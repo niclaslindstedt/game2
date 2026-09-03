@@ -11,8 +11,9 @@
 //
 // Three settings, and they are the whole mode:
 //
-//   RIVALS     how good the field is — its own knob, not the campaign's, so
-//              a knockabout race cannot quietly retune a championship.
+//   DIFFICULTY how good the field is, and what a hit costs your own car —
+//              its own knob, not the campaign's, so a knockabout race cannot
+//              quietly retune a championship.
 //   MASS START everybody on one grid, one green (engine/sim/grid.ts). Off,
 //              it is a rally start: one car at a time, ten seconds apart,
 //              and the result is a list of times.
@@ -30,7 +31,7 @@ import {
 } from "./campaign.ts";
 import { LevelGrid } from "./menu-levels.tsx";
 import {
-  DIFFICULTY_OPTIONS,
+  DifficultyPicker,
   GRID_OPTIONS,
   MenuHead,
   OptionRow,
@@ -75,16 +76,17 @@ export function HeadsUpPage({
           />
         </div>
       ))}
-      {/* The mode's three settings, grouped so a phone held sideways can pair
-          them up: three full-width rows under two rows of stage boxes is one
-          row more than a 390px-tall screen holds. */}
+      {/* HOW HARD, on its own: it is the setting that decides both how good
+          the field is and what a hit costs the player's own car, and it wears
+          the same three cards the campaign's does so the two are one idea
+          with two answers — never two different questions. */}
+      <DifficultyPicker
+        value={headsUp.difficulty}
+        onPick={(difficulty) => onHeadsUp({ ...headsUp, difficulty })}
+      />
+      {/* The race's own two settings, grouped so a phone held sideways can
+          pair them up rather than stacking them. */}
       <div className="menu-settings">
-        <OptionRow
-          label="RIVALS"
-          options={DIFFICULTY_OPTIONS}
-          value={headsUp.difficulty}
-          onPick={(difficulty) => onHeadsUp({ ...headsUp, difficulty })}
-        />
         <ToggleRow
           label="MASS START"
           hint="Everyone off one grid, on one green. You start at the back."

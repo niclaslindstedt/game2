@@ -35,9 +35,39 @@ export const GLYPH_NAMES = [
   "sprint",
   "circuit",
   "clipboard",
+  "easy",
+  "medium",
+  "hard",
 ] as const;
 
 export type GlyphName = (typeof GLYPH_NAMES)[number];
+
+/** The three bars of a difficulty meter, `lit` of them at full strength.
+ * Filled rects on a common baseline — the bar's own width is the mark, so
+ * there is no stroke to thin out when the whole glyph is 14px tall. */
+function Meter({ lit }: { lit: number }) {
+  return (
+    <>
+      {[
+        { x: 3.4, y: 14 },
+        { x: 9.8, y: 9.4 },
+        { x: 16.2, y: 4.6 },
+      ].map((bar, i) => (
+        <rect
+          key={bar.x}
+          x={bar.x}
+          y={bar.y}
+          width="4.4"
+          height={20.6 - bar.y}
+          rx="1.2"
+          fill="currentColor"
+          stroke="none"
+          opacity={i < lit ? 1 : 0.26}
+        />
+      ))}
+    </>
+  );
+}
 
 /** The 24x24 body of each mark. Stroke geometry only — the wrapper sets the
  * paint, so a glyph inherits the colour of whatever row it sits in. */
@@ -145,6 +175,19 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
       <path d="M15.5 21H5.2A2.2 2.2 0 0 1 3 18.8V7.5" />
     </>
   ),
+  // THE THREE RUNGS OF DIFFICULTY, as a meter: three bars rising, with as
+  // many of them lit as the rung is worth. It is the shape a volume or a
+  // signal is already drawn in everywhere else, so the ladder reads before
+  // the word under it does — and it is filled rather than stroked because
+  // an outlined bar 4px wide is a smudge at the size a phone reads this at.
+  //
+  // The unlit bars stay ON, at low opacity, rather than coming off: what a
+  // rung means is how far up a scale it stands, and a mark showing only its
+  // own bars has no scale in it. The COLOUR is the row's (`currentColor`),
+  // which is where the green-amber-red comes from.
+  easy: <Meter lit={1} />,
+  medium: <Meter lit={2} />,
+  hard: <Meter lit={3} />,
 };
 
 /** One mark, sized by the row it sits in (`1em` of the current font size

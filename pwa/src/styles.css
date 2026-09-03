@@ -2819,6 +2819,79 @@ body {
   margin-top: 0;
 }
 
+/* THE PAGE'S ONE OTHER PRESS, at the far end of the head: the location's
+   standings. It wears the back button's chrome rather than a chip's — the
+   two are the same kind of thing, a way off this page rather than a setting
+   on it — and it is pushed to the right so the head reads as "out ← what
+   this is → aside". */
+.menu-head-act {
+  margin-left: auto;
+  align-self: flex-start;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font: inherit;
+  font-size: clamp(0.62rem, 2.1vmin, 0.82rem);
+  letter-spacing: 0.14em;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.5rem;
+  padding: 0.28rem 0.7rem;
+  cursor: pointer;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+.menu-head-solo .menu-head-act {
+  align-self: center;
+}
+
+.menu-head-act:hover,
+.menu-head-act:focus-visible {
+  background: rgb(255 255 255 / 20%);
+}
+
+.menu-head-act .menu-glyph {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+/* The one fact about the table worth reading without opening it: this
+   country has been WON, and the next one is open because of it. */
+.menu-head-act-lit {
+  color: var(--hud-good);
+  border-color: var(--hud-good);
+}
+
+/* Portrait on a phone: the word comes off and the mark carries it. A head
+   is one line, and "‹ CAMPAIGN  TAIGA  ▮▮ STANDINGS" is one line more than
+   360px of it holds — the title is what gets squeezed, and the title is the
+   thing that says where you are. The button keeps its accessible name from
+   the `title` the component sets. */
+@media (orientation: portrait) and (max-width: 26rem) {
+  .menu-head-act-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .menu-head-act {
+    padding: 0.28rem 0.5rem;
+  }
+
+  .menu-head-act .menu-glyph {
+    width: 1.5em;
+    height: 1.5em;
+  }
+}
+
 .menu-section {
   display: flex;
   flex-direction: column;
@@ -3106,6 +3179,21 @@ body {
   transform: translateY(1px);
 }
 
+/* THE BOX THE PAGE WOULD PICK — where the campaign left off, the box the
+   pad's cursor lands on and the one START takes. A halo outside the frame
+   rather than a fatter frame or a brighter fill: the border is already
+   carrying open-or-shut across six boxes, and a second meaning painted into
+   it would make one open stage look like a different KIND of stage. The
+   glow sits outside the box, so nothing inside it moves.
+
+   It is what the CONTINUE button on the old standings panel used to say in
+   words, at none of its cost in height. */
+.menu-level-next {
+  box-shadow:
+    0 0 0 2px rgb(255 210 62 / 45%),
+    0 0 0.9rem rgb(255 210 62 / 35%);
+}
+
 .menu-level-locked {
   align-items: center;
   justify-content: center;
@@ -3244,6 +3332,149 @@ body {
   background: var(--hud-good);
   border-color: var(--hud-ink);
   color: var(--hud-shadow);
+}
+
+/* ── R29: DIFFICULTY, as three cards ────────────────────────────────────
+   The biggest control on a stage grid, because it is the biggest decision
+   on one: it sets how good the fourteen crews are AND how much of every
+   impact lands on the player's own car, and every result the boxes above it
+   are showing was scored at one of these three.
+
+   As a row of chips it was the same size as HILLS, and read as a knob. As
+   three cards it reads as a choice: a meter that says how far up the ladder
+   each one stands, the word, and the one number worth printing — what a
+   crash costs there. */
+
+.menu-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.menu-diff-opts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+/* Green, amber, red — the scale everything else in the world that has three
+   rungs is painted in, so the ladder is read before a word on it is. The
+   colour is the CARD's, not the selection's: all three wear their own hue at
+   all times, dimmed until chosen, because the point of the row is the scale
+   and a scale with two grey rungs is not one.
+
+   The green and the amber are the pacenote strip's own (`.hud-pace-soft`,
+   `.hud-pace-medium`); the top rung is the HUD's red, which is where this
+   parts company with a corner call. A hard CORNER has not gone wrong — the
+   note is instruction, and red would read as a reprimand. A hard GAME is a
+   thing the player chose, and red is what they chose it for. */
+.menu-diff-easy {
+  --diff: #6de37f;
+  --diff-soft: rgb(109 227 127 / 18%);
+}
+
+.menu-diff-medium {
+  --diff: #ffd23e;
+  --diff-soft: rgb(255 210 62 / 18%);
+}
+
+.menu-diff-hard {
+  --diff: #ff5a4e;
+  --diff-soft: rgb(255 90 78 / 18%);
+}
+
+.menu-diff-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.6rem 0.4rem 0.5rem;
+  font: inherit;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 7%);
+  border: 3px solid rgb(255 255 255 / 22%);
+  border-radius: 0.7rem;
+  cursor: pointer;
+  text-shadow: none;
+  opacity: 0.72;
+}
+
+.menu-diff-opt:hover,
+.menu-diff-opt:focus-visible {
+  opacity: 1;
+  background: rgb(255 255 255 / 12%);
+}
+
+.menu-diff-opt:active {
+  transform: translateY(1px);
+}
+
+.menu-diff-on {
+  opacity: 1;
+  background: var(--diff-soft);
+  border-color: var(--diff);
+}
+
+.menu-diff-meter {
+  width: clamp(1.35rem, 5vmin, 1.9rem);
+  height: clamp(1.35rem, 5vmin, 1.9rem);
+  color: var(--diff);
+}
+
+.menu-diff-name {
+  font-size: clamp(0.72rem, 2.6vmin, 1rem);
+  letter-spacing: 0.1em;
+  line-height: 1.1;
+}
+
+.menu-diff-on .menu-diff-name {
+  color: var(--diff);
+}
+
+/* What a crash costs at this rung, off the engine's own table. Small: it is
+   the footnote on the choice, not the choice. */
+.menu-diff-blurb {
+  font-size: clamp(0.5rem, 1.7vmin, 0.64rem);
+  letter-spacing: 0.1em;
+  opacity: 0.7;
+  line-height: 1.1;
+  text-align: center;
+}
+
+/* Landscape on a phone: three cards laid on their sides. The meter and the
+   word go on one line and the footnote under them comes off — a card whose
+   height is the last slack on a 390px-tall screen has no room for a line
+   that is already the smallest thing on it. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  /* ...and the label beside them rather than over them, the same cut the
+     option rows on this page already take. */
+  .menu-diff {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.7rem;
+  }
+
+  .menu-diff-opts {
+    flex: 1;
+    min-width: 0;
+    gap: 0.4rem;
+  }
+
+  .menu-diff-opt {
+    flex-direction: row;
+    gap: 0.45rem;
+    padding: 0.35rem 0.5rem;
+  }
+
+  .menu-diff-blurb {
+    display: none;
+  }
+
+  .menu-diff-meter {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
 }
 
 /* A continuous setting: the fader, and the number it is standing at. The
@@ -5925,86 +6156,30 @@ a.menu-version:focus-visible {
   }
 }
 
-/* ── R30: the standings panel on a location page ────────────────────────
-   What the stage boxes above it are being driven for: where the table
-   stands, the way back into it, and the way to drive it all again. */
+/* ── R30: the standings, in the modal the head's button opens ───────────
+   What the stage boxes are being driven for. It used to be a panel under
+   them — a line of figures and a row of buttons, permanently taking the
+   height of a seventh stage box on a page whose job is to show six — and it
+   is now a press at the far end of the head (`.menu-head-act`) and a table
+   over the top of the page. What survives here is the FOOT of that table:
+   the gate, and the press that tears the points up. */
 
-.menu-standings {
+.menu-standings-foot {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.5rem 0.7rem;
-  border: 2px solid rgb(255 255 255 / 30%);
-  border-left: 6px solid var(--hud-good);
-  border-radius: 0.6rem;
-  background: rgb(255 255 255 / 8%);
-}
-
-.menu-standings-line {
-  display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 0.3rem 0.7rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.menu-standings-line .menu-glyph {
-  width: 1.1em;
-  height: 1.1em;
-  color: var(--hud-good);
-}
-
-.menu-standings-place {
-  font-size: clamp(0.8rem, 2.8vmin, 1.1rem);
-  letter-spacing: 0.08em;
-}
-
-.menu-standings-won {
-  color: var(--hud-good);
-}
-
-.menu-standings-points {
-  font-size: clamp(0.8rem, 2.8vmin, 1.1rem);
-  color: var(--hud-good);
-}
-
-.menu-standings-run {
-  margin-left: auto;
-  font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
-  letter-spacing: 0.12em;
-  opacity: 0.72;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 0.7rem;
+  margin-top: 0.6rem;
 }
 
 /* The one gate a padlock cannot teach: a country whose stages are all
-   driven still needs its table topped. It rides on the same line as the
-   figures rather than owning a row, and it is only there when it applies. */
+   driven still needs its table topped. Only there when it applies. */
 .menu-standings-hint {
-  flex-basis: 100%;
   font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
   letter-spacing: 0.1em;
   color: var(--hud-good);
   opacity: 0.85;
-}
-
-.menu-standings-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-/* Landscape on a phone: the panel's own chrome comes off before anything on
-   it does — six stage boxes and a table on a 390px-tall screen leaves the
-   padding as the only slack there is. */
-@media (orientation: landscape) and (max-height: 34rem) {
-  .menu-standings {
-    gap: 0.3rem;
-    padding: 0.4rem 0.6rem;
-  }
-}
-
-.menu-standings-go {
-  border-color: var(--hud-good);
-  color: var(--hud-good);
 }
 
 /* A country still behind the table before it: the tile is a wall with the

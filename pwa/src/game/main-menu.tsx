@@ -51,14 +51,7 @@ import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
 import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
 import { HeadsUpPage } from "./menu-headsup.tsx";
-import {
-  DIFFICULTY_OPTIONS,
-  MenuHead,
-  OptionRow,
-  gridSize,
-  type PlayMode,
-  type RaceSettings,
-} from "./menu.tsx";
+import { DifficultyPicker, MenuHead, gridSize, type PlayMode, type RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsSub } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
@@ -344,104 +337,70 @@ function CampaignPage({
   );
 }
 
-/** R30 — THE STANDINGS PANEL. The location's table is what the stage boxes
- * above it are being driven FOR — the same points open the next box and the
- * next country — so it sits on the location page with the three presses it is
- * worth: pick the campaign back up, read the whole table, or tear it up and
- * drive it again. CONTINUE goes to the same pre-race card the grid does — it
- * names the stage, and the car is still a decision.
+/** R30 — THE STANDINGS, BEHIND ONE PRESS IN THE HEAD.
  *
- * CONTINUE walks FORWARD first — the next stage never driven — and only then
- * back to the first stage not yet WON. That is the shape of a points
- * campaign: see the country, then go back for the wins it costs to leave
- * it.
+ * The location's table is what the stage boxes are being driven FOR — the
+ * same points open the next box and the next country — but knowing where it
+ * stands is a question a player asks between runs, not on every visit to the
+ * grid. It used to be a panel under the boxes: a line of figures and a row
+ * of buttons, permanently occupying the height of a seventh stage box on a
+ * page whose whole job is to show six.
  *
- * It is ONE line and a row of buttons. The scoring — three, two, one for the
- * podium — used to be printed here on every visit, and it is a rule a player
- * learns from their first result screen. What survives is the gate that
- * nothing else can teach: a country whose stages are all driven still needs
- * the table topped, and that is not guessable from a full grid. */
-function StandingsPanel({
+ * So it is a button at the far end of the head instead, and everything it
+ * used to print lives inside the table it opens: where you stand, what you
+ * have scored, how much of the country you have driven, the one gate a
+ * padlock cannot teach — a country whose stages are all driven still needs
+ * its table topped — and the press that tears the lot up and drives it
+ * again. The button itself wears the menu's yellow once the country is WON,
+ * which is the single fact worth reading without opening anything.
+ *
+ * The CONTINUE press went with the panel. The grid already marks the stage
+ * it would pick (`LevelGrid`'s `next`) — the box is lit, the controller's
+ * cursor lands on it and START takes it — so a second control naming the
+ * same stage in words was a row spent saying what the boxes already say. */
+function LocationStandings({
   location,
   progress,
-  onPick,
   onReset,
 }: {
   location: CampaignLocation;
   progress: CampaignProgress;
-  onPick: (level: CampaignLevel) => void;
   onReset: (locationId: string) => void;
 }) {
   const [table, setTable] = useState(false);
   // A reset costs every point in the location and cannot be undone, so it asks
-  // once. The question expires with the page rather than sitting armed forever.
+  // once. The question expires with the table rather than sitting armed forever.
   const [sure, setSure] = useState(false);
   const rows = locationStandings(location, progress);
   const mine = playerStanding(location, progress);
-  const next = continueAt(location, progress);
   const won = locationWon(location, progress);
   const run = stagesDriven(location, progress);
+  const place = won
+    ? "WON"
+    : run === 0
+      ? // A place on a table nobody has scored on is not a place.
+        "NOT STARTED"
+      : `${mine.tied ? "=" : ""}${ordinal(mine.place)} OF ${rows.length}`;
   return (
-    <div className="menu-standings">
-      <div className="menu-standings-line">
+    <>
+      <button
+        type="button"
+        className={`menu-head-act ${won ? "menu-head-act-lit" : ""}`}
+        title={`${location.name} standings — ${place}`}
+        onClick={() => {
+          playUi("select");
+          setTable(true);
+        }}
+      >
         <Glyph name="standings" />
-        <span className={`menu-standings-place ${won ? "menu-standings-won" : ""}`}>
-          {won
-            ? "WON"
-            : run === 0
-              ? // A place on a table nobody has scored on is not a place.
-                "NOT STARTED"
-              : `${mine.tied ? "=" : ""}${ordinal(mine.place)} OF ${rows.length}`}
-        </span>
-        {run > 0 && <span className="menu-standings-points">{mine.points} PTS</span>}
-        <span
-          className="menu-standings-run"
-          title={`${run} of ${location.levels.length} stages driven`}
-        >
-          {run} / {location.levels.length}
-        </span>
-        {!won && locationComplete(location, progress) && (
-          <span className="menu-standings-hint">TOP THE TABLE TO OPEN THE NEXT COUNTRY</span>
-        )}
-      </div>
-      <div className="menu-standings-acts">
-        {next && (
-          <button type="button" className="menu-opt menu-standings-go" onClick={() => onPick(next)}>
-            CONTINUE · {next.name.toUpperCase()}
-          </button>
-        )}
-        <button
-          type="button"
-          className="menu-opt"
-          onClick={() => {
-            playUi("select");
-            setTable(true);
-          }}
-        >
-          TABLE
-        </button>
-        {mine.points > 0 && (
-          <button
-            type="button"
-            className="menu-opt"
-            onClick={() => {
-              playUi("select");
-              if (!sure) {
-                setSure(true);
-                return;
-              }
-              setSure(false);
-              onReset(location.id);
-            }}
-          >
-            {sure ? "SURE? THE POINTS GO" : "RESET"}
-          </button>
-        )}
-      </div>
+        <span className="menu-head-act-word">STANDINGS</span>
+      </button>
       {table && (
         <ResultsModal
           title={`${location.name.toUpperCase()} STANDINGS`}
-          sub={`${run} of ${location.levels.length} stages driven`}
+          sub={`${place} · ${run > 0 ? `${mine.points} PTS · ` : ""}${run} of ${
+            location.levels.length
+          } stages driven`}
           rows={rows.map((row) => ({
             place: row.place,
             name: row.alias,
@@ -449,10 +408,38 @@ function StandingsPanel({
             you: row.you,
           }))}
           stage={false}
-          onClose={() => setTable(false)}
+          foot={
+            <div className="menu-standings-foot">
+              {!won && locationComplete(location, progress) && (
+                <span className="menu-standings-hint">TOP THE TABLE TO OPEN THE NEXT COUNTRY</span>
+              )}
+              {mine.points > 0 && (
+                <button
+                  type="button"
+                  className="menu-opt"
+                  onClick={() => {
+                    playUi("select");
+                    if (!sure) {
+                      setSure(true);
+                      return;
+                    }
+                    setSure(false);
+                    setTable(false);
+                    onReset(location.id);
+                  }}
+                >
+                  {sure ? "SURE? THE POINTS GO" : "RESET"}
+                </button>
+              )}
+            </div>
+          }
+          onClose={() => {
+            setSure(false);
+            setTable(false);
+          }}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -477,10 +464,10 @@ function LocationPage({
   const out = locationParent();
   const gate = (_level: CampaignLevel, index: number): boolean =>
     levelUnlocked(location, index, progress);
-  // THE STAGE THIS PAGE WOULD PICK — the same one CONTINUE names, so the
-  // cursor lands on the box the panel below is already pointing at and one
-  // press of START drives it. Falling back to the last open box for a
-  // location with nothing left to win, which is the end of its own ladder.
+  // THE STAGE THIS PAGE WOULD PICK — the box the cursor lands on, the box
+  // START takes, and the box the grid lights. Falling back to the last open
+  // one for a location with nothing left to win, which is the end of its own
+  // ladder.
   const resume = continueAt(location, progress) ?? latestOpen(location, gate);
   return (
     <div className="menu-card menu-card-wide">
@@ -488,6 +475,7 @@ function LocationPage({
         back={() => onNavigate(out)}
         backLabel={out.page === "root" ? "MENU" : "CAMPAIGN"}
         title={location.name.toUpperCase()}
+        act={<LocationStandings location={location} progress={progress} onReset={onResetPoints} />}
       />
       <LevelGrid
         location={location}
@@ -498,22 +486,15 @@ function LocationPage({
         next={resume}
         onPlay={pick}
       />
-      <StandingsPanel
-        location={location}
-        progress={progress}
-        onPick={pick}
-        onReset={onResetPoints}
-      />
       {/* R29 — how good the fourteen crews you are running against are, and
           what a crash costs your own car while you race them
-          (`damageScaleFor`: nothing on EASY, half on MEDIUM, all of it on
-          HARD). It stays on the GRID rather than moving to the pre-race card
-          with the car, because it is what the boxes' best-result lines are
-          measured against: change it here and the whole ladder is re-read at
-          once. */}
-      <OptionRow
-        label="RIVALS"
-        options={DIFFICULTY_OPTIONS}
+          (`damageScaleFor`). It stays on the GRID rather than moving to the
+          pre-race card with the car, because it is what the boxes'
+          best-result lines are measured against: change it here and the whole
+          ladder is re-read at once. And it is the biggest control on the
+          page, because it is the biggest decision on it — every result the
+          boxes above are showing was scored at one of these three. */}
+      <DifficultyPicker
         value={race.difficulty}
         onPick={(difficulty) => onRace({ ...race, difficulty })}
       />

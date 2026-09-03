@@ -9,6 +9,8 @@
 // the plain fifteen-row layout because the question it answers is the
 // table's, not a run's.
 
+import type { JSX } from "preact";
+
 import { playUi } from "./audio/ui.ts";
 import { formatTime } from "../lib/util.ts";
 
@@ -74,17 +76,24 @@ export type ResultsModalProps = ResultsTableProps & {
   /** One line under the title — which table this is, and how far into it the
    * location has been driven. */
   sub: string;
+  /** Anything the table is worth doing something ABOUT, between it and the
+   * way out: the gate a location is still behind, and the press that tears
+   * its points up. They belong to the table rather than to the page that
+   * opens it — a board is where you go to read where you stand, and a page
+   * of stage boxes has no row to spare for either. */
+  foot?: JSX.Element;
   onClose: () => void;
 };
 
 /** The table over the top of whatever opened it, with one way out. */
-export function ResultsModal({ rows, stage, board, title, sub, onClose }: ResultsModalProps) {
+export function ResultsModal({ rows, stage, board, title, sub, foot, onClose }: ResultsModalProps) {
   return (
     <div className="hud-modal pointer-events-auto">
       <div className="hud-modal-card">
         <div className="hud-modal-title">{title}</div>
         <div className="hud-modal-sub">{sub}</div>
         <ResultsTable rows={rows} stage={stage} board={board} />
+        {foot}
         <button
           type="button"
           className="hud-pause-act"

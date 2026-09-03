@@ -36,8 +36,11 @@ import {
   type Weather,
 } from "@engine";
 
+import type { JSX } from "preact";
+
 import { playToggle, playUi } from "./audio/ui.ts";
 import { manualGain } from "./car-stats.ts";
+import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
 import { FadeRow, StepRow, type Stop } from "./menu-knobs.tsx";
 import { PLAY_CAMERAS, type DevSettings, type Settings } from "./settings.ts";
 
@@ -118,6 +121,84 @@ export const DIFFICULTY_OPTIONS: { id: Difficulty; label: string }[] = DIFFICULT
   id,
   label: DIFFICULTIES[id].label,
 }));
+
+/** What a rung costs the player's OWN car, read off the same table the field
+ * is entered from (`damageScaleFor`). It is the one half of a difficulty
+ * that is a fact rather than a promise — how good fourteen crews are is
+ * something you find out by racing them, and how much of a hit lands on your
+ * bodywork is a number — so it is the half worth printing. Derived rather
+ * than written out, so a retune of `DIFFICULTIES` can never leave the menu
+ * quoting a scale the game no longer runs. */
+function damageWord(damage: number): string {
+  if (damage <= 0) return "NO DAMAGE";
+  if (damage >= 1) return "FULL DAMAGE";
+  return `${Math.round(damage * 100)}% DAMAGE`;
+}
+
+/** The three rungs as CARDS rather than chips: the meter that says how far
+ * up the ladder each one stands, the word, and what a crash costs there. */
+export const DIFFICULTY_CARDS: {
+  id: Difficulty;
+  label: string;
+  glyph: GlyphName;
+  blurb: string;
+}[] = DIFFICULTY_IDS.map((id) => ({
+  id,
+  label: DIFFICULTIES[id].label,
+  // The meter is named for the rung it draws — one mark per idea, and the
+  // idea here IS easy, medium, hard.
+  glyph: id as GlyphName,
+  blurb: damageWord(DIFFICULTIES[id].damage),
+}));
+
+/** R29 — HOW HARD THE GAME IS, as the decision it actually is.
+ *
+ * It is not a knob among knobs: it sets how good the fourteen crews you are
+ * racing are AND how much of every impact lands on your own car, and every
+ * result already on the ladder was scored against one particular answer. A
+ * row of three chips the size of the HILLS dial says none of that. Three
+ * cards do, with room for a meter that reads before the word does and the
+ * green-amber-red every other scale in the world is painted in.
+ *
+ * `label` is a parameter because HEADS UP asks the same question about its
+ * own field, which is deliberately not the campaign's (see
+ * `RaceSettings.headsUp`) — the two must never look like one setting. */
+export function DifficultyPicker({
+  value,
+  onPick,
+  label = "DIFFICULTY",
+}: {
+  value: Difficulty;
+  onPick: (id: Difficulty) => void;
+  label?: string;
+}) {
+  return (
+    <div className="menu-diff">
+      <span className="menu-label">{label}</span>
+      <div className="menu-diff-opts" role="radiogroup" aria-label={label}>
+        {DIFFICULTY_CARDS.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            role="radio"
+            aria-checked={opt.id === value}
+            className={`menu-diff-opt menu-diff-${opt.id} ${
+              opt.id === value ? "menu-diff-on" : ""
+            }`}
+            onClick={() => {
+              playToggle(true);
+              onPick(opt.id);
+            }}
+          >
+            <Glyph name={opt.glyph} className="menu-diff-meter" />
+            <span className="menu-diff-name">{opt.label}</span>
+            <span className="menu-diff-blurb">{opt.blurb}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** R22 — the two shapes a stage comes in. A circuit is the same minutes of
  * driving as the sprint band it is named for, cut into laps: the road is
@@ -274,6 +355,7 @@ export function MenuHead({
   backLabel,
   title,
   sub,
+  act,
 }: {
   back: () => void;
   backLabel: string;
@@ -281,6 +363,11 @@ export function MenuHead({
   /** The page's one line of billing. Omitted on pages whose title says it
    * all — the head then holds the title alone, still on one row. */
   sub?: string;
+  /** THE PAGE'S ONE OTHER PRESS, at the far end of the head. A page whose
+   * content is a grid has nowhere to put a second action that is not a row
+   * of the grid's own height — and a row is the one thing a stage grid on a
+   * phone cannot spare. The head already reserves that line. */
+  act?: JSX.Element;
 }) {
   return (
     // A head carrying a subtitle is two rows tall and the way out stands
@@ -299,6 +386,7 @@ export function MenuHead({
         <div className="menu-title">{title}</div>
         {sub !== undefined && <div className="menu-sub">{sub}</div>}
       </div>
+      {act}
     </div>
   );
 }
