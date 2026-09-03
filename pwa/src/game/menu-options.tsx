@@ -1,26 +1,29 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// OPTIONS — one page, a dozen rows, reached from the front door only.
+// OPTIONS — one page, eleven rows, reached from the front door only.
 //
-//   PICTURE   — one word for the whole renderer: LOW, MEDIUM or HIGH.
+//   PICTURE   — how sharp, how much and how far, as three rows.
 //   SOUND     — the two faders.
 //   HUD       — the instrument panel on or off, and the rear-view glass.
-//   DRIVING   — the camera a stage opens on, whether the driver's head
-//               moves, and which gearbox every car gets.
+//   DRIVING   — the camera a stage opens on, and whether the driver's head
+//               moves. NOT the gearbox: that is asked where it is decided,
+//               on the pre-race card beside the car's own numbers, and the
+//               answer is simply remembered (`settings.gearbox`).
 //   CONTROLS  — only what the device can use: which thumb steers on glass,
 //               and a door each to the keyboard's and the controller's
 //               bindings, which are pages of their own.
 //
-// Every row is the same knob (menu-knobs.tsx), the explanations live in one
-// caption bar under the rows, and every change applies the moment it is
-// made — there is no OK button to forget to press. The page is not offered
-// over a held run: the pause card carries the handful of knobs a player
-// stops mid-stage for (menu.tsx), and everything else waits for the menu.
+// Every row is the same knob (menu-knobs.tsx) and nothing else: no sentence
+// under it, no caption bar, no OK button — a row whose name and three stops
+// do not say what it does is a row that needs a better name. Every change
+// applies the moment it is made. The page is not offered over a held run:
+// the pause card carries the handful of knobs a player stops mid-stage for
+// (menu.tsx), and everything else waits for the menu.
 
 import { useEffect, useRef, useState } from "react";
 
 import { captureAxis, captureSource, type PadFrame } from "./gamepad.ts";
 import { deviceControls, holdPad, readPadFrames } from "./input.ts";
-import { GEARBOX_OPTIONS, MenuHead } from "./menu.tsx";
+import { MenuHead } from "./menu.tsx";
 import {
   BindRow,
   Caption,
@@ -34,17 +37,19 @@ import {
   DEFAULT_KEYS,
   DEFAULT_PAD,
   DEFAULT_SETTINGS,
+  DETAIL_PRESETS,
+  DETAIL_STOPS,
+  DISTANCE_STOPS,
   KEY_ACTIONS,
   PAD_ACTIONS,
   PLAY_CAMERAS,
-  QUALITY_PRESETS,
-  QUALITY_STOPS,
+  RESOLUTION_STOPS,
   clonePad,
+  detailOf,
   freshSettings,
   keyLabel,
   padAxisLabel,
   padSourceLabel,
-  qualityOf,
   type KeyAction,
   type PadAction,
   type PadSettings,
@@ -78,9 +83,6 @@ const THUMBS: Stop<"left" | "right">[] = [
   { id: "left", label: "LEFT THUMB" },
   { id: "right", label: "RIGHT THUMB" },
 ];
-
-/** What the page says while no row is being looked at. */
-const PAGE_LINE = "Every change applies at once — nothing to save";
 
 /** What the browser currently says is plugged in. Polled rather than
  * listened for: `gamepadconnected` is the only event a pad ever fires, and
@@ -133,80 +135,56 @@ function MainPage({
   onSub,
   onBack,
 }: Shared & { onSub: (sub: OptionsSub) => void; onBack: () => void }) {
-  const [hint, setHint] = useState<string | null>(null);
   // Probed once per mount: a device does not grow a keyboard while the
   // options page is open, and re-probing on every render would churn.
   const [device] = useState(deviceControls);
   const pads = usePadPresence();
   const set = (patch: Partial<Settings>): void => onSettings({ ...settings, ...patch });
-  const camera = PLAY_CAMERAS.find((cam) => cam.id === settings.camera) ?? PLAY_CAMERAS[0];
   return (
-    <div className="menu-card menu-card-options" onPointerLeave={() => setHint(null)}>
+    <div className="menu-card menu-card-options">
       <MenuHead back={onBack} backLabel="MENU" title="OPTIONS" />
       {/* Two columns on anything wide enough, packed by ROW COUNT rather
-          than by subject order — five rows a side — so a laptop holds the
-          whole page without scrolling and neither column ends short. */}
+          than by subject order — five a side and six with the controller's
+          — so a laptop holds the whole page without scrolling and neither
+          column ends short. */}
       <div className="knob-groups">
         <div className="knob-col">
+          {/* Three rows, not one, because they are three different costs:
+              how many pixels, how much world, how far away. A machine can
+              be short of one and rich in another — a dense phone screen
+              that wants every pixel and would rather lose the far ridges
+              is the ordinary case, not the exotic one. */}
           <KnobGroup title="PICTURE">
             <StepRow
-              label="QUALITY"
-              stops={QUALITY_STOPS}
-              value={qualityOf(settings.video)}
-              onPick={(quality) => set({ video: { ...QUALITY_PRESETS[quality] } })}
-              onHint={setHint}
-            />
-          </KnobGroup>
-          <KnobGroup title="SOUND">
-            <FadeRow
-              label="EFFECTS"
-              value={settings.audio.sfx}
-              hint="The engine, the tyres, the wind and the slide — off leaves the stage silent apart from the score"
-              onChange={(sfx) => set({ audio: { ...settings.audio, sfx } })}
-              onHint={setHint}
-            />
-            <FadeRow
-              label="MUSIC"
-              value={settings.audio.music}
-              hint="The score, in the menu and on the stage"
-              onChange={(music) => set({ audio: { ...settings.audio, music } })}
-              onHint={setHint}
-            />
-          </KnobGroup>
-          <KnobGroup title="HUD">
-            <StepRow
-              label="HUD"
-              stops={ON_OFF}
-              value={onOff(settings.hud.on)}
-              hint="Clock, map, dials, calls and name tags. Off is a clean frame — the pause button stays"
-              onPick={(id) => set({ hud: { ...settings.hud, on: id === "on" } })}
-              onHint={setHint}
+              label="RESOLUTION"
+              stops={RESOLUTION_STOPS}
+              value={settings.video.resolution}
+              onPick={(resolution) => set({ video: { ...settings.video, resolution } })}
             />
             <StepRow
-              label="REAR VIEW"
-              stops={ON_OFF}
-              value={onOff(settings.hud.mirror)}
-              hint="The mirror at the top of the screen, in every view — it stays up with the HUD off"
-              onPick={(id) => set({ hud: { ...settings.hud, mirror: id === "on" } })}
-              onHint={setHint}
+              label="DETAIL"
+              stops={DETAIL_STOPS}
+              value={detailOf(settings.video)}
+              onPick={(detail) => set({ video: { ...settings.video, ...DETAIL_PRESETS[detail] } })}
+            />
+            <StepRow
+              label="DISTANCE"
+              stops={DISTANCE_STOPS}
+              value={settings.video.drawDistance}
+              onPick={(drawDistance) => set({ video: { ...settings.video, drawDistance } })}
             />
           </KnobGroup>
-        </div>
-        <div className="knob-col">
           <KnobGroup title="DRIVING">
             <StepRow
               label="CAMERA"
               stops={PLAY_CAMERAS}
               value={settings.camera}
-              hint={camera.hint}
               onPick={(id) => set({ camera: id })}
-              onHint={setHint}
             />
             <StepRow
               label="HEAD MOTION"
               stops={ON_OFF}
               value={onOff(settings.view.headMotion > 0)}
-              hint="Inside the car the driver's head has weight — thrown under the brakes, into a landing, along a hit. Off bolts the camera to the body"
               onPick={(id) =>
                 set({
                   view: {
@@ -215,14 +193,34 @@ function MainPage({
                   },
                 })
               }
-              onHint={setHint}
+            />
+          </KnobGroup>
+        </div>
+        <div className="knob-col">
+          <KnobGroup title="SOUND">
+            <FadeRow
+              label="EFFECTS"
+              value={settings.audio.sfx}
+              onChange={(sfx) => set({ audio: { ...settings.audio, sfx } })}
+            />
+            <FadeRow
+              label="MUSIC"
+              value={settings.audio.music}
+              onChange={(music) => set({ audio: { ...settings.audio, music } })}
+            />
+          </KnobGroup>
+          <KnobGroup title="HUD">
+            <StepRow
+              label="HUD"
+              stops={ON_OFF}
+              value={onOff(settings.hud.on)}
+              onPick={(id) => set({ hud: { ...settings.hud, on: id === "on" } })}
             />
             <StepRow
-              label="GEARBOX"
-              stops={GEARBOX_OPTIONS}
-              value={settings.gearbox}
-              onPick={(gearbox) => set({ gearbox })}
-              onHint={setHint}
+              label="REAR VIEW"
+              stops={ON_OFF}
+              value={onOff(settings.hud.mirror)}
+              onPick={(id) => set({ hud: { ...settings.hud, mirror: id === "on" } })}
             />
           </KnobGroup>
           <KnobGroup title="CONTROLS">
@@ -231,36 +229,25 @@ function MainPage({
                 label="STEER WITH"
                 stops={THUMBS}
                 value={settings.touch.steerSide}
-                hint="Which half of the screen is the wheel. The other half is the pedal: touch for gas, drag down and hold to brake, right for the handbrake"
                 onPick={(steerSide) => set({ touch: { ...settings.touch, steerSide } })}
-                onHint={setHint}
               />
             )}
             {device.keyboard && (
               <LinkRow
                 label="KEYBOARD"
                 value={`${KEY_ACTIONS.length} KEYS`}
-                hint="Arrows and WASD drive out of the box. Every key is yours to move"
                 onOpen={() => onSub("keyboard")}
-                onHint={setHint}
               />
             )}
             <LinkRow
               label="CONTROLLER"
               value={pads.connected ? pads.name.toUpperCase() : "NONE FOUND"}
               disabled={!pads.connected}
-              hint={
-                pads.connected
-                  ? "Triggers are the pedals, A is the handbrake, X the camera, the shoulders shift. Every button is yours to move"
-                  : "Plug in or pair a controller and press one of its buttons — it appears here to be mapped"
-              }
               onOpen={() => onSub("controller")}
-              onHint={setHint}
             />
           </KnobGroup>
         </div>
       </div>
-      <Caption text={hint} fallback={PAGE_LINE} />
       {/* The developer flags are not settings, and a reset that took the
           developer menu away again would be a reset that hides a door. */}
       <button

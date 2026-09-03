@@ -10,13 +10,19 @@
 // input.ts reads the key bindings, and the audio bus reads `AudioSettings`.
 //
 // THE BLOB HOLDS MORE KNOBS THAN THE MENU OFFERS, on purpose. The options
-// page (menu-options.tsx) asks a player a dozen questions; the six video
-// levers, the in-car seat and lens, the pad's deadzone and the pedal
-// gestures are all still here with their defaults and their readers, and
-// the tooling still sets some of them from the URL. They are the game's
-// knobs rather than the player's — a simple game does not hand somebody
-// six questions about undergrowth density, it asks whether the picture is
-// smooth and answers the six itself (`QUALITY_PRESETS`).
+// page (menu-options.tsx) asks a player a dozen questions; the in-car seat
+// and lens, the pad's deadzone and the pedal gestures are all still here
+// with their defaults and their readers, and the tooling still sets some of
+// them from the URL. They are the game's knobs rather than the player's.
+//
+// The PICTURE is the one place that grouping is drawn deliberately rather
+// than by default: six renderer levers, three player rows. RESOLUTION and
+// DISTANCE stand alone because they are separate costs a machine can be
+// separately short of, and the four that decide how much world gets built
+// ride one DETAIL row (`DETAIL_PRESETS`) because they are one judgement —
+// a simple game does not hand somebody a question about undergrowth
+// density. Which levers share a row is a design decision; see
+// `VideoSettings`.
 
 import type { GearboxMode } from "@engine";
 
@@ -30,15 +36,18 @@ import type { GearboxMode } from "@engine";
  * player picks from. */
 export type PlayCamera = "bumper" | "hood" | "cockpit" | "close" | "chase" | "far" | "heli" | "top";
 
-export const PLAY_CAMERAS: { id: PlayCamera; label: string; hint: string }[] = [
-  { id: "bumper", label: "BUMPER", hint: "Down at the nose — no bodywork, just road" },
-  { id: "hood", label: "HOOD", hint: "From the seat, over your own bonnet" },
-  { id: "cockpit", label: "COCKPIT", hint: "Behind the wheel — dials, rim and screen pillars" },
-  { id: "close", label: "CLOSE", hint: "Tight behind the bumper, low and fast" },
-  { id: "chase", label: "CHASE", hint: "The arcade rally view: roof height, close behind" },
-  { id: "far", label: "FAR", hint: "Stood back — more road, more warning" },
-  { id: "heli", label: "HELI", hint: "High and behind, as if flown from a drone" },
-  { id: "top", label: "TOP", hint: "Straight over the roof, tilted down the road" },
+/** No hints, like every ladder the options page walks: a camera describes
+ * itself the moment it is picked, because picking it MOVES the one behind
+ * the menu card. What each angle is FOR is camera.ts. */
+export const PLAY_CAMERAS: { id: PlayCamera; label: string }[] = [
+  { id: "bumper", label: "BUMPER" },
+  { id: "hood", label: "HOOD" },
+  { id: "cockpit", label: "COCKPIT" },
+  { id: "close", label: "CLOSE" },
+  { id: "chase", label: "CHASE" },
+  { id: "far", label: "FAR" },
+  { id: "heli", label: "HELI" },
+  { id: "top", label: "TOP" },
 ];
 
 /** The three views taken from inside the car — the ones the seat, lens and
@@ -193,12 +202,31 @@ export type AudioSettings = {
   sfx: number;
 };
 
+/** THE SIX LEVERS THE RENDERER READS, on THREE rows the player turns.
+ *
+ * `resolution` and `drawDistance` are their own rows because they are their
+ * own decisions: how SHARP the picture is and how FAR into it you can see
+ * cost different things on different machines, and wanting one without the
+ * other is the normal case rather than the exotic one — a retina phone with
+ * a modest GPU wants every pixel and the fog pulled in, and a laptop driving
+ * a big low-density screen wants the opposite. Tying them together only ever
+ * charges a player for something they did not ask for.
+ *
+ * The remaining four are HOW MUCH WORLD IS BUILT, and they are one row
+ * (`DETAIL_PRESETS`) because they are one judgement with one answer: they
+ * are all geometry and all decided when a stage is made, they all move
+ * together with how much headroom the machine has, and nobody has an
+ * opinion about undergrowth density that is not also an opinion about
+ * verge stones. */
 export type VideoSettings = {
-  /** Pixel-ratio ceiling — the single biggest lever on a weak GPU. */
+  /** Pixel-ratio ceiling — the single biggest lever on a weak GPU, and its
+   * own player-facing row (RESOLUTION). Applies the moment it is set. */
   resolution: "low" | "medium" | "high";
-  /** How far the fog lets you see, and how far the camera draws. */
+  /** How far the fog lets you see, and how far the camera draws. Its own
+   * player-facing row (DISTANCE). Applies the moment it is set. */
   drawDistance: "near" | "normal" | "far";
-  /** Particles, rain and the ambient life — the transient FX budget. */
+  /** Particles, rain and the ambient life — the transient FX budget. Part
+   * of DETAIL. */
   effects: "off" | "low" | "full";
   /** HOW MUCH OF A CAR IS BUILT for the sake of what is only visible up
    * close — the two things behind and on the glass, on one ladder because
@@ -223,19 +251,19 @@ export type VideoSettings = {
    * geometry, and geometry is decided when a car is made. */
   interior: "off" | "low" | "full";
   /** How thickly the world is planted with the SOFT stuff — undergrowth,
-   * shrubs, stumps. Applies to the NEXT stage built. Named UNDERGROWTH in
-   * the menu, not FOREST: the forest's own density is a generator dial the
-   * player sets per stage, and this one never touches it. */
+   * shrubs, stumps. Part of DETAIL, and applies to the NEXT stage built.
+   * The undergrowth only: the FOREST's own density is a generator dial the
+   * player sets per stage, and this never touches it. */
   flora: "sparse" | "normal" | "lush";
   /** How much LOOSE STONE the ground is scattered with — the chippings
    * spilled across the road's edge that make it run out into the country
    * instead of ending at a line (R16, road-spill.ts), and the cobbles out in
    * the field beyond them. Its own row rather than a share of UNDERGROWTH
-   * because it is the one detail setting that is not decoration: what it
+   * because it is the one detail lever that is not decoration: what it
    * thins is the transition at the road's edge, which is the thing a driver
    * looks straight down for a whole stage. Thousands of small instances, so
-   * it is also the row with the most frames in it after RESOLUTION. Applies
-   * to the NEXT stage built, like the undergrowth. */
+   * it is also the lever with the most frames in it after RESOLUTION. Part
+   * of DETAIL, and applies to the NEXT stage built like the undergrowth. */
   ground: "plain" | "normal" | "rich";
 };
 
@@ -338,70 +366,95 @@ export const GROUND_SCALE: Record<VideoSettings["ground"], number> = {
   rich: 1.6,
 };
 
-/** THE ONE PICTURE SETTING THE PLAYER SEES. The six video levers above are
- * all real and every one is still read by the renderer, but what a player
- * knows is whether the game is smooth, not what undergrowth density costs
- * them. So the menu offers three pictures, and each is a full set of the
- * six. Changing a preset's numbers here changes what LOW, MEDIUM and HIGH
- * mean everywhere, including for every blob already stored. */
-export type Quality = "low" | "medium" | "high";
+/** THE PICTURE, AS THREE QUESTIONS: how sharp, how much, how far. Every one
+ * of the six levers above is real and still read by the renderer, but a
+ * player does not have an opinion about undergrowth density — they have an
+ * opinion about whether the game is smooth, and about which of the things
+ * making it unsmooth they would rather keep. Three rows is what lets them
+ * answer that: RESOLUTION and DISTANCE are single levers, and DETAIL is the
+ * four that are one judgement.
+ *
+ * The point of the split is that the three costs are NOT the same cost.
+ * Resolution is pixels — every one of them, every frame, whatever is on
+ * screen. Distance is how much stage is submitted at all. Detail is how
+ * much geometry each metre of it is made of. A machine can be short of one
+ * and rich in another, and a phone with a dense screen is the ordinary case
+ * of exactly that: it wants the pixels it has and would rather give up the
+ * far ridges than look at a soft picture. Under one knob that trade could
+ * not be expressed at all. */
+export type Detail = "low" | "medium" | "high";
 
-export const QUALITY_PRESETS: Record<Quality, VideoSettings> = {
-  // The phone that stutters: the cheapest canvas, the fog pulled in, the
-  // windows solid and the ground a third as busy.
-  low: {
-    resolution: "low",
-    drawDistance: "near",
-    effects: "low",
-    interior: "off",
-    flora: "sparse",
-    ground: "plain",
-  },
+/** The four levers DETAIL owns. Named as a slice of `VideoSettings` rather
+ * than restated, so adding a seventh lever is a decision about which row it
+ * belongs on instead of a silent omission from both. */
+export type DetailSettings = Pick<VideoSettings, "effects" | "interior" | "flora" | "ground">;
+
+/** What each DETAIL stop is worth, cheapest first — the order the ladder is
+ * walked and the order `detailOf` breaks its ties in. Changing a preset here
+ * changes what LOW, MEDIUM and HIGH mean everywhere, including for every
+ * blob already stored. */
+export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
+  // The phone that stutters: the windows solid, the verges bare, and under
+  // half the particles.
+  low: { effects: "low", interior: "off", flora: "sparse", ground: "plain" },
   // The design point — every lever at the number the game was tuned on.
-  medium: {
-    resolution: "medium",
-    drawDistance: "normal",
-    effects: "full",
-    interior: "full",
-    flora: "normal",
-    ground: "normal",
-  },
-  // A machine with headroom: a retina canvas, the far ridges drawn, a
-  // thicker forest floor.
-  high: {
-    resolution: "high",
-    drawDistance: "far",
-    effects: "full",
-    interior: "full",
-    flora: "lush",
-    ground: "rich",
-  },
+  medium: { effects: "full", interior: "full", flora: "normal", ground: "normal" },
+  // A machine with headroom: a thicker forest floor and stonier verges.
+  high: { effects: "full", interior: "full", flora: "lush", ground: "rich" },
 };
 
-export const QUALITY_STOPS: { id: Quality; label: string; hint: string }[] = [
-  {
-    id: "low",
-    label: "LOW",
-    hint: "The smoothest frame on a weak phone — fewer pixels, less fog to see through, solid windows",
-  },
-  { id: "medium", label: "MEDIUM", hint: "The picture the game was tuned on" },
-  {
-    id: "high",
-    label: "HIGH",
-    hint: "Sharper, further and busier — for a machine with frames to spare",
-  },
+/** The three picture ladders, as the menu walks them. No hints: what the
+ * three rows do is `VideoSettings` above, for anyone reading the code, and
+ * on screen the row's own name and its three stops are the explanation — a
+ * page of settings that has to be read is a page that has failed. */
+export const RESOLUTION_STOPS: { id: VideoSettings["resolution"]; label: string }[] = [
+  { id: "low", label: "LOW" },
+  { id: "medium", label: "MEDIUM" },
+  { id: "high", label: "HIGH" },
 ];
 
-/** Which preset a set of video knobs IS: by exact match, else by the
- * resolution, which is the lever that decides most of the frame — so a blob
- * written on another build's ladder lands on the picture it most feels
- * like rather than on a name it is not. */
-export function qualityOf(video: Partial<VideoSettings>): Quality {
-  const ids = Object.keys(QUALITY_PRESETS) as Quality[];
-  const keys = Object.keys(QUALITY_PRESETS.medium) as (keyof VideoSettings)[];
-  const exact = ids.find((id) => keys.every((key) => QUALITY_PRESETS[id][key] === video[key]));
-  if (exact) return exact;
-  return ids.find((id) => QUALITY_PRESETS[id].resolution === video.resolution) ?? "medium";
+export const DETAIL_STOPS: { id: Detail; label: string }[] = [
+  { id: "low", label: "LOW" },
+  { id: "medium", label: "MEDIUM" },
+  { id: "high", label: "HIGH" },
+];
+
+export const DISTANCE_STOPS: { id: VideoSettings["drawDistance"]; label: string }[] = [
+  { id: "near", label: "NEAR" },
+  { id: "normal", label: "NORMAL" },
+  { id: "far", label: "FAR" },
+];
+
+/** Where the three rows stand on a first launch: the design point on each.
+ * MEDIUM resolution is one pixel per screen pixel rather than the retina
+ * canvas, which is the honest default for a machine the game has never
+ * seen — HIGH is a choice somebody makes after finding out they can. */
+export const DEFAULT_VIDEO: VideoSettings = {
+  resolution: "medium",
+  drawDistance: "normal",
+  ...DETAIL_PRESETS.medium,
+};
+
+/** Which DETAIL stop a set of video knobs IS: by exact match, else the stop
+ * that agrees with the most of the four, ties going to the CHEAPER picture
+ * because `DETAIL_PRESETS` is walked cheapest first. So a blob written on
+ * another build's ladder — or on the old single QUALITY row — lands on the
+ * picture it most resembles, and never on a heavier one than it asked for.
+ * A blob with none of the four in it is a blob with no opinion, which is
+ * MEDIUM: the design point, not the floor. */
+export function detailOf(video: Partial<VideoSettings>): Detail {
+  const ids = Object.keys(DETAIL_PRESETS) as Detail[];
+  const keys = Object.keys(DETAIL_PRESETS.medium) as (keyof DetailSettings)[];
+  let best: Detail = "medium";
+  let agreed = 0;
+  for (const id of ids) {
+    const agree = keys.filter((key) => DETAIL_PRESETS[id][key] === video[key]).length;
+    if (agree > agreed) {
+      best = id;
+      agreed = agree;
+    }
+  }
+  return agreed > 0 ? best : "medium";
 }
 
 /** Everything the keyboard can be asked to do. `menu` leaves the run for
@@ -711,7 +764,15 @@ export type Settings = {
   pad: PadSettings;
   /** Which box the driver wants, for EVERY car. It is a preference about
    * how much of the car you want to be responsible for, not a property of
-   * any one of them, so it lives here rather than in the catalog. */
+   * any one of them, so it lives here rather than in the catalog.
+   *
+   * The options page does NOT ask it. It is asked on the pre-race card
+   * (menu-car.tsx), which is the one screen where the question means
+   * something — the car's top speed and its 0–100 are quoted THROUGH the
+   * box, so AUTO and MANUAL are two different sets of numbers sitting
+   * beside the choice. This field is only the MEMORY of that answer: the
+   * card writes back to it, so the box a player drove last time is the box
+   * the next car is offered with, and nobody has to answer twice. */
   gearbox: GearboxMode;
   /** Whether the SCREENSHOT key and the HUD's shutter take pictures at
    * all. On by default — the feature is the point of having it — and off
@@ -775,7 +836,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // down. Music sits under the effects, because the effects are what the
   // player is actually driving on.
   audio: { music: 0.7, sfx: 0.9 },
-  video: { ...QUALITY_PRESETS.medium },
+  video: { ...DEFAULT_VIDEO },
   keys: DEFAULT_KEYS,
   touch: DEFAULT_TOUCH,
   pad: DEFAULT_PAD,
@@ -915,11 +976,21 @@ export function loadSettings(): Settings {
       settings.view.headMotion = snapToStop(HEAD_STOPS, view.headMotion, base.headMotion);
     }
     if (parsed.audio) Object.assign(settings.audio, parsed.audio);
-    // Snapped to a preset, for the reason the view is snapped to its
-    // ladders: the menu can only ever put the six levers back on one of
-    // three pictures, so a blob standing between two of them is a picture
-    // the player could never get back to once they had moved off it.
-    if (parsed.video) settings.video = { ...QUALITY_PRESETS[qualityOf(parsed.video)] };
+    // Row by row, because the rows are independent: the two single levers
+    // are checked against their own ladders and the other four are snapped
+    // together onto a DETAIL stop. Checked rather than merged for the reason
+    // the view is snapped to its ladders — a value off a ladder is a place
+    // the menu could never put the player back to once they moved off it —
+    // but never snapped ACROSS rows, which is what a blob from the old
+    // single QUALITY row would otherwise do to a mixed picture.
+    if (parsed.video) {
+      const video = parsed.video as Partial<Record<keyof VideoSettings, unknown>>;
+      const resolution = RESOLUTION_STOPS.find((stop) => stop.id === video.resolution);
+      if (resolution) settings.video.resolution = resolution.id;
+      const distance = DISTANCE_STOPS.find((stop) => stop.id === video.drawDistance);
+      if (distance) settings.video.drawDistance = distance.id;
+      Object.assign(settings.video, DETAIL_PRESETS[detailOf(parsed.video)]);
+    }
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
     if (parsed.touch) Object.assign(settings.touch, parsed.touch);
     if (parsed.pad) mergePad(settings.pad, parsed.pad);
