@@ -212,28 +212,14 @@ function gripOf(spec) {
 }
 
 /** How fast this car may ARRIVE at a turn of this radius. Off `limits.ts` —
- * what the tyres will actually hold at that radius (`limits.ts`, which
- * needs BOTH halves of the surface: how hard it holds and how far sideways
- * it lets the car go) — times how hot the driver wants to be.
+ * the traction ceiling's own answer — times how hot the driver wants to be.
  * Reading it per turn rather than fixing one number for the sheet is what
  * makes the panels comparable: every technique is then asked the same
  * question, which is "the tyres will only just hold this — what gets it
  * round, and what does it cost?" */
-/** How much of that hold the lab's driver asks for. Not all of it: the
- * hold is the very limit — the angle the car parks at, the lateral the
- * tyres give up there — and a driver arriving at exactly it has nothing
- * left for a technique to spend, so every panel on the sheet went off the
- * road and the comparison stopped being one. This is a driver arriving fast
- * and still on the road, which is the state the sheet is asking questions
- * about. `--over` is how to arrive past it on purpose. */
-const ENTRY_SHARE = 0.85;
-
 function entryFor(spec, radius) {
   if (flag("entry")) return entrySpeed;
-  return (
-    cornerSpeed(spec, 1 / radius, gripOf(spec), TUNING.surfaces.breakaway[surface], ENTRY_SHARE) *
-    Number(flag("over") ?? 1)
-  );
+  return cornerSpeed(spec, 1 / radius, gripOf(spec)) * Number(flag("over") ?? 1);
 }
 
 function drive(spec, corner, moveId) {

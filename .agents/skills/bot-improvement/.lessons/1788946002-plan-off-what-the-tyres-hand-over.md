@@ -13,9 +13,14 @@ angles and the SAME plan is optimistic instead: ten of seventy-two rival
 crews went off the outside of fast sweepers, rolled and retired, and none of
 them was doing anything the bot had not always done.
 
-The fix is `limits.ts` stating what the car actually holds — the curve read
-at the slip the car carries — and the plan solving `v²κ = share × latHold(v)`
-(three fixed-point passes from the tyre-limited speed). Two traps in it:
+The fix that worked was `limits.ts` stating what the car actually holds — the
+curve read at the slip the car carries — and the plan solving `v²κ = share ×
+latHold(v)` (three fixed-point passes from the tyre-limited speed). It is not
+in the tree: the drift scale it was compensating for was reverted a day later
+and the plan went back to `latCeiling × latFraction`, which is well calibrated
+for the angles the roster actually has. Keep it in mind rather than in the
+code — if the slip angles are ever rescaled again, this is the thing that has
+to move with them, and these are its two traps:
 
 - `latHold` RISES with speed, because `over` does. So switching the plan onto
   it without touching `latFraction` makes the bot FASTER at exactly the fast
@@ -27,8 +32,9 @@ at the slip the car carries — and the plan solving `v²κ = share × latHold(v
   the angles untouched; quoted against `sin²(heldSlip)` it falls with them,
   which is what it is for.
 
-The general rule: any bot number quoted against a handling number has to be
-quoted against the one the car will actually MEET, and a rescale of the
-handling model is a recalibration of the crews in the same change. Measure it
+The general rule, which outlived the code: any bot number quoted against a
+handling number has to be quoted against the one the car will actually MEET,
+and a rescale of the handling model is a recalibration of the crews in the
+same change. Measure it
 with a rival-field DNF sweep (difficulties × seeds × top crews) — `make sim`
 uses one profile and stayed green through all ten of those DNFs.

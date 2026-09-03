@@ -829,7 +829,22 @@ export function stepGrounded(
   // way OUT of a slide (`pullStraight`) — the two pedals swap jobs between
   // the layouts, which is the single thing a player relearns moving from
   // one to the other.
-  const onPower = 1 + D.powerSpan * DR.powerYaw * (1 - car.lift);
+  // Normalised on the OPEN throttle, so `angleSpan` is what a rear-driver
+  // holds at full lock ON THE POWER — the state a rally car actually spends
+  // a corner in — and coming off it is what costs the angle. Written as a
+  // gain over 1 instead, this was a bonus on top of the reference and the
+  // saloon sat 10% deeper than the number said it would.
+  // SQUARED, for the reason `lifted` below is: `car.lift` is `1 - throttle`
+  // lagged, so a car cruising a corner on a third of the pedal reads as
+  // two-thirds lifted. Read straight, that took the angle off every corner
+  // nobody was flat out in — which is most of them, for a bot and for a
+  // player — and the saloon stopped drifting stages it had always drifted.
+  // The ask belongs to a CLOSED throttle: squaring leaves a maintenance
+  // throttle nearly all of its angle and takes it from a driver who has
+  // genuinely come off the power.
+  const power = D.powerSpan * DR.powerYaw;
+  const pedal = 1 - car.lift * car.lift;
+  const onPower = (1 + power * pedal) / (1 + power);
   const askedSlip =
     D.angleSpan *
     breakaway *

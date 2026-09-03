@@ -88,12 +88,9 @@ export { TUNING } from "./game/defs/tuning.ts";
 export {
   askedSlide,
   cornerSpeed,
-  heldSlip,
   latCeiling,
-  latHold,
   slideCap,
   slideFloor,
-  surfaceGripFor,
   wheelSlide,
 } from "./game/limits.ts";
 // ...and how much of the car is standing on the road at this instant, which

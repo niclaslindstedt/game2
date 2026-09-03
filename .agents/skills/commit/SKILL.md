@@ -1,6 +1,6 @@
 ---
 name: commit
-description: "Commit staged changes, push the branch, and create or update a PR with a conventional-commit-formatted title. Use after completing a feature or fix. Owns the quality-gate split (fast checks before the commit, whole-repo suite alongside the push), the repo's commit and PR conventions, and the sim-table obligation on handling/generator PRs."
+description: "Commit staged changes, push the branch, and create or update a PR with a conventional-commit-formatted title. Use after completing a feature or fix. Owns the quality-gate split (format, lint and the AFFECTED tests before the commit; the whole suite left to the PR's CI), the repo's commit and PR conventions, and the sim-table obligation on handling/generator PRs."
 ---
 
 # Commit, Push & PR
@@ -34,18 +34,29 @@ style revert`; breaking changes use `!` or a `BREAKING CHANGE:` footer.
   the PR-only checks against it, nobody is asked to look at it, and the work
   sits done and unmergeable until somebody notices. If a PR is already open
   for the branch, the push updates it and there is nothing more to do.
-- **Push and open the PR WHILE the final suite runs, not after it.** The
-  whole-repo suite passes almost every time, so waiting for it before pushing
-  spends that time twice — once locally and again in CI, which is about to run
-  the same checks anyway. Start `make test` in the background, push and open
-  the PR, then read the result: green means the work is already up, and red
-  means a follow-up commit onto a branch that was going to need one regardless.
-  This applies to the FINAL suite, not to the fast ones — `make fmt` and the
-  affected tests still run before the commit is written.
-- **Capture the final suite's output to a file and read the exit code
-  yourself** (`make test > /tmp/test.log 2>&1; echo "EXIT=$?"`), never through
-  `| tail` — a pipe replaces the exit code with the last stage's, so a harness
-  reporting "exit code 0" on a piped run is reporting on `tail`.
+- **RUN THE TESTS FOR WHAT YOU WROTE. LET CI RUN THE REST.** The whole suite
+  is over a thousand cases and takes ten minutes serially; CI shards it across
+  three runners and runs it on every push whatever you do here. Running it
+  locally first spends that time twice and delays the PR by the length of the
+  slower copy. So before the commit, run the files that cover the change and
+  the ones it plausibly reaches — `npx vitest run tests/<topic>_test.ts …` —
+  and push. The PR is where the whole-repo answer comes from.
+- **A red PR is a normal state, not a failure of process.** The point of
+  pushing early is that CI finds what a local run would have found, sooner,
+  and a follow-up commit onto a branch that was going to need one anyway costs
+  nothing. What is NOT acceptable is leaving it red: a CI failure on your own
+  PR is work now, and the drive-to-green rules say what to do with it.
+- **Know when the blast radius is wider than the diff.** A change to
+  `TUNING`, `engine/game/car.ts`, `engine/sim/`, or the generator moves numbers
+  that tests three directories away assert on — a drift retune has gone red in
+  `tape_test`, `water_test` and `analysis_test` at once, none of them files
+  anyone would have thought to run. For those, name the affected topics
+  generously rather than running everything: the sim-driven suites
+  (`simulation`, `rivals`, `tape`, `drift`, `drivetrain`) are the ones a
+  handling change actually reaches.
+- **`make sim` is not optional and is not the suite.** It takes three minutes,
+  it is the table the PR owes on any handling or generator change, and no
+  amount of CI replaces reading it yourself.
 - **Handling or generator changes carry the `make sim` table, before AND
   after**, pasted into the PR description. This is the contract in
   CONTRIBUTING.md and the PR template's checklist — a tuning PR without both
@@ -61,12 +72,24 @@ style revert`; breaking changes use `!` or a `BREAKING CHANGE:` footer.
 `.github/workflows/ci.yml` is the list, and there is nothing on it a local
 clone cannot run. The split is by COST, not by importance:
 
-| Before the commit is written (seconds)                                                   | Alongside the push (minutes)             |
-| ---------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `make fmt`, then `make fmt-check`                                                        | `make lint` (typecheck + eslint)         |
-| `make actionlint` / `make shellcheck` — only if a workflow, hook, or `.sh` was touched   | `make test` (vitest, bot sims included)  |
-| the changeset call: a fragment under `.changes/unreleased/`, or the `no-changelog` label | `make build`                             |
-|                                                                                          | `make sim` — if handling/generator moved |
+| Before the commit is written (seconds to ~a minute)                                      | Left to CI on the PR (minutes)         |
+| ---------------------------------------------------------------------------------------- | -------------------------------------- |
+| `make fmt`, then `make fmt-check`                                                        | `make test` — the WHOLE suite, sharded |
+| `npx eslint <the files you changed>` — 2 s, against 24 s for the repo                    | `make lint` over everything            |
+| `npx tsc --noEmit` — whole-program on purpose (see below), and 3 s                       | `make build`                           |
+| the tests that cover the change, by file (`npx vitest run tests/<topic>_test.ts`)        | `make check-seo`                       |
+| `make actionlint` / `make shellcheck` — only if a workflow, hook, or `.sh` was touched   |                                        |
+| the changeset call: a fragment under `.changes/unreleased/`, or the `no-changelog` label |                                        |
+| `make sim` — if handling or generator moved; the PR owes its table                       |                                        |
+
+**ESLINT SCOPES; THE TYPECHECK DOES NOT.** eslint reads each file on its own,
+so pointing it at the ten files you touched costs 2 seconds where the repo
+costs 24 — ten times the wait to check code nobody edited. `tsc` is the
+opposite: it checks a PROGRAM, and naming files on its command line makes it
+ignore `tsconfig.json` outright (`TS5112`) and answer a different question.
+That is also exactly the check you want whole: a changed signature breaks its
+CALLERS, which are by definition files you did not touch. It costs 3 seconds.
+So scope the linter, never the typechecker.
 
 **`make fmt` is the one that gets skipped, and it is the one that costs nothing
 to run.** Prettier has an opinion about some line nobody thought about, the
@@ -88,8 +111,14 @@ every edit spends minutes re-formatting files it already formatted and learns
 nothing for them. Once, at the gate, fixes every one of those edits at the same
 cost.
 
-**Verify with `make test` / `make lint`, never a bare `npx vitest run` habit** —
-the Make targets are the definition of green that CI enforces.
+**`make fmt` stays whole-repo** — it is a rewrite, not a check, and it is
+seconds. `make lint` bundles the two halves above; run its pieces directly
+while iterating and let CI run the target.
+
+**A targeted `npx vitest run tests/<topic>_test.ts` is the local habit; `make
+test` is CI's.** The Make target is still the definition of green — it is just
+not worth running serially here to learn what three parallel runners are about
+to tell you.
 
 ## Step 2: Create a Feature Branch
 
