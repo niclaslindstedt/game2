@@ -367,6 +367,17 @@ undoes it without knowing it was ever a rule.
   road built and what `geology.sharpAt` says the rock made sharp on purpose
   — and sharp is the `steepness` dial's, opened past its midpoint, never a
   side effect of the seed.
+- **Two roads at two heights start in the PLAN, not in the ground.** Before
+  shaping the terrain under a step across a junction arm, measure where the
+  roads are: the borrowed run against the highway's own points, entry to
+  exit (`followRoad` walks every bend of the road as a turn of its own
+  radius, whichever way the road is run — what is straight is
+  `straightPart`'s answer, for R38, R4 and the co-driver alike), and the
+  highway against itself (`layOne` keeps off its own line past its radius
+  of arc). The platform, `PLATFORM_HOLD`, the barrier placer and
+  `junctionOverlap` all assume the arm leaves along the main road's line;
+  with the roads a road width apart from where the plan put them, no
+  ground rule can make them agree.
 
 ---
 

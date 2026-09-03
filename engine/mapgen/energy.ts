@@ -272,6 +272,23 @@ function tryWindFarm(
   }
   if (!anchor) return nothing("wind: no anchor");
   if (anchor.h - at.elevation < W.rise) return nothing("wind: no rise");
+  // ...and a rise over the road NEAREST the top tower, not only over the
+  // one it was probed out from. The route can come back past the same
+  // ground on another stretch, higher — a string that stands over the road
+  // it was found from and twenty metres under the road on its other side
+  // is not on the high ground, whatever the probe said.
+  let nearest = at;
+  let nearestD2 = Infinity;
+  for (const s of ctx.samples) {
+    const dx = s.x - anchor.x;
+    const dz = s.z - anchor.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < nearestD2) {
+      nearestD2 = d2;
+      nearest = s;
+    }
+  }
+  if (anchor.h - nearest.elevation < W.rise) return nothing("wind: no rise");
   const top = anchor;
   const hub = rng.range(W.hub.min, W.hub.max);
   const rotor = rng.range(W.rotor.min, W.rotor.max);

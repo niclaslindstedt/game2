@@ -106,6 +106,7 @@ export {
   type BiomeRules,
   generateStage,
   layStageHighways,
+  straightPart,
   generateCircuit,
   circuitLapBand,
   createStageStream,

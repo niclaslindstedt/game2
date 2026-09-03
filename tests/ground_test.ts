@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   NEUTRAL_INPUT,
+  STAGE_RULES,
   TUNING,
   compileStage,
   compileTrack,
@@ -70,12 +71,18 @@ describe("the road and the country", () => {
     // alone is a sawtooth of the road's own grade.
     const track = compileStage(3, "medium");
     const terrain = createTerrain(track);
+    // A junction's mouth is not the graded road under test: the mat flares
+    // a road's width there and an arm's own ribbon lies across the stage's
+    // shoulder, and what the ground does under that is the lanes metric's
+    // to measure (`lanes.agree`), on its own bar.
+    const mouth = STAGE_RULES.junction.reach.max * 2;
+    const inMouth = (s: number): boolean => track.junctions.some((j) => Math.abs(j.s - s) < mouth);
     let graded = 0;
     let worst = 0;
     for (let i = 20; i < track.samples.length - 20; i += 7) {
       const s = track.samples[i];
       const next = track.samples[i + 1];
-      if (s.deck || Math.abs(next.elevation - s.elevation) < 0.05) continue;
+      if (s.deck || inMouth(s.s) || Math.abs(next.elevation - s.elevation) < 0.05) continue;
       graded++;
       const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
       // Between two samples, where interpolation matters most.

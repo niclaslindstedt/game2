@@ -17,6 +17,7 @@ export {
   circuitLapBand,
 } from "./rules.ts";
 export { generateStage, layStageHighways } from "./generate.ts";
+export { straightPart } from "./search.ts";
 export { createStageStream, type StageStream } from "./endless.ts";
 export { generateCircuit } from "./circuit.ts";
 export { createLandField, type LandField } from "./land.ts";

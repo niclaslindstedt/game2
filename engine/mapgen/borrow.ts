@@ -203,7 +203,7 @@ export function planBorrow(
               // binds: a hard turn is taken out of a straight, never out of
               // another turn. A public road mostly runs straight, so the
               // tight one is what a borrow usually gets.
-              const straightOut = plans[plans.length - 1].kind === "straight";
+              const straightOut = straightPart(plans[plans.length - 1]) > 0;
               const off = straightOut
                 ? corners[corners.length - 1]
                 : corners.filter((c) => c.severity !== "hard").pop();
@@ -233,20 +233,21 @@ export function planBorrow(
  * STRAIGHTER than R38 allows, which is the same refusal for the same
  * reason: the route may not be left somewhere it does not belong.
  *
- * A chunk becomes a straight when the road is straight BY R38 — the same
- * `straightRun.bend` the rule counts a run with, so what the route drives
- * and what the rule measures cannot disagree. It is emphatically not the
- * turn vocabulary's widest radius: the vocabulary tops out at a 100 m soft
- * turn and a public road bends at 220 at its tightest, so measured against
- * that every chunk of every road came out "straight" and the route stopped
- * tracking the bend at all — it left the junction on the road's tangent and
- * ran off into the field beside it, one chord at a time, with the terrain
- * able to lay its shelf under only one of the two.
+ * Every chunk that bends at all is a TURN of the road's own radius,
+ * however gentle. A chunk drawn as a straight does not chord the bend it
+ * ignores, it drops it: the route walks on along the tangent it had, and
+ * the heading it did not turn through is still missing at the next chunk,
+ * and the one after. A public road bending at a few kilometres' radius
+ * turns through five degrees in three hundred metres, and a route that
+ * never turned with it left the tarmac thirteen metres into the field
+ * beside it — with its exit junction there too, and the arm cut from the
+ * road setting off sideways across the route to get back to the line.
  *
- * What a chunk drawn as a straight still gives up is the chord across the
- * bend it ignores: `length² / 8r`, which at the threshold is under a metre
- * over a 70 m chunk — inside the carriageway on the narrowest road the
- * width dial builds, and gone entirely on anything straighter. */
+ * What is STRAIGHT is R38's question, not the geometry's: `straightPart`
+ * counts a turn gentler than `straightRun.bend` as straight run, so the
+ * rule measures exactly what it measured when such a chunk was drawn as a
+ * straight, and the co-driver's book reads the same test (`compile.ts`) so
+ * a bend a driver would not notice is not a call either. */
 function followRoad(
   road: Highway,
   index: number,
@@ -259,7 +260,6 @@ function followRoad(
   const step = forward ? 1 : -1;
   const perPoint = road.points[1].s - road.points[0].s;
   const chunk = Math.max(2, Math.round(FOLLOW_STEP / perPoint));
-  const widest = R.straightRun.bend;
   let i = index;
   let ran = 0;
   // R38 — and how far the route has come along the tarmac without a corner
@@ -273,10 +273,17 @@ function followRoad(
     const a = road.points[i];
     const b = road.points[next];
     const length = Math.abs(b.s - a.s);
-    const turn = wrap(forward ? b.heading - a.heading : a.heading - b.heading);
+    // The road's heading is its walk's, and a route running the road the
+    // other way carries that heading plus a half turn at both ends — so
+    // the turn it drives between `a` and `b` is the road's own difference,
+    // whichever way it is running. Negated for the backward run, every bend
+    // on such a run was walked the wrong way, and a route that turned the
+    // wrong way through each of them left the tarmac a hundred metres
+    // into the field on a road with three gentle bends in it.
+    const turn = wrap(b.heading - a.heading);
     const bend = Math.abs(turn) > 1e-4 ? length / Math.abs(turn) : Infinity;
     const plan: SegmentPlan =
-      bend > widest
+      bend === Infinity
         ? { kind: "straight", length, feature: "none", paved: true }
         : {
             kind: "turn",

@@ -151,9 +151,9 @@ describe("the three difficulties", () => {
     expect(scales[0]).toBeLessThan(scales[1]);
     expect(scales[1]).toBeLessThan(scales[2]);
     const field = createField(
-      compileStage(38, "short"),
+      compileStage(36, "short"),
       { ...RALLY_FIELD, difficulty: "easy" },
-      { seed: 38, laps: 1, timeOfDay: "day", weather: "clear", season: "summer" },
+      { seed: 36, laps: 1, timeOfDay: "day", weather: "clear", season: "summer" },
     );
     for (const run of field.runs) expect(run.state.car.damageScale).toBe(1);
   });
@@ -174,7 +174,7 @@ describe("the three difficulties", () => {
     const times = DIFFICULTY_IDS.map((id) => {
       const entry = rivalField(id)[0];
       const run = simulateStage({
-        seed: 38,
+        seed: 36,
         length: "short",
         carId: entry.crew.carId,
         profile: entry.profile,
@@ -301,7 +301,7 @@ describe("the roster", () => {
 
 describe("the field on the road", () => {
   const stage = {
-    seed: 38,
+    seed: 36,
     laps: 1,
     timeOfDay: "day",
     weather: "clear",
@@ -310,7 +310,7 @@ describe("the field on the road", () => {
 
   it("enters the field staggered, one interval per start number", () => {
     const field = createField(
-      compileStage(38, "short"),
+      compileStage(36, "short"),
       { ...RALLY_FIELD, difficulty: "hard" },
       stage,
     );
@@ -331,7 +331,7 @@ describe("the field on the road", () => {
 
   it("pays the head start off, and nobody is on the road until theirs is", () => {
     const field = createField(
-      compileStage(38, "short"),
+      compileStage(36, "short"),
       { ...RALLY_FIELD, difficulty: "hard" },
       stage,
     );
@@ -378,7 +378,7 @@ describe("the field on the road", () => {
 
   it("pushes the whole field on when the player skips the shot", () => {
     const field = createField(
-      compileStage(38, "short"),
+      compileStage(36, "short"),
       { ...RALLY_FIELD, difficulty: "hard" },
       stage,
     );
@@ -397,7 +397,7 @@ describe("the field on the road", () => {
 
   it("books splits as the crews go through, and places the player by TIME", () => {
     const field = createField(
-      compileStage(38, "short"),
+      compileStage(36, "short"),
       { ...RALLY_FIELD, difficulty: "hard" },
       stage,
     );
@@ -434,7 +434,7 @@ describe("the field on the road", () => {
 
   it("counts the cars home at the line", () => {
     const field = createField(
-      compileStage(38, "short"),
+      compileStage(36, "short"),
       { ...RALLY_FIELD, difficulty: "easy" },
       stage,
     );
@@ -494,7 +494,7 @@ describe("the field on the road", () => {
   });
 
   it("reads a heads-up place off the road, and a rally place off the clock", () => {
-    const track = compileStage(38, "short");
+    const track = compileStage(36, "short");
     const field = createField(
       track,
       { difficulty: "medium", cars: 8, massStart: true, contact: true },
@@ -550,7 +550,7 @@ describe("the field on the road", () => {
     // road relative to the player, and the player has finished — so they must
     // come home with a real time while never counting as on the road.
     const field = createField(
-      compileStage(38, "short"),
+      compileStage(36, "short"),
       { ...RALLY_FIELD, difficulty: "easy" },
       stage,
     );
@@ -576,7 +576,7 @@ describe("the field on the road", () => {
 
   it("takes a crew off the road the moment they are home", () => {
     const field = createField(
-      compileStage(38, "short"),
+      compileStage(36, "short"),
       { ...RALLY_FIELD, difficulty: "easy" },
       stage,
     );

@@ -657,7 +657,7 @@ export function cutSpur(
   let y = junction.elevation;
   const slope0 = junction.slope ?? 0;
   let slope = slope0;
-  const endsAt: Spur["endsAt"] = "map";
+  let endsAt: Spur["endsAt"] = "map";
   // Resampled at the BRANCH's own spacing rather than the road's, which is
   // coarser (`HIGHWAY.step`): a `Spur` is read by the terrain, the renderer,
   // the barrier placer and the analysis, and every one of them takes the
@@ -748,6 +748,29 @@ export function cutSpur(
     ));
     if (y > band.ceiling) y = band.ceiling;
     if (y < band.floor) y = Math.min(band.floor, band.ceiling);
+  }
+  // Wherever the road runs to, the arm stops on DRY ground, as a built
+  // branch does: a public road is laid across the bare land and can run
+  // into a lake at the map's edge, and the arm cut from it may not end
+  // metres under the water. Backed up out of the shallows, with `keep`
+  // as the floor, and the box re-read from what survived.
+  while (
+    samples.length > 1 &&
+    samples[samples.length - 1].s > SPUR.keep &&
+    land.flooded(samples[samples.length - 1].x, samples[samples.length - 1].z, SPUR.shoreFreeboard)
+  ) {
+    samples.pop();
+    endsAt = "water";
+  }
+  if (endsAt === "water") {
+    box.minX = box.maxX = junction.x;
+    box.minZ = box.maxZ = junction.z;
+    for (const sample of samples) {
+      if (sample.x < box.minX) box.minX = sample.x;
+      if (sample.x > box.maxX) box.maxX = sample.x;
+      if (sample.z < box.minZ) box.minZ = sample.z;
+      if (sample.z > box.maxZ) box.maxZ = sample.z;
+    }
   }
   return { atS, end, samples, width, endsAt, bounds: box, block: null };
 }
