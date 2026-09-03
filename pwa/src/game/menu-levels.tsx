@@ -101,9 +101,9 @@ type LevelBoxProps = {
    * has been driven and paid NOTHING says so: nought is the reason the box
    * after it is still shut. */
   points: number | undefined;
-  /** This is the stage the page would pick for you — the controller lands
-   * its cursor here, and START takes it (menu-nav.ts). One box per PAGE, so
-   * a page listing several locations names it once. */
+  /** This is the stage the page would pick for you — the box wears a ring,
+   * the controller lands its cursor here, and START takes it (menu-nav.ts).
+   * One box per PAGE, so a page listing several locations names it once. */
   next: boolean;
   onPlay: () => void;
 };
@@ -153,7 +153,12 @@ function LevelBox({
   return (
     <button
       type="button"
-      className="menu-level menu-level-open"
+      className={`menu-level menu-level-open ${next ? "menu-level-next" : ""}`}
+      // THE BOX THE PAGE WOULD PICK, said in the picture as well as to the
+      // pad: it is where the cursor lands and what START takes, and since
+      // the campaign's CONTINUE button came off the location page this ring
+      // is the only thing telling a thumb where it left off.
+      aria-current={next ? "step" : undefined}
       data-nav-next={next ? "" : undefined}
       onClick={onPlay}
     >

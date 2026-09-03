@@ -10,6 +10,11 @@
 // much room is there, once everything on the card that is not rows has taken
 // its share?
 //
+// A THIRD table asks it off a different card: the campaign's location board
+// (results-table.tsx), in a modal over the stage grid. Same question, same
+// answer — which is why the card is a selector rather than this file's own
+// assumption.
+//
 // The arithmetic of pages is `results-pages.ts`, which is DOM-free and
 // tested. This is the half that has to read a live layout, and it is a hook
 // rather than a helper because the answer changes whenever the screen does:
@@ -50,19 +55,24 @@ function capOf(maxHeight: string, screen: number): number {
  * ONE row that has to be on screen — the high score board while a name is
  * being typed into it — lowers it, because a floor that does not fit is a
  * floor that hangs half a row under the fold.
+ *
+ * `card` is the selector of the card the rows are ON — what the page is cut
+ * to the height of, and what the `max-height` is read from. The results card
+ * by default; the campaign's location board is the same table in a modal.
  */
 export function useCardRows(
   listRef: RefObject<HTMLElement | null>,
   column: string,
   min = PAGE_MIN,
+  card = ".hud-finish",
 ): number {
   const [perPage, setPerPage] = useState(PAGE_MAX);
 
   useLayoutEffect(() => {
     const list = listRef.current;
-    const card = list?.closest<HTMLElement>(".hud-finish");
-    const screen = card?.parentElement;
-    if (!list || !card || !screen) return;
+    const box = list?.closest<HTMLElement>(card);
+    const screen = box?.parentElement;
+    if (!list || !box || !screen) return;
     const measure = (): void => {
       const row = list.firstElementChild;
       const side = list.closest<HTMLElement>(column);
@@ -73,10 +83,10 @@ export function useCardRows(
       // cannot have. Off the card's full content height rather than its box,
       // so a card already cut to the cap and scrolling measures the same as
       // one that fits.
-      let chrome = card.scrollHeight - list.offsetHeight;
+      let chrome = box.scrollHeight - list.offsetHeight;
       // Beside a TALLER summary the column has room the card is not being
       // charged for: rows up to the summary's own height cost it nothing.
-      const summary = card.querySelector<HTMLElement>(".fin-summary");
+      const summary = box.querySelector<HTMLElement>(".fin-summary");
       if (
         summary &&
         Math.abs(summary.getBoundingClientRect().top - side.getBoundingClientRect().top) < 1
@@ -93,14 +103,22 @@ export function useCardRows(
       // makes an 86%-of-the-screen card 86 pixels tall, which pages every
       // table in the game down to its floor. Resolve it against the screen
       // the percentage is of; `CARD_SHARE` covers a cap that is neither.
-      const room = capOf(getComputedStyle(card).maxHeight, screen.clientHeight) - chrome;
+      // …against the screen's CONTENT box, which is what a percentage cap is
+      // a percentage OF: a screen that pads itself (the modal does, the HUD's
+      // centre column does not) has that much less to give away.
+      const pad = getComputedStyle(screen);
+      const inner =
+        screen.clientHeight -
+        (parseFloat(pad.paddingTop) || 0) -
+        (parseFloat(pad.paddingBottom) || 0);
+      const room = capOf(getComputedStyle(box).maxHeight, inner) - chrome;
       setPerPage(rowsPerPage(room, row.offsetHeight, gap, PAGE_MAX, min));
     };
     measure();
     const watch = new ResizeObserver(measure);
     watch.observe(screen);
     return () => watch.disconnect();
-  }, [listRef, column, min]);
+  }, [listRef, column, min, card]);
 
   return perPage;
 }

@@ -40,6 +40,7 @@ import type { ComponentChildren } from "preact";
 
 import { playToggle, playUi } from "./audio/ui.ts";
 import { manualGain } from "./car-stats.ts";
+import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
 import { FadeRow, StepRow, type Stop } from "./menu-knobs.tsx";
 import { PLAY_CAMERAS, type DevSettings, type Settings } from "./settings.ts";
 
@@ -120,6 +121,103 @@ export const DIFFICULTY_OPTIONS: { id: Difficulty; label: string }[] = DIFFICULT
   id,
   label: DIFFICULTIES[id].label,
 }));
+
+/** What a rung costs the player's OWN car, read off the same table the field
+ * is entered from (`damageScaleFor`). Derived rather than written out, so a
+ * retune of `DIFFICULTIES` can never leave the menu quoting a scale the game
+ * no longer runs. */
+function damageWord(damage: number): string {
+  if (damage <= 0) return "NO DAMAGE";
+  if (damage >= 1) return "FULL DAMAGE";
+  if (Math.abs(damage - 0.5) < 0.01) return "HALF DAMAGE";
+  return `${Math.round(damage * 100)}% DAMAGE`;
+}
+
+/** ...and what it does to the FOURTEEN CREWS, which is the other half of the
+ * word and the half a player meets first: a difficulty is a points budget
+ * every rival spends on their own driving, plus how much of their temper
+ * they are allowed off the leash (`budgetFor`, `DIFFICULTIES[].aggression`).
+ * A skill budget is not a figure anybody can read — 27 against 42 says
+ * nothing — so this half is WORDED rather than derived, and the meter beside
+ * it is what says how far up the ladder the rung stands. Keyed by id so a
+ * rung the engine grows arrives wordless rather than mislabelled. */
+const CREW_WORD: Partial<Record<Difficulty, string>> = {
+  easy: "CALM CREWS",
+  medium: "QUICK CREWS",
+  hard: "BEST CREWS",
+};
+
+/** The three rungs as CARDS rather than chips: the meter that says how far up
+ * the ladder each one stands, the word, and the two things the word decides
+ * — how good the crews are, and what a crash costs. */
+export const DIFFICULTY_CARDS: {
+  id: Difficulty;
+  label: string;
+  glyph: GlyphName;
+  crews: string;
+  damage: string;
+}[] = DIFFICULTY_IDS.map((id) => ({
+  id,
+  label: DIFFICULTIES[id].label,
+  // The meter is named for the rung it draws — one mark per idea, and the
+  // idea here IS easy, medium, hard.
+  glyph: id as GlyphName,
+  crews: CREW_WORD[id] ?? "",
+  damage: damageWord(DIFFICULTIES[id].damage),
+}));
+
+/** R29 — HOW HARD THE GAME IS, as the decision it actually is.
+ *
+ * It is not a knob among knobs. It buys every rival crew a bigger budget to
+ * spend on their own driving AND lets more of every impact through to the
+ * player's car, and every result already on the ladder was scored against
+ * one particular answer. A row of three chips the size of the HILLS dial
+ * says none of that. Three cards do, with room to say both halves and for a
+ * meter that reads before the word does, in the green-amber-red every other
+ * scale in the world is painted in.
+ *
+ * `label` is a parameter because HEADS UP asks the same question about its
+ * own field, which is deliberately not the campaign's (see
+ * `RaceSettings.headsUp`) — the two must never look like one setting. */
+export function DifficultyPicker({
+  value,
+  onPick,
+  label = "DIFFICULTY",
+}: {
+  value: Difficulty;
+  onPick: (id: Difficulty) => void;
+  label?: string;
+}) {
+  return (
+    <div className="menu-diff">
+      <span className="menu-label">{label}</span>
+      <div className="menu-diff-opts" role="radiogroup" aria-label={label}>
+        {DIFFICULTY_CARDS.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            role="radio"
+            aria-checked={opt.id === value}
+            className={`menu-diff-opt menu-diff-${opt.id} ${
+              opt.id === value ? "menu-diff-on" : ""
+            }`}
+            onClick={() => {
+              playToggle(true);
+              onPick(opt.id);
+            }}
+          >
+            <Glyph name={opt.glyph} className="menu-diff-meter" />
+            <span className="menu-diff-name">{opt.label}</span>
+            <span className="menu-diff-blurb">
+              <span>{opt.crews}</span>
+              <span>{opt.damage}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** R22 — the two shapes a stage comes in. A circuit is the same minutes of
  * driving as the sprint band it is named for, cut into laps: the road is
@@ -276,6 +374,7 @@ export function MenuHead({
   backLabel,
   title,
   sub,
+  act,
   aside,
 }: {
   back: () => void;
@@ -284,6 +383,17 @@ export function MenuHead({
   /** The page's one line of billing. Omitted on pages whose title says it
    * all — the head then holds the title alone, still on one row. */
   sub?: string;
+  /** THE PAGE'S ONE OTHER PRESS, at the far end of the head. A page whose
+   * content is a grid has nowhere to put a second action that is not a row
+   * of the grid's own height — and a row is the one thing a stage grid on a
+   * phone cannot spare. The head already reserves that line, so a press put
+   * here costs nothing and STAYS on it: where there is no width for the
+   * word, the mark carries it (`.menu-head-act`).
+   *
+   * A press, not a figure — see `aside` for the other kind. A head carries
+   * one or the other: they want the same corner, and only one of them may
+   * fall to a second row. */
+  act?: ComponentChildren;
   /** ONE READING the page is about, given the head's far corner where there
    * is room for it: a figure rather than a sentence, and never something the
    * title already says. Where there is no width for a third column it comes
@@ -310,6 +420,7 @@ export function MenuHead({
         <div className="menu-title">{title}</div>
         {sub !== undefined && <div className="menu-sub">{sub}</div>}
       </div>
+      {act}
       {aside !== undefined && <div className="menu-head-side">{aside}</div>}
     </div>
   );

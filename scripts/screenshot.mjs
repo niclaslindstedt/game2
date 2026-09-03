@@ -1278,9 +1278,31 @@ for (const [name, viewport] of [
   await capture(name, viewport, menuUp, { menu: "1" });
 }
 
-// Campaign: the location, then its four stages with the ladder still locked.
+/** A CAMPAIGN PART-DRIVEN, written straight into the save before the page
+ * boots. A location page with nothing on it is a page of padlocks: the
+ * surface worth looking at is the one carrying what the boxes are for —
+ * times, places, points, and a table with something on it. Three stages in
+ * is where a player spends most of their time on this screen. */
+const PLAYED_IN = `localStorage.setItem(
+  "scandi-flick-campaign",
+  JSON.stringify({
+    finished: ["taiga-1", "taiga-2", "taiga-3"],
+    points: {
+      "taiga-1": { you: 3, frostbite: 2, blink: 1 },
+      "taiga-2": { blink: 3, you: 2, frostbite: 1 },
+      "taiga-3": { you: 3, skarv: 2, granite: 1 },
+    },
+    best: { "taiga-1": 29.53, "taiga-2": 136.85, "taiga-3": 271.4 },
+    places: { "taiga-1": { hard: 1 }, "taiga-2": { hard: 2 }, "taiga-3": { hard: 1 } },
+  }),
+)`;
+
+// Campaign: the location and its ladder, at the two shapes a phone holds it
+// in as well as on a laptop. Portrait is its own shot because the grid, the
+// head's standings press and the difficulty cards all change shape there.
 for (const [name, viewport] of [
   ["shot-menu-campaign", { width: 1280, height: 720 }],
+  ["shot-menu-campaign-portrait", { width: 390, height: 844 }],
   ["shot-menu-campaign-landscape", { width: 844, height: 390 }],
 ]) {
   await capture(
@@ -1292,6 +1314,33 @@ for (const [name, viewport] of [
       await page.waitForTimeout(2500);
     },
     { menu: "1" },
+    "load",
+    { initScript: PLAYED_IN },
+  );
+}
+
+// ...and the table behind the head's STANDINGS press, which is where
+// everything the old panel printed under the boxes now lives. Both shapes:
+// the page it cuts its rows to is measured off the room the modal has, and a
+// phone held sideways is the shape with none.
+for (const [name, viewport] of [
+  ["shot-menu-standings", { width: 390, height: 844 }],
+  ["shot-menu-standings-landscape", { width: 844, height: 390 }],
+]) {
+  await capture(
+    name,
+    viewport,
+    async (page) => {
+      await menuUp(page);
+      await stageGrid(page);
+      await page.locator(".menu-head-act").click();
+      // The pictures are real bodies on a stand, one per idle slot
+      // (car-portraits.ts) — the board is worth photographing with them on.
+      await page.waitForTimeout(9000);
+    },
+    { menu: "1" },
+    "load",
+    { initScript: PLAYED_IN },
   );
 }
 

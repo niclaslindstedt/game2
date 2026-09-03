@@ -2876,6 +2876,84 @@ body {
   margin-top: 0;
 }
 
+/* THE PAGE'S ONE OTHER PRESS, at the far end of the head: the location's
+   standings. It wears the back button's chrome rather than a chip's — the
+   two are the same kind of thing, a way off this page rather than a setting
+   on it — and it is pushed to the right so the head reads as "out ← what
+   this is → the press".
+
+   A press, not a reading (`.menu-head-aside` below is the other kind). The
+   difference is what each does when the head runs out of width: a figure
+   drops to a row of its own under the title, and a press cannot, because a
+   row is the one thing a stage grid on a phone has none of. */
+.menu-head-act {
+  margin-left: auto;
+  align-self: flex-start;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font: inherit;
+  font-size: clamp(0.62rem, 2.1vmin, 0.82rem);
+  letter-spacing: 0.14em;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.5rem;
+  padding: 0.28rem 0.7rem;
+  cursor: pointer;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+.menu-head-solo .menu-head-act {
+  align-self: center;
+}
+
+.menu-head-act:hover,
+.menu-head-act:focus-visible {
+  background: rgb(255 255 255 / 20%);
+}
+
+.menu-head-act .menu-glyph {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+/* The one fact about the table worth reading without opening it: this
+   country has been WON, and the next one is open because of it. */
+.menu-head-act-lit {
+  color: var(--hud-good);
+  border-color: var(--hud-good);
+}
+
+/* Portrait on a phone: the word comes off and the mark carries it. A head
+   is one line, and "‹ CAMPAIGN  TAIGA  ▮▮ STANDINGS" is one line more than
+   360px of it holds — the title is what gets squeezed, and the title is the
+   thing that says where you are. The button keeps its accessible name from
+   the `title` the component sets. */
+@media (orientation: portrait) and (max-width: 26rem) {
+  .menu-head-act-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .menu-head-act {
+    padding: 0.28rem 0.5rem;
+  }
+
+  .menu-head-act .menu-glyph {
+    width: 1.5em;
+    height: 1.5em;
+  }
+}
+
 /* ── A head with a READING in it ─────────────────────────────────────────
    A grid rather than the flex row above, because the reading has two homes
    and they are different CELLS of one layout: under the title where the head
@@ -3204,6 +3282,21 @@ body {
   transform: translateY(1px);
 }
 
+/* THE BOX THE PAGE WOULD PICK — where the campaign left off, the box the
+   pad's cursor lands on and the one START takes. A halo outside the frame
+   rather than a fatter frame or a brighter fill: the border is already
+   carrying open-or-shut across six boxes, and a second meaning painted into
+   it would make one open stage look like a different KIND of stage. The
+   glow sits outside the box, so nothing inside it moves.
+
+   It is what the CONTINUE button on the old standings panel used to say in
+   words, at none of its cost in height. */
+.menu-level-next {
+  box-shadow:
+    0 0 0 2px rgb(255 210 62 / 45%),
+    0 0 0.9rem rgb(255 210 62 / 35%);
+}
+
 .menu-level-locked {
   align-items: center;
   justify-content: center;
@@ -3342,6 +3435,159 @@ body {
   background: var(--hud-good);
   border-color: var(--hud-ink);
   color: var(--hud-shadow);
+}
+
+/* ── R29: DIFFICULTY, as three cards ────────────────────────────────────
+   The biggest control on a stage grid, because it is the biggest decision
+   on one: it sets how good the fourteen crews are AND how much of every
+   impact lands on the player's own car, and every result the boxes above it
+   are showing was scored at one of these three.
+
+   As a row of chips it was the same size as HILLS, and read as a knob. As
+   three cards it reads as a choice: a meter that says how far up the ladder
+   each one stands, the word, and the one number worth printing — what a
+   crash costs there. */
+
+.menu-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.menu-diff-opts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+/* Green, amber, red — the scale everything else in the world that has three
+   rungs is painted in, so the ladder is read before a word on it is. The
+   colour is the CARD's, not the selection's: all three wear their own hue at
+   all times, dimmed until chosen, because the point of the row is the scale
+   and a scale with two grey rungs is not one.
+
+   The green and the amber are the pacenote strip's own (`.hud-pace-soft`,
+   `.hud-pace-medium`); the top rung is the HUD's red, which is where this
+   parts company with a corner call. A hard CORNER has not gone wrong — the
+   note is instruction, and red would read as a reprimand. A hard GAME is a
+   thing the player chose, and red is what they chose it for. */
+.menu-diff-easy {
+  --diff: #6de37f;
+  --diff-soft: rgb(109 227 127 / 18%);
+}
+
+.menu-diff-medium {
+  --diff: #ffd23e;
+  --diff-soft: rgb(255 210 62 / 18%);
+}
+
+.menu-diff-hard {
+  --diff: #ff5a4e;
+  --diff-soft: rgb(255 90 78 / 18%);
+}
+
+.menu-diff-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.6rem 0.4rem 0.5rem;
+  font: inherit;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 7%);
+  border: 3px solid rgb(255 255 255 / 22%);
+  border-radius: 0.7rem;
+  cursor: pointer;
+  text-shadow: none;
+  opacity: 0.72;
+}
+
+.menu-diff-opt:hover,
+.menu-diff-opt:focus-visible {
+  opacity: 1;
+  background: rgb(255 255 255 / 12%);
+}
+
+.menu-diff-opt:active {
+  transform: translateY(1px);
+}
+
+.menu-diff-on {
+  opacity: 1;
+  background: var(--diff-soft);
+  border-color: var(--diff);
+}
+
+.menu-diff-meter {
+  width: clamp(1.35rem, 5vmin, 1.9rem);
+  height: clamp(1.35rem, 5vmin, 1.9rem);
+  color: var(--diff);
+}
+
+.menu-diff-name {
+  font-size: clamp(0.72rem, 2.6vmin, 1rem);
+  letter-spacing: 0.1em;
+  line-height: 1.1;
+}
+
+.menu-diff-on .menu-diff-name {
+  color: var(--diff);
+}
+
+/* What a crash costs at this rung, off the engine's own table. Small: it is
+   the footnote on the choice, not the choice. */
+.menu-diff-blurb {
+  display: flex;
+  flex-direction: column;
+  font-size: clamp(0.5rem, 1.7vmin, 0.64rem);
+  letter-spacing: 0.1em;
+  opacity: 0.7;
+  line-height: 1.25;
+  text-align: center;
+}
+
+/* Each half is a phrase, never half of one: "CALM" over "CREWS" reads as
+   two settings. */
+.menu-diff-blurb > span {
+  white-space: nowrap;
+}
+
+/* Landscape on a phone: three cards laid on their sides. The meter and the
+   word go on one line and the footnote under them comes off — a card whose
+   height is the last slack on a 390px-tall screen has no room for a line
+   that is already the smallest thing on it. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  /* ...and the label beside them rather than over them, the same cut the
+     option rows on this page already take. */
+  .menu-diff {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.7rem;
+  }
+
+  .menu-diff-opts {
+    flex: 1;
+    min-width: 0;
+    gap: 0.4rem;
+  }
+
+  .menu-diff-opt {
+    flex-direction: row;
+    gap: 0.45rem;
+    padding: 0.35rem 0.5rem;
+  }
+
+  /* ...with the two halves stacked in the width the card just gained,
+     beside the word rather than under it. */
+  .menu-diff-blurb {
+    text-align: left;
+  }
+
+  .menu-diff-meter {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
 }
 
 /* A continuous setting: the fader, and the number it is standing at. The
@@ -5742,104 +5988,10 @@ a.menu-version:focus-visible {
   font-style: italic;
 }
 
-/* ── R30: the result sheet ────────────────────────────────────────────────
-   Fifteen rows of place, crew, time and points — the stage's classification
-   on the results card, and the location's standings table in the menu.
-   One layout for both, because they are the same table asked at two
-   different moments, and a player who has learned to read one has learned
-   to read the other.
-
-   Monospaced numerals and fixed columns: a table whose figures wander is a
-   list, and nobody scans a list for their own row. */
-
-.results-table {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  width: 100%;
-  margin: 0.6rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: clamp(0.62rem, 2.1vmin, 0.9rem);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.06em;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.results-row {
-  display: grid;
-  grid-template-columns: 1.8em 1fr 4.4em 2.4em 3.6em;
-  gap: 0.5em;
-  align-items: baseline;
-  padding: 0.12rem 0.35rem;
-  border-radius: 0.3rem;
-}
-
-/* Without a stage in view there are no times and no stage points — only what
-   everybody has. */
-.results-table.is-standings .results-row {
-  grid-template-columns: 1.8em 1fr 3.6em;
-}
-
-/* …and a HEADS-UP race is the other way round: a stage, a time, and no board
-   behind either of them. */
-.results-table.is-race .results-row {
-  grid-template-columns: 1.8em 1fr 4.4em;
-}
-
-.results-pos {
-  text-align: right;
-  opacity: 0.75;
-}
-
-.results-who {
-  letter-spacing: 0.16em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.results-time,
-.results-points,
-.results-total {
-  text-align: right;
-}
-
-.results-points {
-  color: var(--hud-good);
-}
-
-/* The heading is a label, not a row: it never lights up and it never scores. */
-.results-head {
-  font-size: 0.8em;
-  letter-spacing: 0.04em;
-  opacity: 0.6;
-  position: sticky;
-  top: 0;
-  background: rgb(18 48 105 / 92%);
-}
-
-.results-head .results-points {
-  color: inherit;
-}
-
-/* Your own row. Loud on purpose: finding it is the only thing anybody does
-   with a table they are already looking at. */
-.results-row.is-you {
-  background: rgb(255 210 62 / 88%);
-  color: var(--hud-shadow);
-  text-shadow: none;
-}
-
-.results-row.is-you .results-points {
-  color: inherit;
-}
-
-/* ── …and the modal it is shown in ──────────────────────────────────────
+/* ── THE MODAL a board is shown in ─────────────────────────────────────
    Over the top of whatever opened it, with one way out. Fifteen rows is
-   more than a results card can hold, which is exactly why this is a
-   deliberate look rather than another block on the card. */
+   more than a page of stage boxes can hold, which is exactly why this is a
+   deliberate look rather than another row on the page. */
 
 .hud-modal {
   position: fixed;
@@ -6165,6 +6317,85 @@ a.menu-version:focus-visible {
   opacity: 0.6;
 }
 
+/* ── …and the same board as a LOCATION'S TABLE (results-table.tsx) ──────
+   The campaign's fifteen crews after the stages driven so far, behind the
+   STANDINGS press on a location page. Same rows, same pictures, same pager:
+   what changes is that a stage's TIME becomes the WINS that break a tie, and
+   TOTAL is the figure the whole board is about.
+
+   Every rule that changes a COLUMN is scoped to `.is-table`: the rows are
+   shared with the result sheet and the high score board, and an unscoped
+   `.rsheet-total` here would repaint the finish card's own last column. */
+.rsheet.is-table .rsheet-row {
+  grid-template-columns: 2em 3.6rem minmax(0, 1fr) 4.2em 2.6em;
+}
+
+/* On this board the TOTAL is the figure the whole page is about, where on a
+   stage's sheet it is the running total beside what the stage just paid. */
+.rsheet.is-table .rsheet-total {
+  color: var(--hud-good);
+}
+
+/* The tie-break, and the line a campaign is remembered by. */
+.rsheet-wins {
+  text-align: right;
+  font-size: 0.82em;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+/* A crew who has not scored: the row is still theirs, but the board is
+   about the ones who have. */
+.rsheet-row.is-nought .rsheet-total {
+  opacity: 0.5;
+}
+
+.rsheet.is-table .rsheet-row.is-you .rsheet-total,
+.rsheet-row.is-you .rsheet-wins {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* The board fills the modal and reads left to right. The modal itself
+   centres its title, its sub and its ways out — a card of announcements —
+   and a TABLE centred inside one is a table whose columns wander. */
+.hud-modal-board .rsheet {
+  width: 100%;
+  text-align: left;
+}
+
+/* The board's head: what the rows ARE on the left, the pager on the right.
+   It never wraps — the count is three words and the arrows have to stay on
+   its line — and where the player stands is the modal's own centred line
+   above it. */
+.hud-modal-board .rsheet-head {
+  justify-content: space-between;
+}
+
+.hud-modal-board .rsheet-count {
+  white-space: nowrap;
+}
+
+/* Where the player stands, in caps like the rest of the menu's voice. */
+.hud-modal-board .hud-modal-sub {
+  color: var(--hud-good);
+  opacity: 0.9;
+}
+
+/* The board's modal is wider than a plain one — five columns and a picture
+   in every row — and it SCROLLS as a last resort: the page is measured to
+   fit, but a browser zoomed in far enough to beat the row floor must still
+   be able to reach CLOSE. */
+.hud-modal-board {
+  width: min(34rem, 100%);
+  /* Solid, where the announcement modals are 96%: a table is a document, and
+     the stage boxes reading faintly through its rows are a column of figures
+     with somebody else's words in it. */
+  background: #123069;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* A phone held sideways, where the whole screen is 390px tall and the card
    still owes its table five rows (`PAGE_FLOOR`): shorter rows, and the
    pictures cut to them. The podium keeps its margin over the rest — it comes
@@ -6195,86 +6426,30 @@ a.menu-version:focus-visible {
   }
 }
 
-/* ── R30: the standings panel on a location page ────────────────────────
-   What the stage boxes above it are being driven for: where the table
-   stands, the way back into it, and the way to drive it all again. */
+/* ── R30: the standings, in the modal the head's button opens ───────────
+   What the stage boxes are being driven for. It used to be a panel under
+   them — a line of figures and a row of buttons, permanently taking the
+   height of a seventh stage box on a page whose job is to show six — and it
+   is now a press at the far end of the head (`.menu-head-act`) and a table
+   over the top of the page. What survives here is the FOOT of that table:
+   the gate, and the press that tears the points up. */
 
-.menu-standings {
+.menu-standings-foot {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.5rem 0.7rem;
-  border: 2px solid rgb(255 255 255 / 30%);
-  border-left: 6px solid var(--hud-good);
-  border-radius: 0.6rem;
-  background: rgb(255 255 255 / 8%);
-}
-
-.menu-standings-line {
-  display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 0.3rem 0.7rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.menu-standings-line .menu-glyph {
-  width: 1.1em;
-  height: 1.1em;
-  color: var(--hud-good);
-}
-
-.menu-standings-place {
-  font-size: clamp(0.8rem, 2.8vmin, 1.1rem);
-  letter-spacing: 0.08em;
-}
-
-.menu-standings-won {
-  color: var(--hud-good);
-}
-
-.menu-standings-points {
-  font-size: clamp(0.8rem, 2.8vmin, 1.1rem);
-  color: var(--hud-good);
-}
-
-.menu-standings-run {
-  margin-left: auto;
-  font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
-  letter-spacing: 0.12em;
-  opacity: 0.72;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 0.7rem;
+  margin-top: 0.6rem;
 }
 
 /* The one gate a padlock cannot teach: a country whose stages are all
-   driven still needs its table topped. It rides on the same line as the
-   figures rather than owning a row, and it is only there when it applies. */
+   driven still needs its table topped. Only there when it applies. */
 .menu-standings-hint {
-  flex-basis: 100%;
   font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
   letter-spacing: 0.1em;
   color: var(--hud-good);
   opacity: 0.85;
-}
-
-.menu-standings-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-/* Landscape on a phone: the panel's own chrome comes off before anything on
-   it does — six stage boxes and a table on a 390px-tall screen leaves the
-   padding as the only slack there is. */
-@media (orientation: landscape) and (max-height: 34rem) {
-  .menu-standings {
-    gap: 0.3rem;
-    padding: 0.4rem 0.6rem;
-  }
-}
-
-.menu-standings-go {
-  border-color: var(--hud-good);
-  color: var(--hud-good);
 }
 
 /* A country still behind the table before it: the tile is a wall with the
