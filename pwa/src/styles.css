@@ -4207,18 +4207,26 @@ a.menu-version:focus-visible {
 }
 
 /* ── Roam ────────────────────────────────────────────────────────────────
-   A split view: the STAGE pane (a window onto the live map), the CAR on its
-   stand, and the CONDITIONS. `.roam-map` deliberately paints NOTHING — the
-   game canvas is behind it, and the renderer scissors the map view into
-   exactly that rectangle (setMapRect), so the pane is a hole rather than a
-   picture. Give it a background and the map disappears. */
+   Two panes: the MAP, which is the stage, and the SETTINGS that build it.
+   The car is not on this page — it is the pre-race card after it — so the
+   whole width is spent on the one question being asked here.
+
+   `.roam-map` deliberately paints NOTHING. The game canvas is behind the
+   DOM layer and the renderer scissors the map view into exactly that
+   rectangle (setMapRect), so the pane is a HOLE rather than a picture: give
+   it a background and the map disappears, and a `backdrop-filter` frosts
+   the very thing it is a window onto.
+
+   The settings are the OPTIONS page's own rows (`.knob`, further down this
+   sheet) and nothing new, so everything here is layout: where the column
+   stands, how far it scrolls, and what stays pinned while it does. */
 
 .roam {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.45rem;
   padding: max(0.7rem, env(safe-area-inset-top)) max(0.7rem, env(safe-area-inset-right))
     max(0.7rem, env(safe-area-inset-bottom)) max(0.7rem, env(safe-area-inset-left));
   pointer-events: none;
@@ -4228,20 +4236,417 @@ a.menu-version:focus-visible {
   pointer-events: auto;
 }
 
+/* The way out and the page's name, on ONE thin row over both panes. It is
+   the only row on this page that is neither the map nor a setting, so it is
+   as short as a row can be and still hold a button. Its text sits on the
+   flat sky the renderer leaves around the map, which is why it carries the
+   HUD's shadow rather than a plate. */
+.roam-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  text-shadow:
+    2px 2px 0 var(--hud-shadow),
+    -1px -1px 0 var(--hud-shadow);
+}
+
+.roam-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: clamp(0.95rem, 3.2vmin, 1.45rem);
+  letter-spacing: 0.18em;
+  color: var(--hud-good);
+}
+
+.roam-title .menu-glyph {
+  width: 1.15em;
+  height: 1.15em;
+}
+
 .roam-split {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
-.roam-column {
+/* THE HOLE. Transparent by design — see the block comment above. It is also
+   the handle on the map camera, so the browser must not claim the drag for
+   a scroll or a page zoom before the pane sees it.
+
+   Stacked on a phone it takes a third of the height and no less: below that
+   the country stops being something you can judge, and the settings under
+   it scroll on their own rather than eating it. */
+.roam-map {
+  position: relative;
+  flex: 1 1 34vh;
+  min-height: min(34vh, 15rem);
+  border-radius: 0.7rem;
+  border: 2px solid rgb(255 255 255 / 22%);
+  touch-action: none;
+  cursor: grab;
+}
+
+.roam-map:active {
+  cursor: grabbing;
+}
+
+/* Everything the map says about itself, stacked along its foot: the gesture
+   hint first, then the viewer's tools under it. One anchored stack, so the
+   rows cannot drift apart or land on top of each other, and it is deaf by
+   default — a strip lying across the pane must not swallow the drag it is
+   advertising, so only the controls inside it take a pointer. */
+.roam-map-foot {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.3rem;
+  pointer-events: none;
+}
+
+/* What the map can be DONE to. Quiet, and it wraps rather than running off
+   the pane: on a phone this is four gestures' worth of words across a
+   narrow column. */
+.roam-map-hint {
+  font-size: clamp(0.46rem, 1.5vmin, 0.6rem);
+  letter-spacing: 0.14em;
+  opacity: 0.6;
+  text-shadow:
+    2px 2px 0 var(--hud-shadow),
+    -1px -1px 0 var(--hud-shadow);
+}
+
+/* THE SETTINGS COLUMN: the rows, and under them the one thing that must not
+   scroll away from them — the way on. */
+.roam-side {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: rgb(18 48 105 / 80%);
+  border: 3px solid rgb(255 255 255 / 45%);
+  border-radius: 0.9rem;
+  padding: clamp(0.5rem, 1.8vmin, 0.85rem);
+  backdrop-filter: blur(3px);
+}
+
+/* WHICH ROAD — a button across the whole column, above the rows. It is the
+   one press here that changes every setting at once (a campaign stage
+   brings its seed, its band, its shape and its weather with it), so it is
+   not a row among fourteen; and once a stage is loaded it is a READOUT as
+   much as a control, which is what the lit state is for. */
+.roam-pick {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 2.9rem;
+  font: inherit;
+  font-size: clamp(0.72rem, 2.2vmin, 0.94rem);
+  letter-spacing: 0.14em;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 9%);
+  border: 2px solid rgb(255 255 255 / 30%);
+  border-radius: 0.6rem;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  text-align: left;
+  text-shadow: none;
+}
+
+.roam-pick:hover,
+.roam-pick:focus-visible,
+.roam-pick.nav-cursor {
+  background: rgb(255 210 62 / 18%);
+  border-color: rgb(255 210 62 / 60%);
+}
+
+.roam-pick-on {
+  color: var(--hud-good);
+  background: rgb(255 210 62 / 12%);
+  border-color: rgb(255 210 62 / 55%);
+}
+
+.roam-pick-glyph {
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+}
+
+.roam-pick-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roam-pick-go {
+  flex: none;
+  font-size: 1.3em;
+  line-height: 1;
+  opacity: 0.6;
+}
+
+/* The rows are the only part that scrolls. Auto-fit rather than a fixed
+   count, so ONE rule gives a phone a single column and a laptop's wider
+   column two. */
+.roam-knobs {
+  /* Shrink-to-content, not grow-to-fill: with the card free to stop where
+     its rows do (below), a knobs box that took the slack would put a band
+     of empty plate between the last row and the way on. */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  align-content: start;
+  gap: clamp(0.45rem, 1.6vmin, 0.9rem);
+}
+
+/* The groups are packed into the two columns by ROW COUNT rather than by
+   subject order — seven a side — so neither column ends short. Authored,
+   because only this file knows how tall each group is. */
+.roam-knob-col {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 2vmin, 1rem);
+  min-width: 0;
+}
+
+/* Roam's rows stand TWO COLUMNS to a card, so every horizontal measure on
+   them is cut to what its longest word actually needs: the value to
+   LAKELAND, the name to WEATHER. The arrows still line up down each column,
+   which is the rule that matters — a page whose arrows wander is a page the
+   eye has to hunt across — and they keep a thumb's width, which is the rule
+   that outranks it. */
+.roam-knobs .knob-value {
+  width: clamp(5.6rem, 26vw, 9rem);
+}
+
+.roam-knobs .knob-word {
+  font-size: clamp(0.66rem, 2.1vmin, 0.82rem);
+}
+
+.roam-knobs .knob-arrow {
+  width: 2.1rem;
+}
+
+.roam-knobs .knob-label {
+  font-size: clamp(0.6rem, 2vmin, 0.76rem);
+  letter-spacing: 0.08em;
+}
+
+.roam-knobs .knob-glyph {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+/* Bigger than the options page's rows, and deliberately: this column is
+   seven rows where that page is five or six, so the extra height is what
+   the card has spare — and a row a thumb finds first time is worth more
+   here than anywhere, because Roam is where a phone spends its longest. */
+.roam-knobs .knob {
+  min-height: 3.1rem;
+  padding-left: 0.55rem;
+}
+
+.roam-knobs .knob-rows {
+  gap: 0.35rem;
+}
+
+.roam-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* The way on wears the menu's green light and carries the mark of what is
+   behind it, because what is behind it is a screen and not a start line. */
+.roam-foot .menu-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.roam-foot .menu-start .menu-glyph {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+/* Roam in LANDSCAPE: the map takes the room and the settings stand beside
+   it. Written immediately after the base rules it overrides — a media-query
+   block adds no specificity, so one placed earlier than the rule it
+   overrides silently loses the cascade. */
+@media (min-aspect-ratio: 5 / 4) {
+  .roam-split {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .roam-map {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  /* Wide enough for two columns of rows on a laptop. It stops where its
+     rows do rather than stretching to the map's height — a card is as tall
+     as what is in it, and the empty plate under a short column is the one
+     thing a page made of two panes cannot hide. Past full height the rows
+     scroll inside it instead. */
+  .roam-side {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    max-height: 100%;
+    width: clamp(18rem, 48vw, 38rem);
+  }
+
+  /* Two rows abreast means every horizontal measure is cut to its longest
+     word: the value to LAKELAND, the name to WEATHER. */
+  .roam-knobs .knob-value {
+    width: 5.2rem;
+  }
+}
+
+/* A phone held sideways is its own shape: `vmin` there IS the scarce axis,
+   so every clamp above lands on its floor and the card still does not fit.
+   Cut the plate, not the rows — the arrows stay a thumb wide. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .roam {
+    gap: 0.3rem;
+    padding: max(0.4rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right))
+      max(0.4rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
+  }
+
+  .roam-head {
+    gap: 0.6rem;
+  }
+
+  .roam-title {
+    font-size: 1rem;
+  }
+
+  /* THE SETTINGS TAKE THE WIDTH HERE, and the map gives it up: a phone held
+     sideways has 390 px of height, and one column of rows in it shows four
+     of fourteen. Two narrow columns show nine, and a 340 px map is still a
+     country you can judge — where a column you have to scroll four times is
+     not a page anybody reads to the end of. */
+  .roam-side {
+    width: clamp(17rem, 60vw, 30rem);
+    padding: 0.35rem;
+    border-width: 2px;
+    gap: 0.3rem;
+  }
+
+  /* 13rem is the width a row actually needs at these metrics, not the width
+     two of them would fit in: `auto-fit` will make a second column out of
+     anything the minimum allows, and a 190 px column truncates every label
+     on the page. A 667 px phone falls back to one column here, and that is
+     the right answer for it. */
+  .roam-knobs {
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 0.35rem;
+  }
+
+  /* Order of cuts on a screen this short: the plate first, then the words,
+     and the targets last — 2rem is the arrow every other card in the menu
+     stands down to at this shape, so the rows match them rather than
+     inventing a smaller one. */
+  .roam-knob-col {
+    gap: 0.35rem;
+  }
+
+  .roam-knobs .knob {
+    min-height: 2.3rem;
+    gap: 0.4rem;
+    padding-left: 0.3rem;
+    padding-right: 0.15rem;
+  }
+
+  .roam-knobs .knob-ctl {
+    gap: 0.05rem;
+  }
+
+  .roam-knobs .knob-label {
+    font-size: 0.6rem;
+    gap: 0.35rem;
+  }
+
+  .roam-knobs .knob-glyph {
+    width: 1.1em;
+    height: 1.1em;
+  }
+
+  .roam-knobs .knob-word {
+    font-size: 0.68rem;
+  }
+
+  .roam-knobs .knob-value {
+    width: 3.9rem;
+  }
+
+  .roam-knobs .knob-arrow {
+    width: 2rem;
+    height: 2rem;
+    font-size: 1.15rem;
+  }
+
+  .roam-pick {
+    min-height: 2.4rem;
+    font-size: 0.8rem;
+  }
+
+  .roam-foot {
+    gap: 0.25rem;
+  }
+
+  .roam-foot .menu-start {
+    min-height: 2.5rem;
+    font-size: 1.05rem;
+    padding: 0.3rem 0.8rem;
+  }
+}
+
+/* ...and the SHORTEST phone held sideways (667x375 and its like) cannot make
+   two columns out of 60% of its width, so it should not be charged for them:
+   one column needs 21rem, and every pixel over that is a pixel taken off the
+   map for nothing. Written after the block above, which sets the same
+   property — a media query adds no specificity, so only source order
+   separates them. */
+@media (orientation: landscape) and (max-height: 34rem) and (max-width: 45rem) {
+  .roam-side {
+    width: 21rem;
+  }
+}
+
+/* ── The developer's map viewer ──────────────────────────────────────────
+
+   The same window, filling the screen, with the generator's layers over it
+   and the stage list behind one press. It keeps the old plate-and-pane
+   shape because it is a workbench rather than a page a player reads: the
+   header carries every control the viewer has, and the map takes the rest.
+
+   It fills the PANE rather than the viewport, and that is the difference
+   between the map's own controls being on the page and being off the edge
+   of it: a hole pinned to the viewport puts everything anchored inside it —
+   the layer switch, the gesture hint — outside the frame the pane draws,
+   and on a phone that means under the home bar and behind the status bar. */
+.roam-view .roam-split {
+  flex-direction: column;
 }
 
 .roam-pane {
@@ -4257,36 +4662,30 @@ a.menu-version:focus-visible {
 
 /* The stage pane FRAMES the map hole, so it paints nothing across it: a
    background here — even a translucent one — sits between the viewer and
-   the canvas and drains every colour out of the landscape, and a
-   backdrop-filter frosts the very thing the pane is a window onto. Its own
-   text sits on the flat sky the renderer leaves around the map, which is
-   why the labels carry the HUD's shadow. */
+   the canvas and drains every colour out of the landscape. Its own text
+   sits on the flat sky the renderer leaves around the map, which is why the
+   labels carry the HUD's shadow. */
 .roam-pane-stage {
-  /* Grows into the room there is, and never shrinks below its own contents:
-     stacked on a phone the pane is taller than the viewport, and a pane that
-     shrank would simply cut the last two dials off. The split scrolls. */
-  flex: 1 0 auto;
+  flex: 1;
+  min-height: 0;
   background: none;
   backdrop-filter: none;
+  padding: 0;
+  border: 0;
   text-shadow:
     2px 2px 0 var(--hud-shadow),
     -1px -1px 0 var(--hud-shadow);
 }
 
-/* The stage pane's header carries the whole page's chrome — the way back,
-   the page's name, and the seed — so none of it costs a row of its own
-   above the map. It wraps rather than crushing on a narrow phone. */
+/* The viewer's header carries the whole page's chrome — the way back, the
+   copy mark, which road is under the layers, and the seed — so none of it
+   costs a row of its own above the map. It wraps rather than crushing on a
+   narrow phone. */
 .roam-pane-head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.3rem 0.7rem;
-}
-
-.roam-title {
-  font-size: clamp(0.9rem, 3.4vmin, 1.4rem);
-  letter-spacing: 0.16em;
-  color: var(--hud-good);
 }
 
 .roam-pane-title {
@@ -4295,10 +4694,14 @@ a.menu-version:focus-visible {
   color: var(--hud-good);
 }
 
-/* COPY DEBUG INFO, as a mark in the header where the page's name was. It
-   wears the seed stepper's chrome rather than the tool row's, because that
-   is the row it is now in — a button in a header has to look like the other
-   buttons in that header, not like the ones it moved away from. */
+.roam-map-full {
+  min-height: 0;
+  flex: 1;
+}
+
+/* COPY DEBUG INFO, as a mark in the header. It wears the seed stepper's
+   chrome rather than the tool row's, because that is the row it is in — a
+   button in a header has to look like the other buttons in that header. */
 .map-copy {
   display: flex;
   align-items: center;
@@ -4336,109 +4739,6 @@ a.menu-version:focus-visible {
 .map-copy-said {
   font-size: 0.58em;
   letter-spacing: 0.12em;
-}
-
-/* Everything the map says about itself, stacked along its foot: the gesture
-   hint first, then the developer's tools under it. One anchored stack, so
-   the rows cannot drift apart or land on top of each other, and it is deaf
-   by default — a strip lying across the pane must not swallow the drag it
-   is advertising, so only the controls inside it take a pointer. */
-.roam-map-foot {
-  position: absolute;
-  left: 0.5rem;
-  right: 0.5rem;
-  bottom: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.3rem;
-  pointer-events: none;
-}
-
-/* What the map can be DONE to. Quiet, and it wraps rather than running off
-   the pane: on a phone this is four gestures' worth of words across a
-   narrow column. */
-.roam-map-hint {
-  font-size: clamp(0.46rem, 1.5vmin, 0.6rem);
-  letter-spacing: 0.14em;
-  opacity: 0.6;
-}
-
-/* The hole. Transparent by design — see the block comment above. It is also
-   the handle on the map camera: the browser must not claim the drag for a
-   scroll or a page zoom before the pane sees it. */
-.roam-map {
-  position: relative;
-  flex: 1;
-  /* The floor is what a phone held SIDEWAYS can spare once the slider and
-     five dials have had theirs — everything taller gets 30vh. */
-  min-height: clamp(6.5rem, 30vh, 22rem);
-  border-radius: 0.6rem;
-  border: 2px solid rgb(255 255 255 / 22%);
-  touch-action: none;
-  cursor: grab;
-}
-
-.roam-map:active {
-  cursor: grabbing;
-}
-
-/* ── The developer's map ─────────────────────────────────────────────────
-
-   Blown up to fill the STAGE PANE, which with the column and the slider
-   taken off below is the whole screen inside its own frame. The pane
-   measures itself and hands its rectangle up (see MapPane), and the
-   renderer scissors the map view into whatever it is told — so growing the
-   hole is the whole of "full screen", and nothing in the renderer knows
-   about it. The page stays standing underneath, which is what makes SHRINK
-   a press rather than a reload.
-
-   It fills the pane rather than covering the VIEWPORT, and that is the
-   difference between the map's own controls being on the page and being off
-   the edge of it: a hole pinned to the viewport puts everything anchored
-   inside it — the layer switch, the gesture hint — outside the frame the
-   pane draws, and on a phone that means under the home bar and behind the
-   status bar. Inside the pane they land where every other control on this
-   page lands. */
-.roam-map-full {
-  min-height: 0;
-}
-
-/* The pane paints NOTHING — that is the whole design (see above) — so
-   blowing it up to the screen does not by itself hide anything: the car
-   stand and the dials go on showing straight through the map they are
-   supposed to have got out of the way of. They are taken off explicitly.
-   The stage pane's own header stays: the seed stepper and the stage list
-   are exactly what somebody reading these layers reaches for next.
-
-   DRIVE IT STAYS TOO, and that is not an oversight. ROAM IS A PAGE FOR
-   DRIVING: a map you are looking at here is a map you are deciding whether
-   to take out, and full screen is exactly when you have decided. The column
-   used to come off whole, which left the map at its most convincing with no
-   way onto it. The viewer is the page that looks and does not drive, and it
-   is `.roam-view` below. */
-.roam-full .roam-length,
-.roam-full .roam-column > *:not(.menu-start) {
-  display: none;
-}
-
-/* ...and with only that button left in it, the column takes a button's
-   width rather than the quarter of the screen the dials needed — otherwise
-   "full screen" would be the map plus an empty pane beside it. Two classes
-   deep on purpose: it has to outrank the landscape rule that pins the
-   column's width, which is written further down the sheet. */
-.roam-full .roam-column {
-  width: auto;
-}
-
-/* THE DEVELOPER'S MAP VIEWER — the same page with the driving half not
-   rendered at all (menu-roam.tsx), so there is nothing here to hide: the
-   split holds one pane, and the pane holds the map. The rule exists to say
-   the pane cannot be shrunk out of it, which on Roam is a toggle and here
-   is the shape of the page. */
-.roam-view .roam-pane-stage {
-  flex: 1;
-  min-height: 0;
 }
 
 /* The layer switch, in the map's foot stack under the gesture hint. It is
@@ -4491,6 +4791,14 @@ a.menu-version:focus-visible {
   border-color: var(--hud-good);
 }
 
+/* A tool with nothing to say yet: the stage is still being generated, so
+   the button that would copy its numbers is offered but dead, rather than
+   absent and arriving under the pointer a second later. */
+.map-tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* The ramp, spelled out: a colour is only a reading if the numbers beside
    it say what it is worth. */
 .map-legend {
@@ -4520,20 +4828,10 @@ a.menu-version:focus-visible {
   border: 1px solid rgb(0 0 0 / 45%);
 }
 
-/* A tool with nothing to say yet: the stage is still being generated, so
-   the button that would copy its numbers is offered but dead, rather than
-   absent and arriving under the pointer a second later. */
-.map-tool:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
 /* WHICH STAGE IS ON THE MAP, and the way to make it another one. It wears
    the header's own chrome — the same plate the seed's arrows and the copy
-   mark wear — because a button in a row of buttons has to look like the row
-   it is in. Lit once a campaign stage is loaded: at that point it is a
-   readout as much as a control, and the name on it is the answer to the
-   only question this page's header is ever asked. */
+   mark wear. Lit once a campaign stage is loaded: at that point it is a
+   readout as much as a control. */
 .roam-level {
   display: flex;
   align-items: center;
@@ -4595,70 +4893,6 @@ a.menu-version:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.roam-length {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  flex: 0 0 auto;
-}
-
-.roam-slider {
-  width: 100%;
-  accent-color: #ffd23e;
-  cursor: pointer;
-}
-
-.roam-length-read {
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-  font-size: clamp(0.56rem, 1.9vmin, 0.74rem);
-  font-style: normal;
-  font-weight: 500;
-  opacity: 0.8;
-}
-
-.roam-length-read b {
-  font-style: italic;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: var(--hud-good);
-  opacity: 1;
-}
-
-/* The generator's dials, under the map they change. In COLUMNS, and tighter
-   than the conditions rows: a dial is a short label over three small chips,
-   so one per line spends the pane's whole width on a third of it and takes
-   five lines off the map. Auto-fit rather than a fixed count — the same rule
-   gives a phone one column and a desktop four. */
-.roam-dials {
-  display: grid;
-  /* Two columns on the narrowest phone — a dial per full-width line is the
-     stack this layout exists to get rid of, and a chip wrapping now and then
-     costs less than that. Landscape widens the column below, where there is
-     room for all three chips on one line. */
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: 0.2rem 0.75rem;
-  flex: 0 0 auto;
-}
-
-.roam-dials .menu-row {
-  gap: 0.4rem;
-}
-
-.roam-dials .menu-opts {
-  gap: 0.25rem;
-}
-
-.roam-dials .menu-label {
-  font-size: clamp(0.5rem, 1.6vmin, 0.64rem);
-}
-
-.roam-dials .menu-opt {
-  padding: 0.2rem 0.34rem;
-  font-size: clamp(0.48rem, 1.5vmin, 0.6rem);
-}
-
 /* ── Options ─────────────────────────────────────────────────────────────
    ONE SILHOUETTE PER ROW (menu-knobs.tsx): the setting's name on the left,
    its value on the right between two arrows, and under the value the pips
@@ -4690,12 +4924,22 @@ a.menu-version:focus-visible {
 
 .knob-group-title {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font: inherit;
   font-size: clamp(0.56rem, 1.9vmin, 0.72rem);
   letter-spacing: 0.24em;
   color: var(--hud-good);
   padding: 0 0.25rem 0.15rem;
   border-bottom: 2px solid rgb(255 210 62 / 30%);
+}
+
+/* A group's own mark leads its rule, in the yellow the word is already in:
+   here the glyph IS the heading, so it has nothing to compete with. */
+.knob-group-glyph {
+  width: 1.5em;
+  height: 1.5em;
 }
 
 .knob-rows {
@@ -4732,8 +4976,36 @@ a.menu-version:focus-visible {
 .knob-label {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: clamp(0.66rem, 2.2vmin, 0.86rem);
   letter-spacing: 0.12em;
+}
+
+.knob-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* THE MARK A ROW LEADS WITH, where the page gives it one. Sized off the
+   row's own text so it sits on the same measure as the word beside it, and
+   painted in the ink at reduced weight rather than in the yellow: the VALUE
+   is what the eye is meant to find on a row, and a gold mark at the other
+   end of it competes for exactly that glance. */
+.knob-glyph {
+  flex: none;
+  width: 1.35em;
+  height: 1.35em;
+  opacity: 0.7;
+}
+
+.knob:hover .knob-glyph,
+.knob:focus-within .knob-glyph,
+.knob.nav-cursor .knob-glyph {
+  opacity: 1;
 }
 
 .knob-ctl {
@@ -4787,6 +5059,33 @@ a.menu-version:focus-visible {
   letter-spacing: 0.1em;
   color: var(--hud-good);
   white-space: nowrap;
+}
+
+/* A VALUE THAT IS ITSELF A PRESS — Roam's seed, which rolls a new one. It
+   is drawn as the reading it is and lights up like a control only under the
+   pointer, so the row still reads as a row of settings rather than as a row
+   with a button hidden in the middle of it. */
+.knob-roll {
+  /* The three font longhands rather than the `font` shorthand: `font:
+     inherit` would also reset the size to the row's, throwing away the
+     value's own clamp two rules above. */
+  font-family: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  color: inherit;
+  border: 2px solid transparent;
+  border-radius: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  background: transparent;
+  cursor: pointer;
+  text-shadow: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.knob-roll:hover,
+.knob-roll:focus-visible {
+  border-color: rgb(255 210 62 / 55%);
+  background: rgb(255 210 62 / 16%);
 }
 
 .knob-pips {
@@ -5489,42 +5788,6 @@ a.menu-version:focus-visible {
 /* The chassis is a control, not a picture: it takes the developer secret. */
 .car-pick-stage {
   cursor: pointer;
-}
-
-/* Roam in landscape: the stage pane takes the room and the knobs stack in a
-   column beside it. Written AFTER the base `.roam-*` rules on purpose — a
-   media-query override placed earlier than the rule it overrides silently
-   loses the cascade. */
-@media (min-aspect-ratio: 5 / 4) {
-  .roam-split {
-    flex-direction: row;
-    align-items: stretch;
-  }
-
-  .roam-column {
-    flex: 0 0 auto;
-    /* Wide enough for the stage dials to stand two abreast in it — they
-       moved here off the map, and stacked one per line they would give the
-       column back the height the map just won. */
-    width: min(26rem, 40vw);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-
-  .roam-dials {
-    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
-  }
-
-  .roam-pane-stage {
-    flex: 1;
-    min-width: 0;
-    /* A phone held sideways has ~390 px of height for the map, the slider
-       and five dials. It fits; if a shorter shell ever does not, the pane
-       scrolls rather than cutting the last dial in half (the map pane
-       re-measures itself on scroll). */
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
 }
 
 /* ── The new-build card ──────────────────────────────────────────────────

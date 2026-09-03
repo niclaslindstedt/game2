@@ -9,13 +9,15 @@
 // and what a locked box asks for, and nothing else about a stage box is a
 // page's business.
 //
-// The same stages come round a fourth time as a LIST rather than a grid —
-// `StagePicker`, at the foot of this file — for Roam, which offers them
-// behind no gate at all.
+// The same stages come round a fourth time behind NO gate at all —
+// `StagePicker`, at the foot of this file — for Roam and for the developer's
+// map viewer, which put a road on the map rather than on a start line: the
+// same country rows and the same boxes, with every padlock off, because a
+// stage should look like itself wherever it is offered.
 //
-// And ABOVE the grid, on the same three pages, sits the step that chooses
+// And ABOVE the grid, on all of those pages, sits the step that chooses
 // which country's six are being looked at: `LocationList`. It is the same
-// row of banners on all three because the question is the same one — where
+// row of banners everywhere because the question is the same one — where
 // am I driving — and only the gate behind it differs.
 
 import { FIELD_SIZE, STAGE_RULES, type Difficulty } from "@engine";
@@ -35,6 +37,7 @@ import {
   type CampaignLocation,
   type CampaignProgress,
 } from "./campaign.ts";
+import { MenuHead } from "./menu.tsx";
 import { ROUTE_STROKE, biomeShot, routeShape } from "./stage-preview.ts";
 import { PLAYER_ID } from "./standings.ts";
 
@@ -353,33 +356,6 @@ export function LocationList({
   );
 }
 
-/** One stage as a LINE: its name, and the spec that would be loaded off it. */
-function StageLine({
-  level,
-  loaded,
-  onPick,
-}: {
-  level: CampaignLevel;
-  /** This is the stage already on the map — the cursor lands here. */
-  loaded: boolean;
-  onPick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={loaded ? "menu-item menu-item-on" : "menu-item"}
-      data-nav-focus={loaded ? "" : undefined}
-      onClick={onPick}
-    >
-      {level.name.toUpperCase()}
-      <span className="menu-item-sub">
-        seed {level.seed} · {lengthLabel(level)} · {level.timeOfDay} {level.weather} ·{" "}
-        {level.season}
-      </span>
-    </button>
-  );
-}
-
 /** THE STAGE LIST — the campaign's own roads, offered to a page that is not
  * the campaign.
  *
@@ -388,31 +364,39 @@ function StageLine({
  * somebody is actually going to drive: the shipped stages are authored, and
  * a defect in one of them is a defect a player will meet. Picking one here
  * loads its exact spec — seed, band, shape, and the hour, weather and season
- * it is set in — into Roam's own settings, where every one of them can then
- * be changed and the whole thing DRIVEN. That is the difference between this
- * and the grid above: nothing here is locked, nothing here is scored, and
- * what comes back is a setup rather than a race.
+ * it is set in — into the page's own settings, where every one of them can
+ * then be changed and the whole thing DRIVEN. That is the difference between
+ * this and the campaign's ladder: nothing here is locked and nothing here is
+ * scored, and what comes back is a setup rather than a race.
  *
- * A list rather than boxes, for the same reason: what is wanted off a stage
- * here is its numbers — which seed, which band, what it is set in — and a
- * box the size of a thumb has no room for them.
+ * It is the campaign's own two surfaces, though, and deliberately so: the
+ * country rows with their banners, then that country's six stage boxes with
+ * their roads drawn on them. A player who has picked a stage on the campaign
+ * ladder has already learnt this screen, and a picture of the road is worth
+ * more than the seed number the list used to print — the seed is on the page
+ * underneath, on the row that steps it.
  *
- * The country step is kept even while there is only one country to keep it
- * for: the biome is the axis this list exists to walk, and a list of one is
- * a list that becomes right the moment a second one lands. */
+ * The BESTS still show on a box, because a time is a fact about the road and
+ * not about the discipline; the places and the points do not, because a Roam
+ * run scores nothing (`difficulty` left off, see `LevelGrid`). */
 export function StagePicker({
   loaded,
   back,
+  progress,
   onPick,
   onBack,
 }: {
   /** The level id currently loaded, so the list can say which one you are
-   * looking at. Null on a bare seed. */
+   * looking at — the box wears the ring and the cursor lands on it. Null on
+   * a bare seed. */
   loaded: string | null;
   /** What the page underneath is called — the list is opened from two of
    * them, and a back button that names the wrong one is worse than one that
    * names nothing. */
   back: string;
+  /** The board, for the best times on the boxes. Nothing here is gated on
+   * it: every stage is open. */
+  progress: CampaignProgress;
   onPick: (level: CampaignLevel) => void;
   onBack: () => void;
 }) {
@@ -420,46 +404,41 @@ export function StagePicker({
     () => LOCATIONS.find((l) => l.levels.some((v) => v.id === loaded))?.id ?? null,
   );
   const location = locationId === null ? null : LOCATIONS.find((l) => l.id === locationId);
+  const here = location?.levels.find((l) => l.id === loaded) ?? null;
   return (
     <div className="menu-card menu-card-wide">
       {/* Back steps WITHIN the list before it leaves it, so a controller's B
           walks the same two steps the presses came in on. */}
-      <button
-        type="button"
-        className="menu-back"
-        data-nav-back
-        onClick={() => (location ? setLocationId(null) : onBack())}
-      >
-        ‹ {location ? "STAGES" : back}
-      </button>
-      <div className="menu-title">{location ? location.name.toUpperCase() : "STAGES"}</div>
-      <div className="menu-sub">
-        {location
-          ? "Put a stage on the map"
-          : "The roads the campaign ships, on the map rather than behind a gate"}
-      </div>
-      {location
-        ? location.levels.map((level) => (
-            <StageLine
-              key={level.id}
-              level={level}
-              loaded={level.id === loaded}
-              onPick={() => onPick(level)}
-            />
-          ))
-        : LOCATIONS.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              className="menu-item"
-              onClick={() => setLocationId(l.id)}
-            >
-              {l.name.toUpperCase()}
-              <span className="menu-item-sub">
-                {l.blurb} · {l.levels.length} stages
-              </span>
-            </button>
-          ))}
+      <MenuHead
+        back={() => (location ? setLocationId(null) : onBack())}
+        backLabel={location ? "STAGES" : back}
+        title={location ? location.name.toUpperCase() : "STAGES"}
+        sub={
+          location
+            ? "Put one of its roads on the map"
+            : "The roads the campaign ships, on the map rather than behind a gate"
+        }
+      />
+      {location ? (
+        <LevelGrid
+          location={location}
+          progress={progress}
+          open={() => true}
+          hint=""
+          next={here}
+          onPlay={onPick}
+        />
+      ) : (
+        // The same country rows the campaign, the time trial and heads up
+        // open on — with the gate held open, since nothing here is earned.
+        <LocationList
+          open={() => true}
+          hint={() => ""}
+          line={(l) => <span className="menu-location-progress">{l.levels.length} STAGES</span>}
+          next={LOCATIONS.find((l) => l.levels.some((v) => v.id === loaded)) ?? null}
+          onPick={(l) => setLocationId(l.id)}
+        />
+      )}
     </div>
   );
 }

@@ -78,6 +78,12 @@ await page.goto(`http://127.0.0.1:${port}/glyph-preview.html`);
 await page.waitForFunction("window.__done === true", undefined, { timeout: 20000 });
 const marks = await page.locator(".cell").count();
 if (marks === 0) throw new Error("no glyphs rendered — check pwa/src/tools/glyph-preview.tsx");
+// The sheet grows a row every time a mark is added, and an element screenshot
+// only paints what the VIEWPORT could have shown — past that the capture is
+// the page's flat backdrop, so the newest marks are exactly the ones that go
+// missing. Stand the window as tall as the grid before taking the picture.
+const grid = await page.locator(".grid").boundingBox();
+if (grid) await page.setViewportSize({ width: 780, height: Math.ceil(grid.height) + 40 });
 // The grid rather than the page: a sheet with half a screen of empty plate
 // under it is half a sheet of nothing to look at.
 await page.locator(".grid").screenshot({ path: join(outDir, "glyphs.png") });
