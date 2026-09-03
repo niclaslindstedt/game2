@@ -407,16 +407,22 @@ split rather than deciding it.
 
 The third thing is the ROOSTER TAIL, and it has a direction the other two
 do not: the stones a sliding car throws out SIDEWAYS, off the side the tail
-is going (`drift-spray.ts`, every number of it in `DRIFT_SPRAY`). Two things
+is going (`drift-spray.ts`, every number of it in `DRIFT_SPRAY` in `drift-throw.ts`). Two things
 throw it and they add. A tyre dragged across loose ground ploughs what is in
 front of it, so the leading wheels — the ones on the side the car is sliding
 towards — fan stones out ahead of themselves however the car is driven, and
 the rear axle does this on every layout because a sliding tail moves
-sideways whatever is turning it. A DRIVEN wheel that is also outrunning the
-road (`wheelspin`) is spinning on the same patch and fires what it digs out
-backward as well, so the axle the drivetrain lights up throws more and
-throws it further back: a rear-driver sprays off its tail, a front-driver
-off its nose, all-wheel drive off both. The tail thickens with the slide,
+sideways whatever is turning it. The trailing wheel of each pair is running
+in the furrow the leading one has just dug and finds far less left to throw,
+and the harder the pair is being dragged the wider that gap opens — which is
+what puts the tail out on the OUTSIDE of the car as the angle comes on,
+rather than under the middle of it. A DRIVEN wheel digs DOWN into the
+surface as well as being pushed across it, so it throws half as much again
+as a merely dragged one before it has broken loose at all; once it is also
+outrunning the road (`wheelspin`) it is spinning on the same patch and fires
+what it digs out backward too, at nearly four times the plain throw. So the
+axle the drivetrain turns carries most of the tail: a rear-driver sprays off
+its tail, a front-driver off its nose, all-wheel drive off both. The tail thickens with the slide,
 with how fast the tyres are being dragged sideways and with pace, leaves the
 ground at a low rally angle rather than as a fountain, and is made of the
 ground it came off — the same tint the grit takes, so a soaked stage throws
