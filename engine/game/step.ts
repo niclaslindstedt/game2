@@ -24,7 +24,7 @@ import { TUNING } from "./defs/tuning.ts";
 import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { clipKerbs, clipSolids, collideCar } from "./collision.ts";
 import { beyondDriving } from "./damage.ts";
-import { seatOn } from "./ground.ts";
+import { plant, seatOn } from "./ground.ts";
 import {
   boardHalfWidth,
   crossedFinish,
@@ -66,6 +66,7 @@ function freshStats(): RunStats {
     driftTime: 0,
     driftScore: 0,
     spins: 0,
+    rolls: 0,
     jumps: 0,
     airTime: 0,
     cleanLandings: 0,
@@ -105,12 +106,19 @@ export function freshCar(): CarState {
     rideRate: 0,
     settle: 0,
     weight: 1,
+    loft: 0,
+    loftRate: 0,
+    foot: 0,
+    footVy: 0,
+    footMean: 0,
     pitchLoad: 0,
     kerbFrom: 0,
     slide: 0,
     drifting: false,
     chain: 0,
     spun: false,
+    spinDir: 0,
+    rolling: false,
     wheelspin: 0,
     launchSpin: 0,
     flick: 0,
@@ -118,6 +126,7 @@ export function freshCar(): CarState {
     lift: 0,
     brakeLoad: 0,
     provoked: 0,
+    thrown: 0,
     gear: 0,
     rev: 0,
     gearbox: "auto",
@@ -296,11 +305,13 @@ export function createGame(options: CreateGameOptions): GameState {
             `${track.segments.filter((p) => p.feature === "jump").length} jumps — ${spec.name}`,
     );
   }
+  const terrain = createTerrain(track);
+  plant(car, terrain.groundAt);
   return {
     seed: options.seed,
     spec,
     track,
-    terrain: createTerrain(track),
+    terrain,
     kerbs: createKerbField(track),
     car,
     phase: options.skipCountdown ? "racing" : "intro",
@@ -369,6 +380,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   car.y = home.y;
   car.heading = home.heading;
   stillCar(car);
+  plant(car, state.terrain.groundAt);
   car.u = T.offTrack.respawnSpeed;
   // The service crew get to a wreck the moment it is back at the road: the
   // chassis is patched to a drivable fraction, and the dents, the torn-off
@@ -411,9 +423,12 @@ function drown(state: GameState, events: GameEvent[], waterY: number): void {
   car.airborne = false;
   car.settling = false;
   car.airTime = 0;
+  car.loft = 0;
+  car.loftRate = 0;
   car.drifting = false;
   car.chain = 0;
   car.spun = false;
+  car.rolling = false;
   car.slide = 0;
   car.braking = false;
   car.locked = false;
@@ -455,6 +470,7 @@ function beach(state: GameState, events: GameEvent[]): void {
   car.y = seatOn(car, terrain.groundAt(car.x, car.z), terrain.groundAt);
   car.vy = 0;
   car.wheelVy = 0;
+  plant(car, terrain.groundAt);
   state.stuck.x = car.x;
   state.stuck.z = car.z;
   state.stuck.since = state.t;
@@ -709,6 +725,7 @@ const GROUND: GroundContext = {
   slope: 0,
   slopeLat: 0,
   roadCurve: 0,
+  lip: false,
   windX: 0,
   windZ: 0,
   t: 0,
@@ -879,6 +896,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.slope = (ahead - behind) / (2 * grade);
     ctx.slopeLat = (right - left) / (2 * grade);
     ctx.roadCurve = (fwd + back - 2 * here) / (span * span);
+    ctx.lip = false;
     ctx.windX = state.wind.x;
     ctx.windZ = state.wind.z;
     ctx.t = state.t;
@@ -924,6 +942,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.slope = preFix.slope * turnCos + preFix.slopeLat * turnSin;
     ctx.slopeLat = preFix.slopeLat * turnCos - preFix.slope * turnSin;
     ctx.roadCurve = lipNear ? 0 : pathCurvature(track, preFix, dirX, dirZ);
+    ctx.lip = lipNear;
     ctx.windX = state.wind.x;
     ctx.windZ = state.wind.z;
     ctx.t = state.t;

@@ -240,6 +240,10 @@ describe("event routing", () => {
       { type: "spin", slip: 1.1, speed: 9 },
       { type: "spin", slip: 1.4, speed: 28 },
     ],
+    rollover: [
+      { type: "rollover", rate: 2.6, speed: 12 },
+      { type: "rollover", rate: 9, speed: 30 },
+    ],
     crash: [{ type: "crash" }],
     sink: [{ type: "sink" }],
     respawn: [{ type: "respawn" }],

@@ -18,6 +18,7 @@ import { damageEffects, type DamageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import {
+  rollTilt,
   updateSlip,
   type CarInput,
   type CarState,
@@ -25,7 +26,7 @@ import {
   type RunStats,
 } from "./state.ts";
 import { landingDamage } from "./collision.ts";
-import { groundJolt, readSeat, standOn, wheelSpeed, type GroundUnder } from "./ground.ts";
+import { footOn, groundJolt, readSeat, standOn, wheelSpeed, type GroundUnder } from "./ground.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { Surface } from "../mapgen/index.ts";
 
@@ -337,24 +338,52 @@ function slideFactor(car: CarState, demand: number, limits: SlideLimits): SlideS
  * wheels, so the roll it carries into the air is the slide the tires were
  * fighting plus the rotation already in the body: straight and level flies
  * flat, properly sideways goes a long way over, and once in a while it goes
- * all the way round. Physics decides — nothing here aims for it. */
-export function launch(car: CarState, vy: number, events: GameEvent[], stats: RunStats): void {
+ * all the way round. Physics decides — nothing here aims for it.
+ *
+ * `hop` marks a lift the flight's own gravity would not have allowed: the
+ * ground let the body go at `air.hold` of its weight, and the arcade
+ * gravity will have it back before the flight is anything. It flies the
+ * same way, but it is the car BOBBING over a brow, not a jump — so it
+ * draws no turbulence, books no air time and no jump, and (through
+ * `settling`, which is the same fact read from a landing's side) the bot
+ * keeps driving through it.
+ *
+ * `sudden` is the ground going in one step — a lip, an edge — under tyres
+ * that were holding a slide a moment ago: that is the trip, below. A body
+ * that lifted off its wheels over a brow left tyres that had already
+ * unloaded across the whole of the loft, and they let go of nothing. */
+export function launch(
+  car: CarState,
+  vy: number,
+  events: GameEvent[],
+  stats: RunStats,
+  hop = false,
+  sudden = true,
+): void {
   car.airborne = true;
-  car.settling = false;
+  car.settling = hop;
   car.airTime = 0;
   car.vy = vy;
+  // The body's lift over the ground is the flight's now: the wheels have
+  // stopped reaching after it.
+  car.y += car.loft;
+  car.loft = 0;
+  car.loftRate = 0;
   // Nothing is standing on the tires up here, and nothing about the ground
   // the car just left applies to the one it comes down on. It arrives back
   // at its own weight and the landing's own skitter decides the rest.
   car.weight = 1;
-  car.rollRate = -(car.w * T.air.rollFromSlide + car.yawRate * T.air.rollFromYaw);
-  // The same trip about the vertical axis: the tires that were holding the
-  // slide let go all at once, so the car keeps turning the way the slide
-  // was turning it. Sideways off a ledge is a car that SPINS as it falls,
-  // which is the whole difference between a jump and going over the edge
-  // in a drift. (Heading grows clockwise and rotating the frame that way
-  // reduces `w`, so continuing the slide is a negative rate.)
-  car.yawRate -= car.w * T.air.yawFromSlide;
+  if (sudden) {
+    car.rollRate = -(car.w * T.air.rollFromSlide + car.yawRate * T.air.rollFromYaw);
+    // The same trip about the vertical axis: the tires that were holding
+    // the slide let go all at once, so the car keeps turning the way the
+    // slide was turning it. Sideways off a ledge is a car that SPINS as it
+    // falls, which is the whole difference between a jump and going over
+    // the edge in a drift. (Heading grows clockwise and rotating the frame
+    // that way reduces `w`, so continuing the slide is a negative rate.)
+    car.yawRate -= car.w * T.air.yawFromSlide;
+  }
+  if (hop) return;
   events.push({ type: "takeoff", vy });
   stats.jumps += 1;
 }
@@ -456,7 +485,14 @@ function groundPull(curve: number, pace: number): number {
  * this costs an ordinary corner nothing. */
 export function tyreLoad(car: CarState): number {
   const S = T.suspension;
-  return Math.max(S.loadFloor, (1 - S.loadSkitter * car.settle) * car.weight);
+  // ...and a body that has lifted off its wheels is standing on less again:
+  // the wheels reaching down after ground that is falling away carry only
+  // what the springs' last inch of droop presses on them, which is nothing
+  // much. Toward the same floor the shape's own unloading has, over the
+  // reach the wheels have (`air.loft`), so the two are one continuum — the
+  // car goes light, then lifts, then flies.
+  const lofted = 1 - (1 - S.weightFloor) * clamp(car.loft / T.air.loft, 0, 1);
+  return Math.max(S.loadFloor, (1 - S.loadSkitter * car.settle) * car.weight * lofted);
 }
 
 /** Everything a step needs to know about the ground: the height under any
@@ -475,6 +511,11 @@ export type GroundContext = GroundUnder & {
   /** Vertical curvature of the road under the car, 1/m — negative over a
    * brow. Zero anywhere a jump lip owns the launch. */
   roadCurve: number;
+  /** True within `air.crestSpan` of a jump lip on the road (step.ts). The
+   * lip owns the launch there: the body's lift is read off the ground
+   * under the middle, because the footprint's mean plunges as the front
+   * wheels go over two metres before the middle does. */
+  lip?: boolean;
   /** Current wind velocity, world space m/s. */
   windX: number;
   windZ: number;
@@ -726,6 +767,9 @@ export function stepGrounded(
   // and stand a hairpin's pivot straight up. See `CarState.provoked`.
   car.provoked = Math.max(clamp(asking, 0, 1), car.provoked - D.provokeSettle * dt);
   const provoked = car.provoked;
+  // ...and what the move put into the car's ROTATION outlives the weight
+  // it moved: see `CarState.thrown`.
+  car.thrown = Math.max(provoked, car.thrown - D.thrownSettle * dt);
   // THE LIFT IS THE FOURTH MOVE, and the only one that does not argue with
   // the speed floor. Coming off the power takes weight off the driven axle
   // like the rest of them, so it has to lift the DEPTH — on a layout whose
@@ -819,11 +863,21 @@ export function stepGrounded(
   const wasSpun = car.spun;
   const overGround = Math.hypot(car.u, car.w);
   const spinning = Math.abs(car.slip) > (wasSpun ? D.spinBack : D.spinAt) * breakaway;
-  car.spun = spinning && overGround > D.spinOut;
+  // ...and once spun, spun until the speed is gone: the slip is read from
+  // the nearer axis, so a car going round reads as straight twice a turn,
+  // and one that left the spin there swapped ends on the lock it still had
+  // on and counted a fresh spin each time. A spin is over at `spinOut`, and
+  // nowhere else — which is what "past a point the car is simply gone"
+  // means.
+  car.spun = (spinning || wasSpun) && overGround > D.spinOut;
   if (car.spun && !wasSpun) {
     events.push({ type: "spin", slip: Math.abs(car.slip), speed: overGround });
     stats.spins += 1;
+    // The way the car is turning as it goes — the slide's own sense if the
+    // yaw has not made its mind up.
+    car.spinDir = Math.sign(car.yawRate) || -Math.sign(car.slip) || 1;
   }
+  if (!car.spun) car.spinDir = 0;
   const spun = car.spun ? 1 : 0;
   const deepening = Math.sign(steer) === -Math.sign(car.slip) && car.slip !== 0;
   // ...and a spun car has almost none of it: the front wheels are as crossed
@@ -832,6 +886,65 @@ export function stepGrounded(
   // the car, far too little to save the corner.
   const hands = spun ? D.spinSteer : 1;
   const steerTerm = steer * backwards * (steerGain + spec.driftYaw * speedFactor * asked) * hands;
+  // THE FALLING SIDE OF THE TYRE. Everything below this line finds an
+  // equilibrium: the deepening forces fade over `angleBand` as the car
+  // reaches the angle the wheel asked for, and a held slide parks inside
+  // that band. Past the TOP of it the wheel has nothing left to say — every
+  // force it commands has faded out — and a real rear tyre out there is
+  // past its peak: the force holding the tail FALLS as the angle grows, so
+  // a car carried beyond what the wheel asked for, by a flick, the lever,
+  // the throttle or a landing taken crossed up, has a tail that keeps
+  // coming on its own, all the way to `spinAt`. This is that: from the top
+  // of the band the slip itself turns the car further, and only lock the
+  // OTHER way holds it, which is what makes over-doing a drift something
+  // that can happen, and catching it something that has to be done in
+  // time. Measured from the wheel's own setpoint rather than from a fixed
+  // angle, and driven by what CARRIED the car past it — the move that
+  // unstuck the rear (`thrown`, which outlives the weight it moved), or
+  // the lift — and never by the wheel alone: the wheel names the angle, a
+  // held lock finds that angle at any speed and parks there, and only what
+  // goes past the name runs. Neither
+  // a landing nor the chain drives it: the skitter already takes the grip,
+  // the chain already deepens the ask and brings the breakaway forward,
+  // and a car that came down hard and slid on tyres that were still
+  // hopping is owed a wobble it can drive out of, not a spin it cannot —
+  // the landing that goes further than that trips the car over instead
+  // (`tripSlide`). Not the loop the slide model is built to avoid —
+  // nothing here touches how much the car is sliding, only which way a
+  // car already past the peak is turning. It hands over at `spinAt`: a
+  // spun car is round and rotating on the momentum it has, and pushing it
+  // on from here would carry it through backwards, where four dragged
+  // tyres stop scrubbing.
+  const counter = clamp(steer * backwards * Math.sign(car.slip), 0, 1);
+  const carried = Math.max(car.thrown, lifted);
+  // ...and it is a thing that happens at PACE. The model has no yaw inertia
+  // — the nose answers its target at a rate — and what that leaves out is
+  // exactly this: a car at 60 km/h has a tail its tyres can arrest, a car
+  // at 120 has one they cannot. So the run comes in above the slide's own
+  // floor, over `overSpeed` of it, which is also what keeps the lever's
+  // hairpin — full lock and the handbrake held, well under the floor — a
+  // pivot rather than a spin.
+  const runPace = clamp((overGround - D.slideFrom) / (D.overSpeed * D.slideFrom), 0, 1);
+  const overFrom = askedSlip + D.overFrom * D.angleBand * breakaway;
+  const overPeak = clamp(
+    (Math.abs(car.slip) - overFrom) /
+      Math.max(D.overBand * breakaway, D.spinAt * breakaway - overFrom),
+    0,
+    1,
+  );
+  const runYaw =
+    -Math.sign(car.slip) *
+    D.overYaw *
+    overPeak *
+    carried *
+    runPace *
+    (1 - counter) *
+    (1 - spun) *
+    sliding *
+    speedFactor;
+  // ...and THROUGH THE SPIN (`spinCarry`, below the yaw's own settling):
+  // past `spinAt` the tail is gone and the car turns on its momentum.
+  const spinPace = clamp(overGround / D.slideFrom, 0, 1);
   // The slip's self-rotation scales with steering commitment, so holding
   // into the slide sustains it, releasing lets grip straighten the car, and
   // counter-steer exits fast. An unconditional slip term would be a
@@ -920,7 +1033,11 @@ export function stepGrounded(
   // travelling. That, against the yaw's own lag above, is a spring with
   // damping — which is what lets the nose swing back through centre and a
   // little past it instead of easing to zero and stopping there.
-  const straighten = car.slip * D.releaseSnap * DR.snap * releasing * speedFactor;
+  // ...and neither the weathervane nor the slip's own self-straightening
+  // below survives a spin whole (`spinHold`): they are the tyre's hold on
+  // the car's travel read as a torque, and a spun tyre has let go.
+  const hold = spun ? D.spinHold : 1;
+  const straighten = car.slip * D.releaseSnap * DR.snap * releasing * speedFactor * hold;
   // Saturation gates EVERYTHING that deepens the slide except the power's
   // own oversteer; counter-steer keeps full authority, because it always
   // has somewhere to go.
@@ -933,12 +1050,32 @@ export function stepGrounded(
     liftYaw * sat +
     brakeYaw * sat +
     pullStraight +
-    straighten -
-    car.slip * T.grip.slipYaw * commitment * sat * sliding;
+    straighten +
+    runYaw -
+    car.slip * T.grip.slipYaw * commitment * sat * sliding * hold;
   const yawResponse =
     (T.grip.yawResponse.grip + (T.grip.yawResponse.slide - T.grip.yawResponse.grip) * sliding) *
     (1 - D.releaseHang * releasing);
   car.yawRate += (yawTarget - car.yawRate) * clamp(yawResponse * dt, 0, 1);
+  // THROUGH THE SPIN. The model has no yaw inertia — the nose chases a
+  // target rate — and a spun car is the one place that shows: past
+  // `spinAt` nothing under the car is holding the tail, and it turns on
+  // the momentum it has, the way it was already turning (`spinDir`),
+  // through backwards and on until the speed is scrubbed out of it
+  // (`spinOut`) — where it stops is where it stops, and often enough that
+  // is facing the way it came. So while spun the yaw never falls under
+  // `spinCarry` in the spin's own direction (scaled by the ground speed
+  // over the slide floor, and the counter takes only `spinSteer` of it
+  // away, which is the spin the driver cannot influence enough to save).
+  // A floor rather than a term in the target above: round on its tail the
+  // car reads as straight, the slide shuts and the lock the driver still
+  // has on steers the other way, and a target-rate term was cancelled to
+  // nothing there — the car parked rolling backwards at pace with nothing
+  // scrubbing it.
+  if (car.spun) {
+    const carry = car.spinDir * D.spinCarry * spinPace * (1 - counter * D.spinSteer);
+    if (car.spinDir * car.yawRate < car.spinDir * carry) car.yawRate = carry;
+  }
 
   const delta = car.yawRate * dt;
   car.heading += delta;
@@ -992,8 +1129,16 @@ export function stepGrounded(
     // The rough-ground cap: open nature is fast but never road-fast.
     car.u -= Math.max(0, car.u - T.surfaces.natureTop) * T.surfaces.natureOverDrag * dt;
   }
-  // Grade: gravity along the road — the hills push back (or push on).
-  car.u -= 9.8 * T.hills.gravityAlong * ctx.slope * dt;
+  // Grade: gravity along the road — the hills push back (or push on). A
+  // face steeper than the car can climb pushes back HARDER, which is what
+  // stops a car nosed into a bank in a couple of steps and rolls it back
+  // out; but the descent is no steeper than a hill the car can stand on:
+  // the grade is read over a baseline, and within it of a cliff lip it
+  // reports the whole drop as a slope, which as gravity hurried a car
+  // creeping toward the edge over it at several g. A drop is flown, never
+  // driven down (the takeoff below).
+  const grade = Math.max(ctx.slope, -T.collision.climbLimit);
+  car.u -= 9.8 * T.hills.gravityAlong * grade * dt;
   // The standstill snap, which is also what stops a car creeping on a slope.
   // It has to stand down while the car is backing out, or reverse never gets
   // past its own first tick.
@@ -1101,7 +1246,8 @@ export function stepGrounded(
   const demanded = travel * latRate * Math.abs(car.slip);
   const over = demanded / ceiling;
   const held = ceiling * (T.grip.latGive * over + (1 - T.grip.latGive) * Math.tanh(over));
-  const heldRate = demanded > 1e-6 ? (latRate * held) / demanded : latRate;
+  // ...and a spun tyre has let go of most of it (`drift.spinHold`).
+  const heldRate = (demanded > 1e-6 ? (latRate * held) / demanded : latRate) * hold;
   if (car.u > 1) {
     const swung = car.slip * Math.exp(-heldRate * dt);
     // `travel` is this same speed: nothing between there and here moves the
@@ -1130,10 +1276,16 @@ export function stepGrounded(
   // (R16 — the crown it sheds water off, the wheel track it drops into):
   // a fraction of a degree where a hillside is tens of them, and never the
   // drift's, which contributes nothing to how level the car sits.
-  car.rollRate = 0;
-  const upright = Math.round(car.roll / (Math.PI * 2)) * Math.PI * 2;
+  //
+  // A roll rate the ground was handed and did not take — a landing that
+  // tripped the car but not over (`air.tripSlide`), a low solid clipped
+  // under the sill — plays out first: the body LURCHES over on its springs
+  // and the recovery below brings it back, which is the near-miss the
+  // player gets to see before the one that goes over.
+  car.roll += car.rollRate * dt;
+  car.rollRate *= Math.exp(-T.air.leanDamp * dt);
   const camber = ctx.slopeLat ? Math.atan(ctx.slopeLat) : 0;
-  car.roll += (upright + camber - car.roll) * clamp(T.air.rollRecover * dt, 0, 1);
+  car.roll += (camber - rollTilt(car.roll)) * clamp(T.air.rollRecover * dt, 0, 1);
   settlePitch(car, Math.atan(ctx.slope));
 
   // ── Drift readout ────────────────────────────────────────────────────────
@@ -1201,58 +1353,164 @@ export function stepGrounded(
   // top of a mountain. The lip does not care which way the nose is.
   const pace = Math.hypot(car.u, car.w);
   // The far end of the same number the tires were weighed with at the top of
-  // the step: the ground has stopped merely taking weight off the car and is
-  // asking for more than gravity can give it.
+  // the step: how hard the ground is asking to be followed down.
   const roadPull = groundPull(ctx.roadCurve, pace);
-  if (pace > T.air.crestSpeed && roadPull > T.air.gravity * T.air.crestPull) {
-    launch(car, car.vy, events, stats);
+  // Ride the ground under the wheels, read where the car actually IS — a
+  // slide carries the car ACROSS the slope, which the along-heading slope
+  // can't see, and a road is read the same way so that leaving it and
+  // coming back onto it is one continuous surface.
+  //
+  // THE EDGE. A cliff lip or a cut bank falls away by more than `edgeDrop`
+  // under the car's middle in one step — at pace that is a flight, not a
+  // face to be driven down, and at a crawl it is a drop. Everything else
+  // the ground can do — a lip, a kink, a brow, a step the wheels cannot
+  // follow — is the body's own momentum against the ground below.
+  const at = readSeat(car, ctx);
+  // PROPPED ON A FACE. Out in the wild the seat is lifted off the ground
+  // under the middle by whatever corner asks for the most, and a corner up
+  // against a face the wheels cannot climb asks for the top of its reach
+  // (ground.ts, `corners`): a car nosed into a bank sits on a plane a couple
+  // of metres up it. That plane is the contact model's fiction, not a hill
+  // the body is standing on, and it comes down as fast as the car backs off
+  // the face — so the body follows it, the way it follows the wall check,
+  // and the momentum model below starts again only once the seat is back
+  // within the wheels' reach of the ground. Without this a car reversing
+  // off a bank was thrown a body-height into the air and fell for the
+  // better part of a second before the driver had it back.
+  if (at.seat - at.centre > T.air.leave) {
+    car.loft = 0;
+    car.loftRate = 0;
+    car.foot = at.foot - at.centre;
+    car.footVy = 0;
+    car.footMean = 0;
+    standOn(spec, car, ctx, at, fromX, fromZ, roadVy, events, stats);
   } else {
-    // Ride the ground under the wheels, read where the car actually IS — a
-    // slide carries the car ACROSS the slope, which the along-heading slope
-    // can't see, and a road is read the same way so that leaving it and
-    // coming back onto it is one continuous surface.
+    // THE BODY HAS ITS OWN VERTICAL MOMENTUM. It arrives at this step with
+    // the vertical speed it had (`prevVy` — the ground's own while the ground
+    // was carrying it, its own once it was not) and falls from there at
+    // `air.hold` of gravity; the ground can only ever push it UP. So the body
+    // is put where its momentum takes it and compared with the ground the
+    // wheels have just found: under the ground, and the ground has the car;
+    // above it, and the ground is falling away faster than the body can
+    // follow — the wheels reach down after it on their droop and the gap
+    // between the two is `car.loft`. For the first `air.loft` of that the car
+    // is grounded and light, its body up off the arches; past it the wheels
+    // have run out of reach and it is flying with the speed it has actually
+    // got, which is what makes a crest a MOMENT at pace and nothing at a
+    // crawl: the same brow holds a slow car, unloads a quick one and throws a
+    // fast one, and the one it only just throws lifts off late and low.
     //
-    // THE EDGE. Two readings of the same thing, and either throws the car.
-    // A cliff lip or a cut bank falls away by more than `edgeDrop` under the
-    // car's own footprint in one step — at pace that is a flight, not a face
-    // to be driven down. And any convex KINK the wheels cannot follow: the
-    // car was CLIMBING at some speed and the ground now asks the wheels to
-    // give up more than `edgeSpeed` of it in one step — the drop side of a
-    // jump lip, from either direction: the top of the ramp for a car driving
-    // the stage, the top of the landing face for one coming back. No lip
-    // needs flagging for it: the car is thrown from wherever the ground last
-    // held it, with `launchKeep` of the speed it was climbing at.
+    // The body carries the SMOOTHED grade's speed while it is carried, so a
+    // rut, a kerb or the bump layer at pace — shapes the springs absorb, read
+    // off the raw ground under the wheels — open a gap of a few centimetres
+    // that the next rise closes, and only the shape of the hill can reach
+    // past the droop. What the smoothing hides at a lattice crease or a road
+    // crown is exactly what this catches: the ground turns down under a body
+    // still going up, and the car skips.
     //
-    // What "climbing at" means is the lesser of two readings, and both are
-    // needed. The wheels' own speed over the last step, read off the ground
-    // under the car's middle along its path: against a wall the grade over
-    // a wheelbase says the car is climbing at absurd speed while the wheels
-    // go nowhere, and a wall must never read as the ground falling away.
-    // And the smoothed grade's speed: a kerb lifts the wheels a hand's width
-    // in a single step, which as a speed is a rally car's whole pace, and
-    // the body has not moved — that is a bump for the springs, not a flight.
-    // Only ground the car has actually been climbing, for long enough that
-    // the grade under it says so, carries the momentum to leave it. Out in
-    // the WILD it also has to have been climbing at all: a car that sets off
-    // down a steep face from a standstill at the foot of a cliff has no
-    // upward momentum for the ground to fall away from, and is glued down
-    // the slope exactly as the crest check would glue it (the cliff rule
-    // above is the one that throws a car off a real edge). On the ROAD the
-    // only kink the generator builds is a lip (R6), and a lip is a jump
-    // whatever grade it sits on — a shallow ramp on the steepest descent
-    // nets no climb at its top, and the car still has to leave it. The edge
-    // checks and the wall check inside `standOn` read the SAME seat, so a car
-    // whose body is being held up by one corner does not read that lift as a
-    // cliff it has just driven off.
-    const at = readSeat(car, ctx);
-    const climbing = Math.min(prevWheelVy, prevVy);
-    const kink = climbing - wheelSpeed(ctx, at.centre);
-    if (pace > T.air.crestSpeed && at.seat < car.y - T.air.edgeDrop) {
-      launch(car, roadVy, events, stats);
-    } else if ((climbing > 0 || !ctx.wild) && kink > T.air.edgeSpeed) {
-      launch(car, Math.max(roadVy, prevWheelVy * T.air.launchKeep), events, stats);
-    } else {
+    // A HOP — a lift the flight's own gravity would have had back before it
+    // was anything — is marked as one (`launch`'s `hop`), so it bobs the car
+    // over a brow without booking a jump. A cliff edge is found by the rule
+    // above before the body gets here; a jump LIP (R6) is flagged by the
+    // road, and the flight it throws the car into is a jump whatever the
+    // grade it sits on, with the launch speed the lip is designed around:
+    // the wheels are on the steepest last metre of the ramp when the ground
+    // drops away and the body, a wheelbase long, is carrying the ramp's
+    // average — `launchKeep` of the wheels' climb, or the smoothed grade's,
+    // whichever is more. From either direction: a car coming back the other
+    // way climbs the landing face and is thrown off the top of it.
+    //
+    // The gap is grown from the two SPEEDS — the body's against the wheels'
+    // over the ground they actually covered — and never read off heights: the
+    // seat the body sits on also moves as the attitude settles onto a
+    // hillside, and that is the body being lifted, not the ground going
+    // anywhere. The wheels' speed is the FOOT's (ground.ts, `Seat.foot`): the
+    // mean of the four, because the body rides the four and not the point
+    // under its middle — a rut takes one wheel down a hand's width and the
+    // body a quarter of that, and a bump shorter than the wheelbase is under
+    // one axle at a time. Read off the centre alone, the road's own
+    // cross-section lofted a car crossing it at a crawl. And the speed the
+    // body ARRIVES with is the SMALLEST of the three it could have: the
+    // smoothed grade's, which against a wall says the car is climbing at
+    // absurd speed while the wheels go nowhere, and four metres short of a
+    // cliff lip says it is already diving; the middle's own, which a kerb
+    // spikes for one step while the body has not moved; and the foot's,
+    // whose corners are inside the wall before the middle has reached it.
+    // Only ground the car has actually been carried along carries the body
+    // on — and a body already up off its wheels is carrying its own speed,
+    // which nothing under it bounds.
+    //
+    // ...smallest going UP. Going DOWN the body is never slower than the foot
+    // has been: the smoothed grade under a car sliding across a banked,
+    // crowned road reads a gentler descent than the wheels are actually on,
+    // and a body reset to that every step kept falling behind ground that
+    // was only doing what it had done for the last second — a car drifting
+    // across a wide S-bend lifted off nothing. What the foot has BEEN doing
+    // is read over `air.footLag` (`car.footMean`), so one step's blip in a
+    // four-wheel mean crossing the ruts sideways is not a speed the body
+    // has to have; the gap itself is still grown from the raw speed, and
+    // the springs answer that.
+    const smallest = (a: number, b: number): number => (Math.abs(a) < Math.abs(b) ? a : b);
+    const carriedVy =
+      car.loft > 0
+        ? prevVy
+        : Math.min(smallest(smallest(prevVy, prevWheelVy), car.footVy), car.footMean);
+    const bodyVy = carriedVy - T.air.gravity * T.air.hold * dt;
+    const footVy = ctx.lip ? wheelSpeed(ctx, at.centre) : (at.foot - (ctx.groundY + car.foot)) / dt;
+    const loft = Math.max(0, car.loft + (bodyVy - footVy) * dt);
+    car.foot = at.foot - at.centre;
+    car.footVy = footVy;
+    car.footMean += (footVy - car.footMean) * clamp(dt / T.air.footLag, 0, 1);
+    if (at.centre < ctx.groundY - T.air.edgeDrop) {
+      // Off the edge with the speed the body has, which off a cliff lip is
+      // none of the dive the grade ahead of it reads: the car sails off at
+      // pace and DROPS at a crawl — a car creeping over an edge falls from
+      // where it was, it is never set down the face. The drop is the GROUND
+      // under the middle falling away, never the seat: a car sliding along a
+      // face it cannot climb is held up on a corner, and that lift coming
+      // off as it slides clear is not a cliff.
+      launch(car, bodyVy, events, stats, pace < T.air.crestSpeed);
+    } else if (ctx.lip && bodyVy - footVy >= T.air.edgeSpeed) {
+      // THE LIP. The ground under the middle has just gone at edge speed
+      // within reach of a flagged jump lip: the car leaves NOW, from the top
+      // of the ramp, and not two steps down the landing face when the reach
+      // has run out — with the launch speed the lip is designed around.
+      launch(car, Math.max(roadVy, prevWheelVy * T.air.launchKeep, bodyVy), events, stats);
+    } else if (loft <= 0) {
+      car.loft = 0;
+      car.loftRate = 0;
       standOn(spec, car, ctx, at, fromX, fromZ, roadVy, events, stats);
+    } else {
+      // The wheels stand on the ground (the wall check included); the body
+      // is up off them, at its own speed — which is what the camera, the
+      // attitude and the springs read, so a lifting body rides its springs
+      // out to the droop the way a car cresting a brow does.
+      standOn(spec, car, ctx, at, fromX, fromZ, roadVy, events, stats);
+      // The body is never more than `leave` above the wheels: past that the
+      // rest of the gap is ground the wheels have already left, and the
+      // body's height is the reach, not the drop. Between `loft` and `leave`
+      // the car is SKIPPING — the wheels off the ground for a few tenths,
+      // the tyres carrying nothing, the car still steered — which is what a
+      // bump at pace does to a real car and the whole difference between
+      // going light over one and flying off it.
+      car.loft = Math.min(loft, T.air.leave);
+      car.loftRate = bodyVy - footVy;
+      car.vy = bodyVy;
+      // A jump is the body going UP off the ground at `hopRate` or more, at
+      // pace, over ground that is falling away faster than the flight's own
+      // gravity could follow. Everything else is a hop or a drop: the ground
+      // going away under a body that was barely rising, or not at all — a
+      // bump, the crown of a road, a car backing off a face its nose had
+      // ridden up, a creep over an edge — or a brow the flight's gravity
+      // would have held the car on (`hold`), which the body bobs over; and
+      // only the air's own length can make a flight of that (`hopTime`).
+      // ...and a body that came off its wheels over a brow left tyres that
+      // had unloaded across the whole of the loft; one whose foot plunged at
+      // edge speed left tyres that were holding it a step ago — the trip.
+      if (loft > T.air.leave) {
+        const hop = pace < T.air.crestSpeed || bodyVy < T.air.hopRate || roadPull < T.air.gravity;
+        launch(car, bodyVy, events, stats, hop, car.loftRate >= T.air.edgeSpeed);
+      }
     }
   }
 
@@ -1354,6 +1612,15 @@ export function stepAirborne(
   // forward from where the flight began: on a steep descent a stale height
   // is already above the road, which lands the car in mid-air.
   const groundNow = ctx.groundAt(car.x, car.z);
+  // A hop or a bounce that finds the ground gone from under it — the body
+  // bobbed over a brow and the far side was a lip, or the edge — is a
+  // flight from here on: it draws the air's turbulence, books its air, and
+  // is the jump the takeoff never announced.
+  if (car.settling && car.airTime > T.air.hopTime) {
+    car.settling = false;
+    events.push({ type: "takeoff", vy: car.vy });
+    stats.jumps += 1;
+  }
   if (car.y <= groundNow) {
     car.y = groundNow;
     car.airborne = false;
@@ -1369,29 +1636,52 @@ export function stepAirborne(
       car.z - (cosH * car.u - sinH * car.w) * dt,
     );
     car.wheelVy = (groundNow - behind) / dt;
+    // ...and the foot the next grounded step measures its wheels from,
+    // moving at the speed the ground here is: the flight's own speed is
+    // what the springs get, not what the body carries on with.
+    car.foot = footOn(car, ctx.groundAt) - groundNow;
+    car.footVy = car.wheelVy;
+    car.footMean = car.wheelVy;
+    // A SOFT touchdown — the chassis coming back down off its own bounce,
+    // or a hop's few centimetres of lift closing again — is one landing
+    // still happening, not a new arrival: it pays no speed, unsettles no
+    // tyres and trips nothing, and the springs are the whole of it.
+    const soft = car.settling;
     // Straight nose AND upright: coming down on your side is never clean,
     // however well the nose was lined up.
     const clean =
-      Math.abs(car.slip) <= T.air.cleanSlipLimit && Math.abs(car.roll) < T.air.rollLandLimit;
-    if (clean) {
+      soft ||
+      (Math.abs(car.slip) <= T.air.cleanSlipLimit &&
+        Math.abs(rollTilt(car.roll)) < T.air.rollLandLimit);
+    if (soft) {
+      // Nothing to pay.
+    } else if (clean) {
       car.u *= T.air.cleanKeep;
-      if (!car.settling) stats.cleanLandings += 1;
+      stats.cleanLandings += 1;
     } else {
       car.u *= T.air.sloppyKeep;
       // Shot dampers let the whole car skip and hunt on a bad touchdown.
       const wobble = 1 + T.collision.systems.wobble * car.damage.systems.suspension;
       car.yawRate += -Math.sign(car.slip) * T.air.sloppyWobble * wobble;
     }
+    // ...and a car that came down going SIDEWAYS may not be coming down on
+    // its wheels for long: the tyres bite, the body does not, and it trips.
+    const tumbling = !soft && tripOnLanding(car, events, stats);
     // The ground hits back: descent the suspension cannot absorb crushes
-    // the underside — or the flank the car came down on (collision.ts).
-    const slam = car.u * ctx.slope - car.vy;
+    // the underside — or the flank the car came down on (collision.ts). A
+    // rolling car's flank arrives at the roll's own speed, which is the
+    // whole reason a roll is the end of a car.
+    const descentHit = car.u * ctx.slope - car.vy;
+    const slam = car.rolling
+      ? Math.max(descentHit, Math.abs(car.rollRate) * T.air.tumbleSlam)
+      : descentHit;
     // ...and the wheels start hopping on their own tires. That is what the
     // car is doing for the next half second, and until it stops the tires
     // are only intermittently holding anything (`tyreLoad`). It takes the
     // HARDEST arrival so far rather than adding: a slam followed by its own
     // small rebound is ONE landing, and a chassis bounce must not stack its
     // way into a car with no grip at all.
-    car.settle = Math.max(car.settle, clamp(slam / T.suspension.settleSlam, 0, 1));
+    if (!soft) car.settle = Math.max(car.settle, clamp(slam / T.suspension.settleSlam, 0, 1));
     landingDamage(spec, car, slam, events, stats);
     // Pick the road's own vertical speed back up instead of zeroing: land on
     // a brow and the car may be off the ground again next step, and a stale
@@ -1399,17 +1689,28 @@ export function stepAirborne(
     car.vy = car.u * ctx.slope;
     events.push({ type: "landing", airTime: car.airTime, slam, clean });
     car.airTime = 0;
-    // Past what the springs can travel through, the CHASSIS comes back off
-    // the ground — a real bounce, small and capped, that lands again a beat
-    // later. Each rebound is a fraction of the last, so a slam bounces once
-    // or twice and is done; it can never turn into a second jump.
-    const rebound = slam - T.suspension.bounceSpeed;
-    if (rebound > 0) {
+    if (tumbling) {
+      // OVER IT GOES: the centre of mass lifts over the wheels it is
+      // pivoting on and the car is off the ground again, rolling. A flight
+      // in its own right — turbulence and all — because nothing under it is
+      // holding anything.
       car.airborne = true;
-      car.settling = true;
-      car.vy += Math.min(rebound * T.suspension.bounceKeep, T.suspension.bounceMax);
-    } else {
       car.settling = false;
+      car.vy += T.air.tumbleHop;
+    } else {
+      // Past what the springs can travel through, the CHASSIS comes back
+      // off the ground — a real bounce, small and capped, that lands again
+      // a beat later. Each rebound is a fraction of the last, so a slam
+      // bounces once or twice and is done; it can never turn into a second
+      // jump.
+      const rebound = slam - T.suspension.bounceSpeed;
+      if (rebound > 0) {
+        car.airborne = true;
+        car.settling = true;
+        car.vy += Math.min(rebound * T.suspension.bounceKeep, T.suspension.bounceMax);
+      } else {
+        car.settling = false;
+      }
     }
     // The springs take the whole descent as one jolt whether the chassis
     // came back up or not: this is the squat a landing travels through.
@@ -1417,4 +1718,45 @@ export function stepAirborne(
     return;
   }
   stepSuspension(spec, car, 0, 0);
+}
+
+/** THE TRIP. A car that touches down with the body still travelling
+ * sideways has tyres that stop and a roof that does not: the bottom of the
+ * car catches on the ground it has just been handed and the top keeps
+ * going, over the outside wheels. Below `air.tripSlide` of sideways speed
+ * the tyres spend it as a skip; past it, every further m/s is roll put into
+ * the body — a lean the springs take back (`leanDamp`, `rollRecover`), or
+ * past `tumbleAt` the car going OVER.
+ *
+ * Once it is rolling, every side that comes down is another contact of the
+ * same roll: the roll loses `tumbleKeep` of itself and the car
+ * `tumbleScrub` of its speed each time, and it is over when the roll has
+ * died or the car comes down close enough to its wheels for the ground to
+ * take it back. Returns true when the car is leaving the ground again. */
+function tripOnLanding(car: CarState, events: GameEvent[], stats: RunStats): boolean {
+  const A = T.air;
+  const over = Math.abs(car.w) - A.tripSlide;
+  if (over > 0) {
+    // Sliding to the right, the right wheels dig in and the body goes over
+    // them: the right side down, which is negative roll.
+    car.rollRate -= Math.sign(car.w) * Math.min(over * A.tripRoll, A.tripMax);
+    car.w *= A.tripKeep;
+    updateSlip(car);
+  }
+  const onSide = Math.abs(rollTilt(car.roll)) >= A.rollLandLimit;
+  if (car.rolling) {
+    // One more side hitting the ground.
+    car.rollRate *= A.tumbleKeep;
+    car.u *= A.tumbleScrub;
+    if (Math.abs(car.rollRate) < A.tumbleAt || !onSide) {
+      car.rolling = false;
+      return false;
+    }
+    return true;
+  }
+  if (Math.abs(car.rollRate) < A.tumbleAt) return false;
+  car.rolling = true;
+  events.push({ type: "rollover", rate: Math.abs(car.rollRate), speed: Math.hypot(car.u, car.w) });
+  stats.rolls += 1;
+  return true;
 }

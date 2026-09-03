@@ -326,8 +326,10 @@ function flatRoad(): GameState {
   });
 }
 
-/** ...and the same road rolled into 6 m hills on a 200 m wavelength: the
- * terrain the camera still has to fly. */
+/** ...and the same road rolled into 6 m hills on a 400 m wavelength: the
+ * terrain the camera still has to fly. Long enough that the car crests
+ * them on its wheels at full throttle — a shorter one is a jump now, and
+ * a car in the air is the other test's subject. */
 function rollingRoad(): GameState {
   const base = compileTrack(3, [{ kind: "straight", length: 2000, feature: "none" }]);
   return createGame({
@@ -338,7 +340,7 @@ function rollingRoad(): GameState {
       ...base,
       samples: base.samples.map((s) => ({
         ...s,
-        elevation: 6 * Math.sin((s.s * Math.PI * 2) / 200),
+        elevation: 6 * Math.sin((s.s * Math.PI * 2) / 400),
         bank: 0,
       })),
     },

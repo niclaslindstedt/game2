@@ -35,12 +35,62 @@ export type GroundUnder = {
 };
 
 /** Where the car stands now: `centre` is the ground under its middle, `seat`
- * the height its body sits at. On the lattice the seat is lifted over the
- * whole footprint (`seatOn`); on a road it IS the centre — a road is built
- * smooth across the body's own length, and the cross-section under the
- * wheels (a rut, the crown, the shoulder) is what the car is SUPPOSED to
- * ride, not a face to be lifted clear of. */
-export type Seat = { centre: number; seat: number };
+ * the height its body sits at, and `foot` the mean ground under its four
+ * wheels. On the lattice the seat is lifted over the whole footprint
+ * (`seatOn`); on a road it IS the centre — a road is built smooth across
+ * the body's own length, and the cross-section under the wheels (a rut, the
+ * crown, the shoulder) is what the car is SUPPOSED to ride, not a face to
+ * be lifted clear of. The foot is what the BODY rides: one wheel dropping
+ * into a rut moves it by a quarter of the rut, and a shape shorter than
+ * the wheelbase is under one axle at a time. It is the ground the body's
+ * own momentum is measured against (car.ts, `loft`). */
+export type Seat = { centre: number; seat: number; foot: number };
+
+/** The four wheel positions' ground, read at the car's heading: the plane
+ * they ask the body to sit on (`seat`, see `seatOn`) and their mean
+ * (`foot`). A wheel only ever PUSHES: one whose ground has fallen further
+ * below the middle than any hill the car could be standing on would put
+ * it (`climbLimit` over its distance) plus the wheels' reach (`air.loft`)
+ * is hanging in the air and says nothing about where the body is, so it
+ * counts at the end of its reach — the nose going over an edge leaves the
+ * body riding the rear axle, not diving after the fronts. Measured from
+ * the MIDDLE's ground and never from the body's attitude: a car that has
+ * just come down on a steep face carries the flight's pitch for a beat,
+ * and a clamp read off that plane lofted it straight back off the face. */
+function corners(
+  car: CarState,
+  centre: number,
+  ground: (x: number, z: number) => number,
+): { seat: number; foot: number } {
+  const hl = T.collision.halfLength;
+  const hw = T.collision.halfWidth;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  // The body's own rise at a corner: the nose lifts with pitch, the right
+  // side with roll — the same two angles the renderer draws the body at.
+  const risePitch = Math.sin(car.pitch);
+  const riseRoll = Math.sin(car.roll);
+  let seat = centre;
+  let foot = 0;
+  for (const lz of [hl, -hl]) {
+    for (const lx of [hw, -hw]) {
+      // Forward is (sin h, cos h) and right is (cos h, -sin h).
+      const x = car.x + sinH * lz + cosH * lx;
+      const z = car.z + cosH * lz - sinH * lx;
+      const under = ground(x, z);
+      const reach = Math.hypot(lz, lx) * T.collision.climbLimit;
+      // A corner against a WALL — ground rising harder than the wheels
+      // could climb — is not standing on it either, so it counts at the top
+      // of its reach in the foot as it does in the seat, and the wall's own
+      // slope never becomes a speed the wheels are moving at.
+      const rise = Math.min(under, centre + reach);
+      foot += Math.max(rise, centre - reach - T.air.loft);
+      const plane = rise - (lz * risePitch + lx * riseRoll);
+      if (plane > seat) seat = plane;
+    }
+  }
+  return { seat, foot: foot / 4 };
+}
 
 /**
  * WHERE A CAR STANDS ON UNEVEN GROUND — the height of the plane its own
@@ -78,33 +128,37 @@ export function seatOn(
   centre: number,
   ground: (x: number, z: number) => number,
 ): number {
-  const hl = T.collision.halfLength;
-  const hw = T.collision.halfWidth;
-  const sinH = Math.sin(car.heading);
-  const cosH = Math.cos(car.heading);
-  // The body's own rise at a corner: the nose lifts with pitch, the right
-  // side with roll — the same two angles the renderer draws the body at.
-  const risePitch = Math.sin(car.pitch);
-  const riseRoll = Math.sin(car.roll);
-  let seat = centre;
-  for (const lz of [hl, -hl]) {
-    for (const lx of [hw, -hw]) {
-      // Forward is (sin h, cos h) and right is (cos h, -sin h).
-      const x = car.x + sinH * lz + cosH * lx;
-      const z = car.z + cosH * lz - sinH * lx;
-      const reach = Math.hypot(lz, lx) * T.collision.climbLimit;
-      const rise = Math.min(ground(x, z), centre + reach);
-      const plane = rise - (lz * risePitch + lx * riseRoll);
-      if (plane > seat) seat = plane;
-    }
-  }
-  return seat;
+  return corners(car, centre, ground).seat;
+}
+
+/** The mean ground under the four wheels, at the car's heading — what the
+ * body rides (see `Seat.foot`). Read on its own where the car has just
+ * arrived from the air, so the first grounded step has a foot to measure
+ * the wheels' speed from. */
+export function footOn(car: CarState, ground: (x: number, z: number) => number): number {
+  return corners(car, ground(car.x, car.z), ground).foot;
+}
+
+/** PUT A CAR DOWN: the foot the first grounded step measures its wheels'
+ * speed from, read now so that step sees wheels that have not moved rather
+ * than a foot that fell the whole cross-section of the ground in one step
+ * — which is a body lifting off its wheels on the grid, and tyres carrying
+ * less than the car's weight into the launch. Everything that places a car
+ * on the ground owes it this (the grid, a respawn, the beaching at the end
+ * of a drowning). */
+export function plant(car: CarState, ground: (x: number, z: number) => number): void {
+  car.foot = footOn(car, ground) - ground(car.x, car.z);
+  car.footVy = 0;
+  car.footMean = 0;
+  car.loft = 0;
+  car.loftRate = 0;
 }
 
 /** Read where the car stands now (see `Seat`). */
 export function readSeat(car: CarState, under: GroundUnder): Seat {
   const centre = under.groundAt(car.x, car.z);
-  return { centre, seat: under.wild ? seatOn(car, centre, under.groundAt) : centre };
+  const { seat, foot } = corners(car, centre, under.groundAt);
+  return { centre, seat: under.wild ? seat : centre, foot };
 }
 
 /** The vertical speed the WHEELS moved at over this step, m/s: what the

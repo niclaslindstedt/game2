@@ -193,6 +193,18 @@ export function soundForEvent(
     case "retire":
       return { id: "crash" };
 
+    // The car going OVER. The moment itself is the flank arriving, which
+    // is a crunch sized by how fast the roll took it there; every side that
+    // hits after it comes through as a `landing` of its own, so this is the
+    // one bang at the start and not the whole tumble.
+    case "rollover": {
+      const hard = ramp(event.rate, 2.4, 10);
+      return {
+        id: "impact_crunch",
+        shape: { gain: 0.8 + 0.5 * hard, pitch: 1 - 0.25 * hard, stretch: 1 + 0.4 * hard },
+      };
+    }
+
     // A drift taken past saving. Sized by the SPEED it let go at and not by
     // the angle: past `drift.spinAt` the car is round either way, and what
     // decides how big the moment is — how long the scrub lasts, how much

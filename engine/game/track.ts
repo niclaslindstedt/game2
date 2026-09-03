@@ -543,7 +543,7 @@ export function crossCurvature(track: Track, fix: TrackPoint, share: number): nu
 
 /** THE CURVATURE THE CAR IS ACTUALLY GOING OVER, 1/m — the road's vertical
  * shape resolved onto the direction the car is TRAVELLING in, which is what
- * decides whether the ground can hold it (`air.crestPull`) and how much of
+ * decides whether the ground can hold it (`air.hold`) and how much of
  * its weight is still on the tires while it does.
  *
  * A road is a surface, not a line, and it is curved both ways: along the
