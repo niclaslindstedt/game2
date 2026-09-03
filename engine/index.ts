@@ -351,6 +351,7 @@ export {
   advanceRun,
   createField,
   fieldResults,
+  fieldTraced,
   livePlace,
   onRoad,
   payHeadStart,
@@ -373,6 +374,9 @@ export {
   type RivalField,
   type RivalRun,
 } from "./sim/field.ts";
+
+// A ghost's run, written down before the green and read back by the clock.
+export { TRACE_EVERY, traceBytes, type RunTrace } from "./sim/trace.ts";
 
 // The run tape: a whole run written down as the controls that drove it,
 // and the headless race that records or replays one.

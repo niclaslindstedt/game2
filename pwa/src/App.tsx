@@ -89,6 +89,7 @@ import {
   catchUpField,
   createField,
   drainField,
+  fieldTraced,
   fieldResults,
   livePlace,
   onRoad,
@@ -603,15 +604,19 @@ const MODE_NAME: Record<PlayMode, string> = {
 };
 
 /** HOW THE FIELD IS ENTERED for a run: the campaign runs the whole roster
- * a rally interval apart at the campaign's own difficulty (R29), and a
- * heads-up race runs whatever its three settings say. Nothing else enters
- * anybody, so nothing else asks. */
+ * a rally interval apart at the campaign's own difficulty (R29) as GHOSTS
+ * — every crew's stage written down before the green, and nothing on the
+ * road solid — and a heads-up race runs whatever its three settings say,
+ * with every car solid: that is the discipline where a rival can be leaned
+ * on or put in the trees. Nothing else enters anybody, so nothing else
+ * asks. */
 function fieldPlan(race: RaceSettings, mode: PlayMode): FieldPlan {
   if (mode !== "headsup") return { ...RALLY_FIELD, difficulty: runDifficulty(race, mode) };
   return {
     difficulty: runDifficulty(race, mode),
     cars: gridSize(race.headsUp.cars),
     massStart: race.headsUp.massStart,
+    contact: true,
   };
 }
 
@@ -726,6 +731,12 @@ const BACKDROP_AFTER = 4.5;
  * down anyway — see `settleNow`. */
 const SETTLE_ALL = 20_000;
 const SETTLE_PASSES = 500;
+
+/** How much of a frame the LOADING BEAT may spend writing the field down,
+ * ms. The beat is a held frame with a caption on it, so it is not paying
+ * for smoothness: forty is a picture that still answers at twenty-odd
+ * frames a second while nearly all of the machine goes on the field. */
+const FIELD_HOLD_MS = 40;
 
 /** Air time under which a landing is not worth a banner, s — every ripple
  * and curb technically leaves the ground, and "CLEAN AIR 0.0s" three times
@@ -2810,8 +2821,38 @@ export function App() {
           servePendingShot();
           return;
         }
+        // THE LOADING BEAT. A field of ghosts has every crew's whole stage
+        // written down before the lights run (standings.ts): the establishing
+        // shot's slices are normally enough, and when they are not — a long
+        // stage on a slow phone, or a shot cut short — the countdown waits
+        // HERE, on the frame the shot landed on, with a caption up and most
+        // of every frame spent on what is left. Nothing steps: the lights
+        // have not started, so no clock is owed anything, and a ghost the
+        // clock outran would be a car missing from the road.
+        const entered = fieldRef.current;
+        if (entered && !page && state.phase === "countdown" && !fieldTraced(entered)) {
+          acc = 0;
+          catchUpField(entered, FIELD_HOLD_MS);
+          audioRef.current?.frame(state, dtFrame);
+          renderer.render(state, dtFrame);
+          servePendingShot();
+          readLive(liveRef.current, state, true);
+          hudClock += dtFrame;
+          if (hudClock > 0.08) {
+            hudClock = 0;
+            pushHud(state, fps);
+          }
+          return;
+        }
         acc += dtFrame;
         while (acc >= TUNING.dt) {
+          // …and it is entered from inside the step loop too: the shot ends
+          // (or is skipped, below) between one step and the next, and the
+          // lights must not take a single step ahead of the field.
+          if (entered && state.phase === "countdown" && !fieldTraced(entered)) {
+            acc = 0;
+            break;
+          }
           acc -= TUNING.dt;
           // Sampled every step whether or not it is the one driving: the
           // pedals and the wheel RAMP, and a sample skipped is a ramp that

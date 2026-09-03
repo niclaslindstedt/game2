@@ -17,22 +17,35 @@
 //
 // THE RIVALS ARE REAL. There is no table of authored times here and no
 // curve fitted to a par: the field is fourteen more `GameState`s on the same
-// compiled track, stepped beside the player's, each driven by the real bot
-// with its own skill profile (rivals.ts) in its own car. They brake for the
-// corners the player brakes for, they get it wrong on the corners their
-// profile is bad at, and the ones who go off lose the same seconds anybody
-// loses. That costs about a percent of a frame — the track is shared, so a
-// rival is a car and a terrain index and nothing more — and it buys a field
-// that cannot drift away from the handling, because it IS the handling.
+// compiled track, each driven by the real bot with its own skill profile
+// (rivals.ts) in its own car. They brake for the corners the player brakes
+// for, they get it wrong on the corners their profile is bad at, and the
+// ones who go off lose the same seconds anybody loses. The track is shared,
+// so a rival is a car and a terrain index and nothing more — and it buys a
+// field that cannot drift away from the handling, because it IS the handling.
 //
-// A HEADS-UP RACE IS THE OTHER DISCIPLINE. Same crews, same bot, same road —
-// but everybody leaves on one green off a grid (grid.ts), so there is no
-// stagger to pay off, nobody is owed a head start, and a place read
-// mid-stage is the actual order of the road rather than a count of better
-// split times. The player is on the back row, and the metres that costs come
-// back as the drive to take them back with; that is the whole of the catch-up
-// and there is no other. Everything here is shared between the two: one
-// field, one classification, one set of cars on the road.
+// THE CAMPAIGN'S FIELD IS A FIELD OF GHOSTS (`contact: false`). A real
+// rally starts its cars minutes apart and nobody ever meets; this one
+// starts them ten seconds apart so the road ahead is never empty, and the
+// price of that is that catching a crew has to mean nothing. So every
+// campaign crew drives its stage ALONE — blind to the player and to each
+// other — and their whole run is written down before the lights go green
+// (trace.ts) and played back by the clock: during the race a rival costs a
+// lookup, not a step, and nothing on the road can touch it or be touched by
+// it. Only that field can be looked up, because only a car nobody can
+// disturb drives the same run twice.
+//
+// A HEADS-UP RACE IS THE OTHER DISCIPLINE, and the one where the cars are
+// SOLID. Same crews, same bot, same road — but everybody leaves on one green
+// off a grid (grid.ts), so there is no stagger to pay off, nobody is owed a
+// head start, and a place read mid-stage is the actual order of the road
+// rather than a count of better split times. The player is on the back row,
+// and the metres that costs come back as the drive to take them back with;
+// that is the whole of the catch-up and there is no other. The crews see
+// each other and the player, lean on whoever their temper says, and are
+// resolved through the contact model both against the player and among
+// themselves. Everything here is shared between the two: one field, one
+// classification, one set of cars on the road.
 //
 // This module is the field as the ENGINE runs it: building it, stepping it,
 // rubbing it against the player, and classifying it. The app's own
@@ -50,11 +63,37 @@ import { gridSize, headsUpField, massStartGrid, type GridSlot } from "./grid.ts"
 import { FIELD_SIZE, GRID_STAGGER, START_INTERVAL, rivalField } from "./rivals.ts";
 import type { RivalEntry } from "./rivals.ts";
 import type { Difficulty } from "./skill.ts";
+import {
+  createPlayback,
+  createTrace,
+  playTo,
+  recordStep,
+  shadowState,
+  type Playback,
+  type RunTrace,
+} from "./trace.ts";
 
 /** One rival's run: their game, and the times it has posted so far. */
 export type RivalRun = {
   entry: RivalEntry;
+  /** The crew's game as the world reads it: what is drawn, hit, spectated
+   * and classified. On a solid field it is the game being stepped; on a
+   * field of ghosts it is a SHOWN copy, posed off the trace by the clock. */
   state: GameState;
+  /** The game the bot actually drives. The same object as `state` on a
+   * solid field; on a field of ghosts it runs ahead of the clock — through
+   * the whole stage before the green — and is never read by anybody but
+   * the trace. */
+  sim: GameState;
+  /** The crew's run written down, on a field of ghosts; null where the
+   * crews are stepped live. */
+  trace: RunTrace | null;
+  /** Where the trace's playback has got to. */
+  play: Playback;
+  /** The crew's own step index at the field's clock zero — the head start
+   * their start number gives them, in steps. Zero on a live field and on a
+   * grid, where everybody's clock is the player's. */
+  offset: number;
   /** Race time at each split board passed, in order. On a circuit this runs
    * on across the laps, exactly as the player's `checkpointTimes` does, so
    * the two are compared index for index. */
@@ -66,7 +105,9 @@ export type RivalRun = {
   done: boolean;
   /** Seconds of head start still to be simulated. It counts down as the
    * catch-up spends its budget; until it reaches zero this crew has not
-   * left the start control and is not anywhere the world can reach. */
+   * left the start control and is not anywhere the world can reach. On a
+   * field of ghosts it is the same debt read off the trace: how far the
+   * clock has run past what has been written down. */
   owed: number;
 };
 
@@ -88,22 +129,40 @@ export type RivalField = {
    * ceremony the player does, and a place read mid-stage is the real order
    * of the road rather than a count of better split times. */
   massStart: boolean;
+  /** Whether the cars on this field are SOLID — see `FieldPlan.contact`. */
+  contact: boolean;
+  /** The player's own clock, in steps since the establishing shot opened.
+   * What a field of ghosts is played back by; a solid field steps its own
+   * games and only counts it. */
+  clock: number;
 };
 
-/** How a field is entered: how good it is, how many cars are on it, and
- * whether they leave together. */
+/** How a field is entered: how good it is, how many cars are on it,
+ * whether they leave together, and whether they can be touched. */
 export type FieldPlan = {
   difficulty: Difficulty;
   /** Cars on the entry list, the player included. */
   cars: number;
   massStart: boolean;
+  /** Whether the cars are SOLID. On, and every crew sees the road as a
+   * race — the player and each other — and is resolved through the contact
+   * model both ways; off, and every crew drives the stage alone, blind to
+   * everybody, with its whole run written down before the green and played
+   * back by the clock (trace.ts): nothing on the road can touch it or be
+   * touched by it. The campaign is off — its ten-second interval is a
+   * story told over a stage real rallies run minutes apart, and the price
+   * of the story is that a car you catch is a car you drive through. A
+   * heads-up race is on: that IS the discipline. */
+  contact: boolean;
 };
 
-/** The campaign's own plan — the whole roster, one at a time (R29). */
+/** The campaign's own plan — the whole roster, one at a time (R29), and
+ * nobody solid. */
 export const RALLY_FIELD: FieldPlan = {
   difficulty: "medium",
   cars: FIELD_SIZE,
   massStart: false,
+  contact: false,
 };
 
 /** The conditions a rival is entered under: the player's, exactly. The
@@ -122,6 +181,20 @@ export type FieldStage = {
  * covers the slack in one step. */
 const RUB_RANGE = 5;
 
+/** The pace a crew has to be making, on average over the whole stage, for
+ * its trace to keep being written, m/s — and the grace on top. A crew
+ * averaging under 30 km/h is wedged, not slow, and a trace is memory: the
+ * run is sealed where it stands and the crew is a retirement. It is well
+ * clear of any limit the run-out applies (`settleLimit`), which is what
+ * actually decides the sheet; this only bounds what a trace can cost. */
+const TRACE_PACE = 9;
+const TRACE_GRACE = 120;
+
+/** Steps a traced run is given before it is sealed where it stands. */
+function traceCap(track: Track, laps: number): number {
+  return Math.ceil(((laps * track.length) / TRACE_PACE + TRACE_GRACE) / TUNING.dt);
+}
+
 /** Enter the field for a stage. The compiled track is SHARED with the
  * player's run: it is read-only, so more cars on it cost cars and not
  * worlds.
@@ -132,64 +205,80 @@ const RUB_RANGE = 5;
  * them the same establishing shot and the same lights, and owes nobody
  * anything. Everything downstream — the classification, the splits, the
  * collision, the cars on the road — reads the same two structures either
- * way. */
+ * way.
+ *
+ * Two kinds of car, one field. SOLID crews are stepped live beside the
+ * player; GHOSTS (`plan.contact` off) get a shown state of their own and a
+ * trace their sim is written into ahead of the clock — see the module note. */
 export function createField(track: Track, plan: FieldPlan, stage: FieldStage): RivalField {
   const cars = plan.massStart ? gridSize(plan.cars) : FIELD_SIZE;
   const grid = plan.massStart ? massStartGrid(cars) : null;
   const entries = plan.massStart
     ? headsUpField(plan.difficulty, cars)
     : rivalField(plan.difficulty);
-  const runs = entries.map((entry) => {
+  const cap = traceCap(track, stage.laps);
+  const runs = entries.map((entry): RivalRun => {
     // Where this crew is stood. A rally start is one slot beside the player,
     // taken in turn; a grid is a row and a column of its own.
     const slot = grid?.[entry.number - 1];
+    // Car 14 leaves as the establishing shot opens and owes nothing; every
+    // car ahead of them owes another interval. A grid owes nothing at all.
+    const owed = plan.massStart ? 0 : (cars - 1 - entry.number) * START_INTERVAL;
+    const sim = createGame({
+      seed: stage.seed,
+      carId: entry.crew.carId,
+      // The crews with the hands take their own gears (`gearboxFor`), which
+      // is where the head of a hard field finds its top end.
+      gearbox: entry.gearbox,
+      track,
+      laps: stage.laps,
+      // A rally rival's clock starts at their own green, which is why they
+      // skip the whole start control and carry the offset as `owed`. A grid
+      // shares ONE green, so its cars sit through the same shot and the same
+      // lights the player does and every clock starts together.
+      skipCountdown: !plan.massStart,
+      quiet: true,
+      // Off to one side of the line, because the player is on it. Only the
+      // crew immediately in front is ever visible from a rally control, and
+      // this is the metre and a bit of road that has them pulling away
+      // ALONGSIDE the player instead of out from inside their bodywork. On a
+      // grid it is the column of their row.
+      gridOffset: slot ? slot.lateral : GRID_STAGGER,
+      gridBack: slot?.back ?? 0,
+      // …and the metres that row is giving away, as the drive to take them
+      // back with. Pole is owed nothing and gets nothing.
+      catchUp:
+        slot && slot.gain > 0 ? { gain: slot.gain, untilS: TUNING.massStart.catchUpS } : undefined,
+      env: { timeOfDay: stage.timeOfDay, weather: stage.weather, season: stage.season },
+    });
+    const ghost = !plan.contact;
     return {
       entry,
-      state: createGame({
-        seed: stage.seed,
-        carId: entry.crew.carId,
-        // The crews with the hands take their own gears (`gearboxFor`), which
-        // is where the head of a hard field finds its top end.
-        gearbox: entry.gearbox,
-        track,
-        laps: stage.laps,
-        // A rally rival's clock starts at their own green, which is why they
-        // skip the whole start control and carry the offset as `owed`. A grid
-        // shares ONE green, so its cars sit through the same shot and the same
-        // lights the player does and every clock starts together.
-        skipCountdown: !plan.massStart,
-        quiet: true,
-        // Off to one side of the line, because the player is on it. Only the
-        // crew immediately in front is ever visible from a rally control, and
-        // this is the metre and a bit of road that has them pulling away
-        // ALONGSIDE the player instead of out from inside their bodywork. On a
-        // grid it is the column of their row.
-        gridOffset: slot ? slot.lateral : GRID_STAGGER,
-        gridBack: slot?.back ?? 0,
-        // …and the metres that row is giving away, as the drive to take them
-        // back with. Pole is owed nothing and gets nothing.
-        catchUp:
-          slot && slot.gain > 0
-            ? { gain: slot.gain, untilS: TUNING.massStart.catchUpS }
-            : undefined,
-        env: { timeOfDay: stage.timeOfDay, weather: stage.weather, season: stage.season },
-      }),
-      splits: [] as number[],
-      time: null as number | null,
+      state: ghost ? shadowState(sim) : sim,
+      sim,
+      trace: ghost ? createTrace(sim, cap) : null,
+      play: createPlayback(),
+      offset: ghost ? Math.round(owed / TUNING.dt) : 0,
+      splits: [],
+      time: null,
       done: false,
-      // Car 14 leaves as the establishing shot opens and owes nothing; every
-      // car ahead of them owes another interval. A grid owes nothing at all.
-      owed: plan.massStart ? 0 : (cars - 1 - entry.number) * START_INTERVAL,
+      owed,
     };
   });
-  return {
+  const field: RivalField = {
     runs,
     difficulty: plan.difficulty,
     of: cars,
     playerNumber: cars,
     interval: plan.massStart ? 0 : START_INTERVAL,
     massStart: plan.massStart,
+    contact: plan.contact,
+    clock: 0,
   };
+  // A ghost is shown where its clock puts it from the first frame: car 14
+  // on the line, everybody ahead of them still owed and off the road.
+  if (!plan.contact) for (const run of runs) syncGhost(run, 0, false);
+  return field;
 }
 
 /** WHERE THE PLAYER STANDS on a grid of `cars` — the last slot, on the back
@@ -212,17 +301,38 @@ export function onRoad(run: RivalRun): boolean {
 /** Advance one rival by one step and book whatever they went through.
  * `traffic` is the cars they can see; empty is a crew driving alone, which
  * is what every path except `stepField` hands them — see the note on
- * `stepField` for why that is the only honest answer there. */
+ * `stepField` for why that is the only honest answer there.
+ *
+ * On a field of ghosts this drives the SIM, not the shown state, and what
+ * it went through is written to the trace rather than booked: the sheet is
+ * filled in as the clock replays it (`syncGhost`), so a ghost's splits land
+ * on the classification at the moment they would have on a live field. */
 export function advanceRun(run: RivalRun, traffic?: readonly TrafficCar[]): void {
-  const events = step(run.state, botInput(run.state, run.entry.profile, traffic));
-  bookRun(run, events);
+  const sim = run.sim;
+  const events = step(sim, botInput(sim, run.entry.profile, traffic));
+  if (run.trace) recordStep(run.trace, sim, events);
+  else bookRun(run, events);
 }
 
-/** Book one crew's step: the boards they went through, and the line. */
+/** Book one crew's step: the boards they went through, and the line. On a
+ * ghost the shown state's own books are kept here too, since nothing steps
+ * it: the board count the minimap reads, and the lap times a spectator's
+ * clock is captioned with. */
 function bookRun(run: RivalRun, events: readonly GameEvent[]): void {
+  const shown = run.trace ? run.state : null;
   for (const event of events) {
-    if (event.type === "checkpoint") run.splits.push(event.time);
-    else if (event.type === "finish") {
+    if (event.type === "checkpoint") {
+      run.splits.push(event.time);
+      if (shown) {
+        shown.checkpointsPassed += 1;
+        shown.checkpointTimes.push(event.time);
+      }
+    } else if (event.type === "lap") {
+      if (shown) {
+        shown.lapTimes.push(event.time);
+        shown.lapStart += event.time;
+      }
+    } else if (event.type === "finish") {
       run.time = event.time;
       // Past the line their run tells the classification nothing more, and
       // R25's roll-out is a celebration nobody is watching.
@@ -233,6 +343,76 @@ function bookRun(run: RivalRun, events: readonly GameEvent[]): void {
       run.done = true;
     }
   }
+}
+
+/** Scratch for a ghost's replayed events: one list, emptied per crew per
+ * tick, because this runs for every crew on every step of a stage. */
+const REPLAYED: GameEvent[] = [];
+
+/** Write a ghost's trace forward until it covers step `at` of its own run,
+ * or the run is over. This is the precalculation itself, one crew at a
+ * time; `payHeadStart` is what spends it in budgeted slices. */
+function traceTo(run: RivalRun, at: number): void {
+  const trace = run.trace!;
+  while (!trace.sealed && trace.steps < at) advanceRun(run);
+}
+
+/** PUT A GHOST WHERE THE CLOCK SAYS. Its step is the clock plus its head
+ * start; if the trace reaches it, the shown car is posed there and every
+ * board and impact between the last sync and this one is booked and handed
+ * to `theirs`. If the trace does NOT reach it the crew is owed that road —
+ * off the road and untouchable, exactly as a live crew still in the control
+ * — unless `extend` says to write it now, which the run-outs do and a frame
+ * in the middle of a race does not.
+ *
+ * A trace sealed short of a finish or a retirement (the crew ran out of
+ * `traceCap`) retires the crew at its end: a DNF, as the run-out's limit
+ * would have made of it. */
+function syncGhost(
+  run: RivalRun,
+  clock: number,
+  extend: boolean,
+  theirs?: (run: RivalRun, events: GameEvent[]) => void,
+): void {
+  const trace = run.trace!;
+  const at = clock + run.offset;
+  if (extend) traceTo(run, at);
+  run.owed = Math.max(0, (at - trace.steps) * TUNING.dt);
+  if (run.done) return;
+  // Owed road that is still being written is a crew still in the control.
+  // Owed road past a SEALED trace is not: the run ended before the clock
+  // got there — car 1 is home before the shot opens on a short stage — and
+  // it is played out to its end and booked, with the debt left standing on
+  // the sheet exactly as a live crew's is (`settleField`).
+  if (run.owed > 0 && !trace.sealed) return;
+  REPLAYED.length = 0;
+  playTo(trace, run.play, at, run.state, REPLAYED);
+  if (REPLAYED.length > 0) {
+    bookRun(run, REPLAYED);
+    if (theirs) theirs(run, REPLAYED);
+  }
+  if (trace.sealed && at >= trace.steps) run.done = true;
+}
+
+/** One tick of the clock over a field of ghosts. */
+function tickGhosts(
+  field: RivalField,
+  extend: boolean,
+  theirs?: (run: RivalRun, events: GameEvent[]) => void,
+): void {
+  field.clock += 1;
+  for (const run of field.runs) syncGhost(run, field.clock, extend, theirs);
+}
+
+/** Whether every crew's run is written down — true from the start on a
+ * solid field, which has nothing to write. The app holds the lights on a
+ * field of ghosts until this says so: a ghost the clock outruns is a car
+ * that vanishes from the road, and the beat to spend the seconds in is
+ * before the green rather than during the first corner. */
+export function fieldTraced(field: RivalField): boolean {
+  if (field.contact) return true;
+  for (const run of field.runs) if (!run.trace!.sealed) return false;
+  return true;
 }
 
 /** One car as a bot's eyes see it — no more than a driver reads out of a
@@ -324,13 +504,23 @@ const EVENTS: GameEvent[][] = [];
  * array, and a shunt between those two is a shunt that never happened.
  *
  * `theirs` receives each crew's own events, for anything drawing them.
- * `contact` receives the pairs, for anything counting them (`heat.ts`). */
+ * `contact` receives the pairs, for anything counting them (`heat.ts`).
+ *
+ * A FIELD OF GHOSTS does none of the three. The clock ticks and every crew
+ * is placed off its trace — nobody looks, nobody drives, nobody meets — and
+ * `theirs` still receives what each crew went through on that step, read
+ * back off the recording. */
 export function stepField(
   field: RivalField,
   player: GameState | null = null,
   theirs?: (run: RivalRun, events: GameEvent[]) => void,
   contact?: FieldContact,
 ): void {
+  if (!field.contact) {
+    tickGhosts(field, false, theirs);
+    return;
+  }
+  field.clock += 1;
   LIVE.length = 0;
   for (const run of field.runs) if (onRoad(run)) LIVE.push(run);
   const count = LIVE.length;
@@ -401,12 +591,19 @@ export function stepField(
  * false when this caller has spent long enough for now — which is how the
  * app buys the whole stagger out of frames nobody is waiting on, and how a
  * headless run buys it in one go by never saying stop. Returns true while
- * there is still road owed. */
+ * there is still road owed.
+ *
+ * On a field of ghosts the debt is the WHOLE STAGE, and it is paid in the
+ * order the road needs it: first every crew the clock has already outrun —
+ * car 13 is ten seconds up the road on the first frame of the shot and has
+ * to be somewhere — and only then on to the line for everybody. Returns
+ * true while any crew's run is still being written. */
 export function payHeadStart(
   field: RivalField,
   budget: () => boolean = () => true,
   grain = 64,
 ): boolean {
+  if (!field.contact) return traceField(field, budget, grain);
   let owing = true;
   while (owing) {
     owing = false;
@@ -423,11 +620,47 @@ export function payHeadStart(
   return false;
 }
 
+/** `payHeadStart` for ghosts: write every trace to its end, the crews the
+ * clock is waiting on first. Each slice re-poses the crew it wrote, so a
+ * frame that spent its budget here draws what it paid for. */
+function traceField(field: RivalField, budget: () => boolean, grain: number): boolean {
+  let writing = true;
+  while (writing) {
+    writing = false;
+    // Pass one: whoever the clock has outrun. Pass two: everybody else.
+    for (let pass = 0; pass < 2; pass++) {
+      for (const run of field.runs) {
+        const trace = run.trace!;
+        if (trace.sealed) continue;
+        const owedNow = run.owed > 0;
+        if (pass === 0 ? !owedNow : owedNow) continue;
+        writing = true;
+        for (let i = 0; i < grain && !trace.sealed; i++) advanceRun(run);
+        syncGhost(run, field.clock, false);
+        if (!budget()) return true;
+      }
+    }
+  }
+  return false;
+}
+
 /** Push the player's own clock forward — what skipping the establishing
  * shot does. Everybody on the road owes the same seconds, or the stagger
  * the whole classification rests on quietly shrinks. */
 export function advanceField(field: RivalField, seconds: number): void {
   if (seconds <= 0) return;
+  const steps = Math.round(seconds / TUNING.dt);
+  // GHOSTS take it as clock. A crew already out on the road is written that
+  // far now, so it is still there when the shot lands (the trace usually
+  // covers it long since); one still in the control simply owes it, as a
+  // live crew would.
+  if (!field.contact) {
+    const out = field.runs.map(onRoad);
+    field.clock += steps;
+    field.runs.forEach((run, i) => syncGhost(run, field.clock, out[i]));
+    return;
+  }
+  field.clock += steps;
   // A MASS START jumps the same beat the player jumped rather than driving
   // through it: the whole grid is sat in the same establishing shot, so
   // stepping them on would send the field down the road while the player is
@@ -436,7 +669,6 @@ export function advanceField(field: RivalField, seconds: number): void {
     for (const run of field.runs) if (!run.done) skipIntro(run.state);
     return;
   }
-  const steps = Math.round(seconds / TUNING.dt);
   for (const run of field.runs) {
     if (run.done) continue;
     // A crew still in the control takes it as more time owed; one already on
@@ -457,9 +689,19 @@ export function advanceField(field: RivalField, seconds: number): void {
  * off HERE rather than in frame slices under an establishing shot nobody
  * placed a run to watch: a placed frame is honest from its first render.
  * A mass start shares the player's clock exactly, so its crews are driven
- * from their own lights until their sim time reaches the player's. */
+ * from their own lights until their sim time reaches the player's.
+ *
+ * Ghosts are the simplest case of all: the clock is the player's, whole
+ * stage is written down, and everybody is posed off it. */
 export function placeField(field: RivalField, state: GameState, jumped: number): void {
+  if (!field.contact) {
+    field.clock = Math.round(state.t / TUNING.dt);
+    payHeadStart(field);
+    for (const run of field.runs) syncGhost(run, field.clock, true);
+    return;
+  }
   if (field.massStart) {
+    field.clock = Math.round(state.t / TUNING.dt);
     for (const run of field.runs) {
       if (run.done) continue;
       skipIntro(run.state);
@@ -510,6 +752,7 @@ function retireOverdue(field: RivalField, limit: number): boolean {
  *
  * Returns true once nobody is left running. */
 export function settleField(field: RivalField, steps: number, limit: number): boolean {
+  if (!field.contact) return runOutGhosts(field, steps, limit);
   let budget = steps;
   while (budget > 0) {
     if (retireOverdue(field, limit)) break;
@@ -539,9 +782,24 @@ export function settleField(field: RivalField, steps: number, limit: number): bo
  *
  * Returns true once nobody is left running. */
 export function watchField(field: RivalField, ticks: number, limit: number): boolean {
+  if (!field.contact) return runOutGhosts(field, ticks, limit);
   for (let i = 0; i < ticks; i++) {
     if (retireOverdue(field, limit)) break;
     for (const run of field.runs) if (!run.done) advanceRun(run);
+  }
+  return field.runs.every((run) => run.done);
+}
+
+/** BOTH RUN-OUTS, for ghosts: the clock ticks on and the crews are read
+ * off their traces — written on the spot if the green came before the
+ * writing was done — and retired by the same limit. Settling and watching
+ * are one function here because a lookup is the same lookup however fast
+ * it is asked for. */
+function runOutGhosts(field: RivalField, ticks: number, limit: number): boolean {
+  for (let i = 0; i < ticks; i++) {
+    if (retireOverdue(field, limit)) break;
+    tickGhosts(field, true);
+    if (field.runs.every((run) => run.done)) break;
   }
   return field.runs.every((run) => run.done);
 }
@@ -578,6 +836,9 @@ export function rubRivals(
   state: GameState,
   theirs?: (run: RivalRun, events: GameEvent[]) => void,
 ): GameEvent[] {
+  // Ghosts are driven through. That is the whole bargain of the campaign's
+  // tight interval, and it is made here and nowhere else.
+  if (!field.contact) return [];
   // The player is in the start control until the lights go out, and a car in
   // the control is not somewhere the world can reach: it is why the crew in
   // front can leave from the line the player is sat on.

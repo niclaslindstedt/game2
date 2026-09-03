@@ -101,7 +101,7 @@ export const BENCHMARK: BenchmarkPlan = {
   carId: "compact",
   gearbox: "auto",
   camera: "chase",
-  field: { difficulty: "medium" as Difficulty, cars: 15, massStart: true },
+  field: { difficulty: "medium" as Difficulty, cars: 15, massStart: true, contact: true },
   step: 1 / 60,
   frames: 1800,
 };

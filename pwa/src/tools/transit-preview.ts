@@ -45,7 +45,7 @@ declare global {
  * behind is still driving. */
 const SEED = 38;
 const LENGTH = "short";
-const FIELD = { difficulty: "medium", cars: 8, massStart: true } as const;
+const FIELD = { difficulty: "medium", cars: 8, massStart: true, contact: true } as const;
 const STAGE = {
   seed: SEED,
   laps: 1,

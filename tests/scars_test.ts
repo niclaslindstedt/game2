@@ -135,7 +135,7 @@ describe("a field on a stage that has caught somebody out", () => {
     for (const trap of TRAPS) {
       const field = createField(
         compileStage(trap.seed, "medium"),
-        { difficulty: trap.difficulty, cars: 8, massStart: true },
+        { difficulty: trap.difficulty, cars: 8, massStart: true, contact: true },
         {
           seed: trap.seed,
           laps: 1,

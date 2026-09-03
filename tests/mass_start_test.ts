@@ -264,7 +264,12 @@ describe("a heads-up field on the road", () => {
     season: "summer",
   } as const;
 
-  const plan = { difficulty: "medium", cars: GRID_DEFAULT, massStart: true } as const;
+  const plan = {
+    difficulty: "medium",
+    cars: GRID_DEFAULT,
+    massStart: true,
+    contact: true,
+  } as const;
 
   it("stands the whole grid on the road at once, owing nobody anything", () => {
     const field = createField(compileStage(38, "short"), plan, stage);

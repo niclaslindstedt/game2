@@ -395,8 +395,14 @@ export function readTape(tape: RunTape): TapePlayer {
 
 /** What a tape says the field it was driven against was. A replay against
  * ANOTHER difficulty keeps everything else — the same crews, the same size,
- * the same start type — so only the one number under test moves. */
+ * the same start type, the same solidity — so only the one number under
+ * test moves. A header written before fields could be ghosts names no
+ * `contact`; every car on it was solid, so that is what it reads as. */
 export function fieldAt(header: TapeHeader, difficulty?: Difficulty): FieldPlan | null {
   if (!header.field) return null;
-  return difficulty ? { ...header.field, difficulty } : header.field;
+  const field: FieldPlan = {
+    contact: true,
+    ...(header.field as Partial<FieldPlan> & object),
+  } as FieldPlan;
+  return difficulty ? { ...field, difficulty } : field;
 }

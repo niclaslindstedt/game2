@@ -124,14 +124,17 @@ const GREEN_HOLD = 1.1;
 /** What the gantry is showing, as ONE number so an unchanged frame costs
  * nothing: `AWAY` when the start is behind us, `SHOT` while the camera is
  * still circling the control and there is nothing on the gantry yet,
+ * `HOLD` while the lights are waiting on the field being written down,
  * `GREEN` when the lights are out and the stage is live, and otherwise how
  * many reds are lit. */
 const AWAY = -1;
 const SHOT = -2;
+const HOLD = -3;
 const GREEN = 0;
 
 function gantry(live: LiveRun): number {
   if (live.phase === "intro") return SHOT;
+  if (live.hold) return HOLD;
   if (live.phase === "countdown") {
     // `countdown` runs LAMPS → 0, and the audio bed sounds a tick on each
     // whole second remaining. Ceil it and both land on the same frame.
@@ -167,6 +170,17 @@ export function StartLights({ live, muted }: { live: LiveRun; muted: boolean }) 
       <div className="hud-start-shot">
         <span className="hud-start-control">START CONTROL</span>
         <span className="hud-start-skip">THROTTLE TO SKIP</span>
+      </div>
+    );
+  }
+  if (state === HOLD) {
+    // The loading beat: the field's stages are still being written down
+    // and the lights wait for them. Same place and same face as the shot's
+    // caption, because it is the same moment held a little longer.
+    return (
+      <div className="hud-start-shot">
+        <span className="hud-start-control">SETTING THE FIELD</span>
+        <span className="hud-start-skip">ONE MOMENT</span>
       </div>
     );
   }

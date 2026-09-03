@@ -464,7 +464,11 @@ describe("the field on the road", () => {
     let met = 0;
     for (const seed of [38, 3, 7, 11, 19]) {
       const track = compileStage(seed, "short");
-      const field = createField(track, { difficulty: "hard", cars: 8, massStart: true }, stage);
+      const field = createField(
+        track,
+        { difficulty: "hard", cars: 8, massStart: true, contact: true },
+        stage,
+      );
       for (let i = 0; i < TUNING.physicsHz * 90; i++) {
         stepField(field);
         const live = field.runs.filter(onRoad);
@@ -491,7 +495,11 @@ describe("the field on the road", () => {
 
   it("reads a heads-up place off the road, and a rally place off the clock", () => {
     const track = compileStage(38, "short");
-    const field = createField(track, { difficulty: "medium", cars: 8, massStart: true }, stage);
+    const field = createField(
+      track,
+      { difficulty: "medium", cars: 8, massStart: true, contact: true },
+      stage,
+    );
     const player = createGame({
       seed: stage.seed,
       carId: "compact",

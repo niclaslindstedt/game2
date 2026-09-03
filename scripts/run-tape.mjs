@@ -106,7 +106,7 @@ function describe(tape, file) {
     console.log(
       `        field: ${h.field.cars} cars, ${h.field.difficulty}, ${
         h.field.massStart ? "mass start" : "rally start"
-      }`,
+      }, ${h.field.contact === false ? "ghosts" : "solid"}`,
     );
   } else {
     console.log("        field: nobody entered");
@@ -179,7 +179,9 @@ function cmdRecord() {
     weather: flag("weather", "clear"),
     season: flag("season", "summer"),
   };
-  const field = has("alone") ? null : { difficulty, cars, massStart };
+  // The game's own two fields: a rally start is the campaign's, and the
+  // campaign's crews are ghosts; a mass start is heads-up's, and solid.
+  const field = has("alone") ? null : { difficulty, cars, massStart, contact: massStart };
   const outcome = race({
     stage,
     car: { id: car, gearbox: flag("gearbox", "auto") },
