@@ -3714,6 +3714,7 @@ a.menu-version:focus-visible {
 }
 
 .car-pick-stage {
+  position: relative;
   flex: 1;
   height: clamp(6rem, 22vmin, 9.5rem);
   border-radius: 0.7rem;
@@ -3737,7 +3738,28 @@ a.menu-version:focus-visible {
   }
 }
 
+/* THE CANVAS IS TAKEN OUT OF THE FLOW, and that is load-bearing rather than
+   tidy. A canvas is a REPLACED element: given `height: 100%` against a
+   parent whose own height is indefinite — which is exactly what the
+   pre-race card's stand is on any two-column shape (`height: auto`, sized
+   by the grid row) — the percentage cannot resolve, so it falls back to the
+   BUFFER's aspect ratio and the picture starts sizing the frame it is
+   supposed to be filling.
+
+   That closes a loop, because the buffer is cut to the frame every frame
+   (car-turntable.ts): pane height ← buffer ratio ← pane height. Every ratio
+   is a fixed point of it, so the pane keeps whatever shape it had when its
+   height was last definite and no later screen can talk it back down. In the
+   flow, a phone turned from upright to sideways carries its PORTRAIT ratio
+   into a landscape pane — 44% taller than the same card loaded sideways from
+   cold, which is START pushed under the fold.
+
+   Absolute against the stage's own box, the canvas contributes no height to
+   anything: the pane is sized by the stylesheet and the grid, the buffer
+   follows the pane, and the arrow of causation only points one way. */
 .car-pick-canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;

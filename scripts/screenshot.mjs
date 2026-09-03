@@ -1377,6 +1377,32 @@ for (const [name, viewport] of [
   );
 }
 
+// ...and the same card TURNED, which is a different picture from the one
+// above and has to be the same one. A phone rotated with a card already up
+// re-runs the whole layout against a shape nothing on the card was measured
+// for, and this is the card with a live render surface in it: a canvas is a
+// REPLACED element, so anything that lets the buffer's own aspect ratio
+// reach the layout closes a loop no later screen can break (styles.css,
+// `.car-pick-canvas`). What that failure looks like is the stand keeping
+// its portrait shape in a landscape pane, too tall by nearly half, with
+// START under the fold — and no shot taken at a fixed viewport can see it.
+// Compare against `shot-menu-car-landscape`; they must be the same card.
+await capture(
+  "shot-menu-car-turned",
+  { width: 390, height: 844 },
+  async (page) => {
+    await menuUp(page);
+    await stageGrid(page);
+    await page.locator(".menu-level-open").first().click();
+    await page.waitForTimeout(3000);
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.waitForTimeout(1200);
+  },
+  { menu: "1" },
+  "load",
+  { initScript: SEEDED_BEST },
+);
+
 // Roam: the split view, with the stage drawn into its own pane.
 for (const [name, viewport] of [
   ["shot-menu-roam", { width: 1280, height: 720 }],
