@@ -163,17 +163,27 @@ describe("the run tape", () => {
   });
 
   it("places a time against a field without putting a car on the road", () => {
-    // A HARD field, and the difficulty is the fixture rather than a detail:
-    // it is the one where the bot's own run is quick enough that no crew
-    // ever shares road with it. That is the precondition the claim below
-    // needs — a crew that CATCHES the player sees it in its traffic and
-    // drives around it, so the crew that raced is not the crew the
-    // standalone placing simulates, and on this stage a medium run is slow
-    // enough for exactly that to happen (place 13 raced against 12 placed).
-    const recorded = recordBotRun({ difficulty: "hard", cars: 15 });
+    // A MEDIUM field, and the difficulty is the fixture rather than a
+    // detail: it is the one where the bot's own run shares road with
+    // nobody. That is the precondition the claim below needs — a crew that
+    // CATCHES the player sees it in its traffic and drives around it, so
+    // the crew that raced is not the crew the standalone placing
+    // simulates.
+    //
+    // WHICH difficulty that is moves with the handling, and it has moved
+    // once: this used to be `hard` and the comment used to say a medium run
+    // was the slow one. Halving the roster's drift angles took the crews'
+    // corner speeds down further than the reference bot's — an ace could no
+    // longer plan at the whole of what the tyres hand over without ending
+    // up in the trees (`skill.ts`'s `latFraction`) — so the recorded run is
+    // now the quicker of the two against a hard field and meets somebody,
+    // at place 11 raced against 12 placed. If this goes red again, re-read
+    // it as "the field and the reference driver have drifted apart" rather
+    // than as a placing bug, and check the other two difficulties.
+    const recorded = recordBotRun({ difficulty: "medium", cars: 15 });
     const placed = placeAmongField({
       stage: STAGE,
-      field: { difficulty: "hard", cars: 15, massStart: false, contact: true },
+      field: { difficulty: "medium", cars: 15, massStart: false, contact: true },
       time: recorded.time,
       carId: CAR.id,
     });
@@ -238,7 +248,16 @@ describe("the run tape", () => {
     // Three roads and three fields of fourteen is a hundred and twenty-six
     // stages driven for one assertion — worth it for the one the whole
     // calibration rests on, but not inside the default budget.
-  }, 60_000);
+    //
+    // 120 s, up from 60. Nothing here got slower to RUN; the stages got
+    // slower to DRIVE. Halving the roster's drift angles took the sim's
+    // pace from 87 to 73 km/h, so a stage is about a sixth longer in
+    // simulated seconds and a hundred and twenty-six of them is a sixth
+    // more physics for the same assertion. It came in at 60.4 s against
+    // the old 60 s on a CI runner — a budget that is a fraction over what
+    // the work costs is a red build waiting for the next handling change,
+    // so this one is sized with room rather than trimmed to fit.
+  }, 120_000);
 
   it("writes down the cut establishing shot, because it moves the field", () => {
     const recorder = createTapeRecorder({

@@ -635,13 +635,14 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   // search SPACE, and it is wide on purpose so that a generator change
   // costs the suite a few seconds of scanning rather than a red test.
   const SHORE_SEEDS = [
-    // 73 leads because it is the first of a whole handful that scramble
-    // out — the drive that finds the water is a minute of full lock over
-    // open country, so a car that reaches a given shore is a car that has
-    // not rolled, wedged or drowned on the way, and which seeds those are
-    // moves with the handling as readily as with the roads. The names
-    // behind it are the rest of that handful, so a road that moves under
-    // the leader costs one more plunge rather than a scan of the tail.
+    // 219 leads because it is the first that scrambles out — the drive that
+    // finds the water is a minute of held lock over open country, so a car
+    // that reaches a given shore is a car that has not rolled, wedged or
+    // drowned on the way, and which seeds those are moves with the handling
+    // as readily as with the roads. The names behind it are the rest of
+    // that handful, so a road (or a roster) that moves under the leader
+    // costs one more plunge rather than a scan of the tail.
+    219,
     73,
     5,
     78,
@@ -652,7 +653,6 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
     128,
     158,
     211,
-    219,
     234,
     247,
     249,
@@ -680,8 +680,8 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
    * drives straight back into a second later, and then the fixture was a
    * list of seed numbers somebody had to re-find by hand every time the
    * generator moved a road. */
-  function scrambles(seed: number): boolean {
-    const attempt = plunge(seed, -1);
+  function scrambles([seed, steer]: Approach): boolean {
+    const attempt = plunge(seed, steer);
     if (!attempt) return false;
     const { state } = attempt;
     const throttle = { ...NEUTRAL_INPUT, throttle: 1 };
@@ -709,17 +709,32 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
     return state.car.u > 1;
   }
 
-  let shoreSeed: number | undefined;
+  /** A seed and the lock the car goes looking for water on — the two halves
+   * of the fixture, because BOTH of them decide where in the lake it ends
+   * up. The list used to search only the first, and that was the bug: the
+   * plunge is a minute of held lock across open country and a handling
+   * change moves where it finishes as surely as a generator change does, so
+   * a roster that slid less put every listed seed in water too deep to
+   * drive out of and the fixture had nothing left to find. How HARD the car
+   * turns in decides how far into the lake it gets, which is the cheaper
+   * axis of the two — a gentler entry is a shallower one — so the search
+   * walks it as well and the space is a couple of hundred times wider for
+   * one more loop. */
+  type Approach = [seed: number, steer: number];
+  const APPROACHES: Approach[] = [-0.75, -1, -0.5, -0.35].flatMap((steer) =>
+    SHORE_SEEDS.map((seed): Approach => [seed, steer]),
+  );
+
+  let shore: Approach | undefined;
 
   beforeAll(() => {
-    shoreSeed = SHORE_SEEDS.find(scrambles);
+    shore = APPROACHES.find(scrambles);
   }, SEARCH_ALLOWANCE);
 
   function driveIntoTheShallows(): GameState {
-    if (shoreSeed === undefined)
-      throw new Error("no seed put a shore the car could drive back out of");
-    const attempt = plunge(shoreSeed, -1);
-    if (!attempt) throw new Error(`seed ${shoreSeed} no longer puts the car in the water`);
+    if (shore === undefined) throw new Error("no seed put a shore the car could drive back out of");
+    const attempt = plunge(shore[0], shore[1]);
+    if (!attempt) throw new Error(`seed ${shore[0]} no longer puts the car in the water`);
     return attempt.state;
   }
 
