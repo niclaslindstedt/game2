@@ -20,13 +20,16 @@ import { describe, expect, it } from "vitest";
 // implementation here would test the copy rather than the shipped data.
 import { routeOf } from "../scripts/lib/stage-route.mjs";
 import { LOCATIONS } from "../pwa/src/game/campaign.ts";
+import { BIOME_SHOTS } from "../pwa/src/game/biome-shots.ts";
 import { STAGE_ROUTES } from "../pwa/src/game/stage-routes.ts";
 import { ROUTE_STROKE, biomeShot, routeShape } from "../pwa/src/game/stage-preview.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** What to run when this file fails, since the fix is never an edit here. */
-const REGENERATE = "run `make previews` (the generator's rules have moved)";
+const REGENERATE = "run `make previews`";
+/** The banners need a build and a Chromium, so they are worth naming apart. */
+const REBANNER = "run `make build && make biomes`";
 
 describe("stage routes", () => {
   it("ships one for every campaign stage", () => {
@@ -40,6 +43,26 @@ describe("stage routes", () => {
     const known = new Set(LOCATIONS.flatMap((l) => l.levels).map((level) => level.id));
     const orphans = Object.keys(STAGE_ROUTES).filter((id) => !known.has(id));
     expect(orphans, `stale route for ${orphans.join(", ")} — ${REGENERATE}`).toEqual([]);
+  });
+
+  it("was drawn from the road each level names TODAY", () => {
+    // Every level, not just the two the case below recompiles: a level's own
+    // seed or band is edited far more often than the generator's rules are,
+    // and it re-rolls exactly ONE route rather than all of them — so the
+    // cheap-stage check would sail past a re-seeded `taiga-3` forever. The
+    // stored spec makes that a comparison rather than a compile, which is
+    // what lets it cover all twelve for free.
+    for (const location of LOCATIONS) {
+      for (const level of location.levels) {
+        const stored = STAGE_ROUTES[level.id];
+        expect(stored, level.id).toBeDefined();
+        expect(stored.spec, `${level.id} was drawn from another road — ${REGENERATE}`).toEqual({
+          seed: level.seed,
+          length: level.length,
+          shape: level.shape ?? "sprint",
+        });
+      }
+    }
   });
 
   it("decodes to a path inside the box it declares", () => {
@@ -106,6 +129,35 @@ describe("biome banners", () => {
       expect(bytes, `${location.biome} banner is suspiciously small`).toBeGreaterThan(4_000);
       expect(bytes, `${location.biome} banner is too heavy for a menu row`).toBeLessThan(120_000);
     }
+  });
+
+  it("is a picture of the stage that country STILL opens on", () => {
+    // The one check that catches a level edit reaching the banners. A banner
+    // is a render of the country's FIRST stage from over its start line, so
+    // re-seeding that stage — or re-banding it, or moving it to another hour
+    // or season — makes the picture wrong: a road nobody drives, lit for
+    // weather the stage is no longer set in. There is no recomputing a JPEG
+    // to notice, so the shot's own receipt is what notices.
+    for (const location of LOCATIONS) {
+      const level = location.levels[0];
+      const shot = BIOME_SHOTS[location.biome];
+      expect(shot, `no shot recorded for ${location.biome} — ${REBANNER}`).toBeDefined();
+      expect(shot, `${location.biome}'s banner is of another stage — ${REBANNER}`).toEqual({
+        level: level.id,
+        seed: level.seed,
+        length: level.length,
+        shape: level.shape ?? "sprint",
+        timeOfDay: level.timeOfDay,
+        weather: level.weather,
+        season: level.season,
+      });
+    }
+  });
+
+  it("carries no shot for a country the campaign no longer visits", () => {
+    const visited = new Set<string>(LOCATIONS.map((l) => l.biome));
+    const orphans = Object.keys(BIOME_SHOTS).filter((biome) => !visited.has(biome));
+    expect(orphans, `stale banner for ${orphans.join(", ")} — ${REBANNER}`).toEqual([]);
   });
 
   it("is named under whichever base the site is deployed on", () => {

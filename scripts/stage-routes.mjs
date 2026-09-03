@@ -53,7 +53,9 @@ const { LOCATIONS } = await import(join(root, "pwa/src/game/campaign.ts"));
 function routesModule(rows) {
   const entries = rows
     .map(
-      ({ id, route }) => `  "${id}": {\n    d: "${route.d}",\n    aspect: ${route.aspect},\n  },`,
+      ({ id, route, spec }) =>
+        `  "${id}": {\n    d: "${route.d}",\n    aspect: ${route.aspect},\n` +
+        `    spec: { seed: ${spec.seed}, length: "${spec.length}", shape: "${spec.shape}" },\n  },`,
     )
     .join("\n");
   return `// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
@@ -75,6 +77,13 @@ export type StageRoute = {
   /** How much wider than tall that bounding box is, in the world — what
    * the menu fits its drawing box to, so a stage keeps its shape. */
   aspect: number;
+  /** THE ROAD THIS WAS DRAWN FROM. Nothing at runtime reads it; it is the
+   * receipt, and \`tests/stage_preview_test.ts\` holds it against
+   * \`campaign.ts\`. A level's seed or band edited without a
+   * \`make previews\` leaves a picture of the road that USED to be there,
+   * under the name of the one that is — and that is invisible unless the
+   * data says which road it drew. */
+  spec: { seed: number; length: string; shape: string };
 };
 
 export const STAGE_ROUTES: Record<string, StageRoute> = {
@@ -88,9 +97,10 @@ for (const location of LOCATIONS) {
   const knobs = { ...DEFAULT_KNOBS, biome: location.biome };
   for (const level of location.levels) {
     const started = Date.now();
-    const track = compileStage(level.seed, level.length, knobs, level.shape ?? "sprint");
+    const shape = level.shape ?? "sprint";
+    const track = compileStage(level.seed, level.length, knobs, shape);
     const route = routeOf(track);
-    routes.push({ id: level.id, route });
+    routes.push({ id: level.id, route, spec: { seed: level.seed, length: level.length, shape } });
     console.log(
       `  ${level.id.padEnd(10)} ${(track.length / 1000).toFixed(1).padStart(5)} km  ` +
         `${String(route.points).padStart(4)} points  ` +

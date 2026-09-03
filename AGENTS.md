@@ -284,6 +284,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | ------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | Handling model / tuning                    | `docs/driving.md`                                                                            |
 | Generator rules (`engine/mapgen/rules.ts`) | `docs/track-generator.md` (rules are listed verbatim), then `make previews` — the campaign menu's committed routes and biome banners are generator OUTPUT, and every rule change re-rolls them |
+| A campaign LEVEL (`pwa/src/game/campaign.ts`) | `make previews` — every stage box draws that level's own road, and a country's banner is a render of its FIRST level's start line, so a re-seeded, re-banded or re-lit level leaves a picture of a stage that no longer exists. Editing the first level of a location, or adding a location, re-shoots that country's banner |
 | Bot, sim harness, rival skill model        | `docs/simulation.md`                                                                         |
 | The sound bank, the beds, or a score       | `docs/audio.md`                                                                              |
 | The sky, the weather, or the storm         | `docs/architecture.md` (the atmosphere bullet), then `make sky` and read the sheet           |
