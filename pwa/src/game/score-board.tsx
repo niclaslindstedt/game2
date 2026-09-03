@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE BOARD, DRAWN — a stage's ten best runs, in the two sizes the game reads
-// them at.
+// THE BOARD, DRAWN — a stage's ten best runs, on the one screen that shows
+// them: the results card, the moment a run has landed on it. A board is an
+// invitation to beat a time, and an invitation is worth something with the
+// road still in your hands and worth nothing read cold off a menu.
 //
-// `ScoreBoard` is the LIST: rank, name and time, small enough that a menu
-// page can print one under every stage it offers. `ScoreSheet` is the same
-// board as a TABLE on the results card, and it is deliberately the card's
-// other table wearing the same clothes (results-sheet.tsx): a picture of the
-// car, the name over what set the time, the time on the right, paged to fit
-// with the same arrows. A run that ends in the campaign and a run that ends
-// in a time trial should not land on two different-looking cards.
+// `ScoreSheet` is deliberately the card's other table wearing the same
+// clothes (results-sheet.tsx): a picture of the car, the name over what set
+// the time, the time on the right, paged to fit with the same arrows. A run
+// that ends in the campaign and a run that ends in a time trial should not
+// land on two different-looking cards.
 //
 // What a row SAYS, on the sheet, is the trial's whole argument: a time is
 // only an achievement next to the car it was set in and the difficulty it
@@ -31,34 +31,6 @@ import { ROW } from "./results-sheet.tsx";
 import { BOARD_SIZE, type ScoreEntry } from "./scores.ts";
 import { formatDay, formatTime } from "../lib/util.ts";
 import { carById } from "@engine";
-
-export type ScoreBoardProps = {
-  entries: readonly ScoreEntry[];
-  /** A row to light up — 1-based, the run that has just landed. 0 for none. */
-  highlight?: number;
-  /** Rows to draw. Fewer than the full ten where space is short. */
-  rows?: number;
-};
-
-export function ScoreBoard({ entries, highlight = 0, rows = BOARD_SIZE }: ScoreBoardProps) {
-  return (
-    <ol className="score-board">
-      {Array.from({ length: rows }, (_, i) => {
-        const entry = entries[i];
-        return (
-          <li
-            key={i}
-            className={`score-row${i + 1 === highlight ? " is-you" : ""}${entry ? "" : " is-empty"}`}
-          >
-            <span className="score-rank">{i + 1}</span>
-            <span className="score-who">{entry ? entry.who : "···"}</span>
-            <span className="score-time">{entry ? formatTime(entry.time) : "--·--"}</span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 /** The fewest rows a page of the board is ever cut to — HALF THE BOARD, and
  * higher than the result sheet's own floor on purpose. A sheet of fifteen

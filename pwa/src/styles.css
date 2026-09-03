@@ -1123,56 +1123,6 @@ body {
   }
 }
 
-/* ── The high score board ─────────────────────────────────────────────────
-   One layout, two homes: the results card the moment a run lands on it, and
-   the menu page a player reads before choosing what to beat. Monospaced
-   numerals and a fixed rank column so ten rows read as a TABLE — a board
-   whose columns wander is a list, and a list is not something you scan. */
-
-.score-board {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: clamp(0.7rem, 2.4vmin, 0.95rem);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.06em;
-}
-
-.score-row {
-  display: grid;
-  grid-template-columns: 1.6em 1fr auto;
-  gap: 0.6em;
-  align-items: baseline;
-  padding: 0.1rem 0.35rem;
-  border-radius: 0.3rem;
-}
-
-.score-rank {
-  text-align: right;
-  opacity: 0.75;
-}
-
-.score-who {
-  letter-spacing: 0.24em;
-}
-
-/* An empty row is a place going spare, drawn as one — see score-board.tsx. */
-.score-row.is-empty {
-  opacity: 0.4;
-}
-
-/* The run that has just landed. Loud on purpose: finding your own row is the
-   only thing anybody does with a board they are already looking at. */
-.score-row.is-you {
-  background: rgb(255 210 62 / 88%);
-  color: var(--hud-shadow);
-  text-shadow: none;
-  opacity: 1;
-}
-
 /* ── Entering your initials ───────────────────────────────────────────────
    THE LETTERS ARE TYPED ONTO THE BOARD. The entry is not a screen of its own
    — it is the run's own row, standing in the place the time just won, with
@@ -3009,9 +2959,16 @@ body {
 
 /* ── Locations and stage boxes ───────────────────────────────────────── */
 
+/* EVERY COUNTRY THE SAME HEIGHT, and the grid is what buys it: `1fr` auto
+   rows size every row to the tallest one, with no number here to keep in
+   step with the rows' contents. It is not tidiness — the banner behind a row
+   is cropped to it by `object-fit: cover` off an 8:1 picture, so it is the
+   ROW'S HEIGHT that sets how much of the country a row shows. Rows of
+   different heights are two banners at two different zooms, panning the same
+   pixels over different amounts of ground. */
 .menu-locations {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-auto-rows: 1fr;
   gap: 0.6rem;
 }
 
@@ -3031,6 +2988,9 @@ body {
   padding: 0.8rem 1rem;
   cursor: pointer;
   text-align: left;
+  /* The rows are all the tallest row's height (see `.menu-locations`), so
+     what a shorter row has is space above and below rather than under. */
+  justify-content: center;
   /* The row's own words now sit on a photograph of the country rather than
      on a flat panel, so they get the shadow back that the rest of the menu
      does without: over a sunlit lake, white text with no edge disappears. */
@@ -3077,14 +3037,14 @@ body {
   /* Slow enough to be scenery rather than an animation — a menu row that
      visibly moves while you read it is a menu row you cannot read. A full
      sweep takes most of a minute, and `alternate` walks it back instead of
-     snapping to the start, which would be the one frame the eye does catch. */
-  animation: biome-pan 54s ease-in-out infinite alternate;
-}
+     snapping to the start, which would be the one frame the eye does catch.
 
-/* The two countries drift out of step, because two strips sliding in lockstep
-   read as one sheet moving behind a window with a bar across it. */
-.menu-location:nth-of-type(even) .menu-location-shot {
-  animation-delay: -27s;
+     EVERY ROW IS ON THE SAME CLOCK — no per-row delay. The easing is what
+     makes that load-bearing: `ease-in-out` is near-still at the ends of a
+     sweep and quickest through the middle, so two rows offset in the cycle
+     are visibly moving at different speeds at every instant, and the page
+     reads as one country panning past a second one that is holding still. */
+  animation: biome-pan 54s ease-in-out infinite alternate;
 }
 
 /* The travel: the whole overhang, 70% of the ROW's width. Stated against the
@@ -3437,6 +3397,29 @@ body {
   color: var(--hud-shadow);
 }
 
+/* CHIPS SIZED TO BE AIMED AT. A row whose answers are one or two characters
+   — a grid size, a lap count — is a row of targets the width of the digits
+   on them, and a thumb misses those. So they share the row's width evenly
+   and stand a comfortable touch target tall, which also makes the row read
+   as the decision it is rather than as a footnote under the label. */
+.menu-opts-wide {
+  /* Takes the row's whole remaining width — on a phone held sideways the
+     label sits BESIDE the chips, and a strip sized to its own contents wraps
+     the last chip onto a line of its own while the space to its right goes
+     spare. */
+  flex: 1;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+}
+
+.menu-opts-wide .menu-opt {
+  flex: 1 1 3rem;
+  min-height: 2.6rem;
+  padding: 0.55rem 0.8rem;
+  font-size: clamp(0.78rem, 2.6vmin, 1rem);
+  letter-spacing: 0.06em;
+}
+
 /* ── R29: DIFFICULTY, as three cards ────────────────────────────────────
    The biggest control on a stage grid, because it is the biggest decision
    on one: it sets how good the fourteen crews are AND how much of every
@@ -3651,6 +3634,12 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: center;
     gap: 0.4rem 0.9rem;
+  }
+
+  /* The height a phone held sideways has not got: a wide chip is still a
+     comfortable target at this size, and the row is on one line here. */
+  .menu-opts-wide .menu-opt {
+    min-height: 2.1rem;
   }
 }
 
@@ -5976,32 +5965,6 @@ a.menu-version:focus-visible {
     width: min(100%, 21rem);
     max-height: calc(100% - 6rem);
   }
-}
-
-/* The high scores page: one board per finished stage, side by side where the
-   card is wide enough and stacked where it is not. */
-.score-stages {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: 0.9rem 2rem;
-}
-
-/* A board is a narrow thing however wide the card is: stretched across a
-   desktop card the rank and the time end up at opposite edges and the eye
-   has to travel to read one row. */
-.score-stage {
-  max-width: 22rem;
-}
-
-.score-stage-name {
-  font-size: clamp(0.8rem, 2.6vmin, 1rem);
-  color: var(--hud-good);
-}
-
-.score-stage-where {
-  font-size: clamp(0.6rem, 2vmin, 0.8rem);
-  opacity: 0.7;
-  letter-spacing: 0.1em;
 }
 
 .menu-empty {

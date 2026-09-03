@@ -9,73 +9,98 @@
 // a road you can race on; one you have never seen is a road you should be
 // learning in the campaign, where it counts for something.
 //
-// Three settings, and they are the whole mode:
+// Two steps, the campaign's own: which country, then which of its six. And
+// on the second, the two settings that are the whole mode:
 //
-//   DIFFICULTY how good the field is, and what a hit costs your own car —
-//              its own knob, not the campaign's, so a knockabout race cannot
-//              quietly retune a championship.
-//   MASS START everybody on one grid, one green (engine/sim/grid.ts). Off,
-//              it is a rally start: one car at a time, ten seconds apart,
-//              and the result is a list of times.
-//   CARS       how many are on that grid, the player included. Only a mass
-//              start gets to choose — a rally start enters the whole roster,
-//              because the road is empty either way and a short entry list
-//              would only take rivals off the results sheet.
+//   DIFFICULTY   how good the field is, and what a hit costs your own car —
+//                its own knob, not the campaign's, so a knockabout race
+//                cannot quietly retune a championship.
+//   PARTICIPANTS how many cars are on the grid, the player included.
+//
+// There is no start-type setting. Everybody leaves on one green off one
+// grid (engine/sim/grid.ts) because that IS heads up — a rally start, one
+// car at a time and a list of times at the end, is the campaign, and
+// offering it here would be offering the mode next door.
 
 import {
   LOCATIONS,
   latestOpen,
   levelCompleted,
+  locationById,
   type CampaignLevel,
+  type CampaignLocation,
   type CampaignProgress,
 } from "./campaign.ts";
-import { LevelGrid } from "./menu-levels.tsx";
+import { LevelGrid, LocationList } from "./menu-levels.tsx";
 import {
   DifficultyPicker,
   GRID_OPTIONS,
   MenuHead,
   OptionRow,
-  ToggleRow,
   gridOption,
   type HeadsUpSettings,
 } from "./menu.tsx";
 
 export function HeadsUpPage({
+  locationId,
   progress,
   headsUp,
   onHeadsUp,
+  onLocation,
   onBack,
   onPlay,
 }: {
+  /** The country being looked at, or null on the step that chooses one. */
+  locationId: string | null;
   progress: CampaignProgress;
   headsUp: HeadsUpSettings;
   onHeadsUp: (headsUp: HeadsUpSettings) => void;
+  onLocation: (location: CampaignLocation | null) => void;
   onBack: () => void;
   onPlay: (level: CampaignLevel) => void;
 }) {
   const gate = (level: CampaignLevel): boolean => levelCompleted(level, progress);
-  const open = LOCATIONS.some((location) => location.levels.some(gate));
-  // The furthest stage finished anywhere — where the cursor stands, and the
-  // race START takes. See the same line on the time trial's grid.
-  let resume: CampaignLevel | null = null;
-  for (const location of LOCATIONS) resume = latestOpen(location, gate) ?? resume;
+  const raced = (location: CampaignLocation): boolean => location.levels.some(gate);
+  if (locationId === null) {
+    // The furthest country with a finished stage in it — where the cursor
+    // stands, and the race START takes.
+    const resume = LOCATIONS.filter(raced).at(-1);
+    return (
+      <div className="menu-card">
+        <MenuHead back={onBack} backLabel="MENU" title="HEADS UP" />
+        {resume === undefined && (
+          <div className="menu-empty">Drive a stage to the end in the campaign first.</div>
+        )}
+        <LocationList
+          open={raced}
+          hint={() => "Finish a stage here in the campaign"}
+          line={(location) => (
+            <span className="menu-location-progress">
+              {location.levels.filter(gate).length} / {location.levels.length} OPEN
+            </span>
+          )}
+          next={resume}
+          onPick={onLocation}
+        />
+      </div>
+    );
+  }
+  const location = locationById(locationId);
   return (
     <div className="menu-card menu-card-wide">
-      <MenuHead back={onBack} backLabel="MENU" title="HEADS UP" />
-      {!open && <div className="menu-empty">Drive a stage to the end in the campaign first.</div>}
-      {LOCATIONS.map((location) => (
-        <div key={location.id} className="menu-section">
-          <div className="menu-section-title">{location.name.toUpperCase()}</div>
-          <LevelGrid
-            location={location}
-            progress={progress}
-            open={gate}
-            hint="Finish this stage in the campaign"
-            next={resume}
-            onPlay={onPlay}
-          />
-        </div>
-      ))}
+      <MenuHead
+        back={() => onLocation(null)}
+        backLabel="HEADS UP"
+        title={location.name.toUpperCase()}
+      />
+      <LevelGrid
+        location={location}
+        progress={progress}
+        open={gate}
+        hint="Finish this stage in the campaign"
+        next={latestOpen(location, gate)}
+        onPlay={onPlay}
+      />
       {/* HOW HARD, on its own: it is the setting that decides both how good
           the field is and what a hit costs the player's own car, and it wears
           the same three cards the campaign's does so the two are one idea
@@ -84,27 +109,20 @@ export function HeadsUpPage({
         value={headsUp.difficulty}
         onPick={(difficulty) => onHeadsUp({ ...headsUp, difficulty })}
       />
-      {/* The race's own two settings, grouped so a phone held sideways can
-          pair them up rather than stacking them. */}
-      <div className="menu-settings">
-        <ToggleRow
-          label="MASS START"
-          hint="Everyone off one grid, on one green. You start at the back."
-          on={headsUp.massStart}
-          onToggle={() => onHeadsUp({ ...headsUp, massStart: !headsUp.massStart })}
-        />
-        {headsUp.massStart && (
-          <OptionRow
-            label="CARS"
-            options={GRID_OPTIONS}
-            value={gridOption(headsUp.cars)}
-            onPick={(id) => {
-              const picked = GRID_OPTIONS.find((opt) => opt.id === id);
-              if (picked) onHeadsUp({ ...headsUp, cars: picked.cars });
-            }}
-          />
-        )}
-      </div>
+      {/* HOW MANY CARS ARE IN IT — the one other decision, and the only one
+          that changes what a frame costs: every entry is a body, a plate and
+          a `GameState` stepped beside the player's. Wide chips, because on a
+          phone this is a row of two-character targets. */}
+      <OptionRow
+        label="PARTICIPANTS"
+        options={GRID_OPTIONS}
+        value={gridOption(headsUp.cars)}
+        wide
+        onPick={(id) => {
+          const picked = GRID_OPTIONS.find((opt) => opt.id === id);
+          if (picked) onHeadsUp({ ...headsUp, cars: picked.cars });
+        }}
+      />
     </div>
   );
 }

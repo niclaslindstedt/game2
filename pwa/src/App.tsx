@@ -650,16 +650,16 @@ const MODE_NAME: Record<PlayMode, string> = {
 /** HOW THE FIELD IS ENTERED for a run: the campaign runs the whole roster
  * a rally interval apart at the campaign's own difficulty (R29) as GHOSTS
  * — every crew's stage written down before the green, and nothing on the
- * road solid — and a heads-up race runs whatever its three settings say,
+ * road solid — and a heads-up race stands its own two settings on ONE grid
  * with every car solid: that is the discipline where a rival can be leaned
- * on or put in the trees. Nothing else enters anybody, so nothing else
- * asks. */
+ * on or put in the trees, and a mass start is what makes it one. Nothing
+ * else enters anybody, so nothing else asks. */
 function fieldPlan(race: RaceSettings, mode: PlayMode): FieldPlan {
   if (mode !== "headsup") return { ...RALLY_FIELD, difficulty: runDifficulty(race, mode) };
   return {
     difficulty: runDifficulty(race, mode),
     cars: gridSize(race.headsUp.cars),
-    massStart: race.headsUp.massStart,
+    massStart: true,
     contact: true,
   };
 }
@@ -1523,7 +1523,7 @@ export function App() {
         skipCountdown: false,
         // The back row, on a mass start. Everything else puts the player on
         // the line on their own.
-        grid: mode === "headsup" && race.headsUp.massStart ? playerSlot(race.headsUp.cars) : null,
+        grid: mode === "headsup" ? playerSlot(race.headsUp.cars) : null,
       },
       mode,
       level.id,
@@ -2033,7 +2033,7 @@ export function App() {
               weather: level.weather,
               season: level.season,
               skipCountdown: false,
-              grid: mode === "headsup" && r.headsUp.massStart ? playerSlot(r.headsUp.cars) : null,
+              grid: mode === "headsup" ? playerSlot(r.headsUp.cars) : null,
             }
           : {
               seed: seedRef.current,
@@ -2048,7 +2048,7 @@ export function App() {
               skipCountdown: false,
               // The back row, on a `?mode=headsup` grid; alone on the line
               // otherwise, which is every other way into here.
-              grid: mode === "headsup" && r.headsUp.massStart ? playerSlot(r.headsUp.cars) : null,
+              grid: mode === "headsup" ? playerSlot(r.headsUp.cars) : null,
             };
         // The time to beat, on a stage that keeps one — read before the run
         // starts, as `startStage` reads it, or a placed finish could never
@@ -3130,7 +3130,6 @@ export function App() {
           rows: sheetRows.rows,
           settled: sheetRows.settled,
           cars: gridSize(race.headsUp.cars),
-          massStart: race.headsUp.massStart,
         }
       : null;
   const campaign: FinishStandings | null = ((): FinishStandings | null => {

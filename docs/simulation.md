@@ -153,7 +153,7 @@ A solid field sees itself, too: `stepField` hands every crew the cars around it 
 
 ## The mass-start grid (`engine/sim/grid.ts`)
 
-HEADS UP races the same crews, the same bot and the same roads with the championship taken off — and, optionally, with the rally start taken off too. A **mass start** puts the whole field on one grid and sends it on one green, which changes four things and nothing else.
+HEADS UP races the same crews, the same bot and the same roads with the championship taken off — and with the rally start taken off with it. A heads-up race is ALWAYS a **mass start**: the whole field on one grid, sent on one green, which changes four things and nothing else. (The rally start is still what the campaign runs, and `FieldPlan.massStart` is still the switch between the two — it is simply not a menu setting.)
 
 **The grid stands behind the start gate.** R24 already lays `STAGE_RULES.startZone.apron` metres of flat dirt road off the back of the first sample — the rally start's run-up, straight, with the terrain shelf held flat under it — and that is where the field goes. Every car is on the road, none of them is off the stage (`pastApron`), and the whole grid drives THROUGH the gate when the lights go green. The apron's length is therefore a hard ceiling on how deep a grid can be, and `GRID_MAX` is derived from it rather than chosen: lengthen the apron in the rule book and the grid grows with it.
 
