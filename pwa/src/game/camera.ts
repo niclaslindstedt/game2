@@ -135,17 +135,46 @@ const IN_CAR: InCarCamera[] = ["bumper", "hood", "cockpit"];
  * leaves the depth buffer nothing to separate a lake from the ground under
  * it with. */
 const DRIVING_FAR = 900;
+
+/** The far plane god mode's camera is actually using, m, and the near plane
+ * under it. The driving pair unless a tool has asked to see further
+ * (`?air=`, `setReach`).
+ *
+ * A STILL can afford what a run cannot. 900 m is sized to the fog a driver
+ * is looking through, and past it there is nothing to draw because there is
+ * nothing they could see; a preview taken from two hundred metres up with
+ * the horizon in the frame is looking at kilometres, and on the driving pair
+ * the country simply stops partway out. The near plane moves with it because
+ * the depth buffer is a ratio: a quarter-metre near plane under a six
+ * kilometre far one has nothing left to separate a lake from the ground
+ * under it — the same trade camera-map.ts makes for the same reason. */
+let reachFar = DRIVING_FAR;
 /** Near plane while driving, m. The in-car views each pull it closer still
  * — the nearest bodywork decides it, and camera-eye.ts's rows carry their
  * own. Pulling it in costs depth precision that nothing at this range
  * spends. */
 const DRIVING_NEAR = 0.25;
+/** …and the near plane that rides with `reachFar` — declared after the pair
+ * it defaults to. */
+let reachNear = DRIVING_NEAR;
 /** God mode's field of view, deg — the same register the chase rigs sit in
  * at rest, so a distance judged while flying reads the same as one judged
  * from behind the car. Fixed rather than speed-stretched: the free camera
  * has no speed worth dramatising, and a fov that breathed would make two
  * screenshots of one spot disagree about how far away things are. */
 const FREE_FOV = 58;
+
+/** The lens the free camera is actually wearing, deg. `FREE_FOV` unless a
+ * tool has asked for another one (`?freefov=`, `setFreeFov`).
+ *
+ * It exists for PANORAMAS. three's fov is vertical, and `verticalFovFor`
+ * leaves a design number alone at or above 16:9 — so widening the viewport
+ * past that widens the HORIZONTAL field instead of showing more of the same
+ * lens. At 58° a 4:1 frame is about 131° across, 6:1 is 146°, and by 8:1 it
+ * is 155° and the ground visibly domes. A wide strip therefore has to be
+ * shot on a LONGER lens: drop the vertical fov and the horizontal field
+ * stays where it looks right however wide the frame gets. */
+let freeFov = FREE_FOV;
 
 /** A camera behind the car, as a set of numbers. The distance and height
  * decide how big the car is in frame; the aim point decides the PITCH, and
@@ -433,6 +462,14 @@ export type GameCamera = {
   /** Where the camera is standing and what it is looking at, whatever mode
    * is up — what the debug overlay prints and the repro line carries. */
   pose: () => FreeFlyPose;
+  /** Put a different LENS on god mode's camera, deg of vertical fov; 0 or
+   * less puts the design lens back. For tools shooting a frame the design
+   * number was not authored for — see `freeFov`. */
+  setFreeFov: (deg: number) => void;
+  /** How far the camera may SEE, m — the far plane, with a near plane scaled
+   * under it to keep the depth buffer honest. 0 or less restores the driving
+   * pair. See `reachFar`. */
+  setReach: (far: number) => void;
   /** Where the three in-car views mount on the car now on the stage,
    * body-local m — pushed when the car's meshes are built, because every one
    * of them is read off that car's own silhouette. */
@@ -720,7 +757,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     freeMove.yawDelta = 0;
     freeMove.pitchDelta = 0;
     freeMove.speedSteps = 0;
-    camera.fov = verticalFovFor(FREE_FOV, camera.aspect);
+    camera.fov = verticalFovFor(freeFov, camera.aspect);
     camera.updateProjectionMatrix();
   };
 
@@ -808,9 +845,9 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // car whichever view it planted from, so it takes the outside near plane
     // even when the player was behind the wheel a moment ago.
     if (mode !== "map") {
-      const near = inCar ? eye.rigOf(inCar).near : DRIVING_NEAR;
+      const near = inCar ? eye.rigOf(inCar).near : reachNear;
       camera.near = change.flying() ? Math.min(near, nearFor(changeFrom)) : near;
-      camera.far = DRIVING_FAR;
+      camera.far = reachFar;
     }
     // God mode is nobody's shot but the pilot's: the finish never takes it,
     // and it keeps flying whatever phase the run beneath it is in.
@@ -872,6 +909,17 @@ export function createGameCamera(width: number, height: number): GameCamera {
     free,
     freeMove,
     pose: () => poseOf(camera),
+    setFreeFov: (deg) => {
+      freeFov = deg > 0 ? deg : FREE_FOV;
+    },
+    setReach: (far) => {
+      reachFar = far > 0 ? far : DRIVING_FAR;
+      // Held to about a two-thousandth of the far plane, which is the ratio
+      // the driving pair already runs at — and never nearer than the driving
+      // near plane, so asking to see LESS far cannot push the nose of the car
+      // through it.
+      reachNear = far > 0 ? Math.max(DRIVING_NEAR, far / 2000) : DRIVING_NEAR;
+    },
     setMode: (next) => {
       // Entering god mode is a HAND-OVER, not a cut: the flight starts from
       // the frame that was already on screen, so the first thing the pilot

@@ -29,12 +29,50 @@ import {
   type CampaignLocation,
   type CampaignProgress,
 } from "./campaign.ts";
+import { ROUTE_STROKE, routeShape } from "./stage-preview.ts";
 import { PLAYER_ID } from "./standings.ts";
 
 /** The padlock on anything not open yet. The drawing lives with the rest of
  * the menu's marks; this is the box it hangs in. */
 export function LockGlyph() {
   return <Glyph name="lock" className="menu-lock" />;
+}
+
+/** THE STAGE'S ROAD, as the shape it is — the whole route in the corner of
+ * its own box, so six boxes read as six different roads before a word on
+ * any of them has been read.
+ *
+ * It sits BEHIND the text rather than beside it. A stage box is already as
+ * short as its contents allow (a phone held sideways fits six of them only
+ * just), so a picture given a column of its own would cost the grid the
+ * layout it was cut down to get. Behind, at low contrast, it costs nothing
+ * and the name still reads over it.
+ *
+ * Stroked in `currentColor`, so the box's own state paints it: the menu's
+ * yellow on an open stage, grey on a locked one, and no second palette to
+ * keep in step. Aria-hidden — it says nothing the box does not already say
+ * in words. */
+function RouteMap({ levelId }: { levelId: string }) {
+  const shape = routeShape(levelId);
+  if (!shape) return null;
+  return (
+    <svg
+      className="menu-level-route"
+      viewBox={`0 0 ${shape.width} ${shape.height}`}
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d={shape.d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={ROUTE_STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 /** A stage's billing without compiling it: the band's name, the minutes it
@@ -72,6 +110,8 @@ type LevelBoxProps = {
 
 /** One stage box. The BORDER carries the state — lit and open, grey and shut
  * — because at a glance across six boxes the frame is what the eye counts.
+ * Behind it all sits the stage's own road (`RouteMap`), which is what tells
+ * six boxes apart before their names have been read.
  *
  * What is INSIDE is only what is specific to this stage: its number, its
  * name, how long it is, and what has been got out of it. The stage's blurb
@@ -103,6 +143,7 @@ function LevelBox({
         title={hint}
         aria-label={`Stage ${index + 1}, locked — ${hint}`}
       >
+        <RouteMap levelId={level.id} />
         <span className="menu-level-no">{index + 1}</span>
         <LockGlyph />
       </div>
@@ -116,6 +157,7 @@ function LevelBox({
       data-nav-next={next ? "" : undefined}
       onClick={onPlay}
     >
+      <RouteMap levelId={level.id} />
       <span className="menu-level-head">
         <span className="menu-level-no">{index + 1}</span>
         <Glyph name={laps > 1 ? "circuit" : "sprint"} className="menu-level-shape" />

@@ -64,6 +64,7 @@ import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
 import { RoamPage, type MapDebug, type MapRect, type MapView } from "./menu-roam.tsx";
 import { ScoreBoard } from "./score-board.tsx";
+import { biomeShot } from "./stage-preview.ts";
 import { loadBoard } from "./scores.ts";
 import type { Settings } from "./settings.ts";
 
@@ -245,6 +246,35 @@ function RootPage({
   );
 }
 
+/** THE COUNTRY, behind the row that opens it — a real render taken by the
+ * game from two hundred metres over the country's first start line
+ * (`make biomes`), not a map of any one stage: a location is six roads, and
+ * a picture of one of them would be advertising the wrong thing.
+ *
+ * It fills the row and the text sits on it, which is the only layout that
+ * does not cost the campaign page height it has not got. Decorative, so it
+ * is hidden from a reader — the row already says the country's name and
+ * what it is like in words.
+ *
+ * A missing file takes itself off the page rather than leaving a broken
+ * image in the menu: the banners are generated, and a country added to
+ * `campaign.ts` before `make biomes` is next run has none. */
+function BiomeShot({ location }: { location: CampaignLocation }) {
+  const [gone, setGone] = useState(false);
+  if (gone) return null;
+  return (
+    <img
+      className="menu-location-shot"
+      src={biomeShot(location.biome, import.meta.env.BASE_URL)}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      decoding="async"
+      onError={() => setGone(true)}
+    />
+  );
+}
+
 function CampaignPage({
   progress,
   onNavigate,
@@ -274,6 +304,10 @@ function CampaignPage({
                 className="menu-location menu-location-locked menu-level-locked"
                 aria-label={`${location.name}, locked`}
               >
+                {/* The country IS shown behind a locked row, dimmed: what is
+                    on the other side of the padlock is the reason to go
+                    through it, and a grey box is a reason to stop looking. */}
+                <BiomeShot location={location} />
                 <Glyph name="lock" className="menu-lock" />
                 <span className="menu-location-name">{location.name.toUpperCase()}</span>
                 <span className="menu-location-blurb">Top the {before.name} table</span>
@@ -288,6 +322,7 @@ function CampaignPage({
               data-nav-next={location === resume ? "" : undefined}
               onClick={() => onNavigate({ page: "location", locationId: location.id })}
             >
+              <BiomeShot location={location} />
               <span className="menu-location-name">{location.name.toUpperCase()}</span>
               <span className="menu-location-blurb">{location.blurb}</span>
               <span

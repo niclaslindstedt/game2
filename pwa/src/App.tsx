@@ -487,6 +487,25 @@ function initialSettings(): Settings {
   // local storage.
   const gearbox = new URLSearchParams(location.search).get("gearbox");
   if (gearbox === "auto" || gearbox === "manual") settings.gearbox = gearbox;
+  // ?hud=0 — a CLEAN FRAME: the instrument panel and the rear-view glass
+  // both off, so a tool photographing the WORLD gets the world and nothing
+  // laid over it. Both switches together rather than only the panel, since
+  // half a HUD in shot is the same problem as all of it; pinned from the URL
+  // for the reason the gearbox is, so a picture does not depend on what the
+  // machine taking it happens to have stored.
+  const hud = new URLSearchParams(location.search).get("hud");
+  if (hud === "0" || hud === "1") settings.hud = { on: hud === "1", mirror: hud === "1" };
+  // ?drawdistance= — how far the air lets the camera see (OPTIONS ▸ VIDEO's
+  // own switch, `DRAW_DISTANCE_SCALE` on the sky preset's fog). The fog is
+  // tuned for a driver's eye a metre and a half off the road, where 520 m is
+  // a long way; a camera lifted a hundred metres up is looking through four
+  // times that at the ground in front of it, and on the stored default the
+  // whole middle distance washes out to fog colour. A preview of the COUNTRY
+  // asks for the setting a player with a good machine already has.
+  const range = new URLSearchParams(location.search).get("drawdistance");
+  if (range === "near" || range === "normal" || range === "far") {
+    settings.video = { ...settings.video, drawDistance: range };
+  }
   return settings;
 }
 
@@ -494,6 +513,31 @@ function initialSettings(): Settings {
  * the frame the link was made from, and re-applying it every time the
  * camera came back would make the flight impossible to leave. */
 const URL_POSE = poseFromUrl();
+
+/** ?freefov= — the LENS god mode's camera wears, deg of vertical fov, or 0
+ * for the design one. three's fov is vertical, so a very wide viewport opens
+ * the HORIZONTAL field instead of showing more of the same lens, and past
+ * about 150° across the ground domes and anything near the edge shears. A
+ * tool shooting a wide strip (scripts/biome-preview.mjs) asks for a longer
+ * lens here and gets a panorama instead of a fisheye. */
+const URL_FREE_FOV = (() => {
+  const raw = new URLSearchParams(location.search).get("freefov");
+  const deg = Number(raw);
+  return raw !== null && Number.isFinite(deg) && deg > 0 && deg < 180 ? deg : 0;
+})();
+
+/** ?air= — how far the world is DRAWN for this frame, m, or 0 for the
+ * driving distances. OPTIONS ▸ VIDEO's draw distance only scales the fog
+ * preset, and its longest setting is still sized to a driver's eye a metre
+ * off the road; a camera two hundred metres up with the horizon in frame is
+ * looking at kilometres, and on any of them the ground and the roads on it
+ * stop partway out with open haze past the end. A still can afford to draw
+ * what a run cannot, so the tools ask for it outright. */
+const URL_AIR = (() => {
+  const raw = new URLSearchParams(location.search).get("air");
+  const m = Number(raw);
+  return raw !== null && Number.isFinite(m) && m > 0 && m <= 20000 ? m : 0;
+})();
 
 /** ...and where a `?m…=` link wants the ROAM MAP framed. Read once for the
  * same reason: it names the picture the link was cut from, and re-applying
@@ -1935,6 +1979,12 @@ export function App() {
       // so the picture it reproduces is the picture it was cut from rather
       // than the default framing seen for a moment first.
       renderer.placeMap(URL_MAP_POSE);
+      // ...and a link that named a LENS for god mode's camera, for the same
+      // reason: a tool shooting a wide panorama needs the frame it asked for
+      // on the first frame, not the design lens for a beat and then its own.
+      renderer.setFreeFov(URL_FREE_FOV);
+      // ...and how far it may SEE, for a still that is looking at kilometres.
+      renderer.setAir(URL_AIR);
       // Thunder arrives seconds after the flash that made it (storm.ts), so
       // the renderer decides WHEN and the bank decides what it sounds like.
       // Muted behind a menu for the same reason every other run sound is:

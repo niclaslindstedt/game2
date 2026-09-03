@@ -30,6 +30,8 @@
     "tape": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/run-tape.mjs",
     "track": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/track-preview.mjs",
     "level": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/level-map.mjs",
+    "routes": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/stage-routes.mjs",
+    "biomes": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/biome-preview.mjs",
     "analyze": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/analyze-stage.mjs",
     "drift": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/drift-lab.mjs",
     "cars": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/car-preview.mjs",

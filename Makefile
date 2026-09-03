@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze cars liveries field crew items items-list sky traffic glyphs transit views audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs transit views audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -117,6 +117,31 @@ level:
 	npm run level -- $(if $(LEVEL),--level $(LEVEL),) $(if $(SEED),--seed $(SEED),) \
 		$(if $(LENGTH),--length $(LENGTH),) $(if $(SHAPE),--shape $(SHAPE),) \
 		$(if $(FOCUS),--focus $(FOCUS),) $(if $(SPAN),--span $(SPAN),) $(ARGS)
+
+# THE CAMPAIGN MENU'S PREVIEWS: what a stage box and a location row show of
+# the road and the country before either is driven. Both halves are built
+# from the generator and COMMITTED, because deriving one costs between 60 ms
+# and ten seconds a stage and a menu cannot spend that while somebody is
+# looking at it. Re-run after any generator change — a stale preview is a
+# picture of a road nobody drives any more.
+previews: routes biomes
+
+# The stage boxes' routes: every campaign stage's road, simplified and
+# quantised into pwa/src/game/stage-routes.ts (~4 KB for the campaign) and
+# stroked as an SVG path by the menu. Pure Node, no browser, ~13 s.
+routes:
+	npm run routes
+
+# The location rows' banners: a REAL RENDER of each country, taken by the
+# game from 200 m over its first stage's start line, into
+# pwa/public/previews/. A location is six roads, so it gets a photograph of
+# the place rather than a map of any one of them.
+# Needs a built pwa/dist (run `make build` first) and the same Chromium as
+# `make screenshots`. `LIFT=` and `TILT=` move the camera; `OUT=previews`
+# puts a set somewhere to compare instead of somewhere to ship.
+biomes:
+	npm run biomes -- $(if $(LIFT),--lift $(LIFT),) $(if $(TILT),--tilt $(TILT),) \
+		$(if $(OUT),--out $(OUT),) $(ARGS)
 
 # SCORE generated stages instead of looking at them: the rollers over the
 # road surface, the water's flow, the road network, drivability, the jumps,

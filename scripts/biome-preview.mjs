@@ -1,0 +1,349 @@
+#!/usr/bin/env node
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// THE COUNTRY, PHOTOGRAPHED — one banner per biome for the campaign menu's
+// location rows, taken by the REAL GAME rather than drawn as a diagram.
+//
+// A location is a country, not a road: the taiga is six stages and the
+// desert is six more, so a banner that was a map of any one of them would
+// be advertising a stage the row is not about. What a row wants is the
+// place — the light on it, what grows there, what stands in it, what the
+// ground does — and the only honest source for that is the renderer that
+// draws it in the game.
+//
+// So the camera is put over the START LINE of the country's FIRST level,
+// lifted, and tilted down a bit: a helicopter shot looking out across the
+// landscape the ladder opens on. The first level rather than a chosen one
+// because it is the road that country introduces itself with — the first
+// thing a player will actually see of it.
+//
+// Everything about the frame comes off switches the game already has, so
+// the picture is the game's own and not a special renderer's:
+//
+//   ?hud=0      the instruments and the mirror off — the world alone
+//   ?god=1&g…=  god mode's free camera, parked by the URL
+//   ?freefov=   a longer lens, so a wide frame is a panorama and not a
+//               fisheye — see ACROSS
+//   ?air=       how far the world is BUILT and drawn for this frame, which a
+//               still can afford and a run cannot — see AIR
+//
+// THE ONE THING TO KNOW BEFORE MOVING THE CAMERA: the ground and the
+// scenery are streamed around the CAR (world.ts — "the ground and the wild
+// follow the CAR"), and god mode holds the car on the start line. Fly the
+// camera a few hundred metres away and it looks at the world's edge: bare
+// backdrop, a floating island of terrain, no trees. That is why this stands
+// the camera OVER the start rather than anywhere more scenic — `?air=` buys
+// how far it can SEE from there, not somewhere else to see it from.
+//
+//   npm run biomes
+//   npm run biomes -- --lift 200 --tilt -0.5   # try another shot
+//   npm run biomes -- --air 4000 --settle 45000  # more country, slower
+//   npm run biomes -- --out previews           # somewhere to compare, not ship
+//
+// Needs `npm i --no-save playwright-core` and a Chromium (CHROMIUM_PATH
+// overrides discovery), same as scripts/screenshot.mjs — and a built
+// pwa/dist, because that is what it serves. Run `make build` first, or the
+// banners are a photograph of the previous change.
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import process from "node:process";
+
+import { aliasEngine } from "./lib/engine-alias.mjs";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const dist = join(root, "pwa", "dist");
+aliasEngine(root);
+const engine = await import(join(root, "engine/index.ts"));
+const { DEFAULT_KNOBS, compileStage } = engine;
+const { LOCATIONS } = await import(join(root, "pwa/src/game/campaign.ts"));
+
+const args = process.argv.slice(2);
+const flag = (name, fallback) => {
+  const at = args.indexOf(`--${name}`);
+  return at >= 0 && at + 1 < args.length ? args[at + 1] : fallback;
+};
+
+/** How high over the start line the camera hangs, m — a low helicopter
+ * rather than a high one.
+ *
+ * The lift trades foreground for distance, and a shot with the horizon in it
+ * has all the distance it can use already. From 200 m the nearest ground in
+ * frame is nearly 400 m away, so the whole picture sits in the hazy half and
+ * reads as weather; from here it starts around 200 m, and the rock, the
+ * trees and the road in the near third give the far ones something to be far
+ * FROM. */
+const LIFT = Number(flag("lift", 110));
+
+/** How far the camera tilts down from level, radians. Shallow enough that
+ * THE HORIZON IS IN THE FRAME, which is what makes this a view out across a
+ * country rather than a map of one — an aerial with no horizon in it reads
+ * as the map view with extra steps, whatever lens took it. Sky is the top
+ * few percent; everything below is land going away from you. */
+const TILT = Number(flag("tilt", -0.24));
+
+/** How far the world is DRAWN for the shot, m (`?air=`).
+ *
+ * This is the number that lets the frame keep its horizon. A shot with the
+ * horizon in it is looking at infinity, so it always contains ground past
+ * wherever drawing stops — there is no lift or tilt that avoids it. On the
+ * game's own draw distances that edge lands about 750 m out and is plainly
+ * visible from up here: the desert's tarmac ran out into open sand halfway
+ * to the skyline, which reads as a generator bug and is not one.
+ *
+ * The driving numbers are sized to what a driver could see through the fog,
+ * and drawing kilometres of road and forest is the cost that fog exists to
+ * avoid. A STILL taken once can pay it, and `?air=` buys all three things
+ * that decide how much country is on screen at once: the ground BUILT around
+ * the car, the camera's far plane, and the fog — which is set to go solid
+ * exactly at the drawn edge, so the country ends in haze rather than on a
+ * line. Two and a half kilometres is as far as the eye picks out anything at
+ * this scale, and the tile count goes up with the square of it. */
+const AIR = Number(flag("air", 2600));
+
+/** The banner, px. Low resolution on purpose: it is read as a strip behind
+ * a location's name, and the game it is a picture of is low-poly anyway.
+ *
+ * A PANORAMA rather than a 16:9 frame, because the shape it has to fill is
+ * a menu row — a location row measures about 426x110, near enough four to
+ * one, on every viewport the campaign page has. Shot at 16:9 and cropped to
+ * that, three quarters of the picture is thrown away and whatever the camera
+ * was pointed at goes with it.
+ *
+ * EIGHT to one rather than the row's own four, and the surplus is the point:
+ * the menu SLIDES the banner across its row, and a picture cut to the shape
+ * of the hole it sits in has nowhere to slide to.
+ *
+ * Eight is not a free choice — it is the row's aspect times the width of the
+ * box the menu pans (`.menu-location-shot`, 170% of the row). That box is
+ * about 6.6:1, and `object-fit: cover` fills it by HEIGHT from anything
+ * wider, so the source has to clear 6.6 or the picture is cropped top and
+ * bottom instead. Wider than 8 buys nothing: the surplus is cropped off the
+ * sides, not turned into travel. Change one of the two and change both. */
+const ASPECT = Number(flag("aspect", 8));
+const W = Number(flag("width", 2048));
+const H = Math.round(W / ASPECT);
+
+/** How wide the shot is ACROSS, deg — the number that actually decides
+ * whether a panorama looks like one.
+ *
+ * three's fov is vertical, so a wider frame on a fixed lens opens the
+ * horizontal field instead of showing more of the same lens: on the design
+ * 58° a 4:1 frame is 131° across, 6:1 is 146°, and 8:1 is 155° — where the
+ * ground domes into a hill that is not there and a turbine at the edge
+ * shears. So the HORIZONTAL field is what is held constant here and the
+ * vertical fov is solved for it (`?freefov=`), which is the whole reason a
+ * ten-to-one strip is available at all. 132° is inside where the 4:1 shot
+ * already sat, so the wide frame is no more distorted than the narrow one
+ * was — it simply contains more country. */
+const ACROSS = Number(flag("across", 132));
+
+/** The vertical fov that gives `ACROSS` at this aspect, deg. */
+const FOV = (Math.atan(Math.tan((ACROSS * Math.PI) / 360) / ASPECT) * 360) / Math.PI;
+
+/** How far below the horizon the frame's furthest-seeing ray points, rad.
+ *
+ * THE TOP CORNERS, not the top edge — and the difference is the whole point
+ * on a frame this wide. A rectilinear projection puts the corner ray further
+ * off the camera's axis than the top-centre ray, so it comes out CLOSER to
+ * the horizon and sees further: at 132° across and 32° of tilt the top-centre
+ * looks 680 m out and the corners look past 1600 m. Constraining the edge
+ * and not the corner is how a shot passes its own check and still has the
+ * world ending inside it. */
+function shallowest(tiltRad, fovDeg, aspect) {
+  const halfV = (fovDeg * Math.PI) / 360;
+  const halfH = Math.atan(Math.tan(halfV) * aspect);
+  // The corner ray in camera space, then pitched down into the world.
+  const y = Math.tan(halfV);
+  const x = Math.tan(halfH);
+  const len = Math.hypot(x, y, 1);
+  const p = Math.abs(tiltRad);
+  return Math.asin((Math.sin(p) - y * Math.cos(p)) / len);
+}
+
+/** How far the shot's furthest corner actually looks, m — Infinity once the
+ * horizon is in the frame, which is the intended shot. Reported rather than
+ * clamped: `AIR` is what has to cover it, and the fog closes over the drawn
+ * edge well before it, so this is here to say what the frame is asking of
+ * the world rather than to refuse it. */
+const SKYWARD = shallowest(TILT, FOV, ASPECT);
+const SEES = SKYWARD <= 0 ? Infinity : LIFT / Math.tan(SKYWARD);
+if (Number.isFinite(SEES) && SEES > AIR) {
+  console.warn(
+    `WARNING: from ${LIFT} m at tilt ${TILT.toFixed(2)} the frame's corners look ` +
+      `${SEES.toFixed(0)} m out, past the ${AIR} m of --air — the ground will END in shot. ` +
+      `Raise --air, drop the lift, or tilt further down.`,
+  );
+}
+
+/** JPEG, and not PNG. A 3D render of a landscape is a photograph as far as
+ * a compressor is concerned — sky gradients, dappled ground, thousands of
+ * shaded leaves — and PNG spends 200 KB on one. This is what JPEG is for. */
+const QUALITY = Number(flag("quality", 80));
+
+/** Where the banners land. `--out previews` puts a set in the gitignored
+ * dir instead, for trying a lift or a tilt without touching what ships. */
+const outDir = join(root, flag("out", "pwa/public/previews"));
+
+/** The app chrome that is drawn for a human at the controls and is not part
+ * of the country: god mode's copy button, and the pause chip `?hud=0`
+ * deliberately leaves on screen (it is a phone's only way back out of a
+ * run, so the HUD switch is right to keep it and this is right to hide it —
+ * nobody is going to press it). */
+const HIDE = ".debug-copy, .hud-actions, .hud-mini { display: none !important; }";
+
+/** How long the world is given to build before the shutter, ms. The terrain
+ * tiles and the wild scenery arrive over many frames, and under software
+ * rasterization those frames are slow — a shutter that opens too early
+ * photographs half-planted country. `?air=` makes this the long pole: a
+ * 2.6 km disc of ground is a few hundred tiles, and every one of them has to
+ * be raised before the picture is of anywhere. */
+const SETTLE_MS = Number(flag("settle", 30000));
+
+if (!existsSync(join(dist, "index.html"))) {
+  console.error("no pwa/dist — run `make build` first (this serves the built site)");
+  process.exit(2);
+}
+mkdirSync(outDir, { recursive: true });
+
+const MIME = {
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".webmanifest": "application/manifest+json",
+  ".ico": "image/x-icon",
+  ".txt": "text/plain",
+  ".xml": "application/xml",
+};
+
+const server = createServer(async (req, res) => {
+  const path = (req.url ?? "/").split("?")[0];
+  const file = join(dist, path === "/" ? "index.html" : path.slice(1));
+  try {
+    const body = await readFile(file);
+    res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
+    res.end(body);
+  } catch {
+    res.writeHead(404);
+    res.end("not found");
+  }
+});
+await new Promise((done) => server.listen(0, "127.0.0.1", done));
+const port = server.address().port;
+
+/** The receipt module, written the way prettier would have written it so a
+ * regeneration on a clean tree is a no-op. */
+function shotsModule(rows) {
+  const entries = rows
+    .map(
+      (s) =>
+        `  ${s.biome}: {\n    level: "${s.level}",\n    seed: ${s.seed},\n` +
+        `    length: "${s.length}",\n    shape: "${s.shape}",\n` +
+        `    timeOfDay: "${s.timeOfDay}",\n    weather: "${s.weather}",\n` +
+        `    season: "${s.season}",\n  },`,
+    )
+    .join("\n");
+  return `// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// GENERATED by \`make biomes\` (scripts/biome-preview.mjs). Do not edit.
+//
+// WHAT EACH BIOME BANNER IS A PICTURE OF. The banners themselves are JPEGs
+// under pwa/public/previews/, rendered by the real game from a camera over
+// the country's FIRST campaign stage — so what they show depends entirely on
+// that level's seed, band, shape and conditions.
+//
+// Nothing at runtime reads this. It exists because a photograph cannot be
+// recomputed and compared the way a route can: without it, editing a
+// country's first stage leaves a banner of a road nobody drives, in weather
+// the stage is no longer set in, and NOTHING anywhere would say so.
+// tests/stage_preview_test.ts holds this against campaign.ts.
+
+export type BiomeShot = {
+  /** The campaign level the camera stood on the start line of. */
+  level: string;
+  seed: number;
+  length: string;
+  shape: string;
+  timeOfDay: string;
+  weather: string;
+  season: string;
+};
+
+export const BIOME_SHOTS: Record<string, BiomeShot> = {
+${entries}
+};
+`;
+}
+
+const { chromium } = await import("playwright-core");
+const executablePath = process.env.CHROMIUM_PATH;
+const browser = await chromium.launch(executablePath ? { executablePath } : undefined);
+const page = await browser.newPage({ viewport: { width: W, height: H } });
+page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
+
+const taken = [];
+
+for (const location of LOCATIONS) {
+  // The country's opening road — the one the ladder starts on.
+  const level = location.levels[0];
+  const shape = level.shape ?? "sprint";
+  const track = compileStage(
+    level.seed,
+    level.length,
+    { ...DEFAULT_KNOBS, biome: location.biome },
+    shape,
+  );
+  // Over the start line, looking the way the stage sets off. The road's
+  // heading and the camera's yaw are the same convention — 0 down +z,
+  // growing toward +x — so the opening sample's heading IS the yaw.
+  const start = track.samples[0];
+  const query =
+    `?start=1&biome=${location.biome}&seed=${level.seed}&length=${level.length}` +
+    `&shape=${shape}&tod=${level.timeOfDay}&weather=${level.weather}` +
+    `&season=${level.season}&hud=0&air=${AIR}&god=1&freefov=${FOV.toFixed(2)}` +
+    `&gx=${start.x.toFixed(1)}&gy=${LIFT}&gz=${start.z.toFixed(1)}` +
+    `&gyaw=${start.heading.toFixed(4)}&gpitch=${TILT}`;
+
+  await page.goto(`http://127.0.0.1:${port}/${query}`);
+  await page.waitForFunction("!document.querySelector('.loading')", null, { timeout: 120000 });
+  await page.addStyleTag({ content: HIDE });
+  await page.waitForTimeout(SETTLE_MS);
+
+  const file = join(outDir, `biome-${location.biome}.jpg`);
+  const jpeg = await page.screenshot({ type: "jpeg", quality: QUALITY });
+  writeFileSync(file, jpeg);
+  taken.push({
+    biome: location.biome,
+    level: level.id,
+    seed: level.seed,
+    length: level.length,
+    shape,
+    timeOfDay: level.timeOfDay,
+    weather: level.weather,
+    season: level.season,
+  });
+  console.log(
+    `${file} — ${(jpeg.length / 1024).toFixed(1)} KB  ${W}x${H} (${(W / H).toFixed(2)}:1)\n` +
+      `  ${location.name} over ${level.id} (seed ${level.seed}), ` +
+      `${LIFT} m up, tilt ${TILT}, ${ACROSS}° across on a ${FOV.toFixed(1)}° lens, ` +
+      `${level.timeOfDay} ${level.weather} ${level.season}`,
+  );
+}
+
+// The receipt. A banner is a JPEG, so nothing can recompute it and check —
+// the only way a stale one is ever noticed is if the file says what it is a
+// picture OF. `tests/stage_preview_test.ts` holds this against campaign.ts,
+// so a country whose first stage is re-seeded, re-banded or moved to another
+// hour fails the suite instead of quietly keeping last month's weather on
+// the menu.
+if (outDir === join(root, "pwa/public/previews")) {
+  writeFileSync(join(root, "pwa/src/game/biome-shots.ts"), shotsModule(taken));
+  console.log(`pwa/src/game/biome-shots.ts — ${taken.length} shots`);
+}
+
+await browser.close();
+server.close();

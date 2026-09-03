@@ -2840,6 +2840,8 @@ body {
 }
 
 .menu-location {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2853,7 +2855,121 @@ body {
   padding: 0.8rem 1rem;
   cursor: pointer;
   text-align: left;
-  text-shadow: none;
+  /* The row's own words now sit on a photograph of the country rather than
+     on a flat panel, so they get the shadow back that the rest of the menu
+     does without: over a sunlit lake, white text with no edge disappears. */
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+}
+
+/* THE COUNTRY behind a location row. It fills the row and the text sits on
+   it, because the campaign page has no height to give a picture a column of
+   its own — and a banner across the top would push the second country off a
+   phone held sideways.
+
+   Darkened, and that is the whole trick: what the row has to do first is
+   read as a NAME, and a full-strength landscape under white text reads as
+   neither. The dimming plus the scrim below leave the lake blue, the sand
+   warm and the turbines legible while the words stay the loudest thing.
+
+   IT IS WIDER THAN THE ROW ON PURPOSE, and the number is paired with the
+   banner's own shape. The row is about 3.9:1; a box 170% of its width is
+   6.6:1; the banner is shot at 8:1, so `object-fit: cover` still fills that
+   box by HEIGHT and trims the sides rather than the top. The 70% of a row
+   that hangs off the edge IS the travel — a picture cut to the shape of the
+   hole it sits in has nowhere to slide to. Widening this without widening
+   the shot (scripts/biome-preview.mjs) starts cropping the picture's top and
+   bottom away instead. */
+.menu-location-shot {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  width: 170%;
+  /* Tailwind's preflight sets `img { max-width: 100% }`, which silently
+     clamps the width above back to the row and leaves the pan sliding the
+     picture off its own right edge — the row's background comes through as a
+     grey wedge, and nothing in the rule that looks wrong is wrong. */
+  max-width: none;
+  height: 100%;
+  object-fit: cover;
+  /* Cropped off the TOP: the sky is the same blue in both countries and the
+     ground is what tells them apart. */
+  object-position: 50% 64%;
+  filter: brightness(0.72) saturate(1.05);
+  pointer-events: none;
+  /* Slow enough to be scenery rather than an animation — a menu row that
+     visibly moves while you read it is a menu row you cannot read. A full
+     sweep takes most of a minute, and `alternate` walks it back instead of
+     snapping to the start, which would be the one frame the eye does catch. */
+  animation: biome-pan 54s ease-in-out infinite alternate;
+}
+
+/* The two countries drift out of step, because two strips sliding in lockstep
+   read as one sheet moving behind a window with a bar across it. */
+.menu-location:nth-of-type(even) .menu-location-shot {
+  animation-delay: -27s;
+}
+
+/* The travel: the whole overhang, 70% of the ROW's width. Stated against the
+   IMAGE's own width, because that is what a percentage in `translate`
+   resolves against — 70/170 of it. */
+@keyframes biome-pan {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-41.18%);
+  }
+}
+
+/* Motion is decoration here: the banner says which country this is whether
+   or not it moves, so a reader who has asked for less of it loses nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .menu-location-shot {
+    animation: none;
+    /* Parked halfway, so the still frame is the middle of the pan rather
+       than the edge nobody composed for. */
+    transform: translateX(-20.59%);
+  }
+}
+
+/* THE SCRIM. The row's words all sit down its left-hand side, and that is
+   the half a landscape cannot be trusted in: a sunlit dune and a white name
+   are the same colour. So the picture is darkened where the text is and
+   left alone where it is not — which buys the country a brightness a flat
+   wash over the whole row could never be given. */
+.menu-location::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    90deg,
+    rgb(8 20 44 / 88%) 0%,
+    rgb(8 20 44 / 72%) 38%,
+    rgb(8 20 44 / 20%) 78%,
+    rgb(8 20 44 / 8%) 100%
+  );
+  pointer-events: none;
+}
+
+/* Everything the row says stands over the picture and its scrim. */
+.menu-location > :not(.menu-location-shot) {
+  position: relative;
+  z-index: 1;
+}
+
+/* A locked country is still shown, further down: enough to want it, not
+   enough to look available. */
+.menu-location-locked .menu-location-shot {
+  filter: brightness(0.42) saturate(0.5);
+}
+
+.menu-location:hover .menu-location-shot,
+.menu-location:focus-visible .menu-location-shot {
+  filter: brightness(0.86) saturate(1.1);
 }
 
 .menu-location:hover,
@@ -2922,6 +3038,9 @@ body {
    a location's six stages on a phone held sideways. */
 .menu-level {
   position: relative;
+  /* The route behind the box runs off its right edge on purpose — this is
+     what clips it to the box's own rounded corner. */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -2932,6 +3051,44 @@ body {
   padding: 0.55rem 0.7rem;
   text-align: left;
   text-shadow: none;
+}
+
+/* THE STAGE'S ROAD, behind its own box. Six boxes of near-identical text
+   are told apart by their shapes long before they are read, which is what
+   this is for — and it costs the grid no height at all, because it is
+   underneath rather than beside.
+
+   It hangs to the RIGHT and is allowed to run off that edge. Centred, the
+   line sits squarely under the stage's name and fights it; pushed out, the
+   text keeps a clean left column and the road still reads as a road. The
+   colour is `currentColor` from the box, so the open box's yellow and the
+   locked box's grey both arrive without a second palette. */
+.menu-level-route {
+  position: absolute;
+  top: 8%;
+  right: -6%;
+  bottom: 8%;
+  width: 62%;
+  z-index: 0;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.menu-level-open:hover .menu-level-route,
+.menu-level-open:focus-visible .menu-level-route {
+  opacity: 0.32;
+}
+
+/* A locked stage still shows its road — the shape of what is behind the
+   padlock — but fainter, and the padlock keeps the middle of the box. */
+.menu-level-locked .menu-level-route {
+  opacity: 0.14;
+}
+
+/* Everything the box says stands over the road. */
+.menu-level > :not(.menu-level-route) {
+  position: relative;
+  z-index: 1;
 }
 
 .menu-level-open {

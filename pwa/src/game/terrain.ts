@@ -52,6 +52,41 @@ const GROUND_REACH = 640;
 const FAR = GROUND_REACH;
 /** Tiles kept alive around the CAR when it roams off the corridor, m. */
 const CAR_FAR = 560;
+
+/** …and what that radius actually is right now, m. `CAR_FAR` unless a tool
+ * has asked for more ground (`?air=`, `setGroundReach`).
+ *
+ * THE GROUND IS THE LIMIT ON HOW FAR A PICTURE CAN SEE, and it is the one
+ * nothing else can buy round: opening the fog and the far plane only reveals
+ * that the country stops, because past this radius no tile has been built —
+ * what fills the gap is the camera-locked ridge backdrop, which reads as a
+ * pale haze where the land should be.
+ *
+ * It is the CAR's radius that moves rather than the corridor's, because a
+ * preview stands its camera over the car: the corridor's reach would build
+ * this much ground along every metre of the stage, which is quadratic in the
+ * wrong variable, while the car's is one disc. Bounded on purpose — a tile is
+ * 224 m, so two kilometres is a 19x19 block, and the shutter has to wait for
+ * all of it (`BUILD_TILES` a frame). */
+let carFar = CAR_FAR;
+
+/** Tiles a still may raise per sync, whatever budget the caller passed.
+ *
+ * The radius alone does nothing without this. Ground is streamed a few tiles
+ * a frame, and the budget the world passes is scaled by how far the CAR has
+ * travelled — which under god mode is nowhere, so the rate is zero and the
+ * country never grows past the handful raised when the stage was built. A
+ * run wants that; it is what keeps a stage from stopping the music while it
+ * builds. A preview holds still on purpose and can afford the wait. */
+let eager = 0;
+
+/** Build ground this far around the car, m — for a STILL that is looking at
+ * kilometres. Anything at or under the driving radius restores both this and
+ * the streaming rate to what a run uses. */
+export function setGroundReach(m: number): void {
+  carFar = m > CAR_FAR ? m : CAR_FAR;
+  eager = m > CAR_FAR ? 48 : 0;
+}
 /** Freshly needed tiles built per sync at most — an excursion, and a whole
  * stage's corridor, stream the ground in over a few frames instead of
  * hitching on one. The caller can raise it (see `sync`). */
@@ -581,14 +616,14 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   /** Tiles the car's own surroundings need — how the wild materializes. */
   const carTiles = (carX: number, carZ: number): Set<string> => {
     const needed = new Set<string>();
-    const reach = Math.ceil(CAR_FAR / TILE);
+    const reach = Math.ceil(carFar / TILE);
     const cx = Math.floor(carX / TILE);
     const cz = Math.floor(carZ / TILE);
     for (let dx = -reach; dx <= reach; dx++) {
       for (let dz = -reach; dz <= reach; dz++) {
         const centerX = (cx + dx + 0.5) * TILE;
         const centerZ = (cz + dz + 0.5) * TILE;
-        if (Math.hypot(centerX - carX, centerZ - carZ) < CAR_FAR + TILE * 0.75) {
+        if (Math.hypot(centerX - carX, centerZ - carZ) < carFar + TILE * 0.75) {
           needed.add(`${cx + dx},${cz + dz}`);
         }
       }
@@ -616,7 +651,11 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     // way the engine's does — same rules, same prune, same landscape.
     field.sync(carS);
     const moved = Math.hypot(carX - lastCarX, carZ - lastCarZ);
-    if (!grew && carS - lastSyncedS < 250 && moved < 100) return;
+    // A still asks for more ground than the caller's rate would ever raise,
+    // and asks from a camera that is not moving — so neither the distance
+    // gate below nor the budget above it can be left to decide.
+    const raise = Math.max(budget, eager);
+    if (eager === 0 && !grew && carS - lastSyncedS < 250 && moved < 100) return;
     lastSyncedS = carS;
     lastCarX = carX;
     lastCarZ = carZ;
@@ -641,11 +680,11 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
       })
       .sort((a, b) => a.d - b.d);
     let flooding = false;
-    for (const { key } of missing.slice(0, budget)) {
+    for (const { key } of missing.slice(0, raise)) {
       tiles.set(key, buildTile(...parseKey(key)));
       flooding = true;
     }
-    if (missing.length > budget) lastSyncedS = -Infinity; // come back next frame
+    if (missing.length > raise) lastSyncedS = -Infinity; // come back next frame
 
     // Drop what neither the corridor nor the car can see anymore.
     for (const key of [...tiles.keys()]) {

@@ -21,7 +21,12 @@ pwa/dist/
 
 # Generated previews (track maps, gameplay screenshots) — tooling output,
 # regenerated on demand with `make track` / `make screenshots`.
-previews/
+#
+# ANCHORED to the root on purpose. Unanchored, this pattern matches a
+# directory called `previews` at any depth — including
+# pwa/public/previews/, which is not tooling output at all: those are the
+# campaign menu's biome banners, and they SHIP with the site.
+/previews/
 
 # Recorded runs (`make record`, and the SAVE RUN DATA button) — a drive is
 # somebody's own measurement, not repository content.

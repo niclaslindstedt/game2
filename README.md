@@ -63,6 +63,9 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/`                                                                                            |
 | `make level`       | `LEVEL=1` (or `SEED=… LENGTH=…`) — one stage top down with height, calls, jumps, splits, surfaces and roadside solids labelled, plus its feature table; `FOCUS=J1` for a close-up  |
 | `make analyze`     | Score generated stages: road surface, water flow, road network, drivability, jumps, the two ends, ground, and build cost                                                           |
+| `make previews`    | Rebuild the campaign menu's previews — `make routes` and `make biomes` together. Both are generator output, so re-run after any generator change                                   |
+| `make routes`      | Every campaign stage's road, simplified into `pwa/src/game/stage-routes.ts` for the menu to stroke behind its stage boxes                                                          |
+| `make biomes`      | Photograph each country with the game itself, from over its first stage's start line, into `pwa/public/previews/`                                                                  |
 | `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                                                                                                                     |
 | `make liveries`    | Render one body in the field's paint schemes (`previews/liveries.png`)                                                                                                             |
 | `make field`       | Render the campaign's fourteen rivals in their own cars and colours (`previews/field.png`)                                                                                         |
