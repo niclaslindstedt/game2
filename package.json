@@ -42,6 +42,7 @@
     "sky": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/sky-preview.mjs",
     "traffic": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/traffic-preview.mjs",
     "glyphs": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/glyph-preview.mjs",
+    "health": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/health-preview.mjs",
     "transit": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/transit-preview.mjs",
     "rollcam": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/roll-cam.mjs",
     "views": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/views-preview.mjs",

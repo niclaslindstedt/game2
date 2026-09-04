@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs transit views rollcam audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs health transit views rollcam audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -253,6 +253,16 @@ traffic:
 # pwa/src/tools/glyph-preview.tsx.
 glyphs:
 	npm run glyphs
+
+# THE CONDITION LAB: the car's health schematic in every state it can reach
+# (previews/health.png) — every state at desktop size, then the same states
+# at the size the narrowest phone draws them, over gravel, tarmac, grass and
+# a night sky. REQUIRED before/after any change to what the schematic is made
+# of or how it is coloured: this instrument cannot be judged from the game,
+# because seeing it amber means crashing the car amber first. Same Chromium
+# requirements as `screenshots`.
+health:
+	npm run health
 
 # Photograph the camera leaving the finish line for a crew still out on the
 # stage (previews/transit.png) — CONSECUTIVE frames, so what is judged is

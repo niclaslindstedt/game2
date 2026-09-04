@@ -35,6 +35,7 @@ make items-list   # every item the turntable sheet knows, by group
 make sky          # render the atmosphere to previews/sky.png (every weather x time, plus a strike)
 make traffic      # the HIGH TRAFFIC over a stage: five skies x four moments of ONE race — REQUIRED before/after any change to the aircraft or their contrails
 make glyphs       # render the menu's marks at the three sizes they are read at
+make health       # THE CONDITION LAB: the car's health schematic in every state, over every ground — REQUIRED before/after any change to it
 make transit      # photograph the camera going from the finish line to a crew still out, frame by frame
 make views        # photograph the CAMERA KEY: every step of the ladder, six consecutive frames each
 make rollcam      # photograph the CAMERA WHILE THE CAR GOES OVER — one roll, frame by frame, from two seats
@@ -186,6 +187,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | What a DAMAGED car drives like (power, grip, pull, drag)     | `engine/game/damage.ts` + `TUNING.collision.chassis` — the `collision` skill                                                                                                 |
 | What the AIR costs a car with holes in it (drag, lift, yaw)  | `TUNING.collision.aero` — CdA per part, read in `damage.ts`, spent in `car.ts` — the `collision` skill                                                                       |
 | The TEMPERATURE, and the clock a holed radiator starts       | `engine/game/cooling.ts` + `TUNING.collision.cooling` — writes the ledger, like collision.ts — the `collision` skill                                                         |
+| How the CAR'S CONDITION reads at a glance (the schematic)    | `pwa/src/game/car-health.ts` (the ledger folded to four colours, DOM-free) + `hud-health.tsx` (the plan, and the marks under it); `make health` is the lab                   |
 | Bot behavior                                                 | `engine/sim/bot.ts`                                                                                                                                                          |
 | How GOOD a bot is (difficulty, skill budgets)                | `engine/sim/skill.ts` — the `bot-improvement` skill                                                                                                                          |
 | Who the campaign's rivals ARE (aliases, cars, characters)    | `engine/sim/rivals.ts` — the `bot-improvement` skill                                                                                                                         |
