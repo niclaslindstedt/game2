@@ -30,6 +30,7 @@ import { createDriftSpray, type DriftSpray } from "./drift-spray.ts";
 import { groundTint, plumeGround, type PlumeGround } from "./ground-tint.ts";
 import { createPlume, type Plume } from "./plume.ts";
 import { createFumes, type Fumes } from "./fumes.ts";
+import { CRASH_THROW } from "./crash-throw.ts";
 import { rockAt } from "./terrain.ts";
 
 export type CarFx = {
@@ -50,6 +51,11 @@ export type CarFx = {
    * not grit — and its own module because the throw has a direction the
    * wheel logic's grains do not. */
   gravel: DriftSpray;
+  /** Say the crash cloud is being thrown into, so it is DRAWN. It is parked
+   * otherwise: the pool is the biggest in the game and most runs never fire
+   * it, and a parked `THREE.Points` still costs a draw call and its whole
+   * vertex buffer every frame. Call it beside every `crash.spawn`. */
+  showCrash: () => void;
   /** The ground a CRASH ploughs up: a body that is no longer on its wheels,
    * grinding along on a corner of its shell. Its own pool rather than the
    * wheel dust's, because a rollover throws more grit in two seconds than a
@@ -115,6 +121,14 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   const crash = createDust(CRASH_GRIT);
   const mud = createDust(MUD);
   mud.points.visible = false;
+  // ...and so is the crash's, until a crash happens. A `THREE.Points` in
+  // the scene is a draw call and its whole vertex buffer submitted EVERY
+  // frame, live particles or not — and this pool is the biggest in the game
+  // (3072) for an effect most runs never see. `mud` has always been parked
+  // this way; the difference is that the weather decides mud once, where a
+  // crash decides itself, so this one is switched on by its first spawn and
+  // off again once the last grain has died (`showCrash`).
+  crash.points.visible = false;
   const spray = createDust(SPLASH_WATER);
   const foam = createDust(WATER_FOAM);
   const fumes = createFumes();
@@ -177,9 +191,24 @@ export function createCarFx(scene: THREE.Scene): CarFx {
         );
   };
 
+  /** How long the crash cloud stays DRAWN after the last grain was thrown:
+   * one particle's whole life, after which the pool is provably empty and
+   * the draw call is pure waste. Reset by every spawn. */
+  let crashFor = 0;
+  const showCrash = (): void => {
+    crashFor = CRASH_THROW.life;
+    crash.points.visible = true;
+  };
+
   const step = (dt: number): void => {
     dust.update(dt);
-    crash.update(dt);
+    // Parked means EMPTY here — the countdown outlives the longest-lived
+    // grain — so there is nothing to walk and no buffer to re-upload.
+    if (crashFor > 0) {
+      crash.update(dt);
+      crashFor -= dt;
+      if (crashFor <= 0) crash.points.visible = false;
+    }
     mud.update(dt);
     smoke.update(dt);
     spray.update(dt);
@@ -199,6 +228,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   return {
     dust,
     crash,
+    showCrash,
     mud,
     smoke,
     plume,
