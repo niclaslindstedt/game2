@@ -26,7 +26,7 @@ import type { JSX } from "preact";
 
 import type { InternalSystem } from "@engine";
 
-import type { CarHealth, HealthPanel, HealthTier } from "./car-health.ts";
+import { markRows, type CarHealth, type HealthPanel, type HealthTier } from "./car-health.ts";
 
 /** THE PLAN, in a 64 x 108 box with the nose UP. Everything is a block: the
  * four panels down the body, four wheels standing off its flanks, and a
@@ -113,16 +113,26 @@ export function CarHealthPanel({ health }: { health: CarHealth }): JSX.Element {
       {/* WHAT IS WRONG UNDER THE PANELS, and only what is: a sound car draws
           an empty row, so the row filling up is itself the news. No words —
           the middle of the screen already said them once, in the sentence
-          this is the standing reminder of. */}
+          this is the standing reminder of.
+
+          Three to a row and BALANCED past that (`markRows`), so four marks
+          are 2 over 2 rather than 3 with one hanging off the end. The block
+          is drawn under a car that is a symmetrical shape, and a row that
+          does not centre under it reads as a mistake before it reads as a
+          count. */}
       <div className="hud-health-systems">
-        {health.systems.map(({ system, tier }) => (
-          <span
-            key={system}
-            className={`hud-health-icon ${tierClass(tier)}`}
-            title={`${SYSTEM_LABEL[system]}: ${WORST_LABEL[tier]}`}
-          >
-            <SystemMark system={system} />
-          </span>
+        {markRows(health.systems).map((row) => (
+          <div key={row[0].system} className="hud-health-marks">
+            {row.map(({ system, tier }) => (
+              <span
+                key={system}
+                className={`hud-health-icon ${tierClass(tier)}`}
+                title={`${SYSTEM_LABEL[system]}: ${WORST_LABEL[tier]}`}
+              >
+                <SystemMark system={system} />
+              </span>
+            ))}
+          </div>
         ))}
       </div>
     </div>

@@ -19,7 +19,11 @@ states — not like a page whose last three states scrolled off.
 Two lines in the page's own `<style>` fix it:
 
 ```css
-html, body { height: auto; overflow: visible; }
+html,
+body {
+  height: auto;
+  overflow: visible;
+}
 ```
 
 And in the script, prefer measuring `scrollHeight` and standing the VIEWPORT

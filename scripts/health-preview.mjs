@@ -79,7 +79,7 @@ const browser = await chromium.launch(executablePath ? { executablePath } : unde
 // Twice the pixels, because half of what is being judged is a drawing about
 // forty pixels tall.
 const page = await browser.newPage({
-  viewport: { width: 1180, height: 900 },
+  viewport: { width: 1360, height: 900 },
   deviceScaleFactor: 2,
 });
 page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
@@ -97,7 +97,7 @@ if (cells === 0) throw new Error("no states rendered — check pwa/src/tools/hea
 // paints a SKY behind everything else.
 await page.addStyleTag({ content: "html { background: #0d1c38; }" });
 const tall = await page.evaluate("document.documentElement.scrollHeight");
-await page.setViewportSize({ width: 1180, height: Math.ceil(tall) });
+await page.setViewportSize({ width: 1360, height: Math.ceil(tall) });
 await page.screenshot({ path: join(outDir, "health.png") });
 console.log(`previews/health.png (${cells} states)`);
 

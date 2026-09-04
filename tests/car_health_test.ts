@@ -28,6 +28,7 @@ import {
   carHealth,
   healthSystems,
   healthTier,
+  markRows,
   worstTier,
 } from "../pwa/src/game/car-health.ts";
 
@@ -164,6 +165,26 @@ describe("the condition schematic", () => {
     const rows = healthSystems(damage);
     expect(rows.map((row) => row.system)).toEqual(["gearbox", "cooling", "brakes"]);
     expect(rows.map((row) => row.tier)).toEqual(["dead", "spent", "hurt"]);
+  });
+
+  it("breaks the marks under the car into balanced rows of at most three", () => {
+    const shape = (n: number): number[] =>
+      markRows(Array.from({ length: n }, (_, i) => i)).map((row) => row.length);
+    expect(shape(0)).toEqual([]);
+    expect(shape(1)).toEqual([1]);
+    expect(shape(3)).toEqual([3]);
+    // The whole point of the split: four marks are a block of 2 and 2, never
+    // a row of three with one hanging off the end of it.
+    expect(shape(4)).toEqual([2, 2]);
+    // ...and an odd one goes in the EARLIER row, which is the shape a stack
+    // of things is read in.
+    expect(shape(5)).toEqual([3, 2]);
+    expect(shape(6)).toEqual([3, 3]);
+    // Six systems is the most there can ever be, so two rows is the most the
+    // split can make — the stylesheet reserves exactly that.
+    expect(markRows(INTERNAL_SYSTEMS).length).toBe(2);
+    // Nothing is dropped and nothing is reordered on the way through.
+    expect(markRows([..."abcde"]).flat()).toEqual([..."abcde"]);
   });
 
   it("carries the worst thing on the car up to the panel's own frame", () => {

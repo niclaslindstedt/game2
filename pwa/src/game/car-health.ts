@@ -253,6 +253,34 @@ export function healthSystems(damage: CarDamage): { system: InternalSystem; tier
   return rows.map(({ system, tier }) => ({ system, tier }));
 }
 
+/** THE MOST MARKS THAT MAY STAND IN ONE ROW under the car. Three is what
+ * fits across a drawing about as wide as a thumbnail without the marks
+ * having to shrink to make room for each other. */
+export const HEALTH_MARKS_PER_ROW = 3;
+
+/** ...and how a row of marks is BROKEN when there are more than that. Not
+ * "fill three, then the rest": four marks laid out 3 and 1 reads as a row
+ * with something dropped off the end of it, where 2 and 2 reads as a block.
+ * So the rows are balanced — the count is spread as evenly as it goes, with
+ * any odd one landing in the EARLIER row, which is the shape a stack of
+ * things is read in (3 and 2, never 2 and 3).
+ *
+ * Generic because the split is about counting and not about damage, and
+ * because that is what lets tests/car_health_test.ts state the shapes
+ * directly instead of building a ledger for each one. */
+export function markRows<T>(items: readonly T[]): T[][] {
+  if (items.length === 0) return [];
+  const rows = Math.ceil(items.length / HEALTH_MARKS_PER_ROW);
+  const out: T[][] = [];
+  let taken = 0;
+  for (let row = 0; row < rows; row += 1) {
+    const size = Math.ceil((items.length - taken) / (rows - row));
+    out.push(items.slice(taken, taken + size));
+    taken += size;
+  }
+  return out;
+}
+
 /** The worst tier in a list — the panel's own frame reads it. */
 export function worstTier(tiers: HealthTier[]): HealthTier {
   let worst: HealthTier = "ok";

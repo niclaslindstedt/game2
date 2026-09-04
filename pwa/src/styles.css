@@ -115,12 +115,17 @@ body {
      in portrait, where everything is stacked down the same column. */
   --hud-stage: 2.3rem;
   /* ...and the room the condition schematic takes under both of them, at
-     the foot of that column. One knob: the drawing sizes itself off what is
-     left of it once the icon row underneath has taken its share, so what is
-     placed below the column cannot drift out of step with the picture in
-     it. */
-  --hud-health: calc(var(--hud-map) * 0.92);
+     the foot of that column, stated as its two halves so neither can drift
+     out of step with the other. The MARKS reserve two rows whatever is on
+     them: they are three to a row and there are six systems, so two is the
+     most the split can ever make (`markRows`) — and reserving the worst
+     case is what keeps the drawing above a fixed size instead of shrinking
+     the moment a fourth system goes, which would make the instrument move
+     while the driver is reading it. */
   --hud-health-row: clamp(0.72rem, 2.4vmin, 1.05rem);
+  --hud-health-marks: calc(var(--hud-health-row) * 2 + 0.12rem);
+  --hud-health-car: calc(var(--hud-map) * 0.78);
+  --hud-health: calc(var(--hud-health-car) + var(--hud-health-marks) + 0.15rem);
   color: var(--hud-ink);
   font-weight: 800;
   font-style: italic;
@@ -1818,13 +1823,13 @@ body {
   transition: opacity 400ms linear;
 }
 
-/* The drawing takes whatever the icon row underneath does not, so the two
-   together are exactly `--hud-health` and the stage chip below can be
-   placed off that one number. Width follows from the box's own aspect. */
+/* The drawing and the marks under it add up to `--hud-health`, which is what
+   anything placed below this column is spaced off. Width follows from the
+   box's own aspect. */
 .hud-health-car {
   display: block;
   width: auto;
-  height: calc(var(--hud-health) - var(--hud-health-row) - 0.15rem);
+  height: var(--hud-health-car);
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 55%));
 }
 
@@ -1861,24 +1866,28 @@ body {
 
 /* The marks for the machinery. An empty row on a sound car — the row
    filling up is the news, so it is never captioned and never explained. */
+/* The block of marks: up to two rows, each one CENTRED on the car above it
+   rather than packed from one end, which is what makes 3 over 2 read as a
+   block instead of as a row with a gap in it. */
 .hud-health-systems {
   width: 100%;
-  height: var(--hud-health-row);
+  height: var(--hud-health-marks);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.12rem;
+}
+
+.hud-health-marks {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.18rem;
 }
 
-/* The marks SHRINK rather than wrap or spill. A car with every system gone
-   is six of them across a row as wide as the minimap, which is the one case
-   that does not fit — and it is also the case where losing the sixth mark
-   off the end would be losing the worst news on the instrument. Flex does
-   the whole of it: full size is the basis, and the row is allowed to take
-   it back. */
 .hud-health-icon {
-  flex: 0 1 var(--hud-health-row);
-  min-width: 0;
+  flex: 0 0 var(--hud-health-row);
   aspect-ratio: 1;
   color: var(--hp);
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 65%));

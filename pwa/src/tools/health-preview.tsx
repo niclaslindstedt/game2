@@ -110,8 +110,28 @@ const CASES: { name: string; note: string; damage: CarDamage }[] = [
       d.wear = 0.8;
       d.systems.steering = CALL.spent;
       d.systems.gearbox = CALL.hurt;
+      d.systems.suspension = CALL.hurt;
+      d.systems.brakes = CALL.hurt;
       d.broken.push("glassF", "glassL", "doorL", "spoiler", "lampRL");
       d.wheels[3] = FLAT + 0.3;
+    }),
+  },
+  {
+    // FIVE marks, which is the row split's other shape: 3 over 2.
+    name: "hanging on",
+    note: "everything but the motor",
+    damage: make((d) => {
+      d.zones[0] = ZONE * 0.7;
+      d.zones[5] = ZONE * 0.6;
+      d.belly = ZONE * 0.6;
+      d.wear = 0.7;
+      d.systems.cooling = CALL.dead;
+      d.systems.suspension = CALL.spent;
+      d.systems.gearbox = CALL.spent;
+      d.systems.brakes = CALL.hurt;
+      d.systems.steering = CALL.hurt;
+      d.broken.push("bumperF", "glassR", "lampFR");
+      d.wheels[2] = FLAT + 0.2;
     }),
   },
   {
@@ -165,7 +185,7 @@ function Sheet() {
                font: 600 11px/1.2 system-ui, sans-serif; }
         h2 { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
              opacity: 0.7; margin: 22px 0 10px; font-weight: 700; }
-        .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
+        .grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; }
         .cell { background: rgb(18 48 105 / 70%); border: 2px solid rgb(255 255 255 / 30%);
                 border-radius: 10px; padding: 10px 6px 8px; display: flex;
                 flex-direction: column; align-items: center; gap: 8px; }
