@@ -1778,6 +1778,23 @@ export const TUNING = {
        * roof, and the load shifts across that roof as it rocks the last of
        * it down. */
       settled: 0.12,
+      /** ...AND HOW FAR A CONTACT HAS TO REACH IN BOTH DIRECTIONS to be a
+       * FACE rather than an EDGE, m.
+       *
+       * Counting the points near the plane is not enough on its own. A car
+       * up on one side has FOUR of them — two wheels and the two sill
+       * corners above them — and they lie in a LINE two metres long and a
+       * hand's breadth wide. Asked as "four points are down" that is a car
+       * lying flat on a face, and the consequences are both ways round: the
+       * settle hands back a car balanced on its edge as one that has come
+       * to rest, and the run then books it overturned and takes the crew to
+       * the last board for an attitude the roll had just called upright.
+       *
+       * The smallest real face on the box is an END — the body's width one
+       * way and the depth from floor to roof the other, a little over half
+       * a metre. An edge is a fifth of that, so this sits between them and
+       * is not near either. */
+      faceSpan: 0.3,
       rest: 0.7,
       /** ...and, for a body that came to rest on a face that is NOT its
        * wheels, when it has stopped TRAVELLING as well, m/s.

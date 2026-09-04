@@ -163,7 +163,13 @@ Read the whole-run summary above it for damage and where it came to rest.
 - **ASK A GEOMETRIC FACT AT THE SCALE IT LIVES AT.** A face is metres long,
   so whether the body is lying on one is an ANGLE (`air.roll.settled`), never
   a height — gated on a millimetre it was true in one step out of nineteen
-  hundred and three behaviours built on it were silently dead. And an
+  hundred and three behaviours built on it were silently dead. And a face has
+  to REACH BOTH WAYS (`air.roll.faceSpan`): four points near the plane is an
+  EDGE when they lie in a line, which is what a car up on one side is — two
+  wheels and the two sill corners over them — and an edge is the ridge between
+  two faces, the one attitude a crash most needs to know is not a resting
+  place. Counted rather than measured, the settle handed such a car back as
+  having come to rest and `step.ts` booked it overturned in the same step. And an
   attitude is TWO angles: `standingOn(...).sprung` / `onItsWheels(roll,
 pitch)` is the honest "is it on its wheels", because a body at roll 0 and
   half a turn of pitch is on its roof and one at half a turn of both is on

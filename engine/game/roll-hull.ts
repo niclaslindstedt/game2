@@ -175,11 +175,13 @@ export function seatSlopes(tilt: number, pitch: number, bed: Bed = LEVEL): Slope
  * Everything about a contact is geometry, and asking the box directly beats
  * every angle test that used to stand in for it:
  *
- *   - `flat` — a whole FACE is on the plane. Four points of the box within
- *     a millimetre of the lowest is a face lying down, on any slope, in
- *     both planes at once. It replaces rounding an angle to the nearest
- *     quarter turn and then comparing against a bed, which cannot be done
- *     honestly on a plane tilted two ways.
+ *   - `flat` — a whole FACE is on the plane: four points of the box near
+ *     enough to it, REACHING BOTH WAYS. It replaces rounding an angle to
+ *     the nearest quarter turn and then comparing against a bed, which
+ *     cannot be done honestly on a plane tilted two ways. The reach is what
+ *     separates a face from an EDGE, and counting alone cannot: a car up on
+ *     one side has four points down — two wheels and the two sill corners
+ *     over them — in a line two metres long and a hand's breadth wide.
  *   - `sprung` — the points holding the car up are its WHEELS. That is the
  *     whole of "is this a car somebody can drive": tyres on the ground,
  *     whatever angle the body is holding. A car balanced on two wheels
@@ -189,9 +191,17 @@ export function seatSlopes(tilt: number, pitch: number, bed: Bed = LEVEL): Slope
  *     offset from the weight. This is the arm the friction under the car
  *     turns it about, and the reason a sliding car SPINS: a patch that is
  *     not under the middle of the car turns the body about the vertical
- *     just as surely as one below it rolls the body over.
+ *     just as surely as one below it rolls the body over. It is the one
+ *     reading here that STEPS as the body walks from one corner to the
+ *     next — see the note on the arm below.
  *   - `height` — how far the weight is above that patch, which is the arm
- *     for the other two moments. */
+ *     for the other two moments. It is `seatOn` itself: the lowest point of
+ *     the box is on the plane by construction, so the weight's height above
+ *     the patch and its height above the plane are one number. Which is why
+ *     the arm is CONTINUOUS through a corner hand-over and needs no blend —
+ *     the box does not get taller because a different corner is holding it
+ *     up. Measured over a turn it moves at its own gradient and never
+ *     steps, where the patch OFFSET beside it steps by most of a metre. */
 export type Patch = {
   readonly flat: boolean;
   readonly sprung: boolean;
@@ -280,14 +290,21 @@ export function standingOn(tilt: number, pitch: number, bed: Bed = LEVEL): Patch
     if (t.along > maxAlong) maxAlong = t.along;
   }
   const centre = turned([0, B.centreY, 0], tilt, pitch);
+  const spanAcross = (maxAcross - minAcross) / 2;
+  const spanAlong = (maxAlong - minAlong) / 2;
   return {
-    flat: face >= 4,
+    // FOUR POINTS DOWN AND REACHING BOTH WAYS. Four in a LINE is a body up
+    // on its edge, which is the one attitude a crash most needs to know is
+    // not a resting place — it is the ridge between two faces, and calling
+    // it one handed a braked crash back balanced on its sill and had the
+    // run retire it in the same step.
+    flat: face >= 4 && Math.min(spanAcross, spanAlong) >= R.faceSpan,
     sprung,
     across: across / n - centre.across,
     along: along / n - centre.along,
     height: heightOn([0, B.centreY, 0], tilt, pitch, bed) - lowest,
-    spanAcross: (maxAcross - minAcross) / 2,
-    spanAlong: (maxAlong - minAlong) / 2,
+    spanAcross,
+    spanAlong,
   };
 }
 

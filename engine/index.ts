@@ -118,8 +118,11 @@ export {
   type MassSpread,
 } from "./game/roll.ts";
 // ...and how much of what is on the ground is still RUBBER, which is the
-// whole of what a driver has left while the car is going over (roll-hull.ts).
-export { tyreShare } from "./game/roll-hull.ts";
+// whole of what a driver has left while the car is going over — beside the
+// PATCH the whole crash is read off, so the tests can hold its arm to being
+// continuous through a corner hand-over and its faces to being faces
+// (roll-hull.ts).
+export { bedNormal, seatOn, standingOn, tyreShare, type Patch } from "./game/roll-hull.ts";
 
 // The stage generator.
 export {

@@ -416,9 +416,15 @@ export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
     state.car.z -= sinH * OFF_ROAD;
     if (scenario.bank)
       standGround(state, scenario.bank, scenario.edge ?? 0, scenario.drop ?? Infinity);
-    state.car.y = state.terrain.groundAt(state.car.x, state.car.z);
     state.car.rolling = true;
     state.car.roll = scenario.place.tilt;
+    // STOOD ON THE FACE, not buried in it. `car.y` is the WHEEL PLANE under
+    // the car's middle, so a body on its roof has to be stood a whole car's
+    // clearance above the ground (`hullStand`) or the first step lifts it
+    // there — 1.7 m of free fall, in one step, before the scenario has begun.
+    // The ledger read that as the crash gaining a tenth of its budget out of
+    // nothing, which is the scenario's staging and not the model's physics.
+    state.car.y = state.terrain.groundAt(state.car.x, state.car.z) + hullStand(scenario.place.tilt);
     state.car.rollRate = 0;
     state.car.airborne = false;
     state.car.vy = 0;
