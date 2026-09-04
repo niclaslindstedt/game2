@@ -73,13 +73,13 @@ describe("the odometer's drums", () => {
   });
 
   it("counts kilometres and tenths, with the leading zeros a counter is read with", () => {
-    expect(face(1_000)).toBe("0000010");
-    expect(face(42_300)).toBe("0000423");
-    expect(face(999_999_900)).toBe("9999999");
+    expect(face(1_000)).toBe("00010");
+    expect(face(42_300)).toBe("00423");
+    expect(face(9_999_900)).toBe("99999");
   });
 
   it("rolls over at the top of the window, the way the real thing does", () => {
-    expect(face(1_000_000_000)).toBe("0000000");
+    expect(face(10_000_000)).toBe("00000");
   });
 
   it("steps the tenths drum a whole figure every hundred metres, and never between", () => {
@@ -125,8 +125,8 @@ describe("the odometer's drums", () => {
   });
 
   it("carries every drum together at the top of a decade", () => {
-    expect(face(99_900)).toBe("0000999");
-    expect(face(100_000)).toBe("0001000");
+    expect(face(99_900)).toBe("00999");
+    expect(face(100_000)).toBe("01000");
     for (const d of odometerDrums(100_000)) expect(d.roll).toBe(0);
   });
 });

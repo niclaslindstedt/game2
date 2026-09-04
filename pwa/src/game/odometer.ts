@@ -31,12 +31,12 @@
  * what the tenth marks on a real drum are. */
 export const TRIP_TICK_M = 100;
 
-/** Drums in the window: six for the kilometres and ONE MORE for the tenths,
- * which is the layout on a car's own counter and the reason the thing reads
- * as a counter at all — the drum on the end is the one that moves while you
- * are looking at it. It counts to 999 999.9 km and then, like the real
- * thing, rolls quietly back to zero. */
-export const ODO_DIGITS = 7;
+/** Drums in the window: four for the kilometres and ONE MORE for the tenths,
+ * which is the layout on a car's own trip counter and the reason the thing
+ * reads as a counter at all — the drum on the end is the one that moves
+ * while you are looking at it. It counts to 9999.9 km and then, like the
+ * real thing, rolls quietly back to zero. */
+export const ODO_DIGITS = 5;
 
 /** How much of a drum's turn is spent carrying the one above it. A counter
  * does not move its tens drum through the whole of a kilometre — the tens

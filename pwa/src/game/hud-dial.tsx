@@ -51,14 +51,20 @@ const DIAL_TICK_OUT = 40;
 const DIAL_TICK_IN = 36.5;
 const DIAL_NUMBERS = 32.5;
 
-/** THE COUNTER'S WINDOW, in the dial's own hundred-unit box. It sits just
- * under the needle's boss because that is where a car puts it, and it fills
- * what the scale leaves: the boss above, the 4 and the 0 of the scale
- * below, the 5 out to the left. */
-const ODO_X = 21;
-const ODO_Y = 54;
-const ODO_W = 58;
-const ODO_H = 12.5;
+/** THE COUNTER'S WINDOW, measured off a real cluster and scaled to the
+ * dial's own hundred-unit box. On the gauge it was taken from, the counter
+ * is a fifth of the dial across — a small, dense plate with a lot of face
+ * around it, which is why it reads as an instrument set INTO the dial
+ * rather than as a caption on it. A cell is 5.2 units, the window 8.3
+ * deep, and the figures fill a bit over half that depth.
+ *
+ * Where it sits is this dial's own answer rather than that gauge's: halfway
+ * from the hub to the 0 of the scale, which on a rev counter whose numbers
+ * all live up the left-hand side is the middle of the empty half. */
+const ODO_X = 37;
+const ODO_Y = 62;
+const ODO_W = 26;
+const ODO_H = 8.3;
 
 /** THE DRUMS, TURNING. Each one shows the digit it is on and the digit
  * coming up behind it, on a strip the height of the window, slid up by
@@ -88,7 +94,7 @@ function Odometer({ metres }: { metres: number }) {
       height={ODO_H}
       viewBox={`0 0 ${ODO_W} ${ODO_H}`}
     >
-      <rect className="hud-odo-window" x="0" y="0" width={ODO_W} height={ODO_H} rx="0.8" />
+      <rect className="hud-odo-window" x="0" y="0" width={ODO_W} height={ODO_H} rx="0.6" />
       {/* THE TENTHS DRUM IS THE ODD ONE, and a car says so by painting it
           the other way round: a light drum with dark figures on the end of
           a dark window. It is the one that is always about to move, and the
@@ -99,7 +105,7 @@ function Odometer({ metres }: { metres: number }) {
         y="0"
         width={cell}
         height={ODO_H}
-        rx="0.8"
+        rx="0.6"
       />
       {drums.map((drum, i) => (
         <g
@@ -174,11 +180,6 @@ export function Tachometer({ rpm, odoM }: { rpm: number; odoM: number | null }) 
           needle so the needle sweeps over the window rather than under it,
           which is the way round a real cluster is built. */}
       {odoM !== null && <Odometer metres={odoM} />}
-      {odoM !== null && (
-        <text className="hud-odo-unit" x="50" y="70.5">
-          KM
-        </text>
-      )}
       {/* The needle is transformed rather than re-pathed so the browser can
           tween it between HUD snapshots — the dial reads smooth at 12 Hz. */}
       <g className="hud-tach-needle" style={{ transform: `rotate(${dialAngle(value)}deg)` }}>

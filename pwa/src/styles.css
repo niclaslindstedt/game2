@@ -1546,23 +1546,31 @@ body {
      makes the window read as a hole in the dial rather than as a label
      printed on it. */
   stroke: rgb(255 255 255 / 85%);
-  stroke-width: 1;
+  stroke-width: 0.7;
 }
 
 /* The tenths drum, painted the other way round (hud-dial.tsx). */
 .hud-odo-tenths {
   fill: rgb(238 242 250 / 95%);
   stroke: rgb(255 255 255 / 85%);
-  stroke-width: 1;
+  stroke-width: 0.7;
 }
 
 .hud-odo-digit {
   fill: #fff;
-  /* Smaller than the window could take, on purpose: a drum's figure has
-     air around it, and seven of them crowding their cells read as a number
-     printed across the dial rather than as a counter. */
-  font-size: 6.5px;
+  /* Measured off the cluster this is copied from: the figures stand a bit
+     over half the window's depth, and they stand UPRIGHT. Everything else
+     on this HUD leans (`.hud` is italic); a drum's figure is stamped into
+     metal and cannot, and the lean is also what put the corners of one
+     figure over its neighbour's cell. */
+  font-size: 5.5px;
+  font-style: normal;
   font-weight: 800;
+  /* …and they are FLAT. The HUD's own figures are stamped out of the
+     picture with a hard offset shadow (`.hud`); a drum's figure is printed
+     on metal an inch behind glass, and the shadow at this size only fills
+     in the air between one cell and the next. */
+  text-shadow: none;
   font-variant-numeric: tabular-nums;
   text-anchor: middle;
   dominant-baseline: central;
@@ -1578,7 +1586,7 @@ body {
 .hud-odo-seam {
   fill: none;
   stroke: rgb(255 255 255 / 14%);
-  stroke-width: 0.4;
+  stroke-width: 0.3;
 }
 
 /* Each hundred metres the strip slides a tenth of the window; the step that
@@ -1586,15 +1594,6 @@ body {
    forwards (hud-dial.tsx). */
 .hud-odo-drum {
   transition: transform 140ms ease-out;
-}
-
-.hud-odo-unit {
-  fill: rgb(255 255 255 / 70%);
-  font-size: 5.5px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  text-anchor: middle;
-  dominant-baseline: central;
 }
 
 .hud-tach-needle {
