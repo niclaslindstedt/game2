@@ -35,6 +35,7 @@
     "analyze": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/analyze-stage.mjs",
     "drift": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/drift-lab.mjs",
     "roll": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/roll-lab.mjs",
+    "verge": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/verge-lab.mjs",
     "cars": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/car-preview.mjs",
     "items": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/item-preview.mjs",
     "sky": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/sky-preview.mjs",

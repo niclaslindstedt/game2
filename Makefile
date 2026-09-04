@@ -88,6 +88,19 @@ drift:
 roll:
 	npm run roll -- $(if $(CAR),--car=$(CAR),) $(ARGS)
 
+# THE VERGE LAB — a car LEAVING THE ROAD, drawn from behind, with the ground
+# under every frame: the terrain in green, the road's own ribbon in tan, and
+# the body standing on whichever of them the physics is reading. Under it,
+# the same steps as numbers — how far the body is over the country, the
+# loft, and the speed the FOOT was handed. The verge is where the world
+# swaps ground readers under a car at speed, and a step between the two is a
+# throw, not a shape. Required before/after any change to the ground under
+# the car — `game/ground.ts`, the road/wild swap in `game/step.ts`, R16's
+# hand-over — and after anything that moves the terrain beside a road.
+# `make verge CAR=coupe` · `make verge ARGS="--seeds=3,7 --speed=20 --table"`
+verge:
+	npm run verge -- $(if $(CAR),--car=$(CAR),) $(ARGS)
+
 # Record a bot run to a run tape (runs/*.jsonl): a whole drive written down
 # as the controls that drove it. `make record SEED=42 CAR=compact
 # DIFFICULTY=hard OUT=runs/ref.jsonl`

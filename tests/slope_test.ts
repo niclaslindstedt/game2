@@ -124,11 +124,17 @@ describe("the road as a shape, taken from the side", () => {
     // falls away over a short chamfer, where a gravel road of the same width
     // simply runs out into its shoulder. Same width, same speed, and the
     // sealed one has the body further off its wheels.
-    const gravel = crossRoad(10, 14);
-    const sealed = crossRoad(10, 14, { surface: "asphalt", lift: 0.2 });
-    expect(gravel.lift).toBeLessThan(TUNING.air.loft);
-    expect(sealed.lift).toBeGreaterThan(TUNING.air.loft);
-    expect(sealed.lift).toBeGreaterThan(gravel.lift * 1.3);
+    const sealed = { surface: "asphalt", lift: 0.2 };
+    expect(crossRoad(10, 14, sealed).lift).toBeGreaterThan(crossRoad(10, 14).lift * 1.3);
+    // ...and SOONER is a speed, not a height: the sealed edge has the tyres
+    // off the ground at a pace the gravel one is still holding the car at.
+    // Read as a height at one fixed speed, this said nothing for as long as
+    // the verge handed the physics a step between its two ground readers —
+    // that step lofted every crossing by the same 9 cm whatever the road was
+    // made of or how fast it was taken, and the assertion passed on the
+    // artifact rather than on the chamfer.
+    expect(crossRoad(10, 20, sealed).lift).toBeGreaterThan(TUNING.air.loft);
+    expect(crossRoad(10, 20).lift).toBeLessThan(TUNING.air.loft);
   });
 
   it("but driving ALONG a level road costs the tires nothing at all", () => {

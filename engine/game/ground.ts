@@ -23,13 +23,22 @@ import type { CarState, GameEvent, RunStats } from "./state.ts";
 const T = TUNING;
 
 /** The ground a step is settled against: a height reader over world
- * position, whether it is the open lattice (`wild`) or a road profile — the
- * distinction is only the SEAT, see `readSeat` — and the height it stood at
- * under the car's middle as the step began, which is what the wheels'
- * vertical speed is measured from. */
+ * position, how much of what the car is standing on is open COUNTRY rather
+ * than road — the distinction is only the SEAT, see `readSeat` — and the
+ * height it stood at under the car's middle as the step began, which is
+ * what the wheels' vertical speed is measured from.
+ *
+ * `groundAt` is ONE surface across the whole world, road and country alike
+ * (step.ts builds it): the seam at the verge is a place the car drives over
+ * and never a step between two readers, because a step in the ground is a
+ * height difference divided by `dt`, and at 120 Hz that is tens of m/s of
+ * ground apparently falling out from under a car that is merely driving off
+ * a road. */
 export type GroundUnder = {
   groundAt: (x: number, z: number) => number;
-  wild: boolean;
+  /** 0 where the car stands on the road's own ribbon, 1 out in the country,
+   * ramped across the verge between them. */
+  country: number;
   /** Ground elevation under the car before this step's move. */
   groundY: number;
 };
@@ -154,11 +163,19 @@ export function plant(car: CarState, ground: (x: number, z: number) => number): 
   car.loftRate = 0;
 }
 
-/** Read where the car stands now (see `Seat`). */
+/** Read where the car stands now (see `Seat`).
+ *
+ * The corner lift comes in with the COUNTRY (`GroundUnder.country`) rather
+ * than switching on at the verge line. On the mat there is none: a road is
+ * built smooth across the body's length, and a car seated on its own crown
+ * would ride a hand's width high on every stage. Out in the country it is
+ * whole. Switched at the line instead, the lift arrived all at once — up to
+ * a third of a metre of body, in one step, upward, on a car driving off a
+ * road — which is the ONE thing a car leaving a road must never do. */
 export function readSeat(car: CarState, under: GroundUnder): Seat {
   const centre = under.groundAt(car.x, car.z);
   const { seat, foot } = corners(car, centre, under.groundAt);
-  return { centre, seat: under.wild ? seat : centre, foot };
+  return { centre, seat: centre + (seat - centre) * under.country, foot };
 }
 
 /** The vertical speed the WHEELS moved at over this step, m/s: what the

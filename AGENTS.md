@@ -15,6 +15,7 @@ make fmt          # prettier in place; fmt-check is what CI runs
 make sim          # headless balance sweep — REQUIRED before/after any handling or generator change
 make drift        # THE DRIFT LAB: every corner x every technique, tabled and DRAWN — REQUIRED before/after any drift-model change
 make roll         # THE ROLL LAB: a car going OVER, drawn from behind — the pivot, the walk, the damage — REQUIRED before/after any roll-model change
+make verge        # THE VERGE LAB: a car LEAVING THE ROAD, drawn from behind — the ground under each frame, from both readers — REQUIRED before/after any change to the ground under the car
 make analyze      # SCORE generated stages (water, roads, surface, jumps, ends, ground, cost) — REQUIRED before/after any generator change
 make record       # record a bot run to a run tape (runs/*.jsonl)
 make replay       # RUN='runs/<file>.jsonl' — replay a tape and place its time against each field
@@ -133,7 +134,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Handling/feel (drift, jump, grip, gearbox)                   | `engine/game/car.ts`; numbers in `engine/game/defs/`                                                                                                                         |
 | What a car does once it is PAST its outside wheels           | `engine/game/roll.ts` — the hull's centre-of-mass curve, the walk over its corners, the pitch and yaw every contact throws in; numbers in `TUNING.air.roll` — `make roll`    |
-| Where the car STANDS: the seat, the edge, the bump           | `engine/game/ground.ts` — one rule for the road and the country; `TUNING.air` (edges) and `TUNING.suspension` (bumps)                                                        |
+| Where the car STANDS: the seat, the edge, the bump           | `engine/game/ground.ts` — one rule for the road and the country; `TUNING.air` (edges) and `TUNING.suspension` (bumps) — `make verge`                                         |
 | How a turn becomes a drift, and how it lets go               | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill                                                                                                      |
 | What a MOVE (flick, trailed brake, lever) buys a slide       | `drift.flickDepth` / `brakeDepth` / `leverDepth` / `provokeFloor` — the `drift-feel` skill                                                                                   |
 | What a car CAN do, for anything that has to plan around it   | `engine/game/limits.ts` — stated once, read by `car.ts` AND `sim/bot.ts`; never restate a ceiling                                                                            |
