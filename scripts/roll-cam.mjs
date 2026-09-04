@@ -82,8 +82,22 @@ page.on("console", (msg) => {
   if (msg.type() === "error") console.error(`[console] ${msg.text()}`);
 });
 await page.goto(`http://127.0.0.1:${port}/roll-preview.html`);
+// HOW LONG THE SHEET IS GIVEN TO DRAW ITSELF, ms — and it is sized for the
+// machine that has no GPU, not for the one that does.
+//
+// The page renders four accidents in full (two seats x two runs), and on a
+// developer's machine that is seconds. In a container Chromium falls back to
+// SwiftShader and software-rasterizes every frame of every one of them, which
+// is a quarter of an hour and was fifteen minutes' worth of ceiling for half
+// the work: adding the caught runs walked the default straight into its own
+// timeout, and the failure arrives as a bare `TimeoutError` with no sheet and
+// nothing said about why.
+//
+// So the ceiling belongs to the slow path. It costs a fast machine nothing —
+// it is a deadline, not a budget, and the wait ends when `__done` is set.
+//
 // A string, not a closure — it runs in the page, where `window` exists.
-await page.waitForFunction("window.__done === true", undefined, { timeout: 900000 });
+await page.waitForFunction("window.__done === true", undefined, { timeout: 2_400_000 });
 const sheet = await page.$("canvas#stage");
 const box = await sheet.boundingBox();
 await page.setViewportSize({ width: Math.ceil(box.width), height: Math.ceil(box.height) });

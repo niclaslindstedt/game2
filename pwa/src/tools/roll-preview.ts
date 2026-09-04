@@ -42,8 +42,10 @@ const RUN_IN = 3;
 
 /** THE TRIP: the climb the car is thrown off the ground with, m/s, and the
  * sideways speed pinned on through the flight. Well past `air.tripSlide`, so
- * the landing goes over rather than merely lurching. */
-const TRIP = { lift: 6.5, across: -26 };
+ * the landing goes over rather than merely lurching. `across` is per-run
+ * below, because how hard the car is tripped is exactly what decides whether
+ * there is anything left to catch. */
+const TRIP = { lift: 6.5 };
 
 /** Which seats the roll is watched from — and the pair is the point. `chase`
  * is an outside rig, which plants and watches; `cockpit` is bolted to the
@@ -52,36 +54,57 @@ const TRIP = { lift: 6.5, across: -26 };
  * a planted shot under `cockpit`) is the sheet failing loudly. */
 const SEATS = ["chase", "cockpit"] as const;
 
-/** ...and the two ACCIDENTS, which is the other axis of the sheet.
+/** ...and the two ACCIDENTS, which is the other axis of the sheet. They are
+ * here to photograph the camera's TWO ENDINGS, and the camera has two because
+ * the car does.
  *
- * A crash the driver never touches runs its course and the shot holds the
- * frame for the beat the car is left lying in. A crash the driver CATCHES
- * ends with somebody driving again, and the shot has a second job there: hand
- * the frame back quickly and then stay off it (`camera-roll.ts`'s latch), so
- * a car that is still fighting for grip is fought for from the player's own
- * camera. That hand-back is a property of one frame beside the next, exactly
- * like the plant, and a lab that only ever drove with the bot could not
- * photograph half of what the module does.
+ * `the trip` is the accident nobody comes back from: thrown sideways hard
+ * enough to go over and over, it ends on its roof, and the lens plants at the
+ * verge, holds for the beat the crew are left in, and flies home.
  *
- * `catches` steers into the roll for as long as it lasts. Which way that is
- * falls out of the trip: the body goes over toward the side the sideways
- * speed carries it, so the lock that opposes it is the sign of `TRIP.across`.
- * Nothing here decides whether the save works — the engine does, and a sheet
- * whose CAUGHT row never comes back upright is the finding. */
+ * `caught` is a roll the car comes out of ON ITS WHEELS, which is the ending
+ * the camera treats completely differently — the frame goes back on the short
+ * clock and the shot then latches itself off until `car.planted`
+ * (`camera-roll.ts`). Both of those are properties of one frame beside the
+ * next, which is what this sheet is.
+ *
+ * TWO THINGS ARE DELIBERATE HERE AND BOTH WERE WRONG ONCE.
+ *
+ * The LOCK opposes the roll, and its sign is the OPPOSITE of the sideways
+ * speed's: a car carried to negative `w` goes over toward positive roll, and
+ * the lateral force that pushes it back down is a positive one
+ * (`roll_control_test.ts` pins the same convention). Steering with the sign
+ * of `across` instead is the lock that finishes the job — measured on this
+ * exact staging, it took the crash from 810° of roll to 1624° and a car that
+ * never stopped rolling at all.
+ *
+ * And the trip is GENTLER on the caught run, because at `the trip`'s severity
+ * there is nothing to catch: 26 m/s across the car is two and a half turns and
+ * no lock in the game saves it — the right one still ended overturned. That is
+ * the physics being right, not the driver being weak, and a "caught" row over
+ * an uncatchable trip photographs nothing. What the driver is WORTH belongs to
+ * `make crash`, which measures it; this sheet's job is the lens. */
 const RUNS = [
-  { id: "the trip", catches: false },
-  { id: "caught", catches: true },
+  { id: "the trip", across: -26, catches: false },
+  { id: "caught", across: -18, catches: true },
 ] as const;
 
 /** The sheet: tile size, and the columns it wraps at — one row per half of a
  * seat's roll, so a roll is read across and the seats down. */
 const TILE = { width: 320, height: 180, cols: 8 };
 
-/** Frames rendered per seat, the ones photographed, and how many. Sixteen
- * tiles a sixth of a second apart cover two and a half seconds: the trip, the
- * roll, the beat the car is left lying, and the flight home. */
-const PER_SEAT = 260;
-const SHOT_EVERY = 10;
+/** Frames rendered per seat, the ones photographed, and how many.
+ *
+ * THE WINDOW HAS TO OUTLAST THE ACCIDENT, and that is a longer event than it
+ * looks. A roll the car comes out of is over at about 2.6 s, the frame goes
+ * back over the half second after it, and the car is not `planted` — which is
+ * what releases the camera's latch — until about 4.0 s. Sixteen tiles a sixth
+ * of a second apart covered 2.67 s and stopped while the car was still
+ * rolling: every hand-back this sheet exists to show happened after the last
+ * picture. Spaced to cover four and a half seconds instead, which reaches past
+ * the plant, the roll, the hand-back and the latch on both endings. */
+const PER_SEAT = 280;
+const SHOT_EVERY = 17;
 const SHOTS = TILE.cols * 2;
 
 /** The frame the harness renders at, s. Fixed rather than wall-clock, for the
@@ -129,13 +152,16 @@ async function main(): Promise<void> {
      * of the crash, and there was no crash in it. */
     const events: GameEvent[] = [];
     /** WHO IS DRIVING THIS FRAME. The bot, until the body goes over and this
-     * is the run where somebody fights it — from there, full opposite lock
-     * for as long as the roll owns the car. The bot is left in charge of
-     * everything else so the run-in, the trip and the recovery afterwards are
-     * the same drive in both rows and only the accident differs. */
+     * is the run where somebody fights it — from there, full OPPOSITE lock
+     * for as long as the roll owns the car. Opposite is `-sign(across)`: the
+     * car is carried toward negative `w` and goes over toward positive roll,
+     * so the lateral force that pushes it back down is the positive one.
+     *
+     * The bot keeps everything else, so the run-in and the trip are the same
+     * drive in both rows and only the accident differs. */
     const hands = (): ReturnType<typeof botInput> =>
       run.catches && game.car.rolling
-        ? { ...botInput(game), steer: Math.sign(TRIP.across), throttle: 0, brake: 0 }
+        ? { ...botInput(game), steer: -Math.sign(run.across), throttle: 0, brake: 0 }
         : botInput(game);
     const drive = (): void => {
       events.length = 0;
@@ -152,7 +178,7 @@ async function main(): Promise<void> {
     game.car.vy = TRIP.lift;
     let was = { at: new THREE.Vector3(), had: false };
     for (let f = 0; f < PER_SEAT; f++) {
-      if (game.car.airborne && !game.car.rolling) game.car.w = TRIP.across;
+      if (game.car.airborne && !game.car.rolling) game.car.w = run.across;
       drive();
       if (f % SHOT_EVERY !== 0 || f / SHOT_EVERY >= SHOTS) continue;
       const pose = renderer.cameraPose();
@@ -179,10 +205,22 @@ async function main(): Promise<void> {
           f === 0
             ? `${view}  ${run.id}`
             : `+${(f * FRAME).toFixed(2)}s  ${moved}  ${toCar.length().toFixed(0)}m off ${off}°${
-                // WHICH OF THE THREE STATES the car is in, because the whole
-                // reading of the CAUGHT row is where it stops saying ROLLING
-                // and how long after that the lens is still out in the grass.
-                game.car.rolling ? "  ROLLING" : game.car.planted ? "  PLANTED" : "  ON TWO"
+                // WHICH STATE the car is in, because the whole reading of the
+                // caught row is where it stops saying ROLLING, how long after
+                // that the lens is still out in the grass, and where PLANTED
+                // arrives — the frame the camera's latch is released on.
+                //
+                // AIR is called out separately: the trip is staged by THROWING
+                // the car, so the opening frames are a flight, and labelling
+                // those ON TWO reads as a car balanced on two wheels down the
+                // road at 90 km/h.
+                game.car.rolling
+                  ? "  ROLLING"
+                  : game.car.airborne
+                    ? "  AIR"
+                    : game.car.planted
+                      ? "  PLANTED"
+                      : "  ON TWO"
               }`,
         head: f === 0,
       });
