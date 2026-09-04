@@ -243,7 +243,7 @@ export function goesOver(roll: number, rollRate: number): boolean {
  * body and keeps half, and a car balanced up on a wheel with its sill a
  * hand's breadth above the ground swaps for a corner barely off the one it
  * is already on and keeps nearly all of it. */
-function pivotKeep(tilt: number): { keep: number; gap: number } {
+function pivotKeep(tilt: number): { keep: number; gap: number; sprung: boolean } {
   const cos = Math.cos(tilt);
   const sin = Math.sin(tilt);
   let low = Infinity;
@@ -272,7 +272,7 @@ function pivotKeep(tilt: number): { keep: number; gap: number } {
   // taking it: the spring stores the blow and returns it, which is the
   // whole job of a suspension and the reason a car can be rolled at all.
   const keep = arriving[2] ? 1 - (1 - rigid) * (1 - R.sprung) : rigid;
-  return { keep: Math.max(0, Math.min(1, keep)), gap: next - low };
+  return { keep: Math.max(0, Math.min(1, keep)), gap: next - low, sprung: arriving[2] };
 }
 
 /** THE CAR IS GOING OVER. Books the roll and says so once — everything
@@ -325,13 +325,36 @@ function contact(
   // The TRAVEL it costs is the friction that this blow, and only this
   // blow, can pay for: the arrival presses the body into the ground for as
   // long as it takes to kill the descent, and Coulomb's is the most a
-  // normal impulse that size can drag out of the travel sideways. Never
-  // the rotational exchange above — that is the pivot swapping ends of a
-  // face, a different thing entirely, and charging the travel for it stops
-  // a car dead in a single contact.
-  const rub = R.grip * descent;
-  car.u -= Math.sign(car.u) * Math.min(Math.abs(car.u), rub);
-  car.w -= Math.sign(car.w) * Math.min(Math.abs(car.w), rub);
+  // normal impulse that size can drag out of the travel. Never the
+  // rotational exchange above — that is the pivot swapping ends of a face,
+  // a different thing entirely, and charging the travel for it stops a car
+  // dead in a single contact.
+  //
+  // ONE impulse, opposing the way the body is actually going, and never a
+  // rub taken out of each axis in turn: friction is a vector, and a car
+  // carrying speed along AND across itself paid this twice over that way —
+  // once out of its travel down the road and once out of its slide — for a
+  // total half again what the normal impulse could possibly deliver, with
+  // the leftovers pointing wherever the two axes happened to be uneven.
+  //
+  // ...and WHAT ARRIVES decides whether it drags at all. A panel meeting
+  // the ground is sheet metal on gravel and slides for the whole of it; a
+  // WHEEL arriving is a tyre, and a tyre ROLLS — it takes the blow through
+  // the spring and hands it back, which is the same argument `pivotKeep`
+  // already makes about the rotation, made about the travel.
+  //
+  // It is the difference between a rollover and a car hitting a wall. A
+  // roll passes through upright once a turn, and that arrival was being
+  // charged a full sliding stop off the whole normal impulse: a car
+  // carrying 37 km/h into the second turn of a roll came out of it at
+  // 3 km/h, on its wheels, in one step, having touched nothing at all.
+  const drag = pivot.sprung ? 1 - R.sprung : 1;
+  const speed = Math.hypot(car.u, car.w);
+  if (speed > 0) {
+    const rub = Math.min(speed, R.grip * descent * drag);
+    car.u -= (car.u / speed) * rub;
+    car.w -= (car.w / speed) * rub;
+  }
   updateSlip(car);
   if (Math.abs(before) < R.slamAt && descent <= 0) return;
   // How hard it hit, for what it FOLDS: how fast the arriving corner was
@@ -461,30 +484,43 @@ export function stepRolling(
     // GRAVITY along the centre's own curve — downhill toward the face
     // below it, uphill against the corner ahead of it.
     car.rollRate -= (T.air.gravity / R.inertia) * centreSlope(tilt) * dt;
-    // ...and THE GROUND DRIVING IT ON. The body is still travelling across
-    // itself, so the contact is being dragged, and the drag works on the
-    // lever of the centre's own height: sliding to the right rolls the
-    // right side down, which is negative roll — the same hand the trip
-    // goes over with.
+    // ...and THE GROUND DRIVING IT ON — which is the same friction that is
+    // slowing the car down, and has to be written as one thing.
     //
-    // It is written as the momentum the friction TAKES OUT OF THE TRAVEL
-    // and puts into the body, and that is the whole of why a roll ends. A
-    // torque written on the sign of the slide alone is a car that turns
-    // over for as long as it is nudged sideways by anything at all — a
-    // camber is enough — because nothing it spends comes from anywhere.
-    // Here the roll is bought out of the sideways speed, so when that is
-    // gone the drive is gone with it, and the bite can never reverse the
-    // slide that is paying for it.
-    const across = Math.sign(car.w);
-    const bite = Math.min(R.grip * T.air.gravity * dt, Math.abs(car.w));
-    if (bite > 0) {
-      car.w -= across * bite;
-      car.rollRate -= (across * bite * centreHeight(tilt)) / R.inertia;
+    // A body grinding along on its shell has ONE contact patch and one
+    // Coulomb budget under it: `grip` times its own weight, pointing
+    // against the way it is travelling and nowhere else. Split that vector
+    // into the car's own axes and the two halves do two different jobs —
+    // the ACROSS share works on the lever of the centre's own height and
+    // rolls the body over (sliding to the right rolls the right side down,
+    // which is negative roll, the same hand the trip goes over with), while
+    // the ALONG share simply retards it. Neither is free of the other: a
+    // car sliding straight down the road has nothing left to turn it over,
+    // and a car going sideways spends the lot on the roll.
+    //
+    // It is bought OUT OF THE TRAVEL, and that is the whole of why a roll
+    // ends. A torque written on the sign of the slide alone is a car that
+    // turns over for as long as it is nudged sideways by anything at all —
+    // a camber is enough — because nothing it spends comes from anywhere.
+    //
+    // AND IT IS THE ONLY THING THAT SLOWS THE CAR DOWN. There used to be a
+    // flat exponential scrub on both axes beside it, and it is the reason a
+    // rollover read as a car hitting glue: 2.6/s took nine tenths of the
+    // speed out of every second the body spent in contact, so a car that
+    // went over at 166 km/h was walking 2.2 s later and had covered 35 m.
+    // A rollover is not a stop. The body weighs a tonne, the ground gives
+    // it about `grip` g to work with, and it goes as far as that allows —
+    // which is a hundred metres and more from a big one, most of it in the
+    // air between contacts, where nothing slows it at all.
+    const speed = Math.hypot(car.u, car.w);
+    if (speed > 0) {
+      const pull = Math.min(R.grip * T.air.gravity * dt, speed);
+      const bite = (car.w / speed) * pull;
+      car.u -= (car.u / speed) * pull;
+      car.w -= bite;
+      car.rollRate -= (bite * centreHeight(tilt)) / R.inertia;
     }
     car.rollRate *= Math.exp(-R.drag * dt);
-    // The body grinds along on whatever is down, and it costs the run.
-    car.u *= Math.exp(-R.scrub * dt);
-    car.w *= Math.exp(-R.scrub * dt);
   }
 
   const before = car.roll;
@@ -598,7 +634,32 @@ export function stepRolling(
     if (centre <= seat) {
       // ...and comes back to it. ONE contact, at whatever attitude it
       // actually arrived at, which is what `contact` is written to take.
-      const descent = Math.max(0, -car.vy);
+      //
+      // WHAT ARRIVED, and it is a much smaller thing than the numbers on
+      // either side of the contact suggest. Two corrections, and a roll
+      // that carries has to make both:
+      //
+      // It is the closing speed against the CURVE, never the body's own
+      // fall. The seat is moving: `centreHeight` runs at `slope × rollRate`
+      // under a body turning off a corner, which past a corner is ten
+      // metres a second of it. A body tracking that down is not arriving
+      // anywhere. Reading `-vy` instead booked every one of the chattering
+      // steps around a corner handover — where `held` sits on gravity and
+      // the body ticks in and out of contact — as a ten metre a second
+      // arrival: seven of them inside a tenth of a second, each dragging
+      // `grip × descent` out of the travel, and 72 km/h went to 24 for a
+      // car that had touched nothing.
+      //
+      // ...and it is capped by WHAT THE FLIGHT PUT IN. Gravity is the only
+      // thing that can have been adding to the body's fall while it was off
+      // the ground, so `g × airTime` is the whole of what the ground has to
+      // arrest — and the rest of the closing is the body ROTATING over its
+      // corner, which the pivot exchange prices and the travel must never
+      // be charged for. Without the cap a car lying on its flank and simply
+      // turning on it was billed a five metre a second impact per contact,
+      // for a centre climbing a curve under its own roll.
+      const closing = Math.max(0, slope * car.rollRate - car.vy);
+      const descent = Math.min(closing, T.air.gravity * car.airTime);
       centre = seat;
       car.vy = slope * car.rollRate;
       car.airborne = false;
@@ -629,7 +690,7 @@ export function stepRolling(
   // the ground settles the car to the nearest upright rather than rewinding
   // a rotation it has actually done. What TRAVEL is left is left: a car
   // that rolls once and comes down on its wheels still going is a car that
-  // drives on, and the scrub above is the only thing that decides how much
-  // of it there is.
+  // drives on, and the friction above is the only thing that decides how
+  // much of it there is.
   car.roll += face - now;
 }

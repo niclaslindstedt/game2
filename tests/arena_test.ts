@@ -15,9 +15,11 @@ import {
   ARENA_PAD,
   ARENA_REACH,
   NEUTRAL_INPUT,
+  WHEEL_BASIN,
   compileArena,
   createGame,
   createTerrain,
+  rollTilt,
   step,
   type ArenaPlan,
   type CarInput,
@@ -104,6 +106,18 @@ function flight(u: number, v: number, speed: number): Flight | null {
 function alongV(x: number, z: number): number {
   const { heading } = plan.frame;
   return (x - plan.frame.x) * Math.sin(heading) + (z - plan.frame.z) * Math.cos(heading);
+}
+
+/** ...and the whole of `at` inverted: a world point back in the arena's own
+ * frame, which is the frame every number in the layout is stated in. */
+function localOf(x: number, z: number): { u: number; v: number } {
+  const { heading } = plan.frame;
+  const dx = x - plan.frame.x;
+  const dz = z - plan.frame.z;
+  return {
+    u: dx * Math.cos(heading) - dz * Math.sin(heading),
+    v: dx * Math.sin(heading) + dz * Math.cos(heading),
+  };
 }
 
 describe("the training ground", () => {
@@ -256,6 +270,50 @@ describe("what the training ground is for", () => {
     const gone = Math.hypot(state.car.x - c.x, state.car.z - c.z);
     expect(gone).toBeGreaterThan(1);
     expect(state.car.damage.wear).toBeGreaterThan(0);
+  });
+
+  it("puts a car OVER when it arrives at the roll lane's rail sideways", () => {
+    // R1. The one exercise on the ground that is not about staying on your
+    // wheels: the lane's rails are low enough to catch the car under its
+    // centre of mass and let the top keep going, which is how a rally car
+    // actually rolls. Placed beside the rail already sliding, because that
+    // is what the exercise asks the driver to arrive with — a car that has
+    // straightened up by the time it gets there simply scrapes down it.
+    const state = drive(60, 30, 0, 0);
+    state.car.u = 40;
+    state.car.w = 18;
+    let rolled = false;
+    for (let i = 0; i < 120 * 6; i += 1) {
+      step(state, NEUTRAL_INPUT);
+      if (state.car.rolling) rolled = true;
+    }
+    expect(rolled).toBe(true);
+    // ...and the same lane, taken straight, leaves the car on its wheels:
+    // the rails are a trip for a car that is sideways, not a corridor that
+    // rolls anything driven down it.
+    const straight = drive(56, 20, 34, 3, { throttle: 1 });
+    expect(straight.car.rolling).toBe(false);
+    expect(Math.abs(rollTilt(straight.car.roll))).toBeLessThan(WHEEL_BASIN);
+  });
+
+  it("gives the roll somewhere to carry to, and something to hit at the end", () => {
+    // The run-out past the rails is deliberately empty for thirty metres —
+    // that is where how far a roll carries becomes visible — and the debris
+    // field is what a roll runs into when it does. Both are the exercise;
+    // neither is dressing.
+    const tyres = plan.structures.filter((s) => s.kind === "tyres");
+    const inLane = tyres.filter((s) => {
+      const v = alongV(s.x, s.z);
+      return v > 58 && v < 92;
+    });
+    expect(inLane.length).toBeGreaterThanOrEqual(3);
+    // Nothing standing in the thirty metres the roll is measured over.
+    for (const solid of plan.solids) {
+      const v = alongV(solid.x, solid.z);
+      const { u } = localOf(solid.x, solid.z);
+      if (u < 49 || u > 63) continue;
+      expect(v > 56 && v < 61).toBe(false);
+    }
   });
 
   it("lays its cones and its furniture on the ground, never off the side of it", () => {

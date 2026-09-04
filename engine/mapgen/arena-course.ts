@@ -49,6 +49,62 @@ const CHICANE = { u: -58, v: 20, length: 30, offset: 9, gap: 34 } as const;
  * handbrake is the answer and the steering wheel is not. */
 const HAIRPIN = { u: 34, v: -70, length: 42, half: 7.5, spacing: 6 } as const;
 
+/** R1 — THE ROLL LANE: the one exercise on the ground that is not about
+ * keeping the car on its wheels.
+ *
+ * A rally car does not roll off a bank. It rolls because something small
+ * and hard at the side of the road catches the bottom of it while the top
+ * is still going — a ditch lip, a rock, a kerb — and the body goes over its
+ * outside wheels (`collision.ts`'s `tripRoll`). So the lane is a straight
+ * with a LOW RUN OF CONCRETE down its right-hand edge: get properly
+ * sideways before the yellow line, put the car into the rail, and it will
+ * put you over. Nothing else on the training ground will.
+ *
+ * Past the rail the lane is left open for thirty metres — that is where you
+ * find out how far a roll actually carries, which is the whole reason to
+ * have one somewhere you can repeat it — and then it runs into a DEBRIS
+ * FIELD, because a car going over rarely gets to finish the job undisturbed
+ * and what a roll does when it meets something is a different accident
+ * again. Boards across the run-out every ten metres, so "it carried past
+ * the third board" is a distance and not an impression.
+ *
+ * `u` is the lane's centre, `rail` where the trip starts and `railRun` how
+ * long it is, all in the arena's own metres. */
+const ROLL = {
+  u: 56,
+  half: 7,
+  from: 4,
+  turnIn: 12,
+  rail: 26,
+  railRun: 30,
+  to: 90,
+  marks: [10, 20, 30],
+} as const;
+
+/** ...and the rail itself: low enough that it catches the car UNDER its
+ * centre of mass and lets the top keep going, which is the window a trip
+ * lives in (`collision.solids.tripTop`..`tripFade`), and tall enough not to
+ * be something the wheels merely climb (`collision.rideOver`). A wall the
+ * body meets square is not a trip; it is a wall. */
+const RAIL_HEIGHT = 0.7;
+
+/** The debris downrange, as offsets from the lane's centre and metres up
+ * it. Placed by hand and off the lane's middle line, because a rolling body
+ * WALKS — it turns about a corner a metre out from its own middle, so it
+ * crosses a couple of metres of ground per half turn and arrives nowhere
+ * near where it was pointing. A field authored straight ahead is a field
+ * the roll curves neatly around. */
+const DEBRIS: readonly (readonly [number, number, "tyres" | "post"])[] = [
+  [-4.5, 62, "tyres"],
+  [2.5, 65, "post"],
+  [-1.0, 69, "tyres"],
+  [5.0, 72, "post"],
+  [-5.5, 75, "post"],
+  [1.5, 79, "tyres"],
+  [4.5, 83, "post"],
+  [-2.5, 86, "tyres"],
+];
+
 /** The service yard — where the crew keep what the ground is made of.
  * Inside the south rim, west of the gate, out of everybody's way. */
 const YARD = { u: -34, v: -104 } as const;
@@ -193,6 +249,42 @@ export function buildCourse(to: ToWorld, heading: number): Course {
     0.9,
     "yellow",
   );
+
+  // ── R1, the roll lane ─────────────────────────────────────────────────
+  // The lane it is driven down, the line you have to be sideways by, the
+  // rail that puts you over, and the boards that say how far it carried.
+  line(ROLL.u - ROLL.half, ROLL.from, ROLL.u - ROLL.half, ROLL.to, 0.45, "white");
+  line(ROLL.u + ROLL.half, ROLL.from, ROLL.u + ROLL.half, ROLL.to, 0.45, "white");
+  line(ROLL.u - ROLL.half, ROLL.turnIn, ROLL.u + ROLL.half, ROLL.turnIn, 1.2, "yellow");
+  // A rail down BOTH edges: the exercise is to arrive at one properly
+  // sideways, and which hand you go over on should be yours to choose
+  // rather than the layout's. It is also what the lane is a model OF — a
+  // rally road with a ditch lip either side of it, where running wide in
+  // either direction finds something that catches the sill.
+  for (const side of [-1, 1]) {
+    built(
+      "barrier",
+      ROLL.u + side * ROLL.half,
+      ROLL.rail + ROLL.railRun / 2,
+      0,
+      ROLL.railRun,
+      0.6,
+      RAIL_HEIGHT,
+    );
+    // A tall cone at each end, because a run of concrete a knee high is not
+    // something you see coming at a hundred and forty.
+    for (const end of [ROLL.rail, ROLL.rail + ROLL.railRun]) {
+      cone(ROLL.u + side * (ROLL.half + 2), end, true);
+    }
+  }
+  const runOut = ROLL.rail + ROLL.railRun;
+  for (const m of ROLL.marks) {
+    line(ROLL.u - ROLL.half, runOut + m, ROLL.u + ROLL.half, runOut + m, 0.6, "white");
+  }
+  for (const [du, v, kind] of DEBRIS) {
+    if (kind === "tyres") built("tyres", ROLL.u + du, v, Math.PI / 2, 5, 1.8, 1.2);
+    else built("fence", ROLL.u + du, v, Math.PI / 3, 6, 0.2, 1.3);
+  }
 
   // ── The seam road, edged ──────────────────────────────────────────────
   // It is gravel on a gravel pad for half its length, so what makes it read

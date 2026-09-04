@@ -1599,21 +1599,34 @@ export const TUNING = {
        * charging that as a flat-on-both-wheels impact takes nine tenths of
        * the trip before the car has even come off its wheels. */
       sprung: 0.88,
-      /** How hard the GROUND DRIVES THE ROLL ON, as an effective friction
-       * coefficient under a body that is still travelling sideways,
-       * working on the lever of its own centre height. This is the whole
-       * reason a roll is a roll rather than one flip: a car with fifteen
-       * metres a second still across it is a car the ground keeps turning
-       * over. It is also why one STOPS — the roll ends when the travel
-       * does, not when a counter runs out. */
-      grip: 0.85,
+      /** THE ONE FRICTION A ROLLING BODY HAS, as a coefficient under the
+       * shell it is grinding on. A body on its panels has one contact
+       * patch and one Coulomb budget, pointing against the way it is
+       * travelling — and `roll.ts` spends it on both jobs at once: the
+       * share ACROSS the car works on the lever of its own centre height
+       * and turns it over, the share ALONG it simply retards it.
+       *
+       * That is the whole reason a roll is a roll rather than one flip —
+       * a car with fifteen metres a second still across it is a car the
+       * ground keeps turning over — and it is also why one STOPS: the roll
+       * ends when the travel does, not when a counter runs out.
+       *
+       * And it is the ONLY thing that slows a rolling car down, which is
+       * why it is SHEET METAL'S number and not a tyre's. A rolling car is
+       * measured in accident reconstruction as a drag factor, and the
+       * figure is around half a g — panels and glass on soil, not rubber.
+       * At 0.85 (which is what a tyre holds, and what this used to be) a
+       * roll came out over a g, and a car went over at 165 km/h and was
+       * walking two seconds later.
+       *
+       * It used to carry a flat 2.6/s exponential scrub beside it as well,
+       * which took nine tenths of the speed out of every second of
+       * contact — between them, the read that made a rollover look like a
+       * car hitting glue and then spinning on the spot. */
+      grip: 0.55,
       /** How fast the roll bleeds into the ground it is grinding round on,
        * 1/s. Panels are not tyres. */
       drag: 0.9,
-      /** How much of the car's TRAVEL each second on its side costs, 1/s —
-       * on top of what the landing already took. A roll is the most
-       * expensive thing a car can do short of a tree. */
-      scrub: 2.6,
       /** ...and of its yaw, 1/s. Low, and deliberately: a car does not
        * trip from a straight line. It is already sliding and already
        * ROTATING when its centre of gravity goes past its leading tyres,

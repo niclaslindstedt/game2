@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs transit views rollcam audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs transit views rollcam audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -87,6 +87,20 @@ drift:
 # `make roll CAR=coupe` · `make roll ARGS="--seeds=4,5"`
 roll:
 	npm run roll -- $(if $(CAR),--car=$(CAR),) $(ARGS)
+
+# THE CRASH LAB — ONE accident, in sequence, drawn as a diagram: the plan
+# (where it went and which way it pointed), the profile (the attitude placed
+# where it was down the road — whether it CARRIED or ground to a halt), and
+# then every sixth of a second as its own cell with the numbers that decide
+# the next step printed beside it. No renderer, no browser, no assets: the
+# engine and a canvas, so the crash is isolated from everything that is not
+# the physics. Required before/after any change to the roll, the trip or the
+# contact model — `make roll` says how far a car goes over, this says what
+# it was DOING while it did.
+# `make crash` · `make crash CRASH=carry` · `make crash CRASH="carry debris"`
+# `make crash ARGS="--car=coupe --every=12"`
+crash:
+	npm run crash -- $(CRASH) $(ARGS)
 
 # THE VERGE LAB — a car LEAVING THE ROAD, drawn from behind, with the ground
 # under every frame: the terrain in green, the road's own ribbon in tan, and

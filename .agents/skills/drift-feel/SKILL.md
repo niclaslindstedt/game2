@@ -34,6 +34,36 @@ drama, the camera); this skill is the mechanism under it.
 | `releaseSnap`            | How hard the rear pulls the nose back to the travel direction on the way out     | …gather the car up faster, and (with `hang`) overshoot harder         |
 | `enterSlip` / `exitSlip` | The angle at which the car READS as drifting — dust, HUD, stats                  | …make the readout stingier about calling something a drift            |
 
+## ...and the SPIN, which is the far end of the same model
+
+A spin is not a crash and it is not its own system: it is the drift model
+past the point the slide can be brought back, and its knobs sit in the same
+`TUNING.drift` group, read in the same `stepGrounded` block (`car.ts`, around
+`car.spun`). Anything about a car going round belongs here, not in `crash`.
+
+| Knob        | What it decides                                                                              |
+| ----------- | -------------------------------------------------------------------------------------------- |
+| `spinAt`    | The slip (×`breakaway`) at which the slide stops being a drift and becomes a spin            |
+| `spinBack`  | ...and where it comes back, meaningfully under it — the hysteresis                           |
+| `spinOut`   | The speed a spin needs on BOTH sides: under it a car is pointing the wrong way, not spinning |
+| `spinCarry` | The rate it goes on turning at once nothing is holding the tail                              |
+| `spinSteer` | How much of the wheel survives — never zero, or the spin is a cutscene                       |
+| `spinScrub` | ...and how much harder four dragged tyres scrub, ×`grip.scrub`                               |
+
+Two traps, both of which have bitten:
+
+- **Gate the entry AND the exit on speed.** Guarding only the exit lets a
+  slow car enter on angle and leave on speed in the same step, chattering
+  the `spin` event and the counter several times a second.
+- **A spin needs a rate of its own (`spinCarry`), not just an absence of
+  grip.** Without one, `spinScrub`'s four dragged tyres pull the car back
+  inside `spinAt` and the spin resolves into a tidy drift — which is the
+  opposite of the moment.
+
+`make crash CRASH=spin` stages one on the bench (a solid caught on the nose
+corner: yaw without going over) and prints the yaw rate frame by frame; the
+`crash` skill owns that lab, but the model it is measuring is this one.
+
 And the group under it — **what a MOVE buys**, which is where the angle a
 layout does not find on the wheel alone comes from. Each lifts that layout's
 own `depth` toward the reference slide, so a move is worth most to the car

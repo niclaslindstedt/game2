@@ -11,6 +11,7 @@ import {
   compileTrack,
   createGame,
   goesOver,
+  ridesOver,
   rollTilt,
   step,
   type CarInput,
@@ -277,6 +278,86 @@ describe("the jump", () => {
     expect(Math.max(zones[2], zones[6])).toBeGreaterThan(0);
   });
 
+  it("a roll CARRIES — a car that goes over at pace travels while it does", () => {
+    // THE MOMENTUM. A rollover is not a stop: the body weighs a tonne, the
+    // ground gives it a shell's friction to work against (`roll.grip`, half
+    // a g), and it is off the ground for most of every turn, where nothing
+    // slows it at all. Accident reconstruction measures a real one at
+    // around half a g overall, and the bar here is a full g — twice as
+    // harsh as the world, and still a bar the model has been under.
+    //
+    // It has failed two ways, and both read to a player as a car hitting
+    // glue: a flat exponential scrub on the travel beside the friction, and
+    // the friction itself charged off arrivals the body never made — the
+    // seat's own rotation under a turning car, and the tyres touching down
+    // as the roll passes through upright.
+    const state = game();
+    // On CLEAR ground. A car thrown off a lip crossed up lands in the wild
+    // and tumbles through the forest, and a trunk it snaps costs it twenty
+    // metres a second in one step — which is the contact model working, and
+    // nothing at all to do with what a roll costs. "Nothing to hit" is a
+    // claim a test has to arrange rather than assume.
+    state.terrain.obstaclesNear = () => [];
+    state.terrain.treesNear = () => [];
+    let thrown = false;
+    for (let i = 0; !thrown && i < TUNING.physicsHz * 60; i += 1) {
+      state.car.u = 40;
+      thrown = step(state, { ...NEUTRAL_INPUT, throttle: 0.5 }).some((e) => e.type === "takeoff");
+    }
+    for (let i = 0; !state.car.rolling && i < TUNING.physicsHz * 6; i += 1) {
+      state.car.w = -26;
+      step(state, { ...NEUTRAL_INPUT });
+    }
+    expect(state.car.rolling).toBe(true);
+    const into = Math.hypot(state.car.u, state.car.w);
+    const x0 = state.car.x;
+    const z0 = state.car.z;
+    let seconds = 0;
+    let worst = 0;
+    while (state.car.rolling && seconds < 8) {
+      const was = Math.hypot(state.car.u, state.car.w);
+      step(state, { ...NEUTRAL_INPUT });
+      seconds += TUNING.dt;
+      worst = Math.max(worst, was - Math.hypot(state.car.u, state.car.w));
+    }
+    const carried = Math.hypot(state.car.x - x0, state.car.z - z0);
+    const outOf = Math.hypot(state.car.u, state.car.w);
+    expect(carried).toBeGreaterThan(20);
+    expect((into - outOf) / seconds).toBeLessThan(9.81);
+    // ...and no ONE contact may take a third of what the car is carrying.
+    // A rollover is a dozen-odd contacts sharing the work; a step that eats
+    // most of the travel on its own is a bug in what the ground was charged
+    // for, and it is the shape every version of this has failed in.
+    expect(worst).toBeLessThan(into / 3);
+  });
+
+  it("a car that is going over rides over nothing", () => {
+    // `ridesOver` measures the bar off `car.y`, which for a rolling body is
+    // its origin held a hull's width in the air. A car on its flank also
+    // has no wheels underneath it to climb anything with — so the one
+    // moment it is least able to avoid what is in front of it was the one
+    // moment it flew over all of it.
+    const state = game();
+    const stone = {
+      x: state.car.x,
+      z: state.car.z,
+      y: 0,
+      kind: "rock" as const,
+      size: 1,
+      spin: 0,
+      radius: 0.6,
+      height: 0.5,
+      mass: 300,
+      rooted: 0.7,
+      snap: Infinity,
+    };
+    state.car.y = 0.9;
+    state.car.rolling = false;
+    expect(ridesOver(state.car, stone)).toBe(true);
+    state.car.rolling = true;
+    expect(ridesOver(state.car, stone)).toBe(false);
+  });
+
   it("a roll STRIPS the car — the glass, the mirrors, the panels it lands on", () => {
     // A rolled car is not a car with a dented flank. Every contact of the
     // roll is the ground meeting sheet metal with nothing sprung under it,
@@ -292,8 +373,12 @@ describe("the jump", () => {
     // fold a car cannot get without having been upside down.
     expect(damage.roof).toBeGreaterThan(0);
     expect(Math.max(damage.zones[2], damage.zones[6])).toBeGreaterThan(0);
-    // ...and it is a beaten car afterwards, not a scratched one.
-    expect(damage.wear).toBeGreaterThan(0.3);
+    // ...and it is a beaten car afterwards, not a scratched one. The bar is
+    // a quarter of the shell rather than a third because a roll no longer
+    // compounds its damage across contacts the body never made: the
+    // chattering steps around every corner handover used to be booked as
+    // arrivals, and a roll paid for a dozen of them.
+    expect(damage.wear).toBeGreaterThan(0.25);
   });
 
   it("...but a hard landing on the WHEELS is still a landing, not a roll", () => {

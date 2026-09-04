@@ -15,6 +15,7 @@ make fmt          # prettier in place; fmt-check is what CI runs
 make sim          # headless balance sweep — REQUIRED before/after any handling or generator change
 make drift        # THE DRIFT LAB: every corner x every technique, tabled and DRAWN — REQUIRED before/after any drift-model change
 make roll         # THE ROLL LAB: a car going OVER, drawn from behind — the pivot, the walk, the damage — REQUIRED before/after any roll-model change
+make crash        # THE CRASH LAB: ONE accident in SEQUENCE, schematic — plan, profile, and every frame's physics numbers — REQUIRED before/after any roll, trip or contact change
 make verge        # THE VERGE LAB: a car LEAVING THE ROAD, drawn from behind — the ground under each frame, from both readers — REQUIRED before/after any change to the ground under the car
 make analyze      # SCORE generated stages (water, roads, surface, jumps, ends, ground, cost) — REQUIRED before/after any generator change
 make record       # record a bot run to a run tape (runs/*.jsonl)
@@ -74,13 +75,23 @@ This project is tuned by measuring, not guessing:
 
 1. **`make sim`** before and after every handling/generator change. The table (pace, drifts, clean exits, air time, respawns) is the regression surface — bots must keep finishing and keep drifting.
 2. **`make drift`** before and after every change to the DRIFT MODEL. It drives every corner the generator can build — and the sequences that catch a car out — once per technique (wheel, lift, trailed brake, handbrake, flick), prints what each one bought, and draws `previews/drift-<car>.png`: the car every sixth of a second with its travel arrow, so the slip angle is something you look at. `make sim` says what the bot does with the car; this says what the car does.
-3. **`make analyze`** before and after every GENERATOR change. It scores a stage against what a stage has to be — water that runs downhill and ends somewhere, roads that go somewhere and do not double up, a surface with no steps in it, jumps that land on the road, a start that holds the field and a finish with road past it, ground whose layers agree — and prints the findings that explain the score. `make track` is the looking half of the loop; this is the measuring half.
-4. **`make track`** to LOOK at what the rules engine builds.
+3. **`make crash`** before and after every change to the ROLL, the TRIP or the
+   CONTACT model. `make roll` says how far a car goes over; this says what it
+   was DOING while it did — one accident drawn as a diagram (the plan, the
+   profile, then every sixth of a second as its own cell with its speed, roll
+   rate, yaw rate and damage printed beside it), with no renderer, no browser
+   and no scenery in the way. `carry` is the momentum question and `debris`
+   the same roll with things to hit; `slide`, `spin` and `wall` isolate the
+   trip and the contact. It reports each roll's own retardation in g, which
+   is the one figure a rollover can be checked against the world with — a
+   real one runs about half a g.
+4. **`make analyze`** before and after every GENERATOR change. It scores a stage against what a stage has to be — water that runs downhill and ends somewhere, roads that go somewhere and do not double up, a surface with no steps in it, jumps that land on the road, a start that holds the field and a finish with road past it, ground whose layers agree — and prints the findings that explain the score. `make track` is the looking half of the loop; this is the measuring half.
+5. **`make track`** to LOOK at what the rules engine builds.
    **`make level LEVEL=1`** to REASON about one stage without driving it: the map with every call (`T3`, in its severity's colour and the driver's left/right), jump (`J1`), crest, ford, bridge, split board (`CP2`), junction, start and finish labelled, the ground tinted by height with the road's elevation profile under it, and the trees and rocks within reach of the road dotted in — plus a table saying what each id is (lip height, ramp grade, which call it lands before, what stands beside it). A claim about "the first jump on level 1" is a claim about `J1` there; `FOCUS=J1` re-frames the same picture a few hundred metres across. Engine only — no build, no browser, a couple of seconds.
-5. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
-6. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
-7. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine. The table is metered over a wall-clock window, so on a slow machine two runs of one build differ by up to a tenth — judge the change structurally (a new pass? a new material? or only an instance count?) before reading movement that size as a regression.
-8. **`make replay RUN=…`** before and after every DIFFICULTY change. A bot lap says what the bot would do; a recorded human drive (developer menu → COLLECT RACE DATA, or `make record`) replayed against easy/medium/hard says what those words are worth to a person — the `bot-improvement` skill owns reading it.
+6. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
+7. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
+8. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine. The table is metered over a wall-clock window, so on a slow machine two runs of one build differ by up to a tenth — judge the change structurally (a new pass? a new material? or only an instance count?) before reading movement that size as a regression.
+9. **`make replay RUN=…`** before and after every DIFFICULTY change. A bot lap says what the bot would do; a recorded human drive (developer menu → COLLECT RACE DATA, or `make record`) replayed against easy/medium/hard says what those words are worth to a person — the `bot-improvement` skill owns reading it.
 
 Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
 dist photographs and meters the last change rather than this one, and the
@@ -134,6 +145,8 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Handling/feel (drift, jump, grip, gearbox)                   | `engine/game/car.ts`; numbers in `engine/game/defs/`                                                                                                                         |
 | What a car does once it is PAST its outside wheels           | `engine/game/roll.ts` — the hull's centre-of-mass curve, the walk over its corners, the pitch and yaw every contact throws in; numbers in `TUNING.air.roll` — `make roll`    |
+| What a ROLL COSTS in momentum, and what it may be charged    | `roll.grip` (sheet metal's Coulomb budget, spent once on the drive AND the retardation) and `contact()`'s descent in `roll.ts` — the `crash` skill                           |
+| THE ROLL LANE: where a roll is provoked on purpose           | R1 in `engine/mapgen/arena-course.ts` — the trip rails, the measured run-out and the debris field; `make crash` is its bench equivalent                                      |
 | Where the car STANDS: the seat, the edge, the bump           | `engine/game/ground.ts` — one rule for the road and the country; `TUNING.air` (edges) and `TUNING.suspension` (bumps) — `make verge`                                         |
 | How a turn becomes a drift, and how it lets go               | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill                                                                                                      |
 | What a MOVE (flick, trailed brake, lever) buys a slide       | `drift.flickDepth` / `brakeDepth` / `leverDepth` / `provokeFloor` — the `drift-feel` skill                                                                                   |
@@ -343,9 +356,17 @@ Skills live in `.agents/skills/` (`.claude/skills` symlinks there) — each a `S
 
 - **`game-feel`** — how the game FEELS: the sensation of speed and the drift as drama. Owns the Sega Rally reference, the camera, and the cross-system levers (speed × stage scale × framing × FX). Load it whenever the acceptance test is "does it feel right".
 - **`drift-feel`** — how the car turns and slides: the hand-over from a
-  gripped turn into a drift, how deep a given lock goes, and how a slide lets
-  go. Owns the `TUNING.drift` knob group and the response-curve probe.
+  gripped turn into a drift, how deep a given lock goes, how a slide lets
+  go, and the SPIN at the far end of the same model. Owns the `TUNING.drift`
+  knob group and the response-curve probe.
 - **`engine-system`** — adding/changing a gameplay system, engine-first.
+- **`crash`** — the car once it is PAST SAVING: the trip that puts it over,
+  the rollover itself, how much momentum a crash carries and what it may be
+  charged for, and a rolling body meeting solids. Owns `engine/game/roll.ts`,
+  `TUNING.air.roll`, the training ground's roll lane, and the two labs that
+  are the only honest way to judge any of it (`make crash`, `make roll`).
+  Load `collision` beside it for what a contact COSTS, and `drift-feel` for
+  the slide or the spin that got the car there.
 - **`collision`** — the car hitting things: contact model, crush and bent
   polygons, breaking parts, internal-system damage, the wreck, the solid
   trunks, the ground as a solid, the springs the body rides on, and the HUD

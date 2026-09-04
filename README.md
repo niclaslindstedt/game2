@@ -58,6 +58,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make sim`         | Headless balance sweep: bots drive stages, prints the pace / damage table (`--sweep` ranks the roster per stage archetype)                                                         |
 | `make drift`       | The drift lab: every corner the generator builds × every technique, tabled and drawn to `previews/drift-<car>.png`                                                                 |
 | `make roll`        | The roll lab: a car going over, drawn from behind to `previews/roll-<car>.png` — the pivot, the walk, and what the roll cost                                                       |
+| `make crash`       | The crash lab: ONE accident in sequence to `previews/crash-<scenario>.png` — the plan, the profile, and every sixth of a second with its physics numbers beside it                 |
 | `make verge`       | The verge lab: a car leaving the road, drawn from behind to `previews/verge-<car>.png` — the ground under every frame, from both readers, and what the crossing did to the body    |
 | `make heat`        | The whole grid down one road at once: what the rival crews do to each other, per difficulty                                                                                        |
 | `make record`      | Record a bot run to a run tape (`runs/*.jsonl`) — a whole drive as the controls that drove it                                                                                      |
