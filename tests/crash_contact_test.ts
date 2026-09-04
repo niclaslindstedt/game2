@@ -27,11 +27,14 @@ import {
   NEUTRAL_INPUT,
   TUNING,
   compileTrack,
+  bedNormal,
   crashEnergy,
   crashTurbulence,
   createGame,
   createRng,
   massSpread,
+  seatOn,
+  standingOn,
   step,
   updateSlip,
   type GameState,
@@ -203,5 +206,94 @@ describe("the ground, arriving at a body that is going over", () => {
       had = now;
       if (!state.car.rolling) break;
     }
+  });
+});
+
+// ── WHAT THE BODY IS STANDING ON ──────────────────────────────────────────
+//
+// A body going over turns about the corner of itself that is on the ground,
+// and which corner that is changes several times a turn. Two things are read
+// off it every step and they do not behave alike:
+//
+//   the ARM — how far the weight is above the patch — is the weight's own
+//   height over the plane, and no hand-over can move it: the box does not
+//   get taller because a different corner is holding it up. It is continuous
+//   by construction, which is the whole reason `seatSlopes` can be a central
+//   difference of it and gravity, the seat's own speed and a contact's
+//   reaction can all be resolved along one statement of the geometry;
+//
+//   the OFFSET — where the patch is in the ground plane, which is the arm
+//   the friction SPINS the body about — is read off the lowest point, and it
+//   switches. Measured over a turn it steps by most of a track width, four
+//   times per turn. That is a known fault and it is not fixed here; what is
+//   pinned below is the half that is sound, so that a change which quietly
+//   makes the ARM step too is caught by something.
+//
+// And WHICH is down is a third question again: four points near the plane is
+// not a face if they lie in a LINE.
+describe("the pivot the crash is read off", () => {
+  /** The most a reading moves between two attitudes a tenth of a degree
+   * apart, walked round a whole turn. A smooth quantity moves at its own
+   * gradient; one that switches shows the whole step. */
+  const walked = (bed: ReturnType<typeof bedNormal>, pitch: number) => {
+    const step = Math.PI / 1800;
+    let was = standingOn(0, pitch, bed);
+    let most = 0;
+    for (let tilt = step; tilt <= Math.PI * 2; tilt += step) {
+      const now = standingOn(tilt, pitch, bed);
+      most = Math.max(most, Math.abs(now.height - was.height));
+      was = now;
+    }
+    return most;
+  };
+
+  it("carries its ARM through every hand-over without a step in it", () => {
+    // A tenth of a degree of body roll cannot move the weight more than a
+    // few millimetres, on any ground and at any pitch. Measured, it moves
+    // 1.6 mm — its own gradient — where the patch offset beside it moves
+    // 0.88 m across the same hand-over.
+    for (const bed of [bedNormal(), bedNormal(0.3, 0.1), bedNormal(-0.45, 0.2)])
+      for (const pitch of [0, 0.2, 0.6, Math.PI / 2])
+        expect(walked(bed, pitch)).toBeLessThan(0.005);
+  });
+
+  it("...and the arm IS the weight's height over the plane", () => {
+    // Not a separate measurement of the same geometry — the lowest point of
+    // the box is on the plane by construction, so the weight's height above
+    // the patch and its height above the plane are one number. Anything that
+    // makes these two disagree has given the module a second account of
+    // which way a body falls.
+    for (const [tilt, pitch] of [
+      [0, 0],
+      [0.7, 0.2],
+      [Math.PI / 2, 0],
+      [Math.PI, 0.6],
+      [4.2, -0.3],
+    ])
+      expect(standingOn(tilt, pitch, bedNormal(0.3, 0.1)).height).toBeCloseTo(
+        seatOn(tilt, pitch, bedNormal(0.3, 0.1)),
+        9,
+      );
+  });
+
+  it("knows a FACE from an EDGE", () => {
+    // Four points near the plane is not enough on its own. A car up on one
+    // side has four — two wheels and the two sill corners over them — lying
+    // in a line two metres long and a hand's breadth wide, and counting
+    // alone called that a car lying flat on a face. Both ends of that were
+    // wrong: the settle handed back a car balanced on its edge as one that
+    // had come to rest, and the run then booked it overturned and took the
+    // crew to the last board for an attitude the roll had just called
+    // upright.
+    for (const deg of [45, 51, 57, 60]) {
+      const edge = standingOn((deg * Math.PI) / 180, 0);
+      expect(edge.flat).toBe(false);
+      // ...and it is an edge precisely because it reaches one way only.
+      expect(Math.min(edge.spanAcross, edge.spanAlong)).toBeLessThan(0.2);
+      expect(Math.max(edge.spanAcross, edge.spanAlong)).toBeGreaterThan(1);
+    }
+    // The faces themselves are unmoved: wheels, either flank, the roof.
+    for (const deg of [0, 90, 180, 270])
+      expect(standingOn((deg * Math.PI) / 180, 0).flat).toBe(true);
   });
 });
