@@ -26,7 +26,7 @@ import {
   type LampSurfaces,
 } from "./lamps.ts";
 import { flankX, sampleProfile, shade } from "./shell.ts";
-import type { CarBodySpec, Grille } from "./spec.ts";
+import type { CarBodySpec, Grille, Tailgate } from "./spec.ts";
 
 /** How far a lamp lens, a grille panel or a badge floats off the cap it is
  * laid on, m — enough to beat depth fighting at any camera distance. */
@@ -212,14 +212,37 @@ export function buildRear(
 
   if (r.lights) buildTailLights(s, r.lights, z);
 
-  if (r.plate) {
-    const p = r.plate;
-    b.box(0, p.y, z - PROUD, p.width + 0.03, p.height + 0.03, 0.012, trim);
-    b.box(0, p.y, z - PROUD * 1.8, p.width, p.height, 0.012, p.color ?? 0xd9d6cc);
-  }
-
   if (r.bumper) {
     buildBumper(part("bumperR"), spec, axles, r.bumper, z, -1, spec.colors.bumper ?? 0x23272e);
+  }
+
+  if (r.valance) {
+    // The step under the bumper. Like the nose's air dam it tucks INSIDE
+    // the bumper's face, so the bumper stays the car's longest point and
+    // the collision box keeps telling the truth.
+    const v = r.valance;
+    b.taperBox(
+      0,
+      v.y,
+      z - 0.06 + v.depth / 2,
+      v.span * 0.9,
+      v.span,
+      v.height,
+      v.depth,
+      v.color ?? trim,
+    );
+  }
+
+  if (r.lamps) {
+    // Reverse and fog, let into whatever is lowest at the back — the
+    // valance if there is one, the bumper otherwise. Laid on the cap they
+    // would be buried inside it, exactly as the nose's indicators are.
+    const face = r.valance
+      ? z - r.valance.depth + 0.09
+      : r.bumper
+        ? z - r.bumper.depth + 0.03
+        : z - PROUD * 1.6;
+    buildIndicators(s, r.lamps, face, -1);
   }
 
   if (r.exhaust) {
@@ -228,7 +251,96 @@ export function buildRear(
     b.box(e.x, e.y, z + 0.12, e.radius * 1.7, e.radius * 1.7, 0.24, 0x51565e);
   }
 
+  if (r.tailgate) buildTailgate(b, part("hatch"), spec, axles, r.tailgate, z);
+
+  if (r.plate) {
+    // Last, and clear of the tailgate's face: the plate hangs on the panel,
+    // so a panel that stands 16 mm proud of the cap would otherwise swallow
+    // a plate laid on the cap itself.
+    const p = r.plate;
+    const off = r.tailgate ? (r.tailgate.proud ?? 0.016) : 0;
+    b.box(0, p.y, z - off - PROUD, p.width + 0.03, p.height + 0.03, 0.012, trim);
+    b.box(0, p.y, z - off - PROUD * 1.8, p.width, p.height, 0.012, p.color ?? 0xd9d6cc);
+  }
+
   buildPanel(b, spec, part("hatch"), r.deck, "hatch");
+}
+
+/** The tailgate: a proud slab on the tail cap with a shut line run round
+ * it, a pressed swage across it and the grab recess under that.
+ *
+ * Built out of BOXES rather than the quads buildPanel uses, and that is
+ * deliberate twice over. A box cannot be wound inside out, which a hand
+ * placed quad on a face pointing away from the nose very easily is; and the
+ * back of the car is the one panel worth spending faces on, because it is
+ * the panel the player looks at for the whole stage while every other one
+ * is glimpsed at forty metres a second. */
+function buildTailgate(
+  shell: MeshBuilder,
+  panel: MeshBuilder,
+  spec: CarBodySpec,
+  axles: number[],
+  gate: Tailgate,
+  z: number,
+): void {
+  const paint = spec.colors.paint;
+  const seam = gate.seam ?? 0.022;
+  const proud = gate.proud ?? 0.016;
+  // The shut line reads as a shadow in the gap rather than as a painted
+  // outline, so it takes the same shade the panel skirts elsewhere do.
+  const line = shade(paint, 0.42);
+  // The panel is stacked in strips so it can FOLLOW the cap's own taper:
+  // the tail narrows toward the roof, and a single slab across the whole
+  // opening either stands proud of the corners at the top or falls short of
+  // them at the bottom.
+  const steps = 6;
+  const halfAt = (y: number): number => Math.max(0.06, flankX(spec, axles, z, y) - gate.inset);
+  const yAt = (i: number): number => gate.yFrom + ((gate.yTo - gate.yFrom) * i) / steps;
+
+  for (let i = 0; i < steps; i++) {
+    const y0 = yAt(i);
+    const y1 = yAt(i + 1);
+    const yc = (y0 + y1) / 2;
+    const h = y1 - y0;
+    const half = halfAt(yc);
+    // The groove first, wider and barely off the cap, then the panel over
+    // it: what is left showing round the edge IS the shut line.
+    shell.box(
+      0,
+      yc,
+      z - 0.005,
+      (half + seam) * 2,
+      h + (i === 0 || i === steps - 1 ? seam : 0),
+      0.01,
+      line,
+    );
+    shell.box(0, yc, z - proud / 2, half * 2, h, proud, paint);
+  }
+
+  if (gate.rib) {
+    const rib = gate.rib;
+    const half = halfAt(rib.y) - (rib.inset ?? 0.05);
+    shell.box(
+      0,
+      rib.y,
+      z - proud - (rib.proud ?? 0.014) / 2,
+      half * 2,
+      rib.height,
+      rib.proud ?? 0.014,
+      // A swage catches the light rather than being painted, and this body
+      // carries its shading baked in with nothing to catch — so the crease
+      // is drawn as the shadow it would throw, or it is not drawn at all.
+      rib.color ?? shade(paint, 0.82),
+    );
+  }
+
+  if (gate.handle) {
+    // A recess, so it is let INTO the panel: drawn just proud of the panel
+    // face in the shadow tone, which is what a hollow reads as on a body
+    // that carries its shading baked in and has no lights to cast one.
+    const g = gate.handle;
+    panel.box(0, g.y, z - proud - 0.004, g.width, g.height, 0.012, g.color ?? shade(paint, 0.3));
+  }
 }
 
 /** A bonnet or a boot lid: a proud slab following the deck's silhouette,

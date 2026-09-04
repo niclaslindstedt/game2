@@ -56,6 +56,11 @@ const VIEWS: View[] = [
     orbit: { az: 0.62, el: 0.26, dist: 1.55 },
     dirt: { dust: 0.85, mud: 0.6 },
   },
+  // Dead astern and clean: the tail is the panel the chase camera holds for
+  // a whole stage, so it is the one that has to survive being looked at
+  // square on — lamps, tailgate, valance and the wing's own line, none of
+  // which a three-quarter view tells the truth about.
+  { name: "rear", fov: 35, orbit: { az: Math.PI, el: 0.16, dist: 1.3 } },
   // Dead astern, because the back window is the one panel of the car the
   // player looks at for a whole stage — and because the fan a single wiper
   // cuts out of a caked screen is a SHAPE, which is only a shape from
@@ -97,13 +102,35 @@ const CREW_VIEWS: View[] = [
   { name: "game", fov: 64, game: { carYaw: 0.35 } },
 ];
 
-const CELL_W = 440;
-const CELL_H = 310;
+const DEFAULT_CELL = { w: 440, h: 310 };
+
+function byName(views: View[], name: string): View {
+  const view = views.find((v) => v.name === name);
+  if (!view) throw new Error(`unknown view: ${name} (have ${views.map((v) => v.name).join(", ")})`);
+  return view;
+}
 
 async function main(): Promise<void> {
   const res = await fetch("/variants.json");
-  const { cars, mode } = (await res.json()) as { cars: Variant[]; mode?: "crew" };
-  const views = mode === "crew" ? CREW_VIEWS : VIEWS;
+  const {
+    cars,
+    mode,
+    views: only,
+    cell,
+  } = (await res.json()) as {
+    cars: Variant[];
+    mode?: "crew";
+    views?: string[];
+    cell?: { w: number; h: number };
+  };
+  const CELL_W = cell?.w ?? DEFAULT_CELL.w;
+  const CELL_H = cell?.h ?? DEFAULT_CELL.h;
+  const all = mode === "crew" ? CREW_VIEWS : VIEWS;
+  // A narrowed sheet is not a nicety: eight columns of a whole catalog come
+  // back scaled to fit whatever is reading them, and a cell judged at a
+  // third of its size is a cell nobody judged. Naming the columns a change
+  // is about is what keeps them full size.
+  const views = only?.length ? only.map((n) => byName(all, n)) : all;
 
   const canvas = document.getElementById("stage") as HTMLCanvasElement;
   const width = CELL_W * views.length;

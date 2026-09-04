@@ -401,8 +401,11 @@ function buildCage(b: MeshBuilder, cabin: Cabin): void {
   tube(b, [-x, foot, hoopZ], hoopL, r, TRIM.cage);
   tube(b, [x, foot, hoopZ], hoopR, r, TRIM.cage);
   tube(b, hoopL, hoopR, r, TRIM.cage);
-  // A diagonal across the hoop — the brace every rally car carries.
+  // The X across the hoop. BOTH diagonals, because the hoop is framed dead
+  // square in the backlight from the chase camera and a single brace there
+  // does not read as the one a real car carries — it reads as half of one.
   tube(b, [-x, foot, hoopZ], [x, top - 0.06, hoopZ], r * 0.8, TRIM.cage);
+  tube(b, [x, foot, hoopZ], [-x, top - 0.06, hoopZ], r * 0.8, TRIM.cage);
   // The harness bar, across at shoulder height. Every rally car has one, and
   // it is placed here for exactly the height it sits at: a descending ray
   // through the backlight crosses that line between the bulkhead below it

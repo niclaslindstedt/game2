@@ -5,101 +5,186 @@
 // spin rate is legible at a glance from any angle, which is most of what
 // sells speed on a car this small on screen.
 //
+// The rim is BUILT, not painted. A flat disc of radial geometry on the
+// tire's sidewall is what a wheel looks like from exactly one angle — dead
+// side on — and from every other one it is a sticker: no lip standing proud
+// of the rubber, no dish behind it, no thickness to a spoke. So the rim
+// here is a lip ring proud of the sidewall, a barrel sunk in behind it, a
+// recessed hub, and spokes that are boxes bridging the two with sides you
+// can see. It costs geometry and it is the geometry worth spending: a wheel
+// is the one part of a car that is never still.
+//
 // Round parts come from THREE primitives through bakeShading, because
 // hand-winding circular geometry fails silently (faces are culled, not
-// flagged). The rim FACE is the exception: it is flat radial geometry in
-// the wheel's known y-z plane, so its winding is derived once here.
+// flagged).
 
 import * as THREE from "three";
 
-import { MeshBuilder, bakeShading, type V3 } from "./builder.ts";
+import { MeshBuilder, bakeShading } from "./builder.ts";
 import type { CarBodySpec, WheelStyle } from "./spec.ts";
 
 /** The rim, as fractions of the tire radius. */
-const RIM_OUTER = 0.75;
-const RIM_INNER = 0.57;
-const RIM_HUB = 0.2;
-const RIM_FACETS = 16;
+/** Outer edge of the rim flange — just inside the tire's own radius. */
+const RIM_OUTER = 0.86;
+/** Inner edge of that flange, and the radius of the barrel behind it. */
+const RIM_BARREL = 0.74;
+const RIM_FACETS = 18;
+/** The tire carries more, because its outline is a circle nothing ever
+ * covers up and a coarse one reads as a polygon at any speed. */
+const TIRE_FACETS = 26;
+/** How far the flange stands proud of the sidewall, and how deep the dish
+ * behind it runs, m. The step between them is the whole read of a rim. */
+const LIP_PROUD = 0.014;
+const DISH = 0.075;
+const TIRE = 0x181c22;
 
-/** Per-style rim geometry: how wide the spokes are, how many, and how far
- * the polished lip reaches. `steel` is a painted rim under a small hubcap
- * with a ring of bolt-head dimples; `split` is the wide four-spoke classic;
- * `alloy` is the multi-spoke the catalog started with. */
-const STYLES: Record<WheelStyle, { spokes: number; width: number; cap: number; bolts: boolean }> = {
-  alloy: { spokes: 6, width: 0.12, cap: RIM_HUB, bolts: false },
-  steel: { spokes: 0, width: 0, cap: 0.42, bolts: true },
-  split: { spokes: 4, width: 0.3, cap: 0.26, bolts: false },
+/** Per-style rim geometry: how many spokes, how broad, how deep the dish,
+ * and whether the studs show. `steel` is a plain rim under a big cap;
+ * `split` the wide four-spoke classic; `alloy` the multi-spoke. */
+const STYLES: Record<
+  WheelStyle,
+  { spokes: number; width: number; hub: number; dish: number; bolts: boolean }
+> = {
+  alloy: { spokes: 5, width: 0.24, hub: 0.26, dish: 1, bolts: true },
+  steel: { spokes: 0, width: 0, hub: 0.42, dish: 0.4, bolts: true },
+  split: { spokes: 4, width: 0.34, hub: 0.28, dish: 1.15, bolts: false },
 };
 
-/** One flat radial face of the rim, drawn in the wheel's y-z plane at ±x.
- * Angles run y = cos a, z = sin a; stepping OUTWARD in radius then FORWARD
- * in angle gives a +x normal, so `outward` −1 reverses the cycle. */
-function rimFace(
+/** A tube on the wheel's axis, in tire radii. THREE builds it in its own
+ * axis and this turns it onto the axle, so nothing here is hand-wound and
+ * nothing can come back inside out. */
+function tube(b: MeshBuilder, r: number, x0: number, x1: number, color: number): void {
+  b.absorb(
+    bakeShading(
+      new THREE.CylinderGeometry(r, r, Math.abs(x1 - x0), RIM_FACETS, 1, true)
+        .rotateZ(Math.PI / 2)
+        .translate((x0 + x1) / 2, 0, 0),
+      color,
+    ),
+  );
+}
+
+/** A flat ring facing along the axle. */
+function annulus(
   b: MeshBuilder,
+  inner: number,
+  outer: number,
   x: number,
   outward: number,
-  style: WheelStyle,
-  hub: number,
-  spokes: number,
+  color: number,
 ): void {
-  const s = { ...STYLES[style], spokes };
-  const pt = (r: number, a: number): V3 => [x, r * Math.cos(a), r * Math.sin(a)];
-  const quad = (
-    r0: number,
-    a0: number,
-    r1: number,
-    a1: number,
-    ao0: number,
-    ao1: number,
-    color: number,
-  ): void => {
-    const c = [pt(r0, a0), pt(r1, ao0), pt(r1, ao1), pt(r0, a1)];
-    if (outward > 0) b.quad(c[0], c[1], c[2], c[3], color);
-    else b.quad(c[3], c[2], c[1], c[0], color);
-  };
-  // The lip: a bright ring at the tire's shoulder on every style.
-  for (let i = 0; i < RIM_FACETS; i++) {
-    const a0 = (i / RIM_FACETS) * Math.PI * 2;
-    const a1 = ((i + 1) / RIM_FACETS) * Math.PI * 2;
-    quad(RIM_INNER, a0, RIM_OUTER, a1, a0, a1, hub);
-    // Centre cap, fanned from the axle.
-    const c = [pt(s.cap, a0), pt(s.cap, a1)];
-    if (outward > 0) b.tri([x, 0, 0], c[0], c[1], hub);
-    else b.tri([x, 0, 0], c[1], c[0], hub);
+  b.absorb(
+    bakeShading(
+      new THREE.RingGeometry(inner, outer, RIM_FACETS)
+        .rotateY((outward * Math.PI) / 2)
+        .translate(x, 0, 0),
+      color,
+    ),
+  );
+}
+
+/** A box laid radially and spun round the axle — a spoke, or a stud. */
+function radial(
+  b: MeshBuilder,
+  thick: number,
+  length: number,
+  width: number,
+  at: number,
+  x: number,
+  angle: number,
+  color: number,
+): void {
+  b.absorb(
+    bakeShading(
+      new THREE.BoxGeometry(thick, length, width)
+        .translate(0, at, 0)
+        .rotateX(angle)
+        .translate(x, 0, 0),
+      color,
+    ),
+  );
+}
+
+/** A hex colour scaled — the barrel and the dish floor are the same metal
+ * as the face, seen at an angle that never catches the light. */
+function shadeHex(color: number, k: number): number {
+  const r = Math.round(((color >> 16) & 0xff) * k);
+  const g = Math.round(((color >> 8) & 0xff) * k);
+  const b = Math.round((color & 0xff) * k);
+  return (r << 16) | (g << 8) | b;
+}
+
+/** One end of the rim: the flange proud of the sidewall, the barrel sunk
+ * behind it, and — outboard only — the dish floor, the hub, the spokes
+ * bridging them and the studs. The inboard end gets the flange and a plain
+ * wall, which is what the back of a wheel is, and saves drawing spokes
+ * nothing can ever see. */
+function rimFace(
+  b: MeshBuilder,
+  sidewall: number,
+  outward: number,
+  style: WheelStyle,
+  hubColor: number,
+  spokes: number,
+  spokeWidth: number | undefined,
+): void {
+  const s = { ...STYLES[style], spokes, width: spokeWidth ?? STYLES[style].width };
+  const barrel = shadeHex(hubColor, 0.6);
+  const x = (d: number): number => sidewall + outward * d;
+
+  // The rubber sidewall, from the flange out to the tread. The tire itself
+  // is an OPEN tube — it has to be, or its end cap seals the wheel shut and
+  // every recessed thing behind this point is drawn inside a solid drum —
+  // so this ring is what closes the gap between rim and tread.
+  annulus(b, RIM_OUTER, 1, x(0), outward, TIRE);
+
+  // The flange: a ring standing proud of the rubber with its face turned
+  // out. This edge is what says "rim" from every angle but dead side on.
+  tube(b, RIM_OUTER, x(0), x(LIP_PROUD), hubColor);
+  annulus(b, RIM_BARREL, RIM_OUTER, x(LIP_PROUD), outward, hubColor);
+
+  const floor = x(-DISH * s.dish);
+  tube(b, RIM_BARREL, x(LIP_PROUD), floor, barrel);
+
+  if (outward < 0) {
+    annulus(b, 0, RIM_BARREL, floor, outward, barrel);
+    return;
   }
 
-  // Straight-sided spokes: constant width, so the half-angle shrinks with
-  // radius. They stop at the lip, leaving the tire face as the void.
-  const w = s.width / 2;
+  // The floor of the dish. Without it the dish is a hole with the far
+  // sidewall showing through, which is what makes a rim read as a cut-out.
+  annulus(b, s.hub, RIM_BARREL, floor, outward, shadeHex(barrel, 0.75));
+
+  // Spokes: boxes from the hub out under the flange, standing off that
+  // floor so their SIDES show. A spoke with no side is a painted line.
+  const mid = (s.hub + RIM_BARREL) / 2;
+  const face = x(-DISH * s.dish + 0.042);
   for (let i = 0; i < s.spokes; i++) {
-    const a = (i / s.spokes) * Math.PI * 2;
-    const ai = w / Math.max(s.cap, RIM_HUB);
-    const ao = w / RIM_INNER;
-    quad(Math.max(s.cap, RIM_HUB), a - ai, RIM_INNER, a + ai, a - ao, a + ao, hub);
+    radial(
+      b,
+      0.05,
+      RIM_BARREL - s.hub + 0.05,
+      s.width,
+      mid,
+      face,
+      (i / s.spokes) * Math.PI * 2,
+      hubColor,
+    );
   }
 
-  // A steel wheel has no spokes to catch the eye, so its bolt circle is
-  // what makes the rotation readable.
+  // The hub, over the spoke roots, and the studs on it.
+  tube(b, s.hub, floor, x(-DISH * s.dish + 0.062), hubColor);
+  annulus(b, 0, s.hub, x(-DISH * s.dish + 0.062), outward, hubColor);
   if (s.bolts) {
-    const bolts = 4;
-    const r = s.cap * 0.62;
-    const dark = 0x2b3037;
-    for (let i = 0; i < bolts; i++) {
-      const a = (i / bolts) * Math.PI * 2 + Math.PI / 4;
-      const half = 0.035 / r;
-      quad(r * 0.72, a - half, r * 1.25, a + half, a - half * 0.6, a + half * 0.6, dark);
-    }
-    // The gap between cap and lip is painted rim, not a void.
-    for (let i = 0; i < RIM_FACETS; i++) {
-      const a0 = (i / RIM_FACETS) * Math.PI * 2;
-      const a1 = ((i + 1) / RIM_FACETS) * Math.PI * 2;
-      quad(s.cap, a0, RIM_INNER, a1, a0, a1, 0x3a4048);
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      radial(b, 0.02, 0.05, 0.05, s.hub * 0.55, x(-DISH * s.dish + 0.072), angle, 0x2b3037);
     }
   }
 }
 
-/** One wheel as a SINGLE geometry — tire, both rim faces and every tread
- * lug in one buffer. Axle along x; origin at the wheel center.
+/** One wheel as a SINGLE geometry — tire, both rim ends and every tread lug
+ * in one buffer. Axle along x; origin at the wheel center.
  *
  * The parts are welded rather than kept apart because nothing ever moves
  * one relative to another: a wheel spins as a unit. Split, a car spends ten
@@ -111,37 +196,64 @@ export function buildWheel(spec: CarBodySpec): THREE.BufferGeometry {
   const style = spec.wheelStyle ?? "alloy";
   const spokes = spec.wheelSpokes ?? STYLES[style].spokes;
 
-  // The rim faces are drawn in unit radius and scaled to the tire, so they
-  // are built in a builder of their own and poured into the wheel after.
+  // The rim is built in unit radius and scaled to the tire after, so the
+  // radii above stay readable as fractions. Only the RADIAL axes scale —
+  // the axial one must not, or the dish deepens with the tire.
   const rim = new MeshBuilder();
   for (const side of [1, -1]) {
-    rimFace(rim, side * (spec.wheelWidth / 2 + 0.005), side, style, hub, spokes);
+    rimFace(
+      rim,
+      side * (spec.wheelWidth / 2 - 0.012),
+      side,
+      style,
+      hub,
+      spokes,
+      spec.wheelSpokeWidth,
+    );
   }
   const rimGeo = rim.geometry();
   rimGeo.scale(1, r, r);
 
   const b = new MeshBuilder();
+  // Open-ended: the rim's dish is sunk INSIDE the tire's width, so a capped
+  // cylinder would draw a lid straight over the spokes. rimFace lays the
+  // sidewall ring back in.
   b.absorb(
     bakeShading(
-      new THREE.CylinderGeometry(r, r, spec.wheelWidth, RIM_FACETS).rotateZ(Math.PI / 2),
-      0x181c22,
+      new THREE.CylinderGeometry(r, r, spec.wheelWidth, TIRE_FACETS, 1, true).rotateZ(Math.PI / 2),
+      TIRE,
     ),
   );
   b.absorb(rimGeo);
 
-  // Tread lugs: blocks a shade lighter than the tire, riding the rolling
-  // surface so the tire itself visibly turns even seen dead from the side.
-  const lugs = 8;
-  for (let i = 0; i < lugs; i++) {
-    const angle = (i / lugs) * Math.PI * 2;
-    b.absorb(
-      bakeShading(
-        new THREE.BoxGeometry(spec.wheelWidth + 0.015, 0.05, 0.09)
-          .translate(0, r - 0.008, 0)
-          .rotateX(angle),
-        0x333a44,
-      ),
-    );
+  // The TREAD. Eight blocks spaced round the carcass cover about a third of
+  // it, and a third of a tire is not a tire — it reads as lumps of rubber
+  // stuck on a black wheel. A real block pattern nearly closes: the blocks
+  // take most of each pitch and the grooves between them are the gaps. Two
+  // rows, staggered half a pitch, so there is a pattern to see turning
+  // rather than a ring of identical teeth.
+  // The blocks are GROOVED INTO the carcass, not stood on top of it: their
+  // faces clear it by four millimetres, so the silhouette stays the circle
+  // the carcass already draws and the pattern reads as tread. Stood proud
+  // by any real amount they scallop the outline instead, and a tire with
+  // notches cut round its edge is a cog.
+  const blocks = 20;
+  const pitch = (Math.PI * 2) / blocks;
+  const rowW = spec.wheelWidth * 0.46;
+  const rowX = spec.wheelWidth * 0.25;
+  for (let row = 0; row < 2; row++) {
+    for (let i = 0; i < blocks; i++) {
+      const angle = i * pitch + (row ? pitch / 2 : 0);
+      b.absorb(
+        bakeShading(
+          new THREE.BoxGeometry(rowW, 0.035, r * pitch * 0.88)
+            .translate(0, r - 0.0135, 0)
+            .rotateX(angle)
+            .translate(row ? rowX : -rowX, 0, 0),
+          0x333a44,
+        ),
+      );
+    }
   }
   return b.geometry();
 }

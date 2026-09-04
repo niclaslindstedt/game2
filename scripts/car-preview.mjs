@@ -20,6 +20,10 @@
 //     # cabin with the glass off; `--crew blink,diesel` renders a subset
 //   ... car-preview.mjs --variants my-candidates.json --out candidates
 //     # candidates: { "cars": [{ "id": "...", "spec": { CarBodySpec } }] }
+//   ... car-preview.mjs --cars compact --views rear --cell 880x620
+//   ... car-preview.mjs --cars compact --views "game,rear,rear 3/4"
+//     # only those columns, at full size — an eight-column sheet read at
+//     # any width at all shrinks every cell past the point of judging one
 //   ... car-preview.mjs --skip-build
 //     # reuse the last harness bundle (fast spec-only iterations)
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -28,8 +32,12 @@ import { readFile } from "node:fs/promises";
 import { extname, join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
+import { aliasEngine } from "./lib/engine-alias.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+// The spec modules under pwa/src/game/ spell the engine `@engine`; plain
+// Node does not, so the alias goes in before the first import() of one.
+aliasEngine(root);
 const buildDir = join(root, "previews", ".car-preview");
 const outDir = join(root, "previews");
 mkdirSync(outDir, { recursive: true });
@@ -132,6 +140,17 @@ if (!has("skip-build") || !existsSync(join(buildDir, "car-preview.html"))) {
       rollupOptions: { input: join(root, "pwa", "car-preview.html") },
     },
   });
+}
+// Narrow the sheet to named columns — `--views "game,rear"` — so the cells
+// a change is about come back full size instead of scaled to fit.
+const viewList = value("views");
+if (viewList) variants.views = viewList.split(",").map((v) => v.trim());
+// `--cell 880x620` doubles a cell. A narrowed sheet at a bigger cell is how
+// one panel gets looked at properly rather than squinted at.
+const cellArg = value("cell");
+if (cellArg) {
+  const [w, h] = cellArg.split("x").map(Number);
+  variants.cell = { w, h };
 }
 writeFileSync(join(buildDir, "variants.json"), JSON.stringify(variants));
 
