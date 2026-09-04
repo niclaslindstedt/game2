@@ -52,6 +52,27 @@ const TRIP = { lift: 6.5, across: -26 };
  * a planted shot under `cockpit`) is the sheet failing loudly. */
 const SEATS = ["chase", "cockpit"] as const;
 
+/** ...and the two ACCIDENTS, which is the other axis of the sheet.
+ *
+ * A crash the driver never touches runs its course and the shot holds the
+ * frame for the beat the car is left lying in. A crash the driver CATCHES
+ * ends with somebody driving again, and the shot has a second job there: hand
+ * the frame back quickly and then stay off it (`camera-roll.ts`'s latch), so
+ * a car that is still fighting for grip is fought for from the player's own
+ * camera. That hand-back is a property of one frame beside the next, exactly
+ * like the plant, and a lab that only ever drove with the bot could not
+ * photograph half of what the module does.
+ *
+ * `catches` steers into the roll for as long as it lasts. Which way that is
+ * falls out of the trip: the body goes over toward the side the sideways
+ * speed carries it, so the lock that opposes it is the sign of `TRIP.across`.
+ * Nothing here decides whether the save works — the engine does, and a sheet
+ * whose CAUGHT row never comes back upright is the finding. */
+const RUNS = [
+  { id: "the trip", catches: false },
+  { id: "caught", catches: true },
+] as const;
+
 /** The sheet: tile size, and the columns it wraps at — one row per half of a
  * seat's roll, so a roll is read across and the seats down. */
 const TILE = { width: 320, height: 180, cols: 8 };
@@ -86,7 +107,7 @@ async function main(): Promise<void> {
   const forward = new THREE.Vector3();
   const toCar = new THREE.Vector3();
 
-  for (const view of SEATS) {
+  for (const { view, run } of SEATS.flatMap((view) => RUNS.map((run) => ({ view, run })))) {
     const game: GameState = createGame({
       seed: STAGE.seed,
       carId: STAGE.carId,
@@ -107,9 +128,18 @@ async function main(): Promise<void> {
      * is a picture of the CAMERA, but it can only be read against a picture
      * of the crash, and there was no crash in it. */
     const events: GameEvent[] = [];
+    /** WHO IS DRIVING THIS FRAME. The bot, until the body goes over and this
+     * is the run where somebody fights it — from there, full opposite lock
+     * for as long as the roll owns the car. The bot is left in charge of
+     * everything else so the run-in, the trip and the recovery afterwards are
+     * the same drive in both rows and only the accident differs. */
+    const hands = (): ReturnType<typeof botInput> =>
+      run.catches && game.car.rolling
+        ? { ...botInput(game), steer: Math.sign(TRIP.across), throttle: 0, brake: 0 }
+        : botInput(game);
     const drive = (): void => {
       events.length = 0;
-      for (let t = 0; t < ticks; t++) events.push(...step(game, botInput(game)));
+      for (let t = 0; t < ticks; t++) events.push(...step(game, hands()));
       if (events.length > 0) renderer.onEvents(game, events);
       renderer.render(game, FRAME);
     };
@@ -147,9 +177,12 @@ async function main(): Promise<void> {
         image: await createImageBitmap(canvas),
         label:
           f === 0
-            ? `${view}  the trip`
+            ? `${view}  ${run.id}`
             : `+${(f * FRAME).toFixed(2)}s  ${moved}  ${toCar.length().toFixed(0)}m off ${off}°${
-                game.car.rolling ? "  ROLLING" : ""
+                // WHICH OF THE THREE STATES the car is in, because the whole
+                // reading of the CAUGHT row is where it stops saying ROLLING
+                // and how long after that the lens is still out in the grass.
+                game.car.rolling ? "  ROLLING" : game.car.planted ? "  PLANTED" : "  ON TWO"
               }`,
         head: f === 0,
       });
