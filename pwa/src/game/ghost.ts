@@ -15,6 +15,16 @@
 // walks off the road a corner later. The pedals go through the same gate so
 // an analog throttle would be recorded as honestly as a key is.
 //
+// The other half of that bargain is the OPENING. A tape starts at step 0 of
+// the game, ceremony included, so the two runs advance in lockstep — which
+// means the replay has to sit through exactly the ceremony the run sat
+// through. A driver cutting the establishing shot short moves every corner
+// after it seconds up the tape, so the cut is written down as a step index
+// (`skips`) and taken again on that step, exactly as the run tape does it
+// (engine/sim/tape.ts). A run that had no countdown at all — god mode, a
+// placed link — records that too, so the replay's game is built the way the
+// run's was rather than the way the menu would build one now.
+//
 // Storage is one localStorage key per level — a driven stage costs about a
 // character a step, so the ladder's longest is some 60 kB, and reading one
 // ghost must not mean parsing all of them. Storage can be unavailable
@@ -50,7 +60,7 @@ const PEDAL_STEPS = 255;
  * wrong time is worse than no ghost at all. What step 0 MEANS counts as the
  * layout — a recording whose first step was a different moment of the start
  * control is out by the whole opening. */
-const GHOST_FORMAT = 4;
+const GHOST_FORMAT = 5;
 
 const KEY_PREFIX = "scandi-flick-ghost:";
 
@@ -97,6 +107,15 @@ export type GhostRun = GhostStage & {
    * once the ghost had got there too would be blank exactly when the run is
    * quick. */
   splits: number[];
+  /** Whether the run's game was built without a countdown at all — god mode,
+   * or a link that stood the run at a moment. The replay's game is built the
+   * same way or its lights run over the tape's first ten seconds of
+   * driving. */
+  skipCountdown: boolean;
+  /** The steps the driver cut the establishing shot on, in order. Normally
+   * one or none; a list because the tape writes down what happened rather
+   * than what is supposed to. */
+  skips: number[];
   /** Steps on the tape: the whole run, the start control included, so
    * replay and run advance in lockstep from the first step of the game.
    * Which is why `GHOST_FORMAT` moves when the start control does — step 0
@@ -166,21 +185,33 @@ function decodeStream(text: string, steps: number): Uint8Array {
   return out;
 }
 
+/** What was already decided about the run before its first step — the same
+ * shape of header the run tape keeps, and for the same reason: a replay is
+ * only the run again if it STARTS the way the run started. */
+export type GhostStart = {
+  skipCountdown: boolean;
+};
+
 export type GhostRecorder = {
   /** Write down the controls a step was driven on. Called with the input
    * the engine ACTUALLY received, never the one that produced it. */
   record: (input: CarInput) => void;
+  /** The driver cut the establishing shot on the step about to be recorded.
+   * Called where the run takes the cut — before that step, as the replay
+   * takes it. */
+  skipped: () => void;
   steps: () => number;
   /** Seal the tape into a run worth keeping. `splits` is the run's
    * `checkpointTimes` — what the next attempt is measured against. */
   seal: (stage: GhostStage, carId: string, time: number, splits: number[]) => GhostRun;
 };
 
-export function createGhostRecorder(): GhostRecorder {
+export function createGhostRecorder(start: GhostStart): GhostRecorder {
   const steer: number[] = [];
   const throttle: number[] = [];
   const brake: number[] = [];
   const flags: number[] = [];
+  const skips: number[] = [];
   return {
     record: (input) => {
       steer.push(Math.round(clamp(input.steer, -1, 1) * STEER_STEPS) + STEER_STEPS);
@@ -193,6 +224,9 @@ export function createGhostRecorder(): GhostRecorder {
           (input.reset ? FLAG_RESET : 0),
       );
     },
+    skipped: () => {
+      skips.push(steer.length);
+    },
     steps: () => steer.length,
     seal: (stage, carId, time, splits) => ({
       format: GHOST_FORMAT,
@@ -201,6 +235,8 @@ export function createGhostRecorder(): GhostRecorder {
       carId,
       time,
       splits: [...splits],
+      skipCountdown: start.skipCountdown,
+      skips: [...skips],
       steps: steer.length,
       steer: encodeStream(steer),
       throttle: encodeStream(throttle),
@@ -212,6 +248,9 @@ export function createGhostRecorder(): GhostRecorder {
 
 export type GhostTape = {
   steps: number;
+  /** Whether the run cut the establishing shot on this step. Asked BEFORE
+   * the step is taken, so the replay's cut lands where the run's did. */
+  skipsAt: (step: number) => boolean;
   /** The controls step `i` was driven on — neutral once the tape runs out,
    * which is the ghost sitting on the finish line it already crossed. The
    * returned object is REUSED: the engine spends an input within the step
@@ -226,8 +265,10 @@ export function readGhost(run: GhostRun): GhostTape {
   const brake = decodeStream(run.brake, steps);
   const flags = decodeStream(run.flags, steps);
   const input: CarInput = { ...NEUTRAL_INPUT };
+  const skips = new Set(run.skips);
   return {
     steps,
+    skipsAt: (step) => skips.has(step),
     at: (step) => {
       if (step < 0 || step >= steps) return Object.assign(input, NEUTRAL_INPUT);
       const bits = flags[step];
@@ -267,7 +308,7 @@ export function loadGhost(levelId: string): GhostRun | null {
     if (!Number.isFinite(run.steps) || run.steps <= 0) return null;
     if (typeof run.steer !== "string" || typeof run.flags !== "string") return null;
     if (typeof run.throttle !== "string" || typeof run.brake !== "string") return null;
-    if (!Array.isArray(run.splits)) return null;
+    if (!Array.isArray(run.splits) || !Array.isArray(run.skips)) return null;
     return run;
   } catch {
     return null;

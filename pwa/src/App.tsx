@@ -1028,6 +1028,13 @@ export function App() {
    * track, and nothing between them — the cars cannot touch, because
    * neither one is in the other's world. */
   const ghostRef = useRef<{ state: GameState; tape: GhostTape; at: number } | null>(null);
+  /** Whether the stage being driven HAS a ghost on file that still describes
+   * it. A best time is normally what decides whether a run is kept, but a
+   * stage with a time and no tape — a board carried over from a build whose
+   * tapes this one cannot read — would then keep no ghost until the day
+   * somebody beat their own record. Read at the line (see the finish
+   * handler); armed with the ghost. */
+  const ghostOnFileRef = useRef(false);
   /** THE RUN TAPE (game/run-tape.ts): the same controls the ghost writes
    * down, in a file something outside the browser can drive. Armed only by
    * the COLLECT RACE DATA switch, on every kind of run — including the ones
@@ -1415,9 +1422,15 @@ export function App() {
     splitsRef.current = { times: [], against: "" };
     setSplit(null);
     renderer?.setGhost(null);
+    ghostOnFileRef.current = false;
     if (!renderer || !trackRef.current || menuRef.current) return;
     if (!levelId || spec.length === "endless") return;
-    recorderRef.current = createGhostRecorder();
+    // The ceremony the run is about to sit through is part of the recording:
+    // a tape whose header said the lights ran would replay ten seconds of
+    // driving under a countdown that never happened.
+    recorderRef.current = createGhostRecorder({
+      skipCountdown: spec.skipCountdown || godRef.current,
+    });
     const stage: GhostStage = {
       seed: spec.seed,
       length: spec.length as FiniteStageLength,
@@ -1427,6 +1440,7 @@ export function App() {
     };
     const saved = loadGhost(levelId);
     if (!saved || !ghostMatches(saved, stage)) return;
+    ghostOnFileRef.current = true;
     // R28 — the splits to be measured against when there is no field out
     // there: your own best run. A campaign run has fourteen real cars on the
     // road and reads the LEADER's board instead (see the checkpoint handler),
@@ -1440,7 +1454,10 @@ export function App() {
       seed: spec.seed,
       carId: saved.carId,
       track: trackRef.current.track,
-      skipCountdown: spec.skipCountdown,
+      // The run's OWN opening, off the tape — not this attempt's. Step 0 has
+      // to mean the same moment in both games, and whether there was a
+      // countdown at all is the first thing that decides it.
+      skipCountdown: saved.skipCountdown,
       env: { timeOfDay: spec.timeOfDay, weather: spec.weather, season: spec.season },
     });
     ghostRef.current = { state, tape: readGhost(saved), at: 0 };
@@ -2129,12 +2146,17 @@ export function App() {
         // The field, on the same link: a heads-up race with nobody entered
         // is a Roam stage on a grid.
         armFieldRef.current(spec, mode);
-        // …and the run tape, if `?record=1` asked for one: a scripted pass
-        // that drives a stage is exactly the drive somebody wants the file
-        // for, and this path never reaches `startStage`. Never on a PLACED
-        // run: a tape of a run that was stood at its finish is a tape of
-        // nothing anybody drove.
-        if (!URL_PLACE.moment) armTapeRef.current(spec, mode);
+        // …and the ghost and the run tape. Neither on a PLACED run: a
+        // recording of a run that was stood at its finish is a recording of
+        // nothing anybody drove, and a ghost replaying from step 0 beside a
+        // car already at the line is a car parked on the start line. The
+        // ghost is otherwise the same one a player gets from the menu, so a
+        // `?mode=timetrial&level=…` link is the whole run rather than a
+        // lonelier one — and this path never reaches `startStage`.
+        if (!URL_PLACE.moment) {
+          armGhostRef.current(spec, mode, levelId);
+          armTapeRef.current(spec, mode);
+        }
         // The establishing shot is ten seconds of camera before a tooling
         // run has done anything, and every screenshot scene would sit
         // through it. A `?start=1` link therefore lands straight on the
@@ -2152,6 +2174,7 @@ export function App() {
           // it is. A tape whose header claimed the ceremony was never built
           // would replay ten seconds of camera the run did not sit through.
           tapeRef.current?.skipped();
+          recorderRef.current?.skipped();
         }
         // …and further along, if the link asked to be stood at a moment of
         // the run rather than at its start. The engine still owns the
@@ -2486,6 +2509,13 @@ export function App() {
               // read before the new time overwrites the old one. Recorded on
               // the campaign too: the board is shared, and a best set there
               // is the run a time trial has to beat.
+              //
+              // …or when there is no ghost on file for this stage at all,
+              // whatever the clock says. The two are stored separately and a
+              // time outlives a tape — a board carried over from a build
+              // whose tapes this one no longer reads leaves a stage with a
+              // record and nothing to race, and a rule that only kept a NEW
+              // best would leave it that way until the record fell.
               const beat = loadProgress().best[active.levelId];
               const spec = stageRef.current;
               const tape = recorderRef.current;
@@ -2493,7 +2523,7 @@ export function App() {
                 tape &&
                 spec &&
                 spec.length !== "endless" &&
-                (beat === undefined || ev.time < beat)
+                (beat === undefined || ev.time < beat || !ghostOnFileRef.current)
               ) {
                 saveGhost(
                   active.levelId,
@@ -3041,8 +3071,11 @@ export function App() {
             const jumped = skipIntro(state);
             if (running) advanceField(running, jumped);
             // Not an input, but it moves the whole field's clock, so a replay
-            // that missed it would race a stagger nobody drove.
+            // that missed it would race a stagger nobody drove — and it moves
+            // every corner of the ghost's own tape seconds earlier, so the
+            // ghost's has to carry it too.
             if (!tapeEndRef.current) tapeRef.current?.skipped();
+            recorderRef.current?.skipped();
           }
           const events = step(state, driven);
           if (events.length > 0) handleEvents(state, events);
@@ -3059,6 +3092,11 @@ export function App() {
           if (!tapeEndRef.current) tapeRef.current?.record(driven, state);
           const ghost = ghostRef.current;
           if (ghost) {
+            // …including the driver's own cut, taken on the step it was taken
+            // on and before that step, exactly as the run took it. Without it
+            // the ghost sits out an establishing shot the run walked out of
+            // and spends the first seconds of the tape parked on the line.
+            if (ghost.tape.skipsAt(ghost.at)) skipIntro(ghost.state);
             const ghostEvents = step(ghost.state, ghost.tape.at(ghost.at++));
             if (ghostEvents.length > 0) renderer.onGhostEvents(ghost.state, ghostEvents);
           }

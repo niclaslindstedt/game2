@@ -15,7 +15,15 @@
 
 import { describe, expect, it } from "vitest";
 
-import { TUNING, botInput, compileStage, createGame, step, type CarInput } from "@engine";
+import {
+  TUNING,
+  botInput,
+  compileStage,
+  createGame,
+  skipIntro,
+  step,
+  type CarInput,
+} from "@engine";
 
 import {
   createGhostRecorder,
@@ -63,7 +71,7 @@ describe("ghost tape", () => {
   it("replays a whole stage onto the same road, step for step", () => {
     const track = compileStage(STAGE.seed, STAGE.length, STAGE.knobs);
     const game = createGame({ seed: STAGE.seed, carId: "compact", track });
-    const recorder = createGhostRecorder();
+    const recorder = createGhostRecorder({ skipCountdown: false });
     /** The driven line, sampled a second apart — a digest that says WHERE a
      * divergence started rather than only that one happened. */
     const line: number[] = [];
@@ -109,7 +117,7 @@ describe("ghost tape", () => {
   it("keeps a stage's worth of controls inside a storage budget", () => {
     const track = compileStage(STAGE.seed, STAGE.length, STAGE.knobs);
     const game = createGame({ seed: STAGE.seed, carId: "compact", track });
-    const recorder = createGhostRecorder();
+    const recorder = createGhostRecorder({ skipCountdown: false });
     for (let i = 0; i < PATIENCE / TUNING.dt; i++) {
       const input = throughTheWheel(botInput(game));
       recorder.record(input);
@@ -128,7 +136,7 @@ describe("ghost tape", () => {
   });
 
   it("holds every control across the codec, held or changing every step", () => {
-    const recorder = createGhostRecorder();
+    const recorder = createGhostRecorder({ skipCountdown: false });
     const driven: CarInput[] = [];
     for (let i = 0; i < 900; i++) {
       const input: CarInput = {
@@ -152,8 +160,58 @@ describe("ghost tape", () => {
     }
   });
 
+  it("replays the driver's own cut of the establishing shot", () => {
+    // THE OPENING IS PART OF THE TAPE. A tape runs from step 0 of the game,
+    // ceremony included, so a driver who presses on and cuts the shot short
+    // moves every corner of the run seconds up the tape. A replay that sat
+    // through the whole shot would then spend the tape's first seconds parked
+    // on the line and drive the rest of it a corner behind — which is a ghost
+    // standing in the starting block, not a lap.
+    const track = compileStage(STAGE.seed, STAGE.length, STAGE.knobs);
+    const game = createGame({ seed: STAGE.seed, carId: "compact", track });
+    expect(game.phase).toBe("intro");
+    const recorder = createGhostRecorder({ skipCountdown: false });
+    /** The step the driver presses on — a beat into the shot, as anybody
+     * impatient enough to skip one is. */
+    const CUT = 60;
+    const line: number[] = [];
+    let time: number | null = null;
+    for (let i = 0; i < PATIENCE / TUNING.dt && time === null; i++) {
+      // Taken BEFORE the step and before the input is written down, exactly
+      // where the app takes it, so the recorded step index is the step the
+      // replay has to take it on.
+      if (i === CUT) {
+        skipIntro(game);
+        recorder.skipped();
+      }
+      const input = throughTheWheel(botInput(game));
+      recorder.record(input);
+      for (const ev of step(game, input)) if (ev.type === "finish") time = ev.time;
+      if (i % 120 === 0) line.push(game.car.x, game.car.z, game.car.heading);
+    }
+    expect(time).not.toBeNull();
+
+    const run = recorder.seal(STAGE, "compact", time as number, game.checkpointTimes);
+    expect(run.skips).toEqual([CUT]);
+    expect(run.skipCountdown).toBe(false);
+    const tape = readGhost(run);
+    expect(tape.skipsAt(CUT)).toBe(true);
+    expect(tape.skipsAt(CUT - 1)).toBe(false);
+
+    const replay = createGame({ seed: STAGE.seed, carId: "compact", track });
+    const replayLine: number[] = [];
+    let replayTime: number | null = null;
+    for (let i = 0; i < tape.steps; i++) {
+      if (tape.skipsAt(i)) skipIntro(replay);
+      for (const ev of step(replay, tape.at(i))) if (ev.type === "finish") replayTime = ev.time;
+      if (i % 120 === 0) replayLine.push(replay.car.x, replay.car.z, replay.car.heading);
+    }
+    expect(replayLine).toEqual(line);
+    expect(replayTime).toBe(time);
+  });
+
   it("refuses a run recorded on a stage that is no longer this one", () => {
-    const run = createGhostRecorder().seal(STAGE, "compact", 30, []);
+    const run = createGhostRecorder({ skipCountdown: false }).seal(STAGE, "compact", 30, []);
     expect(ghostMatches(run, STAGE)).toBe(true);
     expect(ghostMatches(run, { ...STAGE, seed: STAGE.seed + 1 })).toBe(false);
     expect(ghostMatches(run, { ...STAGE, length: "long" })).toBe(false);
