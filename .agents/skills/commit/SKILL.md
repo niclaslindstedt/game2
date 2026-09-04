@@ -35,8 +35,8 @@ style revert`; breaking changes use `!` or a `BREAKING CHANGE:` footer.
   sits done and unmergeable until somebody notices. If a PR is already open
   for the branch, the push updates it and there is nothing more to do.
 - **RUN THE TESTS FOR WHAT YOU WROTE. LET CI RUN THE REST.** The whole suite
-  is over a thousand cases and takes ten minutes serially; CI shards it across
-  three runners and runs it on every push whatever you do here. Running it
+  is over a thousand cases and takes thirteen minutes serially; CI shards it
+  across ten runners and runs it on every push whatever you do here. Running it
   locally first spends that time twice and delays the PR by the length of the
   slower copy. So before the commit, run the files that cover the change and
   the ones it plausibly reaches — `npx vitest run tests/<topic>_test.ts …` —

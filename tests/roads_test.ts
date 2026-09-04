@@ -17,7 +17,6 @@ import {
   compileStage,
   corridorOffset,
   createLandField,
-  createTerrain,
   crossOffset,
   endApron,
   handoverAt,
@@ -33,6 +32,8 @@ import {
   wearAt,
   type TrackSample,
 } from "@engine";
+
+import { stageTerrain, stageTrack } from "./support/stages.ts";
 
 const WIDTH = knobScale(DEFAULT_KNOBS.width, R.roadWidth);
 const HALF = WIDTH / 2;
@@ -203,8 +204,8 @@ describe("the road's cross-section (R16)", () => {
     // drawn ground lattice, so the road mesh's outermost vertices and the
     // tile mesh's nearest ones agree and there is nothing to hide.
     for (const seed of [1, 4, 7]) {
-      const track = compileStage(seed, "medium");
-      const terrain = createTerrain(track);
+      const track = stageTrack(seed, "medium");
+      const terrain = stageTerrain(track);
       const gaps: number[] = [];
       for (let i = 0; i < track.samples.length; i += 13) {
         const s = track.samples[i];
@@ -298,7 +299,7 @@ describe("junctions (R17)", () => {
     spur: NonNullable<ReturnType<typeof compileStage>["spurs"][number]>;
   } {
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt });
+      const track = stageTrack(seed, "medium", { asphalt });
       // A public ROAD's arm: a railway's is ballast (R41), and what a car
       // finds under it out there is that block's own question.
       const spur = track.spurs.find((s) => !s.rail);
@@ -323,7 +324,7 @@ describe("junctions (R17)", () => {
 
   it("changes surface only at a corner, and puts a junction there", () => {
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const track = stageTrack(seed, "medium", { asphalt: 0.4 });
       let changes = 0;
       let crossed = 0;
       let runOuts = 0;
@@ -378,7 +379,7 @@ describe("junctions (R17)", () => {
 
   it("sends the branch off along the road the route turned onto, not a fork of its own", () => {
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const track = stageTrack(seed, "medium", { asphalt: 0.4 });
       // Both lists are built in the same order (`buildForks`), so filtering
       // the crossings out of both keeps the pairing — a crossing's two arms
       // leave along the road rather than along the corner the route turned
@@ -403,7 +404,7 @@ describe("junctions (R17)", () => {
 
   it("runs every branch off the map, or to whatever stopped it", () => {
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const track = stageTrack(seed, "medium", { asphalt: 0.4 });
       const land = createLandField(seed, track.knobs);
       for (const spur of track.spurs) {
         const end = spur.samples[spur.samples.length - 1];
@@ -438,7 +439,7 @@ describe("junctions (R17)", () => {
 
   it("R23 — keeps every branch off the stage it left, and off its start", () => {
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const track = stageTrack(seed, "medium", { asphalt: 0.4 });
       const keepOut = roadClearance(track.width);
       const first = track.samples[0];
       /** Distance from a point to the apron the start stands on (R24). */
@@ -506,7 +507,7 @@ describe("junctions (R17)", () => {
     const STRIDE = 8;
     const SLACK = 9;
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const track = stageTrack(seed, "medium", { asphalt: 0.4 });
       const keepOut = roadClearance(track.width);
       const bench = Math.max(track.width / 2 + ROAD_CROSS.reach, R.verge.bench);
       const route = track.samples.filter((_, i) => i % STRIDE === 0);
@@ -540,7 +541,7 @@ describe("junctions (R17)", () => {
 
   it("puts the junction ON the road, at a corner tight enough to be one", () => {
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const track = stageTrack(seed, "medium", { asphalt: 0.4 });
       for (const junction of junctionsOf(track)) {
         // The meeting point sits on the route's own centerline — not out
         // at the intersection of two tangents, which on a sweeping corner
@@ -582,7 +583,7 @@ describe("junctions (R17)", () => {
 
   it("opens the dirt road into a mouth that is widest at the tarmac", () => {
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt: 0.5 });
+      const track = stageTrack(seed, "medium", { asphalt: 0.5 });
       // Junctions only: a crossing has no mouth, and R36 says why — a mouth
       // closes the wedge two roads meeting at an ANGLE leave between them,
       // and square there is no wedge.
@@ -637,7 +638,7 @@ describe("junctions (R17)", () => {
 
   it("stops the dirt road AT the tarmac instead of running it underneath", () => {
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt: 0.5 });
+      const track = stageTrack(seed, "medium", { asphalt: 0.5 });
       // Junctions only: at a CROSSING the through road is BOTH arms and
       // none of the route, so "everything on the through road's side" has
       // no side to be on. `tests/crossing_test.ts` walks the two arms.
@@ -677,7 +678,7 @@ describe("junctions (R17)", () => {
 
   it("gives an exploring car tarmac grip on a branch", () => {
     const { track, spur } = firstBranch(0.5);
-    const terrain = createTerrain(track);
+    const terrain = stageTerrain(track);
     const on = spur.samples[Math.floor(spur.samples.length / 3)];
     expect(terrain.spurSurfaceAt(on.x, on.z)).toBe(on.surface);
     // Well off it, the wild is the wild again.
@@ -729,7 +730,7 @@ describe("junctions (R17)", () => {
     let placed = 0;
     let branches = 0;
     for (const seed of seeds) {
-      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const track = stageTrack(seed, "medium", { asphalt: 0.4 });
       const half = track.width / 2;
       for (const spur of track.spurs) {
         branches += 1;
@@ -785,7 +786,7 @@ describe("junctions (R17)", () => {
 // renderer welds onto the ribbon — rather than inferred from the rules.
 describe("the drawn ends of the road (R24, R25)", () => {
   it("a sprint carries a level dirt run-up behind the gate and a run-off past the line", () => {
-    const track = compileStage(3, "medium");
+    const track = stageTrack(3, "medium");
     const n = Math.round(R.startZone.apron / track.step);
     const first = track.samples[0];
     const last = track.samples[track.samples.length - 1];
@@ -813,7 +814,7 @@ describe("the drawn ends of the road (R24, R25)", () => {
 
   it("a circuit draws none: the road either side of its line is the lap", () => {
     for (const seed of [1, 4]) {
-      const track = compileStage(seed, "medium", {}, "circuit");
+      const track = stageTrack(seed, "medium", {}, "circuit");
       expect(track.circuit).toBe(true);
       expect(endApron(track, "start")).toEqual([]);
       expect(endApron(track, "finish")).toEqual([]);
@@ -841,8 +842,8 @@ describe("one ground under the car and the picture of it", () => {
   }
 
   it("banks the ground beside a corner the way it banks the road", () => {
-    const track = compileStage(3, "medium");
-    const terrain = createTerrain(track);
+    const track = stageTrack(3, "medium");
+    const terrain = stageTerrain(track);
     const { sample: s } = bankedSample(track);
     expect(Math.abs(s.bank ?? 0)).toBeGreaterThan(0.02);
     // A point the same distance out on each side of the road. The bank
@@ -861,8 +862,8 @@ describe("one ground under the car and the picture of it", () => {
   });
 
   it("hands the car the drawn ribbon on both sides of a banked corner", () => {
-    const track = compileStage(3, "medium");
-    const terrain = createTerrain(track);
+    const track = stageTrack(3, "medium");
+    const terrain = stageTerrain(track);
     const { sample: s } = bankedSample(track);
     const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
     for (const lateral of [-track.width / 2 - 2, track.width / 2 + 2]) {
@@ -873,8 +874,8 @@ describe("one ground under the car and the picture of it", () => {
   });
 
   it("carries the road's own ground out to the verge, with no step off the mat", () => {
-    const track = compileStage(3, "medium");
-    const terrain = createTerrain(track);
+    const track = stageTrack(3, "medium");
+    const terrain = stageTerrain(track);
     const { sample: s, index } = bankedSample(track);
     const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
     const half = track.width / 2;
@@ -926,7 +927,7 @@ describe("locating the car against the centerline", () => {
     let checked = 0;
     for (const seed of [1, 4, 17, 42]) {
       for (const shape of ["sprint", "circuit"] as const) {
-        const track = compileStage(seed, "medium", {}, shape);
+        const track = stageTrack(seed, "medium", {}, shape);
         const n = track.samples.length;
         // Probes on the road, out on the verge and far into the country —
         // each asked with a hint a step behind the car, one a long way up
@@ -963,7 +964,7 @@ describe("locating the car against the centerline", () => {
     // places where that was a drop or a lift of more than three metres, the
     // worst of them thirty-two.
     for (const seed of [1, 4, 17, 42]) {
-      const track = compileStage(seed, "medium");
+      const track = stageTrack(seed, "medium");
       const n = track.samples.length;
       for (let i = 0; i < n; i += 3) {
         const s = track.samples[i];

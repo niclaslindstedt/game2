@@ -1,23 +1,28 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// Generator invariants: every R-rule from engine/mapgen/rules.ts is asserted
-// here across a spread of seeds — determinism, bounds, braking zones,
-// same-direction caps, feature placement, self-intersection, the length
-// bands, the pacenote book, the ford dips, and the endless stream.
+// Generator invariants: the R-rules from engine/mapgen/rules.ts that govern
+// the ROUTE a stage draws, asserted across a spread of seeds — determinism,
+// braking zones, same-direction caps, feature placement, self-intersection,
+// the pacenote book, the ford dips, and the endless stream.
+//
+// Two groups of rules are files of their own, because they are the only ones
+// that cannot answer from this file's corpus and are most of what the suite
+// spends: the length bands and the world bounds (`mapgen_bands_test.ts`) and
+// the stage dials (`mapgen_dials_test.ts`).
 import { describe, expect, it } from "vitest";
 
 import {
   STAGE_RULES as R,
   builtTerrain,
   compileStage,
-  compileTrack,
   createTerrain,
   generateStage,
   roadClearance,
   straightPart,
-  type FiniteStageLength,
   type Track,
   type TurnSeverity,
 } from "@engine";
+
+import { stagePlans, stageTrack } from "./support/stages.ts";
 
 const SEEDS = Array.from({ length: 24 }, (_, i) => i * 37 + 1);
 const SEVERITY_RANK: Record<TurnSeverity, number> = { soft: 0, medium: 1, hard: 2 };
@@ -37,7 +42,7 @@ describe("stage generator", () => {
 
   it("R1/R2 — opens and closes with a featureless straight", () => {
     for (const seed of SEEDS) {
-      const plans = generateStage(seed);
+      const plans = stagePlans(seed);
       const first = plans[0];
       const last = plans[plans.length - 1];
       expect(first.kind).toBe("straight");
@@ -51,7 +56,7 @@ describe("stage generator", () => {
 
   it("R3 — turns stay inside their severity vocabulary", () => {
     for (const seed of SEEDS) {
-      for (const plan of generateStage(seed)) {
+      for (const plan of stagePlans(seed)) {
         if (plan.kind !== "turn") continue;
         // R3 governs the corners the rally DRAWS. A borrowed public road's
         // bends are the road's own (R17) — tracked, not drawn, and as wide
@@ -74,7 +79,7 @@ describe("stage generator", () => {
       // the dearest thing the generator does.
       for (const shape of ["sprint", "circuit"] as const) {
         if (shape === "circuit" && seed % 3 !== 1) continue;
-        const plans = generateStage(seed, "medium", {}, shape);
+        const plans = stagePlans(seed, "medium", {}, shape);
         let run = 0;
         let worst = 0;
         for (const plan of plans) {
@@ -102,7 +107,7 @@ describe("stage generator", () => {
 
   it("R4 — every hard turn follows a straight", () => {
     for (const seed of SEEDS) {
-      const plans = generateStage(seed);
+      const plans = stagePlans(seed);
       for (let i = 0; i < plans.length; i++) {
         if (plans[i].kind === "turn" && plans[i].severity === "hard") {
           expect(i).toBeGreaterThan(0);
@@ -119,7 +124,7 @@ describe("stage generator", () => {
       let dir = 0;
       let run = 0;
       let angle = 0;
-      for (const plan of generateStage(seed)) {
+      for (const plan of stagePlans(seed)) {
         // R5/R17 — a BORROWED segment resets the run, exactly as
         // `search.ts`'s `trackRun` treats it. The cap is on how many
         // corners in a row the RALLY may turn the same way; the pieces of a
@@ -148,7 +153,7 @@ describe("stage generator", () => {
 
   it("R6 — jumps sit on long straights with run-up and landing room", () => {
     for (const seed of SEEDS) {
-      for (const plan of generateStage(seed)) {
+      for (const plan of stagePlans(seed)) {
         if (plan.feature !== "jump") continue;
         expect(plan.kind).toBe("straight");
         expect(plan.length).toBeGreaterThanOrEqual(R.jump.minStraight);
@@ -160,153 +165,13 @@ describe("stage generator", () => {
 
   it("R7/R13 — crossings sit on straights, clear of the ends by their own margin", () => {
     for (const seed of SEEDS) {
-      for (const plan of generateStage(seed)) {
+      for (const plan of stagePlans(seed)) {
         if (plan.feature !== "water") continue;
         expect(plan.kind).toBe("straight");
         // A ford needs its dip's aprons; a deck needs its level run-on.
         const margin = plan.crossing === "ford" ? R.water.apron : R.bridge.margin;
         expect(plan.featureStart ?? 0).toBeGreaterThanOrEqual(margin);
         expect(plan.length - (plan.featureEnd ?? 0)).toBeGreaterThanOrEqual(margin);
-      }
-    }
-  });
-
-  it("R13 — the span decides the architecture: wade it, plank it, or pour it", () => {
-    let fords = 0;
-    let culverts = 0;
-    let timber = 0;
-    let concrete = 0;
-    for (const seed of SEEDS) {
-      for (const plan of generateStage(seed, "long", { water: 0.85 })) {
-        if (plan.feature !== "water") continue;
-        const span = (plan.featureEnd ?? 0) - (plan.featureStart ?? 0);
-        if (plan.crossing === "ford") {
-          fords += 1;
-          expect(span).toBeLessThanOrEqual(R.water.fordMax);
-        } else if (plan.crossing === "culvert") {
-          // R12 — a stream the road could not dip to goes under it; the
-          // crossing occupies the pipe's own span of road.
-          culverts += 1;
-          expect(span).toBeCloseTo(R.water.culvert.span, 5);
-        } else if (plan.crossing === "timber") {
-          timber += 1;
-          expect(span).toBeGreaterThan(R.water.fordMax);
-          expect(span).toBeLessThanOrEqual(R.bridge.timberMax);
-        } else {
-          concrete += 1;
-          expect(span).toBeGreaterThan(R.bridge.timberMax);
-        }
-      }
-    }
-    // A wet stage band has to actually produce all four, or the rule is
-    // only theory.
-    expect(fords).toBeGreaterThan(0);
-    expect(culverts).toBeGreaterThan(0);
-    expect(timber).toBeGreaterThan(0);
-    expect(concrete).toBeGreaterThan(0);
-    // Twenty-four LONG stages at the wet end of the dial, which is a good
-    // way over the file's own 30 s: it passed on an idle machine and timed
-    // out beside the rest of the file, which is a coin toss and not a test.
-  }, 90_000);
-
-  // Twenty-four LONG stages, sixteen of them with the public roads laid
-  // across the country first (R17) and a borrow solved against them. This is
-  // the heaviest test in the file by a distance — 50 s against the file-wide
-  // 30 s allowance in `vitest.config.ts` — and it is the ONE case here with a
-  // timeout of its own. It WIDENS the allowance and never narrows it: a case
-  // that narrows it has decided how busy a CI runner is allowed to be, which
-  // is the thing the file-wide number exists to stop. Everything else in this
-  // file still runs on the shared 30 s, so the cost of this one case is not
-  // paid by the rest.
-  //
-  // It is measuring a statistical claim, so it needs the seeds: eight is
-  // what makes "the dial buys some, and more buys no less" a fact about the
-  // generator rather than about seed 1.
-  //
-  // R15/R17 — the asphalt dial asks for tarmac; the COUNTRY decides how
-  // much of it the rally can actually have.
-  //
-  // It used to be a promise: the paving field sealed stretches of the
-  // racing line with probability `asphalt`, so the share came out on the
-  // dial to a couple of points. What made that cheap is what made it wrong
-  // — the tarmac was a stripe painted on the rally's own road, so there was
-  // always exactly as much of it as was asked for.
-  //
-  // Now the sealed stretches are pieces of real public roads laid on the
-  // bare land before the route is drawn (`highway.ts`), and the only way to
-  // spend a metre of the dial is to be driving on one. So the dial is a
-  // TARGET the search spends against, and three things bound it: whether
-  // the land carries a road at all, whether the route comes within reach of
-  // one, and how far it can run along it before R9 puts it out of the world
-  // — a bounded map cannot hold four kilometres of straight public road.
-  // What is left to assert is the shape of the response, not its value.
-  it("R15 — the asphalt dial buys tarmac, and the country bounds how much", () => {
-    const share = (asphalt: number): number => {
-      let paved = 0;
-      let total = 0;
-      for (const seed of SEEDS.slice(0, 8)) {
-        const track = compileStage(seed, "long", { asphalt });
-        paved += track.samples.filter((s) => s.surface === "asphalt").length;
-        total += track.samples.length;
-      }
-      return paved / total;
-    };
-    // Under the floor the country carries no public road, so the rally has
-    // nothing to borrow and the stage is gravel end to end. This half of
-    // the contract is exact, and it is the half that matters: a stage with
-    // no tarmac asked for has none.
-    expect(share(0)).toBe(0);
-    // Past it the dial buys some, up to the ceiling the country sets, which
-    // is where it stops. The ceiling is R38's: a public road runs straight
-    // for two or three hundred metres at a time between its bends, the
-    // rally may not sit on a straight that long, so a borrow ends where the
-    // road stops bending rather than where the dial stops asking. What is
-    // asserted is therefore that the dial buys tarmac at all past its
-    // floor, and never a value at the top.
-    //
-    // A LUMPY statistic, and the bars are set with that in mind: of these
-    // eight stages two or three borrow a real stretch (4-7% of their
-    // length) and the rest carry a junction's platform or nothing, so the
-    // share is decided by which seeds happen to reach a road. Measured at
-    // 2.35% (both dials) with the crests drawn from the fold, and 1.55% at
-    // 0.1 against 1.24% at 0.25 with them drawn as whalebacks — a different
-    // two seeds borrowing, and one of them borrowing less when asked for
-    // more, because the dial is a target the search spends against and the
-    // search draws a different plan for it.
-    expect(share(0.1)).toBeGreaterThan(0.01);
-    expect(share(0.25)).toBeGreaterThanOrEqual(share(0.1) * 0.7);
-    // ...and longer again since R23's height clause: a hilly seed's search
-    // backtracks several times as often for the fold-backs it refuses.
-  }, 150_000);
-
-  it("the dials are deterministic, and different dials build different stages", () => {
-    const dials = { elevation: 0.8, water: 0.2, trees: 0.9, asphalt: 0.4 };
-    expect(compileStage(7, "medium", dials).samples).toEqual(
-      compileStage(7, "medium", dials).samples,
-    );
-    expect(compileStage(7, "medium", dials).samples).not.toEqual(
-      compileStage(7, "medium", { ...dials, elevation: 0.1 }).samples,
-    );
-  });
-
-  it("the elevation dial is the road's own relief", () => {
-    const swing = (elevation: number): number => {
-      const ys = compileStage(4, "medium", { elevation }).samples.map((s) => s.elevation);
-      return Math.max(...ys) - Math.min(...ys);
-    };
-    expect(swing(0)).toBeLessThan(swing(0.5));
-    expect(swing(0.5)).toBeLessThan(swing(1));
-  });
-
-  it("R9 — the centerline stays inside each length's world bounds", () => {
-    for (const length of ["short", "medium", "long"] as FiniteStageLength[]) {
-      const bound = R.stageLengths[length].worldBound;
-      for (const seed of SEEDS.slice(0, 6)) {
-        const track = compileStage(seed, length);
-        expect(track.bounds.minX).toBeGreaterThanOrEqual(-bound);
-        expect(track.bounds.maxX).toBeLessThanOrEqual(bound);
-        expect(track.bounds.minZ).toBeGreaterThanOrEqual(-bound);
-        expect(track.bounds.maxZ).toBeLessThanOrEqual(bound);
       }
     }
   });
@@ -321,7 +186,7 @@ describe("stage generator", () => {
     // out) and asserted once.
     const violations: string[] = [];
     for (const seed of SEEDS) {
-      const track = compileTrack(seed);
+      const track = stageTrack(seed);
       const min2 = (roadClearance(track.width) - 7) ** 2;
       const pts = track.samples;
       for (let i = 0; i < pts.length; i += 3) {
@@ -341,73 +206,9 @@ describe("stage generator", () => {
     expect(violations).toEqual([]);
   });
 
-  // Two minutes because R17 lays the country's tarmac before the route and
-  // the search then has to plan around it, and R23's height clause refuses
-  // every fold-back the terrain could not build — a hilly seed's search
-  // backtracks several times as often for it — and this walks thirty-two
-  // stages, eight of them on the longest band.
-  it("R24 — nothing comes back into the start, on any length", () => {
-    const violations: string[] = [];
-    for (const length of ["short", "medium", "long", "xlong"] as FiniteStageLength[]) {
-      for (const seed of SEEDS.slice(0, 8)) {
-        const track = compileStage(seed, length);
-        const clear = roadClearance(track.width) - 7;
-        const first = track.samples[0];
-        const last = track.samples[track.samples.length - 1];
-        // The zone is the grid, the apron of dirt behind it, and the road's
-        // clearance around both. Measured from the start's own axis, since
-        // that is the line the apron is laid along.
-        const toStart = (x: number, z: number): number => {
-          const along = -(
-            (x - first.x) * Math.sin(first.heading) +
-            (z - first.z) * Math.cos(first.heading)
-          );
-          const lateral =
-            (x - first.x) * Math.cos(first.heading) - (z - first.z) * Math.sin(first.heading);
-          return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - R.startZone.apron));
-        };
-        for (const sample of track.samples) {
-          if (sample.s < R.startZone.fromArc) continue;
-          if (toStart(sample.x, sample.z) < clear) {
-            violations.push(
-              `${length} seed ${seed}: s=${sample.s.toFixed(0)} is ` +
-                `${toStart(sample.x, sample.z).toFixed(1)} m from the start`,
-            );
-          }
-        }
-        // ...and the finish's run-off is held to it too: the apron past the
-        // flying finish is drawn road with a shelf under it, so a stage
-        // that closes across its own start leaves that road in the air.
-        for (let past = 0; past <= R.startZone.apron; past += 6) {
-          const x = last.x + Math.sin(last.heading) * past;
-          const z = last.z + Math.cos(last.heading) * past;
-          if (toStart(x, z) < clear) {
-            violations.push(`${length} seed ${seed}: the run-off lands in the start zone`);
-          }
-        }
-      }
-    }
-    expect(violations).toEqual([]);
-  }, 120000);
-
-  it("R11 — every finite length lands in its band", () => {
-    for (const length of ["short", "medium", "long", "xlong"] as FiniteStageLength[]) {
-      const band = R.stageLengths[length].band;
-      for (const seed of SEEDS.slice(0, 4)) {
-        const track = compileStage(seed, length);
-        // R11 measures the RACED stage: the road up to the finish gate.
-        // R22's run-out past it is not part of the band.
-        const raced = track.finishS ?? track.length;
-        expect(raced).toBeGreaterThanOrEqual(band.min - R.closingStraight);
-        expect(raced).toBeLessThanOrEqual(band.max + R.closingStraight);
-        expect(track.length).toBeCloseTo(raced + R.runOut, 3);
-      }
-    }
-  }, 60000);
-
   it("compiles continuous, finite samples with a jump lip per jump segment", () => {
     for (const seed of SEEDS.slice(0, 6)) {
-      const track = compileTrack(seed);
+      const track = stageTrack(seed);
       let prev = track.samples[0];
       for (const sample of track.samples) {
         expect(Number.isFinite(sample.x)).toBe(true);
@@ -428,7 +229,7 @@ describe("stage generator", () => {
 describe("pacenotes", () => {
   it("covers every turn segment with a matching call", () => {
     for (const seed of SEEDS.slice(0, 8)) {
-      const track = compileTrack(seed);
+      const track = stageTrack(seed);
       let s = 0;
       for (const plan of track.segments) {
         // A bend R38 counts as straight run (a borrowed road's, gentler than
@@ -450,7 +251,7 @@ describe("pacenotes", () => {
 
   it("merges contiguous same-direction turns into one call", () => {
     for (const seed of SEEDS.slice(0, 8)) {
-      const track = compileTrack(seed);
+      const track = stageTrack(seed);
       for (let i = 1; i < track.pacenotes.length; i++) {
         const prev = track.pacenotes[i - 1];
         const next = track.pacenotes[i];
@@ -463,7 +264,7 @@ describe("pacenotes", () => {
   });
 
   it("notes carry the summed turn angle", () => {
-    const track = compileTrack(SEEDS[0]);
+    const track = stageTrack(SEEDS[0]);
     for (const note of track.pacenotes) {
       expect(note.angle).toBeGreaterThan(0);
       expect(note.endS).toBeGreaterThan(note.s);
@@ -474,7 +275,7 @@ describe("pacenotes", () => {
 describe("ford dips (R12)", () => {
   it("water lies flat, below every approach within the apron", () => {
     for (const seed of SEEDS.slice(0, 10)) {
-      const track = compileTrack(seed);
+      const track = stageTrack(seed);
       const samples = track.samples;
       for (let i = 0; i < samples.length; i++) {
         if (samples[i].surface !== "water") continue;
