@@ -406,6 +406,16 @@ function pivotKeep(tilt: number): { keep: number; gap: number; sprung: boolean }
   return { keep: Math.max(0, Math.min(1, keep)), gap: next - low, sprung: arriving[2] };
 }
 
+/** THE BED THE BODY IS LYING ON, rad — the ground's own tilt across the
+ * car, which is the attitude every rest face of the outline is measured
+ * from. A car at rest on a hillside lies on the hillside. It is the same
+ * angle `car.ts` settles a car's springs onto (`camber`), read from the
+ * same place, and stated once here because the roll and the landing that
+ * starts one both have to agree about it. */
+export function rollBed(slopeLat: number | undefined): number {
+  return slopeLat ? Math.atan(slopeLat) : 0;
+}
+
 /** THE CAR IS GOING OVER. Books the roll and says so once — everything
  * about how far it then goes is the stepping below. */
 export function beginRoll(car: CarState, events: GameEvent[], stats: RunStats): void {
@@ -445,6 +455,7 @@ function contact(
   spec: CarSpec,
   car: CarState,
   descent: number,
+  lie: number,
   rng: Rng,
   events: GameEvent[],
   stats: RunStats,
@@ -480,12 +491,81 @@ function contact(
   // charged a full sliding stop off the whole normal impulse: a car
   // carrying 37 km/h into the second turn of a roll came out of it at
   // 3 km/h, on its wheels, in one step, having touched nothing at all.
+  //
+  // ...AND WHAT THE GROUND MEETS IS THE CORNER, not the car. A body
+  // grinding along is carried sideways by `walk` — the origin translating
+  // as the body pivots over the corner it is standing on, `hullStand` per
+  // radian — and that is exactly the sweep the rotation puts under it, so
+  // the patch of a GRINDING car moves at `car.w` and the friction there is
+  // right to oppose the plain travel. That is the grind below, unchanged.
+  //
+  // A body ARRIVING OUT OF A FLIGHT has had no walk. It was turning about
+  // its own centre of mass with nothing under it, so the corner that
+  // reaches the ground is sweeping across the car at `rollRate × the
+  // centre's height` on top of whatever the car itself is doing, and THAT
+  // is the speed the ground has to arrest. Every contact with a descent in
+  // it is one of these — the grounded face-crossings arrive with zero and
+  // fall straight through this.
+  //
+  // Reading the plain travel there instead is why a roll's direction was a
+  // property of the TRIP that started it and of nothing afterwards. A fast
+  // roll is mostly flight, so these arrivals are the only say the ground
+  // ever gets; a car that has swapped ends mid-roll is sliding the other
+  // way across itself, and the blow has to read that and check the roll
+  // rather than leave it running. A body still going over the way it left
+  // the lip while its travel says the opposite is the one attitude a
+  // falling car cannot hold.
   const drag = pivot.sprung ? 1 - R.sprung : 1;
+  const budget = shellGrip(rollTilt(car.roll)) * descent * drag;
+  // WHAT IT TAKES OUT OF THE TRAVEL: one impulse, opposing the way the car
+  // is going, and never more than the car has. This half may only ever
+  // slow the body down — a normal impulse cannot hand a car speed — and
+  // that is not a detail. Sizing it off the CORNER's sweep instead pushes
+  // a stopped car sideways whenever it happens to be rocking, the grind
+  // turns that back into roll, and a carry that had come to a complete
+  // halt at 2.5s sat rocking on its sill until 6: three and a half seconds
+  // of `0KM/H DOWN ROLLING`, plain to see in the lab's frames.
   const speed = Math.hypot(car.u, car.w);
   if (speed > 0) {
-    const rub = Math.min(speed, shellGrip(rollTilt(car.roll)) * descent * drag);
+    const rub = Math.min(speed, budget);
     car.u -= (car.u / speed) * rub;
     car.w -= (car.w / speed) * rub;
+  }
+  // ...AND WHICH WAY IT TURNS THE BODY, which is a different question with
+  // a different answer, because the ground meets the CORNER and not the
+  // car.
+  //
+  // A body grinding along is carried sideways by `walk` — the origin
+  // translating as the body pivots over the corner it stands on,
+  // `hullStand` per radian — and that is exactly the sweep the rotation
+  // puts under it, so a grinding car's corner moves at `car.w` and the
+  // travel is the whole story. A body ARRIVING OUT OF A FLIGHT has had no
+  // walk: it was turning about its own centre of mass with nothing under
+  // it, so the corner reaching the ground is sweeping across the car at
+  // `rollRate × the centre's height` on top of whatever the car is doing.
+  // THAT is what the ground has to arrest, and which way it is going is
+  // which way the blow turns the body.
+  //
+  // Reading the plain travel here is why a roll's direction was a property
+  // of the TRIP that started it and of nothing after. A fast roll is mostly
+  // flight, so these arrivals are the only say the ground ever gets; a car
+  // that has swapped ends mid-roll is sliding the other way across itself,
+  // and the blow has to read that and check the roll rather than leave it
+  // running. A body still going over the way it left the lip while its
+  // travel says the opposite is the one attitude a falling car cannot hold.
+  //
+  // Capped at the impulse that brings the corner to a common speed with
+  // the ground: friction stops a slip, it does not drive one the other
+  // way, and without the cap the torque goes on adding roll after the
+  // sliding that paid for it has ended — energy made out of a car the
+  // ground is supposed to be stopping. The divisor is the effective mass
+  // at the corner, `1 + lever² / inertia`.
+  const lever = centreHeight(lie);
+  const sweep = car.w + car.rollRate * lever;
+  if (sweep !== 0) {
+    const stop = Math.abs(sweep) / (1 + (lever * lever) / R.inertia);
+    const turn = Math.min(budget, stop);
+    car.rollRate -= (Math.sign(sweep) * turn * lever) / R.inertia;
   }
   updateSlip(car);
   if (Math.abs(before) < R.slamAt && descent <= 0) return;
@@ -551,6 +631,7 @@ export function landRolled(
   spec: CarSpec,
   car: CarState,
   groundY: number,
+  bed: number,
   rng: Rng,
   events: GameEvent[],
   stats: RunStats,
@@ -568,7 +649,7 @@ export function landRolled(
   // gets, because it is in the air for the rest of every turn.
   const descent = Math.max(0, -car.vy);
   car.vy = 0;
-  contact(spec, car, descent, rng, events, stats);
+  contact(spec, car, descent, rollTilt(car.roll) - bed, rng, events, stats);
 }
 
 /** ONE STEP OF A CAR GOING OVER.
@@ -612,7 +693,7 @@ export function stepRolling(
   // upside down for eleven metres without once threatening to go over.
   // Against the bed it is a body a quarter of the way up the corner, and
   // the hill finishes what it started.
-  const bed = ctx.slopeLat ? Math.atan(ctx.slopeLat) : 0;
+  const bed = rollBed(ctx.slopeLat);
   const lie = tilt - bed;
   // Where the weight in the car is, over the ground it is over. Carried in
   // `car.y` (the origin) between steps, which is what the rest of the game
@@ -697,7 +778,7 @@ export function stepRolling(
   // flat at every quarter turn, so a roll that has crossed one has just put
   // a side down and the far end of it has met the ground.
   if (down && Math.floor(before / QUARTER) !== Math.floor(car.roll / QUARTER)) {
-    contact(spec, car, 0, ctx.rng, events, stats);
+    contact(spec, car, 0, lie, ctx.rng, events, stats);
   }
 
   // THE OTHER TWO AXES, which is most of what makes a roll look like an
@@ -831,7 +912,7 @@ export function stepRolling(
       car.vy = slope * car.rollRate;
       car.airborne = false;
       car.airTime = 0;
-      contact(spec, car, descent, ctx.rng, events, stats);
+      contact(spec, car, descent, rollTilt(car.roll) - bed, ctx.rng, events, stats);
     }
   }
   // Back into the origin the rest of the game reads the car's height from.

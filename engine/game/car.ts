@@ -36,7 +36,7 @@ import {
   wheelSpeed,
   type GroundUnder,
 } from "./ground.ts";
-import { beginRoll, goesOver, landRolled, onItsWheels, rollStand } from "./roll.ts";
+import { beginRoll, goesOver, landRolled, onItsWheels, rollBed, rollStand } from "./roll.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { Surface } from "../mapgen/index.ts";
 
@@ -1721,7 +1721,7 @@ export function stepAirborne(
   if (car.y <= meets && (car.rolling || !onItsWheels(car.roll))) {
     // Nothing for the tyres to do: it is a corner of the body arriving,
     // and the roll that put it there carries on from the contact.
-    landRolled(spec, car, groundNow, ctx.rng, events, stats);
+    landRolled(spec, car, groundNow, rollBed(ctx.slopeLat), ctx.rng, events, stats);
     return;
   }
   if (car.y <= meets) {
