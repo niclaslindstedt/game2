@@ -24,8 +24,10 @@ import { createLandField, type LandField } from "./land.ts";
 import { roadClearance } from "./road.ts";
 import {
   STAGE_RULES as R,
+  challengeMul,
   circuitLapBand,
   knobScale,
+  roadWidthOf,
   type FiniteStageLength,
   type SegmentPlan,
   type StageKnobs,
@@ -251,7 +253,7 @@ function tryCircuit(
   // does. What it does NOT get is R24: closing onto its own start line is
   // the whole shape of a circuit, and the closure lies along the start's
   // apron rather than across it.
-  const field = createPointField(roadClearance(knobScale(knobs.width, R.roadWidth)));
+  const field = createPointField(roadClearance(roadWidthOf(knobs)));
   /** R35 — a ring is drawn round the water like any other road. */
   const keepsDry = (p: Cursor): boolean => !land.nearWater(p.x, p.z, routeClear);
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
@@ -338,10 +340,20 @@ function tryCircuit(
       // a straight at all, exactly as it does on a sprint.
       const straightLeft = R.straightRun.max - straightRunAt(plans);
       const kind: "straight" | "turn" =
-        straightLeft < R.straightShort.min || rng.chance(R.turnChance) ? "turn" : "straight";
+        straightLeft < R.straightShort.min ||
+        // R46 — how much of the ring bends is the difficulty dial's.
+        rng.chance(R.turnChance * challengeMul(knobs.challenge, R.challenge.turns))
+          ? "turn"
+          : "straight";
       let plan: SegmentPlan;
       if (kind === "turn") {
-        plan = drawTurn(rng, plans[plans.length - 1].kind === "straight", forcedDir, sameDirRun);
+        plan = drawTurn(
+          rng,
+          knobs,
+          plans[plans.length - 1].kind === "straight",
+          forcedDir,
+          sameDirRun,
+        );
       } else {
         const straight = Math.min(straightLength(rng), straightLeft);
         plan = {

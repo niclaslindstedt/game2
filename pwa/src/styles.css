@@ -4442,6 +4442,56 @@ a.menu-version:focus-visible {
   width: 2.1rem;
 }
 
+/* R46's DIFFICULTY: the one FADER on the page, across the whole column
+   above the two of dials. It is the same row as every other — the name
+   behind its mark, the value between two arrows — with the fixed widths
+   taken off, because what a fader wants is TRAVEL: a track cut to a
+   two-column card is 60 px on a phone, which is a control nobody can place
+   a thumb on. The name gets its full word here as well, which the narrow
+   columns cannot give a word this long. */
+.roam-diff {
+  flex: 0 0 auto;
+}
+
+.roam-diff .knob {
+  min-height: 3.1rem;
+  padding-left: 0.55rem;
+}
+
+/* The name takes the width of its own word and no more: everything else on
+   the row is TRACK, which is the whole reason this row is not in a column.
+   Left to share the row (`.knob-label` is `flex: 1`) it ate two thirds of a
+   phone's width and left the slider 60 px to drag across. */
+.roam-diff .knob-label {
+  flex: 0 1 auto;
+}
+
+.roam-diff .knob-ctl {
+  flex: 1;
+  min-width: 0;
+}
+
+.roam-diff .knob-fade {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  /* The READING comes before the track. A word at the far end of a filling
+     bar reads as a label for the end it is standing at — "this way to
+     SAVAGE" — when what it says is where the thumb is NOW; beside the
+     name, it is the value of the setting, which is what every other row on
+     this page puts there. */
+  flex-direction: row-reverse;
+}
+
+.roam-diff .knob-read {
+  min-width: 4.6em;
+  text-align: left;
+}
+
+.roam-diff .knob-arrow {
+  width: 2.1rem;
+}
+
 .roam-knobs .knob-label {
   font-size: clamp(0.6rem, 2vmin, 0.76rem);
   letter-spacing: 0.08em;
@@ -5061,11 +5111,12 @@ a.menu-version:focus-visible {
   white-space: nowrap;
 }
 
-/* A VALUE THAT IS ITSELF A PRESS — Roam's seed, which rolls a new one. It
-   is drawn as the reading it is and lights up like a control only under the
-   pointer, so the row still reads as a row of settings rather than as a row
-   with a button hidden in the middle of it. */
-.knob-roll {
+/* A VALUE THAT IS TYPED INTO — Roam's seed. It is drawn as the reading it
+   is and shows a box only under the pointer or the caret, so the row still
+   reads as a row of settings rather than as a form dropped into the middle
+   of one. Tabular figures, so stepping through seeds does not shuffle the
+   arrows either side of them. */
+.knob-field {
   /* The three font longhands rather than the `font` shorthand: `font:
      inherit` would also reset the size to the row's, throwing away the
      value's own clamp two rules above. */
@@ -5073,19 +5124,42 @@ a.menu-version:focus-visible {
   font-weight: inherit;
   font-style: inherit;
   color: inherit;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
   border: 2px solid transparent;
   border-radius: 0.4rem;
-  padding: 0.05rem 0.4rem;
+  padding: 0.05rem 0.3rem;
   background: transparent;
-  cursor: pointer;
+  cursor: text;
   text-shadow: none;
   font-variant-numeric: tabular-nums;
 }
 
-.knob-roll:hover,
-.knob-roll:focus-visible {
-  border-color: rgb(255 210 62 / 55%);
+/* A touch screen has no hover to find a control with, so the box is always
+   drawn — faintly, in the plate's own ink rather than in the gold, so it
+   says "type here" without competing with the value inside it. */
+.knob-field {
+  border-color: rgb(255 255 255 / 20%);
+}
+
+.knob-field:hover {
+  border-color: rgb(255 210 62 / 45%);
+}
+
+.knob-field:focus {
+  outline: none;
+  border-color: rgb(255 210 62 / 75%);
   background: rgb(255 210 62 / 16%);
+}
+
+/* ...and the DIE past the arrows, for a seed nobody has driven. Drawn as a
+   third arrow because that is what it is — one more way to another road —
+   and marked rather than lettered, so it costs the row no width it would
+   have to take off the name. */
+.knob-die .menu-glyph {
+  width: 1.15em;
+  height: 1.15em;
 }
 
 .knob-pips {

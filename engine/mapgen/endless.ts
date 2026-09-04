@@ -16,7 +16,7 @@
 import { angleDiff } from "../lib/math.ts";
 import { createRng } from "../lib/prng.ts";
 import { STAGE_RULES as R, type SegmentPlan, type StageKnobs } from "./rules.ts";
-import { knobScale, resolveKnobs } from "./rules.ts";
+import { challengeMul, knobScale, resolveKnobs, roadWidthOf } from "./rules.ts";
 import { createLandField } from "./land.ts";
 import { roadClearance } from "./road.ts";
 import {
@@ -71,7 +71,7 @@ export type StageStream = {
 export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): StageStream {
   const dials = resolveKnobs(knobs);
   const rng = createRng(seed);
-  const clear = roadClearance(knobScale(dials.width, R.roadWidth));
+  const clear = roadClearance(roadWidthOf(dials));
   const field = createPointField(clear);
   // R35 — the same water the finite search steers round. An endless run
   // meets more of the country than any stage does, so it meets more of the
@@ -169,11 +169,16 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
       }
       const straightLeft = R.straightRun.max - run;
       const kind: "straight" | "turn" =
-        straightLeft < R.straightShort.min || rng.chance(R.turnChance) ? "turn" : "straight";
+        straightLeft < R.straightShort.min ||
+        // R46 — how much of the road bends is the difficulty dial's.
+        rng.chance(R.turnChance * challengeMul(dials.challenge, R.challenge.turns))
+          ? "turn"
+          : "straight";
       let plan: SegmentPlan;
       if (kind === "turn") {
         plan = drawTurn(
           rng,
+          dials,
           plans[plans.length - 1].plan.kind === "straight",
           forcedDir,
           sameDirRun,

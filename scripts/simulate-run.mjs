@@ -46,6 +46,7 @@ const {
   DIFFICULTY_IDS,
   rivalField,
   skillPoints,
+  NUMERIC_KNOBS,
 } = await import(join(root, "engine/index.ts"));
 
 const args = process.argv.slice(2);
@@ -60,7 +61,7 @@ const cars = flag("car") ? [flag("car")] : CARS.map((c) => c.id);
 const weather = flag("weather") ?? "clear";
 // The generator's dials — anything not passed keeps its default position.
 const knobs = {};
-for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepness"]) {
+for (const dial of NUMERIC_KNOBS) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }

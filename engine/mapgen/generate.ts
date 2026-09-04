@@ -20,7 +20,7 @@ import {
   type StageKnobs,
   type StageShape,
 } from "./rules.ts";
-import { knobScale, resolveKnobs } from "./rules.ts";
+import { challengeMul, knobScale, resolveKnobs, roadWidthOf } from "./rules.ts";
 import { generateCircuit } from "./circuit.ts";
 import { createLandField, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
@@ -123,7 +123,7 @@ export function layStageHighways(
   length: FiniteStageLength,
 ): Highway[] {
   const bound = R.stageLengths[length].worldBound;
-  const width = knobScale(knobs.width, R.roadWidth);
+  const width = roadWidthOf(knobs);
   const roads = layHighways(seed, knobs, land, bound, width);
   // R41 — and the railway, after the roads so it keeps off them.
   return [...roads, ...layRailways(seed, knobs, land, bound, width, roads)];
@@ -144,7 +144,7 @@ function tryGenerateStage(
   const plans: SegmentPlan[] = [];
   // R23 — the whole search is measured in the road's own clearance, which
   // is what the width dial makes of it.
-  const width = knobScale(knobs.width, R.roadWidth);
+  const width = roadWidthOf(knobs);
   const clear = roadClearance(width);
   const shelfEnd = width / 2 + ROAD_CROSS.reach;
   const field = createPointField(clear, shelfEnd);
@@ -905,7 +905,12 @@ function tryGenerateStage(
         spec.worldBound - Math.max(R.boundMargin.min, spec.worldBound * R.boundMargin.frac);
       const out = Math.abs(cursor.x) > margin || Math.abs(cursor.z) > margin;
       let forcedDir: 1 | -1 | 0 = 0;
-      let kind: "straight" | "turn" = rng.chance(R.turnChance) ? "turn" : "straight";
+      // R46 — how much of the stage bends at all is the difficulty dial's.
+      let kind: "straight" | "turn" = rng.chance(
+        R.turnChance * challengeMul(knobs.challenge, R.challenge.turns),
+      )
+        ? "turn"
+        : "straight";
       // R38 — the road the route has already covered without a corner in
       // it. What is left of the cap is what a straight drawn here may be,
       // and where there is not enough left for the shortest one in the
@@ -932,6 +937,7 @@ function tryGenerateStage(
         const first = plans.length === 1;
         plan = drawTurn(
           rng,
+          knobs,
           prevWasStraight,
           forcedDir,
           sameDirRun,

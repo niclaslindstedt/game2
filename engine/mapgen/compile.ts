@@ -16,7 +16,7 @@ import type {
   StageShape,
   TurnSeverity,
 } from "./rules.ts";
-import { SAMPLE_STEP, STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.ts";
+import { SAMPLE_STEP, STAGE_RULES as R, resolveKnobs, roadWidthOf } from "./rules.ts";
 import { generateStage, layStageHighways } from "./generate.ts";
 import { createStageStream, type StageStream } from "./endless.ts";
 import { straightPart } from "./search.ts";
@@ -3283,7 +3283,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     samples: [],
     step: SAMPLE_STEP,
     length: 0,
-    width: knobScale(knobs.width, R.roadWidth),
+    width: roadWidthOf(knobs),
     bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
     pacenotes: [],
     checkpoints: [],

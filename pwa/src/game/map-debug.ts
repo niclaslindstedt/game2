@@ -15,12 +15,11 @@
 // Nothing here touches the DOM, so the same rows can be read off a
 // screenshot, copied as text, or asserted on in a headless pass.
 
-import type { Track } from "@engine";
+import { NUMERIC_KNOBS, type Track } from "@engine";
 
 import type { MapPose } from "./camera.ts";
 import { stageParams, type DebugBox, type DebugStage } from "./debug-info.ts";
 import type { MapLayerId, MapLayerInfo } from "./map-layers.ts";
-import { STAGE_DIALS } from "./menu.tsx";
 
 const m = (v: number): string => v.toFixed(1);
 const deg = (rad: number): string => `${(((rad * 180) / Math.PI) % 360).toFixed(1)}°`;
@@ -57,7 +56,7 @@ function stageBox(stage: DebugStage, track: Track, build: string): DebugBox {
   // read off a screenshot must not depend on guessing which is which.
   const dials = [
     stage.knobs.biome,
-    ...STAGE_DIALS.map((d) => `${d.key} ${stage.knobs[d.key].toFixed(2)}`),
+    ...NUMERIC_KNOBS.map((key) => `${key} ${stage.knobs[key].toFixed(2)}`),
   ].join(" · ");
   return {
     title: "STAGE",

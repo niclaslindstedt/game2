@@ -54,7 +54,7 @@
 import { smooth, valueNoise } from "../lib/noise.ts";
 import { createRng } from "../lib/prng.ts";
 import { biomeRules } from "./biomes.ts";
-import { STAGE_RULES as R, knobScale, type StageKnobs } from "./rules.ts";
+import { STAGE_RULES as R, knobScale, reliefOf, type StageKnobs } from "./rules.ts";
 
 /** The water table: ground below this stands under open water — the lakes
  * and the sea. It is where the groundwater surfaces at the map's own base
@@ -149,7 +149,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   // beside the road here, exactly as they reach the road itself. A dry
   // country has no ponds to dial: its water knob still reaches the route
   // (R35's setbacks) and nothing else.
-  const relief = knobScale(knobs.elevation, R.elevation.knob) * L.relief;
+  const relief = reliefOf(knobs) * L.relief;
   const ponds = B.water ? knobScale(knobs.water, R.wet.ponds) : 0;
   // R34 — the one number that says which country this is, drawn from the
   // seed inside the band the `steepness` dial opens. The dial moves the

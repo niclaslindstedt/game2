@@ -241,10 +241,18 @@ export function raceLaps(race: RaceSettings): number {
   return race.shape === "circuit" && race.length !== "endless" ? STAGE_RULES.circuit.laps : 1;
 }
 
-/** The dials, as the menu offers them: three positions each, because a
- * slider on a phone during a pre-race screen is a fiddle and what a player
- * actually wants to say is "more hills" or "no tarmac". The values are the
- * engine's 0..1 knobs (rules.ts). */
+/** The dials, as the menu offers them AS STOPS: three positions each,
+ * because a slider on a phone during a pre-race screen is a fiddle and what
+ * a player actually wants to say is "more hills" or "no tarmac". The values
+ * are the engine's 0..1 knobs (rules.ts).
+ *
+ * It is not every numeric knob the engine has, and must not be read as one
+ * — `NUMERIC_KNOBS` is that list, and it is what the URL, the repro line
+ * and the stage cache walk. Two knobs are deliberately not here: R46's
+ * `challenge`, which is a SLIDER (`challengeWord`) because difficulty is a
+ * scale rather than three named places, and R21's `width`, which that
+ * slider now owns — the road narrows as the stage gets harder, and a ROAD
+ * row beside a DIFFICULTY row is two controls fighting over one number. */
 export type DialStop = { id: string; label: string; value: number };
 
 export const STAGE_DIALS: {
@@ -302,16 +310,36 @@ export const STAGE_DIALS: {
       { id: "high", label: "HALF", value: 0.5 },
     ],
   },
-  {
-    key: "width",
-    label: "ROAD",
-    stops: [
-      { id: "low", label: "NARROW", value: 0.1 },
-      { id: "mid", label: "RALLY", value: 0.55 },
-      { id: "high", label: "WIDE", value: 1 },
-    ],
-  },
 ];
+
+/** R46 — WHAT A POSITION ON THE STAGE'S DIFFICULTY DIAL IS CALLED.
+ *
+ * A percentage would say nothing: a road is not 70% hard. Five words over
+ * the travel, and the middle one is RALLY — the vocabulary every campaign
+ * stage is built on and everything in the game was tuned against — so a
+ * player who has moved the slider can always find their way back to the
+ * game as it ships by reading the word rather than by counting pips.
+ *
+ * This is the ROAD, not the field: R29's `difficulty` (the three cards on
+ * the campaign's page) is how good the rivals are, and Roam has no rivals. */
+export const CHALLENGE_WORDS: { at: number; label: string }[] = [
+  { at: 0.2, label: "GENTLE" },
+  { at: 0.4, label: "STEADY" },
+  { at: 0.6, label: "RALLY" },
+  { at: 0.8, label: "TESTING" },
+  { at: 1.01, label: "SAVAGE" },
+];
+
+export function challengeWord(value: number): string {
+  return (CHALLENGE_WORDS.find((word) => value < word.at) ?? CHALLENGE_WORDS[4]).label;
+}
+
+/** ...and the mark beside it: the same three-bar meter the campaign's
+ * difficulty cards are drawn with, filling as the slider travels. One idea,
+ * one mark, wherever the game is asked how hard something is. */
+export function challengeGlyph(value: number): GlyphName {
+  return value < 0.4 ? "easy" : value < 0.7 ? "medium" : "hard";
+}
 
 /** Which stop a knob value sits on — the nearest one, so a value dialled in
  * from the URL still lights up the button it is closest to. */

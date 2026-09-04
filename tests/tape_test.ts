@@ -34,6 +34,7 @@ const STAGE: TapeStage = {
     trees: 0.5,
     asphalt: 0.25,
     width: 0.55,
+    challenge: 0.5,
   },
   timeOfDay: "day",
   weather: "clear",
