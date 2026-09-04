@@ -287,6 +287,27 @@ export function standingOn(tilt: number, pitch: number, bed: Bed = LEVEL): Patch
   };
 }
 
+/** WHICH FACE IS DOWN, as one number: the body's own up-axis against the
+ * plane it is lying on. +1 on its wheels, 0 on a flank or an end, -1 on its
+ * roof. Two angles and any slope collapse into this, which is exactly what
+ * the faces are — everything in the module that asks "what is the ground
+ * holding" asks it here rather than off an angle. */
+export function faceUp(tilt: number, pitch: number, bed: Bed = LEVEL): number {
+  return heightOn([0, 1, 0], tilt, pitch, bed);
+}
+
+/** HOW MUCH OF WHAT IS ON THE GROUND IS RUBBER, 0..1 — the same reading,
+ * floored at nothing. 1 with the tyres squarely down, about 0.7 for a body
+ * balanced over at 45°, and exactly 0 from the flank round to the roof.
+ *
+ * It is named separately from `gripOn` because the DRIVER depends on it: a
+ * pedal and a steering wheel reach the world through tyres and through
+ * nothing else, so a car on its side has nobody left to ask, and a car up on
+ * two wheels still has two. */
+export function tyreShare(tilt: number, pitch: number, bed: Bed = LEVEL): number {
+  return Math.max(0, faceUp(tilt, pitch, bed));
+}
+
 /** WHAT IS ON THE GROUND HERE, as a Coulomb coefficient — read off the FACE
  * the box is nearest rather than off an angle, so it is right in both
  * planes and on any slope at once.
@@ -300,10 +321,7 @@ export function standingOn(tilt: number, pitch: number, bed: Bed = LEVEL): Patch
  * going over passes through every attitude between them and a coefficient
  * that jumped at each face would kick the crash every quarter turn. */
 export function gripOn(tilt: number, pitch: number, bed: Bed = LEVEL): number {
-  // The body's own up-axis against the plane's: +1 on its wheels, 0 on a
-  // flank or an end, -1 on its roof. Two angles and any slope collapse into
-  // this one number, which is exactly what the faces are.
-  const up = heightOn([0, 1, 0], tilt, pitch, bed);
+  const up = faceUp(tilt, pitch, bed);
   const g = R.faceGrip;
   // ...and which of the two "on its side" faces it is: a flank or an end.
   const across = Math.abs(heightOn([1, 0, 0], tilt, pitch, bed));

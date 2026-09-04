@@ -83,6 +83,24 @@
 // often is: that same respawn teleports it hundreds of metres up the road.
 // A shot cannot pan across a teleport, so the plant is DROPPED and the rig
 // takes the frame back in one frame, which is what a respawn is anyway.
+//
+// THE LATCH — and it is the rule that outranks every one above it. The
+// moment the driver has the car back, this shot is finished with that
+// accident: it hands the frame over QUICKLY (`rescue` rather than
+// `handOver` — every frame of a verge lens is a frame somebody is driving
+// from somebody else's camera) and then it will not take the frame again,
+// however violently the same car carries on. A crash that has been fought
+// back from is very often not over — the body is still leaning, the slide
+// is still on, and one more edge puts it over again — and a shot that
+// planted itself for each of those would take the camera away from the
+// player exactly as often as they were saving the car with it.
+//
+// What clears the latch is `car.planted`: all four tyres carrying and the
+// body inside the lean its springs hold, which is the engine's own line for
+// "this car has fully come back" and not a threshold restated here. A
+// respawn clears it too, by putting the car down planted. So the shot is
+// available once per accident, and the next accident starts when the last
+// one has genuinely finished — never a frame before.
 
 import * as THREE from "three";
 import { TUNING, type GameState } from "@engine";
@@ -161,6 +179,18 @@ const ROLL = {
    * ends tens of metres from where the lens is standing, so this is a real
    * flight home rather than a fade — long enough that it reads as one. */
   handOver: 0.9,
+  /** ...and how long it takes when the DRIVER took the car back rather than
+   * the crash running out, s. Half of it, because the two ends are not the
+   * same: a finished accident can afford a slow flight home, and this one
+   * ends at the moment the player has the car again, with every frame of it
+   * a frame they are driving from a camera standing in the grass.
+   *
+   * Not shorter than that, though. The lens is tens of metres from the car
+   * by the time a roll is caught, and a blend that covers it in a third of a
+   * second is a whip the eye reads as a cut — which is the one thing this
+   * whole module is written to avoid. Halving it is felt; quartering it is
+   * seen. */
+  rescue: 0.5,
   /** A jump in the car's position this shot cannot follow, m in one frame —
    * a respawn, or a spectator's lens changing crew. Nothing a car does under
    * its own power comes near it: a frame at 200 km/h is under a metre. */
@@ -190,8 +220,13 @@ function holdFor(state: GameState): number {
 
 export type RollCamera = {
   /** Whether the shot owns the frame: the car is going over, or it has come
-   * to rest and the beat afterwards has not run out. Read before `fly`, and
-   * it changes nothing. */
+   * to rest and the beat afterwards has not run out.
+   *
+   * ASK IT EVERY FRAME, before `fly` and whether or not the answer can be
+   * used — it is also where the latch is released, and a shot that is only
+   * asked when it could plant can never learn that the car it gave up on has
+   * come back. The caller's other reasons for not running the shot (an
+   * overhead view, a seat inside the car) belong AFTER it. */
   watching: (state: GameState) => boolean;
   /** Fly the shot for this frame, over whatever the driving rig has already
    * written into `camera` — the caller stands the rig FIRST, and the pose it
@@ -209,10 +244,14 @@ export type RollCamera = {
    * outright, 1 on the frame the rig takes it back. The lens's own ceilings
    * ride it across, exactly as they ride a change of seat. */
   at: () => number;
-  /** Drop the plant. Called when the run the shot belongs to is not the run
-   * on the screen any more (a new stage, a change of crew), and by the shot
-   * itself the moment it is finished. */
+  /** Drop the plant. Called every frame the shot is not up, and by the shot
+   * itself the moment it is finished — so it is about THIS plant and leaves
+   * the latch alone, which has to outlive the hand-back that set it. */
   reset: () => void;
+  /** ...and drop the latch with it. For when the run the shot belongs to is
+   * not the run on the screen any more — a new stage, a change of crew —
+   * where nothing about the last accident applies to this car. */
+  release: () => void;
 };
 
 export function createRollCamera(): RollCamera {
@@ -244,6 +283,15 @@ export function createRollCamera(): RollCamera {
    * person moving rather than a solve landing. */
   let climbed = 0;
   let stepped = 0;
+  /** THE DRIVER TOOK THE CAR BACK while this shot was up. It shortens the
+   * hand-back, and it stops the roll re-taking the frame part-way through
+   * one — `rested` is what the hand-back runs off, and a car that goes over
+   * again mid-blend would otherwise reset it and snap the lens back to the
+   * verge it was leaving. */
+  let rescued = false;
+  /** ...and the latch that survives the hand-back: no plant until the car is
+   * fully back on four wheels. */
+  let latched = false;
   const was = new THREE.Vector3();
   const aim = new THREE.Vector3();
 
@@ -255,13 +303,30 @@ export function createRollCamera(): RollCamera {
     lens = 0;
     climbed = 0;
     stepped = 0;
+    rescued = false;
   };
+
+  /** How long this shot has to give the frame back, s. */
+  const backFor = (): number => (rescued ? ROLL.rescue : ROLL.handOver);
 
   return {
     at: () => hand,
     reset,
-    watching: (state) =>
-      state.car.rolling || (planted !== null && rested < holdFor(state) + ROLL.handOver),
+    release: () => {
+      reset();
+      latched = false;
+    },
+    watching: (state) => {
+      // THE FULL RESET, and the only thing that clears the latch: all four
+      // tyres carrying and the body inside the lean its springs hold. A
+      // respawn arrives here the same way, having put the car down planted.
+      if (state.car.planted) latched = false;
+      // A hand-back already running always finishes. The whole point of the
+      // latch is that the shot GIVES THE FRAME BACK, and a cut is not giving
+      // it back — so the latch gates taking the frame, never returning it.
+      if (planted !== null) return rested < holdFor(state) + backFor();
+      return !latched && state.car.rolling;
+    },
     fly: (camera, state, drivingFov, clearance, dt) => {
       const car = state.car;
       if (!planted) {
@@ -298,8 +363,24 @@ export function createRollCamera(): RollCamera {
       }
       was.set(car.x, car.y, car.z);
       stood += dt;
-      rested = car.rolling ? 0 : rested + dt;
-      hand = ease((rested - holdFor(state)) / ROLL.handOver);
+      // THE DRIVER HAS THE CAR: the roll let go of it and left it on its
+      // wheels rather than lying somewhere for the crew. From here the shot
+      // is finished with this accident — it hands back on the short clock and
+      // latches itself off until the car is properly planted again.
+      if (!car.rolling && !state.overturned) {
+        rescued = true;
+        latched = true;
+      }
+      // ...and once it is, a car going over AGAIN does not restart the clock.
+      // A rescued car very often is not out of it, and a shot that reset here
+      // would snap back to the verge it was in the middle of leaving.
+      rested = car.rolling && !rescued ? 0 : rested + dt;
+      // ...and a hand-back that has started never waits for a beat that
+      // arrives after it. If the rescued car goes over again and ends up
+      // lying there inside the half second, `holdFor` would jump from 0 to
+      // `lieFor` under a blend already half flown and walk it backwards,
+      // which is a pop in the one place this module exists to avoid one.
+      hand = ease((rested - (rescued ? 0 : holdFor(state))) / backFor());
       if (hand >= 1) {
         reset();
         return drivingFov;

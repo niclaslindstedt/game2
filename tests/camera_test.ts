@@ -681,6 +681,12 @@ describe("what a blow does to the picture", () => {
   });
 });
 
+/** How long the roll shot has to give the frame back to a driver who caught
+ * the car, s (`ROLL.rescue` in camera-roll.ts). Restated here rather than
+ * exported, for the transit's reason: a test that read the number off the
+ * module could not catch the module changing it. */
+const ROLL_RESCUE = 0.3;
+
 describe("the car going over", () => {
   /** A roll, scripted: the body past its outside wheels, turning about its
    * own centre at most of a turn a second and travelling away from where it
@@ -691,7 +697,12 @@ describe("the car going over", () => {
    *
    * `rolling` false runs the same tumble past the driving rig instead, which
    * is what the shot is measured against. */
-  function tumble(mode: CameraMode, frames: number, rolling = true) {
+  function tumble(
+    mode: CameraMode,
+    frames: number,
+    rolling = true,
+    each?: (state: GameState, f: number) => void,
+  ) {
     const state = game();
     const car = state.car;
     car.heading = 0;
@@ -728,6 +739,7 @@ describe("the car going over", () => {
           car.airborne = false;
         }
       }
+      each?.(state, f);
       cam.update(state, FRAME);
       seats.push(cam.camera.position.clone());
       cam.camera.getWorldDirection(forward);
@@ -944,13 +956,12 @@ describe("the car going over", () => {
     }
   });
 
-  it("hands the frame back without a cut once the car has stopped", () => {
-    // Long enough to run past the roll, the beat the car is left lying for,
-    // and the blend home.
-    const frames = Math.round((TUNING.air.roll.lieFor + 1.6) / FRAME) + 90;
-    const { seats, cars } = tumble("chase", frames);
+  /** The worst any frame changes the lens's TRAVEL over the frame before it,
+   * m — which is what proves a blend is a flight and not a cut. A cut is one
+   * enormous value here; a flight, however quick, is a small one. */
+  function jerkiest(seats: THREE.Vector3[], from: number): number {
     let worst = 0;
-    for (let f = 92; f < frames; f++) {
+    for (let f = from; f < seats.length; f++) {
       const jerk = seats[f]
         .clone()
         .sub(seats[f - 1])
@@ -958,13 +969,140 @@ describe("the car going over", () => {
         .add(seats[f - 2]);
       worst = Math.max(worst, jerk.length());
     }
-    // It is a real flight — the car came to rest tens of metres away — so
-    // what proves there is no cut in it is not the size of a step but its
-    // SMOOTHNESS: no frame changes the lens's travel by more than a few
-    // centimetres over the frame before it.
-    expect(worst).toBeLessThan(0.1);
+    return worst;
+  }
+
+  it("hands the frame back without a cut once the car is lying there", () => {
+    // A WRECK's hand-back: the long one. The car is left lying for the beat
+    // the crew are taken out in, and the flight home after it is a real
+    // one — the car came to rest tens of metres from where the lens stood.
+    //
+    // `overturned` is what makes it a wreck rather than a save, and it has
+    // to be set for this to be the case it claims to be: without it the
+    // engine is describing a car the driver has back, and the shot rightly
+    // gives the frame up on the short clock instead.
+    const frames = Math.round((TUNING.air.roll.lieFor + 1.6) / FRAME) + 90;
+    const { seats, cars } = tumble("chase", frames, true, (state, f) => {
+      if (f >= 90) state.overturned ??= { since: state.t };
+    });
+    expect(jerkiest(seats, 92)).toBeLessThan(0.1);
     // ...and it does end up back on the boom, behind the car it was watching.
     expect(seats[frames - 1].distanceTo(cars[frames - 1])).toBeLessThan(12);
+  });
+
+  it("comes home quicker for a driver who caught it, and still flies", () => {
+    // A SAVE's hand-back: the short one, and the difference is meant to be
+    // felt. What it may not become is a cut — the lens is a long way from
+    // the car by then, and covering that in a third of a second is a whip.
+    const frames = Math.round((TUNING.air.roll.lieFor + 1.6) / FRAME) + 90;
+    const { seats, cars } = tumble("chase", frames);
+    // Home well before a wreck's beat would even have started its blend.
+    const home = Math.round((90 * FRAME + TUNING.air.roll.lieFor) / FRAME);
+    expect(seats[home].distanceTo(cars[home])).toBeLessThan(12);
+    // Quicker, and still continuous: every frame's travel is within a
+    // handful of centimetres of the frame before it.
+    expect(jerkiest(seats, 92)).toBeLessThan(0.4);
+  });
+
+  /** THE SAME ACCIDENT, DRIVEN FRAME BY FRAME, so a test can decide when the
+   * car goes over, when the driver takes it back, and when it is properly
+   * back on four wheels. `tumble` scripts one whole roll; this hands the
+   * script over, which is what the latch has to be measured against.
+   *
+   * `planted` is maintained the way the engine maintains it — false from the
+   * moment the body goes over until it is level on its springs again —
+   * because that flag is the only thing that clears the latch. */
+  function accident(mode: CameraMode) {
+    const state = game();
+    const car = state.car;
+    car.heading = 0;
+    car.u = 26;
+    const cam = createGameCamera(1600, 900);
+    cam.setMode(mode);
+    for (let f = 0; f < 120; f++) {
+      car.z += car.u * FRAME;
+      cam.update(state, FRAME);
+    }
+    /** How far the lens is from the car — small on the boom, large once the
+     * shot has planted and the car has left it. */
+    const behind = (): number =>
+      cam.camera.position.distanceTo(new THREE.Vector3(car.x, car.y, car.z));
+    const run = (frames: number, over: boolean, planted = false): number[] => {
+      const gap: number[] = [];
+      for (let f = 0; f < frames; f++) {
+        car.rolling = over;
+        car.planted = planted;
+        if (over) {
+          car.roll += 5.5 * FRAME;
+          car.heading += 4.5 * FRAME;
+          car.x += 9 * FRAME;
+        }
+        car.z += 24 * FRAME;
+        cam.update(state, FRAME);
+        gap.push(behind());
+      }
+      return gap;
+    };
+    return { state, cam, car, run, behind };
+  }
+
+  it("hands the frame straight back to a driver who catches it", () => {
+    // A car the driver has saved is a car being driven, and every frame of a
+    // verge lens after that is a frame they are driving from somebody else's
+    // camera. So the shot gives up quickly — inside the rescue blend, not the
+    // long hand-over a finished accident gets.
+    const { run, behind } = accident("chase");
+    run(40, true);
+    expect(behind()).toBeGreaterThan(10);
+    // Caught: back on its wheels, nobody overturned, still moving.
+    run(Math.round(ROLL_RESCUE / FRAME) + 2, false);
+    expect(behind()).toBeLessThan(12);
+  });
+
+  it("does not take the frame back for a second roll it has already let go of", () => {
+    // THE LATCH. A crash that has been fought back from is very often not
+    // over — the body is still leaning, one more edge puts it over again —
+    // and a shot that planted itself for each of those would take the camera
+    // away from the player exactly as often as they were saving the car.
+    const { run, behind } = accident("chase");
+    run(40, true);
+    expect(behind()).toBeGreaterThan(10);
+    run(Math.round(ROLL_RESCUE / FRAME) + 2, false);
+    const home = behind();
+    expect(home).toBeLessThan(12);
+    // Over again, hard, for a good deal longer than the first one — and the
+    // camera stays on the boom for the whole of it.
+    const gap = run(120, true);
+    for (const at of gap) expect(at).toBeLessThan(home + 6);
+  });
+
+  it("takes it again once the car is properly back on four wheels", () => {
+    // ...and the latch is not a one-shot: what releases it is `planted`, the
+    // engine's own line for a car that has fully come back. The next
+    // accident gets its shot, because by then the last one is genuinely over.
+    const { run, behind } = accident("chase");
+    run(40, true);
+    run(Math.round(ROLL_RESCUE / FRAME) + 2, false);
+    expect(behind()).toBeLessThan(12);
+    // Down on all four and driving for a moment...
+    run(20, false, true);
+    // ...and the next one is an accident in its own right.
+    const gap = run(60, true);
+    expect(gap[gap.length - 1]).toBeGreaterThan(10);
+  });
+
+  it("still holds on a car that ends up lying there", () => {
+    // The latch is about a car somebody is DRIVING. A crash that ends with
+    // the car on its roof is the shot's whole reason for existing, and it
+    // keeps the frame for the beat the crew are left in it.
+    const { state, run, behind } = accident("chase");
+    run(40, true);
+    const away = behind();
+    expect(away).toBeGreaterThan(10);
+    state.overturned = { since: state.t };
+    run(Math.round(TUNING.air.roll.lieFor / FRAME) - 4, false);
+    // Still out there watching it, well past the rescue blend.
+    expect(behind()).toBeGreaterThan(away - 4);
   });
 
   it("drops the plant rather than panning across a respawn", () => {

@@ -322,12 +322,13 @@ export type CarState = {
   /** True while the car is ROLLING OVER: tripped over its outside wheels
    * by a landing taken crossed up (`air.tripSlide`), and going over side
    * after side until the roll has spent itself. It is off its wheels the
-   * whole time — flying a little between contacts, with nothing under the
-   * tyres to steer or drive with — and each side that hits the ground is a
-   * landing in its own right, with the flank's crush and the speed it
-   * costs. Cleared when the car comes down within `air.rollLandLimit` of
-   * upright, or when there is no roll left in it; the ground rights it
-   * from there. */
+   * whole time — flying a little between contacts — and each side that hits
+   * the ground is a landing in its own right, with the flank's crush and the
+   * speed it costs. The DRIVER is not off, though: whatever of the car is
+   * still on rubber still answers the pedals and the wheel (`driveRolling`),
+   * which is why a roll is something a player can fight rather than watch.
+   * Cleared when the car comes down within `air.rollLandLimit` of upright,
+   * or when there is no roll left in it; the ground rights it from there. */
   rolling: boolean;
   /** ...and WHICH OF THE ROLL'S TWO MOTIONS it is doing. A body past its
    * outside wheels does two quite different things, and only the first of
@@ -347,6 +348,23 @@ export type CarState = {
    *
    * Only ever true while `rolling` is. */
   sliding: boolean;
+  /** ALL FOUR TYRES CARRYING, and the body inside the lean its own springs
+   * can hold — a car that has fully come back to the driver, as against one
+   * balanced on two wheels, one in the air, or one going over.
+   *
+   * It is the handling model's OWN line and not a second threshold invented
+   * beside it: past `air.leanFree` off the camber, `car.ts` stops treating
+   * the body as something the springs carry and starts treating it as a
+   * rigid body pivoting on its outer contact line (`leanTorque`), which is
+   * what being up on two wheels is. Inside it, the car is planted.
+   *
+   * Read by anything that needs "the accident is genuinely over" rather than
+   * "the body is not turning this instant" — the two are far apart, and a car
+   * caught at forty degrees is the second without being the first. The roll
+   * camera is the caller it exists for: it hands the frame back the moment
+   * the driver has the car, and will not take it again until this is true
+   * (`pwa/src/game/camera-roll.ts`). */
+  planted: boolean;
   /** How far the DRIVEN wheels are outrunning the road, m/s — 0 hooked up,
    * and never more than the headroom between the road and what the current
    * gear gives at the limiter, because a wheel with a gear engaged cannot
@@ -513,6 +531,9 @@ export function stillCar(car: CarState): void {
   car.spun = false;
   car.spinDir = 0;
   car.rolling = false;
+  // Set down on all four, which is what "the tyres carrying their whole
+  // weight" above means and what every caller of this is doing.
+  car.planted = true;
   car.thrown = 0;
   car.wheelspin = 0;
   car.launchSpin = 0;

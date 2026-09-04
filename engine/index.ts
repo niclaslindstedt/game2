@@ -110,11 +110,15 @@ export {
   crashTurbulence,
   goesOver,
   goesOverEnd,
+  leanTorque,
   massSpread,
   onItsWheels,
   rollBed,
   type MassSpread,
 } from "./game/roll.ts";
+// ...and how much of what is on the ground is still RUBBER, which is the
+// whole of what a driver has left while the car is going over (roll-hull.ts).
+export { tyreShare } from "./game/roll-hull.ts";
 
 // The stage generator.
 export {

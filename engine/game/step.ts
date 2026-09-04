@@ -1024,15 +1024,16 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   }
 
   if (car.rolling) {
-    // Past its outside wheels and turning: there is no tyre on the ground
-    // to steer or drive with, so the input is not read and the body is
-    // simply a shape going over (roll.ts) — including the flights BETWEEN
-    // its contacts, which belong to the roll and not to the ordinary air,
-    // because a turning body flies about its own centre while the wheel
-    // plane the air flies goes round with it. It ends either back on its
-    // wheels or lying on a flank or its roof, and `stepOverturned` below
-    // is what happens in the second case.
-    stepRolling(state.spec, car, ctx, events, state.stats);
+    // Past its outside wheels and turning: the body is a shape going over
+    // (roll.ts) — including the flights BETWEEN its contacts, which belong
+    // to the roll and not to the ordinary air, because a turning body flies
+    // about its own centre while the wheel plane the air flies goes round
+    // with it. The DRIVER is still in it: the pedals and the wheel reach the
+    // world through whatever of the car is still standing on rubber, which
+    // on two wheels is most of it and on a roof is none. It ends either back
+    // on its wheels or lying on a flank or its roof, and `stepOverturned`
+    // above is what happens in the second case.
+    stepRolling(state.spec, car, drive, ctx, events, state.stats);
   } else if (car.airborne) {
     stepAirborne(state.spec, car, drive, ctx, events, state.stats);
   } else {
