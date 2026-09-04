@@ -1612,9 +1612,21 @@ body {
 }
 
 /* ── The minimap ────────────────────────────────────────────────────────
-   The stage as a route in the top-right corner, and the run's progress read
-   off the FRAME: the border is the gauge, filling clockwise from twelve
-   o'clock. The whole plate is the button that opens the in-race menu.
+   A square of country seen from above in the top-right corner, travelling
+   with the car, and the run's progress read off the FRAME: the border is
+   the gauge, filling clockwise from twelve o'clock. The whole plate is the
+   button that opens the in-race menu.
+
+   Everything inside is a schematic — the paths are cut in minimap-scene.ts
+   and none of it is to scale but the ground. The palette is the one thing
+   that makes it readable: warm and pale for the road the run is on, dim
+   white for every other road, cool for water, and the country itself only
+   ever a tint, so nothing the driver is not driving on competes with the
+   ribbon they are.
+
+   The plate is nearly opaque for the same reason. It is glass over a
+   landscape that is moving at rally pace, and a schematic this dense read
+   against a scrolling forest is a schematic nobody can read at all.
 
    The corner radius is derived from the ring's own geometry in minimap.tsx
    (RING_R + RING_SW / 2, over a 100-unit box) so the chassis and the gauge
@@ -1632,11 +1644,14 @@ body {
   width: var(--hud-map);
   height: var(--hud-map);
   padding: 0;
-  background: rgb(9 24 52 / 55%);
+  background: rgb(10 26 46 / 80%);
   border: none;
   border-radius: calc(var(--hud-map) * 0.175);
   cursor: pointer;
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
+  /* The schematic fills the whole box and runs off every side of it: the
+     plate's own corners are what cut it back to the shape of the frame. */
+  overflow: hidden;
 }
 
 .hud-minimap-face,
@@ -1648,33 +1663,156 @@ body {
   display: block;
 }
 
-.hud-minimap-route {
+/* The country: scaled for the speedo's zoom and slid to wherever the car
+   has got since the paths were cut (minimap.tsx's `worldPose`). The origin
+   is written into the transform list itself, so this only has to make sure
+   nothing else is imposed on it. Tweened at the snapshot's own rate, so the
+   landscape SCROLLS and BREATHES rather than stepping twelve times a second
+   — the same treatment the car icon and the rival plates get. */
+.hud-minimap-world {
+  transform-origin: 0 0;
+  transition: transform 120ms linear;
+}
+
+/* Every stroked road is held OFF the zoom: the window opening up at speed
+   has to mean more country in the frame, not a thinner road in it. The
+   fills scale with the world, because a lake really is a piece of ground
+   and a road at this framing really is not — it is three pixels of truth
+   drawn five wide so it can be read at all. */
+.hud-minimap-stream,
+.hud-minimap-lane,
+.hud-minimap-rail,
+.hud-minimap-case,
+.hud-minimap-road,
+.hud-minimap-sealed,
+.hud-minimap-wall {
+  vector-effect: non-scaling-stroke;
+}
+
+/* The OPENINGS — clearings, bogs, felled blocks, meadows. The plate's own
+   dark ground stands for the closed country around them, which is nearly
+   all of a boreal stage; this is where a car could get through it. A pale
+   tint and nothing more: it is the least urgent thing on the map and must
+   never compete with a road. */
+.hud-minimap-open {
+  fill: rgb(206 214 158 / 20%);
+}
+
+.hud-minimap-water {
+  fill: rgb(70 150 232 / 88%);
+}
+
+/* A stream is a couple of metres wide — far under the ground grid's cell —
+   so it is stroked rather than filled, in the water's own colour. */
+.hud-minimap-stream {
   fill: none;
-  stroke: rgb(255 255 255 / 72%);
-  stroke-width: 2.6;
+  stroke: rgb(70 150 232 / 88%);
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.hud-minimap-car {
+/* Every road that is not the stage: present, findable, and never mistakable
+   for the one the run is on. */
+.hud-minimap-lane {
+  fill: none;
+  stroke: rgb(255 255 255 / 30%);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* R41 — the railway. Dashed, because the one thing a driver must not do is
+   read it as a road they could turn onto. */
+.hud-minimap-rail {
+  fill: none;
+  stroke: rgb(255 255 255 / 26%);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 2.4;
+}
+
+.hud-minimap-case {
+  fill: none;
+  stroke: rgb(6 16 34 / 80%);
+  stroke-width: 7.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hud-minimap-road {
+  fill: none;
+  stroke: rgb(238 224 190 / 92%);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* R15 — the sealed runs, over the gravel: cool where the road is warm, so
+   the tarmac coming up is something the driver sees before they are on it. */
+.hud-minimap-sealed {
+  fill: none;
+  stroke: rgb(168 180 198 / 95%);
+  stroke-width: 5;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+}
+
+.hud-minimap-wall {
+  fill: rgb(236 231 216 / 88%);
+  stroke: rgb(6 16 34 / 70%);
+  stroke-width: 0.7;
+}
+
+/* The stage's two ends, as flags on a staff standing at the place itself.
+   Squared for the finish, swallow-tailed for the start, so the pair read
+   apart in a screenshot with no colour in it at all. */
+.hud-minimap-end {
+  stroke: rgb(9 24 52 / 80%);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+.hud-minimap-end-start {
+  fill: var(--hud-hp-ok);
+}
+
+.hud-minimap-end-finish {
   fill: var(--hud-bad);
-  stroke: rgb(9 24 52 / 85%);
-  stroke-width: 1.4;
-  /* Tweened between the HUD's 12 Hz snapshots, like the tach needle, so the
-     icon slides and swings instead of stepping. */
+}
+
+/* THE CAR, in the middle of the window — the one glyph that never moves,
+   because the window is centred on it. Only its heading changes, and that
+   is tweened between the HUD's 12 Hz snapshots, like the tach needle, so
+   the icon swings instead of stepping. */
+.hud-minimap-car {
   transition: transform 120ms linear;
 }
 
-/* R28 — the split board the run still owes, marked on the route: a ring in
-   the HUD's signal yellow with a halo breathing out of it. Yellow because
-   the two things already on this map are the white route and the car's red
-   arrowhead, and the mark has to be neither; a ring because both the other
-   glyphs are solid.
+.hud-minimap-car-body {
+  fill: var(--hud-bad);
+  stroke: rgb(9 24 52 / 85%);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.hud-minimap-car-glass {
+  fill: rgb(20 46 88 / 70%);
+}
+
+.hud-minimap-car-tyres {
+  fill: rgb(9 24 52 / 90%);
+}
+
+/* R28 — the split board the run still owes: a ring in the HUD's signal
+   yellow with a halo breathing out of it. Yellow because the country under
+   it is warm road, dim lanes and cool water and the car on it is red, and
+   the mark has to be none of them; a ring because every other glyph that
+   moves is solid.
 
    The halo is what makes it findable rather than merely present, which is
    the whole point of it — the mark earns its place when the road is not
-   under the wheels and the route on its own says nothing about which end of
-   itself to drive to. */
+   under the wheels and the window holds nothing that says which way along
+   it to go. */
 .hud-minimap-next-ring {
   fill: none;
   stroke: var(--hud-good);
@@ -1683,6 +1821,18 @@ body {
 
 .hud-minimap-next-dot {
   fill: var(--hud-good);
+}
+
+/* ...and what the same mark becomes once the board is off the window: a
+   wedge on the rim, turned to point at it. The window is three hundred
+   metres across and a stage is thousands, so this is the state the mark is
+   in most of the time — and it is the whole reason the mark survives a map
+   that no longer shows the route end to end. */
+.hud-minimap-next-arrow {
+  fill: var(--hud-good);
+  stroke: rgb(9 24 52 / 80%);
+  stroke-width: 1;
+  stroke-linejoin: round;
 }
 
 .hud-minimap-next-halo {
@@ -1717,7 +1867,7 @@ body {
   }
 }
 
-/* A rival's plate on the route: their door number, in their own paint, on a
+/* A rival's plate: their door number, in their own paint, on a
    point standing where their car is. The dark outline is what keeps two
    crews running nose to tail readable as two plates rather than one blob —
    the fill is per-car and set on the element, so it must not be named here
@@ -1758,13 +1908,17 @@ body {
   transition: stroke-dasharray 160ms linear;
 }
 
-/* The readout rides the frame's bottom edge, inside the gauge. */
+/* The readout rides the frame's bottom edge, inside the gauge. It is on
+   every run now that the window no longer holds the whole stage, so it is
+   set smaller than a HUD figure that has the screen to itself: there is a
+   map under it, and the map is the instrument. */
 .hud-minimap-read {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 6%;
-  font-size: clamp(0.5rem, 1.7vmin, 0.72rem);
+  bottom: 5.5%;
+  opacity: 0.92;
+  font-size: clamp(0.44rem, 1.45vmin, 0.62rem);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.06em;
   text-align: center;

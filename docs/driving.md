@@ -663,9 +663,10 @@ a few seconds — measured against the ghost's own splits, which ride on the
 tape (`GhostRun.splits`) rather than being read back off the replay, so the
 number is there from the first board even on a run that is well up the road
 on its ghost. And a respawn goes to the last board (above). The minimap
-marks the board still owed as a ring on the route, which is the mark to
-steer at from a field or a wrong turn — the one mark on that map that can be
-BEHIND the car.
+marks the board still owed — a ring while it is inside the window it draws,
+a chevron on the rim pointing at it while it is not, which on a stage of any
+length is most of the time. It is the mark to steer at from a field or a
+wrong turn, and the one mark on that map that can be BEHIND the car.
 
 ## The open world
 

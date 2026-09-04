@@ -17,7 +17,7 @@ import {
   type TrackSample,
 } from "@engine";
 
-import { buildMinimap } from "./minimap.tsx";
+import { buildMinimap } from "./minimap-view.ts";
 import { carHealth } from "./car-health.ts";
 import { cornerSign, type PaceSign } from "./pace-shape.ts";
 import { shiftLightOn, shiftWindow } from "./shift-window.ts";
@@ -267,7 +267,8 @@ export type RunBook = { best: number | null };
  *
  * `field` is the run's own entry list, or null where nobody else is
  * entered. Only the map reads it, and only on a mass start — the plates a
- * heads-up race puts on the route (minimap.tsx). */
+ * heads-up race puts on it, and the wider framing it is drawn at
+ * (minimap-view.ts). */
 export function takeSnapshot(
   state: GameState,
   pace: PaceMemory,

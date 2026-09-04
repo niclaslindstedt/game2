@@ -1,261 +1,38 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The minimap: the stage drawn as a route in the top-right corner, the car
-// riding it as an arrowhead, and how far through the stage you are read off
-// the FRAME ITSELF — the border is the progress gauge, filling clockwise
-// from the top as the run goes on. Tapping it opens the in-race menu.
+// The minimap, drawn: a square of country seen from above with the car in
+// the middle of it, the run's progress read off the FRAME ITSELF — the
+// border is the gauge, filling clockwise from the top as the run goes on —
+// and the field's plates over the lot. Tapping it opens the in-race menu.
 //
-// AND, ON A HEADS-UP RACE, THE RACE ITSELF: every rival still on the road as
-// a numbered plate with a point under it, so a grid of fifteen cars trading
-// places over a stage is something the driver can watch happen rather than
-// infer from the position board. A plate carries the number off that crew's
-// door and the colour off their paint, so the box closing on you from behind
-// is the same car the name tag in the mirror names.
+// The two halves it draws are owned elsewhere: minimap-scene.ts cuts the
+// country into paths, minimap-view.ts places everything that moves. This
+// file is the DOM and the glyphs.
 //
-// SIGN BOUNDARY (the same one-flip rule input.ts states for steering): the
-// rendered world mirrors the engine's map view, so the map draws in SCREEN
-// space — `mx = -x`, `my = -z` — which puts the start heading up-screen and
-// makes a heading-growing turn bend LEFT, exactly as the player sees it.
+// The schematic travels: it is cut around an anchor and translated to the
+// car every frame, which is what makes a map that scrolls smoothly while
+// its geometry is rebuilt a couple of times a second. The transform is on
+// the group, so one attribute moves the whole landscape.
 
-import { onRoad, type GameState, type RivalField } from "@engine";
+import { useRef } from "react";
 
-import { legible } from "../lib/util.ts";
-import { liveryForCrew } from "./car-livery.ts";
+import {
+  PIN_DIGIT,
+  PIN_H,
+  PIN_PAD,
+  PIN_R,
+  PIN_TEXT,
+  PIN_TIP,
+  PIN_TIP_W,
+  type HudMinimap,
+  type MinimapCar,
+} from "./minimap-view.ts";
+import { VIEW } from "./minimap-scene.ts";
 
-/** The map's own square user space; everything below is in these units. */
-const VIEW = 100;
-/** Clearance between the route and the frame, so the gauge stays readable. */
-const PAD = 14;
 /** The gauge ring's corner radius and stroke width, in the same space.
  * `.hud-minimap` derives its own border-radius from R + SW/2 so the chassis
  * and the gauge share one corner at every screen scale. */
 const RING_R = 15;
 const RING_SW = 5;
-
-/** Most points the route path is ever drawn with. The map is ~7rem across,
- * so 2 m sample spacing is far finer than the pixels can show — striding to
- * this many keeps a 7 km stage's path the same cost as a 1 km one. */
-const ROUTE_POINTS = 170;
-
-/** Endless stages have no map to fit, so the window travels with the car:
- * this much road behind it and this much ahead, meters. */
-const ENDLESS_BEHIND = 260;
-const ENDLESS_AHEAD = 900;
-
-/** Smallest world span the window is fitted to, meters — without a floor a
- * stationary car on an endless stage fits a few meters of road to the whole
- * frame and the map lurches at walking pace. */
-const MIN_SPAN = 60;
-
-/** A rival's plate: how tall the box is, the point that hangs under it and
- * how wide that point's base is, and the box's corner radius — all in the
- * `VIEW`-square user space.
- *
- * `PIN_H + PIN_TIP` is held AT OR UNDER `PAD` on purpose. The plate stands
- * on the route and grows upward, the route never comes within `PAD` of the
- * frame, and an SVG root clips: a taller plate would have its numeral
- * shaved off for exactly the cars nearest the top edge. */
-const PIN_H = 10;
-const PIN_TIP = 3.5;
-const PIN_TIP_W = 2.4;
-const PIN_R = 2.2;
-
-/** The numeral's type size, one numeral's advance at that size in the HUD's
- * condensed face, and the plate's padding either side of the number — which
- * together are what makes a two-digit plate wider than a one-digit one
- * instead of stretching every plate to fit the widest. */
-const PIN_TEXT = 7.4;
-const PIN_DIGIT = 4.2;
-const PIN_PAD = 3;
-
-/** One rival on the map: where their plate stands, what is written on it,
- * and what it is painted. */
-export type MinimapCar = {
-  x: number;
-  y: number;
-  /** The number off their door (car-livery.ts). */
-  number: string;
-  /** Their paint as CSS, already lifted to a shade dark ink reads against. */
-  color: string;
-};
-
-export type HudMinimap = {
-  /** The route as an SVG path in the `VIEW`-square user space. */
-  path: string;
-  /** The rivals on the road, in PAINT ORDER: last in the list is drawn last
-   * and is therefore the one nothing can cover. The list runs backmarker
-   * first, so the crew winning the race is never hidden behind the plate of
-   * a crew losing it, and the player's own arrowhead goes on after all of
-   * them.
-   *
-   * Empty on every run that is not a heads-up race. A rally leaves ten
-   * seconds apart and its cars are minutes of road apart; drawing them
-   * side by side on one map would claim an order the discipline does not
-   * know it has, which is the same line `livePlace` draws in field.ts. */
-  cars: MinimapCar[];
-  /** The car in that space; `angle` is degrees clockwise for the icon. */
-  car: { x: number; y: number; angle: number };
-  /** R28 — where the SPLIT BOARD THE RUN STILL OWES stands, in the same
-   * space, or null when every board on the lap is behind the car (and on a
-   * stage with no boards at all).
-   *
-   * A run is not finished until it has driven through all of them in order,
-   * so the one that is armed is the only place on the stage the driver has
-   * to reach next — and it is the mark to steer at from a field, a river
-   * bed or a wrong turn, which is when the route on its own says least. It
-   * is also the one mark that can be BEHIND the car: a board missed is a
-   * board still owed, and the map saying so is how a driver finds out where
-   * to turn round to. */
-  next: { x: number; y: number } | null;
-  /** Gauge fill, 0..1 — the finish line on a staged run, the next whole
-   * kilometre on an endless one. */
-  progress: number;
-  /** The readout on the frame's bottom edge — distance on an endless stage,
-   * which has no finish for the gauge to be a fraction of, and the lap
-   * counter on a circuit, where the ring fills once per lap and on its own
-   * cannot say which lap that is. Empty otherwise: the ring already says
-   * how far in the run is, and a percentage beside it is the same sentence
-   * twice over the route. */
-  label: string;
-};
-
-/** The last route we built, keyed by the window it was built from. A staged
- * stage rebuilds once; an endless one rebuilds when its window has slid a
- * `STRIDE_BUCKET`'s worth, not every snapshot. */
-let routeCache: { key: string; path: string; project: Project } | null = null;
-
-type Project = (mx: number, my: number) => [number, number];
-
-/** Sample indices the window is quantised to before it becomes a cache key
- * — 16 samples is ~32 m of road, below what the map can show moving. */
-const STRIDE_BUCKET = 16;
-
-function fitProject(points: [number, number][]): Project {
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const [x, y] of points) {
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  const cx = (minX + maxX) / 2;
-  const cy = (minY + maxY) / 2;
-  const span = VIEW - 2 * PAD;
-  // Aspect is preserved: the tighter axis picks the scale, so a stage that
-  // runs mostly north-south keeps its shape instead of being stretched flat.
-  const k = Math.min(
-    span / Math.max(MIN_SPAN, maxX - minX),
-    span / Math.max(MIN_SPAN, maxY - minY),
-  );
-  return (x, y) => [VIEW / 2 + (x - cx) * k, VIEW / 2 + (y - cy) * k];
-}
-
-/** Build (or reuse) the route path and the projection that placed it. */
-function route(state: GameState): { path: string; project: Project } {
-  const { samples, step, endless } = state.track;
-  const last = samples.length - 1;
-  let i0 = 0;
-  let i1 = last;
-  if (endless) {
-    i0 = Math.max(0, Math.round((state.progressS - ENDLESS_BEHIND) / step));
-    i1 = Math.min(last, Math.round((state.progressS + ENDLESS_AHEAD) / step));
-  }
-  i0 -= i0 % STRIDE_BUCKET;
-  i1 -= i1 % STRIDE_BUCKET;
-  if (i1 <= i0) i1 = Math.min(last, i0 + STRIDE_BUCKET);
-  const key = `${state.track.seed}:${i0}:${i1}:${samples.length}`;
-  if (routeCache?.key === key) return routeCache;
-
-  const stride = Math.max(1, Math.ceil((i1 - i0) / ROUTE_POINTS));
-  const points: [number, number][] = [];
-  for (let i = i0; i <= i1; i += stride) points.push([-samples[i].x, -samples[i].z]);
-  // The tail sample is the finish line (or the streaming frontier) — striding
-  // past it would draw a route that stops short of where the run ends.
-  const tail = samples[i1];
-  points.push([-tail.x, -tail.z]);
-
-  const project = fitProject(points);
-  const path = points
-    .map(([x, y], i) => {
-      const [px, py] = project(x, y);
-      return `${i === 0 ? "M" : "L"} ${px.toFixed(2)} ${py.toFixed(2)}`;
-    })
-    .join(" ");
-  routeCache = { key, path, project };
-  return routeCache;
-}
-
-/** HOW FAR ROUND THE STAGE a run has got, m — the laps already in the book
- * plus the road covered on this one, because `progressS` restarts at every
- * line. It is the plates' paint order, so a leader who has just crossed for
- * another lap must not drop behind the field on the map the way a bare
- * `progressS` would have them. */
-function covered(state: GameState): number {
-  return (state.lap - 1) * state.track.length + state.progressS;
-}
-
-/** The field's plates for this frame, backmarker first. */
-function rivalPlates(field: RivalField | null, project: Project, own: GameState): MinimapCar[] {
-  if (!field?.massStart) return [];
-  const plated: { car: MinimapCar; covered: number }[] = [];
-  for (const run of field.runs) {
-    // Never a plate on the car the map is drawn FROM. It is the arrowhead,
-    // and the arrowhead is already where it is: never the player, and — with
-    // a run-out being watched (spectate.ts) — never the crew under the
-    // camera, whose plate would otherwise stand on its own icon.
-    if (run.state === own) continue;
-    // A crew still in the start control or already home is not on the road,
-    // and a plate for one would be a car the player cannot reach.
-    if (!onRoad(run)) continue;
-    const [x, y] = project(-run.state.car.x, -run.state.car.z);
-    if (x < 0 || x > VIEW || y < 0 || y > VIEW) continue;
-    const livery = liveryForCrew(run.entry.crew.id, run.entry.number);
-    plated.push({
-      car: { x, y, number: livery.number, color: legible(livery.paint) },
-      covered: covered(run.state),
-    });
-  }
-  plated.sort((a, b) => a.covered - b.covered);
-  return plated.map((entry) => entry.car);
-}
-
-/** R28 — the board the run owes, placed. Null once they are all behind the
- * car, and null while it sits outside the drawn window: an endless stage
- * only maps the road either side of the car, and a mark pinned to the frame
- * edge would point at a place that is not there. */
-function nextBoard(state: GameState, project: Project): { x: number; y: number } | null {
-  const board = state.track.checkpoints[state.checkpointsPassed];
-  if (board === undefined) return null;
-  const sample = state.track.samples[board.index];
-  const [x, y] = project(-sample.x, -sample.z);
-  if (x < 0 || x > VIEW || y < 0 || y > VIEW) return null;
-  return { x, y };
-}
-
-/** The HUD's minimap payload for this frame. The field is the run's own, or
- * null on the runs nobody else is entered for. */
-export function buildMinimap(state: GameState, field: RivalField | null = null): HudMinimap {
-  const { path, project } = route(state);
-  const [x, y] = project(-state.car.x, -state.car.z);
-  const km = state.progressS / 1000;
-  const endless = state.track.endless;
-  return {
-    path,
-    cars: rivalPlates(field, project, state),
-    next: nextBoard(state, project),
-    // Screen space runs the heading backwards (see the sign boundary above),
-    // so the icon's clockwise rotation is the negated heading.
-    car: { x, y, angle: -state.car.heading * (180 / Math.PI) },
-    progress: endless ? km - Math.floor(km) : Math.min(1, state.progressS / state.track.length),
-    label: endless
-      ? `${km.toFixed(1)} KM`
-      : state.laps > 1
-        ? `LAP ${Math.min(state.lap, state.laps)}/${state.laps}`
-        : "",
-  };
-}
 
 /** The gauge ring's path: a rounded rect that starts at top-center and runs
  * clockwise, so the fill grows away from twelve o'clock like a lap counter.
@@ -280,107 +57,192 @@ function ringPath(): string {
 
 const RING_PATH = ringPath();
 
-/** The car icon: an arrowhead with a notched tail, drawn nose-up around the
- * origin so the whole glyph is one translate + rotate. */
-const CAR_ICON = "M 0 -6 L 4 5 L 0 2.6 L -4 5 Z";
+/** THE CAR, from above: a body with a pointed nose and a tapered tail, the
+ * glass inside it, and four wheels standing proud of the sides.
+ *
+ * It is drawn nose-up around the origin, so the whole thing is one
+ * translate and one rotate — and it is drawn at a size nothing on the map
+ * shares. A car at this framing is a metre and a half of view space, which
+ * is a dot; the icon is nine times that, because what it has to say is
+ * WHICH WAY THE CAR IS POINTED and a dot cannot say it. */
+const CAR_BODY = "M 0 -7.4 L 3 -4.8 L 3.4 2.2 L 2.6 6.6 L -2.6 6.6 L -3.4 2.2 L -3 -4.8 Z";
+const CAR_GLASS = "M -2 -2.8 L 2 -2.8 L 2.2 0.8 L -2.2 0.8 Z";
+const CAR_WHEELS = [
+  "M -5.1 -5.2 h 1.7 v 3 h -1.7 Z",
+  "M 3.4 -5.2 h 1.7 v 3 h -1.7 Z",
+  "M -5.1 1.8 h 1.7 v 3 h -1.7 Z",
+  "M 3.4 1.8 h 1.7 v 3 h -1.7 Z",
+].join(" ");
 
 /** R28 — the next board's mark: a ring with a dot in it, with a wider ring
- * breathing out of it. A RING because the two glyphs already on the map are
- * solid — the car's arrowhead and the field's plates — and a hollow one is
- * told apart from both at a glance and at the size a phone draws this at.
- * `MARK_HALO` is the far edge of the breath, and it stays inside `PAD` so
- * that a board near the end of the route is not shaved off by the SVG root
- * the way a taller rival plate would be. */
+ * breathing out of it. A RING because everything else that MOVES on the map
+ * is solid, and a hollow glyph is told apart from all of them at a glance
+ * and at the size a phone draws this at. */
 const MARK_R = 3.9;
 const MARK_DOT = 1.5;
 const MARK_HALO = 7.6;
 
+/** ...and the chevron it becomes once the board is off the window: a wedge
+ * on the rim, pointing the way the board is. */
+const MARK_ARROW = "M 0 -4.6 L 3.4 1.6 L 0 0.1 L -3.4 1.6 Z";
+
+/** The stage's ends: a flag on a staff, drawn from its foot so the foot is
+ * the place. Squared off for the finish, swallow-tailed for the start, so
+ * the two read apart with no colour at all. */
+const END_START = "M 0 0 V -9 L 7 -7.4 L 3.6 -5.6 L 7 -3.8 L 0 -2.2 Z";
+const END_FINISH = "M 0 0 V -9 L 7 -9 L 7 -3 L 0 -3 Z";
+
 /** A rival's plate, drawn around the POINT it stands on so the whole glyph
  * is one translate. One closed path rather than a box and a triangle: two
  * shapes share an edge, and a stroked shared edge is a line drawn across
- * the middle of the plate. Traversal is clockwise on screen — bottom edge
- * leftward, up the left side, back along the top — which is what makes
- * every corner arc a sweep of 1, the same way `ringPath` runs. */
-function pinPath(digits: number): string {
+ * the middle of the plate. Traversal is clockwise on screen — which is what
+ * makes every corner arc a sweep of 1, the same way `ringPath` runs.
+ *
+ * `up` hangs the box BELOW the point instead of above it, for a car near
+ * the top of the window whose plate the frame would otherwise clip. */
+function pinPath(digits: number, up: boolean): string {
   const x = (PIN_PAD * 2 + digits * PIN_DIGIT) / 2;
-  const top = -PIN_TIP - PIN_H;
+  const s = up ? 1 : -1;
+  const top = s * (PIN_TIP + PIN_H);
+  const tip = s * PIN_TIP;
   const r = PIN_R;
+  const sweep = up ? 0 : 1;
   return [
     "M 0 0",
-    `L ${-PIN_TIP_W} ${-PIN_TIP}`,
+    `L ${-PIN_TIP_W} ${tip}`,
     `H ${-x + r}`,
-    `A ${r} ${r} 0 0 1 ${-x} ${-PIN_TIP - r}`,
-    `V ${top + r}`,
-    `A ${r} ${r} 0 0 1 ${-x + r} ${top}`,
+    `A ${r} ${r} 0 0 ${sweep} ${-x} ${tip + s * r}`,
+    `V ${top - s * r}`,
+    `A ${r} ${r} 0 0 ${sweep} ${-x + r} ${top}`,
     `H ${x - r}`,
-    `A ${r} ${r} 0 0 1 ${x} ${top + r}`,
-    `V ${-PIN_TIP - r}`,
-    `A ${r} ${r} 0 0 1 ${x - r} ${-PIN_TIP}`,
+    `A ${r} ${r} 0 0 ${sweep} ${x} ${top - s * r}`,
+    `V ${tip + s * r}`,
+    `A ${r} ${r} 0 0 ${sweep} ${x - r} ${tip}`,
     `H ${PIN_TIP_W}`,
     "Z",
   ].join(" ");
 }
 
-/** Cut once per width. A door number is one or two numerals and the map is
- * rebuilt twelve times a second with a whole grid on it. */
-const PIN_PATHS = new Map<number, string>();
+/** Cut once per width and orientation. A door number is one or two numerals
+ * and the map is rebuilt twelve times a second with a whole grid on it. */
+const PIN_PATHS = new Map<string, string>();
 
-function pinFor(number: string): string {
-  const digits = Math.max(1, number.length);
-  let path = PIN_PATHS.get(digits);
+function pinFor(car: MinimapCar): string {
+  const digits = Math.max(1, car.number.length);
+  const key = `${digits}${car.flip ? "u" : "d"}`;
+  let path = PIN_PATHS.get(key);
   if (path === undefined) {
-    path = pinPath(digits);
-    PIN_PATHS.set(digits, path);
+    path = pinPath(digits, car.flip);
+    PIN_PATHS.set(key, path);
   }
   return path;
 }
 
-/** Where the numeral sits: the middle of the box above the point. */
-const PIN_TEXT_Y = -PIN_TIP - PIN_H / 2;
+/** Where the numeral sits: the middle of the box, on whichever side of the
+ * point the box ended up. */
+function pinTextY(car: MinimapCar): number {
+  return (car.flip ? 1 : -1) * (PIN_TIP + PIN_H / 2);
+}
+
+/** The country's pose: scaled about the middle of the box for the speedo's
+ * zoom, then slid to where the car has got since the paths were cut. The
+ * origin is written into the list rather than left to `transform-origin`,
+ * so the two halves compose the same way whatever the element's box is. */
+function worldPose(scene: HudMinimap["scene"]): string {
+  const x = VIEW / 2 + scene.offset.x;
+  const y = VIEW / 2 + scene.offset.y;
+  return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${scene.zoom.toFixed(4)}) translate(${-VIEW / 2}px, ${-VIEW / 2}px)`;
+}
+
+function place(x: number, y: number, angle = 0): string {
+  const turn = angle === 0 ? "" : ` rotate(${angle.toFixed(1)}deg)`;
+  return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)${turn}`;
+}
 
 export function Minimap({ map, onOpen }: { map: HudMinimap; onOpen: () => void }) {
+  const { scene } = map;
+  // The one frame a re-cut lands on is the one frame the country must NOT be
+  // tweened onto: the offset, the zoom and the paths all change together and
+  // compose back to the same picture, so the transform has to arrive with
+  // them. Every other frame is a few view units of drift and is tweened.
+  const drawn = useRef(-1);
+  const recut = drawn.current !== scene.cut;
+  drawn.current = scene.cut;
   return (
     <button type="button" className="hud-minimap" onClick={onOpen} aria-label="Race menu">
       <svg className="hud-minimap-face" viewBox={`0 0 ${VIEW} ${VIEW}`} aria-hidden="true">
-        <path className="hud-minimap-route" d={map.path} />
-        {/* R28 — the board still owed, over the route and under everything
+        {/* The country, cut around its anchor and slid to where the car now
+            stands. Painted bottom up: the ground, then the water on it, then
+            everything built over both. */}
+        <g
+          className="hud-minimap-world"
+          style={{ transform: worldPose(scene), transition: recut ? "none" : undefined }}
+        >
+          <path className="hud-minimap-open" d={scene.open} />
+          <path className="hud-minimap-water" d={scene.water} />
+          <path className="hud-minimap-stream" d={scene.streams} />
+          <path className="hud-minimap-rail" d={scene.rails} />
+          <path className="hud-minimap-lane" d={scene.lanes} />
+          {/* The stage is drawn twice: a dark casing, then the surface over
+              it. The casing is what separates the road from a lane running
+              beside it and from pale ground under both — a single stroke on
+              this plate has no edge of its own at all. */}
+          <path className="hud-minimap-case" d={scene.road} />
+          <path className="hud-minimap-road" d={scene.road} />
+          <path className="hud-minimap-sealed" d={scene.sealed} />
+          <path className="hud-minimap-wall" d={scene.walls} />
+        </g>
+        {/* The stage's ends, where the window holds them. */}
+        {map.ends.map((end) => (
+          <path
+            key={end.kind}
+            className={`hud-minimap-end hud-minimap-end-${end.kind}`}
+            d={end.kind === "start" ? END_START : END_FINISH}
+            style={{ transform: place(end.x, end.y) }}
+          />
+        ))}
+        {/* R28 — the board still owed, over the country and under everything
             that MOVES. It is a place rather than a car, so a plate closing
             on you must never be the thing it hides. */}
         {map.next !== null && (
           <g
             className="hud-minimap-next"
-            style={{
-              transform: `translate(${map.next.x.toFixed(2)}px, ${map.next.y.toFixed(2)}px)`,
-            }}
+            style={{ transform: place(map.next.x, map.next.y, map.next.angle) }}
           >
-            <circle className="hud-minimap-next-halo" r={MARK_HALO} />
-            <circle className="hud-minimap-next-ring" r={MARK_R} />
-            <circle className="hud-minimap-next-dot" r={MARK_DOT} />
+            {map.next.edge ? (
+              <path className="hud-minimap-next-arrow" d={MARK_ARROW} />
+            ) : (
+              <>
+                <circle className="hud-minimap-next-halo" r={MARK_HALO} />
+                <circle className="hud-minimap-next-ring" r={MARK_R} />
+                <circle className="hud-minimap-next-dot" r={MARK_DOT} />
+              </>
+            )}
           </g>
         )}
         {/* The field, backmarker first — SVG paints in document order, so
             the leader's plate is the last one down and the one nothing can
-            cover. The player's arrowhead follows the whole list for the
-            same reason: whatever else is on the map, you can see yourself. */}
+            cover. The player's own car follows the whole list for the same
+            reason: whatever else is on the map, you can see yourself. */}
         {map.cars.map((car) => (
           <g
             key={car.number}
             className="hud-minimap-pin"
-            style={{ transform: `translate(${car.x.toFixed(2)}px, ${car.y.toFixed(2)}px)` }}
+            style={{ transform: place(car.x, car.y) }}
           >
-            <path d={pinFor(car.number)} fill={car.color} />
-            <text className="hud-minimap-pin-no" y={PIN_TEXT_Y} fontSize={PIN_TEXT}>
+            <path d={pinFor(car)} fill={car.color} />
+            <text className="hud-minimap-pin-no" y={pinTextY(car)} fontSize={PIN_TEXT}>
               {car.number}
             </text>
           </g>
         ))}
         <g
           className="hud-minimap-car"
-          style={{
-            transform: `translate(${map.car.x}px, ${map.car.y}px) rotate(${map.car.angle.toFixed(1)}deg)`,
-          }}
+          style={{ transform: place(VIEW / 2, VIEW / 2, map.heading) }}
         >
-          <path d={CAR_ICON} />
+          <path className="hud-minimap-car-tyres" d={CAR_WHEELS} />
+          <path className="hud-minimap-car-body" d={CAR_BODY} />
+          <path className="hud-minimap-car-glass" d={CAR_GLASS} />
         </g>
       </svg>
       {/* The frame IS the progress gauge — a dim track with the run's share
