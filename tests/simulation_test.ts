@@ -37,7 +37,13 @@ describe("bot simulations", () => {
         expect(result.stats.respawns, `seed ${seed} / ${carId}`).toBeLessThanOrEqual(1);
       }
     }
-  });
+    // ...and its OWN allowance, because this one case is twelve whole stages
+    // driven end to end at 120 Hz — around twenty seconds on an idle machine,
+    // which is two thirds of the shared 30 s default rather than the eighth of
+    // it that default is sized for (`vitest.config.ts`). A shard-mate on the
+    // other core is then enough to decide the result, and it has: CI timed
+    // this out at 30129 ms with every assertion in it passing.
+  }, 180_000);
 
   it("stage pace lands in rally territory", () => {
     for (const seed of SEEDS) {
