@@ -181,6 +181,22 @@ pitch)` is the honest "is it on its wheels", because a body at roll 0 and
   prices. `g × airTime`, capped by the closing, is the honest arrival.
   Reading `-vy` books every chattering step around a corner handover as a
   ten m/s impact.
+- **...AND A CONTACT IS A CORNER CLOSING ON THE GROUND**, never a body found
+  below its own surface. That same sweeping seat overtakes a body turning at
+  eight rad/s and leaves it underneath every step or two while one and the
+  same corner is still coming down; read as arrivals, those steps were each
+  charged a full pivot exchange — one hand-over billed four times, 8.24 rad/s
+  to 3.30 through a single corner, on contacts whose `descent` was 0.00. The
+  test is `seatVy - vy > 0`, which is the quantity the arrival is priced off
+  two lines later: one account of the geometry, and a fact about the step
+  rather than something the body has to remember about the last one.
+- **A BODY BETWEEN CONTACTS DOES NOT RIDE THE TERRAIN.** What a flight carries
+  is the weight's WORLD height; the ground enters only as the height a contact
+  happens AT (`rollSeat + seatOn`). Carried relative to the ground under it,
+  a flying body is re-seated every step onto whatever it is over and climbs
+  hills for free, in steps where the only term that ran was gravity. On flat
+  ground it cancels exactly, so only a crash thrown off a lip into the wild
+  ever shows it — there it was an eighth of the whole budget.
 - **A tyre arriving ROLLS; a panel DRAGS.** `pivotKeep` reports whether the
   arriving corner is sprung, and the travel rub has to read it too, not just
   the rotation. A roll passes through upright once a turn, and charging that

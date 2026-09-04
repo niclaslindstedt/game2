@@ -1710,8 +1710,21 @@ export const TUNING = {
        * two seconds later — with a flat 2.6/s exponential scrub beside it
        * that took nine tenths of the speed out of every second of contact.
        * Between them, the read that made a rollover look like a car
-       * hitting glue and then spinning on the spot. */
-      faceGrip: { wheels: 0.85, flank: 0.5, end: 0.58, roof: 0.65 },
+       * hitting glue and then spinning on the spot.
+       *
+       * The three SHELL faces were each a couple of hundredths higher while
+       * the ledger was leaking a fifth of every fast roll: a body handed
+       * free energy at each hand-over needs more friction to come to rest in
+       * a plausible distance, and the numbers had quietly absorbed that.
+       * With the hand-overs settled they read a crash as harder than any
+       * that has been measured — a bare roll at 0.64 against a real one's
+       * 0.45 — so they are re-read here against the reconstruction range
+       * they come from (0.4-0.6 for a body sliding on its shell over soil
+       * and gravel) rather than defended. `wheels` does not move: it is a
+       * tyre being dragged sideways, it is what bites at the start of a
+       * trip, and nothing about the ledger was ever an argument about
+       * rubber. */
+      faceGrip: { wheels: 0.85, flank: 0.42, end: 0.5, roof: 0.58 },
       /** HOW MUCH OF AN ARRIVAL THE SHELL PASSES ON to the body rather than
        * folding, m/s — the most any single contact can turn the car with,
        * however hard it came down.
@@ -1885,10 +1898,19 @@ export const TUNING = {
          * tuned as though it were: a body already sliding has the ground
          * dragging at the whole of the patch's budget in the direction it is
          * going, and no pedal can ask for more friction than the patch has.
-         * What the brake buys is the accident ENDING SOONER and ending the
-         * right way up — measured over one trip, four tenths of a second off
-         * the roll, and the difference between a car back on its wheels and
-         * a car lying on its side waiting for the crew. */
+         * It is not a shorter accident either — swept over ninety trips the
+         * brake moves a roll's LENGTH by a hundredth of a second, and it
+         * cannot do otherwise for the same reason. (It was written down here
+         * as four tenths off the roll, measured at one staging; a rollover is
+         * chaotic enough that any single staging shows a pedal doing
+         * something, half the time the opposite of what it does.)
+         *
+         * What it buys is where the car is POINTING when it stops. The same
+         * budget spent through the tyres the driver still has turns the body
+         * differently from the ground merely dragging on it, and one accident
+         * in ten that would have left the car lying there for the crew ends
+         * with it on its wheels instead — the difference between a bad moment
+         * and a retirement. */
         brake: 1,
         /** THE STEERING: the lateral force the tyres still down will make.
          * This is the term that lets the driver change how the crash GOES

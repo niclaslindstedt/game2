@@ -472,11 +472,22 @@ export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
   // to it except the flight's turbulence, which is bounded. Read per STEP,
   // because that is the only rate a term making energy shows up at; the
   // frame table below samples six times a second and would hide it.
+  //
+  // ...and bucketed BY REGIME — was the body off the ground, is it now — which
+  // is the whole reason this is readable at all. A crash's gain is never one
+  // fault: read as a single percentage it is a number to argue about, and read
+  // as four it names which term is wrong. A rise on `air->air` is a step where
+  // nothing but gravity and the turbulence ran, so it can only be the flight's
+  // own bookkeeping; one on `air->grd` is what a touchdown was charged for;
+  // `grd->grd` is the grounded model itself, which is exactly conservative and
+  // ought to read zero. Split that way, a flat 20% went to three unrelated
+  // faults on the first run of it.
   const spread = massSpread(carById(carId).mass);
   let energy = crashEnergy(state.car, spread);
-  const budget = { into: energy, gained: 0, steps: 0, worst: 0 };
+  const budget = { into: energy, gained: 0, steps: 0, worst: 0, regimes: {} };
   for (let i = 0; i < TUNING.physicsHz * scenario.seconds; i++) {
     const allowed = crashTurbulence(state.car, spread);
+    const wasAir = state.car.airborne;
     const events = step(state, { ...NEUTRAL_INPUT });
     if (state.car.rolling) {
       const now = crashEnergy(state.car, spread);
@@ -485,6 +496,11 @@ export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
         budget.gained += rise;
         budget.steps += 1;
         if (rise > budget.worst) budget.worst = rise;
+        const regime = `${wasAir ? "air" : "grd"}->${state.car.airborne ? "air" : "grd"}`;
+        const seen = budget.regimes[regime] ?? { gained: 0, steps: 0 };
+        seen.gained += rise;
+        seen.steps += 1;
+        budget.regimes[regime] = seen;
       }
       energy = now;
     } else {

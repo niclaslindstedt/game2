@@ -117,9 +117,19 @@ function rollLine(run) {
 function budgetLine(run) {
   const b = run.budget;
   const pc = (x) => `${((100 * x) / b.into).toFixed(1)}%`;
+  // BY REGIME, whenever there is anything to explain. A gain read as one
+  // percentage is a number to argue about; read as `air->air` / `air->grd` /
+  // `grd->grd` it names the term at fault, because the three are different
+  // physics — a flight, a touchdown, and the grounded model, which is exactly
+  // conservative and must read nothing.
+  const split = Object.entries(b.regimes)
+    .sort((a, c) => c[1].gained - a[1].gained)
+    .map(([regime, r]) => `${regime} ${pc(r.gained)} on ${r.steps}`)
+    .join(", ");
   return (
     `BUDGET ${b.into.toFixed(0)} -> ${b.outOf.toFixed(0)} J/KG  ` +
-    `GAINED ${pc(b.gained)} ON ${b.steps} STEPS, WORST +${b.worst.toFixed(2)}`
+    `GAINED ${pc(b.gained)} ON ${b.steps} STEPS, WORST +${b.worst.toFixed(2)}` +
+    (split === "" ? "" : `\n   ${split}`)
   );
 }
 
