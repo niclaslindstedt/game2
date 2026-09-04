@@ -33,7 +33,8 @@ import {
 } from "./hud-finish.tsx";
 import { SpectateBanner, SpectateGap, type SpectateProps } from "./hud-spectate.tsx";
 import { MirrorSwitch, paceUnderGlass, type GlassSlot } from "./hud-mirror.tsx";
-import { Minimap, type HudMinimap } from "./minimap.tsx";
+import { Minimap } from "./minimap.tsx";
+import type { HudMinimap } from "./minimap-view.ts";
 import { CarHealthPanel } from "./hud-health.tsx";
 import type { CarHealth } from "./car-health.ts";
 import type { PaceSign } from "./pace-shape.ts";
