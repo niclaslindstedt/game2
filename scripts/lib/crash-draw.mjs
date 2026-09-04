@@ -329,7 +329,7 @@ function drawCell(canvas, run, f, index, x, y, cell) {
     `${round(f.speed * 3.6)}KM/H  U${round(f.u, 1)} W${round(f.w, 1)}`,
     `ROLL ${round(deg(f.tilt))} ${round(f.rollRate, 1)}R/S VY${round(f.vy, 1)}`,
     `YAW ${round(deg(f.yaw))} ${round(f.yawRate, 1)}R/S PIT ${round(deg(f.pitch))}`,
-    `${f.airborne ? "AIR " : "DOWN"} ${f.rolling ? "ROLLING" : ""} ` +
+    `${f.airborne ? "AIR " : "DOWN"} ${f.sliding ? "SLIDING" : f.rolling ? "ROLLING" : ""} ` +
       `W${round(f.wear * 100)}% P${f.parts}`,
   ];
   rows.forEach((row, i) => canvas.text(row, x + 6, y + cell.h - 34 + i * 8, INK.label, 1));

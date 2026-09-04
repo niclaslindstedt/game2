@@ -303,6 +303,7 @@ function pivotKeep(tilt: number): { keep: number; gap: number; sprung: boolean }
 export function beginRoll(car: CarState, events: GameEvent[], stats: RunStats): void {
   if (car.rolling) return;
   car.rolling = true;
+  car.sliding = false;
   stats.rolls += 1;
   events.push({
     type: "rollover",
@@ -489,6 +490,22 @@ export function stepRolling(
 ): void {
   const dt = T.dt;
   const tilt = rollTilt(car.roll);
+  // THE BED THE BODY IS LYING ON. Everything the centre-of-mass curve says
+  // is said about a body's attitude RELATIVE TO THE GROUND UNDER IT, not to
+  // the horizon: the valleys of `centreHeight` are the faces a body comes
+  // to rest on, and on a hillside those rest attitudes are the hillside's,
+  // tilted with it. It is the same angle a car settles its springs onto
+  // (`car.ts`'s `camber`), read from the same place.
+  //
+  // Without it the model has no idea a slope is there, and the failure is
+  // the whole of what a rollover down a bank should be: a body on its ROOF
+  // sits at the bottom of the roof's valley, gravity pulls it back into
+  // that valley however steep the ground, and a car slid down a 24° bank
+  // upside down for eleven metres without once threatening to go over.
+  // Against the bed it is a body a quarter of the way up the corner, and
+  // the hill finishes what it started.
+  const bed = ctx.slopeLat ? Math.atan(ctx.slopeLat) : 0;
+  const lie = tilt - bed;
   // Where the weight in the car is, over the ground it is over. Carried in
   // `car.y` (the origin) between steps, which is what the rest of the game
   // reads, and unpacked here through the attitude.
@@ -505,8 +522,9 @@ export function stepRolling(
 
   if (down) {
     // GRAVITY along the centre's own curve — downhill toward the face
-    // below it, uphill against the corner ahead of it.
-    car.rollRate -= (T.air.gravity / R.inertia) * centreSlope(tilt) * dt;
+    // below it, uphill against the corner ahead of it, and read against the
+    // BED so that "the face below it" is the hillside's idea of one.
+    car.rollRate -= (T.air.gravity / R.inertia) * centreSlope(lie) * dt;
     // ...and THE GROUND DRIVING IT ON — which is the same friction that is
     // slowing the car down, and has to be written as one thing.
     //
@@ -541,7 +559,7 @@ export function stepRolling(
       const bite = (car.w / speed) * pull;
       car.u -= (car.u / speed) * pull;
       car.w -= bite;
-      car.rollRate -= (bite * centreHeight(tilt)) / R.inertia;
+      car.rollRate -= (bite * centreHeight(lie)) / R.inertia;
     }
     car.rollRate *= Math.exp(-R.drag * dt);
   }
@@ -697,8 +715,22 @@ export function stepRolling(
   // IT IS OVER when the body is lying on a face of itself with no roll
   // left to take it off one — and never on the corner between two, where
   // gravity is still working on it, and never in the air.
+  //
+  // The face is the BED's, not the horizon's: a car at rest on a hillside
+  // lies on the hillside, a quarter turn at a time from the attitude the
+  // hillside itself holds. Rounding against level calls a body resting on a
+  // bank "settled" while it is still a bank's worth of angle up its own
+  // corner, with gravity working on it.
+  //
+  // ...and WHICH OF THE TWO MOTIONS this step was. Cleared here and set in
+  // the one branch below that is a slide, so the flag is a fact about the
+  // step just taken rather than a mode anything has to remember. A body
+  // still turning, still in the air, or balanced on a corner is ROLLING;
+  // only one lying flat on a face of itself with the rotation spent and the
+  // travel not is SLIDING.
+  car.sliding = false;
   if (car.airborne) return;
-  const face = Math.round(now / QUARTER) * QUARTER;
+  const face = Math.round((now - bed) / QUARTER) * QUARTER + bed;
   if (Math.abs(car.rollRate) >= R.rest || Math.abs(now - face) > R.settled) return;
   // ...and not while the nose is still swinging either: a body that has run
   // out of roll on a face can still be pitching hard enough to take itself
@@ -718,7 +750,15 @@ export function stepRolling(
   // speed still in its velocity, unspent, and was then teleported to the
   // last board. A body that comes down on its WHEELS still going is the
   // other case entirely and is handed straight back: that one drives on.
-  if (!onItsWheels(car.roll) && Math.hypot(car.u, car.w) > R.restSpeed) return;
+  if (!onItsWheels(car.roll) && Math.hypot(car.u, car.w) > R.restSpeed) {
+    // SLIDING. The roll keeps the car — the ground can put it back over at
+    // any moment, off a solid, off an edge, or off the drag levering it
+    // past its own corner — but nothing choosing a shot, a sound or an
+    // effect should be told a car lying flat and going straight is turning
+    // over.
+    car.sliding = true;
+    return;
+  }
   car.rolling = false;
   car.rollRate = 0;
   car.pitchRate = 0;

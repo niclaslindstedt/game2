@@ -356,6 +356,7 @@ function drown(state: GameState, events: GameEvent[], waterY: number): void {
   car.chain = 0;
   car.spun = false;
   car.rolling = false;
+  car.sliding = false;
   car.slide = 0;
   car.braking = false;
   car.locked = false;

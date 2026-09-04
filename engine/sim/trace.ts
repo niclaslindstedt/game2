@@ -92,6 +92,7 @@ const REVERSING = 1 << 4;
 const SETTLING = 1 << 5;
 const ROLLING = 1 << 6;
 const SPUN = 1 << 7;
+const SLIDING = 1 << 8;
 
 /** The surfaces, numbered. A `Record` over the state's own union so a new
  * surface fails to compile here rather than silently reading as gravel. */
@@ -237,6 +238,7 @@ function sample(trace: RunTrace, sim: GameState): void {
   if (car.reversing) flags |= REVERSING;
   if (car.settling) flags |= SETTLING;
   if (car.rolling) flags |= ROLLING;
+  if (car.sliding) flags |= SLIDING;
   if (car.spun) flags |= SPUN;
   trace.bits[i + BITS] =
     (clamp(car.gear, 0, (1 << GEAR_BITS) - 1) |
@@ -341,6 +343,7 @@ function pose(trace: RunTrace, step: number, into: GameState): void {
   car.reversing = (flags & REVERSING) !== 0;
   car.settling = (flags & SETTLING) !== 0;
   car.rolling = (flags & ROLLING) !== 0;
+  car.sliding = (flags & SLIDING) !== 0;
   car.spun = (flags & SPUN) !== 0;
   into.surface = SURFACES[(bits >>> SURFACE_SHIFT) & ((1 << SURFACE_BITS) - 1)];
   into.phase = PHASES[(bits >>> PHASE_SHIFT) & ((1 << PHASE_BITS) - 1)];
