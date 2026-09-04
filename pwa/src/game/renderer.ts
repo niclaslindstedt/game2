@@ -326,6 +326,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // what is thrown, when, and how much of it — and none of the plumbing.
   const carFx = createCarFx(scene);
   const { dust, crash, mud, smoke, plume, gravel, spray, foam, fumes, life, celebration } = carFx;
+  const { showCrash } = carFx;
 
   /** THE GROUND A BODY THAT IS OVER IS PLOUGHING, thrown from the corner of
    * the shell that is actually down.
@@ -341,6 +342,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * where it was made and drifts, because it was only disturbed. */
   const throwFromShell = (state: GameState, grains: number, puffs: number): void => {
     if (grains <= 0 && puffs <= 0) return;
+    // The pool is parked between crashes — the biggest one in the game, for
+    // an effect most runs never see — so say it is being used before using
+    // it, or the grains are written into a cloud nothing draws.
+    showCrash();
     const c = state.car;
     const at = crashContact(rollTilt(c.roll));
     const rightX = Math.cos(c.heading);
