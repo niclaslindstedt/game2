@@ -104,7 +104,17 @@ export { tyreLoad } from "./game/car.ts";
 // ...and what a body OFF its wheels does: whether a roll it has been handed
 // is worth the lift over its own sill corner, and how far past that corner
 // a car can be left lying and still be a car anybody drives away (roll.ts).
-export { WHEEL_BASIN, goesOver, goesOverEnd, onItsWheels } from "./game/roll.ts";
+export {
+  WHEEL_BASIN,
+  crashEnergy,
+  crashTurbulence,
+  goesOver,
+  goesOverEnd,
+  massSpread,
+  onItsWheels,
+  rollBed,
+  type MassSpread,
+} from "./game/roll.ts";
 
 // The stage generator.
 export {

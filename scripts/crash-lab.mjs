@@ -107,6 +107,22 @@ function rollLine(run) {
   );
 }
 
+/** THE BUDGET, as its own line. A crash is one store of energy being run
+ * down — what the car was travelling with, what it was turning with, and how
+ * high its weight still was — and NOTHING in the model may add to it except
+ * the flight's turbulence, which is bounded and averages to nothing. So the
+ * gain here is not a tuning figure: any of it is a term making energy out of
+ * nothing, which is what every rotational fault this module has had turned
+ * out to be. Read per STEP, because that is the rate such a term works at. */
+function budgetLine(run) {
+  const b = run.budget;
+  const pc = (x) => `${((100 * x) / b.into).toFixed(1)}%`;
+  return (
+    `BUDGET ${b.into.toFixed(0)} -> ${b.outOf.toFixed(0)} J/KG  ` +
+    `GAINED ${pc(b.gained)} ON ${b.steps} STEPS, WORST +${b.worst.toFixed(2)}`
+  );
+}
+
 /** THE FRAME TABLE. The picture is for seeing the shape of a crash; this is
  * what a claim about one gets made out of, and what a before/after diff is
  * read off. One row per drawn frame, plus every event in order. */
@@ -142,6 +158,7 @@ function report(run, stride) {
   }
   console.log(`   ${summary(run).toLowerCase()}`);
   console.log(`   ${rollLine(run).toLowerCase()}`);
+  console.log(`   ${budgetLine(run).toLowerCase()}`);
 }
 
 const deg = (rad) => ((rad * 180) / Math.PI).toFixed(0);

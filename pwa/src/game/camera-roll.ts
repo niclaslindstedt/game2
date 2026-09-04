@@ -70,6 +70,15 @@
 // to rest on its roof is left lying there before the crew are sent back to
 // the last board.
 //
+// ...AND ONLY FOR A CAR THAT IS LYING THERE. The crash hands the car back the
+// moment its tyres are down and the rotation is spent, which is a car the
+// player is driving again — and holding the verge lens through a beat that
+// exists for a wreck stood the shot still watching them accelerate away up
+// the road for a second and a half. `state.overturned` is the engine's own
+// answer to "is anybody driving this", set by the same step that starts the
+// respawn clock, so the hold is asked of that rather than restated here off
+// an attitude this module would have to interpret.
+//
 // ...unless the car is somewhere else entirely, which after a roll it very
 // often is: that same respawn teleports it hundreds of metres up the road.
 // A shot cannot pan across a teleport, so the plant is DROPPED and the rig
@@ -164,6 +173,21 @@ function ease(t: number): number {
   return c * c * (3 - 2 * c);
 }
 
+/** HOW LONG THE SHOT HOLDS ON THE CAR once the roll has let go of it, s.
+ *
+ * A wreck gets the engine's own beat: `air.roll.lieFor` is exactly how long a
+ * car left off its wheels lies there before the crew are taken back to the
+ * last board, and the shot is what that beat is FOR — the moment the player
+ * reads what just happened to them.
+ *
+ * A car that caught itself gets none of it. The crash hands a car back as
+ * soon as its tyres are down and the rotation is spent, however far over it
+ * is still holding, and that is a car being driven: it wants its own camera
+ * back on the throttle, not a verge lens watching it leave. */
+function holdFor(state: GameState): number {
+  return state.overturned ? TUNING.air.roll.lieFor : 0;
+}
+
 export type RollCamera = {
   /** Whether the shot owns the frame: the car is going over, or it has come
    * to rest and the beat afterwards has not run out. Read before `fly`, and
@@ -237,7 +261,7 @@ export function createRollCamera(): RollCamera {
     at: () => hand,
     reset,
     watching: (state) =>
-      state.car.rolling || (planted !== null && rested < TUNING.air.roll.lieFor + ROLL.handOver),
+      state.car.rolling || (planted !== null && rested < holdFor(state) + ROLL.handOver),
     fly: (camera, state, drivingFov, clearance, dt) => {
       const car = state.car;
       if (!planted) {
@@ -275,7 +299,7 @@ export function createRollCamera(): RollCamera {
       was.set(car.x, car.y, car.z);
       stood += dt;
       rested = car.rolling ? 0 : rested + dt;
-      hand = ease((rested - TUNING.air.roll.lieFor) / ROLL.handOver);
+      hand = ease((rested - holdFor(state)) / ROLL.handOver);
       if (hand >= 1) {
         reset();
         return drivingFov;

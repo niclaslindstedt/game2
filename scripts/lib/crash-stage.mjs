@@ -14,9 +14,14 @@
 import {
   NEUTRAL_INPUT,
   TUNING,
-  WHEEL_BASIN,
   compileTrack,
+  carById,
+  crashEnergy,
+  crashTurbulence,
   createGame,
+  massSpread,
+  onItsWheels,
+  rollBed,
   rollTilt,
   step,
   updateSlip,
@@ -239,7 +244,20 @@ function frameOf(state, t, origin, events) {
   const sinB = Math.sin(car.heading);
   const right = state.terrain.groundAt(car.x + cosB * grade, car.z - sinB * grade);
   const left = state.terrain.groundAt(car.x - cosB * grade, car.z + sinB * grade);
-  const bed = Math.atan((right - left) / (2 * grade));
+  const ahead = state.terrain.groundAt(car.x + sinB * grade, car.z + cosB * grade);
+  const behind = state.terrain.groundAt(car.x - sinB * grade, car.z - cosB * grade);
+  const slopeLat = (right - left) / (2 * grade);
+  const bed = Math.atan(slopeLat);
+  // IS IT ON ITS WHEELS — asked of the box against the ground it is on, not
+  // of the roll angle. With a free pitch axis an attitude is the COMPOSITION
+  // of the two: a car reading roll -171 deg and pitch 178 is sitting
+  // squarely on its tyres facing backwards, and a lab that reads the roll
+  // alone labels that one "lying on its roof" with a straight face.
+  const wheels = onItsWheels(
+    car.roll,
+    car.pitch,
+    rollBed({ slope: (ahead - behind) / (2 * grade), slopeLat }),
+  );
   const dx = car.x - origin.x;
   const dz = car.z - origin.z;
   const sin = Math.sin(origin.heading);
@@ -256,6 +274,7 @@ function frameOf(state, t, origin, events) {
     speed: Math.hypot(car.u, car.w),
     roll: car.roll,
     tilt: rollTilt(car.roll),
+    wheels,
     bed,
     rollRate: car.rollRate,
     yaw: wrap(car.heading - origin.heading),
@@ -442,8 +461,29 @@ export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
   let t = 0;
   let rolled = false;
   let still = 0;
+  // THE BUDGET. A crash is one store of energy — travel, spin and the height
+  // the weight still has — being run down, and nothing in the model may add
+  // to it except the flight's turbulence, which is bounded. Read per STEP,
+  // because that is the only rate a term making energy shows up at; the
+  // frame table below samples six times a second and would hide it.
+  const spread = massSpread(carById(carId).mass);
+  let energy = crashEnergy(state.car, spread);
+  const budget = { into: energy, gained: 0, steps: 0, worst: 0 };
   for (let i = 0; i < TUNING.physicsHz * scenario.seconds; i++) {
+    const allowed = crashTurbulence(state.car, spread);
     const events = step(state, { ...NEUTRAL_INPUT });
+    if (state.car.rolling) {
+      const now = crashEnergy(state.car, spread);
+      const rise = now - energy - allowed;
+      if (rise > 0) {
+        budget.gained += rise;
+        budget.steps += 1;
+        if (rise > budget.worst) budget.worst = rise;
+      }
+      energy = now;
+    } else {
+      energy = crashEnergy(state.car, spread);
+    }
     t += TUNING.dt;
     if (state.car.rolling) rolled = true;
     for (const e of events) log.push({ t, ...e });
@@ -483,7 +523,7 @@ export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
     // its respawn clock. Past the basin its own weight could right it from,
     // there is nothing left to draw.
     const car = state.car;
-    const lying = !car.rolling && !car.airborne && Math.abs(rollTilt(car.roll)) >= WHEEL_BASIN;
+    const lying = !car.rolling && !car.airborne && !frames[frames.length - 1].wheels;
     const moving =
       !lying &&
       (Math.hypot(car.u, car.w) > 0.6 ||
@@ -515,15 +555,32 @@ export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
         across: ended.across - began.across,
         into: began.speed,
         outOf: ended.speed,
-        // The whole-crash retardation, in g — an accident reconstruction's
-        // own figure for a rollover, and the one number that says whether
-        // this reads as a car going over or as a car hitting glue. A real
-        // one runs about 0.45 g.
-        drag: ended.t > began.t ? (began.speed - ended.speed) / (ended.t - began.t) / 9.81 : 0,
+        // The whole-crash retardation, as a fraction of THE GRAVITY IT
+        // HAPPENS UNDER — which is the number an accident reconstruction
+        // quotes for a rollover (about 0.45), and the one figure that says
+        // whether this reads as a car going over or as a car hitting glue.
+        //
+        // Against `air.gravity` and never against 9.81. The game's gravity
+        // is arcade — 1.6x the world's, deliberately, so a hang reads as
+        // slow motion — and dividing a retardation measured under it by the
+        // real figure inflated every reading in this lab by that same 1.6:
+        // crashes sitting at a perfectly good 0.42 were being read as 0.68,
+        // and the "over 1 g and the model is taking speed it should not"
+        // bar was being tripped at a true 0.62. What makes the quantity
+        // comparable across the two worlds is that it is a RATIO — it is
+        // the whole crash's effective coefficient of friction, and it can
+        // be read straight against `roll.faceGrip` (0.5 on a flank), which
+        // is what it ought to come out near.
+        drag:
+          ended.t > began.t
+            ? (began.speed - ended.speed) / (ended.t - began.t) / TUNING.air.gravity
+            : 0,
       }
     : null;
+  budget.outOf = energy;
   return {
     roll,
+    budget,
     name,
     scenario,
     carId,
@@ -540,7 +597,7 @@ export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
     along: last.along,
     across: last.across,
     carried: last.speed,
-    upright: Math.abs(last.tilt) < WHEEL_BASIN,
+    upright: last.wheels,
     wear: last.wear,
     roof: last.roof,
     parts: last.parts,

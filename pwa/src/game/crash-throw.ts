@@ -29,11 +29,22 @@ const B = TUNING.collision;
  * `landing` event carries, both on the engine's own scales.
  */
 export const CRASH_THROW = {
-  /** THE BURST — a corner of the shell arriving. Grains per m/s of slam,
-   * and the ceiling past which more slam only means a harder noise: a
-   * contact that throws three hundred stones already fills the frame, and
-   * a roll makes a dozen of them. */
-  perSlam: 34,
+  /** THE BURST — a corner of the shell arriving. Grains per JOULE PER KG
+   * the ground took off the car, and the ceiling past which more only means
+   * a harder noise: a contact that throws three hundred stones already
+   * fills the frame, and a roll makes a dozen of them.
+   *
+   * Per energy and not per m/s of slam, and that is the whole point of the
+   * number. The ground cannot throw anything it was not given: what comes
+   * up as gravel and dust is what the car just gave up, so it is the
+   * engine's own ledger (`crashEnergy`, on the `landing` event as `took`)
+   * that sizes it. Two things follow that a speed could not give. Energy
+   * goes as the SQUARE of the arrival, so a contact twice as hard throws
+   * four times the stones rather than twice — which is what makes a big one
+   * read as an event and a small one as a scuff. And a contact that arrives
+   * gently but has a whole rollover's ROTATION taken out of it throws like
+   * the accident it is, because the rotation is in the ledger too. */
+  perJoule: 5,
   burstMax: 420,
   /** ...and the HANGING half of the same burst: the part that is left
    * behind rather than flung. The same substance and the same pool — the
@@ -41,12 +52,14 @@ export const CRASH_THROW = {
    * slower and higher, never a soft billboard borrowed from the tyre
    * smoke. Fewer than the grains, so a burst reads as STONES with dust
    * behind them rather than as a ball of haze. */
-  puffPerSlam: 9,
+  puffPerJoule: 1.3,
   puffMax: 130,
-  /** Under this much slam a contact is a body settling rather than
-   * arriving, and it throws nothing. The same bar the engine uses to
-   * decide a contact is an accident at all (`collision.scuffSpeed`). */
-  slamFloor: 3,
+  /** Under this much energy a contact is a body settling rather than
+   * arriving, and it throws nothing. The engine's own bar for a contact
+   * being an accident at all is a SPEED (`collision.scuffSpeed`, 3 m/s), so
+   * this is that speed's own energy — half its square — and the two move
+   * together by construction. */
+  jouleFloor: 4.5,
 
   /** THE GRIND — a body ploughing along on a face of itself. Per SECOND
    * per m/s of travel, because a cloud's density is a rate and never a
@@ -141,15 +154,17 @@ export function crashContact(tilt: number): { across: number; up: number } {
 }
 
 /** WHAT ONE CONTACT THROWS: a corner of the shell arriving at the ground
- * hard enough to matter. `slam` is the arrival speed the `landing` event
- * carries, m/s. Both counts are whole particles, and both are zero for a
- * body merely settling onto a face. */
-export function crashBurst(slam: number): { grains: number; puffs: number } {
-  const over = slam - CRASH_THROW.slamFloor;
+ * hard enough to matter. `took` is what the ground TOOK OFF THE CAR for it,
+ * J per kg, off the `landing` event — the ground can only throw up what it
+ * was given, so that is what sizes this and not how fast the corner was
+ * going. Both counts are whole particles, and both are zero for a body
+ * merely settling onto a face. */
+export function crashBurst(took: number): { grains: number; puffs: number } {
+  const over = took - CRASH_THROW.jouleFloor;
   if (over <= 0) return { grains: 0, puffs: 0 };
   return {
-    grains: Math.round(Math.min(CRASH_THROW.burstMax, over * CRASH_THROW.perSlam)),
-    puffs: Math.round(Math.min(CRASH_THROW.puffMax, over * CRASH_THROW.puffPerSlam)),
+    grains: Math.round(Math.min(CRASH_THROW.burstMax, over * CRASH_THROW.perJoule)),
+    puffs: Math.round(Math.min(CRASH_THROW.puffMax, over * CRASH_THROW.puffPerJoule)),
   };
 }
 

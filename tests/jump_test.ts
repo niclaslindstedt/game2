@@ -4,15 +4,20 @@
 // depending on how straight you touch down. Synthetic one-jump stage.
 import { describe, expect, it } from "vitest";
 
+import { clamp } from "../engine/lib/math.ts";
+
 import {
   NEUTRAL_INPUT,
   TUNING,
   WHEEL_BASIN,
+  carById,
   compileTrack,
+  crashEnergy,
   createGame,
   goesOver,
+  massSpread,
+  onItsWheels,
   ridesOver,
-  rollTilt,
   step,
   updateSlip,
   type CarInput,
@@ -273,7 +278,7 @@ describe("the jump", () => {
     expect(state.stats.rolls).toBe(1);
     // Past the corner its own weight could have brought it back from, at a
     // fraction of the speed, with the flank it came down on folded.
-    expect(Math.abs(rollTilt(state.car.roll))).toBeGreaterThan(WHEEL_BASIN);
+    expect(onItsWheels(state.car.roll, state.car.pitch)).toBe(false);
     expect(Math.hypot(state.car.u, state.car.w)).toBeLessThan(15);
     const zones = state.car.damage.zones;
     expect(Math.max(zones[2], zones[6])).toBeGreaterThan(0);
@@ -325,7 +330,12 @@ describe("the jump", () => {
     const carried = Math.hypot(state.car.x - x0, state.car.z - z0);
     const outOf = Math.hypot(state.car.u, state.car.w);
     expect(carried).toBeGreaterThan(20);
-    expect((into - outOf) / seconds).toBeLessThan(9.81);
+    // Against THE GRAVITY THIS WORLD RUNS AT, not 9.81. The crash's whole
+    // retardation is `roll.faceGrip x g`, so as a fraction of g it is a
+    // coefficient of friction and directly comparable with a real rollover's
+    // 0.45 — but the game's gravity is arcade (1.6x), and dividing by the
+    // real figure instead reports every crash 1.6x harsher than it is.
+    expect((into - outOf) / seconds).toBeLessThan(TUNING.air.gravity);
     // ...and no ONE contact may take a third of what the car is carrying.
     // A rollover is a dozen-odd contacts sharing the work; a step that eats
     // most of the travel on its own is a bug in what the ground was charged
@@ -365,12 +375,12 @@ describe("the jump", () => {
     while (
       turning < TUNING.physicsHz * 6 &&
       (Math.abs(state.car.rollRate) > TUNING.air.roll.rest ||
-        Math.abs(rollTilt(state.car.roll)) < WHEEL_BASIN)
+        onItsWheels(state.car.roll, state.car.pitch))
     ) {
       step(state, { ...NEUTRAL_INPUT });
       turning += 1;
     }
-    expect(Math.abs(rollTilt(state.car.roll))).toBeGreaterThan(WHEEL_BASIN);
+    expect(onItsWheels(state.car.roll, state.car.pitch)).toBe(false);
     const carrying = Math.hypot(state.car.u, state.car.w);
     expect(carrying).toBeGreaterThan(10);
     // It is still the ROLL's car — not handed back, and so not frozen.
@@ -388,7 +398,7 @@ describe("the jump", () => {
     const slid = Math.hypot(state.car.x - x0, state.car.z - z0);
     expect(slid).toBeGreaterThan(6);
     expect(Math.hypot(state.car.u, state.car.w)).toBeLessThanOrEqual(TUNING.air.roll.restSpeed);
-    expect(carrying / seconds).toBeGreaterThan(9.81 * 0.4);
+    expect(carrying / seconds).toBeGreaterThan(TUNING.air.gravity * 0.4);
     // ...and only THEN is it a car lying on its roof for the crew to be
     // taken out of.
     expect(state.car.rolling).toBe(false);
@@ -471,7 +481,7 @@ describe("the jump", () => {
         // owning it.
         expect(state.car.rolling).toBe(true);
         expect(state.car.airborne).toBe(false);
-        expect(Math.abs(rollTilt(state.car.roll))).toBeGreaterThan(WHEEL_BASIN);
+        expect(onItsWheels(state.car.roll, state.car.pitch)).toBe(false);
       }
     }
     // It ground along on a face for a real stretch before it stopped.
@@ -488,7 +498,7 @@ describe("the jump", () => {
     // under one side of it — and the roll has to be reading its own
     // centre-of-mass curve against the GROUND rather than against level to
     // notice, or the hillside may as well not be there.
-    const slideOver = (edge: number): number => {
+    const slideOver = (edge: number): { over: number; rate: number } => {
       const state = game();
       state.terrain.obstaclesNear = () => [];
       state.terrain.treesNear = () => [];
@@ -516,17 +526,34 @@ describe("the jump", () => {
       car.u = 15;
       car.w = 5;
       updateSlip(car);
+      // WHAT THE EDGE PUT INTO THE BODY, rather than where the body ended
+      // up: the peak rate it was turned at, and the furthest round it got.
+      // A rocking body comes back, so the net angle it finishes on cancels
+      // the very thing under test — the old reading of it could not tell a
+      // body levered fifty degrees over from one that never moved.
       const roll0 = car.roll;
+      let over = 0;
+      let rate = 0;
       for (let i = 0; i < TUNING.physicsHz * 9 && car.rolling; i += 1) {
         step(state, { ...NEUTRAL_INPUT });
+        over = Math.max(over, Math.abs(car.roll - roll0));
+        rate = Math.max(rate, Math.abs(car.rollRate));
       }
-      return Math.abs(car.roll - roll0) / (Math.PI * 2);
+      return { over, rate };
     };
-    // An edge a metre to its right: the body goes over it.
-    expect(slideOver(1.2)).toBeGreaterThan(0.4);
+    // An edge a metre to its right levers the body off the face it was
+    // lying on and puts it back into a genuine roll — turning several times
+    // faster than the bar the model calls the rotation spent at, and most of
+    // the way round to the flank beside it.
+    const cliff = slideOver(1.2);
+    expect(cliff.rate).toBeGreaterThan(TUNING.air.roll.rest * 3);
+    expect(cliff.over).toBeGreaterThan(0.7);
     // The same ground with the drop pushed far out of reach is a flat plain,
-    // and the same body just slides to a stop on its roof.
-    expect(slideOver(400)).toBeLessThan(0.2);
+    // and a roof resting on a plain is a stable face: the body does not turn
+    // at all, which is the whole distinction between an EDGE and a RAMP.
+    const plain = slideOver(400);
+    expect(plain.rate).toBeLessThan(TUNING.air.roll.rest);
+    expect(plain.over).toBeLessThan(0.1);
   });
 
   it("a car that is going over rides over nothing", () => {
@@ -561,7 +588,17 @@ describe("the jump", () => {
     // roll is the ground meeting sheet metal with nothing sprung under it,
     // and the car that stops rolling has lost its glass and is folded on
     // whichever faces it came down on.
-    const { state } = landSideways(28, -16);
+    //
+    // THE ENTRY HAS TO BE A HALF-TURN ONE, and that is the whole reason it
+    // is not the -16 the trip test uses: -16 is a car that goes over its
+    // outside wheels and stops there, on one flank, having put one door and
+    // one mirror into the ground. That is a rolled car and it is not a
+    // STRIPPED one — its roof was never down. If a change to the roll moves
+    // this, re-pick it the same way rather than softening the bar below:
+    // sweep the entries and take one that finishes ON ITS ROOF, which is
+    // `Math.abs(rollTilt(roll))` near a half turn.
+    const { state } = landSideways(30, -22);
+    expect(onItsWheels(state.car.roll, state.car.pitch)).toBe(false);
     const damage = state.car.damage;
     for (const pane of ["glassF", "glassB", "glassR", "glassL"]) {
       expect(damage.broken, pane).toContain(pane);
@@ -611,7 +648,192 @@ describe("the jump", () => {
     expect(state.stats.respawns).toBe(respawns + 1);
     expect(state.overturned).toBeNull();
     expect(state.car.rolling).toBe(false);
-    expect(Math.abs(rollTilt(state.car.roll))).toBeLessThan(WHEEL_BASIN);
+    expect(onItsWheels(state.car.roll, state.car.pitch)).toBe(true);
+  });
+
+  it("...and the run reads WHICH WAY UP off the box, not off the roll angle", () => {
+    // With a free pitch axis the attitude is the COMPOSITION of the two
+    // angles, and half the ways a car ends up off its wheels do not show in
+    // the roll at all. Reading the roll alone got both of these wrong, and
+    // in opposite directions: a car on its roof was left there for the rest
+    // of the run because the run never noticed, and a car sitting on its
+    // tyres was teleported to a split board for facing the wrong way.
+    //
+    // Stood rather than driven to: what is under test is the READING, and a
+    // crash that happens to finish at one of these attitudes is not a thing
+    // a test can arrange.
+    const stand = (roll: number, pitch: number) => {
+      const state = game();
+      state.terrain.obstaclesNear = () => [];
+      state.terrain.treesNear = () => [];
+      const car = state.car;
+      car.x += Math.cos(car.heading) * 60;
+      car.z -= Math.sin(car.heading) * 60;
+      car.y = state.terrain.groundAt(car.x, car.z);
+      car.rolling = true;
+      car.roll = roll;
+      car.pitch = pitch;
+      car.rollRate = 0;
+      car.pitchRate = 0;
+      car.airborne = false;
+      car.vy = 0;
+      car.u = 0.2;
+      car.w = 0;
+      updateSlip(car);
+      const respawns = state.stats.respawns;
+      run(state, {}, TUNING.air.roll.lieFor * 4);
+      return state.stats.respawns > respawns;
+    };
+    const half = Math.PI;
+    // On its roof the plain way, and on its roof the way the roll angle
+    // cannot see — half a turn of PITCH, no roll at all. Both are cars
+    // nobody drives away from.
+    expect(stand(half, 0)).toBe(true);
+    expect(stand(0, half)).toBe(true);
+    // ...and half a turn of BOTH is a car sitting squarely on its tyres,
+    // facing backwards. It drives on.
+    expect(stand(half, half)).toBe(false);
+  });
+
+  it("a car up on two wheels is a car somebody is DRIVING", () => {
+    // Past `air.leanFree` the body stops being held by its springs and
+    // becomes a rigid body pivoting on its outer contact line, turned by
+    // gravity down the rollover's own surface plus the lateral force the
+    // tyres are making on the lever of the weight's height (`leanTorque`).
+    // Nothing about that is scripted — which is exactly why it has to be
+    // measured rather than assumed.
+    const upOnTwo = (lean: number, steer: number | null, seconds: number) => {
+      const state = game();
+      state.terrain.obstaclesNear = () => [];
+      state.terrain.treesNear = () => [];
+      const car = state.car;
+      for (let i = 0; i < TUNING.physicsHz * 4; i += 1) {
+        car.u = 22;
+        step(state, { ...NEUTRAL_INPUT, throttle: 0.6 });
+      }
+      car.u = 22;
+      car.roll = lean;
+      car.rollRate = 0;
+      updateSlip(car);
+      // A PLAYER, not a controller running at the physics rate: the lean and
+      // its rate are read and a decision is held for a tenth of a second,
+      // which is about what a person manages. A balance only a 120 Hz loop
+      // can hold is not a balance anybody gets to play with.
+      const every = Math.round(0.1 * TUNING.physicsHz);
+      let held = 0;
+      let hand = 0;
+      let over = false;
+      for (let i = 0; i < TUNING.physicsHz * seconds; i += 1) {
+        if (i % every === 0) {
+          hand = steer ?? clamp(-2.5 * (car.roll - lean + 0.25 * car.rollRate), -1, 1);
+        }
+        step(state, { ...NEUTRAL_INPUT, throttle: 0.5, steer: hand });
+        if (car.rolling) {
+          over = true;
+          break;
+        }
+        if (Math.abs(car.roll) < TUNING.air.leanFree) break;
+        held += TUNING.dt;
+      }
+      return { held, over };
+    };
+    // HELD. A driver working at a human rate keeps the car up on its two
+    // wheels for seconds rather than tenths — the balance is playable.
+    expect(upOnTwo(0.8, null, 8).held).toBeGreaterThan(2);
+    // ...and the authority is the STEERING'S SIGN and nothing else. Positive
+    // roll is the right side up, so the car is standing on its left wheels:
+    // steering right, AWAY from the side it is standing on, holds it there
+    // and past a point takes it over; steering left, INTO that side, puts it
+    // back down on all four. Same body, same speed, opposite hand.
+    const away = upOnTwo(0.8, 1, 4);
+    const into = upOnTwo(0.8, -1, 4);
+    expect(away.over).toBe(true);
+    expect(into.over).toBe(false);
+    expect(into.held).toBeLessThan(away.held + 0.2);
+    // The band has a FLOOR as well as a ceiling, and neither was chosen. Not
+    // far past `leanFree` the weight is still well inboard of the contact
+    // line and gravity simply wins: the car comes back down on four wheels
+    // inside a third of a second whatever the driver does.
+    expect(upOnTwo(0.55, null, 4).held).toBeLessThan(0.35);
+  });
+
+  it("THE BUDGET: a crash runs energy DOWN, and no axis of it may be driven", () => {
+    // A crash is one store of energy — what the car is travelling with, what
+    // it is turning with, and how high its weight still is — and everything
+    // in the model may only take from it. The one exception is the flight's
+    // turbulence, which is bounded and is exactly the tolerance below.
+    //
+    // This is the invariant every rotational fault the module has had turned
+    // out to break, and none of them errored: they read as numbers that
+    // wanted tuning. The ground's spin torque was written with the sign that
+    // turns the contact patch FURTHER into the slide that made it, which is
+    // anti-damping by construction and wound a car merely lying on its roof
+    // from a third of a rad/s up to nearly seven.
+    const mass = massSpread(carById("classic").mass);
+    /** Stand a car on ground laid flat — no terrain to convert against — set
+     * it going, and report what the ledger did. */
+    const stand = (set: (car: GameState["car"]) => void, seconds: number) => {
+      const state = game();
+      state.terrain.obstaclesNear = () => [];
+      state.terrain.treesNear = () => [];
+      const car = state.car;
+      car.x += Math.cos(car.heading) * 60;
+      car.z -= Math.sin(car.heading) * 60;
+      const flat = state.terrain.groundAt(car.x, car.z);
+      state.terrain.groundAt = () => flat;
+      car.y = flat;
+      car.rolling = true;
+      car.airborne = false;
+      car.vy = 0;
+      car.roll = 0;
+      car.pitch = 0;
+      car.rollRate = 0;
+      car.pitchRate = 0;
+      car.yawRate = 0;
+      car.u = 0;
+      car.w = 0;
+      set(car);
+      updateSlip(car);
+      const into = crashEnergy(car, mass);
+      let peakYaw = Math.abs(car.yawRate);
+      let peakRoll = Math.abs(car.rollRate);
+      for (let i = 0; i < TUNING.physicsHz * seconds; i += 1) {
+        step(state, { ...NEUTRAL_INPUT });
+        peakYaw = Math.max(peakYaw, Math.abs(car.yawRate));
+        peakRoll = Math.max(peakRoll, Math.abs(car.rollRate));
+      }
+      return { into, outOf: crashEnergy(car, mass), peakYaw, peakRoll, car };
+    };
+    // A PURE SPIN AND NOTHING ELSE. A body lying on a face with a rotation
+    // and no travel at all has only one thing acting on it, and friction is
+    // a thing that removes energy: the spin must go DOWN from the first step
+    // and reach nothing. It may never exceed what it started with — an axis
+    // the ground torques but does not read the slip of is a pump, and this
+    // is the cheapest possible way to catch one.
+    for (const face of [Math.PI, Math.PI / 2]) {
+      const spun = stand((car) => {
+        car.roll = face;
+        car.yawRate = 3;
+      }, 3);
+      expect(spun.peakYaw).toBeLessThanOrEqual(3.0001);
+      expect(Math.abs(spun.car.yawRate)).toBeLessThan(0.2);
+      expect(spun.outOf).toBeLessThan(spun.into);
+    }
+    // ...and the same of the plane the body goes OVER in.
+    const rolled = stand((car) => {
+      car.roll = Math.PI;
+      car.rollRate = 2;
+    }, 3);
+    expect(rolled.peakRoll).toBeLessThanOrEqual(2.0001);
+    // A WHOLE CRASH runs the budget down and keeps it down: a car that goes
+    // over at 90 km/h comes to rest with a small fraction of what it had.
+    const crash = stand((car) => {
+      car.roll = 0.9;
+      car.rollRate = -6;
+      car.u = 26;
+      car.w = -10;
+    }, 8);
+    expect(crash.outOf).toBeLessThan(crash.into * 0.1);
   });
 
   it("a lean the body cannot carry over its own corner is not a roll", () => {
@@ -620,18 +842,21 @@ describe("the jump", () => {
     // climb costs, the springs take the lurch back and the car drives on —
     // and handed one over it, the same car goes. Nothing in between is a
     // decision anybody wrote down.
+    // Weighed against THIS CAR's own mass distribution — the inertia a roll
+    // rate is worth is the car's, not a constant.
+    const mass = massSpread(carById("classic").mass);
     const climb = TUNING.air.gravity * 0.4;
-    const under = Math.sqrt((2 * climb * 0.6) / TUNING.air.roll.inertia);
-    const over = Math.sqrt((2 * climb * 2) / TUNING.air.roll.inertia);
-    expect(goesOver(0, under)).toBe(false);
-    expect(goesOver(0, over)).toBe(true);
+    const under = Math.sqrt((2 * climb * 0.6) / mass.over.roll);
+    const over = Math.sqrt((2 * climb * 2) / mass.over.roll);
+    expect(goesOver(0, under, mass)).toBe(false);
+    expect(goesOver(0, over, mass)).toBe(true);
     // ...and a body ALREADY halfway up the climb goes over on far less,
     // because most of the lift is behind it. That is the whole reason the
     // same landing is survivable at one attitude and not at another.
-    expect(goesOver(WHEEL_BASIN * 0.9, under)).toBe(true);
+    expect(goesOver(WHEEL_BASIN * 0.9, under, mass)).toBe(true);
     // A body settling back INTO the face beside it is not going over, at
     // any rate at all: there is no corner between it and where it is going.
-    expect(goesOver(-0.005, 1e-4)).toBe(false);
+    expect(goesOver(-0.005, 1e-4, mass)).toBe(false);
   });
 
   it("a hop over a brow is not a landing: no skitter, no speed lost, no jump booked", () => {

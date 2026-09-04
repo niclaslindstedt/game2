@@ -1573,27 +1573,42 @@ export const TUNING = {
      * a lurch and nothing else, and whichever face the energy runs out on
      * is the face the car is left lying on. */
     roll: {
-      /** The body's roll inertia about the EDGE it is turning over, m² (a
-       * radius of gyration squared). It is what a given roll rate is worth
-       * against the corners: the barrier from the wheels up over the sill
-       * is 0.45 m of lift, so this puts going over at about 2.6 rad/s and
-       * flank-to-roof at 2.4. Well under the 1.7 m² a solid box of these
-       * dimensions would carry, because a car is not one: the engine, the
-       * floor, the tank and the crew are all low and close to the middle. */
-      inertia: 1.3,
-      /** ...and about its OWN centre, m². A second quantity, and a
-       * different question: this one decides how much of the roll survives
-       * a FACE arriving flat on the ground, where the body stops turning
-       * about the corner it came over and starts turning about the far
-       * corner of the face it has just landed on. The geometry does the
-       * rest, and it is what makes the three faces behave differently — a
-       * flank keeps about half the roll and carries the car on over, while
-       * landing square on the wheels or the roof keeps under a fifth and
-       * is where a roll stops. */
-      spin: 0.4,
-      endInertia: 4.4,
-      endSpin: 1.4,
-      spinInertia: 1.6,
+      /** HOW THE CAR'S MASS IS SPREAD, as the measured relation between what
+       * a car WEIGHS and what it therefore resists turning with. Not five
+       * numbers any more, and not one set shared by every car: the roster's
+       * three differ by 27% in mass and their mass distributions differ with
+       * them.
+       *
+       * These are the NHTSA Light Vehicle Inertial Parameter Database's own
+       * regressions, for CARS specifically — several hundred vehicles put on
+       * a Vehicle Inertia Measurement Facility and swung. Mass in kg, moment
+       * in kg m^2:
+       *
+       *   roll   Ixx = 0.497 m - 181.4    (R^2 0.86)
+       *   pitch  Iyy = 3.079 m - 1728.8   (R^2 0.91)
+       *   yaw    Izz = 3.176 m - 1754.2   (R^2 0.92)
+       *
+       * Divided by the mass they become the radii of gyration squared, m^2,
+       * which is what this module wants — every term in `roll.ts` is
+       * mass-normalised and the mass itself divides straight out, so what
+       * survives is the SPREAD and nothing else. That is why a heavy car
+       * does not roll more slowly for being heavy; it rolls more slowly
+       * because its weight is further from its axes, and the intercept in
+       * each line above is exactly that effect.
+       *
+       * For this roster (1020-1300 kg) they come out at roll 0.32-0.36,
+       * pitch 1.38-1.75 and yaw 1.46-1.83 m^2 — which is where the five
+       * hand-tuned constants they replace already sat (0.4 / 1.4 / 1.6),
+       * so the model was right about the shape of a car and is now right
+       * about the SPREAD of one too. */
+      spread: {
+        rollSlope: 0.497,
+        rollBase: -181.4,
+        pitchSlope: 3.079,
+        pitchBase: -1728.8,
+        yawSlope: 3.176,
+        yawBase: -1754.2,
+      },
       /** ...and how much of that exchange a SPRUNG corner gives back
        * instead of taking, 0..1. A shell corner arriving at the ground is
        * sheet metal and pays the swap in full; a WHEEL arriving is what
@@ -1653,44 +1668,41 @@ export const TUNING = {
        * barrel roll down the road. */
       yawDamp: 0.55,
 
-      /** NO FACE ARRIVES FLAT — and this group is the whole of why a roll
-       * looks like an accident rather than a rotation.
+      /** NO FACE ARRIVES FLAT, and that is the corkscrew — one of the
+       * standard rollover tests is named for it, and it is what makes two
+       * rolls off the same lip end up facing different ways.
        *
-       * The hull the roll turns on is an outline across the car: it has a
-       * width and a height and no length at all, so it can only ever say
-       * how far the body goes OVER. What it cannot say is that the corner
-       * reaching the ground reaches it before the rest of that face does,
-       * and that the body is thrown about its other two axes every time
-       * one does. That is the corkscrew — one of the standard rollover
-       * tests is named for it — and it is what makes two rolls off the
-       * same lip end up facing different ways.
+       * It used to be four knobs seeding it: a pitch kick, a yaw kick, a
+       * ceiling on the yaw and an arrival speed to scale them by. There is
+       * nothing left to seed. The hull is a box rather than a cross-section
+       * now, so it knows perfectly well that the corner reaching the ground
+       * reaches it before the rest of that face does, and the ground's own
+       * friction — one budget under one patch, on the arm that patch has
+       * from the weight — throws the body about all three of its axes every
+       * time one arrives. A crash's spin answers to how fast it is going,
+       * is checked by the ground, and changes hand with the slide, none of
+       * which a seeded kick could do.
        *
-       * How hard a contact throws, rad/s at `kickAt`: the pitch is the
-       * bigger of the two because it is the axis with nothing else acting
-       * on it, and the yaw arrives on top of what the car was already
-       * carrying when it tripped. */
-      pitchKick: 1.6,
-      yawKick: 1.9,
-      /** ...and the ceiling the yaw kicks wind UP TO, rad/s — about a turn
-       * a second. Each arrival takes a share of the room left under it
-       * rather than adding to what is there, because the arrivals agree
-       * with each other about which way the car is going round: a plain
-       * addition compounds over the fifteen-odd contacts of a roll and
-       * comes out at four turns a second, and a car spinning that fast has
-       * no coherent sideways travel left for the ground to roll it on. The
-       * roll stops, which is the opposite of what the kick is for. */
-      yawMax: 6,
-      /** The arrival, m/s of slam, at which a kick is at its full size —
-       * above it the throw saturates rather than growing without bound,
-       * because past a point the corner folds instead of levering. */
-      kickAt: 9,
-      /** How fast a pitch rate dies while the body is grinding round on
+       * How fast a pitch rate dies while the body is grinding round on
        * the ground, 1/s — faster than the roll's own, because the length
        * of the car is lying on the ground and the roll's axis is not. */
       pitchDamp: 2.4,
-      /** The roll is over when the body is lying within this of a face of
-       * it (rad) and turning slower than `rest` (rad/s) — the rock has
-       * died out and the car is where it is going to stay. */
+      /** HOW FAR FROM PARALLEL a face of the box and the ground under it
+       * may be and still be the same contact, rad.
+       *
+       * A face is METRES long, so asking this as a height — is every corner
+       * of it within a millimetre of the lowest — asks a four-metre roof to
+       * be within a hundredth of a degree of the ground before it counts as
+       * being on it, which over five crash scenarios was true in one step
+       * out of nineteen hundred. The body was up on a single point for the
+       * whole of every accident: nothing answered the friction's moment
+       * (`spanAcross`/`spanAlong` were both zero), and the roll could never
+       * report that it had come to lie on anything, so a car that stopped
+       * off its wheels was never handed back and the crew were never taken
+       * to the board. Asked as an ANGLE it is scale-free and says what it
+       * means — a car on its roof a couple of degrees off is lying on its
+       * roof, and the load shifts across that roof as it rocks the last of
+       * it down. */
       settled: 0.12,
       rest: 0.7,
       /** ...and, for a body that came to rest on a face that is NOT its
@@ -2071,9 +2083,8 @@ export const TUNING = {
      * tree. Past a point the sideways speed goes into FOLDING the nose
      * rather than turning the car, which is what the zone's crush already
      * books, so the kick saturates here instead of scaling. The same
-     * argument the roll's `air.tripMax` makes on the other axis, and the
-     * same ceiling the roll's own kicks wind up to (`air.roll.yawMax`): a
-     * turn a second is as fast as a car is spun by being hit.
+     * argument the roll's `air.tripMax` makes on the other axis: a turn a
+     * second is as fast as a car is spun by being hit.
      *
      * Approached through a `tanh`, not clamped: a hard `min` would put a
      * cliff one notch either side of the limit, where two contacts a

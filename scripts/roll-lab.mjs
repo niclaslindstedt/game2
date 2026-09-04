@@ -30,9 +30,9 @@ import process from "node:process";
 import {
   NEUTRAL_INPUT,
   TUNING,
-  WHEEL_BASIN,
   compileTrack,
   createGame,
+  onItsWheels,
   rollTilt,
   step,
 } from "../engine/index.ts";
@@ -150,7 +150,10 @@ function stageRoll(seed, u, w) {
     rolled,
     turns: Math.abs(state.car.roll - roll0) / (Math.PI * 2),
     across: frames.length ? frames[frames.length - 1].across : 0,
-    upright: Math.abs(rollTilt(state.car.roll)) < WHEEL_BASIN,
+    // Asked of the BOX, not of the roll angle: with a free pitch axis the
+    // attitude is the composition of the two, and a car can read a roll well
+    // past the sill corner and still be sitting on its tyres.
+    upright: onItsWheels(state.car.roll, state.car.pitch),
     broken: damage.broken.length,
     wear: damage.wear,
     roof: damage.roof,

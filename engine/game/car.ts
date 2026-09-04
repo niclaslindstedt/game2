@@ -42,6 +42,7 @@ import {
   goesOverEnd,
   landRolled,
   leanTorque,
+  massSpread,
   onItsWheels,
   rollBed,
   rollStand,
@@ -1366,9 +1367,10 @@ export function stepGrounded(
   // reading the springs' angle instead stands a car merely driving down a
   // steep hill on its own bumper, and every hop and every edge in the suite
   // said so.
+  const mass = massSpread(spec.mass);
   if (
-    goesOver(car.roll, car.rollRate, rollBed(ctx)) ||
-    goesOverEnd(car.pitch, car.pitchRate, rollBed(ctx)) ||
+    goesOver(car.roll, car.rollRate, mass, rollBed(ctx)) ||
+    goesOverEnd(car.pitch, car.pitchRate, mass, rollBed(ctx)) ||
     !onItsWheels(car.roll, 0)
   ) {
     beginRoll(car, events, stats);
@@ -1405,7 +1407,7 @@ export function stepGrounded(
     // Only the TORQUE is added here. The rate was integrated and damped a
     // few lines up, where every roll rate the ground hands the body is —
     // doing either again is a second helping of both.
-    car.rollRate += leanTorque(car.roll, 0, car.u * car.yawRate, bed) * dt;
+    car.rollRate += leanTorque(car.roll, 0, car.u * car.yawRate, mass, bed) * dt;
   } else {
     car.roll += (camber - lean) * clamp(T.air.rollRecover * dt, 0, 1);
   }
@@ -1840,7 +1842,12 @@ export function stepAirborne(
     // a brow and the car may be off the ground again next step, and a stale
     // zero there is a bounce where there should be a flight.
     car.vy = car.u * ctx.slope;
-    events.push({ type: "landing", airTime: car.airTime, slam, clean });
+    // The same quantity for a car that landed on its WHEELS: the descent's
+    // own kinetic energy per kg, which is what the springs and the ground
+    // between them just had to absorb. One scale for both, so the effects
+    // never have to know which kind of arrival they are drawing.
+    const took = 0.5 * slam * slam;
+    events.push({ type: "landing", airTime: car.airTime, slam, took, clean });
     car.airTime = 0;
     if (tumbling) {
       // OVER IT GOES: the trip is worth more than the lift up over the
@@ -1914,7 +1921,7 @@ function tripOnLanding(
     car.w *= A.tripKeep;
     updateSlip(car);
   }
-  if (!goesOver(car.roll, car.rollRate)) return false;
+  if (!goesOver(car.roll, car.rollRate, massSpread(spec.mass))) return false;
   beginRoll(car, events, stats);
   return true;
 }

@@ -37,15 +37,15 @@ import { landingDamage } from "./collision.ts";
 import {
   type Axis,
   type Bed,
-  INERTIA,
+  type MassSpread,
   LEVEL,
-  YAW_INERTIA,
   bedNormal,
   clearOn,
   goesOverOn,
   gripOn,
   pivotKeep,
   seatOn,
+  massSpread,
   seatSlopes,
   standingOn,
   turnedPoints,
@@ -53,14 +53,13 @@ import {
 import {
   rollTilt,
   rotateFrame,
-  rotateSpin,
   updateSlip,
   type CarState,
   type GameEvent,
   type RunStats,
 } from "./state.ts";
 
-export { WHEEL_BASIN, onItsWheels } from "./roll-hull.ts";
+export { WHEEL_BASIN, massSpread, onItsWheels, type MassSpread } from "./roll-hull.ts";
 
 const T = TUNING;
 const R = TUNING.air.roll;
@@ -156,8 +155,13 @@ function weightOverOrigin(tilt: number, pitch: number): number {
 
 /** DOES IT GO OVER SIDEWAYS? The energy question, asked of the plane a
  * sideways trip puts a car over in. */
-export function goesOver(roll: number, rollRate: number, bed: Bed = LEVEL): boolean {
-  return goesOverOn("roll", rollTilt(roll), 0, rollRate, bed);
+export function goesOver(
+  roll: number,
+  rollRate: number,
+  mass: MassSpread,
+  bed: Bed = LEVEL,
+): boolean {
+  return goesOverOn("roll", rollTilt(roll), 0, rollRate, mass, bed);
 }
 
 /** ...AND DOES IT GO OVER ITS OWN NOSE? The same question in the other
@@ -166,8 +170,13 @@ export function goesOver(roll: number, rollRate: number, bed: Bed = LEVEL): bool
  * because the box is more than twice as long as it is wide — a barrel roll
  * wants about three rad/s and an end-over-end four. That is why an endo is
  * the rarer accident, and nobody chose it: it is the shape of the car. */
-export function goesOverEnd(pitch: number, pitchRate: number, bed: Bed = LEVEL): boolean {
-  return goesOverOn("pitch", 0, rollTilt(pitch), pitchRate, bed);
+export function goesOverEnd(
+  pitch: number,
+  pitchRate: number,
+  mass: MassSpread,
+  bed: Bed = LEVEL,
+): boolean {
+  return goesOverOn("pitch", 0, rollTilt(pitch), pitchRate, mass, bed);
 }
 
 /** WHAT TURNS A CAR THAT IS UP ON TWO WHEELS, rad/s² — the balance the driver
@@ -190,12 +199,73 @@ export function goesOverEnd(pitch: number, pitchRate: number, bed: Bed = LEVEL):
  *
  * `aLat` is the lateral acceleration the tyres are making, m/s², positive to
  * the car's right. */
-export function leanTorque(roll: number, pitch: number, aLat: number, bed: Bed): number {
+export function leanTorque(
+  roll: number,
+  pitch: number,
+  aLat: number,
+  mass: MassSpread,
+  bed: Bed,
+): number {
   const tilt = rollTilt(roll);
   const nose = rollTilt(pitch);
   const height = standingOn(tilt, nose, bed).height;
   const slopes = seatSlopes(tilt, nose, bed);
-  return (aLat * height - T.air.gravity * slopes.roll) / INERTIA.roll;
+  return (aLat * height - T.air.gravity * slopes.roll) / mass.over.roll;
+}
+
+/** THE CRASH'S WHOLE LEDGER, J per kg of car — what it is travelling with,
+ * what it is turning with, and how high its weight still is.
+ *
+ * A rollover is one budget being run down. The car arrives with the energy it
+ * was carrying, gravity hands it more as the weight falls (which is why a car
+ * going over down a hillside keeps going and one on the flat does not), and
+ * everything else in this module may only ever TAKE: the ground's one Coulomb
+ * budget, the damps, the pivot exchange. The one thing that adds is the
+ * flight's turbulence, and it is bounded and averages to nothing.
+ *
+ * So this is not a number the model reads — nothing branches on it, and it is
+ * never clamped, because a cap on a budget hides the bookkeeping error that
+ * made it wrong instead of showing it. It is the INVARIANT, for the labs and
+ * the tests to hold the model to: a step that raises it by more than the
+ * turbulence could is a term making energy out of nothing, which is what
+ * every rotational fault this module has had turned out to be.
+ *
+ * Mass-normalised throughout, like `INERTIA` — the car's mass divides out of
+ * every term and never appears. */
+export function crashEnergy(car: CarState, mass: MassSpread): number {
+  const tilt = rollTilt(car.roll);
+  const pitch = rollTilt(car.pitch);
+  const move = car.u * car.u + car.w * car.w + car.vy * car.vy;
+  // The CENTRAL radii, never the ones about the corner: a rotation's energy
+  // is `1/2 I_cm w^2` about the body's own axes, and the corner version
+  // already carries the weight's motion AROUND that corner — which is the
+  // travel, counted just above. Using it here books that motion twice, and
+  // the ledger then reads a body letting go of a corner as losing energy.
+  const spin =
+    mass.spin.roll * car.rollRate * car.rollRate +
+    mass.spin.pitch * car.pitchRate * car.pitchRate +
+    mass.yaw * car.yawRate * car.yawRate;
+  // The WEIGHT's world height: `car.y` is the origin, and the weight rides
+  // `seatOn - clearOn` above it. Read against level for the same reason
+  // `rollStand` is — this is a world height, not an attitude on a plane.
+  const height = car.y + weightOverOrigin(tilt, pitch);
+  return 0.5 * (move + spin) + T.air.gravity * height;
+}
+
+/** ...AND THE MOST ONE STEP'S TURBULENCE COULD ADD to it, J per kg. The only
+ * term in the module that puts energy IN, so it is the whole tolerance any
+ * check of the invariant above is allowed. Each axis is kicked by at most
+ * `rate x dt`, and what that is worth on top of the rotation already there is
+ * `I x (|w| x d + d^2/2)`. */
+export function crashTurbulence(car: CarState, mass: MassSpread): number {
+  const dr = T.air.rollTurbulence * T.dt;
+  const dp = T.air.pitchTurbulence * T.dt;
+  const dy = T.air.turbulence * T.dt;
+  return (
+    mass.spin.roll * (Math.abs(car.rollRate) * dr + 0.5 * dr * dr) +
+    mass.spin.pitch * (Math.abs(car.pitchRate) * dp + 0.5 * dp * dp) +
+    mass.yaw * (Math.abs(car.yawRate) * dy + 0.5 * dy * dy)
+  );
 }
 
 /** THE CAR IS GOING OVER. Books the crash and says so once — everything
@@ -274,6 +344,7 @@ function rubGround(
   tilt: number,
   pitch: number,
   bed: Bed,
+  mass: MassSpread,
   swept: boolean,
 ): void {
   const budget = gripOn(tilt, pitch, bed) * normal;
@@ -282,9 +353,12 @@ function rubGround(
   const lever = patch.height;
   const spin = swept ? lever : 0;
   // Where the patch is actually going: the car's travel, plus what the
-  // body's own rotation is sweeping it at.
-  const slipW = car.w + car.rollRate * spin;
-  const slipU = car.u + car.pitchRate * spin;
+  // body's own rotation is sweeping it at — in ALL THREE planes. The two
+  // that turn the body over sweep the patch on the lever of the weight's
+  // height; the SPIN sweeps it on the patch's own offset in the ground
+  // plane, which is the arm the same friction turns the body about below.
+  const slipW = car.w + car.rollRate * spin + car.yawRate * patch.along;
+  const slipU = car.u + car.pitchRate * spin - car.yawRate * patch.across;
   if (Math.hypot(slipU, slipW) <= 0) return;
 
   // WHAT IT TAKES OUT OF THE TRAVEL: one impulse opposing the way the car is
@@ -315,8 +389,8 @@ function rubGround(
   // became twenty inside a second, the surface then "moved" at twenty metres
   // a second, that became real vertical speed, and the car was fired off the
   // ground and never came back.
-  const across = -Math.sign(slipW) * Math.min(budget, stopping(slipW, lever, INERTIA.roll));
-  const along = -Math.sign(slipU) * Math.min(budget, stopping(slipU, lever, INERTIA.pitch));
+  const across = -Math.sign(slipW) * Math.min(budget, stopping(slipW, lever, mass.over.roll));
+  const along = -Math.sign(slipU) * Math.min(budget, stopping(slipU, lever, mass.over.pitch));
   // ...AND WHAT THE FACE UNDER IT ANSWERS FIRST. A body lying flat is not
   // standing on a point: the normal force shifts WITHIN the face it is on to
   // meet a moment, and only what is left over turns the body. The face can
@@ -329,14 +403,14 @@ function rubGround(
   // a car doing 28 m/s torques its nose down every step, nothing resisted it
   // until the body had already pitched off the face, and a plain sideways
   // trip finished at 178° of pitch having tumbled the length of the car.
-  car.rollRate += turnPast(across, lever, normal * patch.spanAcross) / INERTIA.roll;
-  car.pitchRate += turnPast(along, lever, normal * patch.spanAlong) / INERTIA.pitch;
+  car.rollRate += turnPast(across, lever, normal * patch.spanAcross) / mass.over.roll;
+  car.pitchRate += turnPast(along, lever, normal * patch.spanAlong) / mass.over.pitch;
   // THE SPIN, on the arm the patch has in the ground plane. A patch a metre
   // ahead of the weight with the car sliding sideways swings the tail round;
   // one out at a corner does it hardest. A body flat and square on a face
   // has no arm and gets no spin, which is why a car sliding squarely on its
   // roof tracks straight and one up on a corner does not.
-  car.yawRate += (patch.across * along - patch.along * across) / YAW_INERTIA;
+  car.yawRate += (patch.along * across - patch.across * along) / mass.yaw;
   updateSlip(car);
 }
 
@@ -366,10 +440,15 @@ function contact(
   tilt: number,
   pitch: number,
   bed: Bed,
+  mass: MassSpread,
   events: GameEvent[],
   stats: RunStats,
 ): void {
-  const pivot = pivotKeep(axis, tilt, pitch, bed);
+  // What the body had before the ground got to it — the other end of this
+  // is a few lines down, and the difference is the whole of what the
+  // contact cost, rotation and travel together.
+  const had = crashEnergy(car, mass);
+  const pivot = pivotKeep(axis, tilt, pitch, mass, bed);
   const reach = Math.max(0, 1 - pivot.gap / R.reach);
   const keep = 1 - (1 - pivot.keep) * reach;
   const before = axis === "roll" ? car.rollRate : car.pitchRate;
@@ -385,7 +464,7 @@ function contact(
   // the second turn came out at 3 km/h, on its wheels, having touched
   // nothing at all.
   const drag = pivot.sprung ? 1 - R.sprung : 1;
-  rubGround(car, descent * drag, tilt, pitch, bed, true);
+  rubGround(car, descent * drag, tilt, pitch, bed, mass, true);
   if (Math.abs(before) < R.slamAt && descent <= 0) return;
   // How hard it hit, for what it FOLDS: how fast the arriving corner was
   // travelling when it met the ground — the rotation the body was CARRYING on
@@ -403,7 +482,28 @@ function contact(
   // bar is the same one a contact has to clear to be an accident at all
   // rather than a car leaning on something (`collision.scuffSpeed`).
   if (slam > T.collision.scuffSpeed) {
-    events.push({ type: "landing", airTime: car.airTime, slam, clean: false });
+    // WHAT THE GROUND HAD TO SWALLOW, J per kg — which is not the same
+    // question as how hard the corner arrived, and is the number the gravel
+    // and the dust come off. Two halves, and both are needed:
+    //
+    //   THE ARRIVING CORNER's own, `slam²/2` — the energy the contact patch
+    //   itself has to put into the ground, and the same quantity a car that
+    //   lands on its WHEELS reports, so both kinds of arrival are on one
+    //   scale and the effects never have to know which they are drawing.
+    //   The ledger alone cannot see it: most of a fast roll's contacts are
+    //   glancing taps that keep nearly all their rotation (`pivotKeep`
+    //   swaps for a corner barely off the one it is on), so the body's
+    //   TOTAL barely moves while a corner is ploughing into the ground at
+    //   ten metres a second. Measured that way a trip's thirty-nine
+    //   contacts each read a third of a joule and threw no gravel at all;
+    //
+    //   and THE LEDGER's own drop on top, which is the rotation the pivot
+    //   exchange really did take plus whatever the rub took out of the
+    //   travel. That is the half a speed cannot see, and it is what makes a
+    //   contact that arrives gently but stops a whole rollover throw like
+    //   the accident it is rather than like a car settling on its springs.
+    const took = 0.5 * slam * slam + Math.max(0, had - crashEnergy(car, mass));
+    events.push({ type: "landing", airTime: car.airTime, slam, took, clean: false });
   }
   car.airTime = 0;
 }
@@ -440,7 +540,18 @@ export function landRolled(
   // gets, because it is in the air for the rest of every turn.
   const descent = Math.max(0, -car.vy);
   car.vy = 0;
-  contact(arriving(car), spec, car, descent, tilt, pitch, bed, events, stats);
+  contact(
+    arriving(car),
+    spec,
+    car,
+    descent,
+    tilt,
+    pitch,
+    bed,
+    massSpread(spec.mass),
+    events,
+    stats,
+  );
 }
 
 /** ONE STEP OF A CAR GOING OVER.
@@ -468,6 +579,7 @@ export function stepRolling(
 ): void {
   const dt = T.dt;
   const bed = rollBed(ctx);
+  const mass = massSpread(spec.mass);
   const tilt = rollTilt(car.roll);
   const pitch = rollTilt(car.pitch);
   // Where the weight is, over the ground it is over. Carried in `car.y` (the
@@ -493,15 +605,15 @@ export function stepRolling(
     // angle round from upside down, and sits in a genuine minimum there:
     // which is what "it just slides down" means.
     const slopes = seatSlopes(tilt, pitch, bed);
-    car.rollRate -= (T.air.gravity / INERTIA.roll) * slopes.roll * dt;
-    car.pitchRate -= (T.air.gravity / INERTIA.pitch) * slopes.pitch * dt;
+    car.rollRate -= (T.air.gravity / mass.over.roll) * slopes.roll * dt;
+    car.pitchRate -= (T.air.gravity / mass.over.pitch) * slopes.pitch * dt;
     // ...and THE GROUND, which is the same friction that is slowing the car
     // down and has to be written as one thing. It is bought OUT OF THE
     // TRAVEL, and that is the whole of why a crash ends: a torque written on
     // the sign of the slide alone is a car that turns over for as long as
     // anything nudges it sideways, because nothing it spends comes from
     // anywhere.
-    rubGround(car, T.air.gravity * dt, tilt, pitch, bed, false);
+    rubGround(car, T.air.gravity * dt, tilt, pitch, bed, mass, false);
     // What the ground bleeds out of each rotation as it grinds round on it.
     // Panels are not tyres, and the pitch loses it faster because the whole
     // length of the car is lying on the ground while it goes end over end
@@ -538,7 +650,7 @@ export function stepRolling(
   // of an angle crossing a quarter turn, which cannot be asked honestly of a
   // body that is pitched and rolled at once on a plane tilted two ways.
   if (down && !wasFlat && standingOn(nowR, nowP, bed).flat) {
-    contact(arriving(car), spec, car, 0, nowR, nowP, bed, events, stats);
+    contact(arriving(car), spec, car, 0, nowR, nowP, bed, mass, events, stats);
   }
 
   if (down) {
@@ -550,21 +662,37 @@ export function stepRolling(
   const delta = car.yawRate * dt;
   car.heading += delta;
   rotateFrame(car, delta);
-  // ...AND THE SPIN TURNS WITH IT, for the same reason the velocity does. The
-  // roll and the pitch are rotations about the car's OWN axes, and those axes
-  // are swinging round underneath an angular momentum the world is holding
-  // still: a body that has swapped ends mid-crash is going over the other way
-  // in its own frame, because it is going over the SAME way in the world.
-  // Without it the direction a car goes over is settled at the trip and
-  // outlives the car turning round underneath it — a car travelling forwards
-  // while rolling backwards, which is the one attitude a falling body cannot
-  // hold.
+  // ...AND THE SPIN DOES NOT TURN WITH IT. The velocity is a world vector
+  // read on the car's own axes, so it has to be re-expressed when those axes
+  // swing; the roll and the pitch are not one, and there is no honest way to
+  // treat them as one here. It was tried both ways.
   //
-  // Only WHILE IT IS FREE. On the ground the yaw is the ground scrubbing the
-  // body round — an external torque, and one `rubGround` now applies from the
-  // patch — and the same contact is re-establishing which corner the body
-  // turns about at that moment.
-  if (!down) rotateSpin(car, delta);
+  // Re-expressing the ROLL ALONE is what the reported fault asks for — a car
+  // that swapped ends going on rolling the same way in the world, which is
+  // the other way in its own frame — and it is not a rotation at all: the
+  // roll takes `-pitchRate x sin` and the pitch pays nothing back, which put
+  // 0.086 rad/s a step into the roll of a crash at six rad/s of yaw, half
+  // again what the ground under the car was taking out of it. Nor does it
+  // deliver the flip: applied a step at a time, `x cos(delta)` compounds to a
+  // seven per cent decay over a half turn of yaw, never a sign change.
+  //
+  // The CONSERVATIVE PAIR is exact for the rates and wrong for the angles.
+  // `roll` and `pitch` are Euler angles stepped independently, and the
+  // exchange's own kinematics want the rate the NOSE comes round at, which
+  // once the body is pitched is not the rate it is turning about the world's
+  // vertical at — `heading` runs at `yawRate - rollRate x sin(pitch)`, and a
+  // car going over at eight rad/s with its nose twenty degrees down differs
+  // by 2.7 rad/s. The ground's spin torque is conjugate to the heading, so
+  // the module cannot have it both ways. Measured with the pair in, `carry`
+  // turned nine and a quarter times and covered 121 m: a roll with nothing
+  // left in it that could end.
+  //
+  // So neither, and the invariant bought is worth more than the flip:
+  // NOTHING IN THIS MODULE CAN ADD ROTATION. Gravity trades it against the
+  // surface, the ground's one budget is capped at the slip it is stopping,
+  // the damps and the pivot exchange only ever take, and the turbulence is
+  // bounded and averages to nothing. Every rotational fault this module has
+  // had was something quietly making rotation out of nothing.
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
   car.x += (sinH * car.u + cosH * car.w) * dt + cosH * walk + sinH * stride;
@@ -603,8 +731,8 @@ export function stepRolling(
     // it, most of every turn is flight.
     const held =
       seat * (car.rollRate * car.rollRate + car.pitchRate * car.pitchRate) +
-      (T.air.gravity / INERTIA.roll) * slopes.roll * slopes.roll +
-      (T.air.gravity / INERTIA.pitch) * slopes.pitch * slopes.pitch;
+      (T.air.gravity / mass.over.roll) * slopes.roll * slopes.roll +
+      (T.air.gravity / mass.over.pitch) * slopes.pitch * slopes.pitch;
     centre = seat;
     car.vy = seatVy;
     car.airborne = held > T.air.gravity;
@@ -641,7 +769,7 @@ export function stepRolling(
       car.vy = seatVy;
       car.airborne = false;
       car.airTime = 0;
-      contact(arriving(car), spec, car, descent, nowR, nowP, bed, events, stats);
+      contact(arriving(car), spec, car, descent, nowR, nowP, bed, mass, events, stats);
     }
   }
   // Back into the origin the rest of the game reads the car's height from.
@@ -682,7 +810,11 @@ export function stepRolling(
   // at two or three rad/s and only looks upright for a fiftieth of a second.
   // `R.rest` is the bar the settle already uses for "the rotation is spent",
   // and it is the right one here for the same reason.
-  if (patch.sprung && Math.abs(car.rollRate) < R.rest && !goesOver(car.roll, car.rollRate, bed)) {
+  if (
+    patch.sprung &&
+    Math.abs(car.rollRate) < R.rest &&
+    !goesOver(car.roll, car.rollRate, mass, bed)
+  ) {
     car.rolling = false;
     return;
   }
