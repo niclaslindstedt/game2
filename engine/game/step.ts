@@ -1106,6 +1106,14 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   state.progressS = track.samples[state.progressIndex].s;
   state.lateral = fix.lateral;
   state.stats.topSpeed = Math.max(state.stats.topSpeed, car.u);
+  // THE ODOMETER'S OWN NUMBER: the ground this step actually covered,
+  // measured off the move rather than off the speedo, so a car sliding
+  // sideways is credited with the arc it travelled and a car sitting on the
+  // brakes with its wheels lit up is credited with nothing. Taken from the
+  // same `prevX`/`prevZ` the finish line and the split boards are crossed
+  // between — a respawn or a placed car moves the body outside the step, so
+  // the teleport is never in the reading.
+  state.stats.distance += Math.hypot(car.x - prevX, car.z - prevZ);
   // Revs on the move: the DRIVEN WHEELS read back through the gearing, which
   // with a gear engaged is the only thing the crank can be doing. Normally
   // that is just how far up the gear the road speed is; when the axle is lit

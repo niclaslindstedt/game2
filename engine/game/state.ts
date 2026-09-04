@@ -751,6 +751,13 @@ export type RunStats = {
   crashes: number;
   respawns: number;
   topSpeed: number;
+  /** Metres of ground the car has actually covered this run — every step's
+   * move added up, on the road and off it, forwards and in reverse. Not
+   * `progressS`, which is how far UP THE STAGE the run has got: a spin, a
+   * detour and a lap of a circuit all cost a car distance that progress
+   * never sees, and the odometer on the dial is a reading about the CAR
+   * rather than about the stage it is on. */
+  distance: number;
 };
 
 /** The run's arc.

@@ -140,6 +140,7 @@ import {
   takeSnapshot,
   type RunBook,
 } from "./game/snapshot.ts";
+import { createTrip, type Trip } from "./game/odometer.ts";
 import {
   DEFAULT_HEADS_UP,
   DEFAULT_STAGE_KNOBS,
@@ -889,6 +890,16 @@ export function App() {
    * through `startStage`, so the discipline it opens in is settled here. */
   const [run, setRun] = useState<{ mode: PlayMode; levelId?: string }>(modeFromUrl);
   const [snap, setSnap] = useState<HudSnapshot | null>(null);
+  /** THE ODOMETER on the tachometer: the lifetime metres of the car being
+   * driven, read on the HUD's own tick. Beside the snapshot rather than in
+   * it because it belongs to the CAR and not to the run — every discipline
+   * feeds the same counter, and a stage walked out of halfway still leaves
+   * the kilometres it covered on it (odometer.ts). */
+  const [odo, setOdo] = useState<number | null>(null);
+  /** The open counter for the car on the road, and the run that is running
+   * into it. Replaced whenever a different car is put on the road; the
+   * total behind it is written on every hundred metres. */
+  const tripRef = useRef<Trip | null>(null);
   /** THE TIME TRIAL'S BOARD, for the run that has just ended. `pending` is the
    * run waiting on its three letters; it is what holds the results card's ways
    * on back until they are typed. Cleared with every start, so a board never
@@ -1284,6 +1295,18 @@ export function App() {
     }
     finishTimeRef.current = null;
     retiredRef.current = null;
+    // THE CAR'S COUNTER FOLLOWS THE CAR. A different car is a different
+    // life, so the one being left is written out and the one arriving is
+    // read in; the same car staged again (a restart, the next stage of a
+    // location) keeps the counter it already has, running. Either way the
+    // trip is held: the run about to be built starts from zero metres, and
+    // what the LAST one covered has already been banked.
+    if (tripRef.current?.carId !== spec.carId) {
+      tripRef.current?.flush();
+      tripRef.current = createTrip(spec.carId);
+    }
+    tripRef.current.hold();
+    setOdo(tripRef.current.total());
     // The board belongs to the run that set it. Cleared here rather than in
     // `startStage` so a RESTART — which comes straight through this and never
     // through that — drops the last attempt's table too.
@@ -2719,6 +2742,23 @@ export function App() {
         if (racing?.massStart && state.phase === "racing") {
           standingRef.current = { place: livePlace(racing, state), of: racing.of };
         }
+        // THE ODOMETER TAKES THE RUN'S METRES. Here rather than in the step
+        // loop because the counter is a readout and reads at the readout's
+        // rate: it steps once every hundred metres, which is a hundred times
+        // slower than this tick even at the speed the game is quickest at.
+        //
+        // What it counts is anything the PLAYER drives — the campaign, a
+        // trial, a heads-up race, Roam, and the training ground, which is
+        // the whole point of a counter that belongs to the car. What it
+        // does not count is a car being driven for the player: the bot's
+        // demo behind the menu cards never gets here at all (nothing pushes
+        // the HUD with a page up), and `?bot=1`'s autopilot is held while it
+        // has the wheel, so the kilometres it drives are nobody's.
+        const trip = tripRef.current;
+        if (trip) {
+          if (autopilotRef.current) trip.hold();
+          else setOdo(trip.look(state.stats.distance));
+        }
         setSnap(
           takeSnapshot(
             state,
@@ -3401,6 +3441,11 @@ export function App() {
           // run-out is being watched closely — then it is the crew under the
           // camera, on the same dials, and the layout never has to know.
           snap={watchFace ? watchFace.snap : snap}
+          // …and the counter in the middle of its rev counter, which is the
+          // one instrument that does NOT transfer with the camera: the
+          // player's own car has a life the game keeps, and the crew being
+          // watched has not.
+          odoM={watchFace ? null : odo}
           live={watchFace ? watchLiveRef.current : liveRef.current}
           paused={paused}
           flying={godActive}

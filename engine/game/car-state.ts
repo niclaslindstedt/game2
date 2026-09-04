@@ -23,6 +23,7 @@ export function freshStats(): RunStats {
     crashes: 0,
     respawns: 0,
     topSpeed: 0,
+    distance: 0,
   };
 }
 

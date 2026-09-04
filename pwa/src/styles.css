@@ -1481,8 +1481,12 @@ body {
 /* The tach dial. Drawn in a 100×100 user space by hud.tsx; everything here
    is stroke weight and color, so the geometry stays in one place. */
 .hud-tach {
-  width: clamp(5.5rem, 18vmin, 9rem);
-  height: clamp(5.5rem, 18vmin, 9rem);
+  /* Sized for the COUNTER in the middle of it rather than for the needle:
+     six drums across a third of the dial only read at a glance if the dial
+     itself is big, and a rev counter is the one instrument on the panel
+     that can afford the room. */
+  width: clamp(10.9rem, 36vmin, 18rem);
+  height: clamp(10.9rem, 36vmin, 18rem);
   overflow: visible;
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
 }
@@ -1490,7 +1494,10 @@ body {
 .hud-tach-track,
 .hud-tach-red {
   fill: none;
-  stroke-width: 9;
+  /* A stripe rather than a bar: the scale is read off the ticks and the
+     figures inside it, and the width it gives up is width the counter in
+     the middle of the dial gets (hud-dial.tsx). */
+  stroke-width: 4;
 }
 
 .hud-tach-track {
@@ -1513,10 +1520,80 @@ body {
 
 .hud-tach-label {
   fill: #fff;
-  font-size: 12px;
+  font-size: 9.5px;
   font-weight: 800;
   text-anchor: middle;
   dominant-baseline: central;
+}
+
+/* THE ODOMETER in the middle of the dial: a dark window, six drums, white
+   figures. It is the one readout on the HUD that is not about this run — the
+   whole life of the car in front of the player, which is why it is small,
+   quiet, and never moves faster than a tenth of a drum at a time. */
+/* The window is a viewport of its own, and its edges are what the drums
+   turn behind: the digit leaving the top and the one arriving from
+   underneath are both half outside it, and the window is what cuts them.
+   Said out loud rather than left to the browser's default, because the dial
+   around it is explicitly `overflow: visible` and a counter that inherited
+   that would print its next figure across the scale. */
+.hud-odo {
+  overflow: hidden;
+}
+
+.hud-odo-window {
+  fill: rgb(3 7 16 / 92%);
+  /* The bright frame a counter is set into on a real cluster — it is what
+     makes the window read as a hole in the dial rather than as a label
+     printed on it. */
+  stroke: rgb(255 255 255 / 85%);
+  stroke-width: 0.7;
+}
+
+/* The tenths drum, painted the other way round (hud-dial.tsx). */
+.hud-odo-tenths {
+  fill: rgb(238 242 250 / 95%);
+  stroke: rgb(255 255 255 / 85%);
+  stroke-width: 0.7;
+}
+
+.hud-odo-digit {
+  fill: #fff;
+  /* Measured off the cluster this is copied from: the figures stand a bit
+     over half the window's depth, and they stand UPRIGHT. Everything else
+     on this HUD leans (`.hud` is italic); a drum's figure is stamped into
+     metal and cannot, and the lean is also what put the corners of one
+     figure over its neighbour's cell. */
+  font-size: 5.5px;
+  font-style: normal;
+  font-weight: 800;
+  /* …and they are FLAT. The HUD's own figures are stamped out of the
+     picture with a hard offset shadow (`.hud`); a drum's figure is printed
+     on metal an inch behind glass, and the shadow at this size only fills
+     in the air between one cell and the next. */
+  text-shadow: none;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.hud-odo-digit-tenths {
+  fill: #10203a;
+}
+
+/* The line between one drum and the next — the gap a real counter has
+   between its wheels, which is what stops seven figures reading as a number
+   printed on a plate. */
+.hud-odo-seam {
+  fill: none;
+  stroke: rgb(255 255 255 / 14%);
+  stroke-width: 0.3;
+}
+
+/* Each hundred metres the strip slides a tenth of the window; the step that
+   carries a drum over replaces the element instead, so this only ever runs
+   forwards (hud-dial.tsx). */
+.hud-odo-drum {
+  transition: transform 140ms ease-out;
 }
 
 .hud-tach-needle {
@@ -6163,6 +6240,11 @@ a.menu-version:focus-visible {
 
   .splash-prompt {
     opacity: 1;
+  }
+
+  /* The counter still counts; the drums just step instead of rolling. */
+  .hud-odo-drum {
+    transition: none;
   }
 }
 

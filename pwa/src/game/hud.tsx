@@ -322,6 +322,13 @@ type HudProps = {
    * a rev counter and a dented wing are the same readings whoever is
    * driving. The app picks; see `spectate`. */
   snap: HudSnapshot;
+  /** THE CAR'S WHOLE LIFE, metres — what the odometer in the middle of the
+   * tachometer reads (odometer.ts). It is not part of the snapshot because
+   * it is not part of the run: the snapshot is what the car is DOING, and
+   * this is what it has done, in every discipline, since the player first
+   * took it out. Null while somebody else's run-out is on the dials — a
+   * rival's mileage is not a thing the game keeps. */
+  odoM: number | null;
   flashes: HudFlash[];
   /** The split board just driven through, until it times out. */
   split: HudSplit | null;
@@ -685,6 +692,7 @@ function PositionBoard({ standing }: { standing: HudStanding }) {
 
 export function Hud({
   snap,
+  odoM,
   live,
   paused,
   flying,
@@ -972,7 +980,7 @@ export function Hud({
       {show.cluster && (
         <div className="hud-speed">
           <div className="hud-cluster">
-            {show.tachometer && <Tachometer rpm={snap.rpm} />}
+            {show.tachometer && <Tachometer rpm={snap.rpm} odoM={odoM} />}
             <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
               {/* NEUTRAL ON THE GRID: nothing has been geared yet, and a box
                   reading first before the lights have gone is the instrument
