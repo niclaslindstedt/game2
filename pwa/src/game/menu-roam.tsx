@@ -187,15 +187,23 @@ export function RoamPage({
           {/* R46 — HOW HARD THE ROAD IS: the one SLIDER on the page, and
               the one row that gets the whole width of the column.
               Difficulty is not three named places the way HILLS is — it is
-              a scale, the map redraws as it is dragged, and what a player
-              does with it is hunt the position where the stage is still
-              just drivable, which is a thumb on a track and wants travel
-              under it. It stands over the two columns rather than in one
-              of them because it reaches into BOTH: it moves the corner
-              vocabulary and the jumps of the left-hand column and the
-              country's relief of the right — and the road's width, which
-              is why there is no ROAD row under LAND any more. Two controls
-              over one number is a fight nobody wins. */}
+              a scale, and what a player does with it is hunt the position
+              where the stage is still just drivable, which is a thumb on a
+              track and wants travel under it. It stands over the two
+              columns rather than in one of them because it reaches into
+              BOTH: it moves the corner vocabulary and the jumps of the
+              left-hand column and the country's relief of the right — and
+              the road's width, which is why there is no ROAD row under
+              LAND any more. Two controls over one number is a fight nobody
+              wins.
+
+              It SETTLES rather than reporting every position it passes
+              through: every value here is a different road, and a road is
+              generated, compiled and stood up in the world. Handing over
+              the twenty a drag crosses builds nineteen stages nobody asked
+              to see, on the frames the thumb needed to move — the word
+              says where the thumb is the whole way, and the map answers
+              the moment it is let go. */}
           <div className="roam-diff">
             <FadeRow
               label="DIFFICULTY"
@@ -204,6 +212,7 @@ export function RoamPage({
               read={challengeWord}
               less="easier"
               more="harder"
+              settle
               onChange={(challenge) => onRace({ ...race, knobs: { ...race.knobs, challenge } })}
             />
           </div>

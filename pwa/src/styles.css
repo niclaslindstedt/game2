@@ -4645,17 +4645,30 @@ a.menu-version:focus-visible {
   flex: 1;
   width: auto;
   min-width: 0;
-  /* The READING comes before the track. A word at the far end of a filling
-     bar reads as a label for the end it is standing at — "this way to
-     SAVAGE" — when what it says is where the thumb is NOW; beside the
-     name, it is the value of the setting, which is what every other row on
-     this page puts there. */
-  flex-direction: row-reverse;
+  /* The READING STANDS OVER THE TRACK, where every other row on this page
+     puts its value: the word on top, and under it the drawing of where on
+     its ladder the word stands — the pips on a stepped row, the filled
+     track here. A word at the far end of a filling bar reads as a label
+     for the end it is standing at ("this way to SAVAGE") when what it says
+     is where the thumb is NOW, and a word beside it is a fifth thing on a
+     row that already has four. Column-REVERSE because the track is the
+     control and comes first in the markup, which is the order a pointer
+     and a screen reader want it in. */
+  flex-direction: column-reverse;
+  align-items: stretch;
+  gap: 0.2rem;
+}
+
+/* The track fills the row's width rather than its height, which is what
+   `.knob-range`'s `flex: 1` would give it in a column. */
+.roam-diff .knob-range {
+  flex: 0 0 auto;
+  width: 100%;
 }
 
 .roam-diff .knob-read {
-  min-width: 4.6em;
-  text-align: left;
+  min-width: 0;
+  text-align: center;
 }
 
 .roam-diff .knob-arrow {
