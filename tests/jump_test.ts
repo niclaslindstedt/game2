@@ -436,6 +436,99 @@ describe("the jump", () => {
     expect(TUNING.air.roll.faceGrip.roof).toBeGreaterThan(TUNING.air.roll.faceGrip.flank);
   });
 
+  it("names the two halves of an accident apart: ROLLING, then SLIDING", () => {
+    // A body past its outside wheels does two quite different things, and
+    // only the first is a roll. It TURNS over its corners; then, when the
+    // turning is spent but the travel is not, it LIES on a face and goes
+    // somewhere. The roll owns both (they share a friction budget and a
+    // centre-of-mass curve), which is why `rolling` stays true — but a
+    // camera, a sound or an effect choosing between "the car is cartwheeling"
+    // and "the car is grinding along on its roof" has to be able to tell.
+    const state = game();
+    state.terrain.obstaclesNear = () => [];
+    state.terrain.treesNear = () => [];
+    let thrown = false;
+    for (let i = 0; !thrown && i < TUNING.physicsHz * 60; i += 1) {
+      state.car.u = 30;
+      thrown = step(state, { ...NEUTRAL_INPUT, throttle: 0.5 }).some((e) => e.type === "takeoff");
+    }
+    for (let i = 0; !state.car.rolling && i < TUNING.physicsHz * 6; i += 1) {
+      state.car.w = -18;
+      step(state, { ...NEUTRAL_INPUT });
+    }
+    expect(state.car.rolling).toBe(true);
+    // Going over: turning, and never called a slide while it does.
+    expect(state.car.sliding).toBe(false);
+    let turning = 0;
+    let slid = 0;
+    while (state.car.rolling && turning < TUNING.physicsHz * 8) {
+      step(state, { ...NEUTRAL_INPUT });
+      turning += 1;
+      if (state.car.sliding) {
+        slid += 1;
+        // The invariant: a slide is a state the ROLL is in, so the two are
+        // never independent and a car is never sliding without the roll
+        // owning it.
+        expect(state.car.rolling).toBe(true);
+        expect(state.car.airborne).toBe(false);
+        expect(Math.abs(rollTilt(state.car.roll))).toBeGreaterThan(WHEEL_BASIN);
+      }
+    }
+    // It ground along on a face for a real stretch before it stopped.
+    expect(slid).toBeGreaterThan(TUNING.physicsHz * 0.25);
+    // ...and once the roll hands the car back, neither flag is left set.
+    expect(state.car.rolling).toBe(false);
+    expect(state.car.sliding).toBe(false);
+  });
+
+  it("a slide turns back into a ROLL when the ground runs out under one side", () => {
+    // The case a uniform slope cannot make: a body resting on its roof on a
+    // plane is stable however steep the plane, and it simply slides. What
+    // puts a sliding car over again is an EDGE — the ground running out
+    // under one side of it — and the roll has to be reading its own
+    // centre-of-mass curve against the GROUND rather than against level to
+    // notice, or the hillside may as well not be there.
+    const slideOver = (edge: number): number => {
+      const state = game();
+      state.terrain.obstaclesNear = () => [];
+      state.terrain.treesNear = () => [];
+      const car = state.car;
+      // Well off the road: the wild is the only branch that reads the
+      // terrain's own gradient. On the ribbon the slope comes from the
+      // road's frame and ground laid under the car is never consulted.
+      const cosH = Math.cos(car.heading);
+      const sinH = Math.sin(car.heading);
+      car.x += cosH * 45;
+      car.z -= sinH * 45;
+      const x0 = car.x;
+      const z0 = car.z;
+      const y0 = state.terrain.groundAt(x0, z0);
+      state.terrain.groundAt = (x, z) => {
+        const across = (x - x0) * cosH - (z - z0) * sinH;
+        return y0 - Math.min(6, Math.max(0, across - edge) * 1.6);
+      };
+      car.y = state.terrain.groundAt(car.x, car.z);
+      car.rolling = true;
+      car.roll = Math.PI;
+      car.rollRate = 0;
+      car.airborne = false;
+      car.vy = 0;
+      car.u = 15;
+      car.w = 5;
+      updateSlip(car);
+      const roll0 = car.roll;
+      for (let i = 0; i < TUNING.physicsHz * 9 && car.rolling; i += 1) {
+        step(state, { ...NEUTRAL_INPUT });
+      }
+      return Math.abs(car.roll - roll0) / (Math.PI * 2);
+    };
+    // An edge a metre to its right: the body goes over it.
+    expect(slideOver(1.2)).toBeGreaterThan(0.4);
+    // The same ground with the drop pushed far out of reach is a flat plain,
+    // and the same body just slides to a stop on its roof.
+    expect(slideOver(400)).toBeLessThan(0.2);
+  });
+
   it("a car that is going over rides over nothing", () => {
     // `ridesOver` measures the bar off `car.y`, which for a rolling body is
     // its origin held a hull's width in the air. A car on its flank also

@@ -62,6 +62,8 @@ The scenarios each isolate ONE mechanism, and adding a sixth is a row in
 | `slide`  | Sliding into a low rail on the flat — the rally roll, no jump               |
 | `spin`   | A solid caught on the nose corner: yaw without going over                   |
 | `wall`   | Square into something rooted: the pure contact                              |
+| `cliff`  | On its ROOF, sliding over an EDGE — the ground runs out under one side      |
+| `bank`   | ...and on its roof on a plain steep bank, which it should just slide down   |
 
 ### The one number to read
 
@@ -139,6 +141,28 @@ Read the whole-run summary above it for damage and where it came to rest.
   car settled onto its roof at 63 km/h stood there for the whole of
   `lieFor` with the speed unspent in its velocity. `roll.restSpeed` is
   where the grinding stops and the lying begins.
+- **A ROLL HAS TWO HALVES AND THEY ARE NAMED.** `rolling` is the roll owning
+  the body; `sliding` is which of its motions it is doing — turning over its
+  corners, or lying flat on a face still going somewhere. `sliding` is only
+  ever true while `rolling` is, and is set as a fact about the step just
+  taken rather than a mode anything remembers. The physics is genuinely
+  shared (one friction budget, one curve), which is why this is a flag and
+  not a second branch in `step.ts`; the APPEARANCE is not, which is why the
+  flag has to exist at all.
+- **THE CENTRE-OF-MASS CURVE IS READ AGAINST THE GROUND** (`bed` =
+  `atan(slopeLat)`), never against level. Its valleys are the faces a body
+  rests on, and on a hillside those are the hillside's — the same angle
+  `car.ts` settles a car's springs onto. Round the settled face against the
+  bed too. Ignore it and a body on its roof sits in the roof's valley with
+  gravity holding it there however steep the ground.
+- **A SLIDE IS TURNED BACK INTO A ROLL BY AN EDGE, NOT A RAMP.** A roof
+  resting on a plane is a stable face however steep the plane — the honest
+  answer there is that it slides. What puts a sliding car over is the ground
+  running out from under ONE side of it, a solid it reaches, or the drag
+  levering it past its own corner. A scenario built as a uniform bank tests
+  none of that and reports the model broken when it is the scenario that is:
+  `bank` and `cliff` in the crash lab are that pair, and the contrast
+  between them is the point of having both.
 - **A car that is going over rides over NOTHING** (`ridesOver`). It has no
   wheels underneath it to climb anything with, and `car.y` for a rolling body
   is its origin held a hull's width in the air — so a bar measured from there

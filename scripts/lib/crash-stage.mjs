@@ -24,6 +24,40 @@ import {
 
 const B = TUNING.collision;
 
+/** How far off the road a placed scenario stands its car, m — clear of the
+ * ribbon and its shoulder, so `step()` takes the wild branch and reads the
+ * ground the scenario laid rather than the road's own frame. */
+const OFF_ROAD = 45;
+
+/** THE GROUND A SLIDE HAPPENS ON, laid across the car's path from where it
+ * stands. `grade` is how steeply it falls away to the car's right; `edge`
+ * is how far to the right it stays flat first.
+ *
+ * The two shapes answer different questions, and conflating them was the
+ * first thing this lab got wrong. A uniform BANK (`edge` 0) asks what a
+ * body does ON a slope — and the honest answer for a car resting on its
+ * roof is that it slides, because a roof on a plane is a stable face
+ * however steep the plane. A CLIFF is an EDGE: flat, and then not. What
+ * turns a slide back into a roll is the ground running out from under one
+ * side of the body, which is a thing a ramp never does. */
+function standGround(state, grade, edge = 0, drop = Infinity) {
+  const car = state.car;
+  const cosH = Math.cos(car.heading);
+  const sinH = Math.sin(car.heading);
+  const x0 = car.x;
+  const z0 = car.z;
+  const y0 = state.terrain.groundAt(x0, z0);
+  state.terrain.groundAt = (x, z) => {
+    // The car's own right axis is (cos h, -sin h), so this is metres to its
+    // right — and the ground drops away on that side and no other.
+    const across = (x - x0) * cosH - (z - z0) * sinH;
+    // ...and levels out again `drop` metres down. A cliff has a BOTTOM: an
+    // unbounded ramp is a car falling for the whole of the scenario, which
+    // reports 523 km/h and −1.5 g and answers nothing.
+    return y0 - Math.min(drop, Math.max(0, across - edge) * grade);
+  };
+}
+
 /** A solid to stand in the car's way, with a plausible boulder's numbers
  * under whatever the scenario overrides. Authored in the RELEASE FRAME —
  * `along` down the car's travel and `across` to its right — because that is
@@ -165,6 +199,29 @@ export const SCENARIOS = {
     seconds: 5,
     props: () => [prop(45, 0, { radius: 1.2, height: 1.6, mass: 9000, rooted: 1 })],
   },
+  // ── The two SLIDES: a body already over, on a face, going somewhere ────
+  // Staged by `place` rather than driven to, because what is under test is
+  // what the ground does to a body that is ALREADY on its shell — and a
+  // roll that happens to end on the right face at the right speed is a
+  // scenario nobody can repeat.
+  cliff: {
+    note: "on its ROOF, sliding OVER AN EDGE — the ground runs out under one side",
+    place: { tilt: Math.PI, speed: 15, drift: 5 },
+    bank: 1.6,
+    edge: 1.2,
+    drop: 6,
+    seconds: 9,
+    bare: true,
+    props: () => [],
+  },
+  bank: {
+    note: "...and on its ROOF on a plain steep BANK, which it should just slide down",
+    place: { tilt: Math.PI, speed: 15 },
+    bank: 0.45,
+    seconds: 9,
+    bare: true,
+    props: () => [],
+  },
 };
 
 /** Everything one step of a crash is, as the pictures and the table want to
@@ -173,6 +230,16 @@ export const SCENARIOS = {
  * is how far the nose has come round from it. */
 function frameOf(state, t, origin, events) {
   const car = state.car;
+  // THE BED: the cross-slope under the body, as the roll reads it. Every
+  // valley of the centre-of-mass curve is measured against this and not
+  // against level, so a frame that does not show it cannot explain why the
+  // same body settles at one attitude here and another one ten metres on.
+  const grade = 4;
+  const cosB = Math.cos(car.heading);
+  const sinB = Math.sin(car.heading);
+  const right = state.terrain.groundAt(car.x + cosB * grade, car.z - sinB * grade);
+  const left = state.terrain.groundAt(car.x - cosB * grade, car.z + sinB * grade);
+  const bed = Math.atan((right - left) / (2 * grade));
   const dx = car.x - origin.x;
   const dz = car.z - origin.z;
   const sin = Math.sin(origin.heading);
@@ -189,12 +256,14 @@ function frameOf(state, t, origin, events) {
     speed: Math.hypot(car.u, car.w),
     roll: car.roll,
     tilt: rollTilt(car.roll),
+    bed,
     rollRate: car.rollRate,
     yaw: wrap(car.heading - origin.heading),
     yawRate: car.yawRate,
     pitch: car.pitch,
     airborne: car.airborne,
     rolling: car.rolling,
+    sliding: car.sliding,
     wear: car.damage.wear,
     roof: car.damage.roof,
     parts: car.damage.broken.length,
@@ -293,7 +362,9 @@ function standProps(state, scenario, origin) {
 export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
   const scenario = SCENARIOS[name];
   if (!scenario) throw new Error(`no such scenario: ${name}`);
-  const [u, w] = scenario.entry;
+  // A placed scenario has no entry to be driven to — it is STOOD at its
+  // attitude and speed — so its entry is what it is stood with.
+  const [u, w] = scenario.entry ?? [scenario.place.speed, 0];
   const state = createGame({
     seed,
     carId,
@@ -315,6 +386,29 @@ export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
       state.car.w = w;
       if (step(state, { ...NEUTRAL_INPUT }).some((e) => e.type === "landing")) break;
     }
+  } else if (scenario.place) {
+    // STOOD ON A FACE, on a bank, already sliding. The car is put well off
+    // the road first: the wild is the only branch that reads the TERRAIN's
+    // own gradient — on the ribbon the slope comes from the road's frame,
+    // and a bank laid under a car standing on the road is never consulted.
+    const cosH = Math.cos(state.car.heading);
+    const sinH = Math.sin(state.car.heading);
+    state.car.x += cosH * OFF_ROAD;
+    state.car.z -= sinH * OFF_ROAD;
+    if (scenario.bank)
+      standGround(state, scenario.bank, scenario.edge ?? 0, scenario.drop ?? Infinity);
+    state.car.y = state.terrain.groundAt(state.car.x, state.car.z);
+    state.car.rolling = true;
+    state.car.roll = scenario.place.tilt;
+    state.car.rollRate = 0;
+    state.car.airborne = false;
+    state.car.vy = 0;
+    state.car.u = scenario.place.speed;
+    // ...and, where the scenario asks, already going sideways: a body slid
+    // straight at an edge meets it with both sides at once and simply drops.
+    // What puts a car over is meeting it with ONE side first.
+    state.car.w = scenario.place.drift ?? 0;
+    updateSlip(state.car);
   } else {
     // Straight down the road to the entry speed, and the sideways speed put
     // in ONCE, at the release. Holding `w` through the run-up instead fights

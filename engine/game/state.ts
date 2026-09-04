@@ -326,6 +326,24 @@ export type CarState = {
    * upright, or when there is no roll left in it; the ground rights it
    * from there. */
   rolling: boolean;
+  /** ...and WHICH OF THE ROLL'S TWO MOTIONS it is doing. A body past its
+   * outside wheels does two quite different things, and only the first of
+   * them is a roll: it TURNS over its corners — walking sideways, airborne
+   * between contacts, swapping which corner it pivots about — and then,
+   * when the turning is spent but the travel is not, it SLIDES, lying flat
+   * on one face and going somewhere.
+   *
+   * They share a model (one Coulomb budget under whatever is on the ground,
+   * one centre-of-mass curve) which is why the roll owns both and `rolling`
+   * stays true through a slide. They do not share an APPEARANCE: a turning
+   * body is the one thing a boom cannot follow, and a body sliding flat and
+   * straight is the one thing it can. Anything choosing a shot, a sound or
+   * an effect wants to know which — and a slide is not over, because the
+   * ground can put the car back over at any moment (a solid, an edge, the
+   * drag levering it past its own corner).
+   *
+   * Only ever true while `rolling` is. */
+  sliding: boolean;
   /** How far the DRIVEN wheels are outrunning the road, m/s — 0 hooked up,
    * and never more than the headroom between the road and what the current
    * gear gives at the limiter, because a wheel with a gear engaged cannot

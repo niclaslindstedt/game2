@@ -117,17 +117,21 @@ function report(run, stride) {
       `   ${run.carId}, seed ${run.seed}`,
   );
   console.log(
-    "     t     km/h       u       w      vy    roll   r/s     yaw   r/s   pitch  state    wear  parts",
+    "     t     km/h       u       w      vy    roll   r/s     yaw   r/s   pitch    bed  state    wear  parts",
   );
   run.frames.forEach((f, i) => {
     if (i % stride !== 0) return;
-    const state = `${f.airborne ? "air" : "down"}${f.rolling ? "/roll" : ""}`;
+    // ROLL and SLIDE are the two halves of one accident and the table has
+    // to tell them apart: a body turning over its corners, and one lying
+    // flat on a face still going somewhere.
+    const state = `${f.airborne ? "air" : "down"}${f.sliding ? "/SLIDE" : f.rolling ? "/roll" : ""}`;
     console.log(
       `  ${f.t.toFixed(2)}  ${(f.speed * 3.6).toFixed(0).padStart(5)}  ` +
         `${f.u.toFixed(1).padStart(6)}  ${f.w.toFixed(1).padStart(6)}  ` +
         `${f.vy.toFixed(1).padStart(6)}  ${deg(f.tilt).padStart(6)}  ` +
         `${f.rollRate.toFixed(1).padStart(4)}  ${deg(f.yaw).padStart(6)}  ` +
         `${f.yawRate.toFixed(1).padStart(4)}  ${deg(f.pitch).padStart(6)}  ` +
+        `${deg(f.bed).padStart(5)}  ` +
         `${state.padEnd(9)}${(f.wear * 100).toFixed(0).padStart(4)}%  ${String(f.parts).padStart(5)}`,
     );
   });

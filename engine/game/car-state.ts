@@ -64,6 +64,7 @@ export function freshCar(): CarState {
     spun: false,
     spinDir: 0,
     rolling: false,
+    sliding: false,
     wheelspin: 0,
     launchSpin: 0,
     flick: 0,
