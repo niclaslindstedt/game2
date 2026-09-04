@@ -19,6 +19,8 @@ import { collideSlope } from "./collision.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { CarState, GameEvent, RunStats } from "./state.ts";
+import type { Rng } from "../lib/prng.ts";
+import type { Surface } from "../mapgen/index.ts";
 
 const T = TUNING;
 
@@ -53,6 +55,39 @@ export type GroundUnder = {
  * into a rut moves it by a quarter of the rut, and a shape shorter than
  * the wheelbase is under one axle at a time. It is the ground the body's
  * own momentum is measured against (car.ts, `loft`). */
+/** Everything a step needs to know about the ground: the height under any
+ * world position and whether it is the open lattice or a road profile
+ * (`GroundUnder`, ground.ts), plus the grade and shape already read under
+ * the car and the weather over it. */
+export type GroundContext = GroundUnder & {
+  surface: Surface | "nature";
+  /** Road slope dy/ds under the car... */
+  slope: number;
+  /** Ground slope ACROSS the heading, positive when the ground rises to
+   * the car's right — what pulls a car toward the downhill side. Off the
+   * road it is the hillside; on the road it is the camber and the worn
+   * wheel tracks (road.ts). Absent means dead flat. */
+  slopeLat?: number;
+  /** Vertical curvature of the road under the car, 1/m — negative over a
+   * brow. Zero anywhere a jump lip owns the launch. */
+  roadCurve: number;
+  /** True within `air.crestSpan` of a jump lip on the road (step.ts). The
+   * lip owns the launch there: the body's lift is read off the ground
+   * under the middle, because the footprint's mean plunges as the front
+   * wheels go over two metres before the middle does. */
+  lip?: boolean;
+  /** Current wind velocity, world space m/s. */
+  windX: number;
+  windZ: number;
+  t: number;
+  rng: Rng;
+  /** What the drive is multiplied by this step — 1 everywhere except inside
+   * a mass start's catch-up, where a car giving away grid rows is given back
+   * the metres (state.catchUp). It multiplies the engine's pull and nothing
+   * else: the grip, the slide and the top end are all still the car's. */
+  drive: number;
+};
+
 export type Seat = { centre: number; seat: number; foot: number };
 
 /** The four wheel positions' ground, read at the car's heading: the plane
