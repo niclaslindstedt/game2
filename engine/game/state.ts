@@ -546,14 +546,28 @@ export function rotateFrame(car: CarState, delta: number): void {
  * In the car's frame +z is the nose and +x its right side, so a positive
  * roll is a rotation about +z while a nose-up pitch is a NEGATIVE one about
  * +x (the renderer states the same convention where it draws them). That
- * sign is the whole of why the two lines below are not symmetric. */
+ * sign is why the two lines below are not symmetric.
+ *
+ * WHAT LEAVES THE ROLL AXIS IS NOT HANDED ON, and that is deliberate. The
+ * arithmetic says the component that stops being roll becomes a rotation
+ * about the body's LATERAL axis, which upright is the pitch — but the yaw
+ * this is turning under is not a free body's. Most of a crashing car's yaw
+ * is the GROUND scrubbing it round (`roll.ts` drives it from the contact
+ * patch), and feeding that into the nose invents an end-over-end out of a
+ * plain sideways trip: a car yawing at five rad/s while rolling at three
+ * moved 0.13 rad/s a step out of its roll and into its nose, an order of
+ * magnitude more than the friction under it, and a barrel roll that should
+ * have finished on its flank at no pitch at all finished at 165° of it,
+ * having tumbled the length of the car.
+ *
+ * So the roll is re-expressed and the remainder is dropped. It is the half
+ * of the exchange the reported fault is about — a body that swapped ends
+ * going on rolling the same way in the WORLD — and the half the model has an
+ * honest destination for. */
 export function rotateSpin(car: CarState, delta: number): void {
   const cos = Math.cos(delta);
   const sin = Math.sin(delta);
-  const roll = car.rollRate * cos - car.pitchRate * sin;
-  const pitch = car.rollRate * sin + car.pitchRate * cos;
-  car.rollRate = roll;
-  car.pitchRate = pitch;
+  car.rollRate = car.rollRate * cos - car.pitchRate * sin;
 }
 
 /** Refresh the slip angle after anything rewrites `u`/`w` directly — the

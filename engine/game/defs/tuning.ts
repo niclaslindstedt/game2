@@ -1495,6 +1495,7 @@ export const TUNING = {
      * NEAREST upright, so a car already most of the way over finishes the
      * roll rather than rewinding it. */
     rollRecover: 5,
+    leanFree: 0.45,
     /** ...and how fast a roll RATE the ground was handed dies on the
      * springs, 1/s — a landing that tripped the car short of going over
      * lurches it this far before the recovery above has it back. Faster
@@ -1550,7 +1551,8 @@ export const TUNING = {
      * faster the jump, the straighter it has to be landed, which is the
      * whole reason a flick before a lip is a mistake. Under that the car
      * lurches on its springs and the ground takes it back. */
-    tripRoll: 0.75,
+    tripRoll: 0.95,
+    tripPitch: 0.16,
     /** ...capped here, rad/s: a body does not go over faster than about a
      * turn and a half a second whatever it was doing, because past that
      * the sideways speed is spent folding the car rather than turning it
@@ -1589,6 +1591,9 @@ export const TUNING = {
        * landing square on the wheels or the roof keeps under a fifth and
        * is where a roll stops. */
       spin: 0.4,
+      endInertia: 4.4,
+      endSpin: 1.4,
+      spinInertia: 1.6,
       /** ...and how much of that exchange a SPRUNG corner gives back
        * instead of taking, 0..1. A shell corner arriving at the ground is
        * sheet metal and pays the swap in full; a WHEEL arriving is what
@@ -1635,7 +1640,7 @@ export const TUNING = {
        * that took nine tenths of the speed out of every second of contact.
        * Between them, the read that made a rollover look like a car
        * hitting glue and then spinning on the spot. */
-      faceGrip: { wheels: 0.85, flank: 0.5, roof: 0.65 },
+      faceGrip: { wheels: 0.85, flank: 0.5, end: 0.58, roof: 0.65 },
       /** How fast the roll bleeds into the ground it is grinding round on,
        * 1/s. Panels are not tyres. */
       drag: 0.9,
@@ -1683,15 +1688,6 @@ export const TUNING = {
        * the ground, 1/s — faster than the roll's own, because the length
        * of the car is lying on the ground and the roll's axis is not. */
       pitchDamp: 2.4,
-      /** ...and how fast the ground pulls the body's NOSE back level once
-       * it is lying on a face, 1/s. A car on its roof lies flat on it; it
-       * does not come to rest nose-down in the air. */
-      pitchLevel: 3.5,
-      /** How far off level the pitch is allowed to get, rad. The hull's
-       * outline knows nothing about the length of the car, so a body
-       * pitched past about a third of a turn is drawing a shape the roll
-       * is not modelling — and an end-over-end is a different accident. */
-      pitchMax: 1.1,
       /** The roll is over when the body is lying within this of a face of
        * it (rad) and turning slower than `rest` (rad/s) — the rock has
        * died out and the car is where it is going to stay. */
