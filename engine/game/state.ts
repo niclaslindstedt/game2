@@ -529,6 +529,33 @@ export function rotateFrame(car: CarState, delta: number): void {
   car.w = w;
 }
 
+/** ...and the same thing said about the car's own SPIN. The body's roll and
+ * pitch rates are components of one angular velocity vector, read on the
+ * car's own longitudinal and lateral axes — and when the nose turns by
+ * `delta`, those axes turn under a vector the world is holding still, in
+ * exactly the way `rotateFrame`'s do under the velocity.
+ *
+ * A car does not stop rolling because it swapped ends. It goes on turning
+ * about the SAME axis in the world, which is a different axis of its own:
+ * half a turn of yaw and the roll it is carrying is the other way round in
+ * its own frame. Nothing anywhere else re-reads that, so without it the
+ * direction a body rolls is decided once, at the trip, and survives the car
+ * turning round underneath it — a car sliding forwards while rolling
+ * backwards, which is the one attitude no falling body can hold.
+ *
+ * In the car's frame +z is the nose and +x its right side, so a positive
+ * roll is a rotation about +z while a nose-up pitch is a NEGATIVE one about
+ * +x (the renderer states the same convention where it draws them). That
+ * sign is the whole of why the two lines below are not symmetric. */
+export function rotateSpin(car: CarState, delta: number): void {
+  const cos = Math.cos(delta);
+  const sin = Math.sin(delta);
+  const roll = car.rollRate * cos - car.pitchRate * sin;
+  const pitch = car.rollRate * sin + car.pitchRate * cos;
+  car.rollRate = roll;
+  car.pitchRate = pitch;
+}
+
 /** Refresh the slip angle after anything rewrites `u`/`w` directly — the
  * grounded step's lateral-grip redirect rebuilds the velocity FROM this
  * angle, so a stale slip silently erases the change (collision impulses
