@@ -911,7 +911,14 @@ export function createGameCamera(width: number, height: number): GameCamera {
     //
     // The overhead pair are left alone for their own reason — the drone is a
     // backdrop with a bot in it, and nobody is driving under the map.
-    const going = !overhead && !inCar && rollShot.watching(state);
+    //
+    // ASKED FIRST, and of every frame: the shot latches itself off when the
+    // driver takes the car back and releases that latch when the car is
+    // planted again, so it has to be told about every frame whether or not
+    // this one could use it. Behind an `&&` on the view it would go blind for
+    // the whole time the player was in the cockpit and come back still
+    // holding a latch from an accident two corners ago.
+    const going = rollShot.watching(state) && !overhead && !inCar;
     const watched = going ? rollShot.fly(camera, state, shot, CHASE_CLEARANCE, dt) : shot;
     if (!going) rollShot.reset();
     // The hor+ ceiling belongs to the view (`capFor`), so a move between two
@@ -985,8 +992,10 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // dropped and the rig is stood around THIS car again first.
       finishShot.reset();
       // ...and so does the roll's, for the same reason: a shot planted beside
-      // a car that went over is not a shot to watch another crew from.
-      rollShot.reset();
+      // a car that went over is not a shot to watch another crew from — and
+      // neither is the latch that shot left behind, which belongs to an
+      // accident on a different piece of road.
+      rollShot.release();
       // A change of SEAT on the road the lens is leaving means nothing on the
       // road it is going to.
       change.reset();
@@ -1017,7 +1026,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // flown down to, and nobody starts a run mid-plunge.
       eye.setEyes(next);
       change.reset();
-      rollShot.reset();
+      rollShot.release();
       restand = true;
       held = 0;
     },

@@ -1403,13 +1403,18 @@ export function stepGrounded(
   const bed = rollBed(ctx);
   const lean = rollTilt(car.roll);
   const camber = ctx.slopeLat ? Math.atan(ctx.slopeLat) : 0;
+  // ...and this branch is also where `planted` is decided, because it IS the
+  // question: the springs carrying the body, or a rigid body up on its outer
+  // contact line. Nothing else in the game may draw that line a second time.
   if (Math.abs(lean - camber) > T.air.leanFree) {
     // Only the TORQUE is added here. The rate was integrated and damped a
     // few lines up, where every roll rate the ground hands the body is —
     // doing either again is a second helping of both.
     car.rollRate += leanTorque(car.roll, 0, car.u * car.yawRate, mass, bed) * dt;
+    car.planted = false;
   } else {
     car.roll += (camber - lean) * clamp(T.air.rollRecover * dt, 0, 1);
+    car.planted = true;
   }
   settlePitch(car, Math.atan(ctx.slope));
 
@@ -1695,6 +1700,7 @@ export function stepAirborne(
   car.braking = false;
   car.locked = false; // ...and nothing under the wheels to drag them across
   car.reversing = false; // nothing to back out of in the air
+  car.planted = false; // ...nor anything under them to be planted on
 
   car.yawRate += car.steer * T.air.yawAuthority * dt;
   // A bounce is not a flight: the car is settling onto the ground it has

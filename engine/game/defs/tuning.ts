@@ -1495,6 +1495,11 @@ export const TUNING = {
      * NEAREST upright, so a car already most of the way over finishes the
      * roll rather than rewinding it. */
     rollRecover: 5,
+    /** THE LINE BETWEEN FOUR WHEELS AND TWO, rad of lean off the camber.
+     * Inside it the springs carry the body and the recovery above settles
+     * it onto the ground's own angle; past it the car is a rigid body
+     * pivoting on its outer contact line and `leanTorque` is what turns it.
+     * `CarState.planted` is that same line, written down. */
     leanFree: 0.45,
     /** ...and how fast a roll RATE the ground was handed dies on the
      * springs, 1/s — a landing that tripped the car short of going over
@@ -1762,6 +1767,54 @@ export const TUNING = {
        * board. A car on its roof is not a car anybody is driving away, so
        * there is nothing to wait for beyond reading what happened. */
       lieFor: 1.4,
+      /** WHAT THE DRIVER STILL HAS while the car is going over.
+       *
+       * A rally driver does not take their hands off the wheel because the
+       * car has lifted a pair of wheels, and there is no reason for the
+       * model to either. The pedals and the steering reach the world
+       * through the tyres and through nothing else, so what the driver has
+       * left is whatever of the contact patch is still rubber
+       * (`tyreShare`): all of it on the wheels, about 0.7 balanced over at
+       * 45°, and nothing at all from the flank round to the roof. Nobody
+       * writes a rule that says "the crash is now unrecoverable" — the
+       * geometry says it.
+       *
+       * Each of the three is a share of THE SAME Coulomb budget the ground
+       * is already spending, and the three are clamped to a friction circle
+       * before any of it is spent. A tyre has one budget whether it is
+       * being asked to stop the car, turn it or drive it, and writing them
+       * as three independent forces is how a contact patch ends up making
+       * three times the grip it has. */
+      driver: {
+        /** THE THROTTLE, as a share of that budget — the only term in the
+         * whole crash that may ADD speed, because it is the only one with
+         * an engine behind it. Under half: a driven pair scrabbling at an
+         * attitude nobody chose is not a standing start. */
+        power: 0.45,
+        /** THE BRAKE, and the lever, which while the car is over are the
+         * same ask. It may only ever take travel away — a pedal cannot push
+         * a car backwards — so it is free to have the whole patch.
+         *
+         * What that is worth is not a harder stop, and it should not be
+         * tuned as though it were: a body already sliding has the ground
+         * dragging at the whole of the patch's budget in the direction it is
+         * going, and no pedal can ask for more friction than the patch has.
+         * What the brake buys is the accident ENDING SOONER and ending the
+         * right way up — measured over one trip, four tenths of a second off
+         * the roll, and the difference between a car back on its wheels and
+         * a car lying on its side waiting for the crew. */
+        brake: 1,
+        /** THE STEERING: the lateral force the tyres still down will make.
+         * This is the term that lets the driver change how the crash GOES
+         * rather than merely how fast it ends, because it works on the
+         * lever of the weight's own height exactly as the ground's friction
+         * does — steer into the side the car is standing on and the body is
+         * pushed back down, steer away and it is held up there or taken
+         * over. The same authority `leanTorque` hands the handling model
+         * for a car balanced on two wheels, not switched off at the moment
+         * the body commits. */
+        steer: 0.9,
+      },
     },
   },
 

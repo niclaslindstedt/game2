@@ -38,6 +38,7 @@ import {
   type Axis,
   type Bed,
   type MassSpread,
+  type Patch,
   LEVEL,
   bedNormal,
   clearOn,
@@ -49,11 +50,14 @@ import {
   seatSlopes,
   standingOn,
   turnedPoints,
+  tyreShare,
 } from "./roll-hull.ts";
+import { clamp } from "../lib/math.ts";
 import {
   rollTilt,
   rotateFrame,
   updateSlip,
+  type CarInput,
   type CarState,
   type GameEvent,
   type RunStats,
@@ -63,6 +67,7 @@ export { WHEEL_BASIN, massSpread, onItsWheels, type MassSpread } from "./roll-hu
 
 const T = TUNING;
 const R = TUNING.air.roll;
+const DR = TUNING.air.roll.driver;
 const B = TUNING.collision;
 
 /** What the ground under a crashing car has to be able to say. A structural
@@ -274,6 +279,7 @@ export function beginRoll(car: CarState, events: GameEvent[], stats: RunStats): 
   if (car.rolling) return;
   car.rolling = true;
   car.sliding = false;
+  car.planted = false;
   stats.rolls += 1;
   events.push({
     type: "rollover",
@@ -391,27 +397,134 @@ function rubGround(
   // ground and never came back.
   const across = -Math.sign(slipW) * Math.min(budget, stopping(slipW, lever, mass.over.roll));
   const along = -Math.sign(slipU) * Math.min(budget, stopping(slipU, lever, mass.over.pitch));
-  // ...AND WHAT THE FACE UNDER IT ANSWERS FIRST. A body lying flat is not
-  // standing on a point: the normal force shifts WITHIN the face it is on to
-  // meet a moment, and only what is left over turns the body. The face can
-  // answer `normal × its own reach` — two metres of roof against a friction
-  // moment of `friction × the weight's height`, which is half a metre — so a
-  // car sliding squarely on its roof tracks straight, and one up on a corner,
-  // where the reach is nothing, does not.
-  //
-  // Without it every long slide ended in an end-over-end: the friction under
-  // a car doing 28 m/s torques its nose down every step, nothing resisted it
-  // until the body had already pitched off the face, and a plain sideways
-  // trip finished at 178° of pitch having tumbled the length of the car.
+  turnAt(car, patch, normal, mass, along, across);
+  updateSlip(car);
+}
+
+/** WHAT AN IN-PLANE FORCE AT THE CONTACT PATCH DOES TO THE BODY'S THREE
+ * ROTATIONS. The ground's friction is one such force and the driver's tyres
+ * are another; they act at the same place, on the same arms, and are turned
+ * into rotation here once so the two can never disagree about the geometry.
+ *
+ * `along` and `across` are the impulse in the car's own axes, m/s.
+ *
+ * THE FACE UNDER IT ANSWERS FIRST. A body lying flat is not standing on a
+ * point: the normal force shifts WITHIN the face it is on to meet a moment,
+ * and only what is left over turns the body. The face can answer `normal ×
+ * its own reach` — two metres of roof against a moment of `force × the
+ * weight's height`, which is half a metre — so a car sliding squarely on its
+ * roof tracks straight, and one up on a corner, where the reach is nothing,
+ * does not. Without it every long slide ended in an end-over-end: the
+ * friction under a car doing 28 m/s torques its nose down every step, nothing
+ * resisted it until the body had already pitched off the face, and a plain
+ * sideways trip finished at 178° of pitch having tumbled the length of the
+ * car.
+ *
+ * THE SPIN is on the arm the patch has in the ground plane. A patch a metre
+ * ahead of the weight with the car sliding sideways swings the tail round;
+ * one out at a corner does it hardest. A body flat and square on a face has
+ * no arm and gets no spin, which is the same reason it tracks straight. */
+function turnAt(
+  car: CarState,
+  patch: Patch,
+  normal: number,
+  mass: MassSpread,
+  along: number,
+  across: number,
+): void {
+  const lever = patch.height;
   car.rollRate += turnPast(across, lever, normal * patch.spanAcross) / mass.over.roll;
   car.pitchRate += turnPast(along, lever, normal * patch.spanAlong) / mass.over.pitch;
-  // THE SPIN, on the arm the patch has in the ground plane. A patch a metre
-  // ahead of the weight with the car sliding sideways swings the tail round;
-  // one out at a corner does it hardest. A body flat and square on a face
-  // has no arm and gets no spin, which is why a car sliding squarely on its
-  // roof tracks straight and one up on a corner does not.
   car.yawRate += (patch.along * across - patch.across * along) / mass.yaw;
+}
+
+/** THE DRIVER, STILL DRIVING — the pedals and the wheel, spent through
+ * whatever of the car is still standing on rubber.
+ *
+ * A crash used to be a cutscene the player was sat inside: `stepRolling` read
+ * no input at all, so the most retrievable moment in any accident — two
+ * wheels down, the body balanced, everything still to play for — was the one
+ * moment nothing they pressed could matter. It is the same argument
+ * `leanTorque` already makes for a car the roll has handed back, made one
+ * step earlier, and it needs no new mechanism: the tyres are either on the
+ * ground or they are not, and `tyreShare` says which.
+ *
+ * ONE PATCH, ONE BUDGET, and that is the trap this function is written
+ * around. The three asks are summed as a vector and clamped to a friction
+ * circle, because a tyre has one budget whether it is being asked to stop the
+ * car, turn it or drive it — but the ground's own drag is spending that same
+ * budget, and letting both have all of it is the same double charge on a
+ * different axis. So this runs FIRST and reports back what fraction of the
+ * patch it took: the driver points the tyre, and `rubGround` drags with what
+ * is left. Left uncapped, a lock-to-lock input bought a lateral force the
+ * ground then reacted to in full, and steering either way tripped the car.
+ *
+ * `normal` is the m/s of velocity change the load can pay for this step, the
+ * same figure `rubGround` is handed. Returns the share of the PATCH's own
+ * budget that went on the driver, 0..1 — which is what the ground is then
+ * short by, and is not the same fraction as the load, because the driver
+ * spends the tyres' coefficient where the ground spends the face's. */
+function driveRolling(
+  car: CarState,
+  input: CarInput,
+  normal: number,
+  tilt: number,
+  pitch: number,
+  bed: Bed,
+  mass: MassSpread,
+): number {
+  const share = tyreShare(tilt, pitch, bed);
+  if (share <= 0) return 0;
+  // THE BRAKE ACTS AGAINST THE TRAVEL, and during a crash the travel is not
+  // where the nose is pointing: a car going over sideways at 20 m/s braked
+  // along its own heading would be steered by its brake pedal.
+  const speed = Math.hypot(car.u, car.w);
+  const dirU = speed > 0 ? car.u / speed : 0;
+  const dirW = speed > 0 ? car.w / speed : 0;
+  const stop = Math.max(input.brake, input.handbrake ? 1 : 0) * DR.brake;
+  const ask = {
+    along: input.throttle * DR.power - dirU * stop,
+    across: input.steer * DR.steer - dirW * stop,
+  };
+  const want = Math.hypot(ask.along, ask.across);
+  if (want <= 0) return 0;
+  // The demand, clamped to the friction circle and then sized by the tyres'
+  // own coefficient and by how much of the car is standing on them — and
+  // never more than the whole patch, which is all there is to spend.
+  const patch = gripOn(tilt, pitch, bed) * normal;
+  if (patch <= 0) return 0;
+  const mine = Math.min(Math.min(1, want) * R.faceGrip.wheels * share * normal, patch);
+  const spend = mine / want;
+  let dU = ask.along * spend;
+  let dW = ask.across * spend;
+  // ...and a pedal cannot push a car backwards. Whatever of the impulse
+  // opposes the travel is capped at bringing it to a stop, the same cap the
+  // ground's own rub takes, and the impulse is scaled whole so that the
+  // clamp cannot quietly rotate it into a direction nobody asked for.
+  const against = -(dU * dirU + dW * dirW);
+  if (against > speed) {
+    const keep = speed / against;
+    dU *= keep;
+    dW *= keep;
+  }
+  car.u += dU;
+  car.w += dW;
+  // ONLY THE ENGINE MAY ADD SPEED, and the throttle's own share of the patch
+  // is the whole of what it may add. The steering and the brake REDIRECT and
+  // RETARD: a lateral force that also grew the travel would be a tyre doing
+  // work with nothing behind it, which is the one thing this module has never
+  // let anything do. Applied to the pair together, so the cap turns the
+  // velocity rather than deleting the steering's half of it.
+  const powered = speed + Math.max(0, input.throttle) * DR.power * spend;
+  const now = Math.hypot(car.u, car.w);
+  if (now > powered) {
+    const keep = powered / now;
+    car.u *= keep;
+    car.w *= keep;
+  }
+  turnAt(car, standingOn(tilt, pitch, bed), normal, mass, dU, dW);
   updateSlip(car);
+  return mine / patch;
 }
 
 /** A CONTACT OF THE CRASH: the ground arriving at the body, wherever round
@@ -565,14 +678,20 @@ export function landRolled(
  * contact several times a face. So the height tracked here is the weight's,
  * and the ground it is compared against is the surface.
  *
- * Nothing here is steered or driven: there is no tyre on the ground and the
- * input is not read. What ends it is `car.rolling` going false, at which
- * point either the tyres are back down and the handling model takes the car —
- * leaning or not — or they are not, and step.ts sends the run back to its
- * last split board. */
+ * THE DRIVER IS STILL DRIVING (`driveRolling`), for as much of the car as is
+ * still standing on its tyres and no more. Nothing about that is an override
+ * or an escape: it is one more force at the same contact patch, spent out of
+ * the same budget, doing the same four jobs — so it changes where the crash
+ * goes and not only how fast it ends, and it fades to nothing on its own as
+ * the body passes its flank.
+ *
+ * What ends the roll is `car.rolling` going false, at which point either the
+ * tyres are back down and the handling model takes the car — leaning or not —
+ * or they are not, and step.ts sends the run back to its last split board. */
 export function stepRolling(
   spec: CarSpec,
   car: CarState,
+  input: CarInput,
   ctx: RollGround,
   events: GameEvent[],
   stats: RunStats,
@@ -613,7 +732,14 @@ export function stepRolling(
     // the sign of the slide alone is a car that turns over for as long as
     // anything nudges it sideways, because nothing it spends comes from
     // anywhere.
-    rubGround(car, T.air.gravity * dt, tilt, pitch, bed, mass, false);
+    // THE DRIVER FIRST, through whatever of the car is still on rubber, and
+    // then the ground with WHAT IS LEFT of the patch. The order is the whole
+    // point: they are one contact and one budget, so a steering input the
+    // ground then reacted to in full would be the same friction charged
+    // twice. With no input on the pedals or the wheel this takes nothing and
+    // the rub below is exactly the crash the module always ran.
+    const asked = driveRolling(car, input, T.air.gravity * dt, tilt, pitch, bed, mass);
+    rubGround(car, T.air.gravity * dt * (1 - asked), tilt, pitch, bed, mass, false);
     // What the ground bleeds out of each rotation as it grinds round on it.
     // Panels are not tyres, and the pitch loses it faster because the whole
     // length of the car is lying on the ground while it goes end over end
@@ -711,10 +837,17 @@ export function stepRolling(
   car.drifting = false;
   car.spun = false;
   car.wheelspin = 0;
-  car.braking = false;
   car.locked = false;
   car.reversing = false;
   car.weight = 1;
+  // ...but the DRIVER is not a readout of the ground. The rack follows the
+  // hands whether or not there is anything under the front wheels to answer
+  // it, and the lamps light off the pedal rather than off the grip, so a
+  // player fighting a crash can see their own inputs on the car.
+  car.steer += (input.steer - car.steer) * clamp(T.steering.rackRate * dt, 0, 1);
+  car.braking = input.brake > 0 || input.handbrake;
+  // A body off its wheels is never planted, whatever it is doing next step.
+  car.planted = false;
 
   const seat = seatOn(nowR, nowP, bed);
   const slopes = seatSlopes(nowR, nowP, bed);

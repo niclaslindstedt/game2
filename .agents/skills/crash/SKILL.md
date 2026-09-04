@@ -211,7 +211,18 @@ pitch)` is the honest "is it on its wheels", because a body at roll 0 and
   tenth of a second, the balance is playable between about 40° and 52° of
   lean: under 40° gravity wins inside a third of a second whatever is done,
   and 54° is where the sill corner takes over and it is a rollover. The
-  throttle does not reach it — it enters only through `u × yawRate`.
+  throttle does not reach that balance — it enters only through `u × yawRate`.
+- **...AND THE DRIVER IS STILL IN IT PAST THAT LINE** (`driveRolling`). Once
+  the roll owns the body the pedals and the wheel keep whatever of the
+  contact patch is still rubber (`tyreShare` — all of it on the wheels, ~0.6
+  at the sill corner, exactly none from the flank round to the roof), so the
+  geometry decides when a crash stops being retrievable and nothing writes it
+  down. Two rules govern anything added here, and both have already been
+  broken once: it comes OUT of the ground's budget rather than beside it
+  (`driveRolling` runs first and returns the share of the patch it took), and
+  only the ENGINE may add speed — the wheel and the brake redirect and retard.
+  A brake is not a harder stop: a sliding body already has the ground at the
+  patch's limit, so what it buys is a shorter roll that ends the right way up.
 - **After changing `car.u` or `car.w`, call `updateSlip(car)`** — the grounded
   redirect rebuilds velocity from `car.slip` and silently erases an impulse
   applied against a stale angle.
