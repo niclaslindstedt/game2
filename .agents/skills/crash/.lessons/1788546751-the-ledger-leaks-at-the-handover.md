@@ -1,30 +1,35 @@
 ---
-title: The crash ledger's leak is the ground/air handover, not a term in the model — and two obvious fixes make it worse
+title: The crash ledger's leak is the WALK, unconserved at the ground/air handover — and four fixes for it all make the number worse
 date: 2026-09-04
 scope: engine/game/roll-ledger.ts, engine/game/roll.ts
 concepts: [roll, measurement, physics, debugging, probes]
 ---
 
-`make crash` reports `carry` "gaining" 20% of its budget over 227 steps, and
-it reads as a term making energy. It is not. Walk the run and print every
-step whose ledger rose: the worst are all steps where `stepRolling` sets
-`car.vy = seatVy`, taking the body from −0.65 to +2.63 m/s. That vertical
-speed is the SEAT's own motion under a body pivoting at three rad/s — a
-readout of the rotation, not an independent momentum — and `crashEnergy`
-books it as translation on top of the `spin × rate²` producing it. The `walk`
-along the ground is the same motion on the other axis and is NOT in `car.u`,
-which is exactly why the leak looks like a term rather than bookkeeping.
+`make crash` reports `carry` "gaining" 20% of its budget. It is not a term
+making energy — it is `crashEnergy` reading half of one motion.
 
-Two one-line fixes were tried and BOTH made it worse, so do not repeat them:
-using `mass.over` (corner radii) while grounded took `trip` from 4.6% to
-80.8%, and dropping `vy` from `move` while grounded took `carry` from 20% to
-29%. Each removes the double count and moves the discontinuity to the
-takeoff, where `airborne` flips true with `vy` already set to `seatVy`. The
-committed form is the least bad of the three.
+A body going over turns about the CORNER on the ground, so `stepRolling`
+carries the whole car sideways as it turns (`walk`, `stride`) — and writes
+that straight into `car.x`/`car.z`, never into `car.u`/`car.w`. The VERTICAL
+half of the same motion is in the state (`car.vy` is set to `seatVy`), so the
+ledger counts the pivot on one axis and not the other two. That asymmetry is
+also a real model fault: the walk is six or seven metres a second under a car
+at eight rad/s, a fast roll leaves the ground four times a turn, and the
+horizontal half of it is destroyed at every takeoff and created at every
+contact.
 
-Beware the other end of the same function: `crashEnergy` counts `g × height`
-against the WORLD's zero, so a car standing still on ground 16.9 m up already
-reads 273 J/kg. `jump_test`'s "a crash runs its budget down to a tenth"
-passed for years only because the car ended on its roof and was respawned
-onto a road sixteen metres lower. Subtract the datum — the same car, there,
-at rest — from both ends, or the assertion is about the map's altitude.
+Four fixes were tried and every one made the reported leak WORSE. Do not
+repeat them: `mass.over` (corner radii) while grounded took `trip` 4.6% →
+80.8%; dropping `vy` from `move` while grounded took `carry` 20% → 29%;
+adding the walk to `move` alone (no model change) took it to 58–655%; and
+conserving the walk across the handover as well — `car.u += pivot` at takeoff,
+back out at the contact, with the weight's own arm — still left 66–101%,
+spread over 265 steps rather than a few.
+
+The last one is the physically right change (rolls carry further for it:
+`carry` 2.02 → 3.26 turns, 32 → 50 m) and it still cannot be verified,
+because `standingOn().height` JUMPS as the body walks from corner to corner,
+so a `move` built on it is discontinuous several times a turn. A real fix
+needs a continuous pivot arm first; until then the ledger cannot referee its
+own repair, and changing the trajectory without an invariant is worse than
+the leak.
