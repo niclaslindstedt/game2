@@ -53,9 +53,21 @@ describe("where a body that is over touches the ground", () => {
 describe("how much a crash throws", () => {
   it("throws nothing for a body settling rather than arriving", () => {
     expect(crashBurst(0).grains).toBe(0);
-    expect(crashBurst(CRASH_THROW.slamFloor).grains).toBe(0);
+    expect(crashBurst(CRASH_THROW.jouleFloor).grains).toBe(0);
     expect(crashGrind(0).grains).toBe(0);
     expect(crashGrind(CRASH_THROW.grindFrom).grains).toBe(0);
+  });
+
+  it("is sized by what the GROUND TOOK, so it grows as the square of the blow", () => {
+    // The ground cannot throw up anything it was not given: the burst is the
+    // energy the car gave up (`landing.took`, J/kg), never the speed the
+    // corner arrived at. So a contact twice as hard throws four times the
+    // stones — which is what makes a big one read as an event rather than as
+    // a slightly bigger scuff.
+    const energy = (slam: number) => 0.5 * slam * slam;
+    const hard = crashBurst(energy(12)).grains - crashBurst(energy(6)).grains;
+    const soft = crashBurst(energy(6)).grains - crashBurst(energy(3)).grains;
+    expect(hard).toBeGreaterThan(soft * 3);
   });
 
   it("grows with the blow and with the pace, and then stops growing", () => {

@@ -78,6 +78,18 @@ can be checked against the world with: accident reconstruction measures a real
 one at around **half a g**. Over about 1 g the model is taking speed it should
 not be, and the picture will show it — outlines piling into a knot.
 
+**It is a RATIO, and the divisor is `air.gravity`, never 9.81.** This world's
+gravity is arcade — 1.6x the real one, deliberately, so a hang reads as slow
+motion — and the crash's retardation is `roll.faceGrip x g`, so it scales with
+it. Divided by g it is the crash's own coefficient of friction, which is what
+makes it comparable with the real 0.45 and readable straight against
+`faceGrip` (0.5 on a flank). Divided by 9.81 it is that same number times
+1.6, and the lab spent a whole session reporting perfectly good 0.42 crashes
+as 0.68 and tripping its own "over 1 g" bar at a true 0.62. Note that the
+DRIFT lab's lateral g is the opposite case and correctly uses 9.81: cornering
+grip is stated absolutely (`gripAccel`, m/s²) and does not scale with gravity,
+so there the honest question is how many real g the car is pulling.
+
 `along`, `into it` and `out` are measured over the ROLL, not the run: a crash
 ends when the car stops moving, but the roll hands the car back the moment the
 body settles on a face, and everything after that is a wrecked car coasting.
@@ -122,6 +134,24 @@ Read the whole-run summary above it for damage and where it came to rest.
   door skin and slides longest, `roof` is glass and pillars and gutters
   digging in. BLENDED across the quarter turns, never stepped — a
   coefficient that jumped at each face would kick the roll every quarter.
+- **NOTHING IN THIS MODULE MAY ADD ROTATION.** Gravity trades it against the
+  surface, the ground's budget is capped at the impulse that would bring the
+  slipping patch to a common speed with the ground, the damps and the pivot
+  exchange only ever take, and the turbulence is bounded and zero-mean. That
+  is the spine, and every rotational fault here has been something quietly
+  breaking it — a torque whose axis was not in the slip it was computed from,
+  a sign that turned the patch further into its own slide, a "re-expression"
+  that took from one axis and gave nothing back. Before adding any term,
+  answer where its energy comes from; and check a new one by putting in a
+  pure rotation with no travel and watching it shrink.
+- **ASK A GEOMETRIC FACT AT THE SCALE IT LIVES AT.** A face is metres long,
+  so whether the body is lying on one is an ANGLE (`air.roll.settled`), never
+  a height — gated on a millimetre it was true in one step out of nineteen
+  hundred and three behaviours built on it were silently dead. And an
+  attitude is TWO angles: `standingOn(...).sprung` / `onItsWheels(roll,
+pitch)` is the honest "is it on its wheels", because a body at roll 0 and
+  half a turn of pitch is on its roof and one at half a turn of both is on
+  its tyres facing backwards. Anything reading the roll alone is guessing.
 - **A contact may only be charged for what the FLIGHT put in.** The seat is
   MOVING — `centreHeight` runs at `slope × rollRate` under a turning body,
   which past a corner is ten metres a second — so the closing speed against
@@ -173,6 +203,15 @@ Read the whole-run summary above it for damage and where it came to rest.
   comes to rest on whichever face it ran out on; `step.ts` asks `onItsWheels`
   afterwards. Never add a cap — if a roll goes on too long, the energy
   bookkeeping is wrong, and a cap hides it.
+- **A CAR UP ON TWO WHEELS IS THE SAME BODY ON THE SAME SURFACE**, and it
+  goes back to the driver the moment its TYRES are what is on the ground,
+  however far over it is holding (`leanTorque`, called from `car.ts` past
+  `air.leanFree`). Steer into the side it stands on and it comes down; steer
+  away and it holds up, or goes over. Measured with a driver correcting every
+  tenth of a second, the balance is playable between about 40° and 52° of
+  lean: under 40° gravity wins inside a third of a second whatever is done,
+  and 54° is where the sill corner takes over and it is a rollover. The
+  throttle does not reach it — it enters only through `u × yawRate`.
 - **After changing `car.u` or `car.w`, call `updateSlip(car)`** — the grounded
   redirect rebuilds velocity from `car.slip` and silently erases an impulse
   applied against a stale angle.
@@ -187,10 +226,14 @@ Read the whole-run summary above it for damage and where it came to rest.
 1. **Take the baseline first.** `make crash` (and `make roll`) before the
    first edit — both drive the engine directly, so neither needs a build, and
    the whole set is seconds.
-2. **Find WHICH STEP the speed goes in.** Not which second. Walk the run one
-   step at a time and print any step that sheds more than a fraction of a
-   m/s; a crash that is wrong is almost always one or two catastrophic steps
-   with a long correct grind after them, and the average hides it completely.
+2. **Find WHICH STEP the speed goes in, and which STAGE of it.** Not which
+   second. Walk the run one step at a time and print any step that sheds more
+   than a fraction of a m/s; a crash that is wrong is almost always one or two
+   catastrophic steps with a long correct grind after them, and the average
+   hides it completely. When a ROTATION is the thing going wrong, hook every
+   stage inside `stepRolling` — gravity, the rub, the damps, each contact —
+   and print the stage that moved it: which term is feeding an axis is not a
+   thing the step's net change can tell you.
 3. **Then ask what that step was charged for.** In this module the answer has
    never once been "friction is too high" — it has been an arrival the body
    did not make.

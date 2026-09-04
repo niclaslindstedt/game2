@@ -207,13 +207,40 @@ export type Patch = {
   readonly spanAlong: number;
 };
 
-const ON_PLANE = 1e-3;
+/** WHAT IS BEARING, m — how far off the plane a point may stand and still be
+ * carrying load. Not zero, because neither the shell nor the ground is the
+ * plane the arithmetic pretends: a sill on gravel beds in, a panel folds,
+ * and a corner a couple of centimetres proud of the mud is on the mud. */
+const ON_PLANE = 0.02;
+
+/** ...AND WHAT IT IS LYING ON, rad — how far from parallel the plane and a
+ * face of the box may be and still be the same contact.
+ *
+ * These are two questions and conflating them was the whole of why the face
+ * never answered anything. A face is METRES long, so "within a couple of
+ * centimetres of the lowest point" asks a four-metre roof to be within a
+ * hundredth of a degree of the ground before it counts as being on it —
+ * which, measured over five crash scenarios, was true in one step out of
+ * nineteen hundred. The body was on a single point for the whole of every
+ * accident: nothing answered the friction's moment, and the roll could never
+ * report that it had come to lie on anything.
+ *
+ * Asked as an ANGLE it is scale-free and says what it means. A car on its
+ * roof a few degrees off is lying on its roof, and the load shifts across
+ * that roof as it rocks the last few degrees down — which is exactly the
+ * reach `roll.ts` prices a friction moment against. */
+const ON_FACE = R.settled;
 
 export function standingOn(tilt: number, pitch: number, bed: Bed = LEVEL): Patch {
   let lowest = Infinity;
+  let onIt = turned(HULL[0], tilt, pitch);
   for (const p of HULL) {
-    const h = heightOn(p, tilt, pitch, bed);
-    if (h < lowest) lowest = h;
+    const t = turned(p, tilt, pitch);
+    const h = t.across * bed.across + t.up * bed.up + t.along * bed.along;
+    if (h < lowest) {
+      lowest = h;
+      onIt = t;
+    }
   }
   // The mean of everything actually touching, which for a face down is the
   // middle of that face and for a corner is the corner.
@@ -221,25 +248,36 @@ export function standingOn(tilt: number, pitch: number, bed: Bed = LEVEL): Patch
   let across = 0;
   let along = 0;
   let sprung = true;
+  // ...and, separately, the FACE it is lying on: everything near enough to
+  // the plane, for how far out it is, that the body only has to rock the
+  // last degree or two onto it. That is the set the load may shift within.
+  let face = 0;
   let minAcross = Infinity;
   let maxAcross = -Infinity;
   let minAlong = Infinity;
   let maxAlong = -Infinity;
   for (const p of HULL) {
     const t = turned(p, tilt, pitch);
-    if (t.across * bed.across + t.up * bed.up + t.along * bed.along - lowest > ON_PLANE) continue;
-    n += 1;
-    across += t.across;
-    along += t.along;
+    const over = t.across * bed.across + t.up * bed.up + t.along * bed.along - lowest;
+    if (over <= ON_PLANE) {
+      n += 1;
+      across += t.across;
+      along += t.along;
+      if (!p[3]) sprung = false;
+    }
+    // How far this point stands from the lowest one, in the plane — the arm
+    // the tilt between them is read over.
+    const reach = Math.hypot(t.across - onIt.across, t.along - onIt.along);
+    if (over > ON_PLANE + reach * ON_FACE) continue;
+    face += 1;
     if (t.across < minAcross) minAcross = t.across;
     if (t.across > maxAcross) maxAcross = t.across;
     if (t.along < minAlong) minAlong = t.along;
     if (t.along > maxAlong) maxAlong = t.along;
-    if (!p[3]) sprung = false;
   }
   const centre = turned([0, B.centreY, 0], tilt, pitch);
   return {
-    flat: n >= 4,
+    flat: face >= 4,
     sprung,
     across: across / n - centre.across,
     along: along / n - centre.along,
@@ -275,20 +313,69 @@ export function gripOn(tilt: number, pitch: number, bed: Bed = LEVEL): number {
   return up >= 0 ? side + (g.wheels - side) * up : side + (g.roof - side) * -up;
 }
 
-/** THE PLANES A BODY GOES OVER IN, and the two numbers each is worth. The
- * physics is identical; only the inertias differ, and they differ because
- * the box does: it is four metres long and under two wide, so the weight
- * sits further from an axis ACROSS the car than from one down it, and the
- * climb from the wheels up over the NOSE is more than twice the climb up
- * over the sill. That is the whole reason a rally car barrel-rolls readily
- * and only occasionally stands itself on its face — nobody chose it. */
+/** THE PLANES A BODY GOES OVER IN. The physics is identical; only the
+ * inertias differ, and they differ because the box does: it is four metres
+ * long and under two wide, so the weight sits further from an axis ACROSS
+ * the car than from one down it, and the climb from the wheels up over the
+ * NOSE is more than twice the climb up over the sill. That is the whole
+ * reason a rally car barrel-rolls readily and only occasionally stands
+ * itself on its face — nobody chose it. */
 export type Axis = "roll" | "pitch";
-export const INERTIA: Record<Axis, number> = { roll: R.inertia, pitch: R.endInertia };
-/** ...and the third axis, which is not a plane the body goes OVER in — a
- * car does not come to rest on its side by yawing — but is real motion the
- * ground makes and takes, about the body's own vertical. */
-export const YAW_INERTIA = R.spinInertia;
-export const SPIN: Record<Axis, number> = { roll: R.spin, pitch: R.endSpin };
+
+/** HOW ONE CAR'S MASS IS SPREAD, in the two forms the crash needs it.
+ *
+ * All of it is mass-normalised — radii of gyration squared, m² — because
+ * every term in `roll.ts` divides the car's mass straight out. What is left
+ * is the SPREAD, and that is a real difference between cars: over this
+ * roster's 1020-1300 kg it moves 12% in roll and about a quarter in pitch
+ * and yaw, so the heavy coupe genuinely resists an end-over-end and a spin
+ * where the hatch does not.
+ *
+ *   `spin` / `yaw` — about the body's OWN axes through its weight. What a
+ *   free body turns with, what a rotation's ENERGY is worth, and what
+ *   `pivotKeep` trades when a face arrives flat.
+ *
+ *   `over` — about the CORNER the body is going over, which is what a
+ *   rolling car actually turns about. The same distribution moved onto that
+ *   corner by the parallel-axis theorem: the central radius plus the square
+ *   of the arm from the weight out to the corner. Stated here rather than
+ *   tuned separately, because the two are one distribution and letting them
+ *   be two numbers lets them disagree — the old pair had the pitch a third
+ *   lower than its own geometry allows, which is a body that goes end over
+ *   end more easily than the box it is made of.
+ */
+export type MassSpread = {
+  readonly spin: Record<Axis, number>;
+  readonly yaw: number;
+  readonly over: Record<Axis, number>;
+};
+
+/** The arms from the weight out to the corner the body turns about, m² —
+ * the sill corner for a barrel roll, the nose corner for an end-over-end. */
+const SILL_ARM = B.halfWidth * B.halfWidth + B.centreY * B.centreY;
+const NOSE_ARM = B.halfLength * B.halfLength + B.centreY * B.centreY;
+
+const spreads = new Map<number, MassSpread>();
+
+/** ...and the car's own, off its kerb mass. Memoised: a roster is three
+ * cars and a field is fifteen of them, and this is asked every step. */
+export function massSpread(mass: number): MassSpread {
+  const had = spreads.get(mass);
+  if (had) return had;
+  const S = R.spread;
+  // The measured regressions, divided by the mass they were measured
+  // against — an inertia per kg is a radius of gyration squared.
+  const roll = S.rollSlope + S.rollBase / mass;
+  const pitch = S.pitchSlope + S.pitchBase / mass;
+  const yaw = S.yawSlope + S.yawBase / mass;
+  const made: MassSpread = {
+    spin: { roll, pitch },
+    yaw,
+    over: { roll: roll + SILL_ARM, pitch: pitch + NOSE_ARM },
+  };
+  spreads.set(mass, made);
+  return made;
+}
 
 /** The highest the weight has to be lifted to get from here to the next
  * face it could come to rest on, m — everything between it and there, not
@@ -324,6 +411,7 @@ export function goesOverOn(
   tilt: number,
   pitch: number,
   rate: number,
+  mass: MassSpread,
   bed: Bed = LEVEL,
 ): boolean {
   if (rate === 0) return false;
@@ -332,7 +420,7 @@ export function goesOverOn(
   // the face it is already beside, which is what a body a fraction of a
   // degree off level and settling is doing on every step of every straight.
   if (climb <= 0) return false;
-  return 0.5 * INERTIA[axis] * rate * rate > TUNING.air.gravity * climb;
+  return 0.5 * mass.over[axis] * rate * rate > TUNING.air.gravity * climb;
 }
 
 /** WHAT A CONTACT LEAVES OF THE ROTATION in one plane, 0..1, and how far
@@ -352,6 +440,7 @@ export function pivotKeep(
   axis: Axis,
   tilt: number,
   pitch: number,
+  mass: MassSpread,
   bed: Bed = LEVEL,
 ): { keep: number; gap: number; sprung: boolean } {
   let low = Infinity;
@@ -377,7 +466,7 @@ export function pivotKeep(
   const ay = B.centreY - on[1];
   const bx = -arriving[out];
   const by = B.centreY - arriving[1];
-  const spin = SPIN[axis];
+  const spin = mass.spin[axis];
   const rigid = (spin + ax * bx + ay * by) / (spin + bx * bx + by * by);
   // ...and a SPRUNG corner arriving hands most of that back rather than
   // taking it: the spring stores the blow and returns it, which is the whole

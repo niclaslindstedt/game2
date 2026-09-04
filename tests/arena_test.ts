@@ -15,11 +15,10 @@ import {
   ARENA_PAD,
   ARENA_REACH,
   NEUTRAL_INPUT,
-  WHEEL_BASIN,
+  onItsWheels,
   compileArena,
   createGame,
   createTerrain,
-  rollTilt,
   step,
   type ArenaPlan,
   type CarInput,
@@ -293,7 +292,7 @@ describe("what the training ground is for", () => {
     // rolls anything driven down it.
     const straight = drive(56, 20, 34, 3, { throttle: 1 });
     expect(straight.car.rolling).toBe(false);
-    expect(Math.abs(rollTilt(straight.car.roll))).toBeLessThan(WHEEL_BASIN);
+    expect(onItsWheels(straight.car.roll, straight.car.pitch)).toBe(true);
   });
 
   it("gives the roll somewhere to carry to, and something to hit at the end", () => {

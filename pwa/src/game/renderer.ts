@@ -393,8 +393,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   };
 
   /** One CONTACT of a body that is over: a corner of the shell arriving. */
-  const crashBurst = (state: GameState, slam: number): void => {
-    const burst = burstCount(slam);
+  const crashBurst = (state: GameState, took: number): void => {
+    const burst = burstCount(took);
     const fx = fxScale();
     throwFromShell(state, Math.round(burst.grains * fx), Math.round(burst.puffs * fx));
   };
@@ -811,7 +811,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           // there is a corner of the shell ploughing into the ground, and
           // the burst belongs where that corner is. `atWheels` would put it
           // at four points a metre and a half in the air.
-          crashBurst(state, Math.abs(ev.slam));
+          crashBurst(state, ev.took);
         } else {
           // Four tyres hitting the ground at once, and each of them throws.
           atWheels(

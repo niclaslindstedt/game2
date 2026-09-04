@@ -45,6 +45,7 @@ import {
 } from "./track.ts";
 import {
   NEUTRAL_INPUT,
+  rollTilt,
   stillCar,
   updateSlip,
   type CarInput,
@@ -1025,13 +1026,26 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // air are both still having their go: only one that is down, still and
   // past the basin its own weight could right it from has actually come to
   // rest on something that is not its wheels.
-  // ...asked of the ROLL, and of the springs' pitch not at all. A car being
-  // driven carries its nose angle on its suspension (`settlePitch` eases it
-  // onto the grade, up to `attitude.pitchMax`), and that is an attitude, not
-  // a rotation of the box. Reading it here as one declares a car merely
-  // driving down a hill to be standing on its bumper, `stepOverturned`
-  // returns before anything moves, and the car freezes on the spot.
-  if (!car.rolling && !car.airborne && !onItsWheels(car.roll, 0)) {
+  // ...asked of the ROLL and of the BOX'S OWN PITCH, but never of the
+  // springs'. `car.pitch` is two things under one name: the rotation a
+  // crashing body has been left at, and the nose angle a DRIVEN car carries
+  // on its suspension — and the second reaches `attitude.pitchMax` where the
+  // box stops standing on its tyres at less than half of that, so reading it
+  // raw declares a car merely driving down a hill to be up on its bumper,
+  // `stepOverturned` returns before anything moves, and the car freezes on
+  // the spot. `settlePitch` CLAMPS the springs at that number, so the two
+  // meanings separate exactly: within it, it is an attitude and reads level;
+  // past it, nothing but a crash can have put the car there.
+  //
+  // And it has to be read, because with a free pitch axis half the ways a
+  // car ends up off its wheels do not show in the roll at all. A body at no
+  // roll and half a turn of pitch is lying on its ROOF — and was left there
+  // for good, because the run never marked it overturned and the crew were
+  // never taken back. One at half a turn of BOTH is sitting squarely on its
+  // tyres facing backwards, and was being teleported to the last board for
+  // it.
+  const nose = Math.abs(rollTilt(car.pitch)) > T.attitude.pitchMax ? car.pitch : 0;
+  if (!car.rolling && !car.airborne && !onItsWheels(car.roll, nose)) {
     state.overturned = { since: state.t };
   }
 

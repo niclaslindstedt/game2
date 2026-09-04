@@ -210,8 +210,8 @@ describe("event routing", () => {
     go: [{ type: "go" }],
     takeoff: [{ type: "takeoff", vy: 6 }],
     landing: [
-      { type: "landing", airTime: 1.2, slam: 9, clean: true },
-      { type: "landing", airTime: 1.2, slam: 9, clean: false },
+      { type: "landing", airTime: 1.2, slam: 9, took: 0.5 * 9 ** 2, clean: true },
+      { type: "landing", airTime: 1.2, slam: 9, took: 0.5 * 9 ** 2, clean: false },
     ],
     splash: [
       { type: "splash", speed: 12, deep: false },
@@ -372,12 +372,24 @@ describe("event routing", () => {
   });
 
   it("makes a harder landing louder and lower, and gives the gentlest some weight", () => {
-    const hop = soundForEvent({ type: "landing", airTime: 2.5, slam: 2, clean: true }, 0);
-    const flight = soundForEvent({ type: "landing", airTime: 0.4, slam: 12, clean: true }, 0);
+    const hop = soundForEvent(
+      { type: "landing", airTime: 2.5, slam: 2, took: 0.5 * 2 ** 2, clean: true },
+      0,
+    );
+    const flight = soundForEvent(
+      { type: "landing", airTime: 0.4, slam: 12, took: 0.5 * 12 ** 2, clean: true },
+      0,
+    );
     expect(flight?.shape?.gain ?? 0).toBeGreaterThan(hop?.shape?.gain ?? 0);
     expect(flight?.shape?.pitch ?? 1).toBeLessThan(hop?.shape?.pitch ?? 1);
-    const feather = soundForEvent({ type: "landing", airTime: 0.1, slam: 0.2, clean: true }, 0);
-    const full = soundForEvent({ type: "landing", airTime: 2, slam: 14, clean: true }, 0);
+    const feather = soundForEvent(
+      { type: "landing", airTime: 0.1, slam: 0.2, took: 0.5 * 0.2 ** 2, clean: true },
+      0,
+    );
+    const full = soundForEvent(
+      { type: "landing", airTime: 2, slam: 14, took: 0.5 * 14 ** 2, clean: true },
+      0,
+    );
     expect(feather?.shape?.gain ?? 0).toBeGreaterThan(0.25 * (full?.shape?.gain ?? 1));
   });
 

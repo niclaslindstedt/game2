@@ -529,47 +529,6 @@ export function rotateFrame(car: CarState, delta: number): void {
   car.w = w;
 }
 
-/** ...and the same thing said about the car's own SPIN. The body's roll and
- * pitch rates are components of one angular velocity vector, read on the
- * car's own longitudinal and lateral axes — and when the nose turns by
- * `delta`, those axes turn under a vector the world is holding still, in
- * exactly the way `rotateFrame`'s do under the velocity.
- *
- * A car does not stop rolling because it swapped ends. It goes on turning
- * about the SAME axis in the world, which is a different axis of its own:
- * half a turn of yaw and the roll it is carrying is the other way round in
- * its own frame. Nothing anywhere else re-reads that, so without it the
- * direction a body rolls is decided once, at the trip, and survives the car
- * turning round underneath it — a car sliding forwards while rolling
- * backwards, which is the one attitude no falling body can hold.
- *
- * In the car's frame +z is the nose and +x its right side, so a positive
- * roll is a rotation about +z while a nose-up pitch is a NEGATIVE one about
- * +x (the renderer states the same convention where it draws them). That
- * sign is why the two lines below are not symmetric.
- *
- * WHAT LEAVES THE ROLL AXIS IS NOT HANDED ON, and that is deliberate. The
- * arithmetic says the component that stops being roll becomes a rotation
- * about the body's LATERAL axis, which upright is the pitch — but the yaw
- * this is turning under is not a free body's. Most of a crashing car's yaw
- * is the GROUND scrubbing it round (`roll.ts` drives it from the contact
- * patch), and feeding that into the nose invents an end-over-end out of a
- * plain sideways trip: a car yawing at five rad/s while rolling at three
- * moved 0.13 rad/s a step out of its roll and into its nose, an order of
- * magnitude more than the friction under it, and a barrel roll that should
- * have finished on its flank at no pitch at all finished at 165° of it,
- * having tumbled the length of the car.
- *
- * So the roll is re-expressed and the remainder is dropped. It is the half
- * of the exchange the reported fault is about — a body that swapped ends
- * going on rolling the same way in the WORLD — and the half the model has an
- * honest destination for. */
-export function rotateSpin(car: CarState, delta: number): void {
-  const cos = Math.cos(delta);
-  const sin = Math.sin(delta);
-  car.rollRate = car.rollRate * cos - car.pitchRate * sin;
-}
-
 /** Refresh the slip angle after anything rewrites `u`/`w` directly — the
  * grounded step's lateral-grip redirect rebuilds the velocity FROM this
  * angle, so a stale slip silently erases the change (collision impulses
@@ -620,7 +579,18 @@ export type GameEvent =
    * that comes down on a slope running away from it. It is what the camera,
    * the dust and the sound are all sized off, so that a small jump is a
    * small hit rather than no hit at all. */
-  | { type: "landing"; airTime: number; slam: number; clean: boolean }
+  /** A landing, and WHAT THE GROUND TOOK for it, J per kg of car.
+   *
+   * `slam` is how fast the arriving corner was travelling — the right
+   * number for what FOLDS, because a fold is a depth. It is the wrong one
+   * for what the ground THROWS: a body meeting the ground gives up energy,
+   * the ground has to absorb exactly that, and what comes back up is
+   * gravel and dust in proportion to it. The two differ by more than a
+   * scale — energy goes as the square of the arrival, so a contact twice
+   * as hard throws four times the stones, and a contact that arrives
+   * gently but has a whole rollover's rotation taken out of it throws like
+   * the accident it is rather than like a car settling on its springs. */
+  | { type: "landing"; airTime: number; slam: number; took: number; clean: boolean }
   /** Water taken at speed. `speed` is how fast the car went in, m/s;
    * `deep` marks water it will not be driving out of — the entry that
    * starts a drowning, as opposed to a ford crossed on the way past. */
