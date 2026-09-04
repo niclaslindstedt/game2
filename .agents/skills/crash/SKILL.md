@@ -126,6 +126,14 @@ Read the whole-run summary above it for damage and where it came to rest.
   arriving corner is sprung, and the travel rub has to read it too, not just
   the rotation. A roll passes through upright once a turn, and charging that
   arrival a full sliding stop ends the roll there, every time.
+- **THE ROLL OWNS THE CAR UNTIL IT HAS STOPPED TRAVELLING**, not until it
+  has stopped turning — unless the face it settled on is its wheels, which
+  is a car that drives on and goes straight back to the handling model.
+  There are no tyres under a car on its roof, and `stepOverturned` returns
+  before anything moves, so handing a still-sliding body back FREEZES it: a
+  car settled onto its roof at 63 km/h stood there for the whole of
+  `lieFor` with the speed unspent in its velocity. `roll.restSpeed` is
+  where the grinding stops and the lying begins.
 - **A car that is going over rides over NOTHING** (`ridesOver`). It has no
   wheels underneath it to climb anything with, and `car.y` for a rolling body
   is its origin held a hull's width in the air — so a bar measured from there

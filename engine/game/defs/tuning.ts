@@ -1685,6 +1685,24 @@ export const TUNING = {
        * died out and the car is where it is going to stay. */
       settled: 0.12,
       rest: 0.7,
+      /** ...and, for a body that came to rest on a face that is NOT its
+       * wheels, when it has stopped TRAVELLING as well, m/s.
+       *
+       * A car on its roof has no tyres on the ground; it has a roof, and
+       * the ground goes on taking the travel out of it at the same
+       * friction that was turning it over a moment earlier. So the slide
+       * belongs to the roll and the roll keeps the car until it is over —
+       * which for 70 km/h onto a roof is three seconds and thirty metres
+       * of grinding, and the loudest, longest thing in the whole accident.
+       *
+       * Without it a roll handed the car back the instant the ROTATION
+       * stopped, whatever it was still carrying, and `stepOverturned`
+       * returns before anything moves: the car settled onto its roof at
+       * 63 km/h and became a statue on the spot for `lieFor`, with the
+       * speed still sitting in its velocity, unspent. A car that comes
+       * down on its WHEELS still going is the opposite case and is handed
+       * straight back — that one is a car that drives on. */
+      restSpeed: 1.2,
       /** How close the NEXT corner of the hull has to be to the ground for
        * a contact to reach the rotation, m. A body lying flat on a face
        * has it at zero and pays `spin`'s exchange in full; a body balanced

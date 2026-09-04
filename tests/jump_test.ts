@@ -331,6 +331,69 @@ describe("the jump", () => {
     expect(worst).toBeLessThan(into / 3);
   });
 
+  it("a car that ends up on its roof GRINDS to a stop, it does not freeze", () => {
+    // The other half of the momentum question, and the uglier failure. A
+    // roll used to hand the car back the instant the ROTATION stopped —
+    // whatever it was still carrying — and step.ts sets `overturned` on a
+    // body that is down, still and off its wheels, whereupon
+    // `stepOverturned` returns before anything moves. So a car that settled
+    // onto its roof at 63 km/h became a statue on the spot, with the speed
+    // still sitting unspent in its velocity, and was teleported to the last
+    // board a beat later.
+    //
+    // A car on its roof has no tyres on the ground. It has a roof, and the
+    // ground goes on taking the travel out of it at the same friction that
+    // was turning it over — so the slide belongs to the roll, and the roll
+    // keeps the car through it.
+    const state = game();
+    state.terrain.obstaclesNear = () => [];
+    state.terrain.treesNear = () => [];
+    let thrown = false;
+    for (let i = 0; !thrown && i < TUNING.physicsHz * 60; i += 1) {
+      state.car.u = 30;
+      thrown = step(state, { ...NEUTRAL_INPUT, throttle: 0.5 }).some((e) => e.type === "takeoff");
+    }
+    for (let i = 0; !state.car.rolling && i < TUNING.physicsHz * 6; i += 1) {
+      state.car.w = -18;
+      step(state, { ...NEUTRAL_INPUT });
+    }
+    expect(state.car.rolling).toBe(true);
+    // Run to the moment the body has stopped TURNING but is still going.
+    let turning = 0;
+    while (
+      turning < TUNING.physicsHz * 6 &&
+      (Math.abs(state.car.rollRate) > TUNING.air.roll.rest ||
+        Math.abs(rollTilt(state.car.roll)) < WHEEL_BASIN)
+    ) {
+      step(state, { ...NEUTRAL_INPUT });
+      turning += 1;
+    }
+    expect(Math.abs(rollTilt(state.car.roll))).toBeGreaterThan(WHEEL_BASIN);
+    const carrying = Math.hypot(state.car.u, state.car.w);
+    expect(carrying).toBeGreaterThan(10);
+    // It is still the ROLL's car — not handed back, and so not frozen.
+    expect(state.car.rolling).toBe(true);
+    expect(state.overturned).toBeNull();
+    const x0 = state.car.x;
+    const z0 = state.car.z;
+    let seconds = 0;
+    while (state.car.rolling && seconds < 6) {
+      step(state, { ...NEUTRAL_INPUT });
+      seconds += TUNING.dt;
+    }
+    // It ground its way to a stop over real ground, and quickly: a roof and
+    // its pillars dug into gravel is a far better brake than four tyres.
+    const slid = Math.hypot(state.car.x - x0, state.car.z - z0);
+    expect(slid).toBeGreaterThan(6);
+    expect(Math.hypot(state.car.u, state.car.w)).toBeLessThanOrEqual(TUNING.air.roll.restSpeed);
+    expect(carrying / seconds).toBeGreaterThan(9.81 * 0.4);
+    // ...and only THEN is it a car lying on its roof for the crew to be
+    // taken out of.
+    expect(state.car.rolling).toBe(false);
+    step(state, { ...NEUTRAL_INPUT });
+    expect(state.overturned).not.toBeNull();
+  });
+
   it("a car that is going over rides over nothing", () => {
     // `ridesOver` measures the bar off `car.y`, which for a rolling body is
     // its origin held a hull's width in the air. A car on its flank also

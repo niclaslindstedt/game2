@@ -9,6 +9,13 @@ until the crew were sent back to the last split board. It now does what a
 rolling car does — bounces forward, covers real ground, and smashes into
 whatever is in its way, which sends it over again in a new direction.
 
+And a car that ends up on its roof now grinds to a stop over twenty-odd
+metres rather than freezing solid on the spot: it settled onto its roof
+still doing 63 km/h and simply stopped dead, because the roll handed it back
+the moment the rotation stopped and nothing moves an overturned car. There
+are no tyres under a car on its roof — there is a roof, and it is a very
+good brake.
+
 Three things were taking the speed. A flat scrub on the travel beside the
 ground's own friction; contacts charged for arrivals the body never made
 (the centre climbing its own corner under the roll, and the tyres touching

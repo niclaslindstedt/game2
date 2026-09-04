@@ -682,6 +682,20 @@ export function stepRolling(
   // off it, and handing that car back to the handling model mid-swing is
   // where a roll stops looking like one.
   if (Math.abs(car.pitchRate) >= R.rest) return;
+  // ...NOR WHILE IT IS STILL SLIDING, if the face it came to rest on is not
+  // its wheels. A car on its roof has no tyres on the ground: it has a roof,
+  // and the ground goes on taking the travel out of it at the same friction
+  // that was turning it over a moment ago. That grind belongs to the roll
+  // and the roll keeps the car through it.
+  //
+  // Handing it back the instant the ROTATION stopped froze it solid: step.ts
+  // sets `overturned` on a body that is down, still and off its wheels, and
+  // `stepOverturned` returns before anything moves — so a car that settled
+  // onto its roof at 63 km/h stood there for the whole of `lieFor` with the
+  // speed still in its velocity, unspent, and was then teleported to the
+  // last board. A body that comes down on its WHEELS still going is the
+  // other case entirely and is handed straight back: that one drives on.
+  if (!onItsWheels(car.roll) && Math.hypot(car.u, car.w) > R.restSpeed) return;
   car.rolling = false;
   car.rollRate = 0;
   car.pitchRate = 0;
