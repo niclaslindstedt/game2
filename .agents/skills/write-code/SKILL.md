@@ -194,9 +194,13 @@ Make targets are the definition of green CI enforces).
   file per topic, named `<topic>_test.ts` — the `_test` suffix is mandated by
   OSS_SPEC §20.2 and checked by the validator. Runner: vitest via `make test`;
   the include pattern (`tests/**/*_test.ts`) is in `vitest.config.ts`.
-- **Engine tests only** — no DOM, no browser, plain Node. The renderer is
-  verified by looking (`make screenshots`, the `playtest` skill), not by unit
-  tests.
+- **No DOM, no browser, plain Node** — that is the actual line, not "engine
+  only". A renderer module whose whole import graph is DOM-free is fair game
+  and several are already tested that way (`car_geometry_test.ts`,
+  `breakage_test.ts`, `car_crew_test.ts`): three.js geometry is arithmetic,
+  and a rule joining two layers has nowhere else to be checked. What unit
+  tests cannot judge is how anything LOOKS — that is verified by looking
+  (`make screenshots`, the `playtest` skill).
 - Import the engine through the **`@engine`** alias (→ `engine/index.ts`),
   never a relative path into `engine/`.
 - Physics tests build **synthetic tracks** via `compileTrack(seed, segments)`
