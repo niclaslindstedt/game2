@@ -1025,7 +1025,13 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // air are both still having their go: only one that is down, still and
   // past the basin its own weight could right it from has actually come to
   // rest on something that is not its wheels.
-  if (!car.rolling && !car.airborne && !onItsWheels(car.roll)) {
+  // ...asked of the ROLL, and of the springs' pitch not at all. A car being
+  // driven carries its nose angle on its suspension (`settlePitch` eases it
+  // onto the grade, up to `attitude.pitchMax`), and that is an attitude, not
+  // a rotation of the box. Reading it here as one declares a car merely
+  // driving down a hill to be standing on its bumper, `stepOverturned`
+  // returns before anything moves, and the car freezes on the spot.
+  if (!car.rolling && !car.airborne && !onItsWheels(car.roll, 0)) {
     state.overturned = { since: state.t };
   }
 

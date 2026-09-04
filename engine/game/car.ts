@@ -36,7 +36,16 @@ import {
   wheelSpeed,
   type GroundUnder,
 } from "./ground.ts";
-import { beginRoll, goesOver, landRolled, onItsWheels, rollBed, rollStand } from "./roll.ts";
+import {
+  beginRoll,
+  goesOver,
+  goesOverEnd,
+  landRolled,
+  leanTorque,
+  onItsWheels,
+  rollBed,
+  rollStand,
+} from "./roll.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { Surface } from "../mapgen/index.ts";
 
@@ -1348,12 +1357,58 @@ export function stepGrounded(
   // ...unless the lurch is worth the lift up over the body's own sill
   // corner, at which point there is no near-miss and no recovery: the car
   // is past its outside wheels and the roll owns it from here (roll.ts).
-  if (goesOver(car.roll, car.rollRate) || !onItsWheels(car.roll)) {
+  // THE PITCH HERE IS THE SPRINGS', NOT THE BOX'S. A car being driven
+  // carries its nose angle on its suspension — `settlePitch` eases it onto
+  // the grade, up to `attitude.pitchMax` — and that is an attitude, not a
+  // rotation of the body. The crash model's pitch is the other thing
+  // entirely: the plane the box is actually turning over in. So the roll is
+  // asked with the pitch the box has, which while driving is none of it;
+  // reading the springs' angle instead stands a car merely driving down a
+  // steep hill on its own bumper, and every hop and every edge in the suite
+  // said so.
+  if (
+    goesOver(car.roll, car.rollRate, rollBed(ctx)) ||
+    goesOverEnd(car.pitch, car.pitchRate, rollBed(ctx)) ||
+    !onItsWheels(car.roll, 0)
+  ) {
     beginRoll(car, events, stats);
     return;
   }
+  // ── The body's lean, and the driver's authority over it ────────────────
+  // A car standing on all four wheels is held by its springs, and this game
+  // keeps it FLAT on purpose: a rally car goes sideways level, and the roll
+  // is the ground's camber, never a lean into the slide. That is the ease
+  // below and it is unchanged for every ordinary metre of every stage.
+  //
+  // A car UP ON TWO WHEELS is a different thing entirely, and it used to get
+  // the same treatment: the ease dragged it back to the camber at a fixed
+  // rate whatever the driver did. So the most retrievable moment in any
+  // accident — the car caught itself, the tyres are down, it is balanced
+  // over — was the one moment nothing the player pressed could matter.
+  //
+  // Past the lean the springs can hold it is a rigid body pivoting on its
+  // outer contact line, and `leanTorque` is what turns it: gravity down the
+  // same surface a rollover runs on, plus the lateral force the tyres are
+  // making, working on the lever of the weight's own height. Steer INTO the
+  // side the car is standing on and it comes back down onto four wheels;
+  // steer away and it holds up there, or goes over — which `goesOver` above
+  // has already had its say about. None of that is scripted; it is the sign
+  // of the cornering against the sign of the lean.
+  //
+  // The lateral acceleration is the one the tyres are actually making:
+  // speed times the rate the nose is coming round, which is the centripetal
+  // term and the same quantity a load transfer is written on.
+  const bed = rollBed(ctx);
+  const lean = rollTilt(car.roll);
   const camber = ctx.slopeLat ? Math.atan(ctx.slopeLat) : 0;
-  car.roll += (camber - rollTilt(car.roll)) * clamp(T.air.rollRecover * dt, 0, 1);
+  if (Math.abs(lean - camber) > T.air.leanFree) {
+    // Only the TORQUE is added here. The rate was integrated and damped a
+    // few lines up, where every roll rate the ground hands the body is —
+    // doing either again is a second helping of both.
+    car.rollRate += leanTorque(car.roll, 0, car.u * car.yawRate, bed) * dt;
+  } else {
+    car.roll += (camber - lean) * clamp(T.air.rollRecover * dt, 0, 1);
+  }
   settlePitch(car, Math.atan(ctx.slope));
 
   // ── Drift readout ────────────────────────────────────────────────────────
@@ -1718,10 +1773,10 @@ export function stepAirborne(
   // centre back exactly, so an ordinary jump lands where it always did.
   const meets =
     groundNow + (seatOn(car, groundNow, ctx.groundAt) - groundNow) * ctx.country + rollStand(car);
-  if (car.y <= meets && (car.rolling || !onItsWheels(car.roll))) {
+  if (car.y <= meets && (car.rolling || !onItsWheels(car.roll, 0))) {
     // Nothing for the tyres to do: it is a corner of the body arriving,
     // and the roll that put it there carries on from the contact.
-    landRolled(spec, car, groundNow, rollBed(ctx.slopeLat), ctx.rng, events, stats);
+    landRolled(spec, car, groundNow, rollBed(ctx), events, stats);
     return;
   }
   if (car.y <= meets) {
