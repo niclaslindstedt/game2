@@ -79,7 +79,8 @@ import type { GameRenderer } from "./game/renderer.ts";
 import {
   Hud,
   damageCall,
-  partCall,
+  lampCalls,
+  overheatCall,
   wheelCall,
   type HudFlash,
   type HudSnapshot,
@@ -2486,6 +2487,16 @@ export function App() {
         // behind the card would be the loudest thing in it.
         const demo = menuRef.current !== null;
         if (!demo) audioRef.current?.events(events);
+        // THE LAMPS ARE FOUR AND THE NEWS IS ONE. A nose driven in square
+        // takes both headlamps on the same step, and two lines saying half
+        // of it each is two lines nobody reads. So the batch is scanned
+        // first and the lamps are called from the WHOLE of it — the pair as
+        // one line, a single side by which side it was.
+        for (const call of lampCalls(
+          events.flatMap((ev) => (ev.type === "partBreak" ? [ev.part] : [])),
+        )) {
+          if (!demo) flash(call.text, call.tone);
+        }
         for (const ev of events) {
           if (ev.type === "finish") {
             if (demo) {
@@ -2654,22 +2665,27 @@ export function App() {
             // itself and hurt MACHINERY does not. Valuable machinery gives
             // the driver a useful adjustment to make; chassis wear remains
             // gameplay-relevant but is deliberately silent.
-            const call = damageCall(ev.system, ev.spent);
+            const call = damageCall(ev.system, ev.stage);
             if (call) flash(call.text, call.tone);
+          } else if (ev.type === "overheat") {
+            // The one damage call that comes back down: a needle is a thing
+            // to be managed, and lifting off is an instruction the driver
+            // can still act on.
+            const call = overheatCall(ev.level);
+            flash(call.text, call.tone);
           } else if (ev.type === "wheelFail") {
             const call = wheelCall(ev.wheel, ev.off);
             flash(call.text, call.tone);
-          } else if (ev.type === "partBreak") {
-            // Only the parts whose loss the driver cannot see: the lamps.
-            const call = partCall(ev.part);
-            if (call) flash(call.text, call.tone);
           } else if (ev.type === "retire") {
             // THE RUN IS OVER, and there is no time to post. The car is
             // sitting where it stopped; the card goes up over it with the
             // reason on it, the field is stood down (nothing is classified
             // off a run that did not reach the line), and the theme stops
             // the way it does at a finish — this is the end of the stage,
-            // just not the one anybody wanted.
+            // just not the one anybody wanted. Nothing is FLASHED: whatever
+            // finished the car said so at the moment it happened (an engine
+            // at the top of its ledger, the second wheel leaving), and this
+            // is only where the coasting stopped.
             if (demo) {
               setDemoSeed((s) => s + 1);
               continue;
@@ -2678,8 +2694,6 @@ export function App() {
             stopMusic();
             const field = fieldRef.current;
             if (field) stopField(field);
-            const call = damageCall("engine", true);
-            if (ev.reason === "engine" && call) flash(call.text, call.tone);
           }
         }
       };

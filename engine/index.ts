@@ -25,6 +25,7 @@ export { createGame, skipIntro, startsIn, step, type CreateGameOptions } from ".
 // A run stood at a moment instead of driven to it (place.ts).
 export { placeRun, type RunMoment } from "./game/place.ts";
 export {
+  callDamage,
   clipKerbs,
   clipSolids,
   collideCar,
@@ -34,11 +35,14 @@ export {
   landingDamage,
   type ContactSide,
 } from "./game/collision.ts";
-export { beyondDriving, damageEffects, type DamageEffects } from "./game/damage.ts";
+export { beyondDriving, damageEffects, lampShare, type DamageEffects } from "./game/damage.ts";
+export { heatPower, stepCooling } from "./game/cooling.ts";
 export {
   NEUTRAL_INPUT,
   DAMAGE_ZONES,
+  FRONT_LAMPS,
   INTERNAL_SYSTEMS,
+  REAR_LAMPS,
   WHEEL_PARTS,
   rollTilt,
   updateSlip,
@@ -49,6 +53,7 @@ export {
   type CatchUp,
   type DamageCall,
   type DamagePart,
+  type DamageStage,
   type DrownState,
   type GameEvent,
   type InternalSystem,

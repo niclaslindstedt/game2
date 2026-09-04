@@ -1075,19 +1075,60 @@ worst still crawls to the finish at a fraction of its sound top speed. Two
 things are past that, and they END THE RUN (below): an engine at 1 is dead,
 and a car on fewer than three wheels is not a car.
 
-Under the panels live five **internal systems** (`damage.systems`), each
+Under the panels live six **internal systems** (`damage.systems`), each
 fed by the crush landing nearest to it and each degrading its own job:
 
-| System     | Hurt by                       | Effect when damaged                                                       |
-| ---------- | ----------------------------- | ------------------------------------------------------------------------- |
-| Engine     | Nose and front-corner crush   | Power fades (`systems.powerLoss`), past `chassis.misfireFrom` the         |
-|            |                               | ignition drops beats outright — the car lurches instead of pulling — and  |
-|            |                               | at 1 it is DEAD: no power, a seized crank, smoke off the bonnet, the run  |
-| Suspension | Flank and belly crush         | Less lateral grip, narrower landing tolerance, wobblier touchdowns        |
-| Gearbox    | Rear and belly crush          | Shift cuts stretch; past `chassis.topGearAt` the top ratio stops engaging |
-| Steering   | Front-corner crush            | The rack loses authority (up to `systems.steerLoss`)                      |
-| Brakes     | Corner, flank and belly crush | The pedal loses `systems.brakeLoss` of its bite, and the LEVER nearly all |
-|            |                               | of it (`leverLoss`): a car with cut lines cannot be flicked on the lever  |
+| System     | Hurt by                       | Effect when damaged                                                        |
+| ---------- | ----------------------------- | -------------------------------------------------------------------------- |
+| Engine     | Nose and front-corner crush   | Power fades (`systems.powerLoss`), past `chassis.misfireFrom` the          |
+|            |                               | ignition drops beats outright — the car lurches instead of pulling — and   |
+|            |                               | at 1 it is DEAD: no power, no reverse, a seized crank, and the run         |
+| Cooling    | Nose and front-corner crush   | The radiator stands in front of the block, so it is holed FIRST and hard   |
+|            |                               | (`systems.coolingFromNose`, above `engineFromNose`, and again by           |
+|            |                               | `coolingBareCore` once the front bumper is gone). It costs no power of     |
+|            |                               | its own — it starts a clock (below)                                        |
+| Suspension | Flank and belly crush         | Less lateral grip, narrower landing tolerance, wobblier touchdowns         |
+| Gearbox    | Rear and belly crush          | Shift cuts stretch; past `chassis.topGearAt` the top ratio stops engaging, |
+|            |                               | and past `secondGearAt` a second one goes with it                          |
+| Steering   | Front-corner crush            | The rack loses authority (`systems.steerLoss`) and answers CROOKED         |
+|            |                               | (`chassis.steerPull`, toward whichever front corner folded deeper)         |
+| Brakes     | Corner, flank and belly crush | The pedal loses `systems.brakeLoss` of its bite, and the LEVER nearly all  |
+|            |                               | of it (`leverLoss`): a car with cut lines cannot be flicked on the lever   |
+
+### The temperature, and the clock a holed radiator starts
+
+`engine/game/cooling.ts` is the one piece of the damage model that takes its
+time, and the only one the driver is still deciding about while it happens.
+`CarState.heat` runs 0 (running temperature) to 1 (boiling): the engine makes
+heat with the throttle (`cooling.loadHeat`, `idleHeat`) and the car sheds it
+through what is left of the core — the fan and the block standing still
+(`still`), plus the ram air rising with pace (`ram` at `airSpeed`), all of it
+scaled by how much of the system a hole has cost (`lost`). A sound car makes
+its heat and sheds more of it at every speed, so the needle never leaves its
+peg and the whole system is invisible until something folds the nose.
+
+Past the red line the engine takes damage every second it stays there
+(`cookRate`, `cookPerOver`) — and engine damage reaching 1 is the run. Before
+that the needle is already worth something: `heatPower` pulls up to
+`cooling.heatPower` of the engine's output out of a hot motor, faded in from
+the first warning, which is what a driver feels before anything breaks.
+
+The way out is the throttle. Heat is made by load and shed by air, so lifting
+on the straights, short-shifting and giving away ten seconds a split is the
+difference between limping a holed radiator to the line and parking it in a
+forest. A core a quarter gone is survivable flat out; one three quarters gone
+cooks the engine inside two minutes at full throttle and never boils at all if
+the driver eases the pedal. That trade is the whole point of the group: every
+other line in the ledger is a thing that has already happened to you, and this
+is a thing you are still deciding.
+
+It says so both ways (`overheat`): `TEMPERATURE RISING` at `warnAt`,
+`ENGINE OVERHEATING` at the red line, and `TEMPERATURE OK` when a lift brings
+it back off — the one damage call in the game that is ever good news, and the
+one that can be given more than once, because a temperature is a thing to be
+managed rather than a line that has been crossed for good. A respawn puts the
+needle back on its peg (the car has been standing) and does nothing at all
+about the hole, so a holed core climbs straight back.
 
 The **wheels** carry a ledger each (`damage.wheels`, FL/FR/RL/RR), fed by the
 crush on their own corner, half of the crush on their flank, a little from the
@@ -1112,13 +1153,63 @@ The rest of the ledger is felt too:
 |                             | correction into it down every straight                                     |
 | Crush anywhere, belly crush | Drag: a car folded on every corner is not the shape it was drawn as, and a |
 |                             | folded floorpan ploughs (`chassis.crushDrag`, `bellyDrag`)                 |
-| Parts left on the road      | Drag, per part (`chassis.partDrag`) — a mirror is a rounding error, a      |
-|                             | missing bonnet is a scoop with the engine bay behind it                    |
-| The spoiler specifically    | Downforce the back of the car no longer has, faded in with pace            |
-|                             | (`chassis.spoilerGrip` over `spoilerSpeed`)                                |
+| Parts left on the road      | The air, below — the holes are aerodynamic, not mechanical                 |
 
-Grip is the one place the taxes stack — suspension, structure and the missing
-wing all pull on it — so `chassis.gripFloor` is the floor under all three
+### Two kinds of loss: the hub and the air
+
+Keeping these apart is what makes a broken car read right. A MECHANICAL loss —
+a rim on the road, a rubbing hub, a shell pulled out of square — is a share of
+the speed, so it is felt everywhere and hurts the exit of a hairpin as much as
+a straight. An AERODYNAMIC loss — a door, a bonnet, a windscreen — goes as the
+SQUARE of the speed, so it is nothing at all at 40 km/h and the whole top end
+at 140. A car that has lost its panels still launches like a rally car; it
+simply never arrives anywhere.
+
+`TUNING.collision.aero` holds the second kind, and every entry is stated as
+CdA (drag coefficient times frontal area, m²) — the number a wind tunnel
+actually reports, and the only form in which the entries can be compared with
+each other or with anything real. A whole rally car is about 0.65 of these;
+`damage.ts` adds up what has left the car and `car.ts` spends the total the
+way the air spends it, `½·ρ·CdA·u²` over the car's own mass, so a heavy car
+carries a hole better than a light one. A sound car's total is exactly 0 — the
+roster's top speeds are its gearing and its rolling drag, and nothing here is
+felt until something comes off.
+
+| Off the car      | CdA added  | What it does                                                                                                   |
+| ---------------- | ---------- | -------------------------------------------------------------------------------------------------------------- |
+| A mirror, a lamp | 0.004–0.01 | Nothing you can feel. A car missing a mirror is a car missing a mirror                                         |
+| A door           | 0.08       | About a tenth of the car's drag again, and a PULL toward the open flank                                        |
+| A side window    | 0.032      | A window down, and the same pull at a fifth of the size                                                        |
+| The bonnet       | 0.16       | An open engine bay: a quarter of the drag again, and the nose goes light                                       |
+| The windscreen   | 0.23       | The cabin stops being a shape and becomes a bucket — and the driver is squinting into the blast (`aero.blast`) |
+| The rear wing    | **−0.033** | Faster in a straight line. That is what a wing is for: drag bought on purpose                                  |
+
+What that buys, driven: the small stuff is a few tenths of a per cent of the
+top end. The big openings cost a per cent or so each until the total reaches
+the point where the box will no longer pull its highest ratio at all, and from
+there the top end falls off a cliff — a car with no windscreen tops out a whole
+gear down, around 165 km/h against 205. That cliff is the gearbox's and not the
+air's, and it is the honest shape of the thing: a wrecked car does not top out
+slightly lower, it stops being able to pull top gear. Crush counts too
+(`aero.crush`) — a metre of fold spread over the body is about a fifth of the
+car's drag again without a single panel having left it.
+
+Three things fall out of the same table, all of them faded in with pace
+(`aero.speed`, and the square of it, like the drag):
+
+- **Downforce that is no longer being made** (`aero.lift`). The wing is most of
+  it and always was; a missing bonnet is the other kind, with the air getting
+  under the nose and the front of the car no longer being the end that turns.
+- **The blast** (`aero.blast`). A hundred and forty of open air in the face
+  with no windscreen is a hundred and forty the driver is squinting through,
+  and the line goes where it can be seen rather than where it should be. Not
+  the rack — the driver.
+- **The pull of a hole down ONE side** (`aero.yawPerDrag`). Drag standing off
+  the centreline is a yaw moment, so a car with its left door gone wanders left
+  all the way down every straight. A hole on each side goes straight again.
+
+Grip is the one place the taxes stack — suspension, structure and the lost
+downforce all pull on it — so `chassis.gripFloor` is the floor under all three
 together: below about two thirds of the sound car's grip nothing can be
 pointed, and an unpointable car is not a consequence either. The wheels are
 the one thing allowed under it, to their own floor (`wheelOffGripFloor`): a car
@@ -1138,36 +1229,67 @@ from the grid, or the menu — and no time, place, points or board, because none
 was earned. The wedge rescue and the reset both stand aside for such a car:
 putting a dead engine back on the road would only park it there.
 
-What it takes is a head-on. `systems.engineFromNose` is sized so a wall met
-square at 100 km/h — a quarter of a metre of fold — is the engine gone in one
-hit, and one met at 50 km/h is a third of it, the `ENGINE DAMAGED` line and
-steam off the bonnet. Above about 50 km/h a straight-on hit is really bad; at
-100 it is the run. A rival's engine dies the same way and files them as a DNF.
-The difficulty's damage assist (`CarState.damageScale`) scales all of this
-exactly as it scales every other mark, so an EASY run cannot be retired by the
-car at all.
+What it takes is a head-on, in one hit or over a minute.
+`systems.engineFromNose` is sized so a wall met square at 100 km/h — a quarter
+of a metre of fold — is the engine gone outright, and one met at 50 km/h is a
+third of it, the `ENGINE DAMAGED` line and steam off the bonnet. The SLOW way
+is the radiator: the core stands in front of the block, so that same 50 km/h
+wall leaves an engine that still pulls and a cooling system that no longer
+works, and from there the needle decides the run (above). A rival's engine dies
+either way and files them as a DNF. The difficulty's damage assist
+(`CarState.damageScale`) scales all of this exactly as it scales every other
+mark, so an EASY run cannot be retired by the car at all.
+
+A dead engine is DEAD, and that includes the one path outside the throttle: the
+reverse manoeuvre is gated on the engine making power, so a car whose motor has
+seized cannot back itself out of the trees. Without that gate "engine dead"
+means nothing, which is the whole reason the state exists.
 
 Nothing repairs mid-run. And nothing about it is drawn as an instrument: the
 damage the player can see is already on the screen — the wing is folded, the
 bonnet went over the roof three corners ago — and the damage they cannot see
-is the machinery under it. So the machinery **says** so. Each system, and the
-shell around them, crosses two lines on its way out
-(`TUNING.collision.callAt`), and each crossing is one `systemFail` event the
-app puts up in the middle of the screen where the splits and the lap times
-are said: `ENGINE DAMAGED` as it gives, `ENGINE BROKEN` as it goes, and
-`ENGINE DEAD` at the end of the engine. Once per line per run — damage never
-heals, so a line crossed stays crossed. A wheel says the same two things about
-itself (`wheelFail`): `FRONT LEFT PUNCTURE`, then `FRONT LEFT WHEEL LOST` —
-named as the player sees the car, which is the engine's frame flipped once, in
-the HUD, like every other left and right. And an engine that has been called
-DAMAGED SMOKES: steam off the bonnet, thin at first, thicker and darker as the
-damage climbs, black once it is dead.
+is the machinery under it. So the machinery **says** so.
 
-Nineteen pieces can come off. The two LAMP pairs go first (`partAt.lamp`, the
-first fold past a brush): a smashed headlamp is a dark hole in the face of the
-car — no bloom, no beam on the road ahead, no glow in the dust behind for the
-tail lamps — and the HUD says `HEADLIGHTS BROKEN` or `TAILLIGHTS BROKEN`,
-because a driver looking out of the car cannot see its own lamps. The two
+**Every line has to be true of the car the player is driving.** A call is the
+only account a driver gets of machinery they cannot see, so a word that
+overstates it is worse than no word at all: a car told its engine is DEAD and
+then driven away from the spot is a car whose HUD nobody has a reason to
+believe again. Each system, and the shell around them, crosses up to three
+lines on its way out (`TUNING.collision.callAt` → `DamageStage`), and each
+crossing is one `systemFail` event the app puts up in the middle of the screen
+where the splits and the lap times are said:
+
+| Stage   | At   | Says                                                                                                                |
+| ------- | ---- | ------------------------------------------------------------------------------------------------------------------- |
+| `hurt`  | 0.45 | `ENGINE DAMAGED`, `RADIATOR LEAKING`, `BRAKES DAMAGED` — a warning the driver can still act on                      |
+| `spent` | 0.85 | `ENGINE FAILING`, `RADIATOR DRY`, `GEARBOX FAILING` — a fact about the rest of the stage                            |
+| `dead`  | 1    | `GEARBOX SHOT`, `BRAKES SHOT` — and `ENGINE DEAD`, the one literal word in the set, on the one line the run ends at |
+
+SHOT rather than BROKEN at the bottom of every ladder but the engine's, for
+the same reason: a gearbox at the top of its ledger has lost two ratios and
+still shifts, and brakes at theirs still have a circuit. A car told a part is
+BROKEN and then driven on it has been told something untrue.
+
+Once per line per run — damage never heals, so a line crossed stays crossed.
+The needle is the exception both ways (above), because a temperature is
+managed rather than crossed. A wheel says two things about itself
+(`wheelFail`): `FRONT LEFT PUNCTURE`, then `FRONT LEFT WHEEL LOST` — named as
+the player sees the car, which is the engine's frame flipped once, in the HUD,
+like every other left and right. And an engine that has been called DAMAGED
+SMOKES: steam off the bonnet, thin at first, thicker and darker as the damage
+climbs, black once it is dead.
+
+Twenty-one pieces can come off. The four LAMPS go first (`partAt.lamp`, the
+first fold past a brush), and they go ONE AT A TIME: each is listed under its
+own corner zone and under the centre of its cap, so clipping a tree with the
+right-hand wing takes the right headlamp and leaves the left one lit for the
+rest of the stage, while only a nose driven in square takes the pair. Which
+side is the whole of the news, so the HUD says `LEFT HEADLIGHT OUT` — named as
+the player sees the car, flipped once like the wheels, and coalesced to a
+single `HEADLIGHTS OUT` when a step takes the pair — and the beam down the
+road is a SHARE and not a switch (`lampShare`, engine-side): one lamp gone is
+half the light on every night corner after it, and a dark hole in the face of
+the car where the bloom was. The two
 bumpers, the two mirrors, the spoiler and the two lids fly as they always did: a bonnet or boot lid is bolted deeper
 than the bumper in front of it (`TUNING.collision.partAt.lid`), so it only lets
 go once the clip around it has folded far enough to pull its hinges — and what

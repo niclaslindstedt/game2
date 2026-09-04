@@ -140,6 +140,16 @@ Each crew is also PAINTED to fit: `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts
 
 A solid field sees itself, too: `stepField` hands every crew the cars around it — the player included — so a queue on the road is a race rather than fourteen games driving through one another. Rival-against-rival contact happens **only in `stepField`**, which is the one place the whole field takes the same tick. `catchUpField`, `settleField` and `watchField` drive each run independently, so a crew being fast-forwarded through its head start is at a different moment of the stage than the one beside it in the array, and a shunt between those two would be between cars that were never on the road together.
 
+**A crew nurses a temperature the way a driver would.** A holed radiator is
+the one piece of damage that can be DRIVEN around (`docs/driving.md`, "The
+temperature"), so a bot that could not would cook an engine no human would
+have lost. Past `cooling.warnAt` the crew eases the pedal — deepest at the red
+line, and never to nothing, because a car that stops moving stops making the
+ram air that carries the heat away — and everything else it does is unchanged:
+it still brakes for the corner and still takes the line, it simply arrives
+slower. That is the same trade the player is offered, which is the point: a
+mechanic the AI cannot play is a mechanic the field DNFs on.
+
 **A crew can retire on the car, not only on the clock.** A rival whose engine the crash has killed, or who has lost two wheels, coasts to a stop and is retired where it stands (`retire`, `docs/driving.md` "The end of the run"): `run.done` with no time, a DNF on the sheet. `make sim`'s `fin` column says NO for the same reason on the bot's own run, so a handling or generator change that starts putting bots into walls at speed shows up there before it shows up as pace.
 
 **The run-out is watched, not fast-forwarded.** R30 drives the crews still out there home so the classification has everybody's time; anybody still going at `settleLimit(playerTime)` is retired where they stand. Two functions do it, by the same rule and with each crew driven ALONE (on a field of ghosts both are the same lookup, the clock ticked on and every crew read off its trace):

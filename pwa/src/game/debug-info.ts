@@ -198,6 +198,10 @@ function carBox(state: GameState): DebugBox {
         k: "damage",
         v: `wear ${(dmg.wear * 100).toFixed(0)}%${worst ? ` · ${worst}` : ""}${dmg.broken.length ? ` · lost ${dmg.broken.join(",")}` : ""}`,
       },
+      // The one number in the ledger that MOVES BOTH WAYS, so it is worth a
+      // row of its own: a report about a car that died on a long straight
+      // is unreadable without knowing where the needle was.
+      { k: "heat", v: `${(c.heat * 100).toFixed(0)}%${c.heatCall >= 2 ? " · OVERHEATING" : ""}` },
       {
         k: "run",
         v: `${state.phase} · lap ${state.lap}/${state.laps} · t ${state.raceTime.toFixed(2)} s`,

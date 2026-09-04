@@ -173,12 +173,31 @@ export function soundForEvent(
     // a knock; a system gone is the heavier of the two, and the engine
     // going — the run's end — is the heaviest of all.
     case "systemFail":
-      return event.spent
-        ? {
+      return event.stage === "hurt"
+        ? { id: "system_give" }
+        : {
             id: "system_gone",
-            shape: event.system === "engine" ? { gain: 1.2, pitch: 0.9 } : undefined,
-          }
-        : { id: "system_give" };
+            // An engine that has finished is the loudest and lowest thing
+            // the car ever says about itself, and it is said once.
+            shape:
+              event.system === "engine"
+                ? {
+                    gain: event.stage === "dead" ? 1.4 : 1.2,
+                    pitch: event.stage === "dead" ? 0.7 : 0.9,
+                  }
+                : undefined,
+          };
+
+    // THE NEEDLE. A warning is the same give as any other part starting to
+    // go; the red line is the harder call, pitched up because a temperature
+    // is urgent in a way a bent arm is not. Coming back OUT of the red is
+    // the one piece of good news the damage model ever gives, and it gets
+    // the same chirp lifted and quietened — the shape a driver reads as
+    // "that worked" without taking their eyes off the road.
+    case "overheat":
+      if (event.level === "warn") return { id: "system_give" };
+      if (event.level === "red") return { id: "system_gone", shape: { gain: 1.1, pitch: 1.25 } };
+      return { id: "system_give", shape: { gain: 0.5, pitch: 1.6 } };
 
     // A tyre letting go: the same thump as a block ridden over, lower and
     // flatter — and lower still for the wheel coming off, under the

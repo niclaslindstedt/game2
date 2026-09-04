@@ -174,6 +174,14 @@ const BROW_LOOK = 0.8;
  * a few tenths later, once the speed is down to something a slide can
  * carry. */
 const LEVER_HOT = 12;
+/** Where a crew starts nursing the temperature, 0..1 of the gauge — the
+ * cooling system's own first warning, so the bot acts on the same line the
+ * player is told about (`TUNING.collision.cooling.warnAt`)... */
+const COOL_FROM = TUNING.collision.cooling.warnAt;
+/** ...and the most of the pedal it will give up, at the red line. Enough to
+ * hold the needle on a hurt core at a stage's pace, and short of a crawl:
+ * a crew that gives up the whole throttle gives up the ram air with it. */
+const COOL_PEDAL = 0.35;
 
 /** How long a car is NOT BRAKING after a jump lip, s: the flight itself and
  * the skitter of the landing after it (`CarState.settle`), neither of which
@@ -709,6 +717,24 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
     throttle = 0;
     brake = 1;
     steer = 0;
+  }
+
+  // THE NEEDLE. A holed radiator is the one piece of damage a driver can
+  // DRIVE AROUND (game/cooling.ts), and a bot that cannot is a bot that
+  // cooks an engine no human would have lost: heat is made by the throttle
+  // and shed by the air, so the answer is to ease the pedal and keep
+  // moving. Eased in from the first warning and hardest past the red line,
+  // and never to zero — a car that stops making heat also stops making the
+  // ram air that carries it away, and a driver who parks up boils where
+  // they stand.
+  //
+  // Nothing else the bot does knows about this: a crew nursing a
+  // temperature still brakes for the corner and still takes the line, it
+  // simply arrives there slower. Which is exactly the trade the player is
+  // offered, and the reason the mechanic has to be one the AI can play too.
+  if (car.heat > COOL_FROM && throttle > 0 && !backingOut) {
+    const hot = clamp((car.heat - COOL_FROM) / (1 - COOL_FROM), 0, 1);
+    throttle = Math.min(throttle, 1 - (1 - COOL_PEDAL) * hot);
   }
 
   // THE LEAN. Last, because it is the one thing on this list that is not

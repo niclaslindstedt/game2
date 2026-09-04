@@ -34,6 +34,7 @@ import {
 import { createSunShadows, type SunShadows } from "./car-shadow.ts";
 import { squallOf, type Clap } from "./weather.ts";
 import { glowTexture } from "./textures.ts";
+import { clamp } from "../lib/util.ts";
 
 /** What a lightning flash lights the world with while it lasts — a cold
  * blue-white that owes nothing to the time of day, because a strike is the
@@ -121,7 +122,11 @@ export type Environment = {
   /** Which of the car's lamp pairs the crash has taken out. A beam with no
    * lamp behind it lights nothing: the road ahead goes dark with the
    * headlamps, the dust behind with the tail lamps. */
-  setLampsBroken: (front: boolean, rear: boolean) => void;
+  /** How much of each end's lighting is still on the car, 0..1 — a share,
+   * not a switch, because the lamps break one at a time (`FRONT_LAMPS` /
+   * `REAR_LAMPS`, engine-side). One headlamp gone is half the light down
+   * the road, which is a fact about every night corner after it. */
+  setLampsBroken: (front: number, rear: number) => void;
   /** How far off the centerline the car's lamps sit, m — front and rear. */
   setLampSpread: (front: number, rear: number) => void;
   /** Hang the PLAYER's lamps on the register the dust clouds are lit from
@@ -514,9 +519,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   /** What is left of each pair once the crash has had them: 1 or 0. */
   let headLamps = 1;
   let tailLamps = 1;
-  const setLampsBroken = (front: boolean, rear: boolean): void => {
-    headLamps = front ? 0 : 1;
-    tailLamps = rear ? 0 : 1;
+  const setLampsBroken = (front: number, rear: number): void => {
+    headLamps = clamp(front, 0, 1);
+    tailLamps = clamp(rear, 0, 1);
   };
 
   let preset: Preset = skyFor({

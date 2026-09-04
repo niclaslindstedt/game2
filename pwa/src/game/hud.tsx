@@ -9,7 +9,14 @@
 // input manager at pointer rate), and that is a different job from drawing a
 // readout.
 
-import type { DamageCall, DamagePart, GamePhase, RetireReason, TurnSeverity } from "@engine";
+import type {
+  DamageCall,
+  DamagePart,
+  DamageStage,
+  GamePhase,
+  RetireReason,
+  TurnSeverity,
+} from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
 import { FlyControls } from "./hud-fly.tsx";
@@ -158,49 +165,114 @@ export type HudFlash = { id: number; text: string; tone: "good" | "bad" | "info"
  * three corners ago — and the damage they cannot see is the machinery under
  * it. A gauge for that is a thing in a corner, read by nobody who is busy
  * driving; so it is SAID instead, in the middle of the screen where every
- * other piece of news is said, and only twice per part: once as it starts
- * to give, once as it goes (`systemFail`, engine-side).
+ * other piece of news is said, once per line a part crosses on its way out
+ * (`systemFail`, engine-side).
+ *
+ * EVERY LINE HERE HAS TO BE TRUE OF THE CAR THE PLAYER IS DRIVING. A call
+ * is the only account a driver gets of machinery they cannot see, so a word
+ * that overstates it is worse than no word at all: a car told its engine is
+ * DEAD and then driven away from the spot is a car whose HUD nobody has any
+ * reason to believe again. So the wording tracks the ledger exactly —
+ * DAMAGED is a part giving, FAILING is a part doing most of what it will
+ * ever do, and DEAD is only ever said of an engine at the very top of its
+ * ledger, which is a run that is over where it stops.
  *
  * Two words each, because it is read at speed out of the corner of an eye
- * on the way into a corner. The first is the part; the second is how bad.
- * Chassis wear remains meaningful to the driving model, but is deliberately
- * silent here: it is not a valuable part whose failure gives the driver a
- * useful adjustment to make. */
+ * on the way into a corner. Chassis wear remains meaningful to the driving
+ * model, but is deliberately silent here: it is not a valuable part whose
+ * failure gives the driver a useful adjustment to make. */
 const DAMAGE_PARTS: Record<Exclude<DamageCall, "chassis">, string> = {
   engine: "ENGINE",
+  // Said as the part, not the system: a driver knows what a radiator is and
+  // knows what it means that theirs has a hole in it.
+  cooling: "RADIATOR",
   suspension: "SUSPENSION",
   gearbox: "GEARBOX",
   steering: "STEERING",
   brakes: "BRAKES",
 };
 
-/** The call itself: what to put on screen, and in which colour. A part that
- * is GIVING is a warning the driver can still do something about — ease off
- * the kerbs, stop landing it flat — so it goes up in the same tone as a
- * split; a part that is GONE is not news, it is a fact about the rest of the
- * stage, and it goes up red. An engine that is gone is the run: it says so. */
+/** How each stage is worded, per system. A part that is GIVING is a warning
+ * the driver can still do something about — ease off the kerbs, stop
+ * landing it flat, lift on the straights — so it goes up in the same tone
+ * as a split; a part that is SPENT is not news, it is a fact about the rest
+ * of the stage, and it goes up red.
+ *
+ * SHOT, not BROKEN, at the bottom of every ladder but the engine's. A
+ * gearbox at the top of its ledger has lost two ratios and still shifts,
+ * brakes at theirs still have a circuit, and a car that has been told a
+ * part is BROKEN and then goes on using it has been told something untrue.
+ * The engine is the one system whose last line is literal, and it is the
+ * one line the run ends on. */
+const DAMAGE_STAGES: Record<Exclude<DamageCall, "chassis">, Record<DamageStage, string>> = {
+  engine: { hurt: "DAMAGED", spent: "FAILING", dead: "DEAD" },
+  cooling: { hurt: "LEAKING", spent: "DRY", dead: "DRY" },
+  suspension: { hurt: "DAMAGED", spent: "FAILING", dead: "SHOT" },
+  gearbox: { hurt: "DAMAGED", spent: "FAILING", dead: "SHOT" },
+  steering: { hurt: "DAMAGED", spent: "FAILING", dead: "SHOT" },
+  brakes: { hurt: "DAMAGED", spent: "FAILING", dead: "SHOT" },
+};
+
+/** The call itself: what to put on screen, and in which colour. */
 export function damageCall(
   system: DamageCall,
-  spent: boolean,
+  stage: DamageStage,
 ): { text: string; tone: HudFlash["tone"] } | null {
   if (system === "chassis") return null;
-  const part = DAMAGE_PARTS[system];
-  if (!spent) return { text: `${part} DAMAGED`, tone: "info" };
-  if (system === "engine") return { text: "ENGINE DEAD", tone: "bad" };
-  return { text: `${part} BROKEN`, tone: "bad" };
+  const text = `${DAMAGE_PARTS[system]} ${DAMAGE_STAGES[system][stage]}`;
+  return { text, tone: stage === "hurt" ? "info" : "bad" };
 }
 
-/** A PART'S call, for the parts whose loss is not on the screen in front of
- * the driver: the lamps. A bonnet going over the roof announces itself and
- * a mirror is in the corner of the eye, but a headlamp is glass at the
- * very front of a car the driver is looking out of, and the first sign of
- * it being gone would otherwise be the next dark corner. Null for every
- * other part. */
-export function partCall(part: DamagePart): { text: string; tone: HudFlash["tone"] } | null {
-  if (part === "lampsF") return { text: "HEADLIGHTS BROKEN", tone: "bad" };
-  if (part === "lampsR") return { text: "TAILLIGHTS BROKEN", tone: "bad" };
-  return null;
+/** THE TEMPERATURE, said instead of drawn — the one call that comes back
+ * down again, because the driver is still deciding about it. The warning is
+ * an instruction to lift; the red line is the engine cooking itself, and
+ * the clear is the only good news the damage model ever gives anybody. */
+export function overheatCall(level: "warn" | "red" | "clear"): {
+  text: string;
+  tone: HudFlash["tone"];
+} {
+  if (level === "warn") return { text: "TEMPERATURE RISING", tone: "info" };
+  if (level === "red") return { text: "ENGINE OVERHEATING", tone: "bad" };
+  return { text: "TEMPERATURE OK", tone: "good" };
 }
+
+/** THE ONLY LOSS THE DRIVER CANNOT SEE: the lamps. A bonnet going over the
+ * roof announces itself and a mirror is in the corner of the eye, but a
+ * headlamp is glass at the very corner of a cap the driver is looking out
+ * over, and the first sign of it being gone would otherwise be the next
+ * dark corner. Every other part is silent here.
+ *
+ * Called from a WHOLE step's worth of breakages rather than one at a time,
+ * because a nose driven in square takes both headlamps on the same step and
+ * two lines saying half of it each is two lines nobody reads: the pair is
+ * one line, and a single lamp is named by its side.
+ *
+ * WHICH SIDE is said in the SCREEN's frame rather than the engine's — the
+ * rendered world mirrors the map view, so the engine's right-hand lamp is
+ * the one the player sees on the left of the car in front of them. This is
+ * one of the two places that flip is made (`wheelCall` is the other),
+ * exactly as the audio route pans an impact. */
+export function lampCalls(broken: DamagePart[]): { text: string; tone: HudFlash["tone"] }[] {
+  const calls: { text: string; tone: HudFlash["tone"] }[] = [];
+  const say = (text: string): void => {
+    calls.push({ text, tone: "bad" });
+  };
+  for (const [pair, both, left, right] of LAMP_LINES) {
+    const gone = pair.filter((p) => broken.includes(p));
+    if (gone.length === 0) continue;
+    // `pair` is [engine left, engine right] and the screen is the mirror of
+    // it, so the engine's left lamp is the one on the player's right.
+    if (gone.length === pair.length) say(both);
+    else say(gone[0] === pair[0] ? right : left);
+  }
+  return calls;
+}
+
+/** Each end's pair in engine order, and the three lines it can produce. */
+const LAMP_LINES: [DamagePart[], string, string, string][] = [
+  [["lampFL", "lampFR"], "HEADLIGHTS OUT", "LEFT HEADLIGHT OUT", "RIGHT HEADLIGHT OUT"],
+  [["lampRL", "lampRR"], "TAILLIGHTS OUT", "LEFT TAILLIGHT OUT", "RIGHT TAILLIGHT OUT"],
+];
 
 /** A WHEEL'S call. The engine names its wheels in its own frame (positive
  * `w` is its right side), and the rendered world mirrors the map view — so

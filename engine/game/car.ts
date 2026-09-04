@@ -648,8 +648,14 @@ export function stepGrounded(
   // this car in reverse" from "something threw it backwards": a rebound off a
   // cliff face is also negative `u`, and it belongs to the collision, which
   // gets to keep every bit of it.
+  // AND IT NEEDS AN ENGINE. Reverse is the one place the drivetrain is
+  // asked for a shove outside the throttle path, so it is the one place a
+  // dead motor can be forgotten about: without this gate a car whose engine
+  // has seized backs itself out of the trees at full pace, which is the
+  // whole of "engine dead" meaning nothing.
   car.reversing =
     input.throttle === 0 &&
+    hurt.power > 0 &&
     (input.brake > 0 ? car.u <= T.reverse.engageBelow : car.reversing && car.u < -T.standstill);
 
   stepGearbox(spec, car, input, ctx.t, hurt, events);
@@ -1157,9 +1163,17 @@ export function stepGrounded(
     // A spent chassis cannot hold its hubs square, so the car pulls up long.
     car.u -= spec.brake * hurt.brake * pedal * Math.sign(car.u) * dt;
   }
-  // Torn bodywork, a ploughing floorpan and a shell that is no longer the
-  // shape it was drawn as, all on top of what the surface itself costs.
+  // A ploughing floorpan, a rim on the road and a shell that is no longer
+  // the shape it was drawn as: the MECHANICAL losses, each a share of the
+  // speed, on top of what the surface itself costs.
   car.u -= (surfaceDrag + hurt.drag) * car.u * dt;
+  // ...and THE AIR through the holes the crash left, spent the way the air
+  // spends it: ½·ρ·CdA·u² over the car's own mass. The square is the whole
+  // character of it — nothing at the exit of a hairpin, and the whole top
+  // end on a straight, so a car with its doors and its bonnet gone still
+  // pulls away from a corner like a rally car and simply never arrives.
+  car.u -=
+    ((T.collision.aero.density * hurt.aero) / (2 * spec.mass)) * car.u * Math.abs(car.u) * dt;
   // ...and what a seized engine or a hub on the road takes at ANY speed:
   // the constant part, which is what brings a car that cannot drive to
   // the standstill the retire rule is waiting for (damage.ts).

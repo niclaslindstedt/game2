@@ -9,7 +9,15 @@
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
-import { TUNING, type CarSpec, type DamagePart, type GameEvent, type GameState } from "@engine";
+import {
+  FRONT_LAMPS,
+  REAR_LAMPS,
+  TUNING,
+  type CarSpec,
+  type DamagePart,
+  type GameEvent,
+  type GameState,
+} from "@engine";
 
 import {
   backlightNormal,
@@ -305,14 +313,21 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
    * apiece is the obvious way to write this and costs a draw call per lamp:
    * with fifteen cars on a stage that is thirty draws for four triangles of
    * additive haze. `dir` is the cap's outward direction — the quads sit just
-   * off the lenses and face the same way. */
+   * off the lenses and face the same way.
+   *
+   * Which is also why a SMASHED lamp is snuffed by collapsing its own six
+   * vertices rather than by splitting the mesh in two: the pair share one
+   * material and one draw, a lamp is lost at most twice in a run, and a
+   * buffer rewritten at that moment costs nothing per frame. The returned
+   * `snuff` takes an index into `anchors`, which run left-then-right in the
+   * ENGINE's frame, exactly as the wheels do. */
   const hangBlooms = (
     anchors: ReturnType<typeof rearLampAnchors>,
     mat: THREE.MeshBasicMaterial,
     spread: number,
     dir: number,
-  ): void => {
-    if (anchors.length === 0) return;
+  ): ((lamp: number) => void) => {
+    if (anchors.length === 0) return () => {};
     const pos: number[] = [];
     const uv: number[] = [];
     for (const lamp of anchors) {
@@ -343,13 +358,26 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       }
     }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    const attr = new THREE.Float32BufferAttribute(pos, 3);
+    geo.setAttribute("position", attr);
     geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
     body.chassis.add(new THREE.Mesh(geo, mat));
     lampGeos.push(geo);
+    return (lamp) => {
+      // Six vertices per lamp, two triangles: collapsed onto the anchor's
+      // own point, so the quad has no area and the additive haze over that
+      // corner of the cap simply stops.
+      const at = anchors[lamp];
+      if (!at) return;
+      for (let i = 0; i < 6; i++) attr.setXYZ(lamp * 6 + i, at.x, at.y, at.z);
+      attr.needsUpdate = true;
+    };
   };
-  hangBlooms(rearLampAnchors(bodySpec), lampMat, LAMP_SPREAD, -1);
-  hangBlooms(frontLampAnchors(bodySpec), headMat, HEAD_SPREAD, 1);
+  const snuffRear = hangBlooms(rearLampAnchors(bodySpec), lampMat, LAMP_SPREAD, -1);
+  const snuffFront = hangBlooms(frontLampAnchors(bodySpec), headMat, HEAD_SPREAD, 1);
+  /** Which lamps have already been put out, so the buffer is only rewritten
+   * on the frame one actually goes. */
+  const snuffed = new Set<DamagePart>();
   const lensMat = body.lens;
   if (lensMat && options.ghost) {
     lensMat.transparent = true;
@@ -368,16 +396,26 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   /** The blooms, dimmed by whatever the run has thrown at the lenses — and
    * the lenses themselves, which are switched between the world's light and
    * their own rather than tinted along with the paint. */
-  const shineLamps = (broken: readonly DamagePart[]): void => {
+  const shineLamps = (car: GameState["car"]): void => {
     const clean = 1 - LAMP_GRIME * dirt.level();
-    // A lamp that the crash has taken out of its cap glows with nothing:
-    // the bloom is the light escaping the lamp, and there is no lamp. The
-    // lens under it is left to the crumple, which has already scuffed it
-    // dark — a smashed lamp is a dark hole in the face of the car.
-    const front = broken.includes("lampsF") ? 0 : 1;
-    const rear = broken.includes("lampsR") ? 0 : 1;
-    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * clean * fade * rear;
-    headMat.opacity = (lit ? HEAD_NIGHT : HEAD_DAY) * clean * fade * front;
+    // A lamp the crash has taken out of its cap glows with nothing: the
+    // bloom is the light escaping the lamp, and there is no lamp. The lens
+    // under it is left to the crumple, which has already scuffed it dark —
+    // a smashed lamp is a dark hole in the face of the car. The pair share
+    // a material, so the one that went is snuffed in the geometry and what
+    // is left of the end is what the material still shows.
+    for (const [i, part] of FRONT_LAMPS.entries()) {
+      if (snuffed.has(part) || !car.damage.broken.includes(part)) continue;
+      snuffed.add(part);
+      snuffFront(i);
+    }
+    for (const [i, part] of REAR_LAMPS.entries()) {
+      if (snuffed.has(part) || !car.damage.broken.includes(part)) continue;
+      snuffed.add(part);
+      snuffRear(i);
+    }
+    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * clean * fade;
+    headMat.opacity = (lit ? HEAD_NIGHT : HEAD_DAY) * clean * fade;
     if (lensMat) {
       if (lit) lensMat.color.setRGB(1, 1, 1);
       else lensMat.color.copy(worldLight).lerp(WHITE, LENS_DARK);
@@ -529,7 +567,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       dt,
     );
     shineGlass(state, eye);
-    shineLamps(car.damage.broken);
+    shineLamps(car);
     damage.update(state, dt);
   };
 

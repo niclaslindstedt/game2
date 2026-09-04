@@ -2211,7 +2211,9 @@ export const TUNING = {
       mirror: 0.04,
       /** The lamps sit in the very face of each cap, and they are glass:
        * they go on the first fold that is more than a brush — a wall met
-       * at 30 km/h — well before the bumper under them lets go. */
+       * at 30 km/h — well before the bumper under them lets go. Read per
+       * LAMP, not per end: a corner folded this far takes the lamp on that
+       * corner, and only a nose driven in square takes the pair. */
       lamp: 0.05,
       bumper: 0.12,
       spoiler: 0.1,
@@ -2248,7 +2250,7 @@ export const TUNING = {
      * `spent` is past both, where the part is doing most of what it will
      * ever do to the car. Two calls, not five: a part that reports every
      * tenth is a part nobody reads. */
-    callAt: { hurt: 0.45, spent: 0.85 },
+    callAt: { hurt: 0.45, spent: 0.85, dead: 1 },
     /** The mass every other number here is written against, kg. A car's
      * own `mass` is read against this: heavier spins less off a clipped
      * tree, folds deeper for the same closing speed (the energy is real),
@@ -2325,33 +2327,6 @@ export const TUNING = {
       /** ...and per m of panel crush anywhere, 1/s. A car folded on every
        * corner is not the shape it was drawn as. */
       crushDrag: 0.006,
-      /** Drag each part left on the road costs, 1/s. A mirror is a rounding
-       * error; a missing bonnet is a scoop with the whole engine bay behind
-       * it, and a missing hatch is the same hole facing the other way. A
-       * shattered screen is the cabin open to the wind; a missing door is
-       * the same, sideways. The wheels are costed on their own ledger
-       * (`wheelOffDrag`) and sit at zero here. */
-      partDrag: {
-        mirrorL: 0.0008,
-        mirrorR: 0.0008,
-        bumperF: 0.004,
-        bumperR: 0.003,
-        lampsF: 0,
-        lampsR: 0,
-        spoiler: 0.002,
-        hood: 0.009,
-        hatch: 0.007,
-        glassF: 0.005,
-        glassB: 0.004,
-        glassL: 0.0015,
-        glassR: 0.0015,
-        doorL: 0.006,
-        doorR: 0.006,
-        wheelFL: 0,
-        wheelFR: 0,
-        wheelRL: 0,
-        wheelRR: 0,
-      },
       /** THE PULL. Lock the car carries with the wheel dead straight, per m
        * of left-right crush difference — a body folded harder down one side
        * drags that way, and the driver holds a corner of opposite lock down
@@ -2385,12 +2360,19 @@ export const TUNING = {
        * driven on what is left of it, which caps the stage's top end
        * without ever stopping the car. */
       topGearAt: 0.75,
-      /** Missing-wing lateral grip at speed, as a fraction — the downforce
-       * that is no longer on the back of the car... */
-      spoilerGrip: 0.12,
-      /** ...faded in by pace, m/s: a wing does nothing at walking speed and
-       * all of it at the top end. */
-      spoilerSpeed: 34,
+      /** THE RACK PULLED OFF CENTRE. Bent tie rods do not only answer late
+       * (`systems.steerLoss`) — they answer CROOKED, and the wheel the
+       * driver holds straight is no longer the wheel the car goes straight
+       * on. In lock at steering damage 1, toward whichever front corner is
+       * folded deeper; a nose driven in square bends both rods the same and
+       * pulls nowhere. Under the shell's own `pullMax`, which caps the two
+       * together. */
+      steerPull: 0.05,
+      /** Gearbox damage at which a SECOND ratio goes, on top of the top
+       * gear `topGearAt` already took. A box this far gone is being driven
+       * on its middle gears, which is a stage finished at a crawl and never
+       * a stage that cannot be finished. */
+      secondGearAt: 0.95,
 
       /** THE WHEELS. Each one carries its own ledger (`damage.wheels`), fed
        * by the crush on its corner and its flank (`systems.wheelFrom…`),
@@ -2427,6 +2409,208 @@ export const TUNING = {
       hubBrake: 1.0,
     },
 
+    /** THE AIR, AND THE HOLES A CRASH PUTS IN IT. Every loss in `chassis`
+     * above is MECHANICAL — a rim ploughing the road, a rubbing hub, a
+     * shell that is no longer straight — and every one of them is a share
+     * of the speed, which is what a rolling loss is. This group is the
+     * other kind. The air a car pushes goes as the SQUARE of the speed, so
+     * a hole in the bodywork is worth nothing at all in a hairpin and the
+     * whole top end on a straight: a car with its doors gone still pulls
+     * out of a corner like a rally car and never sees the speed it used to.
+     *
+     * Everything here is stated as CdA — drag coefficient times frontal
+     * area, m², the number a wind tunnel actually reports — because that is
+     * the only form in which the entries can be compared with each other or
+     * with anything real. game/damage.ts adds them up and car.ts spends the
+     * total the way the air spends it: `½·ρ·CdA·u²` over the car's own
+     * mass, so a heavy car carries a hole better than a light one does, for
+     * the same reason it always has.
+     *
+     * A sound car's total is exactly 0. The roster's top speeds are its
+     * gearing and its rolling drag; nothing here is felt until something
+     * comes off. */
+    aero: {
+      /** Air, kg/m³ — sea level, and the same everywhere: a stage that
+       * changed the density with its altitude would be a physics lesson
+       * nobody asked for. */
+      density: 1.225,
+      /** Added CdA per part left on the road, m². A whole rally car is
+       * about 0.65 of these (Cd ≈ 0.35 over 1.9 m² of frontal area), and
+       * these are the tunnel's own proportions against it: a window down is
+       * worth about a twentieth of a car's drag, a door gone rather more
+       * than twice that, an open engine bay a quarter, and a windscreen
+       * that is no longer there a third — the cabin stops being a shape the
+       * air goes over and becomes a bucket it goes into.
+       *
+       * WHAT THAT BUYS, driven: the small stuff is a few tenths of a per
+       * cent of the top end and is felt nowhere, which is correct — a car
+       * missing a mirror is a car missing a mirror. The big openings cost
+       * a per cent or so each until the total reaches the point where the
+       * box will no longer pull its highest ratio at all, and from there
+       * the top end falls off a cliff: a car with no windscreen tops out a
+       * whole gear down, around 165 km/h against 205. That cliff is the
+       * gearbox's and not the air's, and it is the honest shape of the
+       * thing — a wrecked car does not top out slightly lower, it stops
+       * being able to pull top gear.
+       *
+       * The WING is the one negative entry, and it is the honest number: a
+       * rear wing is drag bought on purpose, so a car that has left its
+       * wing in a ditch is fractionally FASTER in a straight line and gives
+       * back rather more than that in `lift` the moment the road turns.
+       * The wheels are a mechanical loss and are costed on their own ledger
+       * (`chassis.wheelOffDrag`); they sit at zero here. */
+      part: {
+        mirrorL: 0.01,
+        mirrorR: 0.01,
+        bumperF: 0.033,
+        bumperR: 0.02,
+        lampFL: 0.005,
+        lampFR: 0.005,
+        lampRL: 0.004,
+        lampRR: 0.004,
+        spoiler: -0.033,
+        hood: 0.16,
+        hatch: 0.05,
+        glassF: 0.23,
+        glassB: 0.026,
+        glassL: 0.032,
+        glassR: 0.032,
+        doorL: 0.08,
+        doorR: 0.08,
+        wheelFL: 0,
+        wheelFR: 0,
+        wheelRL: 0,
+        wheelRR: 0,
+      },
+      /** ...and per m of crush anywhere on the shell, m² of CdA. A folded
+       * car is not the shape it was drawn as, and the air finds every new
+       * edge of it: a metre of fold spread over the body — a hard stage,
+       * not a single accident — is about a fifth of the car's drag again,
+       * without a single panel having left it. A stage's worth of ordinary
+       * bot contact is a few centimetres and worth nothing, which is what
+       * keeps this off the balance table. */
+      crush: 0.13,
+      /** THE PACE the speed-faded numbers below are quoted at, m/s — near
+       * the top of what a stage sees. Under it they fade with the square of
+       * the speed, like the drag itself: nothing aerodynamic happens to a
+       * rally car at the exit of a hairpin. */
+      speed: 34,
+      /** Lateral grip lost at `speed` per part left on the road, as a
+       * fraction of the sound car's — the downforce that is no longer being
+       * made. The WING is most of it and always was. A bonnet is the other
+       * kind: with the bay open the air gets under the nose and lifts it,
+       * and the front of the car stops being the end that turns. */
+      lift: {
+        mirrorL: 0,
+        mirrorR: 0,
+        bumperF: 0.02,
+        bumperR: 0,
+        lampFL: 0,
+        lampFR: 0,
+        lampRL: 0,
+        lampRR: 0,
+        spoiler: 0.12,
+        hood: 0.06,
+        hatch: 0.03,
+        glassF: 0.03,
+        glassB: 0,
+        glassL: 0,
+        glassR: 0,
+        doorL: 0,
+        doorR: 0,
+        wheelFL: 0,
+        wheelFR: 0,
+        wheelRL: 0,
+        wheelRR: 0,
+      },
+      /** Steering authority lost at `speed` with NO WINDSCREEN, as a
+       * fraction. Not the rack: the driver. A hundred and forty of open air
+       * in the face is a hundred and forty the driver is squinting through,
+       * and the line goes where it can be seen rather than where it should
+       * be. Faded by pace like everything else here — a screen that is gone
+       * costs nothing at all in a village. */
+      blast: 0.22,
+      /** THE CAR WITH A HOLE DOWN ONE SIDE. Drag standing off the
+       * centreline is a yaw moment, and the car wanders toward the open
+       * flank all the way down every straight. Lock carried per m² of
+       * one-sided CdA, at `speed`: one door gone (0.08 m²) is 0.02 of lock,
+       * a fifth of what a whole side folded to the cage is worth — a
+       * nuisance to be held down every straight, never a fight. The shell's
+       * own `chassis.pullMax` caps the two together. */
+      yawPerDrag: 0.25,
+    },
+
+    /** THE COOLING SYSTEM — the one piece of damage in the game that takes
+     * its TIME. A radiator stands ahead of everything else on the car, so a
+     * nose-on fold hard enough to matter has holed it before it has touched
+     * the block behind it. What that costs is not power. The engine keeps
+     * making its heat, the coolant that carried the heat away is on the
+     * road two corners back, and the needle climbs: past boiling the engine
+     * starts eating itself, and an engine that has eaten itself is the run
+     * over where it stops.
+     *
+     * Which makes it the one piece of damage a driver can DRIVE around.
+     * Heat is made by the throttle and shed by the air coming through what
+     * is left of the core, so lifting on the straights, short-shifting and
+     * giving away ten seconds a split is the difference between limping a
+     * holed radiator to the line and parking it in a forest. That trade is
+     * the whole reason this group exists — everything else in the ledger is
+     * a thing that has already happened to you, and this is a thing you are
+     * still deciding.
+     *
+     * `CarState.heat` is the gauge, 0 (running temperature) .. 1 (boiling).
+     * Written by game/cooling.ts, and the only number in the damage model
+     * that ever comes back down. */
+    cooling: {
+      /** Gauge made per second at full throttle, and per second by an
+       * engine merely running. A sound car sheds both without the needle
+       * ever leaving its peg — `still` and `ram` below are sized to beat
+       * them by a wide margin, because a stage is not a thing a healthy car
+       * overheats on. */
+      loadHeat: 0.1,
+      idleHeat: 0.01,
+      /** Gauge shed per second standing still with a SOUND system — the fan
+       * and the mass of the block, and the whole of what a car sitting on a
+       * start line has... */
+      still: 0.05,
+      /** ...plus the ram air through the core, per second at `airSpeed`,
+       * scaled linearly by the pace: this is why a hurt car cools on a fast
+       * straight and boils in a hairpin sequence. */
+      ram: 0.1,
+      airSpeed: 30,
+      /** Share of ALL of that shedding a holed core has lost, at cooling
+       * damage 1 — nearly all of it. A system with no coolant in it is a
+       * fan blowing over a dry block, and a dry block is what boils. */
+      lost: 0.7,
+      /** Where the needle goes into the red, 0..1 of the gauge: the
+       * `overheat` call goes up here and the engine starts taking damage
+       * for every second past it... */
+      redline: 1,
+      /** ...and where it is called back out again, so a needle sitting on
+       * the line does not announce itself twice a second. */
+      clearAt: 0.88,
+      /** The first warning, 0..1 — far enough under the red line that
+       * lifting off is still a choice rather than a reaction... */
+      warnAt: 0.62,
+      /** ...and the share of it the needle has to fall back through before
+       * that warning can be given again, so a car cooling and heating
+       * around one line does not say so on every lap of it. */
+      rearm: 0.8,
+      /** Engine damage taken per second at the red line, and again per
+       * second per gauge-point past it: a needle pinned hard over cooks the
+       * engine in well under a minute, a needle wavering on the line takes
+       * a stage to do it. */
+      cookRate: 0.02,
+      cookPerOver: 0.05,
+      /** ...and how far past 1 the gauge is allowed to go, so the cooking
+       * has a ceiling rather than running away with the arithmetic. */
+      heatMax: 1.6,
+      /** Fraction of engine power gone with the needle on the red line —
+       * the timing pulled out of a hot engine, which is what a driver
+       * actually feels before anything breaks. Faded in from `warnAt`. */
+      heatPower: 0.25,
+    },
+
     /** The machinery under the panels: how crush becomes internal damage
      * (per m of crush on the zones nearest each system), and how a damaged
      * system degrades its own job. All damage is 0..1 and never repaired.
@@ -2440,6 +2624,20 @@ export const TUNING = {
        * 50 km/h is a third of it: a head-on at any road speed is a bad
        * day, and above about 50 it is the run. */
       engineFromNose: 4.4,
+      /** ...and nose crush → the COOLING, which stands in FRONT of the
+       * block and is therefore holed first and holed harder. Above
+       * `engineFromNose` on purpose, and that ordering is the whole point:
+       * a wall met at 50 km/h leaves an engine that still pulls and a
+       * cooling system that no longer works, so a modest head-on does not
+       * end a run — it starts a clock the driver can still race
+       * (`collision.cooling`). At 70 the core is finished outright, and
+       * getting home is a question of how slowly you are willing to go. */
+      coolingFromNose: 6,
+      /** ...multiplied by this once the FRONT BUMPER is off the car: the
+       * bar and the valance under it are the only things standing between
+       * a rally car's core and the next tree, and once they are gone the
+       * core is the bumper. */
+      coolingBareCore: 1.6,
       /** Flank crush → suspension (arms and uprights live in the arches). */
       suspensionFromFlank: 1.5,
       /** Rear crush → gearbox (the drivetrain hangs off the back). */

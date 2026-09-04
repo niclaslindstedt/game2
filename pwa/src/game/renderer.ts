@@ -6,8 +6,18 @@
 // run and drives the ground-contact and exhaust particle systems.
 
 import * as THREE from "three";
-import { TUNING, isWooden, type GameEvent, type GameState, type Season } from "@engine";
+import {
+  FRONT_LAMPS,
+  REAR_LAMPS,
+  TUNING,
+  isWooden,
+  lampShare,
+  type GameEvent,
+  type GameState,
+  type Season,
+} from "@engine";
 
+import { clamp } from "../lib/util.ts";
 import { createGameCamera, type CameraMode, type MapPose } from "./camera.ts";
 import type { FreeFlyMove, FreeFlyPose } from "./camera-free.ts";
 import {
@@ -1052,12 +1062,23 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // darker as the damage climbs, and black once the engine is dead and
     // the car is sitting wherever it stopped. It rises off the bay rather
     // than streaming from a pipe, so a stopped car is wrapped in it.
+    //
+    // A CLIMBING TEMPERATURE puts the same cloud up without darkening it,
+    // which is the honest difference between the two: a holed radiator
+    // boils its coolant off as white steam over a motor that is still
+    // perfectly good, and a beaten one burns. So the heat drives how much
+    // there is and the engine's own damage drives what colour it is —
+    // which is also what tells a driver, at a glance, which of the two
+    // things is happening to them.
     const hurt = c.damage.systems.engine;
     const smokeFrom = TUNING.collision.callAt.hurt;
-    if (fx > 0 && hurt >= smokeFrom) {
-      const bad = Math.min(1, (hurt - smokeFrom) / (1 - smokeFrom));
+    const cool = TUNING.collision.cooling;
+    const boil = clamp((c.heat - cool.warnAt) / (cool.redline - cool.warnAt), 0, 1);
+    if (fx > 0 && (hurt >= smokeFrom || boil > 0)) {
+      const bad = Math.max(0, Math.min(1, (hurt - smokeFrom) / (1 - smokeFrom)));
+      const thick = Math.max(bad, boil);
       const every =
-        ENGINE_SMOKE.every.first + (ENGINE_SMOKE.every.dead - ENGINE_SMOKE.every.first) * bad;
+        ENGINE_SMOKE.every.first + (ENGINE_SMOKE.every.dead - ENGINE_SMOKE.every.first) * thick;
       smokeClock += dt;
       const puffs = pipeBursts(smokeClock, every / Math.max(0.2, fx));
       if (puffs > 0) {
@@ -1074,7 +1095,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           1.3,
           state.wind.x * 0.5,
           state.wind.z * 0.5,
-          ENGINE_SMOKE.rise * (0.4 + 0.6 * bad),
+          ENGINE_SMOKE.rise * (0.4 + 0.6 * thick),
         );
       }
     }
@@ -1155,10 +1176,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (driving) wayHomeArrow.update(state, chase.camera, dt);
     chase.update(state, dt);
     environment.setGrime(car?.grime() ?? 0);
-    // ...and which of its lamp pairs the crash has taken: a beam with no
-    // lamp behind it lights nothing (car-mesh.ts darkens the lamp itself).
-    const broken = state.car.damage.broken;
-    environment.setLampsBroken(broken.includes("lampsF"), broken.includes("lampsR"));
+    // ...and how much of each end's lighting the crash has left: the lamps
+    // break one at a time, so a beam is a SHARE and not a switch — one
+    // headlamp gone is half the light down the road for the rest of the
+    // stage (car-mesh.ts darkens the lamp itself and snuffs its bloom).
+    environment.setLampsBroken(lampShare(state.car, FRONT_LAMPS), lampShare(state.car, REAR_LAMPS));
     // The weather is the environment's, the FX budget is the renderer's.
     environment.setEffects(fx);
     environment.update(state, chase.camera, dt);

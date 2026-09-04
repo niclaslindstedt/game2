@@ -80,7 +80,13 @@ noise. Three kinds of sound come out the other side:
   a touch higher on the last board of a lap so a driver counting them hears
   the count end. `systemFail` is the one piece of damage news nobody can see,
   told: a knock for a system giving, a heavier clunk with a hiss behind it
-  for a system gone.
+  for a system gone — and heavier and lower again at the line an engine
+  actually stops at, which it says once. `overheat` runs the same pair up
+  the temperature: the warning is the same knock, the red line the clunk
+  pitched UP because a needle is urgent in a way a bent arm is not, and the
+  needle coming back off it is that first knock lifted and quietened — the
+  only good news the damage model ever gives anybody, and the only call in
+  the game that can be made more than once.
 - **Cues** are moments the app knows and the engine never reported. The
   countdown lights are the worked example: nothing happens in the simulation
   when a light changes, so the light is the bed's business. So are the

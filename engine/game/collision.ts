@@ -35,12 +35,22 @@ const T = TUNING;
 /** Which zones hold each part on, and how much crush shears its bolts. A
  * part is listed under every zone whose folding can take it off. The
  * wheels are not here: a wheel comes off its own ledger (`dealWheels`),
- * not off a zone's. */
+ * not off a zone's.
+ *
+ * The LAMPS are where the zone list does real work rather than merely being
+ * generous. Each of the four is listed under its own corner and under the
+ * cap's centre zone, and nothing else: clip a tree with the right-hand wing
+ * (zone 1) and the right headlamp goes while the left one stays lit for the
+ * rest of the stage, and only a nose driven in square (zone 0) takes the
+ * pair. That is the whole difference between damage that happened to the
+ * car and damage that happened to a SIDE of it. */
 const PART_BOLTS: { part: DamagePart; zones: number[]; crushAt: number }[] = [
   { part: "bumperF", zones: [7, 0, 1], crushAt: T.collision.partAt.bumper },
   { part: "bumperR", zones: [3, 4, 5], crushAt: T.collision.partAt.bumper },
-  { part: "lampsF", zones: [7, 0, 1], crushAt: T.collision.partAt.lamp },
-  { part: "lampsR", zones: [3, 4, 5], crushAt: T.collision.partAt.lamp },
+  { part: "lampFL", zones: [7, 0], crushAt: T.collision.partAt.lamp },
+  { part: "lampFR", zones: [0, 1], crushAt: T.collision.partAt.lamp },
+  { part: "lampRL", zones: [4, 5], crushAt: T.collision.partAt.lamp },
+  { part: "lampRR", zones: [3, 4], crushAt: T.collision.partAt.lamp },
   { part: "mirrorR", zones: [1, 2], crushAt: T.collision.partAt.mirror },
   { part: "mirrorL", zones: [6, 7], crushAt: T.collision.partAt.mirror },
   { part: "spoiler", zones: [3, 4, 5], crushAt: T.collision.partAt.spoiler },
@@ -121,14 +131,25 @@ export function damageZoneAt(angle: number): number {
   return ((Math.round(angle / span) % DAMAGE_ZONES) + DAMAGE_ZONES) % DAMAGE_ZONES;
 }
 
-/** Has `part` just crossed one of the two lines worth telling the driver
- * about? Compared against the value BEFORE the damage was dealt, so a
- * system that walks past a line in a dozen small hits calls out on the one
- * that took it there and stays quiet through the rest. */
-function callDamage(system: DamageCall, was: number, now: number, events: GameEvent[]): void {
-  const { hurt, spent } = T.collision.callAt;
-  if (was < spent && now >= spent) events.push({ type: "systemFail", system, spent: true });
-  else if (was < hurt && now >= hurt) events.push({ type: "systemFail", system, spent: false });
+/** Has `part` just crossed one of the lines worth telling the driver about?
+ * Compared against the value BEFORE the damage was dealt, so a system that
+ * walks past a line in a dozen small hits calls out on the one that took it
+ * there and stays quiet through the rest.
+ *
+ * The DEAD line is the top of the ledger and is said last, because it is
+ * the only one that is not a warning: a part at 1 is a part that has
+ * finished happening, and for the engine it is the run. Nothing announces
+ * "dead" ahead of time — that is the whole reason the line exists. */
+export function callDamage(
+  system: DamageCall,
+  was: number,
+  now: number,
+  events: GameEvent[],
+): void {
+  const { hurt, spent, dead } = T.collision.callAt;
+  if (was < dead && now >= dead) events.push({ type: "systemFail", system, stage: "dead" });
+  else if (was < spent && now >= spent) events.push({ type: "systemFail", system, stage: "spent" });
+  else if (was < hurt && now >= hurt) events.push({ type: "systemFail", system, stage: "hurt" });
 }
 
 /** Crush reaching past the panels: which system lives nearest each zone,
@@ -153,10 +174,16 @@ function dealSystems(car: CarState, face: CrushFace, crush: number, events: Game
     return;
   }
   const zone = face;
+  // The core stands in front of everything, and a rally car's bar is what
+  // stands in front of IT: once the front bumper is on the road there is
+  // nothing left between the radiator and the next tree.
+  const bare = car.damage.broken.includes("bumperF") ? S.coolingBareCore : 1;
   if (zone === 0) {
     deal("engine", crush * S.engineFromNose);
+    deal("cooling", crush * S.coolingFromNose * bare);
   } else if (zone === 1 || zone === 7) {
     deal("engine", crush * S.engineFromNose * 0.5);
+    deal("cooling", crush * S.coolingFromNose * bare * 0.5);
     deal("steering", crush * S.steeringFromCorner);
     deal("brakes", crush * S.brakesFromCorner);
   } else if (zone === 2 || zone === 6) {
