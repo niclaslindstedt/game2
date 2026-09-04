@@ -41,6 +41,7 @@ import { landingDamage } from "./collision.ts";
 import {
   rollTilt,
   rotateFrame,
+  rotateSpin,
   updateSlip,
   type CarState,
   type GameEvent,
@@ -88,19 +89,82 @@ const CONTACTS: readonly (readonly [number, number, boolean])[] = [
   [-B.halfWidth, B.roofY, false],
 ];
 
-/** How far the hull has to be lifted for the outline above to rest on the
- * ground at this attitude, m — the deepest any of its points has gone
- * below the wheel plane. Zero upright, `halfWidth` on its side, the whole
- * height of the car on its roof. */
-function hullStand(tilt: number): number {
+/** ...AND THE SAME BOX WITH ITS LENGTH IN IT: every point of the outline
+ * above, carried out to the corner of the car it belongs to — the wheels
+ * at the axles, everything else at the bumpers. `(across, up, along)`.
+ *
+ * The outline is what the body TURNS on, and it is right that it has no
+ * length: a car goes over about an axis down its middle, and the energy
+ * curve the whole model runs on is a function of the tilt alone. But a
+ * rolling body is PITCHED as often as not — `R.pitchMax` allows most of a
+ * right angle of it — and a section cannot then say where the nose and the
+ * tail are: at two thirds of a radian the tail of a four-metre car hangs
+ * more than a metre below the plane the section thinks it is standing on,
+ * and it is drawn ploughing through the ground. Anything that has to DRAW
+ * or LAND the body asks this instead. */
+const HULL: readonly (readonly [number, number, number])[] = (() => {
+  const out: (readonly [number, number, number])[] = [];
+  for (const [across, up, sprung] of CONTACTS) {
+    const end = sprung ? B.halfBase : B.halfLength;
+    out.push([across, up, end], [across, up, -end]);
+  }
+  return out;
+})();
+
+/** How far the origin has to be lifted for the WHOLE body to clear the
+ * ground at this attitude, m — the deepest any point of the box has gone
+ * below the wheel plane. Zero upright and level, `halfWidth` on its side,
+ * the height of the car on its roof, and more than any of those once the
+ * body is pitched as well, because it is then standing on one END of a
+ * face instead of on all of it.
+ *
+ * The box is symmetric across and along, so which way round the two angles
+ * are read cannot change what the deepest point is — the mirror of every
+ * point is in the set. */
+function hullClear(tilt: number, pitch: number): number {
   const sin = Math.sin(tilt);
   const cos = Math.cos(tilt);
+  const sinP = Math.sin(pitch);
+  const cosP = Math.cos(pitch);
   let lowest = 0;
-  for (const [across, up] of CONTACTS) {
-    const h = up * cos - across * sin;
+  for (const [across, up, along] of HULL) {
+    const h = (up * cos - across * sin) * cosP + along * sinP;
     if (h < lowest) lowest = h;
   }
   return -lowest;
+}
+
+/** WHERE EVERY POINT OF THE BOX IS, in the car's own frame: how far
+ * FORWARD, how far RIGHT and how far UP from the origin. Walked by
+ * whatever has to ask the ground under the BODY rather than the ground
+ * under its middle.
+ *
+ * The composition is the renderer's, stated once: in the car's local frame
+ * +z is the nose and +x its right side, so a positive roll (right side up)
+ * is a rotation about +z and a nose-up pitch a NEGATIVE one about +x. */
+function hullPoints(tilt: number, pitch: number): { ahead: number; right: number; up: number }[] {
+  const sin = Math.sin(tilt);
+  const cos = Math.cos(tilt);
+  const sinP = Math.sin(pitch);
+  const cosP = Math.cos(pitch);
+  return HULL.map(([across, up, along]) => {
+    const rolled = up * cos - across * sin;
+    return {
+      ahead: along * cosP - rolled * sinP,
+      right: across * cos + up * sin,
+      up: rolled * cosP + along * sinP,
+    };
+  });
+}
+
+/** THE SECTION'S OWN ANSWER — the outline level, which is what the roll's
+ * PHYSICS is written on: the centre-of-mass curve, the barrier table and
+ * the walk are all functions of the tilt and nothing else, and they have
+ * to stay that way, or the energy bookkeeping becomes a function of an
+ * angle the ground damps out. What the pitch costs in CLEARANCE is a
+ * separate question, and `hullClear` is the one that answers it. */
+function hullStand(tilt: number): number {
+  return hullClear(tilt, 0);
 }
 
 /** ...and how high the WEIGHT in the car then sits, m. The one curve the
@@ -202,7 +266,51 @@ export function onItsWheels(roll: number): boolean {
  * springs, so it is flat zero and an ordinary jump is untouched by any of
  * this. */
 export function rollStand(car: CarState): number {
-  return car.rolling ? hullStand(rollTilt(car.roll)) : 0;
+  return car.rolling ? hullClear(rollTilt(car.roll), car.pitch) : 0;
+}
+
+/** THE GROUND UNDER THE WHOLE BODY, as a height for the middle of the car
+ * — the same question `ground.ts`'s `seatOn` asks of a car that is
+ * driving, asked of the box a car that is going over is lying on.
+ *
+ * A rolling body is four metres of car at an attitude nobody chose, and
+ * out in the wild the ground under one end of it is nothing like the
+ * ground under its middle. Standing it on the single point under its
+ * origin buries whichever end is over rising ground — a tail through a
+ * bank, a roof through the far side of the rut it is grinding along — at
+ * the one moment the player is watching the car most closely.
+ *
+ * So every corner of the box is asked what height it needs, and the plane
+ * goes where the neediest one is satisfied. Flat ground gives the centre
+ * back exactly, which is why the labs and the road are untouched by it.
+ *
+ * A corner over ground rising harder than the body could have got there
+ * over is not lying on that ground, it is up against a WALL — and a wall
+ * stops a car, it does not hold it in the air. So what a corner may claim
+ * is capped at `collision.climbLimit` over its own reach, the same line
+ * `seatOn` draws and the same one the ground-as-a-solid check does.
+ *
+ * Handed back as a GROUND HEIGHT and never as a lift applied to `car.y`
+ * after the fact. The height the step carries between frames IS `car.y`,
+ * so a clamp on it is read back next step as the body having CLIMBED: a
+ * pitched car held clear of the ground came back a step later thinking its
+ * centre was that much higher, was lifted again off that, and flew away
+ * without ever touching anything again. */
+function rollSeat(car: CarState, ctx: RollGround): number {
+  const tilt = rollTilt(car.roll);
+  const under = ctx.groundAt(car.x, car.z);
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  let seat = under;
+  for (const p of hullPoints(tilt, car.pitch)) {
+    // Forward is (sin h, cos h) and right is (cos h, -sin h).
+    const x = car.x + sinH * p.ahead + cosH * p.right;
+    const z = car.z + cosH * p.ahead - sinH * p.right;
+    const reach = Math.hypot(p.ahead, p.right) * B.climbLimit;
+    const plane = Math.min(ctx.groundAt(x, z), under + reach) - p.up;
+    if (plane > seat) seat = plane;
+  }
+  return seat - hullClear(tilt, car.pitch);
 }
 
 /** The highest the body's centre has to be lifted to get from here to the
@@ -447,7 +555,7 @@ export function landRolled(
   events: GameEvent[],
   stats: RunStats,
 ): void {
-  car.y = groundY + hullStand(rollTilt(car.roll));
+  car.y = groundY + hullClear(rollTilt(car.roll), car.pitch);
   car.airborne = false;
   car.settling = false;
   car.wheelVy = 0;
@@ -509,7 +617,7 @@ export function stepRolling(
   // Where the weight in the car is, over the ground it is over. Carried in
   // `car.y` (the origin) between steps, which is what the rest of the game
   // reads, and unpacked here through the attitude.
-  const was = ctx.groundAt(car.x, car.z);
+  const was = rollSeat(car, ctx);
   let centre = car.y - was + B.centreY * Math.cos(tilt);
   // `airborne` is the roll's own bit for BETWEEN ITS CONTACTS — which is
   // what airborne honestly means for a car going over, and what the camera,
@@ -623,6 +731,24 @@ export function stepRolling(
   const delta = car.yawRate * dt;
   car.heading += delta;
   rotateFrame(car, delta);
+  // ...AND THE SPIN TURNS WITH IT, for the same reason the velocity does.
+  // The roll is a rotation about the car's OWN long axis, and that axis is
+  // swinging round underneath an angular momentum the world is holding
+  // still: a body that has swapped ends mid-roll is going over the other
+  // way in its own frame, because it is going over the SAME way in the
+  // world. Nothing else re-reads that, so without it the direction a car
+  // rolls is settled at the trip and outlives the car turning round
+  // underneath it — a car travelling forwards while rolling backwards,
+  // which is the one attitude a falling body cannot hold.
+  //
+  // Only WHILE IT IS FREE. In the air the body is a rigid body and this is
+  // exact. On the ground it is not: the yaw of a car grinding round on its
+  // panels is the GROUND scrubbing it round, an external torque, and the
+  // same contact is re-establishing which corner the body turns about at
+  // that moment. Carrying the roll through a ground-driven yaw as though
+  // momentum were conserved bleeds it into the pitch every step of every
+  // grind, where there is nothing to give it back.
+  if (!down) rotateSpin(car, delta);
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
   car.x += (sinH * car.u + cosH * car.w) * dt + cosH * walk;
@@ -709,7 +835,7 @@ export function stepRolling(
     }
   }
   // Back into the origin the rest of the game reads the car's height from.
-  car.y = ctx.groundAt(car.x, car.z) + centre - B.centreY * Math.cos(rollTilt(car.roll));
+  car.y = rollSeat(car, ctx) + centre - B.centreY * Math.cos(rollTilt(car.roll));
   car.settling = false;
 
   // IT IS OVER when the body is lying on a face of itself with no roll

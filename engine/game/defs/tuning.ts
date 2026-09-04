@@ -2047,6 +2047,13 @@ export const TUNING = {
      * out of these four numbers and nothing else.
      * tests/car_geometry_test.ts holds them against the drawn shells. */
     halfTrack: 0.74,
+    /** ...and how far ALONG the car those wheel contacts sit, m — half the
+     * wheelbase. The shell's corners are out at `halfLength`, the tyres a
+     * good metre inside them, and the difference is the whole of what a
+     * PITCHED body stands on: nose-down on its wheels it rides the front
+     * axle, nose-down past that it rides the bumper. The catalog runs
+     * 2.38–2.44 m of wheelbase, so one number serves it as the box does. */
+    halfBase: 1.2,
     floorY: 0.28,
     roofY: 1.4,
     centreY: 0.5,
