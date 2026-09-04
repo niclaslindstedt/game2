@@ -1599,21 +1599,46 @@ export const TUNING = {
        * charging that as a flat-on-both-wheels impact takes nine tenths of
        * the trip before the car has even come off its wheels. */
       sprung: 0.88,
-      /** How hard the GROUND DRIVES THE ROLL ON, as an effective friction
-       * coefficient under a body that is still travelling sideways,
-       * working on the lever of its own centre height. This is the whole
-       * reason a roll is a roll rather than one flip: a car with fifteen
-       * metres a second still across it is a car the ground keeps turning
-       * over. It is also why one STOPS — the roll ends when the travel
-       * does, not when a counter runs out. */
-      grip: 0.85,
+      /** THE FRICTION A BODY OFF ITS WHEELS HAS, as a Coulomb coefficient
+       * under WHATEVER OF IT IS ON THE GROUND — one per face, blended
+       * across the quarter turns between them.
+       *
+       * A body on the ground has one contact patch and one budget,
+       * pointing against the way it is travelling, and `roll.ts` spends it
+       * on both jobs at once: the share ACROSS the car works on the lever
+       * of its own centre height and turns it over, the share ALONG it
+       * simply retards it. That is the whole reason a roll is a roll
+       * rather than one flip — a car with fifteen metres a second still
+       * across it is a car the ground keeps turning over — and it is also
+       * why one STOPS: the roll ends when the travel does, not when a
+       * counter runs out.
+       *
+       * It is also the ONLY thing that slows a car that is over, so what
+       * it is worth on each face is what decides how far a rollover goes
+       * and how long a car lies grinding at the end of one. Accident
+       * reconstruction measures those as drag factors, and they are not
+       * one number:
+       *
+       * - `wheels` is RUBBER, being dragged sideways. It is the highest of
+       *   the three, and it is what bites at the start of a trip — the
+       *   tyre that catches while the body keeps going.
+       * - `flank` is a door skin and a sill on gravel: smooth, and the
+       *   longest slide of the three.
+       * - `roof` is glass, gutters, the pillars and whatever aerial is
+       *   still on it, all of which dig in. A car on its roof stops
+       *   noticeably faster than one on its side, and that difference is
+       *   the loudest few seconds of most accidents.
+       *
+       * The whole group used to be one number at a tyre's 0.85, which put
+       * a rollover over a g and had a car going over at 165 km/h walking
+       * two seconds later — with a flat 2.6/s exponential scrub beside it
+       * that took nine tenths of the speed out of every second of contact.
+       * Between them, the read that made a rollover look like a car
+       * hitting glue and then spinning on the spot. */
+      faceGrip: { wheels: 0.85, flank: 0.5, roof: 0.65 },
       /** How fast the roll bleeds into the ground it is grinding round on,
        * 1/s. Panels are not tyres. */
       drag: 0.9,
-      /** How much of the car's TRAVEL each second on its side costs, 1/s —
-       * on top of what the landing already took. A roll is the most
-       * expensive thing a car can do short of a tree. */
-      scrub: 2.6,
       /** ...and of its yaw, 1/s. Low, and deliberately: a car does not
        * trip from a straight line. It is already sliding and already
        * ROTATING when its centre of gravity goes past its leading tyres,
@@ -1672,6 +1697,24 @@ export const TUNING = {
        * died out and the car is where it is going to stay. */
       settled: 0.12,
       rest: 0.7,
+      /** ...and, for a body that came to rest on a face that is NOT its
+       * wheels, when it has stopped TRAVELLING as well, m/s.
+       *
+       * A car on its roof has no tyres on the ground; it has a roof, and
+       * the ground goes on taking the travel out of it at the same
+       * friction that was turning it over a moment earlier. So the slide
+       * belongs to the roll and the roll keeps the car until it is over —
+       * which for 70 km/h onto a roof is three seconds and thirty metres
+       * of grinding, and the loudest, longest thing in the whole accident.
+       *
+       * Without it a roll handed the car back the instant the ROTATION
+       * stopped, whatever it was still carrying, and `stepOverturned`
+       * returns before anything moves: the car settled onto its roof at
+       * 63 km/h and became a statue on the spot for `lieFor`, with the
+       * speed still sitting in its velocity, unspent. A car that comes
+       * down on its WHEELS still going is the opposite case and is handed
+       * straight back — that one is a car that drives on. */
+      restSpeed: 1.2,
       /** How close the NEXT corner of the hull has to be to the ground for
        * a contact to reach the rotation, m. A body lying flat on a face
        * has it at zero and pays `spin`'s exchange in full; a body balanced

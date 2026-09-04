@@ -11,8 +11,10 @@ import {
   compileTrack,
   createGame,
   goesOver,
+  ridesOver,
   rollTilt,
   step,
+  updateSlip,
   type CarInput,
   type GameEvent,
   type GameState,
@@ -277,6 +279,190 @@ describe("the jump", () => {
     expect(Math.max(zones[2], zones[6])).toBeGreaterThan(0);
   });
 
+  it("a roll CARRIES — a car that goes over at pace travels while it does", () => {
+    // THE MOMENTUM. A rollover is not a stop: the body weighs a tonne, the
+    // ground gives it a shell's friction to work against (`roll.faceGrip`,
+    // around half a g on a panel), and it is off the ground for most of
+    // every turn, where nothing
+    // slows it at all. Accident reconstruction measures a real one at
+    // around half a g overall, and the bar here is a full g — twice as
+    // harsh as the world, and still a bar the model has been under.
+    //
+    // It has failed two ways, and both read to a player as a car hitting
+    // glue: a flat exponential scrub on the travel beside the friction, and
+    // the friction itself charged off arrivals the body never made — the
+    // seat's own rotation under a turning car, and the tyres touching down
+    // as the roll passes through upright.
+    const state = game();
+    // On CLEAR ground. A car thrown off a lip crossed up lands in the wild
+    // and tumbles through the forest, and a trunk it snaps costs it twenty
+    // metres a second in one step — which is the contact model working, and
+    // nothing at all to do with what a roll costs. "Nothing to hit" is a
+    // claim a test has to arrange rather than assume.
+    state.terrain.obstaclesNear = () => [];
+    state.terrain.treesNear = () => [];
+    let thrown = false;
+    for (let i = 0; !thrown && i < TUNING.physicsHz * 60; i += 1) {
+      state.car.u = 40;
+      thrown = step(state, { ...NEUTRAL_INPUT, throttle: 0.5 }).some((e) => e.type === "takeoff");
+    }
+    for (let i = 0; !state.car.rolling && i < TUNING.physicsHz * 6; i += 1) {
+      state.car.w = -26;
+      step(state, { ...NEUTRAL_INPUT });
+    }
+    expect(state.car.rolling).toBe(true);
+    const into = Math.hypot(state.car.u, state.car.w);
+    const x0 = state.car.x;
+    const z0 = state.car.z;
+    let seconds = 0;
+    let worst = 0;
+    while (state.car.rolling && seconds < 8) {
+      const was = Math.hypot(state.car.u, state.car.w);
+      step(state, { ...NEUTRAL_INPUT });
+      seconds += TUNING.dt;
+      worst = Math.max(worst, was - Math.hypot(state.car.u, state.car.w));
+    }
+    const carried = Math.hypot(state.car.x - x0, state.car.z - z0);
+    const outOf = Math.hypot(state.car.u, state.car.w);
+    expect(carried).toBeGreaterThan(20);
+    expect((into - outOf) / seconds).toBeLessThan(9.81);
+    // ...and no ONE contact may take a third of what the car is carrying.
+    // A rollover is a dozen-odd contacts sharing the work; a step that eats
+    // most of the travel on its own is a bug in what the ground was charged
+    // for, and it is the shape every version of this has failed in.
+    expect(worst).toBeLessThan(into / 3);
+  });
+
+  it("a car that ends up on its roof GRINDS to a stop, it does not freeze", () => {
+    // The other half of the momentum question, and the uglier failure. A
+    // roll used to hand the car back the instant the ROTATION stopped —
+    // whatever it was still carrying — and step.ts sets `overturned` on a
+    // body that is down, still and off its wheels, whereupon
+    // `stepOverturned` returns before anything moves. So a car that settled
+    // onto its roof at 63 km/h became a statue on the spot, with the speed
+    // still sitting unspent in its velocity, and was teleported to the last
+    // board a beat later.
+    //
+    // A car on its roof has no tyres on the ground. It has a roof, and the
+    // ground goes on taking the travel out of it at the same friction that
+    // was turning it over — so the slide belongs to the roll, and the roll
+    // keeps the car through it.
+    const state = game();
+    state.terrain.obstaclesNear = () => [];
+    state.terrain.treesNear = () => [];
+    let thrown = false;
+    for (let i = 0; !thrown && i < TUNING.physicsHz * 60; i += 1) {
+      state.car.u = 30;
+      thrown = step(state, { ...NEUTRAL_INPUT, throttle: 0.5 }).some((e) => e.type === "takeoff");
+    }
+    for (let i = 0; !state.car.rolling && i < TUNING.physicsHz * 6; i += 1) {
+      state.car.w = -18;
+      step(state, { ...NEUTRAL_INPUT });
+    }
+    expect(state.car.rolling).toBe(true);
+    // Run to the moment the body has stopped TURNING but is still going.
+    let turning = 0;
+    while (
+      turning < TUNING.physicsHz * 6 &&
+      (Math.abs(state.car.rollRate) > TUNING.air.roll.rest ||
+        Math.abs(rollTilt(state.car.roll)) < WHEEL_BASIN)
+    ) {
+      step(state, { ...NEUTRAL_INPUT });
+      turning += 1;
+    }
+    expect(Math.abs(rollTilt(state.car.roll))).toBeGreaterThan(WHEEL_BASIN);
+    const carrying = Math.hypot(state.car.u, state.car.w);
+    expect(carrying).toBeGreaterThan(10);
+    // It is still the ROLL's car — not handed back, and so not frozen.
+    expect(state.car.rolling).toBe(true);
+    expect(state.overturned).toBeNull();
+    const x0 = state.car.x;
+    const z0 = state.car.z;
+    let seconds = 0;
+    while (state.car.rolling && seconds < 6) {
+      step(state, { ...NEUTRAL_INPUT });
+      seconds += TUNING.dt;
+    }
+    // It ground its way to a stop over real ground, and quickly: a roof and
+    // its pillars dug into gravel is a far better brake than four tyres.
+    const slid = Math.hypot(state.car.x - x0, state.car.z - z0);
+    expect(slid).toBeGreaterThan(6);
+    expect(Math.hypot(state.car.u, state.car.w)).toBeLessThanOrEqual(TUNING.air.roll.restSpeed);
+    expect(carrying / seconds).toBeGreaterThan(9.81 * 0.4);
+    // ...and only THEN is it a car lying on its roof for the crew to be
+    // taken out of.
+    expect(state.car.rolling).toBe(false);
+    step(state, { ...NEUTRAL_INPUT });
+    expect(state.overturned).not.toBeNull();
+  });
+
+  it("stops harder on its ROOF than on its flank — what is on the ground decides", () => {
+    // The shell is not one surface. A flank is a door skin and a sill,
+    // which is smooth and slides a long way; a roof is glass, gutters, the
+    // pillars and whatever aerial is still attached, all of which dig in.
+    // Reconstruction measures the two as different drag factors, and this
+    // is where the game says so (`roll.faceGrip`).
+    //
+    // Both bodies are stood on their face already sliding, at the same
+    // speed, so the only difference between the runs is what the ground
+    // has hold of.
+    const slide = (tilt: number): number => {
+      const state = game();
+      state.terrain.obstaclesNear = () => [];
+      state.terrain.treesNear = () => [];
+      const car = state.car;
+      car.rolling = true;
+      car.roll = tilt;
+      car.rollRate = 0;
+      car.airborne = false;
+      car.u = 16;
+      car.w = 0;
+      updateSlip(car);
+      const x0 = car.x;
+      const z0 = car.z;
+      for (let i = 0; i < TUNING.physicsHz * 8 && car.rolling; i += 1) {
+        step(state, { ...NEUTRAL_INPUT });
+      }
+      return Math.hypot(car.x - x0, car.z - z0);
+    };
+    const onItsSide = slide(Math.PI / 2);
+    const onItsRoof = slide(Math.PI);
+    expect(onItsRoof).toBeGreaterThan(2);
+    expect(onItsSide).toBeGreaterThan(onItsRoof);
+    // ...and the wheels are the other end of it again: rubber dragged
+    // sideways is the best brake of the three, which is also what bites at
+    // the start of a trip and sends the body over its outside wheels.
+    expect(TUNING.air.roll.faceGrip.wheels).toBeGreaterThan(TUNING.air.roll.faceGrip.roof);
+    expect(TUNING.air.roll.faceGrip.roof).toBeGreaterThan(TUNING.air.roll.faceGrip.flank);
+  });
+
+  it("a car that is going over rides over nothing", () => {
+    // `ridesOver` measures the bar off `car.y`, which for a rolling body is
+    // its origin held a hull's width in the air. A car on its flank also
+    // has no wheels underneath it to climb anything with — so the one
+    // moment it is least able to avoid what is in front of it was the one
+    // moment it flew over all of it.
+    const state = game();
+    const stone = {
+      x: state.car.x,
+      z: state.car.z,
+      y: 0,
+      kind: "rock" as const,
+      size: 1,
+      spin: 0,
+      radius: 0.6,
+      height: 0.5,
+      mass: 300,
+      rooted: 0.7,
+      snap: Infinity,
+    };
+    state.car.y = 0.9;
+    state.car.rolling = false;
+    expect(ridesOver(state.car, stone)).toBe(true);
+    state.car.rolling = true;
+    expect(ridesOver(state.car, stone)).toBe(false);
+  });
+
   it("a roll STRIPS the car — the glass, the mirrors, the panels it lands on", () => {
     // A rolled car is not a car with a dented flank. Every contact of the
     // roll is the ground meeting sheet metal with nothing sprung under it,
@@ -292,8 +478,12 @@ describe("the jump", () => {
     // fold a car cannot get without having been upside down.
     expect(damage.roof).toBeGreaterThan(0);
     expect(Math.max(damage.zones[2], damage.zones[6])).toBeGreaterThan(0);
-    // ...and it is a beaten car afterwards, not a scratched one.
-    expect(damage.wear).toBeGreaterThan(0.3);
+    // ...and it is a beaten car afterwards, not a scratched one. The bar is
+    // a quarter of the shell rather than a third because a roll no longer
+    // compounds its damage across contacts the body never made: the
+    // chattering steps around every corner handover used to be booked as
+    // arrivals, and a roll paid for a dozen of them.
+    expect(damage.wear).toBeGreaterThan(0.25);
   });
 
   it("...but a hard landing on the WHEELS is still a landing, not a roll", () => {

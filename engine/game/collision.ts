@@ -658,8 +658,17 @@ export function clipKerbs(
  * body passes over. It is the contact model's half of the placement bar
  * (`SOLID_PROP_HEIGHT`): the field stands up anything taller than the
  * middle of the hood, and of those the shortest are mounted, not hit. A
- * flight clears anything it is higher than by the same test. */
+ * flight clears anything it is higher than by the same test.
+ *
+ * A CAR THAT IS GOING OVER RIDES OVER NOTHING. It has no wheels underneath
+ * it to climb anything with — it is a shell on the ground — and the bar is
+ * measured off `car.y`, which for a rolling body is its origin held a
+ * hull's width in the air (`rollStand`). The two together meant a car on
+ * its flank sailed over every stone, post and tyre stack in its path: the
+ * one moment in the game when a car is least able to avoid what is in
+ * front of it was the one moment it could not hit any of it. */
 export function ridesOver(car: CarState, ob: WildObstacle): boolean {
+  if (car.rolling) return false;
   return ob.y + ob.height < car.y + T.collision.rideOver;
 }
 
@@ -683,7 +692,10 @@ export function clipSolids(
   events: GameEvent[],
   fell?: (ob: WildObstacle) => void,
 ): void {
-  if (now < car.kerbFrom || car.airborne) return;
+  // ...and never for a body that is going over: there are no wheels under
+  // a car on its flank to mount anything with, and `ridesOver` has already
+  // handed everything it would have clipped to the body instead.
+  if (now < car.kerbFrom || car.airborne || car.rolling) return;
   const K = T.collision.kerb;
   const S = T.collision.solids;
   for (const ob of solids) {

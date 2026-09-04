@@ -1,0 +1,454 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// STAGING A CRASH — the half of the crash lab that puts a car into one and
+// writes down what the engine did with it, step by step.
+//
+// The pictures are `crash-draw.mjs`; this is the experiment. It is kept
+// apart because the two answer different questions and change for different
+// reasons: a new scenario is a row in the table below, a new READOUT is a
+// field on the frame, and neither one wants to be edited through the other.
+//
+// Nothing here is a special physics path. The car is driven by `step()`
+// exactly as the game drives it — what the lab owns is only WHERE the car
+// is when it is let go, and what is standing in front of it.
+
+import {
+  NEUTRAL_INPUT,
+  TUNING,
+  WHEEL_BASIN,
+  compileTrack,
+  createGame,
+  rollTilt,
+  step,
+  updateSlip,
+} from "../../engine/index.ts";
+
+const B = TUNING.collision;
+
+/** A solid to stand in the car's way, with a plausible boulder's numbers
+ * under whatever the scenario overrides. Authored in the RELEASE FRAME —
+ * `along` down the car's travel and `across` to its right — because that is
+ * how a crash is described ("a rock forty metres on, a metre off the nose")
+ * and because the frame the pictures are drawn in is the same one. */
+export function prop(along, across, over = {}) {
+  return {
+    along,
+    across,
+    kind: "boulder",
+    size: 1,
+    spin: 0,
+    radius: 0.6,
+    height: 0.9,
+    mass: 420,
+    rooted: 0.7,
+    snap: Infinity,
+    ...over,
+  };
+}
+
+/** A stack of tyres: heavy enough to matter, light enough to burst. */
+export const tyres = (along, across) =>
+  prop(along, across, {
+    kind: "tyres",
+    radius: 0.9,
+    height: 1.2,
+    mass: 240,
+    rooted: 0.2,
+    snap: 3200,
+  });
+
+/** A low concrete run — the thing a sliding car TRIPS on. Under the body's
+ * centre of mass and over the ride-over bar, which is the whole window a
+ * trip lives in (`solids.tripTop`..`tripFade` against `rideOver`). */
+export const rail = (along, across) =>
+  prop(along, across, { kind: "barrier", radius: 0.8, height: 0.7, mass: 1400, rooted: 0.85 });
+
+/** A fence post: a car goes THROUGH a fence, it does not stop at one. */
+export const post = (along, across) =>
+  prop(along, across, {
+    kind: "post",
+    radius: 0.14,
+    height: 1.3,
+    mass: 22,
+    rooted: 0.5,
+    snap: 900,
+  });
+
+/** The stage the lab drives on: a long straight with one lip in it, which
+ * is the only piece of geometry any of these scenarios needs. The flat
+ * scenarios simply never reach it. */
+const STAGE = (lip) => [
+  {
+    kind: "straight",
+    length: 700,
+    feature: lip ? "jump" : "none",
+    featureStart: 400,
+    featureEnd: 414,
+    lipHeight: 2,
+  },
+  { kind: "straight", length: 1400, feature: "none" },
+];
+
+/** THE SCENARIOS — one per mechanism, so a picture shows one thing.
+ *
+ * `entry` is what the car is HANDED at the moment it is let go: forward
+ * speed and sideways speed, m/s. Past `air.tripSlide` of sideways the
+ * landing trips the car; under it the springs take it and the car drives
+ * on, which is what makes `slide` worth having beside the rest.
+ *
+ * `props` is authored in the release frame (see `prop`). */
+export const SCENARIOS = {
+  trip: {
+    note: "a lip taken crossed up: the landing that goes over",
+    lip: true,
+    entry: [30, -18],
+    seconds: 6,
+    bare: true,
+    props: () => [],
+  },
+  carry: {
+    note: "the same, at pace, with nothing to hit — THE MOMENTUM QUESTION",
+    lip: true,
+    entry: [46, -30],
+    seconds: 9,
+    bare: true,
+    props: () => [],
+  },
+  debris: {
+    note: "...and into a field of solids: does it bounce, spin, change hand",
+    lip: true,
+    entry: [46, -30],
+    seconds: 9,
+    bare: true,
+    // A BAND across the whole run-out, not a line down the release heading.
+    // A rolling body WALKS — the corner it turns about is a metre out from
+    // its middle, so it crosses two metres of ground per half turn and ends
+    // up nowhere near the way it was pointing. A field authored straight
+    // ahead is a field the car curves neatly around, which is what the
+    // first version of this scenario measured: a roll identical to `carry`
+    // and not one prop touched.
+    props: () => {
+      const out = [];
+      for (let i = 0; i < 7; i += 1) {
+        const along = 16 + i * 12;
+        const shift = ((i % 3) - 1) * 4;
+        out.push(tyres(along, -14 + shift));
+        out.push(prop(along + 4, -7 + shift, { radius: 0.7, height: 1.0, mass: 600 }));
+        out.push(post(along + 7, -1 + shift));
+        out.push(prop(along + 2, 5 + shift, { radius: 0.8, height: 1.1, mass: 900 }));
+      }
+      return out;
+    },
+  },
+  slide: {
+    note: "sliding into a low rail on the flat — the rally roll, no jump",
+    lip: false,
+    entry: [30, 26],
+    seconds: 8,
+    bare: true,
+    // A run of it, so a slide that arrives early or late still finds it —
+    // and low, because a trip is a thing that catches the car UNDER its
+    // centre of mass and lets the top keep going (`solids.tripTop`). A wall
+    // the body meets square is not a trip, it is a wall.
+    props: () => Array.from({ length: 30 }, (_, i) => rail(2 + i * 1.4, 3.6)),
+  },
+  spin: {
+    note: "a solid caught on the nose corner: yaw without going over",
+    lip: false,
+    entry: [34, 0],
+    seconds: 5,
+    props: () => [prop(40, 1.35, { radius: 0.7, height: 1.1, mass: 1500, rooted: 0.9 })],
+  },
+  wall: {
+    note: "square into something rooted: the pure contact",
+    lip: false,
+    entry: [33, 0],
+    seconds: 5,
+    props: () => [prop(45, 0, { radius: 1.2, height: 1.6, mass: 9000, rooted: 1 })],
+  },
+};
+
+/** Everything one step of a crash is, as the pictures and the table want to
+ * read it. Stated in the RELEASE FRAME: `along`/`across` are metres from
+ * where the car was let go, along the heading it was let go on, and `yaw`
+ * is how far the nose has come round from it. */
+function frameOf(state, t, origin, events) {
+  const car = state.car;
+  const dx = car.x - origin.x;
+  const dz = car.z - origin.z;
+  const sin = Math.sin(origin.heading);
+  const cos = Math.cos(origin.heading);
+  return {
+    t,
+    along: sin * dx + cos * dz,
+    across: cos * dx - sin * dz,
+    up: car.y - origin.y,
+    ground: car.y - origin.y - (car.rolling ? hullStand(rollTilt(car.roll)) : 0),
+    u: car.u,
+    w: car.w,
+    vy: car.vy,
+    speed: Math.hypot(car.u, car.w),
+    roll: car.roll,
+    tilt: rollTilt(car.roll),
+    rollRate: car.rollRate,
+    yaw: wrap(car.heading - origin.heading),
+    yawRate: car.yawRate,
+    pitch: car.pitch,
+    airborne: car.airborne,
+    rolling: car.rolling,
+    wear: car.damage.wear,
+    roof: car.damage.roof,
+    parts: car.damage.broken.length,
+    events,
+  };
+}
+
+function wrap(a) {
+  const turn = Math.PI * 2;
+  return a - Math.round(a / turn) * turn;
+}
+
+/** How far the hull is standing off the ground at this attitude, m — the
+ * picture's copy of `game/roll.ts`'s own, and used for one thing only:
+ * finding the GROUND under a body whose height is read off `car.y`. */
+export function hullStand(tilt) {
+  const sin = Math.sin(tilt);
+  const cos = Math.cos(tilt);
+  let lowest = 0;
+  for (const [across, up] of [
+    [B.halfTrack, 0],
+    [-B.halfTrack, 0],
+    [B.halfWidth, B.floorY],
+    [-B.halfWidth, B.floorY],
+    [B.halfWidth, B.roofY],
+    [-B.halfWidth, B.roofY],
+  ]) {
+    const h = up * cos - across * sin;
+    if (h < lowest) lowest = h;
+  }
+  return -lowest;
+}
+
+/** Stand the scenario's props in the world, once the release point is
+ * known, and hang them off the terrain's FIXTURES query — which the step
+ * asks on every step wherever the car is, on the road or off it, so a lab
+ * prop can be put anywhere without pretending the car has left the stage.
+ * Felled props leave the world through the same door everything else does. */
+function standProps(state, scenario, origin) {
+  const sin = Math.sin(origin.heading);
+  const cos = Math.cos(origin.heading);
+  const standing = scenario.props().map((p, id) => ({
+    id,
+    x: origin.x + p.along * sin + p.across * cos,
+    z: origin.z + p.along * cos - p.across * sin,
+    y: state.terrain.groundAt(
+      origin.x + p.along * sin + p.across * cos,
+      origin.z + p.along * cos - p.across * sin,
+    ),
+    kind: p.kind,
+    size: p.size,
+    spin: p.spin,
+    radius: p.radius,
+    height: p.height,
+    mass: p.mass,
+    rooted: p.rooted,
+    snap: p.snap,
+    along: p.along,
+    across: p.across,
+  }));
+  const gone = new Set();
+  const touched = new Set();
+  const own = state.terrain.fixturesNear;
+  const fell = state.terrain.fell;
+  // A BARE scenario has the country's own trees and stones swept out of the
+  // way, and it has to be asked for: a stage's wild is dense enough that a
+  // car tumbling off the road through it is measuring the forest, not the
+  // roll. "Nothing to hit" is a claim a lab has to actually arrange.
+  if (scenario.bare) {
+    state.terrain.obstaclesNear = () => [];
+    state.terrain.treesNear = () => [];
+  }
+  state.terrain.fixturesNear = (x, z, r) => {
+    const out = scenario.bare ? [] : own(x, z, r);
+    for (const s of standing) {
+      if (gone.has(s.id)) continue;
+      if (Math.hypot(s.x - x, s.z - z) <= r + s.radius) out.push(s);
+    }
+    return out;
+  };
+  state.terrain.fell = (ob) => {
+    if (ob.id !== undefined) gone.add(ob.id);
+    else fell(ob);
+  };
+  return { standing, gone, touched };
+}
+
+/** RUN ONE. Drive the car up to the entry, let it go, and write down every
+ * step of what follows.
+ *
+ * The entry is PINNED rather than driven to: a crash is a thing that starts
+ * at a known speed and attitude, and a lab that had to find 165 km/h and
+ * thirty across by driving would be measuring the run-up instead of the
+ * crash. Everything after the release is the engine's own.
+ */
+export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
+  const scenario = SCENARIOS[name];
+  if (!scenario) throw new Error(`no such scenario: ${name}`);
+  const [u, w] = scenario.entry;
+  const state = createGame({
+    seed,
+    carId,
+    skipCountdown: true,
+    track: compileTrack(0, STAGE(scenario.lip)),
+  });
+
+  // Up to speed, and — on the lip scenarios — off it. The forward speed is
+  // held through the run-up so the release happens at the stated entry and
+  // not at whatever the run-up managed.
+  if (scenario.lip) {
+    for (let i = 0; i < TUNING.physicsHz * 60; i++) {
+      state.car.u = u;
+      if (step(state, { ...NEUTRAL_INPUT, throttle: 0.5 }).some((e) => e.type === "takeoff")) break;
+    }
+    // ...and crossed up, held through the flight, so the landing arrives at
+    // the sideways speed the scenario asked for.
+    for (let i = 0; i < TUNING.physicsHz * 6; i++) {
+      state.car.w = w;
+      if (step(state, { ...NEUTRAL_INPUT }).some((e) => e.type === "landing")) break;
+    }
+  } else {
+    // Straight down the road to the entry speed, and the sideways speed put
+    // in ONCE, at the release. Holding `w` through the run-up instead fights
+    // the handling model for forty seconds — the grip redirect rebuilds the
+    // velocity from the slip angle every step and the pin puts it back, and
+    // the pair pump each other until the state is a car at eight thousand
+    // rad/s that no longer moves. A crash starts at an attitude; it is not
+    // driven to one.
+    for (let i = 0; i < TUNING.physicsHz * 40; i++) {
+      state.car.u = u;
+      step(state, { ...NEUTRAL_INPUT, throttle: 0.5 });
+      if (state.progressS > 300) break;
+    }
+    state.car.u = u;
+    state.car.w = w;
+    updateSlip(state.car);
+  }
+
+  const origin = {
+    x: state.car.x,
+    z: state.car.z,
+    y: state.car.y,
+    heading: state.car.heading,
+    roll: state.car.roll,
+  };
+  const props = standProps(state, scenario, origin);
+
+  const frames = [];
+  const log = [];
+  const respawns = state.stats.respawns;
+  let t = 0;
+  let rolled = false;
+  let still = 0;
+  for (let i = 0; i < TUNING.physicsHz * scenario.seconds; i++) {
+    const events = step(state, { ...NEUTRAL_INPUT });
+    t += TUNING.dt;
+    if (state.car.rolling) rolled = true;
+    for (const e of events) log.push({ t, ...e });
+    // THE RUN PUTTING THE CAR BACK is the end of the crash and not part of
+    // it. A car left lying on its roof goes back to the last split board
+    // (`roll.lieFor`), which teleports it hundreds of metres up the road and
+    // rewinds its attitude — so a lab that kept recording would report the
+    // distance to the board as the distance the crash carried, and a car
+    // that finished on its roof as one that finished on its wheels.
+    if (state.stats.respawns > respawns) break;
+    // A lab that draws a blown-up state draws nonsense confidently, which is
+    // worse than drawing nothing. Anything non-finite is the scenario's own
+    // staging being wrong, and it says so rather than rendering it.
+    if (!Number.isFinite(state.car.u + state.car.w + state.car.roll)) {
+      throw new Error(`${name}: the state went non-finite at ${t.toFixed(2)}s`);
+    }
+    frames.push(frameOf(state, t, origin, events));
+    // What the body actually REACHED, marked as the run goes. A prop only
+    // leaves the world when it yields, so felling is no measure of contact:
+    // a rooted boulder the car folds itself against is still standing, and
+    // a picture that draws it the same as one the car missed by ten metres
+    // cannot answer the question the scenario is asking.
+    for (const prop of props.standing) {
+      if (props.touched.has(prop.id)) continue;
+      const reach = prop.radius + B.halfLength;
+      if (Math.hypot(prop.x - state.car.x, prop.z - state.car.z) <= reach) {
+        props.touched.add(prop.id);
+      }
+    }
+    // Over when the car has stopped moving — a crash ends where it comes to
+    // rest, and the seconds after that are a picture of nothing.
+    //
+    // A car LYING is finished whatever its numbers still say. The roll has
+    // handed it back, so nothing is turning it over any more, but the yaw it
+    // ended on is still in it and holds a rate test open for the whole of
+    // `roll.lieFor` — a dozen identical cells of a stationary car waiting on
+    // its respawn clock. Past the basin its own weight could right it from,
+    // there is nothing left to draw.
+    const car = state.car;
+    const lying = !car.rolling && !car.airborne && Math.abs(rollTilt(car.roll)) >= WHEEL_BASIN;
+    const moving =
+      !lying &&
+      (Math.hypot(car.u, car.w) > 0.6 ||
+        Math.abs(car.rollRate) > 0.2 ||
+        Math.abs(car.yawRate) > 0.2);
+    still = moving ? 0 : still + TUNING.dt;
+    if (still > 0.4) break;
+  }
+
+  // Everything the run is SUMMARISED by comes off the last frame RECORDED,
+  // never off `state.car`: the two are the same car only when the crash
+  // ended by coming to rest, and a crash that ended by being put back on
+  // the road has a car sitting upright and undamaged at the split board.
+  const last = frames[frames.length - 1];
+  // ...and THE ROLL ITSELF, which is a different measurement from the run.
+  // A crash ends when the car stops moving, but the roll hands the car back
+  // the moment the body settles on a face — and everything after that is a
+  // wrecked car coasting, which covers ground and sheds speed for reasons
+  // that have nothing to do with going over. Reading the distance and the
+  // speed off the last frame alone reports every roll as ending at 0 km/h,
+  // which is exactly the reading that hides whether a roll carries.
+  const over = frames.filter((f) => f.rolling);
+  const began = over[0];
+  const ended = over[over.length - 1];
+  const roll = began
+    ? {
+        seconds: ended.t - began.t,
+        along: ended.along - began.along,
+        across: ended.across - began.across,
+        into: began.speed,
+        outOf: ended.speed,
+        // The whole-crash retardation, in g — an accident reconstruction's
+        // own figure for a rollover, and the one number that says whether
+        // this reads as a car going over or as a car hitting glue. A real
+        // one runs about 0.45 g.
+        drag: ended.t > began.t ? (began.speed - ended.speed) / (ended.t - began.t) / 9.81 : 0,
+      }
+    : null;
+  return {
+    roll,
+    name,
+    scenario,
+    carId,
+    seed,
+    origin,
+    entry: { u, w },
+    frames,
+    log,
+    props: props.standing,
+    felled: props.gone,
+    touched: props.touched,
+    rolled,
+    turns: Math.abs(last.roll - origin.roll) / (Math.PI * 2),
+    along: last.along,
+    across: last.across,
+    carried: last.speed,
+    upright: Math.abs(last.tilt) < WHEEL_BASIN,
+    wear: last.wear,
+    roof: last.roof,
+    parts: last.parts,
+  };
+}

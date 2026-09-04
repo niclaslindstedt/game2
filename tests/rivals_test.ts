@@ -576,7 +576,13 @@ describe("the field on the road", () => {
       // (the test above; 32 does not), and where a crew marks the car after
       // the shot opens on every difficulty (`trace_test` shares the seed;
       // 31, 35, 40 and 48 have no such crew). 44 does all three.
-      if (run.state.phase === "retired") expect(run.time).toBeNull();
+      //
+      // The retirement is read off `run.sim` — the game the bot actually
+      // drove — and never off `run.state`, which on a field of ghosts is a
+      // SHOWN copy posed off the trace by the clock. A traced crew's shown
+      // phase stays "racing" after its run has retired, so asking that one
+      // sends every DNF down the has-a-time branch.
+      if (run.sim.phase === "retired") expect(run.time).toBeNull();
       else expect(run.time).not.toBeNull();
       expect(run.done).toBe(true);
       // The debt is left standing rather than settled — but it is a debt in
