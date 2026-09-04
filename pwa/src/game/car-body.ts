@@ -427,14 +427,17 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
 
   const wheelGroups: THREE.Group[] = [];
   const wheelSpin: THREE.Object3D[] = [];
-  // All four wheels share one geometry — only their transforms differ, so
-  // it is built once and disposed once.
-  const wheelGeo = buildWheel(spec);
+  // TWO geometries, one per side of the car — a wheel is not symmetric. Its
+  // rim face is built on the outboard end only (the inboard end is the plain
+  // wall nothing can see), so a single geometry on both sides turns one of
+  // them back to front and leaves those two corners showing a bare drum.
+  // Each is still built once for the whole axle set and disposed once.
+  const wheelGeo = [buildWheel(spec, -1), buildWheel(spec, 1)];
   for (const axle of axles) {
-    for (const side of [-1, 1]) {
+    for (const side of [-1, 1] as const) {
       const wheel = new THREE.Group();
       wheel.position.set(side * spec.trackHalf, spec.wheelRadius, axle);
-      const spin = new THREE.Mesh(wheelGeo, material);
+      const spin = new THREE.Mesh(wheelGeo[side < 0 ? 0 : 1], material);
       spin.castShadow = true;
       wheel.add(spin);
       group.add(wheel);
@@ -453,7 +456,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     boltOnGeo?.dispose();
     glassGeo?.dispose();
     lensGeo?.dispose();
-    wheelGeo.dispose();
+    for (const geo of wheelGeo) geo.dispose();
     material.dispose();
     glassMat?.dispose();
     lensMat?.dispose();

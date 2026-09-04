@@ -115,14 +115,17 @@ function shadeHex(color: number, k: number): number {
 }
 
 /** One end of the rim: the flange proud of the sidewall, the barrel sunk
- * behind it, and — outboard only — the dish floor, the hub, the spokes
- * bridging them and the studs. The inboard end gets the flange and a plain
- * wall, which is what the back of a wheel is, and saves drawing spokes
- * nothing can ever see. */
+ * behind it, and — on the FACE end only — the dish floor, the hub, the
+ * spokes bridging them and the studs. The other end gets the flange and a
+ * plain wall, which is what the back of a wheel is, and saves drawing spokes
+ * nothing can ever see. Which end is which is the caller's to say: it is the
+ * side of the CAR the wheel is bolted to, not a sign fixed in the geometry.
+ */
 function rimFace(
   b: MeshBuilder,
   sidewall: number,
   outward: number,
+  faced: boolean,
   style: WheelStyle,
   hubColor: number,
   spokes: number,
@@ -146,7 +149,7 @@ function rimFace(
   const floor = x(-DISH * s.dish);
   tube(b, RIM_BARREL, x(LIP_PROUD), floor, barrel);
 
-  if (outward < 0) {
+  if (!faced) {
     annulus(b, 0, RIM_BARREL, floor, outward, barrel);
     return;
   }
@@ -186,11 +189,17 @@ function rimFace(
 /** One wheel as a SINGLE geometry — tire, both rim ends and every tread lug
  * in one buffer. Axle along x; origin at the wheel center.
  *
+ * `outboard` is the x direction that points AWAY from the car, and it is the
+ * end that gets the rim's face. A wheel is not symmetric — the back of one
+ * is a plain wall — so the two sides of a car need one geometry each; built
+ * with a single sign, whichever side of the car it is wrong for shows a bare
+ * drum where its rim should be.
+ *
  * The parts are welded rather than kept apart because nothing ever moves
  * one relative to another: a wheel spins as a unit. Split, a car spends ten
  * draw calls per corner and forty on its wheels alone — the cost that
  * decides how many cars can be on a stage at once. */
-export function buildWheel(spec: CarBodySpec): THREE.BufferGeometry {
+export function buildWheel(spec: CarBodySpec, outboard: 1 | -1 = 1): THREE.BufferGeometry {
   const r = spec.wheelRadius;
   const hub = spec.colors.hub ?? 0xe6e3da;
   const style = spec.wheelStyle ?? "alloy";
@@ -200,11 +209,12 @@ export function buildWheel(spec: CarBodySpec): THREE.BufferGeometry {
   // radii above stay readable as fractions. Only the RADIAL axes scale —
   // the axial one must not, or the dish deepens with the tire.
   const rim = new MeshBuilder();
-  for (const side of [1, -1]) {
+  for (const side of [1, -1] as const) {
     rimFace(
       rim,
       side * (spec.wheelWidth / 2 - 0.012),
       side,
+      side === outboard,
       style,
       hub,
       spokes,
