@@ -495,10 +495,18 @@ export function stepRolling(
       const closing = Math.max(0, seatVy - car.vy);
       const descent = Math.min(closing, T.air.gravity * car.airTime);
       centre = seat;
-      car.vy = seatVy;
       car.airborne = false;
       car.airTime = 0;
       contact(arriving(car), spec, car, descent, nowR, nowP, bed, mass, events, stats);
+      // ...and the body leaves at the speed the SURFACE is now moving, which
+      // the contact has just changed: the reaction turned the body about the
+      // corner it landed on, and the seat under a body turning at a new rate
+      // rises and falls at a new speed. Read off `seatVy` from before the
+      // contact, the body arrives at the next step already closing on ground
+      // it is no longer falling toward, and books a second arrival for the
+      // first one's impulse.
+      const after = seatSlopes(nowR, nowP, bed);
+      car.vy = after.roll * car.rollRate + after.pitch * car.pitchRate;
     }
   }
   // Back into the origin the rest of the game reads the car's height from.

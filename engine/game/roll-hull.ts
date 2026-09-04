@@ -155,11 +155,15 @@ export function seatOn(tilt: number, pitch: number, bed: Bed = LEVEL): number {
  * difference rounds those off, which is what a tyre and a bent sill do to
  * them anyway. */
 const STEP = 1e-3;
-export function seatSlopes(
-  tilt: number,
-  pitch: number,
-  bed: Bed = LEVEL,
-): { roll: number; pitch: number } {
+
+/** THE SURFACE'S GRADIENT under a body, m per rad in each plane. Gravity is
+ * resolved along it, the seat's own speed under a turning body is read off
+ * it, and a contact's reaction is answered by it — one statement of which
+ * way the weight goes when the body turns, so those three can never
+ * disagree about which way a car falls. */
+export type Slopes = { readonly roll: number; readonly pitch: number };
+
+export function seatSlopes(tilt: number, pitch: number, bed: Bed = LEVEL): Slopes {
   return {
     roll: (seatOn(tilt + STEP, pitch, bed) - seatOn(tilt - STEP, pitch, bed)) / (2 * STEP),
     pitch: (seatOn(tilt, pitch + STEP, bed) - seatOn(tilt, pitch - STEP, bed)) / (2 * STEP),

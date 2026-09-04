@@ -26,8 +26,10 @@ import {
   type Bed,
   type MassSpread,
   type Patch,
+  type Slopes,
   gripOn,
   pivotKeep,
+  seatSlopes,
   standingOn,
   tyreShare,
 } from "./roll-hull.ts";
@@ -282,6 +284,67 @@ export function driveRolling(
   return mine / patch;
 }
 
+/** NEWTON'S THIRD LAW AT THE CORNER THAT ARRIVED — the reaction, and the
+ * only thing in the module that lets the ground change what a crash IS
+ * rather than merely how fast it is running out.
+ *
+ * The ground stops the patch. The rest of the body does not stop, and the
+ * impulse that arrested it acted an arm's length from the weight — so it
+ * TURNS the car, in both planes at once, by exactly as much as those arms
+ * are long. That is what makes WHICH PART lands matter. A body coming down
+ * square on a flank has its patch under its own weight, and the arrival
+ * changes nothing about where the crash is going; the same body catching a
+ * NOSE corner has a metre and a half of lever on the same impulse and is
+ * pitched out of the plane it was rolling in by it.
+ *
+ * Without it the ground could only ever take SPEED out of a crash. Every
+ * accident ran out along the plane it started in — a barrel roll stayed a
+ * barrel roll, an end-over-end stayed an end-over-end — and the thing a
+ * rollover is famous for, the change of hand halfway through when a corner
+ * digs in, could not happen at all, because nothing anywhere in the model
+ * carried a torque from one axis to the other. `pivotKeep` is the ROTATION's
+ * own arrival and works in one plane by construction; this is the FALL's,
+ * and the fall does not know what plane the body was turning in.
+ *
+ * IT CANNOT MAKE ROTATION OUT OF NOTHING, which is the rule this module is
+ * built on. `descent` is already the patch's own closing speed net of the
+ * rotation sweeping it (`stepRolling` subtracts the surface's own motion and
+ * caps what is left at what gravity could have added), so this is a strictly
+ * inelastic normal impulse against a real approach: `j` is that closing over
+ * the body's effective mass at the patch — one for the translation and one
+ * for each arm — and the rotational energy it hands over is at most a
+ * quarter of the fall it takes away, for any arm whatever. It is exactly
+ * zero for a body arriving flat and square, which is the body with no arm to
+ * be turned about.
+ *
+ * IT IS THE SAME CONSTRAINT GRAVITY IS WRITTEN ON, one step of it. The
+ * surface the body is lying on is `seatOn` — how high the weight has to be
+ * for the box to rest on the plane at this attitude — and `seatSlopes` is
+ * its gradient, which is what gravity is already resolved along
+ * (`stepRolling`) and what the seat's own speed under a turning body is
+ * already read off. So the reaction is resolved along it too, rather than
+ * along a corner's offset measured a second way: the two would then be free
+ * to disagree about which way the body falls, and the one thing this module
+ * cannot afford is two accounts of the same geometry.
+ *
+ * `arrival` is how fast the weight is closing on that surface, already net
+ * of the rotation carrying the surface up to meet it. */
+function slamTurn(car: CarState, slopes: Slopes, mass: MassSpread, arrival: number): void {
+  if (arrival <= 0) return;
+  // WHAT THE SHELL PASSED ON, rather than folding — a panel collapses at a
+  // roughly fixed force, so what reaches the body saturates however hard the
+  // corner came down (`R.foldSpeed`). The rest is the fold, which the damage
+  // ledger books in the same breath a few lines below.
+  const impulse = (arrival * R.foldSpeed) / (R.foldSpeed + arrival);
+  const share =
+    1 +
+    (slopes.roll * slopes.roll) / mass.spin.roll +
+    (slopes.pitch * slopes.pitch) / mass.spin.pitch;
+  const j = impulse / share;
+  car.rollRate -= (slopes.roll * j) / mass.spin.roll;
+  car.pitchRate -= (slopes.pitch * j) / mass.spin.pitch;
+}
+
 /** A CONTACT OF THE CRASH: the ground arriving at the body, wherever round
  * either turn that happens.
  *
@@ -332,6 +395,12 @@ export function contact(
   // the second turn came out at 3 km/h, on its wheels, having touched
   // nothing at all.
   const drag = pivot.sprung ? 1 - R.sprung : 1;
+  // THE REACTION FIRST, then the friction it pays for. They are one arrival
+  // and the order between them is a step's worth of arithmetic, but the
+  // normal impulse is the larger of the two and the rub reads the rates it
+  // leaves — so the drag under a corner that has just been kicked into a new
+  // plane is the drag of the body that is actually there.
+  slamTurn(car, seatSlopes(tilt, pitch, bed), mass, descent * drag);
   rubGround(car, descent * drag, tilt, pitch, bed, mass, true);
   if (Math.abs(before) < R.slamAt && descent <= 0) return;
   // How hard it hit, for what it FOLDS: how fast the arriving corner was

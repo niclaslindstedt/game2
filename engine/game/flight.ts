@@ -485,12 +485,16 @@ export function stepAirborne(
       const wobble = 1 + T.collision.systems.wobble * car.damage.systems.suspension;
       car.yawRate += -Math.sign(car.slip) * T.air.sloppyWobble * wobble;
     }
+    // How hard it arrived. The ground hits back with this: descent the
+    // suspension cannot absorb crushes the underside (collision.ts), and
+    // the same figure is what presses the tyres into the ground for the
+    // trip below — a slam is a load before it is damage.
+    const slam = car.u * ctx.slope - car.vy;
     // ...and a car that came down going SIDEWAYS may not be coming down on
     // its wheels for long: the tyres bite, the body does not, and it trips.
-    const tumbling = !soft && tripOnLanding(spec, car, ctx.surface, events, stats);
-    // The ground hits back: descent the suspension cannot absorb crushes
-    // the underside (collision.ts).
-    const slam = car.u * ctx.slope - car.vy;
+    // How hard they bite is the driver's, through the lock they have on and
+    // the pedals they are holding (`tripBite`).
+    const tumbling = !soft && tripOnLanding(spec, car, input, ctx.surface, slam, events, stats);
     // ...and the wheels start hopping on their own tires. That is what the
     // car is doing for the next half second, and until it stops the tires
     // are only intermittently holding anything (`tyreLoad`). It takes the
@@ -539,6 +543,50 @@ export function stepAirborne(
   stepSuspension(spec, car, 0, 0);
 }
 
+/** WHAT THE DRIVER IS DOING ABOUT IT, as a multiplier on the trip's bite.
+ *
+ * The trip is the tyres refusing to go sideways, and how hard they refuse is
+ * not a constant. Three things set it, and all three are decided IN THE AIR,
+ * because the wheels are already pointed and the pedals already pressed by
+ * the time the rubber touches — which is the whole of what makes a
+ * crossed-up landing a moment of skill rather than a dice roll.
+ *
+ * THE HANDS. Only the FRONT pair is pointed by anybody. Aim them along the
+ * way the car is actually travelling and they stop refusing — they roll,
+ * they make no lateral force, and the front axle's share of the moment goes
+ * with them. Aim them the other way and the slip angle at the front grows
+ * and so does the moment. Nothing here is scripted: it is the sine of what
+ * is left of the front tyres' own slip against the sine of the body's, which
+ * is zero for a perfect catch and climbs to the plateau for a lock wound
+ * into the slide.
+ *
+ * THE PEDALS, through the friction circle. A tyre has ONE budget, and the
+ * trip is that budget spent sideways; a pedal takes its share along the car
+ * first and the bite gets what is left of the circle. So a car that arrives
+ * with something asked of the tyres trips markedly less than one that
+ * arrives coasting — and pays for it, because rubber that is not gripping is
+ * not scrubbing the sideways speed off either, and the car that saved itself
+ * is still travelling sideways into whatever is next.
+ *
+ * THE ARRIVAL. The moment is the lateral force times the weight's height and
+ * the force is what the load will pay for, so a car that SLAMS down loads
+ * its tyres far past its own weight for as long as the springs are taking
+ * the arrival, and bites that much harder for it. Getting the car flat and
+ * level in the air is not decoration; it is the other half of the save. */
+function tripBite(car: CarState, input: CarInput, slam: number): number {
+  const A = T.air;
+  const slip = Math.abs(Math.sin(car.slip));
+  // A car travelling dead straight has no bite to point out of: the whole
+  // trip is the rear axle's, and the sine ratio is 0/0 there.
+  const missed = Math.abs(Math.sin(car.slip - car.steer * A.tripLock));
+  const front = slip > 1e-3 ? clamp(missed / slip, 0, A.tripMiss) : 1;
+  const hands = 1 - A.tripFront + A.tripFront * front;
+  const pedal = A.tripPedal * Math.max(input.brake, input.handbrake ? 1 : 0, input.throttle);
+  const circle = Math.sqrt(Math.max(0, 1 - pedal * pedal));
+  const load = 1 + A.tripLoad * clamp(slam / T.suspension.settleSlam, 0, 1);
+  return hands * circle * load;
+}
+
 /** THE TRIP. A car that touches down with the body still travelling
  * sideways has tyres that stop and a roof that does not: the bottom of the
  * car catches on the ground it has just been handed and the top keeps
@@ -568,18 +616,24 @@ export function stepAirborne(
 function tripOnLanding(
   spec: CarSpec,
   car: CarState,
+  input: CarInput,
   surface: Surface | "nature",
+  slam: number,
   events: GameEvent[],
   stats: RunStats,
 ): boolean {
   const A = T.air;
-  const bite = surfaceGripFor(spec, surface) / surfaceGripFor(spec, "gravel");
+  const ground = surfaceGripFor(spec, surface) / surfaceGripFor(spec, "gravel");
+  const bite = ground * tripBite(car, input, slam);
   const over = Math.abs(car.w) - A.tripSlide;
   if (over > 0) {
     // Sliding to the right, the right wheels dig in and the body goes over
     // them: the right side down, which is negative roll.
     car.rollRate -= Math.sign(car.w) * Math.min(over * A.tripRoll * bite, A.tripMax);
-    car.w *= A.tripKeep;
+    // ...and the same bite is what scrubs the sideways speed off. A tyre
+    // pointed along the travel, or one whose budget the brake has already
+    // spent, does neither job — which is why the save is never free.
+    car.w *= 1 - (1 - A.tripKeep) * clamp(bite, 0, 1);
     updateSlip(car);
   }
   if (!goesOver(car.roll, car.rollRate, massSpread(spec.mass))) return false;
