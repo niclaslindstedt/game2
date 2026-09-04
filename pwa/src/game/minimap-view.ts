@@ -223,11 +223,11 @@ export function buildMinimap(state: GameState, field: RivalField | null = null):
   // window that only holds the road ahead. Every other discipline leaves
   // ten seconds apart and has no field to hold, so it keeps the framing
   // that draws the ROAD best.
-  // ...and opened further by the speedo, so what the window holds is a
-  // roughly constant amount of NOTICE rather than a constant piece of road.
-  // Ground speed, like the speedo: a car crossed up at 140 is covering
-  // ground at 140, and a map that zoomed back in every time the nose swung
-  // would breathe through every corner.
+  // ...and then closed in or opened up by the speedo, so what the window
+  // holds is a roughly constant amount of NOTICE rather than a constant
+  // piece of road. Ground speed, like the speedo: a car crossed up at 140 is
+  // covering ground at 140, and a map that zoomed back in every time the
+  // nose swung would breathe through every corner.
   const base = field?.massStart === true ? SPAN.race : SPAN.solo;
   const span = spanFor(base, Math.hypot(state.car.u, state.car.w) * 3.6);
   return {

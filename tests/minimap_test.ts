@@ -184,11 +184,17 @@ describe("minimap framing", () => {
     const state = game();
     const field = headsUp(state, 200);
     const rival = field.runs[0].state;
+    // At race pace, because both framings are read through the speed zoom
+    // and a standing car is given a window that holds neither.
+    state.car.u = 30;
+    const kmh = 30 * 3.6;
     // Two hundred metres up the road is past the solo window's own half-span
     // and inside the race one's — which is the whole of what the wider
     // framing buys, and it costs the corner some of its shape.
-    expect(inView(project(state, rival.car.x, rival.car.z, SPAN.solo))).toBe(false);
-    expect(inView(project(state, rival.car.x, rival.car.z, SPAN.race))).toBe(true);
+    const solo = spanFor(SPAN.solo, kmh);
+    const race = spanFor(SPAN.race, kmh);
+    expect(inView(project(state, rival.car.x, rival.car.z, solo))).toBe(false);
+    expect(inView(project(state, rival.car.x, rival.car.z, race))).toBe(true);
     expect(buildMinimap(state, field).cars).toHaveLength(1);
   });
 
@@ -204,10 +210,23 @@ describe("minimap framing", () => {
 });
 
 describe("minimap zoom", () => {
-  it("opens the window up with the speedo, and stops opening it", () => {
-    expect(spanFor(SPAN.solo, 0)).toBe(SPAN.solo);
-    expect(spanFor(SPAN.solo, 90)).toBeGreaterThan(SPAN.solo);
-    expect(spanFor(SPAN.solo, 180)).toBeGreaterThan(spanFor(SPAN.solo, 90));
+  it("closes the window in when the car is slow and opens it when it is fast", () => {
+    // The zoom is tied to the speedo at BOTH ends, which is what makes it
+    // read as speed: a standstill is a plan of the ground under the car, and
+    // rally pace is the road about to arrive.
+    expect(spanFor(SPAN.solo, 0)).toBeLessThan(SPAN.solo);
+    expect(spanFor(SPAN.solo, 180)).toBeGreaterThan(SPAN.solo);
+    // …and it is monotonic in between, so the picture never breathes the
+    // wrong way as the car winds up.
+    let last = 0;
+    for (const kmh of [0, 30, 60, 90, 120, 150, 180]) {
+      const span = spanFor(SPAN.solo, kmh);
+      expect(span).toBeGreaterThan(last);
+      last = span;
+    }
+    // The whole range is worth looking at rather than merely nudging the
+    // frame — near three times as much country at speed as at rest.
+    expect(spanFor(SPAN.solo, 180) / spanFor(SPAN.solo, 0)).toBeGreaterThan(2.5);
     // Past the top of the ramp the picture settles: a map that kept opening
     // would end the stage showing a squiggle again.
     expect(spanFor(SPAN.solo, 400)).toBe(spanFor(SPAN.solo, 180));

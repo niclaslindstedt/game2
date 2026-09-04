@@ -120,6 +120,13 @@ export type HudSnapshot = {
   health: CarHealth;
   /** The co-driver's next calls (current turn first), screen-space. */
   pacenotes: HudPacenote[];
+  /** THIS RUN'S OWN DISTANCE, metres — the trip counter in the lower window
+   * of the tachometer. Ground covered rather than progress down the stage,
+   * because that is what a trip counter measures: a spin and a wrong-way
+   * detour both cost the car kilometres. It starts again at zero on every
+   * stage, which is the whole difference between it and the lifetime total
+   * above it (odometer.ts). */
+  tripM: number;
   seed: number;
   carName: string;
   /** THE TRAINING GROUND is standing rather than a stage (`mapgen/arena.ts`).
@@ -327,8 +334,8 @@ type HudProps = {
    * a rev counter and a dented wing are the same readings whoever is
    * driving. The app picks; see `spectate`. */
   snap: HudSnapshot;
-  /** THE CAR'S WHOLE LIFE, metres — what the odometer in the middle of the
-   * tachometer reads (odometer.ts). It is not part of the snapshot because
+  /** THE CAR'S WHOLE LIFE, metres — what the upper counter on the face of
+   * the tachometer reads (odometer.ts). It is not part of the snapshot because
    * it is not part of the run: the snapshot is what the car is DOING, and
    * this is what it has done, in every discipline, since the player first
    * took it out. Null while somebody else's run-out is on the dials — a
@@ -1004,7 +1011,7 @@ export function Hud({
       {show.cluster && (
         <div className="hud-speed">
           <div className="hud-cluster">
-            {show.tachometer && <Tachometer rpm={snap.rpm} odoM={odoM} />}
+            {show.tachometer && <Tachometer rpm={snap.rpm} tripM={snap.tripM} odoM={odoM} />}
             <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
               {/* NEUTRAL ON THE GRID: nothing has been geared yet, and a box
                   reading first before the lights have gone is the instrument

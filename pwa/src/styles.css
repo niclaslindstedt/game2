@@ -109,8 +109,13 @@ body {
 /* ── HUD chrome ─────────────────────────────────────────────────────────── */
 
 .hud {
-  /* The minimap's edge length — the top bar reserves it, the dock spends it. */
-  --hud-map: clamp(4.8rem, 16vmin, 7.5rem);
+  /* The minimap's edge length — the top bar reserves it, the dock spends it,
+     and the condition schematic under it takes the same width, so the whole
+     right-hand column is this one number. The map is the instrument that is
+     read while the road is moving, and at seven rem a schematic of three
+     hundred metres of country was a squiggle: it is sized to be legible at a
+     glance rather than to be unobtrusive. */
+  --hud-map: clamp(6.24rem, 20.8vmin, 9.75rem);
   /* Room the stage chip takes under the map — the pacenote strip clears it
      in portrait, where everything is stacked down the same column. */
   --hud-stage: 2.3rem;
@@ -1495,12 +1500,13 @@ body {
 /* The tach dial. Drawn in a 100×100 user space by hud.tsx; everything here
    is stroke weight and color, so the geometry stays in one place. */
 .hud-tach {
-  /* Sized for the COUNTER in the middle of it rather than for the needle:
-     six drums across a third of the dial only read at a glance if the dial
-     itself is big, and a rev counter is the one instrument on the panel
-     that can afford the room. */
-  width: clamp(10.9rem, 36vmin, 18rem);
-  height: clamp(10.9rem, 36vmin, 18rem);
+  /* Sized for the COUNTERS on its face rather than for the needle: seven
+     drums across a third of the dial only read at a glance if the dial has
+     some size to it. It is still the instrument that gives room back most
+     cheaply — the revs are read off the needle's ANGLE, which survives being
+     drawn smaller, where a map or a counter loses its figures. */
+  width: clamp(8.72rem, 28.8vmin, 14.4rem);
+  height: clamp(8.72rem, 28.8vmin, 14.4rem);
   overflow: visible;
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
 }
@@ -1540,10 +1546,11 @@ body {
   dominant-baseline: central;
 }
 
-/* THE ODOMETER in the middle of the dial: a dark window, six drums, white
-   figures. It is the one readout on the HUD that is not about this run — the
-   whole life of the car in front of the player, which is why it is small,
-   quiet, and never moves faster than a tenth of a drum at a time. */
+/* THE COUNTERS on the face of the dial: a dark window, white figures, and
+   nothing to tell the trip from the total but how wide it is. They are the
+   quietest readouts on the HUD — one is this stage, the other the whole life
+   of the car in front of the player — and neither ever moves faster than a
+   drum at a time. */
 /* The window is a viewport of its own, and its edges are what the drums
    turn behind: the digit leaving the top and the one arriving from
    underneath are both half outside it, and the window is what cuts them.
@@ -1559,13 +1566,6 @@ body {
   /* The bright frame a counter is set into on a real cluster — it is what
      makes the window read as a hole in the dial rather than as a label
      printed on it. */
-  stroke: rgb(255 255 255 / 85%);
-  stroke-width: 0.7;
-}
-
-/* The tenths drum, painted the other way round (hud-dial.tsx). */
-.hud-odo-tenths {
-  fill: rgb(238 242 250 / 95%);
   stroke: rgb(255 255 255 / 85%);
   stroke-width: 0.7;
 }
@@ -1590,10 +1590,6 @@ body {
   dominant-baseline: central;
 }
 
-.hud-odo-digit-tenths {
-  fill: #10203a;
-}
-
 /* The line between one drum and the next — the gap a real counter has
    between its wheels, which is what stops seven figures reading as a number
    printed on a plate. */
@@ -1603,11 +1599,14 @@ body {
   stroke-width: 0.3;
 }
 
-/* Each hundred metres the strip slides a tenth of the window; the step that
-   carries a drum over replaces the element instead, so this only ever runs
-   forwards (hud-dial.tsx). */
+/* The strip slides as the drum turns; the step that carries a drum over
+   replaces the element instead, so this only ever runs forwards
+   (hud-dial.tsx). LINEAR, and a shade longer than the gap between two HUD
+   snapshots: the tenths drum turns continuously with the wheels, so what is
+   being tweened is a constant speed rather than a step, and easing it would
+   make a drum that climbs steadily look like one that stutters. */
 .hud-odo-drum {
-  transition: transform 140ms ease-out;
+  transition: transform 100ms linear;
 }
 
 .hud-tach-needle {
@@ -6256,9 +6255,15 @@ a.menu-version:focus-visible {
     opacity: 1;
   }
 
-  /* The counter still counts; the drums just step instead of rolling. */
+  /* The counters still count; the drums just step instead of rolling. The
+     transform is parked rather than merely un-tweened, because the tenths
+     drum turns continuously — dropping the transition alone would leave it
+     jumping a twelfth of a turn every snapshot, which is more motion than
+     the smooth version, not less. Overridden with `!important` because the
+     turn is an inline style (hud-dial.tsx). */
   .hud-odo-drum {
     transition: none;
+    transform: none !important;
   }
 }
 

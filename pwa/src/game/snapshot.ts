@@ -312,6 +312,10 @@ export function takeSnapshot(
     shiftUp: shiftLightOn(state),
     shift: shiftWindow(state),
     airborne: state.car.airborne,
+    // The trip counter's own metres — the engine's ground accumulator, which
+    // is reset with the stage, so the lower window on the dial reads this
+    // level and nothing before it.
+    tripM: state.stats.distance,
     minimap: buildMinimap(state, field),
     // The standing answer to what is left of the car, under the map
     // (car-health.ts). Folded here rather than in the HUD so the
