@@ -25,107 +25,216 @@ import type { CarEyes } from "./camera-eye.ts";
 import { cockpitEyeFor, type CarBodySpec } from "./car-body.ts";
 import { applyLivery, type Livery } from "./car-livery.ts";
 
-/** The front-driver: a short, tall, slab-sided two-box hatch. Stubby nose, near
- * vertical screen, a long flat roof over a steep tailgate, and heavy
- * plastic everywhere — bumpers, arch trim, rubbing strip. Reads small,
- * upright and eager. */
+/** The front-driver: a short, upright, hard-edged two-box hatch in the
+ * late-70s-into-the-80s idiom — the shape a generation of small European
+ * rally cars was built on. Blunt vertical nose, a flat bonnet, an upright
+ * screen off a low cowl, a long dead-flat roof on deep rain gutters, a
+ * heavy C-pillar, and a tailgate that drops away almost straight down.
+ * Plastic everywhere it can be: deep bumpers, a rubbing strip along the
+ * flank, arch extensions, a sill skirt.
+ *
+ * The PROPORTIONS are measured off period elevations rather than guessed,
+ * because on a shape this plain proportion is the whole likeness — there is
+ * no surfacing to hide behind. As fractions of overall length: the axles at
+ * 0.20 and 0.83, so the front overhang is the longer one; the cowl at 0.39,
+ * the roof from 0.47 to 0.79, the tailgate's foot at 0.90. Across the back,
+ * a lamp cluster runs from two thirds of the half-width out to within a
+ * hair of the corner. Up the side, the glass is three eighths of the body's
+ * height and the sheet metal under it the other five — which is the single
+ * number that separates a car of this era from a modern one.
+ *
+ * The BACK is where the geometry has been spent, and deliberately. Every
+ * other panel is glimpsed at forty metres a second; the tail is the one the
+ * chase camera holds for the entire stage, so it gets a real tailgate with
+ * a shut line round it, a pressed swage and a grab recess across it, three
+ * cell clusters sunk into their own housings, a valance with reversing
+ * lamps under the bumper, and a pipe out of the left of it. */
 export const COMPACT_BODY: CarBodySpec = {
+  // MEASURED off a period side elevation, sampled column by column rather
+  // than judged by eye, and stated here as fractions of overall length so
+  // the next person can check them: the bonnet's leading edge at 0.04, the
+  // COWL AT 0.31, the roof from 0.45 to 0.79, the tailgate's foot at 0.96.
+  // The cowl is the one that matters — a bonnet run out to 0.39, which is
+  // where it lands if you place it by eye, adds a third of a metre of nose
+  // and turns a small hatch into something with an engine down its length.
+  //
+  // The deck FALLS 130 mm from the cowl to that leading edge, and it falls
+  // CONTINUOUSLY — five stations down the bonnet, not two. A deck run level
+  // and then stepped off at the last station is not a wedge, it is a shelf
+  // with a wall under it, and that is exactly what it looks like. It stops
+  // where it does because the engine plants a roadside stone as a SOLID by
+  // measuring it against the lowest bonnet in the catalog, and this is now
+  // that bonnet (tests/car_geometry_test.ts).
   profile: [
-    { z: 1.91, topY: 0.9, half: 0.735 },
-    { z: 1.76, topY: 0.91, half: 0.78 },
-    { z: 1.15, topY: 0.93, half: 0.8 },
-    { z: 0.6, topY: 0.99, half: 0.8 },
-    { z: -1.15, topY: 1.01, half: 0.8 },
-    { z: -1.74, topY: 1.0, half: 0.78 },
-    { z: -1.91, topY: 0.95, half: 0.735 },
+    { z: 1.84, topY: 0.845, half: 0.7 },
+    { z: 1.76, topY: 0.872, half: 0.755 },
+    { z: 1.58, topY: 0.908, half: 0.785 },
+    { z: 1.24, topY: 0.94, half: 0.79 },
+    { z: 0.98, topY: 0.959, half: 0.79 },
+    { z: 0.76, topY: 0.975, half: 0.79 },
+    { z: 0.0, topY: 0.984, half: 0.79 },
+    { z: -0.72, topY: 0.99, half: 0.79 },
+    { z: -1.28, topY: 0.99, half: 0.79 },
+    { z: -1.58, topY: 0.984, half: 0.78 },
+    { z: -1.74, topY: 0.972, half: 0.765 },
+    { z: -1.8, topY: 0.95, half: 0.73 },
   ],
-  floorY: 0.3,
-  beltY: 0.84,
+  // Low: the body sits down on its wheels rather than standing over them.
+  floorY: 0.27,
+  // The belt is the widest point of the SECTION, and it has to sit under
+  // every station's deck: where the deck falls below it — which is exactly
+  // what a nose angled downward does — the ring turns inside out and the
+  // front wing grows a flat shelf along its top with a wall at the end of
+  // it. So this tracks the LOWEST deck on the car, not the cabin's.
+  beltY: 0.82,
   // Almost no tuck: the flanks are flat sheet from the sills to the
   // shoulder, which is the whole read of a car shaped like this.
-  side: { rocker: 0.95, shoulder: 0.94 },
-  wheelbase: 2.4,
-  trackHalf: 0.735,
-  wheelRadius: 0.31,
-  wheelWidth: 0.24,
-  wheelStyle: "steel",
+  side: { rocker: 0.965, shoulder: 0.955 },
+  wheelbase: 2.47,
+  // All but centred: the two overhangs of a car like this are within twenty
+  // millimetres of each other.
+  axleShift: 0.01,
+  trackHalf: 0.745,
+  // Big, inside an opening that only just clears them — the gap is the
+  // suspension's whole travel and not a millimetre more, which is the
+  // tightest tests/car_geometry_test.ts will allow. A small wheel rattling
+  // round a wide arch is what puts a car on stilts.
+  wheelRadius: 0.335,
+  wheelWidth: 0.25,
+  wheelStyle: "alloy",
+  wheelSpokes: 5,
+  wheelSpokeWidth: 0.24,
   arches: {
-    radius: 0.42,
-    lift: 0.01,
-    trim: { width: 0.035, drop: 0.075, color: 0x1b1e23 },
+    radius: 0.418,
+    lift: 0,
+    trim: { width: 0.036, drop: 0.055, color: 0x191c21 },
   },
   cabin: {
-    cowlZ: 0.6,
-    roofFrontZ: 0.02,
-    roofRearZ: -1.16,
-    baseRearZ: -1.8,
-    roofY: 1.4,
-    roofHalf: 0.665,
+    cowlZ: 0.76,
+    roofFrontZ: 0.33,
+    roofRearZ: -1.1,
+    baseRearZ: -1.74,
+    roofY: 1.415,
+    roofHalf: 0.685,
     // One long door glass, a small kicked-up quarter behind it, and a
     // heavy C-pillar: the three-door greenhouse.
     pillars: {
-      a: 0.09,
-      b: 0.1,
-      c: 0.3,
-      sill: 0.06,
-      header: 0.05,
-      split: 0.56,
-      quarterRise: 0.02,
+      a: 0.085,
+      b: 0.072,
+      c: 0.285,
+      sill: 0.052,
+      header: 0.042,
+      split: 0.63,
+      quarterRise: 0.028,
+      backWidth: 0.78,
     },
-    gutter: { width: 0.028 },
+    gutter: { width: 0.032 },
     wipers: true,
-    seal: 0.018,
+    seal: 0.02,
   },
-  flare: { extra: 0.02, length: 1.0 },
-  spoiler: { kind: "roof", z: -1.4, y: 1.44, span: 1.26, chord: 0.26 },
-  doorSeams: [0.44, -0.66],
-  handles: { z: [-0.3], y: 0.8 },
-  sideBands: [
-    // The sill skirt, then the rubbing strip under the belt line. Both are
-    // plastic hardware rather than paint, so a repaint keeps them.
-    { role: "trim", zFrom: 0.72, zTo: -0.72, yFrom: 0.31, yTo: 0.44, color: 0x1b1e23, proud: 0.01 },
-    {
-      role: "trim",
-      zFrom: 1.72,
-      zTo: -1.74,
-      yFrom: 0.765,
-      yTo: 0.81,
-      color: 0x1b1e23,
-      proud: 0.014,
-    },
-  ],
-  raceNumber: { text: "5", z: -0.11, y: 0.6, size: 0.24, color: 0x1b1e23 },
+  // Bolted-on box flares rather than a swelling: the step at each end is
+  // the point of them, and it is what survives being small on screen.
+  flare: { extra: 0.04, length: 1.06, kind: "box" },
+  spoiler: { kind: "roof", z: -1.16, y: 1.435, span: 1.24, chord: 0.17 },
+  mudflaps: false,
+  doorSeams: [0.66, -0.82],
+  handles: { z: [-0.54], y: 0.895 },
+  // No black band down the flank — a rubbing strip run wheel to wheel cuts
+  // the one long unbroken surface this car has in half, and at range that
+  // line is louder than the shape it is drawn on. The plastic that stays is
+  // the plastic with a job: the two bumpers and the arch extensions.
+  //
+  // What is here instead is PAINT: a hairline of yellow sitting on top of
+  // the blue, which is where the two-tone's own edge already draws a line.
+  // One stripe, because the two-tone is doing the work and a second would
+  // just be noise on top of it.
+  sideBands: [{ zFrom: 1.62, zTo: -1.7, yFrom: 0.824, yTo: 0.85, color: 0xf0c419, proud: 0.004 }],
+  // High on the flank, under the belt, which is where a period rally car
+  // actually carried one.
+  raceNumber: {
+    text: "5",
+    z: -0.24,
+    y: 0.62,
+    size: 0.26,
+    color: 0x14357f,
+    panel: { width: 0.46, height: 0.42, color: 0xf4f2ec },
+  },
   front: {
+    // The face: one dark band nearly the width of the nose, outlined in the
+    // accent colour, with the lamps standing INSIDE it at each end. That
+    // outline is the most recognisable thing about a car of this kind, and
+    // the only part of the face that survives at range.
     grille: {
-      width: 1.16,
-      height: 0.22,
-      y: 0.72,
-      depth: 0.06,
+      width: 1.36,
+      height: 0.185,
+      y: 0.7,
+      depth: 0.05,
       surround: 0.022,
-      surroundColor: 0xc4211d,
-      color: 0x101317,
-      bars: 4,
-      barColor: 0x24282e,
+      surroundColor: 0xf0c419,
+      color: 0x0e1115,
+      bars: 5,
+      barColor: 0x22262c,
     },
-    lights: { kind: "round", x: 0.43, y: 0.72, size: 0.105, bezel: 0.014, bezelColor: 0x2a2e34 },
-    indicators: { y: 0.5, x: 0.52, width: 0.16, height: 0.07 },
-    bumper: { y: 0.5, height: 0.16, depth: 0.16, wrap: 0.3, color: 0x1e2126 },
-    splitter: { y: 0.37, height: 0.1, depth: 0.2, span: 1.24, color: 0x1e2126 },
-    hood: { half: 0.6, zFrom: 1.8, zTo: 0.62 },
+    lights: {
+      kind: "round",
+      x: 0.395,
+      y: 0.7,
+      size: 0.08,
+      pairGap: 0.2,
+      pairSize: 0.1,
+      bezel: 0.012,
+      bezelColor: 0x2a2e34,
+      depth: 0.04,
+    },
+    indicators: { y: 0.535, x: 0.59, width: 0.17, height: 0.05 },
+    bumper: { y: 0.52, height: 0.165, depth: 0.185, wrap: 0.34, color: 0x1c1f24 },
+    splitter: { y: 0.375, height: 0.14, depth: 0.22, span: 1.32, color: 0x1c1f24 },
+    hood: { half: 0.64, zFrom: 1.8, zTo: 0.78 },
   },
   rear: {
-    lights: { x: 0.5, y: 0.72, width: 0.34, height: 0.24, lower: 0.35 },
-    bumper: { y: 0.5, height: 0.16, depth: 0.16, wrap: 0.26, color: 0x1e2126 },
-    plate: { y: 0.65, width: 0.3, height: 0.1 },
-    exhaust: { x: -0.45, y: 0.36, radius: 0.035 },
+    // Measured off a rear elevation: each cluster runs from two thirds of
+    // the half-width out to within a hair of the corner, and stands a
+    // finger's width clear of the bumper under it.
+    lights: {
+      x: 0.565,
+      y: 0.7775,
+      width: 0.265,
+      height: 0.175,
+      cells: 3,
+      lower: 0.3,
+      lowerColor: 0xe0a326,
+      bezel: 0.018,
+      bezelColor: 0x17191d,
+      depth: 0.05,
+    },
+    // The door itself: shut line round it, and three things stacked up it,
+    // because a tailgate with nothing on it reads as a blanking plate.
+    tailgate: {
+      yFrom: 0.655,
+      yTo: 0.885,
+      inset: 0.33,
+      proud: 0.018,
+      seam: 0.03,
+      rib: { y: 0.858, height: 0.026, proud: 0.012, inset: 0.05 },
+      handle: { y: 0.815, width: 0.32, height: 0.036 },
+    },
+    plate: { y: 0.735, width: 0.36, height: 0.095 },
+    bumper: { y: 0.5525, height: 0.165, depth: 0.185, wrap: 0.32, color: 0x1c1f24 },
+    valance: { y: 0.415, height: 0.11, depth: 0.21, span: 1.3, color: 0x1c1f24 },
+    lamps: { y: 0.415, x: 0.4, width: 0.115, height: 0.05, color: 0xf2ede0 },
+    exhaust: { x: -0.44, y: 0.33, radius: 0.045 },
   },
   colors: {
-    paint: 0xf1efe9,
-    accent: 0xc4211d,
+    paint: 0xf4f2ec,
+    accent: 0x14357f,
+    // The blue is cut INTO the loft rather than laid over it, so it follows
+    // the flares and wraps both caps — which is why the car still reads
+    // blue from dead astern, where a flank stripe would show nothing.
+    lower: 0x2f74c8,
     glass: 0x8fb0d2,
-    trim: 0x1b1e23,
-    hub: 0xc9ced5,
-    bumper: 0x1e2126,
+    trim: 0x191c21,
+    hub: 0xdfe3e8,
+    bumper: 0x1c1f24,
     shadow: 0x14171b,
   },
 };

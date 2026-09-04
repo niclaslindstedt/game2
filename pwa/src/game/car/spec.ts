@@ -178,6 +178,31 @@ export type FrontSpec = {
   lampPods?: LampPods;
 };
 
+/** A hatchback's tailgate: the panel that IS the back of the car, standing
+ * on the tail cap between two heights with a shut line run round it.
+ *
+ * It gets its own geometry rather than a painted rectangle because it is
+ * the one panel the chase camera holds for a whole stage — everything else
+ * on a car is glimpsed, and this is looked at. */
+export type Tailgate = {
+  /** Bottom and top of the panel on the tail face, m. */
+  yFrom: number;
+  yTo: number;
+  /** How far inboard of the flank the shut line runs, m. */
+  inset: number;
+  /** How far the panel stands proud of the cap, m. */
+  proud?: number;
+  /** Width of the dark shut line drawn round the panel, m. */
+  seam?: number;
+  /** The pressed grab recess the hatch is opened by: a dark let-in strip
+   * across the panel. `y` is its centre height, m. */
+  handle?: { y: number; width: number; height: number; color?: number };
+  /** A raised rib across the panel — the pressed swage a tailgate stiffens
+   * itself with, and the line that keeps a big flat panel from reading as
+   * cardboard. `y` is its centre height, m. */
+  rib?: { y: number; height: number; proud?: number; inset?: number; color?: number };
+};
+
 /** The rear clip: everything laid onto the tail cap. */
 export type RearSpec = {
   lights?: TailLights;
@@ -188,6 +213,16 @@ export type RearSpec = {
   exhaust?: { x: number; y: number; radius: number };
   /** Boot/hatch shut line — mirrors FrontSpec.hood on the tail deck. */
   deck?: { half: number; zFrom: number; zTo: number };
+  /** The tailgate, for a car whose back is a door. */
+  tailgate?: Tailgate;
+  /** The panel under the rear bumper — the step a hatchback's tail drops
+   * to, and what the exhaust comes out beneath. Mirrors FrontSpec.splitter
+   * on the tail. */
+  valance?: { y: number; height: number; depth: number; span: number; color?: number };
+  /** Reversing lamps let into the valance or the bumper's face — the pair
+   * of pale squares low on the back of a period rally car, and the one
+   * thing down there that catches the light at all. */
+  lamps?: Indicators;
 };
 
 export type CarBodySpec = {
@@ -212,6 +247,11 @@ export type CarBodySpec = {
   wheelStyle?: WheelStyle;
   /** Spokes per wheel face, overriding the style's own count. */
   wheelSpokes?: number;
+  /** Spoke width as a fraction of the tire radius, overriding the style's
+   * own. A five-spoke with broad blades and a mesh with fine ones are the
+   * same builder and the same count range — the width is what tells them
+   * apart, so it belongs to the car rather than to the style. */
+  wheelSpokeWidth?: number;
   /** Wheel arch openings cut into the flank. Without this the body sides
    * run straight down to the floor and the wheels read as bolted on. */
   arches?: {

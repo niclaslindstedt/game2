@@ -25,6 +25,7 @@ import {
   liveryForCrew,
 } from "../pwa/src/game/car-livery.ts";
 import { CAR_BODIES, bodySpecFor } from "../pwa/src/game/car-styles.ts";
+import type { SideBand } from "../pwa/src/game/car/spec.ts";
 
 const bodies = Object.entries(CAR_BODIES);
 const slots = Array.from({ length: 40 }, (_, i) => i);
@@ -160,14 +161,24 @@ describe("repainting a body", () => {
   });
 
   it("keeps the hardware bands and drops the old paint", () => {
-    const base = CAR_BODIES.compact;
-    const hardware = (base.sideBands ?? []).filter((b) => b.role === "trim");
-    expect(hardware.length).toBeGreaterThan(0);
+    // The fixture is built here rather than taken from the catalog. Which
+    // car happens to wear a rubbing strip is a styling decision that moves,
+    // and when the last one lost its strip this test started asserting
+    // something about an empty list instead of about applyLivery.
+    const trim: SideBand = {
+      role: "trim",
+      zFrom: 0.8,
+      zTo: -0.8,
+      yFrom: 0.3,
+      yTo: 0.4,
+      color: 0x191c21,
+    };
+    const paint: SideBand = { zFrom: 1.2, zTo: -1.2, yFrom: 0.6, yTo: 0.7, color: 0xff0000 };
+    const base = { ...CAR_BODIES.compact, sideBands: [trim, paint] };
     const painted = applyLivery(base, liveryFor(0));
-    for (const band of hardware) expect(painted.sideBands).toContainEqual(band);
+    expect(painted.sideBands).toContainEqual(trim);
     // ...and nothing the old livery painted survived into the new one.
-    const oldPaint = (base.sideBands ?? []).filter((b) => b.role !== "trim");
-    for (const band of oldPaint) expect(painted.sideBands).not.toContainEqual(band);
+    expect(painted.sideBands).not.toContainEqual(paint);
   });
 
   it("keeps every piece of hardware the spec bolted on", () => {
