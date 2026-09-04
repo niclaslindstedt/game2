@@ -44,15 +44,15 @@ function UpdateGlyph() {
   return (
     <svg viewBox="0 0 100 100" aria-hidden="true" className="update-nudge-mark">
       <path
-        d="M 50 14 V 52"
+        d="M 50 11 V 49"
         fill="none"
         stroke="currentColor"
         strokeWidth="12"
         strokeLinecap="round"
       />
-      <polygon points="26,46 74,46 50,80" fill="currentColor" />
+      <polygon points="26,43 74,43 50,77" fill="currentColor" />
       <path
-        d="M 24 92 H 76"
+        d="M 24 89 H 76"
         fill="none"
         stroke="currentColor"
         strokeWidth="12"

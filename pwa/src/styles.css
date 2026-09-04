@@ -5883,7 +5883,16 @@ a.menu-version:focus-visible {
   bottom: max(0.9rem, env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  /* The gap belongs to the ARMED state only. A collapsed word is still a flex
+     item, and a gap in front of it is real width — it pushes the mark off the
+     circle's centre by half of itself, which is exactly the amount a round
+     button makes obvious. */
+  gap: 0;
+  /* A circle at rest: the mark's own width plus the padding is under this, so
+     the minimum is what shapes it, and arming widens the same button from
+     here rather than standing a new shape up under the finger. */
+  min-width: 2.4rem;
   height: 2.4rem;
   padding: 0 0.65rem;
   font: inherit;
@@ -5899,7 +5908,8 @@ a.menu-version:focus-visible {
   opacity: 0.62;
   transition:
     opacity 140ms ease,
-    background 140ms ease;
+    background 140ms ease,
+    gap 160ms ease;
 }
 
 .update-nudge:hover,
@@ -5936,6 +5946,7 @@ a.menu-version:focus-visible {
 }
 
 .update-nudge[data-armed] {
+  gap: 0.35rem;
   opacity: 1;
   background: rgb(18 48 105 / 92%);
   border-color: var(--hud-good);
