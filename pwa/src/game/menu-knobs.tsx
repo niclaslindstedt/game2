@@ -19,7 +19,7 @@
 // sideways over it presses the arrows.
 
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 
 import { playToggle, playUi } from "./audio/ui.ts";
 import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
@@ -131,7 +131,12 @@ export function StepRow<T extends string>({
  * presses; the track itself is a real range input, so a thumb or a mouse
  * drags it. The reading is a WORD wherever the value has one — silence is
  * a thing people choose, and so is a savage road — which is why `read` is
- * a parameter and the volume's OFF/percent is only its default. */
+ * a parameter and the volume's OFF/percent is only its default.
+ *
+ * A fader whose value is EXPENSIVE to apply takes `settle`, and then the
+ * drag is a draft: the thumb and the reading move under the finger the
+ * whole way, and the setting is only handed on when the thumb is let go.
+ * See the prop. */
 export function FadeRow({
   label,
   glyph,
@@ -140,6 +145,7 @@ export function FadeRow({
   less = "quieter",
   more = "louder",
   hint,
+  settle,
   onChange,
   onHint,
 }: {
@@ -154,18 +160,49 @@ export function FadeRow({
   less?: string;
   more?: string;
   hint?: string;
+  /** REPORT THE VALUE WHEN THE THUMB IS LET GO, not while it is moving.
+   * For a fader whose every value costs something real to apply: Roam's
+   * DIFFICULTY builds a whole stage, so a drag across the track asks for
+   * twenty of them and the page stops answering the finger that is still
+   * on it. A volume costs nothing and must stay live — a fader you cannot
+   * hear until you let go is one you cannot set — so this is off unless a
+   * row asks for it. */
+  settle?: boolean;
   onChange: (value: number) => void;
   onHint?: OnHint;
 }) {
+  // WHERE THE THUMB IS while a settled drag is in flight, and null the rest
+  // of the time. It is the row's own state rather than the setting's
+  // because that is exactly what it is: a value that has been chosen but
+  // not yet handed over, and a page that redrew for it would be the lag
+  // this exists to remove. The ref is the same reading for the HANDLERS:
+  // two ways out of one drag can both fire before the row renders again,
+  // and a stale `drag` in the second of them would hand the value over
+  // twice — which is the one rebuild this row exists to avoid.
+  const [drag, setDrag] = useState<number | null>(null);
+  const dragRef = useRef<number | null>(null);
+  const shown = drag ?? value;
   const describe = (): void => onHint?.(hint ?? null);
-  const set = (next: number): void =>
-    onChange(Math.min(1, Math.max(0, Math.round(next * 100) / 100)));
+  const clamp = (next: number): number => Math.min(1, Math.max(0, Math.round(next * 100) / 100));
+  const hold = (next: number): void => {
+    dragRef.current = next;
+    setDrag(next);
+  };
+  const set = (next: number): void => {
+    dragRef.current = null;
+    setDrag(null);
+    onChange(clamp(next));
+  };
+  /** The thumb is let go: hand over what it landed on, once. */
+  const release = (): void => {
+    if (dragRef.current !== null) set(dragRef.current);
+  };
   const nudge = (by: number): void => {
     // The tick IS the point on a volume fader: it is an effect, so the
     // effects level is heard at the level being set. Capped inside playUi,
     // so a drag is a run of ticks rather than a buzz.
     playUi("move");
-    set(value + by);
+    set(shown + by);
   };
   return (
     <div className="knob" data-nav-steps onPointerEnter={describe} onFocusCapture={describe}>
@@ -187,15 +224,32 @@ export function FadeRow({
             min={0}
             max={1}
             step={0.05}
-            value={value}
+            value={shown}
             aria-label={label}
-            style={`--fill: ${Math.round(value * 100)}%`}
+            style={`--fill: ${Math.round(shown * 100)}%`}
             onInput={(e) => {
               playUi("move");
-              set(Number((e.target as HTMLInputElement).value));
+              const next = clamp(Number((e.target as HTMLInputElement).value));
+              if (settle) hold(next);
+              else onChange(next);
             }}
+            // THE END OF THE DRAG IS THE PRESS BEING LET GO, spelled out in
+            // pointer events rather than taken off `onChange`. The native
+            // change event says exactly this — a range fires it on release
+            // and nowhere else — but preact/compat is in this bundle and it
+            // rewrites `onChange` on an input to `oninput` for every type
+            // but file, checkbox and radio, so a row wired that way commits
+            // on every position the thumb passes and settles nothing at all.
+            // `lostpointercapture` is the one that catches a finger lifted
+            // off the track or outside the window, since a range captures
+            // the pointer for the whole drag; blur and keyup are the
+            // keyboard's own way out of the same state.
+            onPointerUp={release}
+            onLostPointerCapture={release}
+            onKeyUp={release}
+            onBlur={release}
           />
-          <span className="knob-word knob-read">{read(value)}</span>
+          <span className="knob-word knob-read">{read(shown)}</span>
         </span>
         <button
           type="button"
