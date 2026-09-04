@@ -202,7 +202,6 @@ export function leanTorque(roll: number, pitch: number, aLat: number, bed: Bed):
  * about how far it then goes is the stepping below. */
 export function beginRoll(car: CarState, events: GameEvent[], stats: RunStats): void {
   if (car.rolling) return;
-  console.error("[beginRoll]", ((car.roll * 180) / Math.PI).toFixed(0), car.rollRate.toFixed(2));
   car.rolling = true;
   car.sliding = false;
   stats.rolls += 1;
