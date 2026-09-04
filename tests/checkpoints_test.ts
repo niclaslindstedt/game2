@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  INTERNAL_SYSTEMS,
   NEUTRAL_INPUT,
   STAGE_RULES,
   TUNING,
@@ -240,6 +241,86 @@ describe("where a respawn lands", () => {
     expect(state.car.x).toBeCloseTo(grid.x, 3);
     expect(state.car.z).toBeCloseTo(grid.z, 3);
     expect(state.progressS).toBe(track.samples[0].s);
+  });
+
+  /** A car with a bad accident already in its ledger: folded at the nose,
+   * down on a corner, with parts on the road behind it and machinery giving
+   * out. Written rather than driven into a tree — where the damage came
+   * from is `collision_test`'s subject, and this file's is what happens to
+   * it when the run is sent home. */
+  function wreck(state: ReturnType<typeof createGame>): void {
+    const damage = state.car.damage;
+    damage.zones[0] = 0.4;
+    damage.belly = 0.2;
+    damage.roof = 0.15;
+    damage.wear = 1;
+    damage.systems.engine = 0.5;
+    damage.systems.suspension = 0.3;
+    damage.wheels[1] = 1;
+    damage.broken.push("bumperF", "wheelFR");
+    damage.version += 1;
+  }
+
+  /** Everything the ledger says is wrong with the car, as one number. */
+  function hurt(state: ReturnType<typeof createGame>): number {
+    const damage = state.car.damage;
+    return (
+      damage.zones.reduce((sum, zone) => sum + zone, 0) +
+      damage.wheels.reduce((sum, wheel) => sum + wheel, 0) +
+      INTERNAL_SYSTEMS.reduce((sum, system) => sum + damage.systems[system], 0) +
+      damage.belly +
+      damage.roof +
+      damage.wear +
+      damage.broken.length
+    );
+  }
+
+  it("hands back a whole car with the run that starts again from the line", () => {
+    const track = compileTrack(7, RIG);
+    const state = createGame({ seed: 7, track, skipCountdown: true });
+    expect(drive(state, botInput, (s) => s.progressS > 200)).toBeGreaterThan(0);
+    expect(state.checkpointsPassed).toBe(0);
+    wreck(state);
+    const before = state.car.damage.version;
+    const events = step(state, { ...NEUTRAL_INPUT, reset: true });
+    expect(events.some((ev) => ev.type === "repair")).toBe(true);
+    expect(hurt(state)).toBe(0);
+    // The body is re-derived from this number, so it has to MOVE — a car
+    // healed back to a version the renderer had already drawn would keep the
+    // shape of the crash.
+    expect(state.car.damage.version).toBeGreaterThan(before);
+  });
+
+  it("keeps the damage when the run is sent back to a board it took", () => {
+    const track = compileTrack(7, RIG);
+    const state = createGame({ seed: 7, track, skipCountdown: true });
+    const board = track.checkpoints[0];
+    expect(drive(state, botInput, (s) => s.progressS > board.s + 100)).toBeGreaterThan(0);
+    expect(state.checkpointsPassed).toBe(1);
+    wreck(state);
+    const damaged = hurt(state);
+    const events = step(state, { ...NEUTRAL_INPUT, reset: true });
+    expect(events.some((ev) => ev.type === "repair")).toBe(false);
+    // A wreck is still patched to something drivable, and nothing else about
+    // the car is touched: the dents and the missing parts are the run.
+    expect(state.car.damage.wear).toBe(TUNING.collision.repairTo);
+    expect(hurt(state)).toBeCloseTo(damaged - 1 + TUNING.collision.repairTo, 6);
+  });
+
+  it("is the LINE that heals, not the lap: a circuit gets no free rebuild", () => {
+    const track = compileTrack(7, RIG);
+    const state = createGame({ seed: 7, track, skipCountdown: true });
+    expect(drive(state, botInput, (s) => s.progressS > 200)).toBeGreaterThan(0);
+    // R22 — the boards are the LAP's, so a car round onto lap two owes all
+    // of them again and `lastCheckpoint` is the start line once more. It is
+    // still a lap into the run, and a rebuild every time round would be the
+    // cheapest way to drive a circuit.
+    state.lap = 2;
+    expect(state.checkpointsPassed).toBe(0);
+    wreck(state);
+    const events = step(state, { ...NEUTRAL_INPUT, reset: true });
+    expect(events.some((ev) => ev.type === "repair")).toBe(false);
+    expect(hurt(state)).toBeGreaterThan(0);
   });
 });
 

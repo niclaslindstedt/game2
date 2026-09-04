@@ -472,7 +472,21 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       watched = run;
       if (run) built.get(run)?.tag.hide();
     },
-    events: (run, events) => built.get(run)?.visual.onEvents(run.state, events),
+    events: (run, events) => {
+      const car = built.get(run);
+      if (!car) return;
+      // A crew handed a whole car back (step.ts) needs a whole BODY with it:
+      // the damage is in the geometry — folded panels, a hub where a wheel
+      // was, panes at alpha zero — and none of it comes back out of a healed
+      // ledger. So this one comes off the road, and `update` builds the crew
+      // a pristine car the next time they are near enough to be worth one.
+      if (events.some((ev) => ev.type === "repair")) {
+        drop(car);
+        built.delete(run);
+        return;
+      }
+      car.visual.onEvents(run.state, events);
+    },
     paint: (next, lit, wet) => {
       tint = next;
       lampsLit = lit;

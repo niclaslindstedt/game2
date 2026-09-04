@@ -247,6 +247,7 @@ describe("event routing", () => {
     crash: [{ type: "crash" }],
     sink: [{ type: "sink" }],
     respawn: [{ type: "respawn" }],
+    repair: [{ type: "repair" }],
     lap: [
       { type: "lap", lap: 1, time: 62, best: true },
       { type: "lap", lap: 2, time: 64, best: false },
@@ -280,12 +281,23 @@ describe("event routing", () => {
     ],
   };
 
+  /** The events that are BOOKKEEPING rather than a moment: nothing happens
+   * to the car when one arrives that is not already being heard. The repair
+   * is handed over in the same frame as the respawn that carried the run
+   * back to the line, and the respawn is the sound of it — a second cue
+   * under the first would be one clunk too many. */
+  const SILENT: GameEvent["type"][] = ["repair"];
+
   it("answers every event with a sound the bank actually holds", () => {
-    // Nothing is silent any more: a split board and a system giving way
+    // Nothing else is silent any more: a split board and a system giving way
     // were the two moments the car reported that nobody could hear.
     for (const [type, events] of Object.entries(EVERY_EVENT)) {
       for (const event of events) {
         const hit = soundForEvent(event, 0);
+        if (SILENT.includes(event.type)) {
+          expect(hit, `${type} should be silent`).toBeNull();
+          continue;
+        }
         expect(hit, `${type} makes no sound`).not.toBeNull();
         expect(RUN_BANK[(hit as { id: string }).id], `${type} names a missing sound`).toBeTruthy();
       }

@@ -5,7 +5,7 @@
 // the traffic on the public roads — every one of which would otherwise
 // hand-roll a partial with a field somebody forgot.
 
-import { DAMAGE_ZONES, type CarState, type RunStats } from "./state.ts";
+import { DAMAGE_ZONES, INTERNAL_SYSTEMS, type CarState, type RunStats } from "./state.ts";
 
 export function freshStats(): RunStats {
   return {
@@ -95,4 +95,29 @@ export function freshCar(): CarState {
     },
     damageScale: 1,
   };
+}
+
+/** THE CAR MADE WHOLE: the ledger `freshCar` starts a run with, handed back
+ * to a car that has already been driven — every fold, the wear, the hurt
+ * systems, the flats and the parts left on the road.
+ *
+ * Mutated in place rather than replaced, because the HUD's schematic and
+ * the renderer's body both hold this object. Its `version` moves FORWARD
+ * rather than back to zero for the same reason: that number is what the
+ * body's polygons are re-derived from, and a car healed to a version the
+ * renderer had already drawn would keep the shape of the crash.
+ *
+ * Only ever a whole run beginning again — a restart, or the respawn that
+ * puts the car back on a line it has driven nothing from (step.ts). Nothing
+ * mid-stage repairs anything: the crew are at the finish, not at the verge. */
+export function healCar(car: CarState): void {
+  const damage = car.damage;
+  damage.zones.fill(0);
+  damage.belly = 0;
+  damage.roof = 0;
+  damage.wear = 0;
+  for (const system of INTERNAL_SYSTEMS) damage.systems[system] = 0;
+  damage.wheels.fill(0);
+  damage.broken.length = 0;
+  damage.version += 1;
 }
