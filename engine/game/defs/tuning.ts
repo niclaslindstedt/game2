@@ -1549,14 +1549,22 @@ export const TUNING = {
      * scrubs and stays on its wheels... */
     tripSlide: 9,
     /** ...and past it, the roll rate every further m/s of sideways speed
-     * puts into the body, rad/s. Whether that is enough to go over is not
-     * a threshold here — it is `roll.inertia` against the lift up to the
-     * body's own sill corner — but it works out at around twelve m/s
-     * across the car: 26° of yaw at 100 km/h, 20° at 130, 15° at 170. The
-     * faster the jump, the straighter it has to be landed, which is the
-     * whole reason a flick before a lip is a mistake. Under that the car
-     * lurches on its springs and the ground takes it back. */
-    tripRoll: 0.95,
+     * puts into the body, rad/s, FOR A TYRE BITING AT ITS REFERENCE. What
+     * a tyre actually bites with is the surface under it and what the
+     * driver has done with the car (`tripBite`, flight.ts), and both are
+     * multipliers on this — so the number here is the trip a car takes
+     * settling onto gravel with nothing asked of the wheel or the pedals
+     * and its springs barely troubled, which is the softest version of it
+     * there is. A car that slams down gets half again as much.
+     *
+     * Whether that is enough to go over is not a threshold anywhere — it
+     * is the body's inertia against the lift up to its own sill corner —
+     * but the trip a hard landing gets away with works out at around
+     * twelve m/s across the car: 26° of yaw at 100 km/h, 20° at 130, 15°
+     * at 170. The faster the jump, the straighter it has to be landed,
+     * which is the whole reason a flick before a lip is a mistake. Under
+     * that the car lurches on its springs and the ground takes it back. */
+    tripRoll: 0.6,
     tripPitch: 0.16,
     /** ...capped here, rad/s: a body does not go over faster than about a
      * turn and a half a second whatever it was doing, because past that
@@ -1566,8 +1574,51 @@ export const TUNING = {
      * thirteen rad/s and took three wheels off in one contact. */
     tripMax: 9,
     /** How much of the sideways speed the trip leaves in the car, 0..1 —
-     * the tyres dug in and the rest went into the roll. */
+     * the tyres dug in and the rest went into the roll. Scaled by the same
+     * bite the roll is: rubber that is not gripping is not scrubbing
+     * sideways speed off either, which is the price of every save below. */
     tripKeep: 0.35,
+    /** WHAT THE DRIVER CAN DO ABOUT IT. The trip is the tyres refusing to
+     * go sideways, and how hard they refuse is not fixed — it is the load
+     * on them and the direction they are pointed, both of which are
+     * decided in the air, before the wheels are anywhere near the ground.
+     * That is the whole of what makes a crossed-up landing a moment of
+     * SKILL rather than a dice roll: the hands and the pedals are already
+     * committed when the tyres bite, and nothing after the bite can undo
+     * them.
+     *
+     * How far a full lock points the front wheels off straight ahead, rad
+     * — a rally car's road-wheel lock. The front tyres' own slip is the
+     * body's slip angle less this much of it, and their share of the
+     * moment goes with the sine of that: aim them along the way the car is
+     * actually travelling and the front axle stops tripping the car
+     * altogether. */
+    tripLock: 0.55,
+    /** ...and how much of the bite is the FRONT axle's, 0..1 — the share
+     * the hands can point out of it. Half: the rear pair are pointed
+     * wherever the body is and no counter-steer reaches them, so even a
+     * perfectly caught landing still trips on half the car. */
+    tripFront: 0.5,
+    /** The most a lock turned the WRONG way can multiply the front axle's
+     * bite by. A tyre's lateral force peaks well short of a right angle
+     * and the sine alone would run to nearly double at full lock into the
+     * slide; this is the plateau. */
+    tripMiss: 1.5,
+    /** How much of the tyres' one budget a fully applied pedal spends
+     * LONGITUDINALLY, 0..1 — what is left for the bite is the other side
+     * of the friction circle, `sqrt(1 - this²)`. At 0.85 a full brake or a
+     * full boot roughly halves the trip: the correct rally answer to a
+     * landing you know is crossed up, and one that costs you the sideways
+     * speed you would rather have scrubbed off. */
+    tripPedal: 0.85,
+    /** ...and how much harder a tyre bites for arriving HARD, at the slam
+     * the suspension calls a full one (`suspension.settleSlam`). The
+     * moment is the lateral force times the weight's height and the force
+     * is what the load will pay for, so a car that slams down loads its
+     * tyres far past its own weight for the tenth of a second the springs
+     * are swallowing the arrival. Landing FLAT and soft is the other half
+     * of the save. */
+    tripLoad: 0.6,
     /** THE ROLL. What the car does once the trip has actually put it past
      * its outside wheels — and, deliberately, NOT how far it goes. There
      * is no turn count here and no rate at which a roll is declared over:
@@ -1661,6 +1712,24 @@ export const TUNING = {
        * Between them, the read that made a rollover look like a car
        * hitting glue and then spinning on the spot. */
       faceGrip: { wheels: 0.85, flank: 0.5, end: 0.58, roof: 0.65 },
+      /** HOW MUCH OF AN ARRIVAL THE SHELL PASSES ON to the body rather than
+       * folding, m/s — the most any single contact can turn the car with,
+       * however hard it came down.
+       *
+       * A panel is not a billiard ball. It collapses at a roughly fixed
+       * force over its stroke, so the faster a corner arrives the more of
+       * that arrival goes into the metal and the less into rotating what is
+       * left of the car: below this the structure carries the blow and the
+       * body takes nearly all of it, well above it the extra is almost
+       * entirely fold. It is the same arrival `landingDamage` is booking
+       * parts off for in the same breath, priced once on each side.
+       *
+       * Without it a car thrown off a lip at eight rad/s met the ground at
+       * ten metres a second, had the whole of that resolved through the arm
+       * of the corner it caught, and came out at 0.8 rad/s — one turn, on
+       * its wheels, from an accident that used to run to two and a half.
+       * A rollover is not a stop. */
+      foldSpeed: 2.5,
       /** How fast the roll bleeds into the ground it is grinding round on,
        * 1/s. Panels are not tyres. */
       drag: 0.9,

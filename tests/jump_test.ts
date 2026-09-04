@@ -792,6 +792,13 @@ describe("the jump", () => {
       car.yawRate = 0;
       car.u = 0;
       car.w = 0;
+      // THE DATUM: the same car, here, at rest. `crashEnergy` counts the
+      // weight's height above the world's zero, so on ground sixteen metres
+      // up a car standing perfectly still already reads 273 J/kg — and a
+      // crash "running its budget down to a tenth" then means whatever the
+      // altitude happens to be. What is under test is the energy the car
+      // brought, so the altitude is subtracted from both ends.
+      const atRest = crashEnergy(car, mass);
       set(car);
       updateSlip(car);
       const into = crashEnergy(car, mass);
@@ -802,7 +809,13 @@ describe("the jump", () => {
         peakYaw = Math.max(peakYaw, Math.abs(car.yawRate));
         peakRoll = Math.max(peakRoll, Math.abs(car.rollRate));
       }
-      return { into, outOf: crashEnergy(car, mass), peakYaw, peakRoll, car };
+      return {
+        into: into - atRest,
+        outOf: crashEnergy(car, mass) - atRest,
+        peakYaw,
+        peakRoll,
+        car,
+      };
     };
     // A PURE SPIN AND NOTHING ELSE. A body lying on a face with a rotation
     // and no travel at all has only one thing acting on it, and friction is
@@ -827,6 +840,10 @@ describe("the jump", () => {
     expect(rolled.peakRoll).toBeLessThanOrEqual(2.0001);
     // A WHOLE CRASH runs the budget down and keeps it down: a car that goes
     // over at 90 km/h comes to rest with a small fraction of what it had.
+    // Read against the datum, so this is the crash's own energy and not the
+    // height of the hill it happened on — measured the other way it passed
+    // for years because the car ended on its ROOF and was respawned onto a
+    // road sixteen metres lower, which is not a fact about the budget at all.
     const crash = stand((car) => {
       car.roll = 0.9;
       car.rollRate = -6;

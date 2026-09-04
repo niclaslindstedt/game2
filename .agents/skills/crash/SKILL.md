@@ -8,12 +8,20 @@ description: "Use when working on what happens to the car once it is PAST SAVING
 This skill owns **one question**: what does the car do between the moment it
 stops being drivable and the moment it stops moving?
 
-Three modules answer it, and the split matters:
+Five modules answer it, and the split matters:
 
-- **`engine/game/roll.ts`** — the body as a shape with a weight in it, going
-  over. Knobs in `TUNING.air.roll`.
-- **`car.ts`'s `tripOnLanding`** — the landing that starts one. Knobs in
-  `TUNING.air` (`tripSlide`, `tripRoll`, `tripMax`, `tripKeep`).
+- **`engine/game/roll.ts`** — the step: the body as a shape with a weight in
+  it, going over. Knobs in `TUNING.air.roll`.
+- **`roll-hull.ts`** — the shape, the plane under it, and every geometric
+  question asked of the pair.
+- **`roll-contact.ts`** — every force at the contact patch (the ground's
+  friction, the fall's reaction, the driver's tyres) and `turnAt`, the one
+  place any of them becomes rotation.
+- **`roll-ledger.ts`** — `crashEnergy`, the invariant the labs hold it to.
+- **`flight.ts`'s `tripOnLanding`** — the landing that starts one, and
+  `tripBite`, what the driver's hands, pedals and arrival do to it. Knobs in
+  `TUNING.air` (`tripSlide`, `tripRoll`, `tripMax`, `tripKeep`, `tripLock`,
+  `tripFront`, `tripMiss`, `tripPedal`, `tripLoad`).
 - **`collision.ts`'s `tripRoll`** — the low solid that starts one instead,
   which is how a rally car actually rolls.
 
@@ -134,6 +142,14 @@ Read the whole-run summary above it for damage and where it came to rest.
   door skin and slides longest, `roof` is glass and pillars and gutters
   digging in. BLENDED across the quarter turns, never stepped — a
   coefficient that jumped at each face would kick the roll every quarter.
+- **ONE ACCOUNT OF THE GEOMETRY, AND EVERY TERM RESOLVED ALONG IT.** The
+  surface a body rests on is `seatOn`, and `seatSlopes` is its gradient:
+  gravity is resolved along it, the seat's own speed under a turning body is
+  read off it, and a contact's reaction is answered by it. Measure the same
+  thing a second way — off `standingOn`'s patch offsets, say — and the two are
+  free to disagree about which way a body falls, which is a sign error you
+  will derive twice and still get backwards. If a new term needs to know which
+  way the weight goes when the body turns, it asks `seatSlopes`.
 - **NOTHING IN THIS MODULE MAY ADD ROTATION.** Gravity trades it against the
   surface, the ground's budget is capped at the impulse that would bring the
   slipping patch to a common speed with the ground, the damps and the pivot
