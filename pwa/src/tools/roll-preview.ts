@@ -68,25 +68,38 @@ const SEATS = ["chase", "cockpit"] as const;
  * (`camera-roll.ts`). Both of those are properties of one frame beside the
  * next, which is what this sheet is.
  *
- * TWO THINGS ARE DELIBERATE HERE AND BOTH WERE WRONG ONCE.
+ * THE ONLY THING THAT SEPARATES THEM IS HOW HARD THE CAR IS TRIPPED, and
+ * that is the whole design. Two earlier versions of this row scripted a
+ * driver instead — full opposite lock held for as long as the roll owned the
+ * car — and both were wrong, in ways only the rendered sheet showed:
  *
- * The LOCK opposes the roll, and its sign is the OPPOSITE of the sideways
- * speed's: a car carried to negative `w` goes over toward positive roll, and
- * the lateral force that pushes it back down is a positive one
- * (`roll_control_test.ts` pins the same convention). Steering with the sign
- * of `across` instead is the lock that finishes the job — measured on this
- * exact staging, it took the crash from 810° of roll to 1624° and a car that
- * never stopped rolling at all.
+ *   - the first steered WITH the sideways speed, which is the lock that
+ *     finishes the job rather than opposing it: 1624° of roll against 810°
+ *     for a car nobody touched, and it never stopped rolling at all;
+ *   - the second corrected the sign and still photographed no catch, because
+ *     it was tripped at 18 m/s across, where every lock — the right one
+ *     included — ends `overturned` at the same instant the roll ends. What
+ *     looked like a save was the RESPAWN putting the car down planted at the
+ *     start line a beat later, which is a different picture entirely.
  *
- * And the trip is GENTLER on the caught run, because at `the trip`'s severity
- * there is nothing to catch: 26 m/s across the car is two and a half turns and
- * no lock in the game saves it — the right one still ended overturned. That is
- * the physics being right, not the driver being weak, and a "caught" row over
- * an uncatchable trip photographs nothing. What the driver is WORTH belongs to
- * `make crash`, which measures it; this sheet's job is the lens. */
+ * And measured across the band where a catch is possible at all, a clamped
+ * full lock is WORSE than what the bot was already doing: at 13 m/s across
+ * the bot comes out of the roll on its wheels and never overturns, while
+ * full lock either way ends as a wreck. Held flat for two seconds, a lock is
+ * not a model of a driver, so this sheet no longer pretends to be one — the
+ * bot drives both rows, exactly as it drives everything else here, and what
+ * the DRIVER is worth belongs to `make crash` and to
+ * `tests/roll_control_test.ts`, which measure it. This sheet's subject is
+ * the lens.
+ *
+ * The catchable band is narrow — under 12 the car never goes over and past
+ * 13 it never comes back — so `caught` sits in the middle of it. A sheet
+ * whose caught row starts reading ROLLING to the end, or PLANTED only after
+ * a jump back to the start line, is that band having moved, and the labels
+ * under each tile say so rather than hiding it. */
 const RUNS = [
-  { id: "the trip", across: -26, catches: false },
-  { id: "caught", across: -18, catches: true },
+  { id: "the trip", across: -26 },
+  { id: "caught", across: -12.5 },
 ] as const;
 
 /** The sheet: tile size, and the columns it wraps at — one row per half of a
@@ -151,21 +164,13 @@ async function main(): Promise<void> {
      * is a picture of the CAMERA, but it can only be read against a picture
      * of the crash, and there was no crash in it. */
     const events: GameEvent[] = [];
-    /** WHO IS DRIVING THIS FRAME. The bot, until the body goes over and this
-     * is the run where somebody fights it — from there, full OPPOSITE lock
-     * for as long as the roll owns the car. Opposite is `-sign(across)`: the
-     * car is carried toward negative `w` and goes over toward positive roll,
-     * so the lateral force that pushes it back down is the positive one.
-     *
-     * The bot keeps everything else, so the run-in and the trip are the same
-     * drive in both rows and only the accident differs. */
-    const hands = (): ReturnType<typeof botInput> =>
-      run.catches && game.car.rolling
-        ? { ...botInput(game), steer: -Math.sign(run.across), throttle: 0, brake: 0 }
-        : botInput(game);
     const drive = (): void => {
       events.length = 0;
-      for (let t = 0; t < ticks; t++) events.push(...step(game, hands()));
+      // THE BOT DRIVES BOTH ROWS, through the roll included — its steering
+      // reaches a car that is going over exactly as a player's does
+      // (`driveRolling`), so the accident is a driven one without this
+      // harness scripting a driver badly. See the note on `RUNS`.
+      for (let t = 0; t < ticks; t++) events.push(...step(game, botInput(game)));
       if (events.length > 0) renderer.onEvents(game, events);
       renderer.render(game, FRAME);
     };
