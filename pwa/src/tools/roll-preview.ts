@@ -23,7 +23,7 @@
 // camera's own reading.
 
 import * as THREE from "three";
-import { TUNING, botInput, createGame, step, type GameState } from "@engine";
+import { TUNING, botInput, createGame, step, type GameEvent, type GameState } from "@engine";
 
 import { createRenderer } from "../game/renderer.ts";
 import { DEFAULT_SETTINGS } from "../game/settings.ts";
@@ -97,8 +97,20 @@ async function main(): Promise<void> {
     renderer.setGame(game);
     renderer.setCamera(view);
     renderer.skipIntroShot();
+    /** One rendered frame, and the sim steps under it.
+     *
+     * The step's EVENTS are handed to the renderer, not dropped. Half of
+     * what a crash looks like is event-driven — the burst off each corner
+     * of the shell as it arrives, the impact debris, a part coming off —
+     * and a harness that throws the events away photographs a roll with
+     * none of it, silently. This sheet spent its whole life doing that: it
+     * is a picture of the CAMERA, but it can only be read against a picture
+     * of the crash, and there was no crash in it. */
+    const events: GameEvent[] = [];
     const drive = (): void => {
-      for (let t = 0; t < ticks; t++) step(game, botInput(game));
+      events.length = 0;
+      for (let t = 0; t < ticks; t++) events.push(...step(game, botInput(game)));
+      if (events.length > 0) renderer.onEvents(game, events);
       renderer.render(game, FRAME);
     };
     for (let f = 0; f < Math.round(RUN_IN / FRAME); f++) drive();

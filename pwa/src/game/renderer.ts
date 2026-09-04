@@ -12,6 +12,7 @@ import {
   TUNING,
   isWooden,
   lampShare,
+  rollTilt,
   type GameEvent,
   type GameState,
   type Season,
@@ -46,6 +47,7 @@ import {
 import { clearDustLamps } from "./dust-light.ts";
 import { SOOT, groundTints, sootySmoke, type PlumeGround } from "./ground-tint.ts";
 import { createCarFx } from "./car-fx.ts";
+import { CRASH_THROW, crashContact, crashBurst as burstCount, crashGrind } from "./crash-throw.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFieldCars, type FieldCars } from "./field-cars.ts";
 import { wetnessOf, type Clap } from "./weather.ts";
@@ -323,7 +325,100 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // in the scene together (car-fx.ts). The renderer keeps the decisions —
   // what is thrown, when, and how much of it — and none of the plumbing.
   const carFx = createCarFx(scene);
-  const { dust, mud, smoke, plume, gravel, spray, foam, fumes, life, celebration } = carFx;
+  const { dust, crash, mud, smoke, plume, gravel, spray, foam, fumes, life, celebration } = carFx;
+
+  /** THE GROUND A BODY THAT IS OVER IS PLOUGHING, thrown from the corner of
+   * the shell that is actually down.
+   *
+   * Everything else that moves ground on a stage is a tyre and spawns at an
+   * axle. A car past its outside wheels has no tyre on the ground — it has
+   * one corner of itself, somewhere round the hull depending on how far
+   * over it is (`crashContact`) — and that corner is doing all of the work.
+   *
+   * `grains` and `puffs` are whole particles the caller has already worked
+   * out; this only decides WHERE they leave from and HOW. The grit is flung
+   * back along the travel and up, because it was thrown; the smoke is left
+   * where it was made and drifts, because it was only disturbed. */
+  const throwFromShell = (state: GameState, grains: number, puffs: number): void => {
+    if (grains <= 0 && puffs <= 0) return;
+    const c = state.car;
+    const at = crashContact(rollTilt(c.roll));
+    const rightX = Math.cos(c.heading);
+    const rightZ = -Math.sin(c.heading);
+    const x = c.x + rightX * at.across;
+    const z = c.z + rightZ * at.across;
+    // Just clear of the ground the corner is in, so the cloud comes off the
+    // contact rather than out of it.
+    const y = c.y + at.up + 0.15;
+    const K = CRASH_THROW;
+    const wind = state.wind;
+    if (grains > 0) {
+      crash.spawn(
+        x,
+        y,
+        z,
+        groundDust(state),
+        grains,
+        K.spread,
+        -c.u * Math.sin(c.heading) * K.kick + wind.x * 0.4,
+        -c.u * Math.cos(c.heading) * K.kick + wind.z * 0.4,
+        K.lift,
+      );
+    }
+    if (puffs > 0) {
+      // The HANGING half of the same cloud, and it is the same SUBSTANCE:
+      // ground-coloured grit thrown slower, higher and wider, so it is left
+      // behind where the grains are flung ahead. Not the tyre-smoke pool —
+      // that one is big soft growing billboards tuned for rubber cooking on
+      // tarmac, and a handful of them over a rolling car reads as a pale
+      // wedge hanging in the air rather than as anything the car did. The
+      // world is chunky and vertex-coloured; its dust has to be too.
+      crash.spawn(
+        x,
+        y + 0.2,
+        z,
+        groundDust(state),
+        puffs,
+        K.smokeSpread,
+        -c.u * Math.sin(c.heading) * K.smokeKick + wind.x * 0.8,
+        -c.u * Math.cos(c.heading) * K.smokeKick + wind.z * 0.8,
+        K.smokeLift,
+      );
+    }
+  };
+
+  /** One CONTACT of a body that is over: a corner of the shell arriving. */
+  const crashBurst = (state: GameState, slam: number): void => {
+    const burst = burstCount(slam);
+    const fx = fxScale();
+    throwFromShell(state, Math.round(burst.grains * fx), Math.round(burst.puffs * fx));
+  };
+
+  /** ...and the GRIND between them, as a rate with its fraction carried:
+   * a cloud's density is a rate per second, and an emitter that rounds per
+   * frame makes its density the frame rate instead. */
+  let grindGrains = 0;
+  let grindPuffs = 0;
+  const crashGrind_ = (state: GameState, dt: number): void => {
+    const c = state.car;
+    if (!c.rolling || c.airborne) {
+      // Nothing owed while the body is in the air between its contacts —
+      // and the debt is dropped rather than banked, so a long flight does
+      // not land as one enormous puff.
+      grindGrains = 0;
+      grindPuffs = 0;
+      return;
+    }
+    const fx = fxScale();
+    const rate = crashGrind(Math.hypot(c.u, c.w));
+    grindGrains += rate.grains * dt * fx;
+    grindPuffs += rate.puffs * dt * fx;
+    const grains = Math.floor(grindGrains);
+    const puffs = Math.floor(grindPuffs);
+    grindGrains -= grains;
+    grindPuffs -= puffs;
+    throwFromShell(state, grains, puffs);
+  };
   const { atWheels } = carFx;
   const wayHomeArrow = createWayHomeArrow(canvas);
   // The arrow lives in camera space, and a camera only draws its children
@@ -706,14 +801,22 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // Straight down: the wheels stop falling and the driver's head does
         // not, which is the whole of what a landing feels like from inside.
         chase.kick((ev.clean ? 0.34 : 0.62) * slam, DOWN, "landing");
-        // Four tyres hitting the ground at once, and each of them throws.
-        atWheels(
-          wetGround ? mud : dust,
-          state,
-          groundDust(state),
-          Math.round((ev.clean ? 18 : 32) * slam * fx),
-          3.5,
-        );
+        if (c.rolling) {
+          // ...unless the car is OVER, in which case there are no tyres:
+          // there is a corner of the shell ploughing into the ground, and
+          // the burst belongs where that corner is. `atWheels` would put it
+          // at four points a metre and a half in the air.
+          crashBurst(state, Math.abs(ev.slam));
+        } else {
+          // Four tyres hitting the ground at once, and each of them throws.
+          atWheels(
+            wetGround ? mud : dust,
+            state,
+            groundDust(state),
+            Math.round((ev.clean ? 18 : 32) * slam * fx),
+            3.5,
+          );
+        }
       } else if (ev.type === "splash") {
         // How much water the car moved. A ford taken at pace throws a
         // sheet off the nose; a car going into a lake throws a COLUMN, and
@@ -880,6 +983,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // in it. `plumeDust` is that whole judgement — a sealed road, water, a
     // stage the rain has settled and a grass verge all come back null.
     plume.update(state, dt, fx, plumeDust(state));
+    // ...and the ground a body that is OVER is ploughing up, which no wheel
+    // cloud can throw: they all spawn at an axle, and a car on its roof has
+    // its axles in the air. This is the cloud a rollover and a long grind
+    // on the shell are mostly MADE of.
+    crashGrind_(state, dt);
     // THE ROOSTER TAIL — the stones a slide throws out sideways, off the side
     // the car is going. Its own module (drift-spray.ts) because its throw
     // has a direction none of the wheel logic's grains have, and its own
@@ -1007,9 +1115,19 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // wheels, and thickens as the slide deepens. Off-road earns it at
         // the same speed a slide does — a car picking its way back to the
         // track at walking pace is not excavating anything.
-        const perWheel = 4 + Math.round(c.slide * 5);
+        // ...and a SPIN throws far more of it than a drift does, off all
+        // four corners rather than the two the drift hangs out. Tarmac has
+        // always drawn that distinction (the fronts make their own smoke
+        // above); on gravel a car going round backwards at 100 km/h threw
+        // exactly what a tidy drift threw, which is the one moment in a run
+        // that ought to be unmistakable from any camera.
+        const perWheel = Math.round((4 + c.slide * 5) * (c.spun ? CRASH_THROW.spun : 1));
         wheel(-AXLE.rear, -1, perWheel, 3.5);
         wheel(-AXLE.rear, 1, perWheel, 3.5);
+        if (c.spun) {
+          wheel(AXLE.front, -1, perWheel, 3.5);
+          wheel(AXLE.front, 1, perWheel, 3.5);
+        }
       } else if (c.braking && c.u > 8) {
         wheel(-AXLE.rear, -1, 4, 2.5);
         wheel(-AXLE.rear, 1, 4, 2.5);

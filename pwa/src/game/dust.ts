@@ -21,6 +21,7 @@ import * as THREE from "three";
 import { type DriveLayout } from "@engine";
 
 import { DUST_LAMP_UNIFORMS, DUST_LAMPS } from "./dust-light.ts";
+import { CRASH_THROW } from "./crash-throw.ts";
 import { billowTexture, puffTexture } from "./textures.ts";
 
 /** How many particles a cloud keeps, unless its style asks for more. Big
@@ -146,6 +147,26 @@ export const GRAVEL_DUST: DustStyle = {
  * available to it because it is `puffy`: the chase cam sits a couple of
  * metres behind the tires that make these, and at that range a bare sprite
  * this size is a grey rectangle stuck to the lens. */
+/** THE GROUND A CRASH PLOUGHS UP — the same grit as a wheel's, given its
+ * own pool because a rollover throws more of it in two seconds than a whole
+ * clean stage does.
+ *
+ * It shares `GRAVEL_DUST`'s look on purpose: what a car on its roof digs
+ * out of a gravel road is what a tyre digs out of it, and an effect that
+ * reached for a different substance here would read as a different game.
+ * What it does NOT share is the budget. The wheel clouds live in 768
+ * particles between them, and a body grinding along at full rate wants most
+ * of that on its own — which shows up as the wheel dust tearing a hole in
+ * itself at the exact moment the picture is busiest.
+ *
+ * Longer-lived than the wheel's, too: a crash cloud is meant to be still
+ * hanging where the car went over when the camera gets back to it. */
+export const CRASH_GRIT: DustStyle = {
+  ...GRAVEL_DUST,
+  life: { min: CRASH_THROW.life / 2, max: CRASH_THROW.life },
+  pool: CRASH_THROW.pool,
+};
+
 export const TIRE_SMOKE: DustStyle = {
   size: 0.42,
   opacity: 0.3,
