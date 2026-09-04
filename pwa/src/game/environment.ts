@@ -32,6 +32,7 @@ import {
   type Preset,
 } from "./sky.ts";
 import { createSunShadows, type SunShadows } from "./car-shadow.ts";
+import { fogRangeFor } from "./settings.ts";
 import { squallOf, type Clap } from "./weather.ts";
 import { glowTexture } from "./textures.ts";
 import { clamp } from "../lib/util.ts";
@@ -545,8 +546,18 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   let absolute: { near: number; far: number } | null = null;
 
   const applyRange = (): void => {
-    fog.near = absolute ? absolute.near : preset.fogNear * rangeScale;
-    fog.far = absolute ? absolute.far : preset.fogFar * rangeScale;
+    if (absolute) {
+      fog.near = absolute.near;
+      fog.far = absolute.far;
+      return;
+    }
+    // The preset handed in here has ALREADY taken the sky's own fraction
+    // (sky.ts), and the player's DISTANCE row is a multiplier on top of it —
+    // so the two compound, and what the row may take is decided next to the
+    // ladder itself rather than here (`fogRangeFor`).
+    const range = fogRangeFor(preset.fogNear, preset.fogFar, rangeScale);
+    fog.near = range.near;
+    fog.far = range.far;
   };
 
   const setRange = (scale: number): void => {

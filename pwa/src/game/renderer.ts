@@ -23,6 +23,7 @@ import { createGameCamera, type CameraMode, type MapPose } from "./camera.ts";
 import type { FreeFlyMove, FreeFlyPose } from "./camera-free.ts";
 import {
   DRAW_DISTANCE_SCALE,
+  DUST_RAISED,
   EFFECTS_SCALE,
   INTERIOR_DETAIL,
   SCREEN_GRIME,
@@ -513,6 +514,30 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * across is invisible and still costs a draw. */
   const fxScale = (): number => (mapView ? 0 : EFFECTS_SCALE[quality.effects]);
 
+  /** …and how thick the ground the car being driven raises is allowed to be:
+   * the same budget, or nothing where the player has asked that no wheel on
+   * the stage dig (the DUST row — settings.ts). Its own reader because that
+   * row is about WHOSE cloud, not about how much of it: everything else the
+   * car throws — a landing, a crash, an impact, the smoke off a hot tyre —
+   * keeps the plain effects budget. */
+  const dustFx = (): number => (DUST_RAISED[quality.dust].player ? fxScale() : 0);
+
+  /** Which of the two pools that hold NOTHING BUT ground are drawn at all.
+   * `dustFx` already stops them being spawned into, but a `THREE.Points` in
+   * the scene is a draw call and its whole vertex buffer submitted every
+   * frame whether or not a grain is alive in it — and frames are the entire
+   * point of switching the dust off. The wheel pools are not on this list:
+   * `dust` and `mud` are also where a landing, a lost wheel and an impact
+   * throw, and none of those is this row's business.
+   *
+   * The towed cloud takes the wet stage's answer on top: a soaked road hangs
+   * nothing behind a car, it throws clods, and those are the wheel pools'. */
+  const applyDust = (): void => {
+    const raised = DUST_RAISED[quality.dust].player;
+    plume.points.visible = raised && !wetGround;
+    gravel.points.visible = raised;
+  };
+
   /** Cut the world to the island, or stop cutting it. The planes are solved
    * from the track, so this is also how a new stage's coastline arrives. */
   const applyIsland = (): void => {
@@ -584,7 +609,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // squall breathes, and the sheet has to breathe with it. Read against
     // the country (R40): a desert storm is wind and sand, and soaks nothing.
     wetGround = wetnessOf(state.env, biome) > 0;
-    plume.points.visible = !wetGround;
+    applyDust();
     mud.points.visible = wetGround;
     applyRange();
     applyTint();
@@ -598,6 +623,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       INTERIOR_DETAIL[quality.interior],
       SCREEN_GRIME[quality.interior] ? "coarse" : "off",
     );
+    // Unlike the rest of the DETAIL row, the dust is not geometry and does
+    // not wait for the next stage: the pools are standing in the scene
+    // already, so switching the row is switching them, mid-run included.
+    applyDust();
     if (game) setConditions(game);
     else applyRange();
   };
@@ -978,6 +1007,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // of the car's wake plus the wind, so every cloud streams backward and
     // leans downwind.
     const fx = fxScale();
+    // ...and the share of it the GROUND is allowed, which the player's DUST
+    // row can take to nothing on its own. Everything below that reads this
+    // instead of `fx` is a cloud lifted off the stage by a wheel; everything
+    // that keeps `fx` is made of the car — the tyre smoke, the shards, the
+    // spray, the grit a crash ploughs up.
+    const groundFx = dustFx();
     // The engine tracks the driven surface — road fords AND the wild's
     // lakes and streams throw the blue spray, and the stage's sealed
     // sections throw nothing at all until the tires start smoking.
@@ -987,7 +1022,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // logic below, and off entirely where the ground has no loose dry dust
     // in it. `plumeDust` is that whole judgement — a sealed road, water, a
     // stage the rain has settled and a grass verge all come back null.
-    plume.update(state, dt, fx, plumeDust(state));
+    plume.update(state, dt, groundFx, plumeDust(state));
     // ...and the ground a body that is OVER is ploughing up, which no wheel
     // cloud can throw: they all spawn at an axle, and a car on its roof has
     // its axles in the air. This is the cloud a rollover and a long grind
@@ -1003,7 +1038,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     gravel.update(
       state,
       dt,
-      fx,
+      groundFx,
       sealed ? 0 : (state.surface === "nature" ? WILD_THROW : 1) * (wetGround ? WET_THROW : 1),
       () => groundDust(state),
     );
@@ -1027,7 +1062,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       Math.min(1, rubberHeat + (sealed && scrubbing ? cooking * SOOT.heat : -SOOT.cool) * dt),
     );
     dustClock += dt;
-    if (fx > 0 && !c.airborne && dustClock > (sealed ? TARMAC_SMOKE.every : 0.03)) {
+    // What the wheels throw is two different substances on two different
+    // roads — the tyre's own smoke on a sealed one, the stage itself on
+    // every other — so the budget over them is whichever belongs to what is
+    // being thrown. A player who has asked for no dust still gets smoke off
+    // a locked wheel on tarmac: that came out of the tyre, not the ground.
+    const wheelFx = sealed ? fx : groundFx;
+    if (wheelFx > 0 && !c.airborne && dustClock > (sealed ? TARMAC_SMOKE.every : 0.03)) {
       dustClock = 0;
       // A wet stage throws clods where a dry one throws grit: same wheel
       // logic, same tuning, different matter under it.
@@ -1057,7 +1098,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         ? 1
         : pace * (state.surface === "nature" ? WILD_THROW : 1) * (wetGround ? WET_THROW : 1);
       const grains = (count: number): number => {
-        grainDebt += count * fx * thrown;
+        grainDebt += count * wheelFx * thrown;
         const whole = Math.floor(grainDebt);
         grainDebt -= whole;
         return whole;
@@ -1276,7 +1317,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (ghost && ghostCar) ghostCar.update(ghost, dt, chase.camera.position);
     // The entry list, off their own games; off under the map view like the
     // player's own body below.
-    field.setDust(wetGround, fx);
+    // ...and the two budgets they spend: the effects one on their exhausts,
+    // and the DUST row's own answer for the field on the cloud they tow —
+    // which is the half a struggling machine gives up first, because a
+    // rival's plume is worth everything to the picture and nothing to the
+    // driving (settings.ts).
+    field.setDust(wetGround, fx, DUST_RAISED[quality.dust].field ? fx : 0);
     field.update(state, chase.camera, dt, view !== "map");
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
     // drone, the map view and god mode's free camera there is nobody lost

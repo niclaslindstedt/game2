@@ -176,10 +176,17 @@ export type FieldCars = {
    * which is looking at a stage rather than at cars and takes the whole
    * field off along with the player's own body. */
   update: (viewer: GameState, camera: THREE.PerspectiveCamera, dt: number, shown: boolean) => void;
-  /** The two things the field's dust needs and only the renderer knows:
+  /** The three things the field's clouds need and only the renderer knows:
    * whether the rain has settled this stage (there is no cloud to tow off a
-   * soaked road) and how thick the transient FX are allowed to be. */
-  setDust: (wet: boolean, fx: number) => void;
+   * soaked road), how thick the transient FX are allowed to be, and how much
+   * of that the field's TOWED dust may have.
+   *
+   * The last is its own number rather than a share of the second because the
+   * player owns it directly (settings.ts's DUST row, which can put the
+   * whole entry list's cloud away and leave the driven car's standing), and
+   * because an exhaust is not dust: a grid steaming on the line is the
+   * effect at its best and has nothing to do with what the ground gives up. */
+  setDust: (wet: boolean, fx: number, towed: number) => void;
   /** Hang the nearest crews' lamps on the register the clouds are lit from
    * (dust-light.ts) — a rival ahead of you in the dark is a red glow inside
    * its own dust before it is a car. `power` is how much of a beam the
@@ -259,6 +266,8 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let watched: RivalRun | null = null;
   let wetGround = false;
   let fx = 1;
+  /** …and the share of it the towed cloud may spend — see `setDust`. */
+  let towedFx = 1;
   /** One cloud for the whole entry list — see the module note. Off until
    * somebody is entered (`showCloud`). */
   const plume = createPlume(FIELD_PLUME);
@@ -274,15 +283,16 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
    * garbage the collector answers with a pause in the middle of a stage. */
   const near: { run: RivalRun; range: number }[] = [];
 
-  /** Whether the field's cloud is worth drawing at all. Two ways it is not,
-   * and the second is the common one: rain has settled the stage (what a
-   * wheel picks up off a soaked road is clods, and those are the renderer's
-   * grains, not this), or there is no field — a time trial, a roam, the
-   * menu's own backdrop. Hidden rather than merely starved, because a
+  /** Whether the field's cloud is worth drawing at all. Three ways it is
+   * not, and the second is the common one: rain has settled the stage (what
+   * a wheel picks up off a soaked road is clods, and those are the
+   * renderer's grains, not this), there is no field — a time trial, a roam,
+   * the menu's own backdrop — or the player has asked that the field not
+   * raise any (the DUST row). Hidden rather than merely starved, because a
    * `Points` nobody has spawned into still costs its draw call and its
    * texture bind on every pass of every frame. */
   const showCloud = (): void => {
-    plume.points.visible = !wetGround && runs.length > 0;
+    plume.points.visible = !wetGround && towedFx > 0 && runs.length > 0;
     // The exhaust takes only the second half of that test. Rain settles what
     // a wheel PICKS UP; it does nothing to what an engine puts out, and a
     // grid steaming in the wet is the best the effect ever looks.
@@ -396,7 +406,12 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       // are standing on: a rival crossing a meadow raises nothing while the
       // player on the road beside them raises a wall, which is the same rule
       // read twice rather than one answer shared.
-      for (let i = 0; i < near.length && i < DUST_CARS; i++) {
+      //
+      // Skipped whole where the field has no dust to raise rather than left
+      // to `raise` to refuse: what is being handed in is a ground reading
+      // per crew, and asking the terrain three questions a frame for a cloud
+      // nobody is going to see is exactly the cost the setting removes.
+      for (let i = 0; towedFx > 0 && i < near.length && i < DUST_CARS; i++) {
         const crew = near[i];
         if (!crew) continue;
         const state = crew.run.state;
@@ -404,7 +419,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           crew.run,
           state,
           dt,
-          fx,
+          towedFx,
           plumeGround(state.track.knobs.biome, state.surface, wetGround, () =>
             rockAt(state.terrain.groundAt, state.car.x, state.car.z),
           ),
@@ -445,9 +460,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         }
       }
     },
-    setDust: (wet, budget) => {
+    setDust: (wet, budget, towed) => {
       wetGround = wet;
       fx = budget;
+      towedFx = towed;
       showCloud();
     },
     lightDust: (power) => {

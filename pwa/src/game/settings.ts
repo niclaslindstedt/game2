@@ -204,7 +204,7 @@ export type AudioSettings = {
   sfx: number;
 };
 
-/** THE SIX LEVERS THE RENDERER READS, on THREE rows the player turns.
+/** THE SEVEN LEVERS THE RENDERER READS, on THREE rows the player turns.
  *
  * `resolution` and `drawDistance` are their own rows because they are their
  * own decisions: how SHARP the picture is and how FAR into it you can see
@@ -214,18 +214,19 @@ export type AudioSettings = {
  * a big low-density screen wants the opposite. Tying them together only ever
  * charges a player for something they did not ask for.
  *
- * The remaining four are HOW MUCH WORLD IS BUILT, and they are one row
+ * The remaining five are HOW MUCH WORLD IS DRAWN, and they are one row
  * (`DETAIL_PRESETS`) because they are one judgement with one answer: they
- * are all geometry and all decided when a stage is made, they all move
- * together with how much headroom the machine has, and nobody has an
- * opinion about undergrowth density that is not also an opinion about
+ * all move together with how much headroom the machine has, and nobody has
+ * an opinion about undergrowth density that is not also an opinion about
  * verge stones. */
 export type VideoSettings = {
   /** Pixel-ratio ceiling — the single biggest lever on a weak GPU, and its
    * own player-facing row (RESOLUTION). Applies the moment it is set. */
   resolution: "low" | "medium" | "high";
-  /** How far the fog lets you see, and how far the camera draws. Its own
-   * player-facing row (DISTANCE). Applies the moment it is set. */
+  /** How far the fog lets you see, which is the same thing as how much
+   * stage is submitted: the world is culled at the fog's own far distance
+   * (`DRAW_DISTANCE_SCALE`). Its own player-facing row (DISTANCE), and it
+   * applies the moment it is set. */
   drawDistance: "near" | "normal" | "far";
   /** Particles, rain and the ambient life — the transient FX budget. Part
    * of DETAIL. */
@@ -267,6 +268,28 @@ export type VideoSettings = {
    * it is also the lever with the most frames in it after RESOLUTION. Part
    * of DETAIL, and applies to the NEXT stage built like the undergrowth. */
   ground: "plain" | "normal" | "rich";
+  /** WHOSE WHEELS RAISE THE GROUND: the cloud a car TOWS down a loose stage
+   * (plume.ts), the grit and the clods its wheels kick up, and the stones a
+   * slide throws out sideways (drift-spray.ts). Part of DETAIL, and the one
+   * lever on the row that applies the instant it is set rather than at the
+   * next stage — none of it is geometry, it is particles spawned per frame
+   * off a car that is moving.
+   *
+   * Three stops because the cost is not shared evenly between the cars on
+   * the road. The player's own cloud IS the effect: it is what a loose
+   * surface feels like from the seat, and the last of it to give up. The
+   * field's is the same substance read from two hundred metres away — worth
+   * a great deal to the picture (a rival is a plume over the trees a corner
+   * before it is a car) and nothing at all to the driving, so it is the half
+   * that goes first on a machine that is struggling: `player` is a stage
+   * where only the car you are in is digging. `off` is both, for the phone
+   * that would rather have the frames.
+   *
+   * It does not reach what a CRASH ploughs up, what a landing punches out,
+   * or the smoke a tyre boils off tarmac: none of those is a cloud hanging
+   * over the stage, they are the moment they belong to, and they ride the
+   * EFFECTS budget with every other burst. */
+  dust: "off" | "player" | "all";
 };
 
 /** HOW MANY FRAMES A SECOND A PHONE IS ASKED FOR, at most.
@@ -310,14 +333,56 @@ export const RESOLUTION_SCALE: Record<VideoSettings["resolution"], number> = {
   high: 2,
 };
 
-/** Multipliers on the environment preset's fog distances and the camera's
- * far plane. Pulling the fog in is what stops a weak device from drawing
- * half a stage it cannot see through anyway. */
+/** Multipliers on the environment preset's own fog distances. The fog IS
+ * the draw distance: how far it lets the player see is also the radius the
+ * world is culled at every frame (`world.cull` is handed `fogFar`), so
+ * pulling it in is what stops a weak device from submitting half a stage it
+ * cannot see through anyway.
+ *
+ * NEAR is a LOT nearer than the design point rather than a shade under it,
+ * and that is the whole reason the stop exists. At two-thirds it was a
+ * picture that looked like the tuned one and metered like it too — a stop a
+ * player reaches for because the game is stuttering and puts back because
+ * nothing happened. At this depth a clear day fogs out around two hundred
+ * metres instead of five, and every road chunk and wild cell past that is
+ * dropped before the frame is drawn rather than shaded into solid fog. It
+ * cannot be pushed further without
+ * closing the view in on the driver: the weather shortens the SAME fog
+ * (sky.ts's per-weather fractions), so this is a multiplier ON one and the
+ * two compound — which is what `environment.ts` keeps a floor under. */
 export const DRAW_DISTANCE_SCALE: Record<VideoSettings["drawDistance"], number> = {
-  near: 0.6,
+  near: 0.4,
   normal: 1,
   far: 1.45,
 };
+
+/** The nearest the DISTANCE row may ever bring the far fog, m.
+ *
+ * A hundred and fifty metres is about five seconds of road at rally pace,
+ * which is the shortest sight line a corner can arrive out of and still be
+ * a corner rather than an ambush. It exists because the SETTING and the
+ * WEATHER shorten the same fog and compound: every stop of the row is well
+ * past this on a clear sky, and what it catches is NEAR landing on the
+ * weather that already takes the most (sky.ts's per-weather fractions). */
+export const MIN_FOG_FAR = 150;
+
+/** The fog a preset actually gets, once the player's DISTANCE row has had
+ * its say — the whole policy in one place, so `environment.ts` applies it
+ * rather than deciding it and the ladder can be read without a browser.
+ *
+ * The floor is on what the SETTING may take, never on what the weather may:
+ * a preset already shorter than `MIN_FOG_FAR` keeps its own answer, so this
+ * can only ever push the fog back OUT, and a storm stays as short as a storm
+ * is. The near plane rides whatever ratio the far one landed on, so the fog
+ * keeps its shape instead of thickening at one end when the floor bites. */
+export function fogRangeFor(
+  near: number,
+  far: number,
+  scale: number,
+): { near: number; far: number } {
+  const reach = Math.max(far * scale, Math.min(far, MIN_FOG_FAR));
+  return { near: near * (reach / far), far: reach };
+}
 
 /** Particle-count and spawn-rate multiplier per effects level; `off` also
  * takes the rain and the ambient life out entirely. */
@@ -368,6 +433,20 @@ export const GROUND_SCALE: Record<VideoSettings["ground"], number> = {
   rich: 1.6,
 };
 
+/** Who is allowed to raise ground off the stage at each stop of the DUST
+ * row, as the two questions the renderer actually has: the car the frame is
+ * rendered FROM (its towed plume, its wheel kickup, its rooster tail), and
+ * the rest of the entry list (the one cloud the whole field shares).
+ *
+ * A record rather than a pair of comparisons at the two call sites, because
+ * the two must never disagree: a stage where the field is towing dust and
+ * the player is not would read as a bug in the car. */
+export const DUST_RAISED: Record<VideoSettings["dust"], { player: boolean; field: boolean }> = {
+  off: { player: false, field: false },
+  player: { player: true, field: false },
+  all: { player: true, field: true },
+};
+
 /** THE PICTURE, AS THREE QUESTIONS: how sharp, how much, how far. Every one
  * of the six levers above is real and still read by the renderer, but a
  * player does not have an opinion about undergrowth density — they have an
@@ -379,30 +458,37 @@ export const GROUND_SCALE: Record<VideoSettings["ground"], number> = {
  * The point of the split is that the three costs are NOT the same cost.
  * Resolution is pixels — every one of them, every frame, whatever is on
  * screen. Distance is how much stage is submitted at all. Detail is how
- * much geometry each metre of it is made of. A machine can be short of one
- * and rich in another, and a phone with a dense screen is the ordinary case
- * of exactly that: it wants the pixels it has and would rather give up the
- * far ridges than look at a soft picture. Under one knob that trade could
- * not be expressed at all. */
+ * much of it there is per metre — the geometry each one is made of, and the
+ * dust the cars hang over it. A machine can be short of one and rich in
+ * another, and a phone with a dense screen is the ordinary case of exactly
+ * that: it wants the pixels it has and would rather give up the far ridges
+ * than look at a soft picture. Under one knob that trade could not be
+ * expressed at all. */
 export type Detail = "low" | "medium" | "high";
 
-/** The four levers DETAIL owns. Named as a slice of `VideoSettings` rather
- * than restated, so adding a seventh lever is a decision about which row it
+/** The five levers DETAIL owns. Named as a slice of `VideoSettings` rather
+ * than restated, so adding an eighth lever is a decision about which row it
  * belongs on instead of a silent omission from both. */
-export type DetailSettings = Pick<VideoSettings, "effects" | "interior" | "flora" | "ground">;
+export type DetailSettings = Pick<
+  VideoSettings,
+  "effects" | "interior" | "flora" | "ground" | "dust"
+>;
 
 /** What each DETAIL stop is worth, cheapest first — the order the ladder is
  * walked and the order `detailOf` breaks its ties in. Changing a preset here
  * changes what LOW, MEDIUM and HIGH mean everywhere, including for every
  * blob already stored. */
 export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
-  // The phone that stutters: the windows solid, the verges bare, and under
-  // half the particles.
-  low: { effects: "low", interior: "off", flora: "sparse", ground: "plain" },
-  // The design point — every lever at the number the game was tuned on.
-  medium: { effects: "full", interior: "full", flora: "normal", ground: "normal" },
-  // A machine with headroom: a thicker forest floor and stonier verges.
-  high: { effects: "full", interior: "full", flora: "lush", ground: "rich" },
+  // The phone that stutters: the windows solid, the verges bare, under half
+  // the particles, and nobody on the road raising any ground at all.
+  low: { effects: "low", interior: "off", flora: "sparse", ground: "plain", dust: "off" },
+  // The design point — every lever at the number the game was tuned on, and
+  // the dust spent where it is worth the most: the car being driven digs,
+  // and the field's shared cloud is what the machine buys back.
+  medium: { effects: "full", interior: "full", flora: "normal", ground: "normal", dust: "player" },
+  // A machine with headroom: a thicker forest floor, stonier verges, and the
+  // whole entry list towing dust the way a rally actually looks.
+  high: { effects: "full", interior: "full", flora: "lush", ground: "rich", dust: "all" },
 };
 
 /** The three picture ladders, as the menu walks them. No hints: what the
@@ -438,7 +524,7 @@ export const DEFAULT_VIDEO: VideoSettings = {
 };
 
 /** Which DETAIL stop a set of video knobs IS: by exact match, else the stop
- * that agrees with the most of the four, ties going to the CHEAPER picture
+ * that agrees with the most of the five, ties going to the CHEAPER picture
  * because `DETAIL_PRESETS` is walked cheapest first. So a blob written on
  * another build's ladder — or on the old single QUALITY row — lands on the
  * picture it most resembles, and never on a heavier one than it asked for.
