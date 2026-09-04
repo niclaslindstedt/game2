@@ -18,6 +18,7 @@ import {
   type StageLength,
   type StageShape,
   type Surface,
+  type Track,
 } from "../mapgen/index.ts";
 import { carById, gearedSpec, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
@@ -661,6 +662,35 @@ function checkIn(state: GameState, events: GameEvent[]): void {
   state.checkpointTimes.push(state.raceTime);
 }
 
+/** HOW MUCH OF A POINT IS OPEN COUNTRY rather than road, 0..1 — the weight
+ * the terrain lattice carries against the road's own ribbon, and the weight
+ * the body's corners carry against the ground under its middle (ground.ts,
+ * `readSeat`).
+ *
+ * 0 over the mat, ramped across `offTrack.verge` and 1 from the line the
+ * car counts as off the road outward, on the smoothstep R16 hands the
+ * shoulder over with — so both surfaces and both seat rules meet with no
+ * step and no kink at the seam the car crosses at speed. Measured against
+ * the STAGE's half-width rather than the sample's, because that is the line
+ * `offRoad` itself is drawn at and the two have to reach 1 together.
+ *
+ * A DECK has no verge to ramp across: past a parapet is air rather than a
+ * shoulder leaning away, so a bridge keeps the hard edge it has always had
+ * — the ribbon, clamped to the mat (track.ts, `profileOf`), for a corner
+ * hanging over the parapet with the car still on the deck, and the country
+ * outright for a car that has left it, which over a bridge is the river bed
+ * and a car falling into it. And off the END of the road — past the apron
+ * R24 shelves — the terrain owns the ground however little lateral offset
+ * the fix reports.
+ */
+function countryShare(track: Track, fix: TrackPoint): number {
+  if (track.samples[fix.index].deck != null) return fix.offRoad ? 1 : 0;
+  if (fix.offRoad) return 1;
+  const out = (Math.abs(fix.lateral) - track.width / 2) / T.offTrack.verge;
+  const t = clamp(out, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
 /** The ground under the car, refilled every step. `stepGrounded` and
  * `stepAirborne` read this and never keep a reference, and a run is 120
  * steps a second, so the whole run shares one record instead of allocating
@@ -679,7 +709,7 @@ const GROUND: GroundContext = {
   rng: createRng(0),
   drive: 1,
   groundAt: () => 0,
-  wild: false,
+  country: 0,
 };
 
 /** What this step multiplies the drive by, and the SPENDING of the mass
@@ -820,6 +850,44 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // is the direction half of the same idea.)
   const dirX = sinH * car.u + cosH * car.w;
   const dirZ = cosH * car.u - sinH * car.w;
+  // ONE GROUND, road and country alike — the surface every height in the
+  // step below is read off, wherever it is asked about.
+  //
+  // The two are stated in different places: the mat is the road's own
+  // ribbon (`locate` — its crown, its wheel tracks, the shoulder), and the
+  // country is the terrain lattice, which is what the renderer draws and
+  // what R16's hand-over leans the shoulder onto. They agree over the mat
+  // and for the bare metre and a half past it, and then they part: the
+  // ribbon's cross-section is a FORMULA and runs on for ever, gently, where
+  // the real ground drops away down an embankment. Metres out — which is
+  // where a car's own corners are asking (ground.ts, `corners`) — the
+  // ribbon is a fiction worth up to a body's height.
+  //
+  // That fiction never stayed a height. The body's momentum is measured
+  // against the ground the wheels found (`Seat.foot`), and reading the
+  // fiction on one step and the truth on the next made a foot that fell at
+  // tens of m/s — a whole loft opened in a single hundred-and-twentieth of
+  // a second, on ground that only ever went down, and the car thrown up
+  // into the air at the verge line and left riding the fiction across the
+  // country. A seam between two readers is not a shape; it is a teleport.
+  //
+  // So the ribbon hands over to the terrain ACROSS the verge, on the same
+  // smoothstep R16 draws with, and by the line where the car counts as off
+  // the road the two branches below are reading the identical surface. A
+  // DECK is the exception the ribbon is right about: past a parapet is air,
+  // not a verge, and the lattice under a bridge is the river bed.
+  const groundAt = (x: number, z: number): number => {
+    const fix = locate(track, x, z, preFix.index);
+    const share = countryShare(track, fix);
+    if (share <= 0) return fix.elevation;
+    if (share >= 1) return terrain.groundAt(x, z);
+    return fix.elevation + (terrain.groundAt(x, z) - fix.elevation) * share;
+  };
+  const country = countryShare(track, preFix);
+  // The ground under the car as the step BEGINS, read off that same one
+  // surface: `wheelSpeed` divides the move by `dt`, so a pre-move height
+  // from a different reader than the post-move one is the seam again.
+  const groundY = country <= 0 ? preFix.elevation : groundAt(car.x, car.z);
   let ctx: GroundContext;
   if (preFix.offRoad) {
     // The wild: the terrain owns the ground — the RIDDEN lattice surface
@@ -852,7 +920,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     // route abandons at its junctions (R17) are real tarmac, and a car
     // exploring one gets tarmac grip on it.
     ctx.surface = offRoadSurface(state, car.x, car.z);
-    ctx.groundY = here;
+    ctx.groundY = groundY;
     ctx.slope = (ahead - behind) / (2 * grade);
     ctx.slopeLat = (right - left) / (2 * grade);
     ctx.roadCurve = (fwd + back - 2 * here) / (span * span);
@@ -869,8 +937,11 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.t = state.t;
     ctx.rng = state.rng;
     ctx.drive = gain;
-    ctx.groundAt = ground;
-    ctx.wild = true;
+    // The car's own corners reach back over the mat it has just left, and a
+    // corner over a road is standing on the road: the shared surface above,
+    // not the bare lattice, which is why this is not `terrain.groundAt`.
+    ctx.groundAt = groundAt;
+    ctx.country = country;
   } else {
     // How sharply the road curves under the car ALONG ITS PATH — what
     // decides whether it throws the car, and how much of the car's weight
@@ -905,7 +976,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     const turnSin = sinH * fwdZ - cosH * fwdX;
     ctx = GROUND;
     ctx.surface = preFix.surface;
-    ctx.groundY = preFix.elevation;
+    ctx.groundY = groundY;
     ctx.slope = preFix.slope * turnCos + preFix.slopeLat * turnSin;
     ctx.slopeLat = preFix.slopeLat * turnCos - preFix.slope * turnSin;
     ctx.roadCurve = lipNear ? 0 : pathCurvature(track, preFix, dirX, dirZ);
@@ -915,18 +986,15 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.t = state.t;
     ctx.rng = state.rng;
     ctx.drive = gain;
-    // On the road the road IS the ground: its own profile — crown, tracks,
+    // On the mat the road IS the ground: its own profile — crown, tracks,
     // shoulder and the grassed slope past it (R16), interpolated between
-    // samples — read wherever the step lands the car, exactly as the wild
-    // reads its lattice. It is the same surface `terrain.groundAt` hands the
-    // car once it counts as off the road, so the seam at the verge line is
-    // one the car drives over rather than a step it is dropped down. Nothing
-    // is seated on the profile: a road is smooth across the body's length,
-    // and the cross-section under the wheels is what the car is meant to
-    // ride, not a face to be lifted clear of.
-    const near = preFix.index;
-    ctx.groundAt = (x, z) => locate(track, x, z, near).elevation;
-    ctx.wild = false;
+    // samples — read wherever the step lands the car, and handed over to
+    // the country past the verge by the shared reader above. Nothing is
+    // seated on the profile: a road is smooth across the body's length, and
+    // the cross-section under the wheels is what the car is meant to ride,
+    // not a face to be lifted clear of — which is what `country` says.
+    ctx.groundAt = groundAt;
+    ctx.country = country;
   }
 
   if (car.rolling) {

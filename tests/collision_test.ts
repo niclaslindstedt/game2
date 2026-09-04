@@ -848,6 +848,17 @@ describe("the end of the run", () => {
     // ...two is not.
     car.damage.wheels[3] = 1;
     car.damage.broken.push("wheelRR");
+    // The same three hits also hole the radiator, and a holed radiator is a
+    // clock: on full throttle the heat finishes the engine about a dozen
+    // seconds before a car dragging two hubs has come to rest, and
+    // `beyondDriving` reads the engine first — so the run retired for the
+    // ENGINE and the wheel rule under test here was never reached. Clear the
+    // heat with the roll and the heading above, for the same reason: this
+    // asserts the wheel ledger, and every other way the crash could end the
+    // run is staged out of its way.
+    car.damage.systems.engine = 0;
+    car.damage.systems.cooling = 0;
+    car.heat = 0;
     let retired = false;
     for (let i = 0; i < TUNING.physicsHz * 30 && !retired; i++) {
       retired = step(state, { ...NEUTRAL_INPUT, throttle: 1 }).some(
