@@ -304,6 +304,31 @@ rewards it, and no drift seconds are counted at the player.
 - **The body WALKS over its corners.** A rolling car turns about the corner of itself that is on the ground, and that corner is a metre out from its middle — so going over carries the whole car sideways, about two metres per half turn. Placing the body by its height alone puts the right corner on the ground at every attitude but leaves it turning about a fixed point under its own middle, which reads as a car holding on to a bar at ground level and spinning round it. The walk per radian is exactly how tall the body is standing on that corner (`hullStand`): zero flat on its wheels, widest up on a corner.
 - **NO FACE ARRIVES FLAT** (`air.roll.pitchKick` / `yawKick` / `yawMax`). The outline the roll turns on is a cross-section — a width and a height, no length — so it can say how far the body goes over and nothing about the fact that the corner reaching the ground reaches it before the rest of that face does. Every contact therefore throws the body about its other two axes: `CarState.pitchRate` is a real degree of freedom for the length of a roll (free in the air, damped on the ground, levelled out under a body lying flat on a face), and the yaw is wound up toward `yawMax` — about a turn a second — rather than damped away. That is the corkscrew, and it is why two rolls off the same lip end up facing different ways. The kicks are drawn from the run's own seeded RNG, because which end arrives first is decided by a rut a hand's breadth across that the terrain field is far too coarse to know; a stage driven twice still rolls twice the same way.
 - **A roll STRIPS the car.** Every contact of a roll is the ground meeting sheet metal with nothing sprung under it, so the landing's own tolerance does not apply: `air.roll.shellFree` is what a shell arrival gets for free, and it is a fraction of `collision.hardLandSpeed`. A car that has been over loses its glass and its mirrors, folds the faces it came down on, and past a certain roll loses the doors, the lids and eventually a pair of wheels. See "Collision and damage" below for the faces that fold.
+- **AND THE OUTSIDE CAMERA GETS OFF ITS BOOM** (`pwa/src/game/camera-roll.ts`).
+  A rolling car is the one thing on a stage a boom cannot follow — it is off
+  its wheels, its heading and its travel have come apart, and it is in the air
+  between every pair of contacts — so a chase rig tracking a blend of nose and
+  travel whips through a full circle. The five outside rigs therefore stop
+  being rigs for the length of a roll: the lens coasts to a stop where it was
+  standing, steps back if it was sitting right behind the bumper, and watches
+  from the verge. It zooms to hold the car a readable size as it goes away,
+  caps how far off centre the pan may lag (against the lens it is actually
+  drawing at), and CLIMBS — up and forward, rate-limited — until its sight
+  line to the car clears whatever ground has got between them. It holds for
+  `roll.lieFor` afterwards and then flies home into the pose the driving rig
+  has been standing in underneath it all along, unless the car has been
+  respawned out from under it, which no pan can cross.
+  **The three in-car views keep theirs**, and go over WITH the car: a lens
+  bolted to the bumper, the scuttle or the driver's head is not failing when
+  the car rolls, it is showing the roll from the one seat nobody can buy a
+  ticket for. Driving, those rigs take only a share of the body's roll through
+  a bit of play (`rollFollow`, `rollPlay` — a driver levels their head against
+  a camber); while `car.rolling` the neck hands over to a bolt
+  (`camera-eye.ts`), and the gaze becomes the body's own basis one for one,
+  because two thirds of a turn while the car takes a whole one slides the
+  interior round the lens. That share is also why the eye reads `rollTilt`
+  rather than the raw angle — `car.roll` is never wrapped, and a fraction of
+  the whole turn a car carries after going over once is not zero.
 - **A car the roll leaves off its wheels is a run that is over where it lies.** There is no tyre on the ground, so nothing the driver asks for reaches the car; `state.overturned` holds it there for `roll.lieFor` and then puts the crew back at the last split board (R28), exactly as a drowning does. It is the same rule for the FIELD, without a line of its own — every rival is stepped through the same code.
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
 - **Landing** — straight (slip inside the clean limit) keeps all your speed: `CLEAN AIR`. Landing sideways scrubs speed and wobbles the car, and past the trip above it rolls. Line up before the lip. Whatever the descent was, the springs take it (below), and a slam past what they can travel through bounces the whole chassis back off the ground for a beat — one landing still happening, not a second flight, so it draws no turbulence and never counts as a jump.
@@ -966,6 +991,18 @@ every solid is a circle, and a hit does several things at once:
   corner spins the car instead of politely stopping it. Below
   `scuffSpeed`, contact is a scuff: the car stops against the rock,
   unmarked.
+
+  The spin one contact can add SATURATES (`yawKickMax`, through a `tanh`,
+  as the lateral grip does). The kick is linear in the velocity change and
+  in the lever arm both, so the worst case multiplies two big numbers: a
+  car arriving sideways at pace and catching a trunk on its nose corner
+  had its whole lateral speed reversed at the full half-length of the body
+  and came away turning four times a second. Past the ceiling that speed
+  goes into folding the nose instead, which the zone's crush already
+  books — the same argument `air.tripMax` makes about the roll axis. The
+  ceiling is on the KICK and not on the car, so a car already going round
+  for reasons of its own is not straightened by a scrape.
+
 - **What the solid does about it.** Nothing in the wild is infinitely
   heavy. Every standing thing carries a mass, a rooting (how much of it
   the ground holds) and a snapping strength, all three derived from the

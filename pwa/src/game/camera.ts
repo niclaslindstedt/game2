@@ -62,13 +62,19 @@
 // common to ease at all, and the flight is the whole of them: it reads as
 // climbing into the car and back out of it, which is what it is.
 //
-// And two BEATS override whichever of them is up. The establishing shot
-// opens every stage: the camera circles the start control while the crew in
-// front leaves, then comes down onto the car it will be driven from
-// (camera-start.ts). The flying finish closes it: the camera stops
-// travelling with the car, plants itself where it stood, and turns to watch
-// it go (camera-finish.ts). This file owns WHEN each of the two has the
-// frame; they own what the shot is.
+// And three BEATS override whichever of them is up, all three of them the
+// same gesture — the lens stops being a rig and becomes an operator standing
+// somewhere. The establishing shot opens every stage: the camera circles the
+// start control while the crew in front leaves, then comes down onto the car
+// it will be driven from (camera-start.ts). The flying finish closes it: the
+// camera stops travelling with the car, plants itself where it stood, and
+// turns to watch it go (camera-finish.ts). And the roll takes the frame
+// whenever it happens, for the one reason the other two do not share — a car
+// past its outside wheels is not a thing a BOOM can follow, so the outside
+// rigs plant, come to rest, and watch it go over from the verge
+// (camera-roll.ts). The three seats inside the car keep theirs and go round
+// with the body, which is the same decision read the other way. This file
+// owns WHEN each of the three has the frame; they own what the shot is.
 
 import * as THREE from "three";
 import { angleLerp, clamp } from "../lib/angles.ts";
@@ -112,6 +118,7 @@ import {
   type ShakeSource,
 } from "./camera-shake.ts";
 import { createMapCamera, type MapPose } from "./camera-map.ts";
+import { createRollCamera } from "./camera-roll.ts";
 import { createStartCamera } from "./camera-start.ts";
 import { createSweepCamera } from "./camera-sweep.ts";
 import { DEFAULT_SETTINGS, PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
@@ -589,6 +596,9 @@ export function createGameCamera(width: number, height: number): GameCamera {
   /** The shot the stage closes on: the camera planted at the line, watching
    * the car go (camera-finish.ts). */
   const finishShot = createFinishCamera();
+  /** …and the shot the car goes OVER in: the lens planted at the side of
+   * the road, watching the roll (camera-roll.ts). */
+  const rollShot = createRollCamera();
   /** …and the flight between two cars, for a spectator changing crew
    * (camera-sweep.ts). */
   const sweepShot = createSweepCamera();
@@ -888,16 +898,34 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const overhead = mode === "drone" || mode === "map";
     if (overhead) startShot.reset();
     const shot = !overhead && startShot.flying(state) ? startShot.fly(camera, state, fov, dt) : fov;
+    // THE CAR GOING OVER outranks every beat above it, and rides over the rig
+    // the same way they do: a boom cannot follow a rolling car, so the lens is
+    // planted at the side of the road until it has finished (camera-roll.ts).
+    //
+    // THE SEATS KEEP THEIRS. A camera bolted to the car is not a shot that
+    // fails on a roll, it is the roll from the one place nobody can buy a
+    // ticket for: the bumper and the scuttle go round with the body, and the
+    // cockpit takes the driver over with it. Nothing there needs rescuing,
+    // and standing their lens on the verge would take away the best thing
+    // about driving from inside the car.
+    //
+    // The overhead pair are left alone for their own reason — the drone is a
+    // backdrop with a bot in it, and nobody is driving under the map.
+    const going = !overhead && !inCar && rollShot.watching(state);
+    const watched = going ? rollShot.fly(camera, state, shot, CHASE_CLEARANCE, dt) : shot;
+    if (!going) rollShot.reset();
     // The hor+ ceiling belongs to the view (`capFor`), so a move between two
     // of them carries it across with everything else: stepped at the press,
     // it would re-frame a portrait viewport a whole move before the lens got
-    // there.
+    // there. A planted shot is an OUTSIDE one whichever view it planted from,
+    // and the seat's own ceiling comes back with the hand-back.
     const cap = inCar ? eye.rigOf(inCar).vfovMax : MAX_VFOV;
     const at = change.at();
+    const seatCap = change.flying() ? capFor(changeFrom) + (cap - capFor(changeFrom)) * at : cap;
     camera.fov = verticalFovFor(
-      shot,
+      watched,
       camera.aspect,
-      change.flying() ? capFor(changeFrom) + (cap - capFor(changeFrom)) * at : cap,
+      going ? MAX_VFOV + (seatCap - MAX_VFOV) * rollShot.at() : seatCap,
     );
     camera.updateProjectionMatrix();
   };
@@ -956,6 +984,9 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // somebody else's car, kilometres up the road — so the plant is
       // dropped and the rig is stood around THIS car again first.
       finishShot.reset();
+      // ...and so does the roll's, for the same reason: a shot planted beside
+      // a car that went over is not a shot to watch another crew from.
+      rollShot.reset();
       // A change of SEAT on the road the lens is leaving means nothing on the
       // road it is going to.
       change.reset();
@@ -986,6 +1017,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // flown down to, and nobody starts a run mid-plunge.
       eye.setEyes(next);
       change.reset();
+      rollShot.reset();
       restand = true;
       held = 0;
     },

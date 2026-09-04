@@ -681,6 +681,308 @@ describe("what a blow does to the picture", () => {
   });
 });
 
+describe("the car going over", () => {
+  /** A roll, scripted: the body past its outside wheels, turning about its
+   * own centre at most of a turn a second and travelling away from where it
+   * was tripped. It is the state no rig can follow — the heading is spinning,
+   * the travel direction has come apart from it, and the wheels are off the
+   * ground — and it is written directly, because what the camera does with it
+   * is the whole subject and how the car got there is not.
+   *
+   * `rolling` false runs the same tumble past the driving rig instead, which
+   * is what the shot is measured against. */
+  function tumble(mode: CameraMode, frames: number, rolling = true) {
+    const state = game();
+    const car = state.car;
+    car.heading = 0;
+    car.u = 26;
+    car.w = 12;
+    const cam = createGameCamera(1600, 900);
+    cam.setMode(mode);
+    // Two seconds of ordinary driving first: the shot plants from the view
+    // the player was actually driving in, and a rig that has never stood
+    // anywhere is not that view.
+    for (let f = 0; f < 120; f++) {
+      car.z += car.u * FRAME;
+      cam.update(state, FRAME);
+    }
+    let over = true;
+    const seats: THREE.Vector3[] = [];
+    const aims: THREE.Vector3[] = [];
+    const cars: THREE.Vector3[] = [];
+    const lens: number[] = [];
+    const forward = new THREE.Vector3();
+    for (let f = 0; f < frames; f++) {
+      if (over) {
+        // Over and over, and going somewhere while it does. The roll ends
+        // where any roll ends: with the body down and out of turn.
+        car.roll += 5.5 * FRAME;
+        car.heading += 4.5 * FRAME;
+        car.airborne = f % 20 < 8;
+        car.rolling = rolling;
+        car.z += 24 * FRAME;
+        car.x += 9 * FRAME;
+        if (f > 90) {
+          over = false;
+          car.rolling = false;
+          car.airborne = false;
+        }
+      }
+      cam.update(state, FRAME);
+      seats.push(cam.camera.position.clone());
+      cam.camera.getWorldDirection(forward);
+      aims.push(forward.clone());
+      cars.push(new THREE.Vector3(car.x, car.y, car.z));
+      lens.push(cam.camera.fov);
+    }
+    return { state, cam, seats, aims, cars, lens };
+  }
+
+  it("stops travelling with the car and lets it go", () => {
+    const { seats, cars } = tumble("chase", 90);
+    // The lens comes to rest rather than cutting to it — it is still moving
+    // as the shot opens, taking its coast and its step back...
+    const opening = seats[6].distanceTo(seats[0]);
+    expect(opening).toBeGreaterThan(0.5);
+    // ...and is standing still well before the roll is over, over three
+    // times as many frames.
+    const late = seats[89].distanceTo(seats[70]);
+    expect(late).toBeLessThan(0.05);
+    // Meanwhile the car has left: the whole point of the shot is that the
+    // distance between the two grows.
+    const first = seats[0].distanceTo(cars[0]);
+    const last = seats[89].distanceTo(cars[89]);
+    expect(last).toBeGreaterThan(first + 15);
+  });
+
+  it("keeps the car in the picture for every frame of it", () => {
+    const { seats, aims, cars, lens } = tumble("chase", 90);
+    for (let f = 0; f < 90; f++) {
+      const to = cars[f].clone().sub(seats[f]).normalize();
+      // Inside the frame, and not by a whisker: the lens is tightening
+      // underneath the pan the whole time, so the test is against the fov
+      // the frame is actually being drawn at, halved.
+      expect(aims[f].angleTo(to)).toBeLessThan(((lens[f] / 2) * Math.PI) / 180);
+    }
+  });
+
+  it("zooms, so the car is still worth looking at when it stops", () => {
+    const { seats, cars, lens } = tumble("chase", 90);
+    /** What share of the frame's height a two-metre car fills, %. */
+    const size = (f: number): number =>
+      ((2 * Math.atan(2 / seats[f].distanceTo(cars[f])) * 180) / Math.PI / lens[f]) * 100;
+    // The car ends the roll more than twice as far away as it began it...
+    expect(seats[89].distanceTo(cars[89])).toBeGreaterThan(seats[10].distanceTo(cars[10]) * 2);
+    // ...and the lens has been pulled in to answer it, so it is never less
+    // than a readable object rather than the six pixels a fixed one leaves.
+    expect(lens[89]).toBeLessThan(lens[10] * 0.7);
+    for (let f = 10; f < 90; f++) expect(size(f)).toBeGreaterThan(7);
+  });
+
+  it("climbs to see over a bank the car has gone behind", () => {
+    // A ridge across the road just past where the car went over: from the
+    // plant the accident is behind it, and a shot that stays put watches a
+    // bank. Every frame's sight line is walked, and none of it may be under
+    // the ground it crosses.
+    const state = game();
+    const car = state.car;
+    const ridgeAt = car.z + 46;
+    const ground = (z: number): number => (Math.abs(z - ridgeAt) < 8 ? 6 : 0);
+    state.terrain = { ...state.terrain, groundAt: (_x, z) => ground(z), waterAt: () => null };
+    car.y = 0;
+    car.heading = 0;
+    car.u = 26;
+    const cam = createGameCamera(1600, 900);
+    cam.setMode("chase");
+    for (let f = 0; f < 60; f++) {
+      car.z += car.u * FRAME;
+      car.y = ground(car.z);
+      cam.update(state, FRAME);
+    }
+    let blocked = 0;
+    for (let f = 0; f < 150; f++) {
+      car.rolling = true;
+      car.roll += 5.5 * FRAME;
+      car.heading += 4.5 * FRAME;
+      car.z += 24 * FRAME;
+      car.y = ground(car.z);
+      cam.update(state, FRAME);
+      // Only once the operator has had a moment to get up there: the climb
+      // is rate-limited on purpose, and a solve that landed in one frame
+      // would be a camera teleporting onto a hill.
+      if (f < 110) continue;
+      const lens2 = cam.camera.position;
+      for (let i = 1; i < 12; i++) {
+        const t = i / 12;
+        const z = lens2.z + (car.z - lens2.z) * t;
+        const y = lens2.y + (car.y + 0.7 - lens2.y) * t;
+        if (y < state.terrain.groundAt(lens2.x + (car.x - lens2.x) * t, z)) blocked++;
+      }
+    }
+    expect(blocked).toBe(0);
+    // ...and it got there by going up and forward, not by teleporting onto
+    // the hill: the ridge stands 6 m and the lens has climbed past it.
+    expect(cam.camera.position.y).toBeGreaterThan(6);
+  });
+
+  it("does not whip round with a car that is spinning under it", () => {
+    // The same tumble, past the shot and past the rig it replaces. A boom
+    // tracking a blend of nose and travel follows the spin through most of a
+    // circle; a bystander turns their head.
+    const planted = tumble("chase", 90);
+    const followed = tumble("chase", 90, false);
+    const swung = (aims: THREE.Vector3[]): number => {
+      let total = 0;
+      for (let f = 1; f < aims.length; f++) total += aims[f].angleTo(aims[f - 1]);
+      return total;
+    };
+    expect(swung(planted.aims)).toBeLessThan(swung(followed.aims) / 2);
+    // ...and the lens itself is not being flown round the car either.
+    const moved = (seats: THREE.Vector3[]): number => {
+      let total = 0;
+      for (let f = 1; f < seats.length; f++) total += seats[f].distanceTo(seats[f - 1]);
+      return total;
+    };
+    expect(moved(planted.seats)).toBeLessThan(moved(followed.seats) / 3);
+  });
+
+  it("leaves the seats inside the car alone — they go over with it", () => {
+    // A lens bolted to the body is not a shot that fails on a roll; it is
+    // the roll from inside, and the whole reason to drive from in there. So
+    // the plant never takes an in-car view: the eye stays in the car, which
+    // means it stays with it as it goes.
+    const { seats, cars } = tumble("cockpit", 90);
+    for (let f = 0; f < 90; f++) expect(seats[f].distanceTo(cars[f])).toBeLessThan(3);
+  });
+
+  it("turns the driver's head over WITH the car, one for one", () => {
+    // A head on a neck takes only a share of the body's roll through a bit
+    // of play, which is right for a camber and wrong for a roll: two thirds
+    // of a turn while the car takes a whole one slides the interior round the
+    // lens. Measured as the angle between the camera's own UP and the car's,
+    // which is zero for a head that is going over with the body whatever
+    // attitude the body is at.
+    const state = game();
+    const car = state.car;
+    car.heading = 0;
+    car.u = 26;
+    const cam = createGameCamera(1600, 900);
+    cam.setMode("cockpit");
+    for (let f = 0; f < 60; f++) {
+      car.z += car.u * FRAME;
+      cam.update(state, FRAME);
+    }
+    const up = new THREE.Vector3();
+    const body = new THREE.Vector3();
+    let worst = 0;
+    for (let f = 0; f < 150; f++) {
+      car.rolling = true;
+      car.roll += 5.5 * FRAME;
+      car.z += 24 * FRAME;
+      cam.update(state, FRAME);
+      up.set(0, 1, 0).applyQuaternion(cam.camera.quaternion);
+      // Positive roll lifts the car's right side, so the body's up leans the
+      // same way about its own nose axis (+z, the car heading 0).
+      body.set(-Math.sin(car.roll), Math.cos(car.roll), 0);
+      // The blend at the start of the roll is a fifth of a second; past that
+      // the head is bolted.
+      if (f > 30) worst = Math.max(worst, up.angleTo(body));
+    }
+    // Within the few degrees the seat's own tilt, wobble and road grain are
+    // worth — they sit on top of the body's attitude and are meant to. What
+    // this rules out is the SHARE: a head taking `rollFollow` of the roll is
+    // most of a radian out by the time the car is upside down.
+    expect(worst).toBeLessThan(0.12);
+  });
+
+  it("does not leave the horizon canted once the car is back on its wheels", () => {
+    // `car.roll` accumulates and is never wrapped: a car that has been over
+    // once carries a whole turn in it, and a SHARE of a whole turn is not
+    // zero. Read raw, the driver spent the rest of the run looking at a
+    // world tipped most of the way onto its side.
+    const state = game();
+    const car = state.car;
+    car.heading = 0;
+    car.u = 26;
+    const cam = createGameCamera(1600, 900);
+    cam.setMode("cockpit");
+    for (let f = 0; f < 60; f++) {
+      car.z += car.u * FRAME;
+      cam.update(state, FRAME);
+    }
+    const level = new THREE.Vector3(0, 1, 0);
+    const cant = (): number =>
+      new THREE.Vector3(0, 1, 0).applyQuaternion(cam.camera.quaternion).angleTo(level);
+    // What a seat is worth on its own: the tilt, the wobble and the road
+    // grain, on a car that has never been anywhere near upside down.
+    for (let f = 0; f < 120; f++) {
+      car.z += car.u * FRAME;
+      cam.update(state, FRAME);
+    }
+    const settled = cant();
+    // Over once and back down, upright, exactly as the roll leaves it.
+    car.roll = Math.PI * 2;
+    for (let f = 0; f < 120; f++) {
+      car.z += car.u * FRAME;
+      cam.update(state, FRAME);
+    }
+    expect(cant()).toBeCloseTo(settled, 2);
+  });
+
+  it("steps back off a car it was sitting right behind", () => {
+    // The tightest boom on the ladder stands four metres off the bumper, and
+    // four metres is bodywork filling the frame rather than an accident.
+    const { seats, cars } = tumble("close", 40);
+    expect(seats[0].distanceTo(cars[0])).toBeLessThan(7);
+    expect(seats[39].distanceTo(cars[0])).toBeGreaterThan(seats[0].distanceTo(cars[0]));
+  });
+
+  it("never sinks into the ground it is standing on", () => {
+    const { state, seats } = tumble("chase", 120);
+    for (const seat of seats) {
+      expect(seat.y).toBeGreaterThan(state.terrain.groundAt(seat.x, seat.z));
+    }
+  });
+
+  it("hands the frame back without a cut once the car has stopped", () => {
+    // Long enough to run past the roll, the beat the car is left lying for,
+    // and the blend home.
+    const frames = Math.round((TUNING.air.roll.lieFor + 1.6) / FRAME) + 90;
+    const { seats, cars } = tumble("chase", frames);
+    let worst = 0;
+    for (let f = 92; f < frames; f++) {
+      const jerk = seats[f]
+        .clone()
+        .sub(seats[f - 1])
+        .sub(seats[f - 1])
+        .add(seats[f - 2]);
+      worst = Math.max(worst, jerk.length());
+    }
+    // It is a real flight — the car came to rest tens of metres away — so
+    // what proves there is no cut in it is not the size of a step but its
+    // SMOOTHNESS: no frame changes the lens's travel by more than a few
+    // centimetres over the frame before it.
+    expect(worst).toBeLessThan(0.1);
+    // ...and it does end up back on the boom, behind the car it was watching.
+    expect(seats[frames - 1].distanceTo(cars[frames - 1])).toBeLessThan(12);
+  });
+
+  it("drops the plant rather than panning across a respawn", () => {
+    const { state, cam, seats } = tumble("chase", 60);
+    const car = state.car;
+    const away = seats[59].distanceTo(new THREE.Vector3(car.x, car.y, car.z));
+    expect(away).toBeGreaterThan(10);
+    // The crew are put back at the last split board: a jump no pan can
+    // cross, and nothing left on this piece of road to watch.
+    car.rolling = false;
+    car.z += 400;
+    car.roll = 0;
+    cam.update(state, FRAME);
+    cam.update(state, FRAME);
+    expect(cam.camera.position.distanceTo(new THREE.Vector3(car.x, car.y, car.z))).toBeLessThan(20);
+  });
+});
+
 describe("the transit between two cars", () => {
   /** A stage that BENDS: two straights with a long sweeping right between
    * them. The straight line between the two ends of a transit cuts the chord
