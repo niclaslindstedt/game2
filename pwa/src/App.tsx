@@ -1325,10 +1325,14 @@ export function App() {
     gameRef.current = state;
     // A different track object (new seed OR new length) is a different
     // world, and the only thing worth rebuilding one for. A different car on
-    // the same road is a body swap, and everything else — the light, the
-    // weather — is a re-light.
+    // the same road is a body swap — and so is a RUN STARTING (`force`): the
+    // engine hands over a car with a clean ledger, but the body standing in
+    // the scene is still bent, still missing whatever it lost, and still
+    // wearing the last attempt's dirt, none of which is re-derived from the
+    // ledger per frame. Everything else — the light, the weather — is a
+    // re-light.
     if (!previous || previous.track !== state.track) renderer.setGame(state);
-    else if (previous.spec.id !== spec.carId) renderer.setCar(state);
+    else if (force || previous.spec.id !== spec.carId) renderer.setCar(state);
     else renderer.setConditions(state);
     setSnap(takeSnapshot(state, paceRef.current, null, null, bookRef.current));
     // The score is a function of the stage — its country, its sky, its

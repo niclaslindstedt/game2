@@ -829,7 +829,8 @@ has driven out does not drown in the lake, it drowns in the beach.
   **reset input** (`CarInput.reset`, the B key) is the run being given up
   on, so it costs the road back to the last
   checkpoint (`lastCheckpoint`, R28) — the same place a drowning respawns
-  at. The **wedge check** — throttle held for `TUNING.offTrack.stuck.after`
+  at, and, while the first lap has taken no board at all, the start line
+  with a WHOLE CAR on it (the damage ledger, below). The **wedge check** — throttle held for `TUNING.offTrack.stuck.after`
   seconds without covering `stuck.radius` meters — is not: nobody asked for
   it, the car is pinned through no decision of the driver's, and a rescue
   that cost a checkpoint would put the car back at a board it has already
@@ -1120,6 +1121,18 @@ every solid is a circle, and a hit does several things at once:
   back to `repairTo` only once something (the reset, the wedge check) puts
   it back on the road. The dents, the torn-off parts and the hurt systems
   all stay: the run remembers.
+- **...until the run starts again.** The one thing that does clear the whole
+  ledger is the attempt beginning from scratch: RESTART, which builds a new
+  car, and the respawn that lands on the START LINE — the reset button or a
+  drowning while the first lap has taken no split board, where the way home
+  (`lastCheckpoint`, R28) is the line itself. Being put back there is not a
+  penalty inside a run, it is the run starting over with nothing behind it,
+  so the crew hand over the car that left the line: the crush, the wear, the
+  hurt systems, the flats and the parts on the road all go (`healCar`, and a
+  `repair` event so the renderer puts a whole BODY on the road with it — the
+  damage lives in the geometry). A later lap of a circuit crosses the same
+  line with a lap already driven and is charged as usual; a wedge rescue,
+  which lands where the car stands rather than at a board, never heals.
 
 ### What a broken car drives like
 

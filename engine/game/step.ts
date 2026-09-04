@@ -57,7 +57,7 @@ import {
   type TimeOfDay,
   type Weather,
 } from "./state.ts";
-import { freshCar, freshStats } from "./car-state.ts";
+import { freshCar, freshStats, healCar } from "./car-state.ts";
 import { createTraffic, stepTraffic } from "./traffic.ts";
 import { status } from "../output.ts";
 
@@ -295,7 +295,7 @@ function offRoadSurface(state: GameState, x: number, z: number): Surface | "natu
  * would put the car back at a board it has already proved it can drive from
  * into the same trunk, forever. That one goes to the road where the car
  * stands, exactly as it always has. */
-function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
+function respawn(state: GameState, events: GameEvent[], home: WayHome, whole = false): void {
   const car = state.car;
   car.x = home.x;
   car.z = home.z;
@@ -304,10 +304,18 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   stillCar(car);
   plant(car, state.terrain.groundAt);
   car.u = T.offTrack.respawnSpeed;
-  // The service crew get to a wreck the moment it is back at the road: the
-  // chassis is patched to a drivable fraction, and the dents, the torn-off
-  // parts and the hurt systems all stay.
-  if (car.damage.wear >= 1) car.damage.wear = T.collision.repairTo;
+  // WHAT THE CREW HAND BACK. A car set down where it started with the whole
+  // run still in front of it is handed the car that left the line: an
+  // attempt that has driven nothing carries nothing out of the lake with it
+  // (`whole`, decided by `sendBack`). Anywhere else they only ever get to a
+  // WRECK — the chassis is patched to a drivable fraction, and the dents,
+  // the torn-off parts and the hurt systems all stay.
+  if (whole) {
+    healCar(car);
+    events.push({ type: "repair" });
+  } else if (car.damage.wear >= 1) {
+    car.damage.wear = T.collision.repairTo;
+  }
   // ...and the car has been standing while they did it, so the needle is
   // back off the line. The coolant is still on the road, which is why this
   // is a reprieve and not a repair: a holed core climbs straight back.
@@ -332,6 +340,22 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   state.stuck.since = state.t;
   state.stats.respawns += 1;
   events.push({ type: "respawn" });
+}
+
+/** R28 — THE RUN GIVEN UP ON: a drowning, a car left lying on its roof, or
+ * the reset button. All three cost the road back to the last split board,
+ * and all three land here so they cost it the same way.
+ *
+ * WHILE THE RUN HAS TAKEN NO BOARD AT ALL — the first lap, before the first
+ * one — that board is the START LINE, and being put back on it is not a
+ * penalty inside a run: it is the run beginning again with nothing behind
+ * it. So the car begins again too, whole, exactly as pressing RESTART hands
+ * over a fresh one. A later lap of a circuit crosses the same line with a
+ * lap already driven, which is why the lap is asked about as well: a free
+ * rebuild every time round would be the cheapest way to drive a circuit. */
+function sendBack(state: GameState, events: GameEvent[]): void {
+  const fromTheLine = state.checkpointsPassed === 0 && state.lap === 1;
+  respawn(state, events, lastCheckpoint(state), fromTheLine);
 }
 
 /** The water has the car. It is a crash the moment it goes in — the entry
@@ -495,7 +519,7 @@ function stepDrowning(state: GameState, events: GameEvent[]): void {
     events.push({ type: "sink" });
   }
 
-  if (age >= D.duration) respawn(state, events, lastCheckpoint(state));
+  if (age >= D.duration) sendBack(state, events);
 }
 
 /** ON ITS ROOF. The roll is over and the car is lying on a face of itself
@@ -516,7 +540,7 @@ function stepDrowning(state: GameState, events: GameEvent[]): void {
 function stepOverturned(state: GameState, events: GameEvent[]): void {
   const lying = state.overturned as NonNullable<GameState["overturned"]>;
   if (state.t - lying.since < T.air.roll.lieFor) return;
-  respawn(state, events, lastCheckpoint(state));
+  sendBack(state, events);
 }
 
 /** The wedge check: a car pinned against a trunk with the throttle buried
@@ -1210,7 +1234,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // (`retire` below), not at a board it will never drive away from.
   const done = beyondDriving(car);
   if (done === null) {
-    if (drive.reset && !crashed) respawn(state, events, lastCheckpoint(state));
+    if (drive.reset && !crashed) sendBack(state, events);
     else if (!crashed) stepStuck(state, drive, events);
   } else if (
     state.phase === "racing" &&

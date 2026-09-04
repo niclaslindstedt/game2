@@ -136,7 +136,9 @@ export type DamageStage = "hurt" | "spent" | "dead";
 
 /** The car's accumulated damage — the physics writes it, the renderer bends
  * the body's polygons from it. Crashing never resets it: the dents are the
- * run's history, and only a fresh game starts clean. */
+ * run's history. The one thing that does is the run STARTING AGAIN — a
+ * fresh game, or the respawn that puts the car back on a line it has driven
+ * nothing from (`healCar`). */
 export type CarDamage = {
   /** Crush depth per zone, m — how far that side's panels have folded in. */
   zones: number[];
@@ -155,7 +157,8 @@ export type CarDamage = {
    * the next time it is put back on the road. */
   wear: number;
   /** Damage per internal system, 0 (sound) .. 1 (broken) — fed by where
-   * the crush lands, read back by the handling model. Never repaired. */
+   * the crush lands, read back by the handling model. Never repaired short
+   * of the run beginning again (`healCar`). */
   systems: Record<InternalSystem, number>;
   /** Damage per wheel, 0 (sound) .. 1 (off the car), in `WHEEL_PARTS`
    * order. Fed by the flank and corner folding nearest each one and by a
@@ -674,6 +677,12 @@ export type GameEvent =
    * way through it — the gulp, not the entry. */
   | { type: "sink" }
   | { type: "respawn" }
+  /** THE CAR HANDED BACK WHOLE. Emitted with the respawn that puts a run
+   * back on the line it has driven nothing from (step.ts): the ledger is
+   * the one a run starts with again, so anything that drew the damage —
+   * the body's own polygons, the parts lying down the road — is being told
+   * to put a fresh car on the road rather than to bend this one back. */
+  | { type: "repair" }
   /** R22 — a lap of a circuit is in the book. `lap` is the lap that was
    * just completed (1-based), `time` how long it took, and `best` says it
    * is the quickest of the run so far. */

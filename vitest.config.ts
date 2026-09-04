@@ -26,9 +26,18 @@ export default defineConfig({
     // an idle machine — 1.4x against the default, and nothing at all
     // against a runner sharing two cores with a shard-mate.
     //
-    // 30 s is sized to the work, not to the failure: ~8x the heaviest case,
-    // so how busy the runner was cannot decide a result. A genuinely hung
-    // test now costs 30 s to report instead of 5 s, which is the price.
-    testTimeout: 30_000,
+    // The number is sized to the work, not to the failure: ~8x the heaviest
+    // case, so how busy the runner was cannot decide a result. That is what
+    // has to be re-measured when it stops holding, and it had: the heaviest
+    // cases are now `simulation_test`'s twelve-stage bot sweep and
+    // `scars_test`'s two eight-car fields, both about TWENTY SECONDS on an
+    // idle machine. Against 30 s that is 1.5x — a coin toss again, and it
+    // came up tails on both of them in consecutive CI runs, each timing out
+    // with every assertion in the case passing. 120 s puts the ratio back.
+    //
+    // The price is what it always was, larger: a genuinely hung test costs
+    // two minutes to report instead of thirty seconds. The shards run in
+    // parallel, so that is two minutes on one of ten, once.
+    testTimeout: 120_000,
   },
 });

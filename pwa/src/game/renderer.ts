@@ -914,6 +914,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         );
       } else if (ev.type === "respawn") {
         chase.kick(0.3, undefined, "reset");
+      } else if (ev.type === "repair") {
+        // THE CAR HANDED BACK WHOLE (step.ts). The body wears its damage in
+        // its own geometry — a torn-off door is a mesh lying down the road,
+        // a shattered pane is a slice of the glass buffer at alpha zero, a
+        // lost wheel is a hub, and the run's dirt is baked into the paint —
+        // and none of that is re-derived from the ledger each frame. So a
+        // healed LEDGER on this body would read as a schematic saying the
+        // car is fine over a wreck that still looks like one. The honest
+        // answer is the one the menu gives when a different car is picked:
+        // build the car again.
+        fitCar(state);
       } else if (ev.type === "solidBreak") {
         // Something came out of the landscape. The engine has already taken
         // it out of the field and worked out where the piece is going; the
