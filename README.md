@@ -78,6 +78,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make sky`         | Render the atmosphere to a contact sheet (`previews/sky.png`): every weather × time of day, and a caught strike                                                                    |
 | `make traffic`     | Photograph the high traffic over a stage (`previews/traffic.png`): five skies against four moments of one race                                                                     |
 | `make glyphs`      | Render the menu's marks to a contact sheet (`previews/glyphs.png`) at the three sizes they are read at                                                                             |
+| `make health`      | Render the car's condition schematic in every state it can reach (`previews/health.png`), at desktop size and at phone size over four grounds                                      |
 | `make transit`     | Photograph the camera leaving the finish line for a crew still out on the stage (`previews/transit.png`), frame by consecutive frame                                               |
 | `make views`       | Photograph the camera key at every step of the ladder (`previews/views.png`), six consecutive frames per step                                                                      |
 | `make rollcam`     | Photograph the camera while the car goes over (`previews/rollcam.png`), frame by consecutive frame, from two seats                                                                 |

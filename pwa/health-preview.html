@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Condition schematic harness</title>
+    <!-- Tooling page for scripts/health-preview.mjs — not part of the app
+         build (vite only builds index.html) and never deployed. It renders
+         the REAL <CarHealthPanel> off REAL damage ledgers, so the sheet
+         cannot drift from the instrument the game actually draws. -->
+  </head>
+  <body>
+    <div id="sheet"></div>
+    <script type="module" src="/src/tools/health-preview.tsx"></script>
+  </body>
+</html>

@@ -1290,10 +1290,44 @@ reverse manoeuvre is gated on the engine making power, so a car whose motor has
 seized cannot back itself out of the trees. Without that gate "engine dead"
 means nothing, which is the whole reason the state exists.
 
-Nothing repairs mid-run. And nothing about it is drawn as an instrument: the
-damage the player can see is already on the screen — the wing is folded, the
-bonnet went over the roof three corners ago — and the damage they cannot see
-is the machinery under it. So the machinery **says** so.
+Nothing repairs mid-run. It is reported twice, and the split is deliberate.
+
+**A CALL IS NEWS; THE SCHEMATIC IS STATE.** A line in the middle of the screen
+is how something that just happened gets said, and then it ages out and the
+driver is on their own again — which is the right way to break news and the
+wrong way to hold an answer to "what have I got left". So under the minimap
+there is a plan of the car with a colour per piece
+(`pwa/src/game/hud-health.tsx`, off the DOM-free fold in `car-health.ts`):
+green is well, yellow is damaged, orange is very damaged, red is broken. The
+nose, the windscreen, the cabin and the tail each carry their own colour, as
+do all four wheels and all four lamps — named as the player sees the car,
+which is the engine's frame flipped once, like every other left and right in
+the HUD.
+
+Two rules make it a diagram rather than an average. A **panel is as bad as the
+worst thing in it**: the parts are weighted, but a vital one is never averaged
+away by the sound parts around it, so an engine at the top of its ledger is a
+front compartment at 1 whatever the bonnet over it is doing. And **the panel
+and the calls may never disagree**: the four tiers ARE the `callAt` lines
+below, so a car whose nose has just gone amber is a car the middle of the
+screen has just called DAMAGED. A wheel's own ledger and a face's crush depth
+are remapped into that same space rather than given an opinion of their own
+(`wheelScore`, `crushScore`) — a puncture reads exactly where the calls start.
+
+The MACHINERY has no shape worth drawing from above, so it is not drawn into
+the panels: under the car there is one mark per system with something wrong
+with it, in the same four colours and with no caption. A sound car draws an
+empty row, and the row filling up is itself the news. A sound car is also
+QUIET — the whole instrument stands back at reduced strength until there is
+something to say. `make health` is the only honest way to judge any of it:
+seeing the schematic amber from inside the game means crashing the car amber
+first, so the lab draws every state it can reach at once, at desktop size and
+at the size the narrowest phone gives it, over gravel, tarmac, grass and a
+night sky.
+
+That leaves the damage the player can already see — the wing is folded, the
+bonnet went over the roof three corners ago — and the damage they cannot,
+which is the machinery under it. So the machinery also **says** so.
 
 **Every line has to be true of the car the player is driving.** A call is the
 only account a driver gets of machinery they cannot see, so a word that

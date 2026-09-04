@@ -18,6 +18,7 @@ import {
 } from "@engine";
 
 import { buildMinimap } from "./minimap.tsx";
+import { carHealth } from "./car-health.ts";
 import { cornerSign, type PaceSign } from "./pace-shape.ts";
 import { shiftLightOn, shiftWindow } from "./shift-window.ts";
 import type { HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx";
@@ -301,6 +302,10 @@ export function takeSnapshot(
     shift: shiftWindow(state),
     airborne: state.car.airborne,
     minimap: buildMinimap(state, field),
+    // The standing answer to what is left of the car, under the map
+    // (car-health.ts). Folded here rather than in the HUD so the
+    // component draws colours and never reads a ledger.
+    health: carHealth(state.car.damage),
     // The co-driver stops calling corners the moment the car is in the
     // water: the next one is not going to be taken, and reading it out
     // over a sinking car is the same wrong note as the way-home prompt.

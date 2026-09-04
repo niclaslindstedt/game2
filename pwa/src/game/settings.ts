@@ -161,6 +161,7 @@ export type HudSettings = {
  * the panel as a whole. */
 export type HudInstrument =
   | "minimap"
+  | "damage"
   | "mirror"
   | "nameTags"
   | "cameraButton"
@@ -179,6 +180,7 @@ export function hudShow(hud: HudSettings): HudShow {
   const on = hud.on;
   return {
     minimap: on,
+    damage: on,
     mirror: hud.mirror,
     nameTags: on,
     cameraButton: on,

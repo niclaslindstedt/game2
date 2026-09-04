@@ -21,6 +21,19 @@
   --hud-bad: #ff5a4e;
   --hud-info: #9fd8ff;
   --hud-steer: #2f7bff;
+
+  /* THE CONDITION LANGUAGE, four colours (hud-health.tsx): green is well,
+     yellow is damaged, orange is very damaged, red is broken. Yellow and
+     red are the HUD's own signal colours rather than new ones — the panel
+     is the standing version of a call the middle of the screen already
+     makes, and the two must not be two different reds. The green and the
+     orange are the pair that fills the ladder in, picked to hold their
+     distance from each other and from the yellow between them at the ten
+     pixels a wheel block is actually drawn at. */
+  --hud-hp-ok: #4cd964;
+  --hud-hp-hurt: var(--hud-good);
+  --hud-hp-spent: #ff9a3c;
+  --hud-hp-dead: var(--hud-bad);
 }
 
 html,
@@ -101,6 +114,13 @@ body {
   /* Room the stage chip takes under the map — the pacenote strip clears it
      in portrait, where everything is stacked down the same column. */
   --hud-stage: 2.3rem;
+  /* ...and the room the condition schematic takes under both of them, at
+     the foot of that column. One knob: the drawing sizes itself off what is
+     left of it once the icon row underneath has taken its share, so what is
+     placed below the column cannot drift out of step with the picture in
+     it. */
+  --hud-health: calc(var(--hud-map) * 0.92);
+  --hud-health-row: clamp(0.72rem, 2.4vmin, 1.05rem);
   color: var(--hud-ink);
   font-weight: 800;
   font-style: italic;
@@ -1746,6 +1766,144 @@ body {
   pointer-events: none;
 }
 
+/* ── The condition schematic ─────────────────────────────────────────────
+   Under the map, in the corner a driver already glances at for the route:
+   a plan of their own car with a colour per piece, and a row of marks under
+   it for the machinery that has no shape worth drawing (hud-health.tsx).
+
+   Four rules carry the whole language, and every shape in the drawing reads
+   its colour out of one custom property — so a piece is coloured by putting
+   ONE class on it, and the panel's frame can carry the worst tier on the
+   car without anything having to be told twice. */
+.hud-hp-ok {
+  --hp: var(--hud-hp-ok);
+}
+
+.hud-hp-hurt {
+  --hp: var(--hud-hp-hurt);
+}
+
+.hud-hp-spent {
+  --hp: var(--hud-hp-spent);
+}
+
+.hud-hp-dead {
+  --hp: var(--hud-hp-dead);
+}
+
+/* A SOUND CAR IS QUIET. Every colour here is at full strength — that is
+   what makes a hurt panel findable — so an instrument reading all-green at
+   full strength would be the loudest thing in that corner of the screen for
+   the whole of a clean run, competing with the road for a driver who has
+   nothing to read. It stands back until there is something to say, and the
+   coming forward is itself part of the news. */
+.hud-health.hud-hp-ok {
+  opacity: 0.6;
+}
+
+.hud-health {
+  position: absolute;
+  /* The FOOT of the right-hand column: the map, the run's label, then this.
+     The two above it are read once — where you are, and what you are in —
+     and this one is read all the way down the stage, so it takes the edge of
+     the group that nothing else can push around. */
+  top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) + 0.35rem);
+  right: max(0.8rem, env(safe-area-inset-right));
+  width: var(--hud-map);
+  height: var(--hud-health);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  transition: opacity 400ms linear;
+}
+
+/* The drawing takes whatever the icon row underneath does not, so the two
+   together are exactly `--hud-health` and the stage chip below can be
+   placed off that one number. Width follows from the box's own aspect. */
+.hud-health-car {
+  display: block;
+  width: auto;
+  height: calc(var(--hud-health) - var(--hud-health-row) - 0.15rem);
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 55%));
+}
+
+/* The car's own outline, under the blocks: what keeps a schematic missing
+   its bonnet reading as a car with a hole in it rather than as four
+   unrelated shapes. Same plate colour as the minimap beside it — the two
+   are one instrument stack, not two. */
+.hud-health-plate {
+  fill: rgb(9 24 52 / 55%);
+  /* The outline carries the WORST tier on the car, which is how the shape
+     answers the question before any one block has been read. Set off the
+     root's own class, so it needs nothing per-piece. */
+  stroke: var(--hp);
+  stroke-opacity: 0.55;
+  stroke-width: 2;
+  transition: stroke 240ms linear;
+}
+
+.hud-health-panel,
+.hud-health-wheel,
+.hud-health-lamp {
+  fill: var(--hp);
+  /* The dark keyline is doing real work: two adjacent blocks on the same
+     tier would otherwise merge into one shape, and the split IS the
+     instrument. */
+  stroke: rgb(9 24 52 / 70%);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  /* Damage never heals, so this only ever runs one way — a piece darkening
+     as it goes, rather than a block that was green last frame and red this
+     one. The HUD refreshes at 12 Hz and the eye catches the step. */
+  transition: fill 240ms linear;
+}
+
+/* The marks for the machinery. An empty row on a sound car — the row
+   filling up is the news, so it is never captioned and never explained. */
+.hud-health-systems {
+  width: 100%;
+  height: var(--hud-health-row);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18rem;
+}
+
+/* The marks SHRINK rather than wrap or spill. A car with every system gone
+   is six of them across a row as wide as the minimap, which is the one case
+   that does not fit — and it is also the case where losing the sixth mark
+   off the end would be losing the worst news on the instrument. Flex does
+   the whole of it: full size is the basis, and the row is allowed to take
+   it back. */
+.hud-health-icon {
+  flex: 0 1 var(--hud-health-row);
+  min-width: 0;
+  aspect-ratio: 1;
+  color: var(--hp);
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 65%));
+}
+
+.hud-health-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A system at the top of its ledger is the one thing on this instrument
+   that is about to end the run, so it is the one thing that moves. */
+@media (prefers-reduced-motion: no-preference) {
+  .hud-health-icon.hud-hp-dead {
+    animation: health-alarm 1.1s steps(1, end) infinite;
+  }
+}
+
+@keyframes health-alarm {
+  50% {
+    opacity: 0.25;
+  }
+}
+
 /* ── Small phones ───────────────────────────────────────────────────────
    The top bar has to hold the stage number and the clock in the strip left
    of the minimap, and on the SE class that is not enough room at full size.
@@ -1798,7 +1956,10 @@ body {
   /* Below the minimap, always: a percentage top clears the dock on a tall
      phone and slides under it on a short one. */
   .hud-pace {
-    top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) + 0.55rem);
+    top: calc(
+      max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) +
+        var(--hud-health) + 0.55rem
+    );
   }
 
   /* ...and below the GLASS when the glass is up, which on a phone hangs

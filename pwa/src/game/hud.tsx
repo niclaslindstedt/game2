@@ -34,6 +34,8 @@ import {
 import { SpectateBanner, SpectateGap, type SpectateProps } from "./hud-spectate.tsx";
 import { MirrorSwitch, paceUnderGlass, type GlassSlot } from "./hud-mirror.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
+import { CarHealthPanel } from "./hud-health.tsx";
+import type { CarHealth } from "./car-health.ts";
 import type { PaceSign } from "./pace-shape.ts";
 import type { HudShow, TouchSettings } from "./settings.ts";
 import type { ShiftWindow } from "./shift-window.ts";
@@ -105,6 +107,11 @@ export type HudSnapshot = {
   /** The route, the car on it, and how far through the stage the run is —
    * the top bar has no progress pill; the minimap's frame is the gauge. */
   minimap: HudMinimap;
+  /** THE CAR ITSELF, as the schematic under the map paints it: one colour
+   * per panel, wheel, lamp and hurt system (car-health.ts). The damage
+   * CALLS are news and age out; this is the standing answer to what is
+   * left, which is the question the calls never stay on screen to hold. */
+  health: CarHealth;
   /** The co-driver's next calls (current turn first), screen-space. */
   pacenotes: HudPacenote[];
   seed: number;
@@ -899,6 +906,14 @@ export function Hud({
           {fps !== null && <span className="hud-chip-sub hud-fps">{fps} FPS</span>}
         </div>
       )}
+
+      {/* THE CAR'S OWN CONDITION, at the foot of the right-hand column —
+          under the map and under the label, because those two are read once
+          at the start of a run and this one is read all the way down the
+          stage. Over there rather than beside the cluster because the
+          cluster is a fixed cast sized to the narrowest phone (see
+          `hud-speed` below), and this is a fifth instrument. */}
+      {show.damage && !flying && <CarHealthPanel health={snap.health} />}
 
       {/* The co-driver's slot: corner calls while there is a road to call,
           the way back the moment there isn't, and TURN AROUND for the road
