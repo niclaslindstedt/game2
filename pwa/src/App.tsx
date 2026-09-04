@@ -218,7 +218,7 @@ import { readHudLayer, type HudLayer } from "./game/shot-hud.ts";
 import { beginImageCopy } from "./lib/share-image.ts";
 import { splashSkipped } from "./game/splash.ts";
 import { SplashScreen } from "./game/splash-screen.tsx";
-import { UpdateCard } from "./game/update-card.tsx";
+import { UpdateButton } from "./game/update-button.tsx";
 
 connectOutput();
 
@@ -238,12 +238,13 @@ function autopilotRequested(): boolean {
   return new URLSearchParams(location.search).get("bot") === "1";
 }
 
-/** ?update=1 (tooling): show the new-build card as if a worker were waiting.
- * A real one only appears after a deploy has actually landed on a device
- * that already had the app, which is not a state a screenshot pass can
- * reach — and an interface nobody can look at is an interface nobody
- * maintains. RESTART still reloads, so the escape hatch is honest. */
-function updateCardForced(): boolean {
+/** ?update=1 (tooling): show the new-build button as if a worker were
+ * waiting. A real one only appears after a deploy has actually landed on a
+ * device that already had the app, which is not a state a screenshot pass
+ * can reach — and an interface nobody can look at is an interface nobody
+ * maintains. The second press still reloads, so the escape hatch is
+ * honest. */
+function updateNudgeForced(): boolean {
   return new URLSearchParams(location.search).get("update") === "1";
 }
 
@@ -1134,8 +1135,7 @@ export function App() {
     cacheId: cacheIdForBase(import.meta.env.BASE_URL),
     enabled: !import.meta.env.DEV && shellHost() === null,
   });
-  const forcedUpdate = useMemo(() => updateCardForced(), []);
-  const [updateDismissed, setUpdateDismissed] = useState(false);
+  const forcedUpdate = useMemo(() => updateNudgeForced(), []);
 
   const flash = (text: string, tone: HudFlash["tone"]): void => {
     const id = ++flashId;
@@ -3476,14 +3476,10 @@ export function App() {
         />
       )}
       {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}
-      <UpdateCard
-        needRefresh={(pwa.needRefresh || forcedUpdate) && !updateDismissed}
+      <UpdateButton
+        needRefresh={pwa.needRefresh || forcedUpdate}
         incomingVersion={pwa.incomingVersion ?? (forcedUpdate ? __APP_VERSION__ : null)}
         onReload={pwa.reload}
-        onDismiss={() => {
-          setUpdateDismissed(true);
-          pwa.dismiss();
-        }}
       />
     </div>
   );

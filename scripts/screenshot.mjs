@@ -1461,15 +1461,26 @@ await capture(
   { menu: "1" },
 );
 
-// The new-build card, over the menu and over a run: it wears the menu's
-// chrome, and both are places it can turn up. `?update=1` stands it up —
-// a real waiting worker needs a deploy to land on a device that already had
-// the app, which no capture pass can arrange.
+// The new-build button, over the menu and over a run: a mark in the corner,
+// and both are places it can turn up. `?update=1` stands it up — a real
+// waiting worker needs a deploy to land on a device that already had the
+// app, which no capture pass can arrange. The armed shot presses it once,
+// which is the state where it says RESTART rather than just showing a mark.
 for (const [name, viewport, params, script] of [
-  ["shot-update-card", { width: 1280, height: 720 }, { menu: "1" }, menuUp],
-  ["shot-update-card-portrait", { width: 390, height: 844 }, { menu: "1" }, menuUp],
-  ["shot-update-card-landscape", { width: 844, height: 390 }, { menu: "1" }, menuUp],
-  ["shot-update-card-race", { width: 1280, height: 720 }, {}, racing],
+  ["shot-update-button", { width: 1280, height: 720 }, { menu: "1" }, menuUp],
+  ["shot-update-button-portrait", { width: 390, height: 844 }, { menu: "1" }, menuUp],
+  ["shot-update-button-landscape", { width: 844, height: 390 }, { menu: "1" }, menuUp],
+  ["shot-update-button-race", { width: 1280, height: 720 }, {}, racing],
+  [
+    "shot-update-button-armed",
+    { width: 1280, height: 720 },
+    { menu: "1" },
+    async (page) => {
+      await menuUp(page);
+      await page.locator(".update-nudge").click();
+      await page.waitForTimeout(300);
+    },
+  ],
 ]) {
   await capture(name, viewport, script, { ...params, update: "1" });
 }
