@@ -630,8 +630,22 @@ body {
   color: #ff7a1f;
 }
 
-.hud-pace-jump {
+/* A jump is sized on the same ladder, so that "how much should I worry"
+   reads identically whether the call is a corner or a lip and a driver
+   never has to translate between two colour languages mid-braking. Only
+   the harmless end keeps the jumps' own cyan: a small lip is the one call
+   in the strip that asks for nothing, and cyan says so where green would
+   claim it is an easy CORNER. The icon carries the rest of the identity. */
+.hud-pace-jump-small {
   color: #63d8ff;
+}
+
+.hud-pace-jump-medium {
+  color: #ffd23e;
+}
+
+.hud-pace-jump-big {
+  color: #ff7a1f;
 }
 
 /* Off the road the strip is not calling a corner any more: amber, the same

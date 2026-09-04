@@ -8,9 +8,11 @@
 
 import {
   TUNING,
+  jumpSize,
   startsIn,
   wayHome,
   type GameState,
+  type JumpSize,
   type Pacenote,
   type RetireReason,
   type RivalField,
@@ -128,8 +130,11 @@ export type PaceMemory = {
 };
 
 /** One thing worth calling, and where on the stage it is. A corner carries
- * the note the generator wrote; a jump is the sample the lip crosses. */
-type PaceEvent = { s: number; note: Pacenote } | { s: number; jump: TrackSample };
+ * the note the generator wrote; a jump is the sample the lip crosses, with
+ * the size the engine gives it (`jumpSize`) already taken — the flight is a
+ * walk down the elevation profile, and the stage's lips do not change under
+ * a running car any more than its corners do. */
+type PaceEvent = { s: number; note: Pacenote } | { s: number; jump: TrackSample; size: JumpSize };
 
 export function createPaceMemory(): PaceMemory {
   return {
@@ -165,10 +170,11 @@ function paceEvents(state: GameState, mem: PaceMemory): PaceEvent[] {
   // redraw every sign on the strip for nothing. Read before the rebuild
   // below writes over it.
   if (mem.builtFor !== samples) mem.shapes.clear();
-  const events: PaceEvent[] = [
-    ...notes.map((note) => ({ s: note.s, note })),
-    ...samples.filter((s) => s.jump).map((jump) => ({ s: jump.s, jump })),
-  ];
+  const events: PaceEvent[] = notes.map((note) => ({ s: note.s, note }));
+  for (let i = 0; i < samples.length; i++) {
+    if (!samples[i].jump) continue;
+    events.push({ s: samples[i].s, jump: samples[i], size: jumpSize(state.track, i) });
+  }
   events.sort((a, b) => a.s - b.s);
   mem.events = events;
   mem.builtFor = samples;
@@ -214,7 +220,11 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
     if ("jump" in event) {
       mem.calledJumpS = Math.max(mem.calledJumpS, eventS);
       from = Math.max(from, eventS);
-      out.push({ kind: "jump", distance: Math.max(0, eventS - state.progressS) });
+      out.push({
+        kind: "jump",
+        size: event.size,
+        distance: Math.max(0, eventS - state.progressS),
+      });
       if (out.length >= 2) break;
       continue;
     }

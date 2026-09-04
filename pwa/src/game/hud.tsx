@@ -14,6 +14,7 @@ import type {
   DamagePart,
   DamageStage,
   GamePhase,
+  JumpSize,
   RetireReason,
   TurnSeverity,
 } from "@engine";
@@ -61,6 +62,10 @@ export type HudPacenote =
     }
   | {
       kind: "jump";
+      /** How much air the lip gives — the engine's own reading of the ramp
+       * and the road past it (`jumpSize`), not of how fast the car is
+       * going, so the call cannot change under the lift it asks for. */
+      size: JumpSize;
       /** Meters from the car to the takeoff lip. */
       distance: number;
     };
@@ -448,24 +453,43 @@ const SEVERITY_WORD: Record<TurnSeverity, string> = {
   hard: "HARD",
 };
 
+/** The co-driver's word for each size. The middle one is unmodified on
+ * purpose — half the lips on a stage are ordinary jumps, and a strip that
+ * qualifies every one of them has nothing left to say when a big one comes
+ * up. The modifier IS the warning. */
+const JUMP_WORD: Record<JumpSize, string> = {
+  small: "SMALL JUMP",
+  medium: "JUMP",
+  big: "BIG JUMP",
+};
+
 function pacenoteText(note: HudPacenote): string {
-  if (note.kind === "jump") return "JUMP";
+  if (note.kind === "jump") return JUMP_WORD[note.size];
   return `${note.long ? "LONG " : ""}${SEVERITY_WORD[note.severity]} ${note.dir.toUpperCase()}`;
 }
 
+/** How high the ramp throws the arrow in the icon's 100x100 box, per size.
+ * The road under it stays at 72 and the arrow always leaves at the same x,
+ * so a bigger jump is drawn as a STEEPER ramp — the shape reads at a glance
+ * from the corner of the eye, which is the only way it is ever read, and it
+ * says the same thing as the word under it for a driver who does not have a
+ * spare tenth of a second to read words. */
+const JUMP_LAUNCH: Record<JumpSize, number> = { small: 52, medium: 35, big: 20 };
+
 function PacenoteIcon({ note }: { note: HudPacenote }) {
   if (note.kind === "jump") {
+    const top = JUMP_LAUNCH[note.size];
     return (
-      <svg className="hud-pace-arrow hud-pace-jump-icon" viewBox="0 0 100 100" aria-hidden="true">
+      <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
         <path
-          d="M 15 72 L 39 72 L 55 35 L 77 35"
+          d={`M 15 72 L 39 72 L 55 ${top} L 77 ${top}`}
           fill="none"
           stroke="currentColor"
           strokeWidth="13"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <polygon points="76,17 96,35 76,53" fill="currentColor" />
+        <polygon points={`76,${top - 18} 96,${top} 76,${top + 18}`} fill="currentColor" />
       </svg>
     );
   }
@@ -473,7 +497,7 @@ function PacenoteIcon({ note }: { note: HudPacenote }) {
 }
 
 function pacenoteClass(note: HudPacenote): string {
-  return note.kind === "jump" ? "hud-pace-jump" : `hud-pace-${note.severity}`;
+  return note.kind === "jump" ? `hud-pace-jump-${note.size}` : `hud-pace-${note.severity}`;
 }
 
 /** The way home, in the co-driver's own slot. Off the road there is no next
