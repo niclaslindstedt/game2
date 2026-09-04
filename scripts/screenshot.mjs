@@ -1915,6 +1915,39 @@ await captureElement(
   { shape: "circuit", length: "medium", seed: "3", bot: "1" },
 );
 
+// THE JUMP CALL, at each of the three sizes the co-driver has words for.
+// A lip's size is stage geometry (`engine/game/jump.ts`), so each of these
+// is a KNOWN lip on a known seed rather than something to be driven to: the
+// run is PLACED a call's lead short of it (`at=racing&s=`, engine's
+// place.ts) and the strip is photographed on its own. Read them as a row —
+// the point of three words is that they are told apart at a glance, and
+// three separate frames are the only way to see whether the colour, the
+// word and the ramp in the icon all step together.
+//
+// The seeds are not decorative: re-roll the generator and these lips move,
+// so if a shot comes back with no call in it, re-list the stage's lips
+// (their sizes are `jumpSize` over `track.samples[i].jump`) and re-pick.
+for (const lip of [
+  { name: "small", seed: "5", s: 334 },
+  { name: "medium", seed: "7", s: 1178 },
+  { name: "big", seed: "3", s: 2475 },
+]) {
+  await capture(
+    `shot-pace-jump-${lip.name}`,
+    { width: 1280, height: 720 },
+    // Wait for the LIP'S OWN call rather than for any call at all: the
+    // strip holds two, and a lip that follows a combination is behind two
+    // corner calls until they are driven through.
+    async (page) => {
+      await page.waitForSelector(`.hud-pace-jump-${lip.name}`, { timeout: 240000 });
+    },
+    // Placed a few hundred metres short of the lip with the bot driving —
+    // the run is stood where the drive would have left it (`at=racing&s=`,
+    // engine's place.ts) instead of costing the whole stage up to here.
+    { at: "racing", s: String(lip.s - 300), seed: lip.seed, length: "medium", bot: "1" },
+  );
+}
+
 // R28 — the SPLIT, as the car goes through the first checkpoint. The bot
 // drives: a board stands a corner or two into the stage and reaching one is
 // the whole point of the shot, not something a scripted key press can

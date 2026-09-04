@@ -65,6 +65,7 @@ export {
   type TimeOfDay,
   type Weather,
 } from "./game/state.ts";
+export { jumpFlight, jumpSize, type JumpSize } from "./game/jump.ts";
 export {
   boardHalfWidth,
   crossedFinish,
