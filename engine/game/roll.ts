@@ -13,10 +13,12 @@
 //   - GRAVITY pulls the centre downhill along it, which is what turns the
 //     car over and what rocks it back when it cannot make the next corner.
 //   - THE GROUND DRIVES IT ON while the car is still travelling sideways
-//     (`roll.grip`): friction under a sliding body, working on the lever of
-//     the centre's own height. This is why a roll is a roll and not one
-//     flip — and why it stops, because the same friction is scrubbing the
-//     travel away underneath it.
+//     (`roll.faceGrip`): friction under a sliding body, working on the
+//     lever of the centre's own height. This is why a roll is a roll and
+//     not one flip — and why it stops, because the same friction is
+//     scrubbing the travel away underneath it. It is one budget per face,
+//     and what the ground is holding changes as the body turns: rubber at
+//     the wheels, a door skin on a flank, glass and pillars on the roof.
 //   - EACH FACE arriving flat on the ground is an impact that changes which
 //     corner the body is turning about, and that exchange keeps a share of
 //     the roll set by the geometry alone (`faceKeep`). A flank keeps about
@@ -116,6 +118,27 @@ function centreHeight(tilt: number): number {
 const SLOPE_STEP = 1e-3;
 function centreSlope(tilt: number): number {
   return (centreHeight(tilt + SLOPE_STEP) - centreHeight(tilt - SLOPE_STEP)) / (2 * SLOPE_STEP);
+}
+
+/** WHAT IS ON THE GROUND HERE, as a Coulomb coefficient: the face the body
+ * is nearest, blended across the quarter turn to the next one.
+ *
+ * It is one contact patch and one budget, and `stepRolling` spends it on
+ * both of the ground's jobs at once — the share across the car turns it
+ * over, the share along it retards it. What changes with the attitude is
+ * WHAT the ground is holding: rubber being dragged sideways at the wheels,
+ * a smooth door skin and sill on a flank, and glass and pillars and gutters
+ * digging in on the roof. Blended rather than stepped because a body going
+ * over passes through every attitude between them, and a coefficient that
+ * jumped at each face would kick the roll every quarter turn.
+ *
+ * `tilt` is off upright, so |tilt| / QUARTER runs 0 at the wheels, 1 on
+ * either flank and 2 on the roof — the hull is symmetric, so which flank
+ * is down is not a question this has to answer. */
+function shellGrip(tilt: number): number {
+  const at = Math.abs(tilt) / QUARTER;
+  const g = R.faceGrip;
+  return at <= 1 ? g.wheels + (g.flank - g.wheels) * at : g.flank + (g.roof - g.flank) * (at - 1);
 }
 
 /** THE FACES — the attitudes the body lies flat on the ground at: its
@@ -351,7 +374,7 @@ function contact(
   const drag = pivot.sprung ? 1 - R.sprung : 1;
   const speed = Math.hypot(car.u, car.w);
   if (speed > 0) {
-    const rub = Math.min(speed, R.grip * descent * drag);
+    const rub = Math.min(speed, shellGrip(rollTilt(car.roll)) * descent * drag);
     car.u -= (car.u / speed) * rub;
     car.w -= (car.w / speed) * rub;
   }
@@ -514,7 +537,7 @@ export function stepRolling(
     // air between contacts, where nothing slows it at all.
     const speed = Math.hypot(car.u, car.w);
     if (speed > 0) {
-      const pull = Math.min(R.grip * T.air.gravity * dt, speed);
+      const pull = Math.min(shellGrip(tilt) * T.air.gravity * dt, speed);
       const bite = (car.w / speed) * pull;
       car.u -= (car.u / speed) * pull;
       car.w -= bite;

@@ -9,6 +9,12 @@ until the crew were sent back to the last split board. It now does what a
 rolling car does — bounces forward, covers real ground, and smashes into
 whatever is in its way, which sends it over again in a new direction.
 
+The shell is also no longer one surface. What the ground has hold of decides
+what it costs: the tyres bite hardest (that is what starts a trip), a flank
+is a door skin and slides longest, and a roof is glass and pillars and
+gutters digging in — so a car on its roof stops noticeably sooner than one
+on its side.
+
 And a car that ends up on its roof now grinds to a stop over twenty-odd
 metres rather than freezing solid on the spot: it settled onto its roof
 still doing 63 km/h and simply stopped dead, because the roll handed it back

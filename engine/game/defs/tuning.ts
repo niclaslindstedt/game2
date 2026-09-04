@@ -1599,31 +1599,43 @@ export const TUNING = {
        * charging that as a flat-on-both-wheels impact takes nine tenths of
        * the trip before the car has even come off its wheels. */
       sprung: 0.88,
-      /** THE ONE FRICTION A ROLLING BODY HAS, as a coefficient under the
-       * shell it is grinding on. A body on its panels has one contact
-       * patch and one Coulomb budget, pointing against the way it is
-       * travelling — and `roll.ts` spends it on both jobs at once: the
-       * share ACROSS the car works on the lever of its own centre height
-       * and turns it over, the share ALONG it simply retards it.
+      /** THE FRICTION A BODY OFF ITS WHEELS HAS, as a Coulomb coefficient
+       * under WHATEVER OF IT IS ON THE GROUND — one per face, blended
+       * across the quarter turns between them.
        *
-       * That is the whole reason a roll is a roll rather than one flip —
-       * a car with fifteen metres a second still across it is a car the
-       * ground keeps turning over — and it is also why one STOPS: the roll
-       * ends when the travel does, not when a counter runs out.
+       * A body on the ground has one contact patch and one budget,
+       * pointing against the way it is travelling, and `roll.ts` spends it
+       * on both jobs at once: the share ACROSS the car works on the lever
+       * of its own centre height and turns it over, the share ALONG it
+       * simply retards it. That is the whole reason a roll is a roll
+       * rather than one flip — a car with fifteen metres a second still
+       * across it is a car the ground keeps turning over — and it is also
+       * why one STOPS: the roll ends when the travel does, not when a
+       * counter runs out.
        *
-       * And it is the ONLY thing that slows a rolling car down, which is
-       * why it is SHEET METAL'S number and not a tyre's. A rolling car is
-       * measured in accident reconstruction as a drag factor, and the
-       * figure is around half a g — panels and glass on soil, not rubber.
-       * At 0.85 (which is what a tyre holds, and what this used to be) a
-       * roll came out over a g, and a car went over at 165 km/h and was
-       * walking two seconds later.
+       * It is also the ONLY thing that slows a car that is over, so what
+       * it is worth on each face is what decides how far a rollover goes
+       * and how long a car lies grinding at the end of one. Accident
+       * reconstruction measures those as drag factors, and they are not
+       * one number:
        *
-       * It used to carry a flat 2.6/s exponential scrub beside it as well,
-       * which took nine tenths of the speed out of every second of
-       * contact — between them, the read that made a rollover look like a
-       * car hitting glue and then spinning on the spot. */
-      grip: 0.55,
+       * - `wheels` is RUBBER, being dragged sideways. It is the highest of
+       *   the three, and it is what bites at the start of a trip — the
+       *   tyre that catches while the body keeps going.
+       * - `flank` is a door skin and a sill on gravel: smooth, and the
+       *   longest slide of the three.
+       * - `roof` is glass, gutters, the pillars and whatever aerial is
+       *   still on it, all of which dig in. A car on its roof stops
+       *   noticeably faster than one on its side, and that difference is
+       *   the loudest few seconds of most accidents.
+       *
+       * The whole group used to be one number at a tyre's 0.85, which put
+       * a rollover over a g and had a car going over at 165 km/h walking
+       * two seconds later — with a flat 2.6/s exponential scrub beside it
+       * that took nine tenths of the speed out of every second of contact.
+       * Between them, the read that made a rollover look like a car
+       * hitting glue and then spinning on the spot. */
+      faceGrip: { wheels: 0.85, flank: 0.5, roof: 0.65 },
       /** How fast the roll bleeds into the ground it is grinding round on,
        * 1/s. Panels are not tyres. */
       drag: 0.9,

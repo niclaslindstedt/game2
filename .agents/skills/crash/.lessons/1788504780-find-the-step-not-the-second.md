@@ -6,7 +6,8 @@ concepts: [roll, momentum, measurement, probes, debugging]
 ---
 
 "A rollover stops dead" looked like a friction number and was not. Swept
-across a 2× range of `roll.grip` AND `roll.drag`, the distance a car covered
+across a 2× range of the shell's friction (now `roll.faceGrip`) AND
+`roll.drag`, the distance a car covered
 moved from 35 m to 39 m — flat, which is the signature of a loss the tuning
 knobs are not the source of.
 

@@ -106,15 +106,20 @@ Read the whole-run summary above it for damage and where it came to rest.
   than its own length per turn, something is charging it for an impact it
   never made — that failure has happened three separate ways in this module
   and every one of them read to a player as "the car hit glue".
-- **`roll.grip` is ONE Coulomb budget, spent once.** A body grinding on its
-  panels has one contact patch: `grip × g`, pointing against the way it is
-  actually travelling. The share ACROSS the car works on the lever of its
+- **`roll.faceGrip` is ONE Coulomb budget, spent once.** A body grinding on
+  the ground has one contact patch: `grip × g`, pointing against the way it
+  is actually travelling. The share ACROSS the car works on the lever of its
   centre height and turns it over; the share ALONG it retards it. They are
   not two knobs and must never be written as two — a lateral bite plus a
   separate scrub on the travel charges the same friction twice and creates
   roll out of nothing.
-- **It is SHEET METAL's coefficient, not a tyre's.** Panels and glass on
-  soil, around half a g. A tyre's 0.85 there puts a rollover over a g.
+- **...and it is a SHELL's coefficient, per face.** Panels and glass on soil,
+  around half a g — a tyre's 0.85 across the whole roll puts a rollover over
+  a g. But the shell is not one surface: `wheels` is rubber dragged sideways
+  and the highest (it is what bites at the start of a trip), `flank` is a
+  door skin and slides longest, `roof` is glass and pillars and gutters
+  digging in. BLENDED across the quarter turns, never stepped — a
+  coefficient that jumped at each face would kick the roll every quarter.
 - **A contact may only be charged for what the FLIGHT put in.** The seat is
   MOVING — `centreHeight` runs at `slope × rollRate` under a turning body,
   which past a corner is ten metres a second — so the closing speed against

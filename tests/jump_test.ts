@@ -14,6 +14,7 @@ import {
   ridesOver,
   rollTilt,
   step,
+  updateSlip,
   type CarInput,
   type GameEvent,
   type GameState,
@@ -280,8 +281,9 @@ describe("the jump", () => {
 
   it("a roll CARRIES — a car that goes over at pace travels while it does", () => {
     // THE MOMENTUM. A rollover is not a stop: the body weighs a tonne, the
-    // ground gives it a shell's friction to work against (`roll.grip`, half
-    // a g), and it is off the ground for most of every turn, where nothing
+    // ground gives it a shell's friction to work against (`roll.faceGrip`,
+    // around half a g on a panel), and it is off the ground for most of
+    // every turn, where nothing
     // slows it at all. Accident reconstruction measures a real one at
     // around half a g overall, and the bar here is a full g — twice as
     // harsh as the world, and still a bar the model has been under.
@@ -392,6 +394,46 @@ describe("the jump", () => {
     expect(state.car.rolling).toBe(false);
     step(state, { ...NEUTRAL_INPUT });
     expect(state.overturned).not.toBeNull();
+  });
+
+  it("stops harder on its ROOF than on its flank — what is on the ground decides", () => {
+    // The shell is not one surface. A flank is a door skin and a sill,
+    // which is smooth and slides a long way; a roof is glass, gutters, the
+    // pillars and whatever aerial is still attached, all of which dig in.
+    // Reconstruction measures the two as different drag factors, and this
+    // is where the game says so (`roll.faceGrip`).
+    //
+    // Both bodies are stood on their face already sliding, at the same
+    // speed, so the only difference between the runs is what the ground
+    // has hold of.
+    const slide = (tilt: number): number => {
+      const state = game();
+      state.terrain.obstaclesNear = () => [];
+      state.terrain.treesNear = () => [];
+      const car = state.car;
+      car.rolling = true;
+      car.roll = tilt;
+      car.rollRate = 0;
+      car.airborne = false;
+      car.u = 16;
+      car.w = 0;
+      updateSlip(car);
+      const x0 = car.x;
+      const z0 = car.z;
+      for (let i = 0; i < TUNING.physicsHz * 8 && car.rolling; i += 1) {
+        step(state, { ...NEUTRAL_INPUT });
+      }
+      return Math.hypot(car.x - x0, car.z - z0);
+    };
+    const onItsSide = slide(Math.PI / 2);
+    const onItsRoof = slide(Math.PI);
+    expect(onItsRoof).toBeGreaterThan(2);
+    expect(onItsSide).toBeGreaterThan(onItsRoof);
+    // ...and the wheels are the other end of it again: rubber dragged
+    // sideways is the best brake of the three, which is also what bites at
+    // the start of a trip and sends the body over its outside wheels.
+    expect(TUNING.air.roll.faceGrip.wheels).toBeGreaterThan(TUNING.air.roll.faceGrip.roof);
+    expect(TUNING.air.roll.faceGrip.roof).toBeGreaterThan(TUNING.air.roll.faceGrip.flank);
   });
 
   it("a car that is going over rides over nothing", () => {
