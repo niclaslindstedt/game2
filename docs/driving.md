@@ -1071,7 +1071,8 @@ every solid is a circle, and a hit does several things at once:
 - **The crush.** Closing speed past the scuff floor folds the struck
   panels in, permanently — eight zones ring the body (`CarState.damage`),
   and the renderer bends the body's actual polygons from the ledger
-  (`pwa/src/game/car-damage.ts`): pulled inward, crumpled, scuffed darker.
+  (`pwa/src/game/car-damage.ts` over the field in `car-crumple.ts`):
+  folded back from the rim, bulged, creased, scuffed and chipped.
   Zone crush past a part's bolt strength (`partAt`) tears it off —
   mirrors, bumpers, the wing — as a `partBreak` event the renderer turns
   into tumbling debris. Past `zoneMax` the panel has nowhere left to fold
@@ -1427,11 +1428,26 @@ flank (`partAt.door`, most of the way to the cage): a skin between the door
 seams that tumbles off and leaves the flank behind it painted into the dark of
 the cabin, stripes and all. And the four WHEELS come off their own ledger.
 
-The polygons fold to match. A quarter of a metre in the ledger reads as half a
-metre of car gone (`FOLD` in `car-damage.ts`), torn about rather than scaled —
-every vertex pulled in by its own share and thrown up and across by the rest —
-and scuffed to primer over the first bad hit. A car that has met a wall at
-100 km/h has no front.
+The polygons fold to match, through one displacement field over each
+vertex's rest position (`pwa/src/game/car-crumple.ts`) — the shortcut every
+game that cannot afford a soft body takes, with the ledger's faces as its
+control values. A quarter of a metre in the ledger reads as half a metre of
+car gone at a cap (`FOLD`), and a third of that at a flank (`FOLD_FLANK`,
+because a door skin driven past the seats is a door standing inside the
+cabin). The metal TELESCOPES — the fold dies out with depth, so the bumper
+goes furthest and the bulkhead not at all; what went in comes OUT through
+the surface as a bulge (a bonnet tents, a wing bows); the panel CORRUGATES
+in accordion creases across the fold; a coherent noise over the position
+tears it; and the whole nose or tail section KINKS about the bulkhead,
+toward the corner that took more and down under a square hit. Every face
+is then lit again from the plane it now lies in, and the paint scuffs dark
+and chips to primer where — and only where — the metal actually folded.
+Everything bolted to the shell bends with it (the lenses, the bumpers and
+lids, the cabin under a caved roof), and because the field is a function
+of position alone, meshes bent apart stay joined where they meet. A car
+that has met a wall at 100 km/h has no front. `make wrecks` is the lab:
+one body through every accident the ledger can describe, from the chase
+camera and the turntable.
 
 ## The drivetrain
 

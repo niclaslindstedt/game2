@@ -26,6 +26,15 @@ const LIGHT = new THREE.Vector3(0.35, 1, 0.45).normalize();
 const AMBIENT = 0.62;
 const DIFFUSE = 0.38;
 
+/** The baked sun's term for a face with this unit normal — what every
+ * face's vertex colours are the part colour scaled by. Exported so a face
+ * that is BENT after it was baked (car-damage.ts) can be lit again from its
+ * new normal with the same sun, rather than keeping the shade of the plane
+ * it no longer lies in. */
+export function lambert(nx: number, ny: number, nz: number): number {
+  return AMBIENT + DIFFUSE * Math.max(0, nx * LIGHT.x + ny * LIGHT.y + nz * LIGHT.z);
+}
+
 /** Accumulates flat-shaded triangles with baked lambert vertex colors.
  * `alpha` opens the fourth colour channel; a builder without it writes three
  * floats a vertex and the `alpha` argument on every method is ignored. */

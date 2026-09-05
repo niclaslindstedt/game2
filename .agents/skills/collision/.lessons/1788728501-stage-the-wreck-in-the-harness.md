@@ -1,26 +1,23 @@
 ---
-title: The LOOK step for a crash is a harness scene, not a drive — `shot-crash*` in scripts/screenshot.mjs, and a heli variant to see the nose
+title: The LOOK step for a fold is `make wrecks` first; the game's own `shot-crash*` scenes come after, with the head-ons last because they can time out
 date: 2026-09-01
 scope: scripts/screenshot.mjs, pwa/src/game/car-damage.ts
 concepts: [collision, damage, screenshots, harness, playtest]
 ---
 
-`make screenshots` has a wreck of its own now: `shot-crash` (throttle, then
-hard left off the opening straight into the treeline, shutter once the car
-is under 25 km/h), `shot-crash-after` (the same wreck six seconds on) and
-`shot-crash-headon` (no steering at all through the first corner, which is
-where a head-on comes from — on seed 42 it kills the engine and lands the
-RETIRED card). Run only those with
-`CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/screenshot.mjs shot-crash`
-after `make build`; the sweep is minutes, the three scenes are one.
+`make wrecks` is the LOOK step for the shape of a fold: one body through a
+brush, two head-ons, a corner, a flank, a rear shunt, a roll and the wreck,
+each a ledger written by hand in the engine's metres (`scripts/car-preview.mjs
+--wrecks`, with `shearedParts` deriving the parts those folds tear off), bent
+by the real damage visual with no physics or scenery in the way. `SCENE=flank
+VIEWS=side CELL=1320x930` is one accident close up. Judge the fold there
+first; it is seconds, and it shows every face.
 
-Two things the pictures taught:
-
-- The chase camera never sees the nose. `shot-crash-headon-heli` (`camera:
-"heli"`) is the frame that shows what a head-on did, and it is also the
-  only one where the engine smoke reads as a column rather than a wisp
-  behind the card.
-- The per-vertex buckle (`WARP` in `car-damage.ts`) is what separates torn
-  from scaled, and it goes to spikes fast: at 0.8 of the fold the tail was
-  a burst of white splinters, at 0.55 it is a crumpled quarter panel. Judge
-  it on the tail shot, where the fold is deepest.
+The game's own wreck scenes are `shot-crash*` in `scripts/screenshot.mjs`
+(`CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/screenshot.mjs
+shot-crash shot-crash-after` after `make build`). Two things about them: the
+chase camera never sees the nose (`shot-crash-headon-heli` is the frame for
+that), and the head-on scenes wait for the car to drop under 25 km/h, which
+on the current stage 42 it may never do — the scene then times out after
+three minutes and takes the rest of the run with it. Name the scenes you
+need, and put the head-ons last.

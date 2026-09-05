@@ -8,8 +8,11 @@
 
 import * as THREE from "three";
 
+import type { CarDamage, GameState } from "@engine";
+
 import { buildCarBody, crewSeats, type CarBodySpec } from "../game/car-body.ts";
 import type { CrewLook } from "../game/car-crew.ts";
+import { createCarDamage } from "../game/car-damage.ts";
 import { createDirtPainter, wheelSpray, type DirtCoat } from "../game/car-dirt.ts";
 import { gravelTexture } from "../game/textures.ts";
 
@@ -19,7 +22,15 @@ declare global {
   }
 }
 
-type Variant = { id: string; spec: CarBodySpec; crew?: CrewLook };
+type Variant = {
+  id: string;
+  spec: CarBodySpec;
+  crew?: CrewLook;
+  /** THE WRECK LAB (`--wrecks`): a damage ledger written by hand, in the
+   * engine's own metres, for the real damage visual to bend this body from
+   * — the row is that accident, and nothing about it is simulated. */
+  damage?: CarDamage;
+};
 
 type View = {
   name: string;
@@ -102,12 +113,52 @@ const CREW_VIEWS: View[] = [
   { name: "game", fov: 64, game: { carYaw: 0.35 } },
 ];
 
+/** The wreck sheet's columns: the chase camera first, because that is the
+ * only view of the damage a player ever holds — then the turntable, at the
+ * angles that show a nose, a flank, a tail and a roof. */
+const WRECK_VIEWS: View[] = [
+  { name: "game", fov: 64, game: { carYaw: 0 } },
+  { name: "front 3/4", fov: 35, orbit: { az: 0.62, el: 0.26, dist: 1.55 } },
+  { name: "side", fov: 35, orbit: { az: Math.PI / 2, el: 0.1, dist: 1.45 } },
+  { name: "rear 3/4", fov: 35, orbit: { az: Math.PI - 0.62, el: 0.28, dist: 1.55 } },
+  { name: "top", fov: 35, orbit: { az: 0.4, el: 1.15, dist: 2.1 } },
+];
+
+/** How long a staged wreck's torn-off pieces are given to land, s, at the
+ * frame rate they are stepped at: they are thrown from the car on the first
+ * update and have to be lying on the ground by the time the shutter goes. */
+const DEBRIS_SETTLE = 4;
+const DEBRIS_HZ = 60;
+
 const DEFAULT_CELL = { w: 440, h: 310 };
 
 function byName(views: View[], name: string): View {
   const view = views.find((v) => v.name === name);
   if (!view) throw new Error(`unknown view: ${name} (have ${views.map((v) => v.name).join(", ")})`);
   return view;
+}
+
+/** Bend a freshly built body to a hand-written ledger, the way the game
+ * bends the player's car to the engine's: the damage visual reads the
+ * ledger whole on its first update (every fold, and every part it says is
+ * off), and the pieces it throws are then stepped until they lie still on
+ * the studio floor. The body is left sitting as crooked as its wheels
+ * leave it, which in the game is car-mesh.ts's job. */
+function stageWreck(
+  car: ReturnType<typeof buildCarBody>,
+  damage: CarDamage,
+  scene: THREE.Scene,
+): void {
+  const state = {
+    car: { damage, heading: 0, u: 0, w: 0 },
+    terrain: { groundAt: () => 0 },
+  } as unknown as GameState;
+  const visual = createCarDamage(car);
+  scene.add(visual.debris);
+  for (let n = 0; n < DEBRIS_SETTLE * DEBRIS_HZ; n++) visual.update(state, 1 / DEBRIS_HZ);
+  car.chassis.position.y += visual.pose.drop;
+  car.chassis.rotation.x = -visual.pose.pitch;
+  car.chassis.rotation.z = visual.pose.roll;
 }
 
 async function main(): Promise<void> {
@@ -119,13 +170,13 @@ async function main(): Promise<void> {
     cell,
   } = (await res.json()) as {
     cars: Variant[];
-    mode?: "crew";
+    mode?: "crew" | "wrecks";
     views?: string[];
     cell?: { w: number; h: number };
   };
   const CELL_W = cell?.w ?? DEFAULT_CELL.w;
   const CELL_H = cell?.h ?? DEFAULT_CELL.h;
-  const all = mode === "crew" ? CREW_VIEWS : VIEWS;
+  const all = mode === "crew" ? CREW_VIEWS : mode === "wrecks" ? WRECK_VIEWS : VIEWS;
   // A narrowed sheet is not a nicety: eight columns of a whole catalog come
   // back scaled to fit whatever is reading them, and a cell judged at a
   // third of its size is a cell nobody judged. Naming the columns a change
@@ -173,6 +224,7 @@ async function main(): Promise<void> {
     });
     scene.add(car.group);
     const dirty = createDirtPainter(car.group, wheelSpray(variant.spec));
+    if (variant.damage) stageWreck(car, variant.damage, scene);
 
     const zs = variant.spec.profile.map((p) => p.z);
     const length = Math.max(...zs) - Math.min(...zs);

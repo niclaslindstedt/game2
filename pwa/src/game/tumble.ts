@@ -66,6 +66,12 @@ export type TumbleBody = {
    * fell on — every step it touches the ground, and is exactly flat by the
    * time it sleeps. */
   lays: boolean;
+  /** FLAT things come to rest on their face. A torn-off panel is a plate,
+   * and a plate that settles standing on its edge is a door planted in the
+   * gravel like a sign — so the object's own axis named here, the plate's
+   * normal, is turned toward straight up (either way up) every step it
+   * touches the ground, and is exactly upright by the time it sleeps. */
+  flat: "x" | "y" | "z" | null;
   /** Stopped, and no longer worth stepping. */
   asleep: boolean;
 };
@@ -77,8 +83,9 @@ export function tumbleFrom(
   spin: THREE.Vector3,
   rest: number,
   lays = false,
+  flat: "x" | "y" | "z" | null = null,
 ): TumbleBody {
-  return { object, vel, spin, rest, lays, asleep: false };
+  return { object, vel, spin, rest, lays, flat, asleep: false };
 }
 
 /** How much of the way to flat a laying body turns per second of contact —
@@ -111,6 +118,23 @@ function layDown(body: TumbleBody, t: number): void {
   // whatever attitude this left.
   if (t >= 1) object.quaternion.copy(lying);
   else object.quaternion.setFromEuler(object.rotation).slerp(lying, t);
+}
+
+const normal = new THREE.Vector3();
+const flatten = new THREE.Quaternion();
+
+/** Turn a plate toward lying on its face: its own `flat` axis, wherever it
+ * points now, is swung to straight up by the shortest turn, which keeps
+ * the bearing the plate skidded to a stop on. */
+function layFlat(body: TumbleBody, t: number): void {
+  const object = body.object;
+  const flat = body.flat as "x" | "y" | "z";
+  normal.set(flat === "x" ? 1 : 0, flat === "y" ? 1 : 0, flat === "z" ? 1 : 0);
+  normal.applyQuaternion(object.quaternion);
+  if (normal.y < 0) normal.negate();
+  flatten.setFromUnitVectors(normal, UP).multiply(object.quaternion);
+  if (t >= 1) object.quaternion.copy(flatten);
+  else object.quaternion.slerp(flatten, t);
 }
 
 /**
@@ -146,6 +170,9 @@ export function stepTumble(
   if (body.lays) {
     layDown(body, 1 - Math.exp(-LAY_RATE * dt));
     body.spin.multiplyScalar(Math.exp(-LAY_SPIN_DRAG * dt));
+  } else if (body.flat) {
+    layFlat(body, 1 - Math.exp(-LAY_RATE * dt));
+    body.spin.multiplyScalar(Math.exp(-LAY_SPIN_DRAG * dt));
   }
   // On the ground and still moving: the ground drags it down rather than
   // letting it slide forever across a hillside.
@@ -157,6 +184,7 @@ export function stepTumble(
     body.vel.set(0, 0, 0);
     body.spin.set(0, 0, 0);
     if (body.lays) layDown(body, 1);
+    else if (body.flat) layFlat(body, 1);
     body.asleep = true;
     return false;
   }

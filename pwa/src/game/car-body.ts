@@ -95,6 +95,9 @@ export function backlightNormal(spec: CarBodySpec): THREE.Vector3 {
 }
 
 export type CarBodyParts = {
+  /** The spec this body was built from — the frame the damage visual bends
+   * it within (its caps, its belt, its roof). */
+  spec: CarBodySpec;
   /** The whole car, origin at ground level under the body center. */
   group: THREE.Group;
   /** The SPRUNG mass — every panel, and nothing that touches the ground.
@@ -119,6 +122,11 @@ export type CarBodyParts = {
    * HIDDEN while they are all still bolted on: one merged copy of the lot is
    * drawn in their place until `unbolt` is called. */
   breakables: Partial<Record<DamagePart, THREE.Mesh>>;
+  /** ...and the one mesh they are drawn as until then. Handed out so the
+   * damage visual can bend it with the shell: a bumper that stays pristine
+   * in front of a folded nose is the one thing on the car that looks
+   * wrong. Null on a car with one bolt-on or none. */
+  boltOns: THREE.Mesh | null;
   /** Stop drawing the bolt-on panels as one mesh and give each of them its
    * own again — what the damage visual calls the instant it takes the first
    * one off, because from then on they no longer move together. Idempotent,
@@ -467,6 +475,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     mirrorMat?.dispose();
   };
   return {
+    spec,
     group,
     chassis,
     wheelGroups,
@@ -474,6 +483,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     body,
     lenses,
     breakables,
+    boltOns,
     unbolt,
     wipers,
     glass: glassMat,

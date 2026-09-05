@@ -33,6 +33,7 @@ export {
   ridesOver,
   damageZoneAt,
   landingDamage,
+  shearedParts,
   type ContactSide,
 } from "./game/collision.ts";
 export { beyondDriving, damageEffects, lampShare, type DamageEffects } from "./game/damage.ts";
