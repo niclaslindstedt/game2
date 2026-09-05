@@ -310,10 +310,11 @@ export const COMPACT_BODY: CarBodySpec = {
 export const CLASSIC_BODY: CarBodySpec = {
   // The bonnet's leading edge 0.62 m ahead of the front axle (the bumper
   // face 0.12 m past it), the cowl 0.46 m behind it, the roof's front edge
-  // 1.04 m behind it. The roof's sheet ENDS 0.18 m behind the REAR axle,
-  // and from there the backlight is one long shallow pane — thirty-odd
-  // degrees, half a metre of run — down to the tailgate's edge 0.70 m
-  // behind the axle; the tail face is 0.78 m behind it.
+  // 1.04 m behind it. The roof's sheet ENDS 0.26 m AHEAD of the REAR axle,
+  // where the quarter glass's diagonal begins, and from there the backlight
+  // is one long shallow pane — some twenty-five degrees, a metre of run —
+  // down to the tailgate's edge 0.70 m behind the axle, with a slim
+  // diagonal pillar beside it; the tail face is 0.78 m behind the axle.
   //
   // The bonnet is all but flat from the cowl to the bar the nose stops at.
   // Behind the cowl the deck is the door tops, one line rising a hair to
@@ -360,26 +361,27 @@ export const CLASSIC_BODY: CarBodySpec = {
   cabin: {
     cowlZ: 0.86,
     roofFrontZ: 0.28,
-    roofRearZ: -1.34,
+    roofRearZ: -0.9,
     baseRearZ: -1.86,
     roofY: 1.35,
     roofHalf: 0.64,
-    // The glasshouse narrows and falls toward the tail: the roof's rear
-    // edge is a hand narrower each side than its front and a few
-    // centimetres lower, which is what the ruled photographs said its
-    // corners were — and it ENDS early, so the backlight can lie down.
+    // The glasshouse narrows toward the tail: the roof's rear edge is a
+    // hand narrower each side than its front and a touch lower, which is
+    // what the ruled photographs said its corners were — and the roof ENDS
+    // over the rear seats, so the backlight can lie down behind it.
     roofRearHalf: 0.59,
-    roofRearY: 1.32,
+    roofRearY: 1.33,
     roofPaint: "accent",
     // The three-door glasshouse: a 1.25 m door, a B-pillar standing plumb
     // at its rear edge, and behind it the quarter glass this shape is
     // known by — a right trapezoid. Its top edge runs level from the pillar
-    // for 0.45 m, then its trailing edge is one long diagonal, parallel to
-    // the backlight, down to a foot on the sill 0.55 m behind the rear
-    // axle; what is left of the flank behind that edge is the big blank
-    // sail panel, 0.65 m of it along the roof. The glass runs close to the
-    // metal: this is the flush-glazed body that did away with the rain
-    // gutter. The backlight takes nearly the whole width of the tail.
+    // to the roof's own end, then its trailing edge is one long diagonal,
+    // parallel to the backlight beside it, down to a foot on the sill
+    // 0.55 m behind the rear axle; between that edge and the backlight is
+    // the pillar, a hand wide at the top and a hand and a half at the sill.
+    // The glass runs close to the metal: this is the flush-glazed body that
+    // did away with the rain gutter. The backlight takes nearly the whole
+    // width of the tail.
     pillars: {
       a: 0.09,
       b: 0.08,
@@ -387,7 +389,7 @@ export const CLASSIC_BODY: CarBodySpec = {
       header: 0.035,
       splitZ: -0.42,
       quarterZ: -1.71,
-      quarterRake: 0.85,
+      quarterRake: 0.89,
       quarterRise: 0,
       backWidth: 0.92,
     },

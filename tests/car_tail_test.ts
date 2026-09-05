@@ -101,7 +101,7 @@ describe("a quarter glass stated in metres", () => {
       ...CLASSIC_BODY,
       cabin: {
         ...CLASSIC_BODY.cabin,
-        pillars: { ...CLASSIC_BODY.cabin.pillars, quarterZ: -1.2, quarterRake: undefined },
+        pillars: { ...CLASSIC_BODY.cabin.pillars, quarterZ: -0.8, quarterRake: undefined },
       },
     };
     const [, , flank] = cabinPanels(spec);

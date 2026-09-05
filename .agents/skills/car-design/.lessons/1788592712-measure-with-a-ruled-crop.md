@@ -10,11 +10,15 @@ ruled crop, the compression rule, the overlay). What a three-door FASTBACK
 adds to it:
 
 - `cabin.baseRearZ` is the BACKLIGHT'S FOOT and `roofRearZ` is where the
-  roof's SHEET ends — read that bend off the ruled photo, not the glass's
-  own top, and it is earlier than it looks: on a fastback the backlight is
-  one long shallow pane (thirty-odd degrees, half a metre of run) and a
-  roof carried too far back makes it a short steep box under the wing. The
-  wing's posts (`spoiler.kind: "gate"`) stand on that glass.
+  roof's SHEET ends — and on a fastback that is where the quarter glass's
+  diagonal begins, AHEAD of the rear axle: the light strip that looks like
+  roof carried back over a "sail panel" is the C-pillar's top edge seen
+  from a low camera, and the backlight runs from the roof's end as one
+  shallow pane (some twenty-five degrees, a metre of run). A roof carried
+  back makes it a short steep box under the wing. The wing's posts
+  (`spoiler.kind: "gate"`) stand on that glass; the quarter edge's top
+  corner cannot pass the roof corner, so `quarterRake` reaches at most to
+  it, and the pillar is what is left along the patch's rear edge.
 - The quarter glass is a RIGHT TRAPEZOID, not a rectangle: read BOTH ends
   of its trailing edge off the ruled photo. Its foot goes in metres
   (`pillars.quarterZ`) and its top `quarterRake` ahead of that — 0.85 m on
