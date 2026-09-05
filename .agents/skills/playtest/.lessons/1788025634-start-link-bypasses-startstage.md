@@ -26,3 +26,9 @@ Two things about that branch bite once you do arm a field there:
 
 Only one of the two paths is exercised by playing the game, so a change to
 `startStage` that a person never notices is what silently breaks every scene.
+
+The camera is the same: `?camera=<id>` pins the angle for a scene, and a
+count of camera-key presses silently shoots the wrong view the day the
+ladder grows. A capture that comes back looking RIGHT is not evidence the
+parameter arrived — two scenes that should differ and are pixel-identical is
+the tell.

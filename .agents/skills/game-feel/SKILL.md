@@ -60,7 +60,7 @@ the game harder, not faster.
 | -------------------- | --------------------------------------------- | -------------------- |
 | Speed & drift model  | `engine/game/defs/{tuning,cars}.ts`, `car.ts` | `engine-system`      |
 | Stage scale          | `engine/mapgen/rules.ts`                      | `mapgen-improvement` |
-| Camera               | `pwa/src/game/camera.ts`                      | (this skill)         |
+| Camera               | `pwa/src/game/camera{,-eye,-feel,-ground}.ts` | (this skill)         |
 | Ground-contact FX    | `pwa/src/game/{dust,renderer,car-dirt}.ts`    | `visual-effects`     |
 | The car's motion cue | `pwa/src/game/car-mesh.ts` (wheels, pitch)    | `car-design`         |
 
@@ -104,13 +104,23 @@ What each contributes:
 3. **`make sim` before and after** any engine or rules lever — the feeling is
    never allowed to cost the bots the stage (finishes, drifts, respawns are
    the regression surface).
-4. **LOOK**: `make screenshots` (in web sessions
+4. **MEASURE the camera before looking at it.** `camera.ts` only ever
+   reads `GameState`, so a rig is metered headlessly: `tests/camera_test.ts`
+   scripts a drive (`weave`, `straight`), `jolt` takes the RMS SECOND
+   difference of a series (a pan of any speed has almost none; a shot that
+   rocks is nothing else — travel is the wrong column), `spread` its wander,
+   `blowRun` what a kick does from a settled datum, and
+   `tests/camera_feel_test.ts` reads the lens's own axes for a bank. Assert
+   the rule, then look.
+5. **LOOK**: `make screenshots` (in web sessions
    `CHROMIUM_PATH=/opt/pw-browsers/chromium`), plus a staged run for the
    specific moment (`test-scenario` / `playtest` own the tooling). Put the
    shot next to the reference and compare proportions, not vibes: where do
    the wheels sit vertically? where is the horizon? how many degrees of drift
-   show in the framing?
-5. **Iterate camera/FX freely** — they are presentation and cost nothing to
+   show in the framing? **Every camera framing change gets its own PORTRAIT
+   shot** (390×844): the fov is vertical, so landscape cannot show what a
+   phone held upright does to the field or to the bodywork in it.
+6. **Iterate camera/FX freely** — they are presentation and cost nothing to
    re-tune. Engine feel numbers move in small steps; each step re-simmed.
 
 ## Hard-earned constraints
@@ -133,6 +143,19 @@ What each contributes:
   on the hand-over. Any deliberate look on top (a tilt down over an arc) is a
   LOCAL rotation applied after the slerp, which is stable at every pose.
   `camera-sweep.ts` and `camera-start.ts` are the two worked examples.
+- **Anything that vibrates the lens is a few incommensurate oscillators
+  UNDER 8 Hz on a decaying envelope** — the road grain (`GRAIN` in
+  camera-eye.ts), a blow's rattle (camera-shake.ts), the speed tremor
+  (camera-feel.ts) all share the shape. Never a fresh random offset per
+  frame: white noise at a real blow's amplitude is a broken picture, and at
+  30 fps it aliases into a slow lurch. Past 8 Hz a phone resolves its own
+  sampling instead of the wave, and jolt goes as f², so lowering the
+  frequency is the cheapest cut there is.
+- **A hit belongs to the CAR.** The engine drops the body onto its springs
+  at every contact and car-mesh.ts draws it; an outside rig takes NONE of a
+  `contact` (only landings, water and a reset shudder the boom), and the
+  in-car rigs take all of it as the head being thrown. Moving a boom with a
+  hit doubles the motion and hides the car taking it.
 - The renderer never mutates `GameState`; feel state that must persist
   (dirt level, camera smoothing) lives in renderer-side closures and resets
   with the next stage's meshes.
