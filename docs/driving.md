@@ -694,13 +694,17 @@ not a mistake anymore; it is exploration:
   seated on the highest of them, so ground the body's own attitude cannot
   follow — a face steeper than `TUNING.attitude.pitchMax`, the crease
   where two lattice triangles meet, the foot of a cut bank — no longer
-  buries one end of it. A corner over ground rising harder than
-  `TUNING.collision.climbLimit` is against a WALL rather than standing on
-  a slope, so its claim is capped there and the contact model takes over —
-  and the limit is arcade-generous, a little under 45°, with the full
-  refusal (`wallSlope`) not until nearly 70°: a bank, a cut verge, the
-  landing face of a jump are things the car bounces up over, and only
-  ground it plainly could not climb is a wall. The
+  buries one end of it. A corner over ground rising harder than the wheels
+  carry the car at its speed (`climbGrade`, limits.ts) is against a WALL
+  rather than standing on a slope, so its claim is capped there and the
+  contact model takes over — and the limit is arcade-generous: a little
+  under 45° (`TUNING.collision.climbLimit`) from a crawl, rising with speed
+  to the full refusal (`wallSlope`) at nearly 70° once the car arrives at
+  `climbSpeed.to`. Speed carries a car up a bank: a 55° face is a stop at
+  walking pace and a climb at 80 km/h, with the grade draining the speed
+  on the way up. A bank, a cut verge, the landing face of a jump are things
+  the car bounces up over, and only ground steeper than 70° is a wall at
+  any speed — rock or soil, the same face to a wheel. The
   grade under the wheels is read over a wheelbase-scale baseline
   (`TUNING.hills.gradeSpan`) along the heading AND across it: banks push
   back the moment the wheels touch them, the nose pitches with the local
@@ -1111,13 +1115,20 @@ every solid is a circle, and a hit does several things at once:
   / `wheelFromRoof` only — the ring's own rates are a point impact's,
   where a solid reaches past the panel into the upright behind it, and the
   ground does no such thing. **So is the ground itself**:
-  a face rising faster than `climbLimit` under the wheels — the terrain, or
-  a road profile where it stands up — stops being a hill and starts refusing
-  the car, at `wallSlope` completely. The ground's gradient at the bumper IS
+  a face rising faster than the car's speed carries it (`climbGrade`:
+  `climbLimit` from a crawl, `wallSlope` at pace) under the wheels — the
+  terrain, or a road profile where it stands up — stops being a hill and
+  starts refusing the car by the shortfall, at `wallSlope` completely and
+  at any speed. The ground's gradient at the bumper IS
   the contact normal, so a cliff met head on takes the pace and folds the
   nose while one met at an angle deflects the car along it — and the car is
   backed out of however much of the step the face refused, which is why it
-  never ends up inside a mountain. A face has its own scuff floor
+  never ends up inside a mountain. A bank the speed DOES carry the car up
+  is still an arrival: the wheels' vertical speed jumping by more than
+  `collision.faceLand` in one step is more than the springs take up in
+  their travel, and the rest reaches the belly as a hard landing would — a
+  bank taken at the speed it asks for is free, the same bank at twice that
+  costs the floor. A face has its own scuff floor
   (`faceScuff`, above the solids' `scuffSpeed`): a steep bank taken at
   50 km/h costs speed and paint, never the run, while a cliff at pace still
   folds the nose.

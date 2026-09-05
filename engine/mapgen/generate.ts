@@ -51,6 +51,7 @@ import {
   type Cursor,
   type Profile,
   type SameDirRun,
+  type StartGround,
 } from "./search.ts";
 
 /** Generate a finite stage plan from a seed, sized for `length`'s band.
@@ -160,6 +161,9 @@ function tryGenerateStage(
     return water === null ? ground : Math.max(ground, water + R.elevation.follow.freeboard - roll);
   };
   const profile: Profile = { y: groundAt(0, 0, rolling(0)), slope: 0, rollS: 0 };
+  /** R24 in height — the start's own ground, for the arm that comes back
+   * past its apron (`entersStart`). */
+  const start: StartGround = { y: profile.y, shelfEnd };
   /** A candidate is walked on a COPY: the search draws several before it
    * keeps one, and a rejected draw must not have moved the road's height.
    * The copy comes back with the points so whichever draw is committed can
@@ -561,7 +565,7 @@ function tryGenerateStage(
         points.some(
           (p) =>
             field.blocked(p) ||
-            entersStart(p, clear) ||
+            entersStart(p, clear, start) ||
             !keepsDry(p) ||
             !sitsOnTheLand(p) ||
             // The pieces that RUN ALONG the road are on it by definition;
@@ -967,7 +971,7 @@ function tryGenerateStage(
         points.some(
           (p) =>
             field.blocked(p) ||
-            entersStart(p, clear) ||
+            entersStart(p, clear, start) ||
             !keepsDry(p) ||
             !sitsOnTheLand(p) ||
             !clearOfTarmac(p),
@@ -1045,7 +1049,7 @@ function tryGenerateStage(
     const past = probe(end, runOff).points;
     const clearOfEverything = (p: Cursor): boolean =>
       !field.blocked(p) &&
-      !entersStart(p, clear) &&
+      !entersStart(p, clear, start) &&
       keepsDry(p) &&
       sitsOnTheLand(p) &&
       clearOfTarmac(p);

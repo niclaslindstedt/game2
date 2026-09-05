@@ -24,7 +24,7 @@ import { STAGE_RULES, compileStage, junctionMainEdge, type Track } from "@engine
  * a route grade the ramp clause below can live with. */
 const CROSSINGS: { seed: number; length: "short" | "medium" }[] = [
   { seed: 12, length: "short" },
-  { seed: 21, length: "short" },
+  { seed: 28, length: "short" },
   { seed: 2, length: "medium" },
   { seed: 6, length: "medium" },
   { seed: 8, length: "medium" },

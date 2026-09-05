@@ -918,6 +918,30 @@ export type SpurIndex = {
   spurs: SpurLine[];
   add: (spur: SpurLine) => void;
   nearest: (x: number, z: number) => SpurHit | null;
+  /** The branch whose FILL stands highest here: over every branch in reach,
+   * the one whose road, run out from its own edge (`edgeOf`) at `climb`
+   * metres per metre, is the highest at this point. The ground between
+   * two branches, or a branch and the route, has to carry the taller
+   * fill whichever is nearer (terrain.ts) — and `nearest` cannot say
+   * which: where a branch on a twenty-metre fill hands over to a lower
+   * one its fill was simply dropped, a step the height of the fill along
+   * the midline. Its own scratch record, so a `nearest` read stays good
+   * beside it. */
+  highest: (
+    x: number,
+    z: number,
+    climb: number,
+    edgeOf: (spur: SpurLine) => number,
+  ) => SpurHit | null;
+  /** The branch whose CONE stands lowest here: over every branch in reach,
+   * the one whose road, with a bench `bench` wide and the country rising
+   * off it at `climb`, holds the country lowest at this point — R31's
+   * ceiling is a min over every road, and the nearest branch alone is not
+   * that. Where a branch cut thirty metres under the country hands over
+   * to a higher one, the nearest changes hands and the lower one's cone
+   * simply stops: a twenty metre step ruled along the midline (seed 22).
+   * Its own scratch record, like `highest`. */
+  lowest: (x: number, z: number, climb: number, bench: number) => SpurHit | null;
   /** Endless: forget the branches the run has left far behind. */
   pruneBefore: (atS: number) => void;
 };
@@ -953,6 +977,11 @@ type SpurCell = {
   maxX: number;
   minZ: number;
   maxZ: number;
+  /** The highest and the lowest road in the cell — what bounds `highest`'s
+   * and `lowest`'s answers from a cell before its samples are read, the way
+   * the box bounds `nearest`'s. */
+  maxY: number;
+  minY: number;
 };
 
 /** The rings out, comfortably past the corridor AND the shelf blend beyond
@@ -1005,6 +1034,8 @@ export function createSpurIndex(): SpurIndex {
             maxX: -Infinity,
             minZ: Infinity,
             maxZ: -Infinity,
+            maxY: -Infinity,
+            minY: Infinity,
           }),
         );
       }
@@ -1013,12 +1044,15 @@ export function createSpurIndex(): SpurIndex {
       if (sample.x > cell.maxX) cell.maxX = sample.x;
       if (sample.z < cell.minZ) cell.minZ = sample.z;
       if (sample.z > cell.maxZ) cell.maxZ = sample.z;
+      if (sample.elevation > cell.maxY) cell.maxY = sample.elevation;
+      if (sample.elevation < cell.minY) cell.minY = sample.elevation;
     }
     nearCx = NaN;
   };
 
-  const nearest = (x: number, z: number): SpurHit | null => {
-    if (spurs.length === 0) return null;
+  /** The cells the block around (`x`, `z`) reaches, held from the last
+   * query (see `nearCells`). */
+  const blockAt = (x: number, z: number): SpurCell[] => {
     const cx = Math.floor(x / INDEX_CELL);
     const cz = Math.floor(z / INDEX_CELL);
     if (cx !== nearCx || cz !== nearCz) {
@@ -1030,46 +1064,38 @@ export function createSpurIndex(): SpurIndex {
         if (cell) nearCells.push(cell);
       }
     }
-    let bestSpur: SpurLine | null = null;
-    let bestIndex = -1;
-    let bestD2 = Infinity;
-    // Squared throughout, and the winner built once at the end: this runs
-    // under every height query the terrain answers, and a root per candidate
-    // and an object per improvement are both pure waste there.
-    for (let c = 0; c < nearCells.length; c++) {
-      const cell = nearCells[c];
-      // The block reaches `SPUR_INDEX_REACH` and the branch the point is
-      // beside is normally in the middle cell, so most of these boxes are already
-      // further off than the answer in hand — see `blockOffsets` for why
-      // the ring order is what makes that true this early.
-      const bx = x < cell.minX ? cell.minX - x : x > cell.maxX ? x - cell.maxX : 0;
-      const bz = z < cell.minZ ? cell.minZ - z : z > cell.maxZ ? z - cell.maxZ : 0;
-      if (bx * bx + bz * bz >= bestD2) continue;
-      const entries = cell.entries;
-      for (let i = 0; i < entries.length; i++) {
-        const sample = entries[i].sample;
-        const dx = sample.x - x;
-        const dz = sample.z - z;
-        const d2 = dx * dx + dz * dz;
-        if (d2 >= bestD2) continue;
-        bestD2 = d2;
-        bestSpur = entries[i].spur;
-        bestIndex = entries[i].index;
-      }
-    }
-    if (!bestSpur) return null;
-    // The nearest VERTEX is in hand; the nearest point on the road is on
-    // one of the two segments it ends, and the foot of the perpendicular
-    // onto that segment is where the road's height is read. Between two
-    // samples the road is a straight ramp — which is also exactly what the
-    // renderer's ribbon draws between them.
-    const line = bestSpur.samples;
-    const at = line[bestIndex];
+    return nearCells;
+  };
+
+  /** How far the point is from a cell's box, squared — zero inside it. */
+  const boxD2 = (cell: SpurCell, x: number, z: number): number => {
+    const bx = x < cell.minX ? cell.minX - x : x > cell.maxX ? x - cell.maxX : 0;
+    const bz = z < cell.minZ ? cell.minZ - z : z > cell.maxZ ? z - cell.maxZ : 0;
+    return bx * bx + bz * bz;
+  };
+
+  /** The hit for the vertex `index` of `spur`, read at the foot of the
+   * perpendicular (see `SpurHit`) into `out`. The nearest VERTEX is in
+   * hand; the nearest point on the road is on one of the two segments it
+   * ends, and the foot of the perpendicular onto that segment is where the
+   * road's height is read. Between two samples the road is a straight
+   * ramp — which is also exactly what the renderer's ribbon draws between
+   * them. */
+  const footOf = (
+    spur: SpurLine,
+    index: number,
+    vertexD2: number,
+    x: number,
+    z: number,
+    out: SpurSample,
+  ): SpurHit => {
+    const line = spur.samples;
+    const at = line[index];
     let from = at;
     let to = at;
     let t = 0;
-    let d2 = bestD2;
-    for (const k of [bestIndex - 1, bestIndex + 1]) {
+    let d2 = vertexD2;
+    for (const k of [index - 1, index + 1]) {
       if (k < 0 || k >= line.length) continue;
       const other = line[k];
       const ex = other.x - at.x;
@@ -1086,20 +1112,132 @@ export function createSpurIndex(): SpurIndex {
       to = other;
       t = u;
     }
-    foot.x = from.x + (to.x - from.x) * t;
-    foot.z = from.z + (to.z - from.z) * t;
-    foot.elevation = from.elevation + (to.elevation - from.elevation) * t;
-    foot.s = from.s + (to.s - from.s) * t;
-    foot.lift = from.lift + (to.lift - from.lift) * t;
-    foot.flat = from.flat + (to.flat - from.flat) * t;
+    out.x = from.x + (to.x - from.x) * t;
+    out.z = from.z + (to.z - from.z) * t;
+    out.elevation = from.elevation + (to.elevation - from.elevation) * t;
+    out.s = from.s + (to.s - from.s) * t;
+    out.lift = from.lift + (to.lift - from.lift) * t;
+    out.flat = from.flat + (to.flat - from.flat) * t;
     // Two consecutive headings are a few degrees apart at most, so the
     // short way round is the difference itself.
     let turn = to.heading - from.heading;
     while (turn > Math.PI) turn -= 2 * Math.PI;
     while (turn < -Math.PI) turn += 2 * Math.PI;
-    foot.heading = from.heading + turn * t;
-    foot.surface = t < 0.5 ? from.surface : to.surface;
-    return { spur: bestSpur, sample: foot, d: Math.sqrt(d2) };
+    out.heading = from.heading + turn * t;
+    out.surface = t < 0.5 ? from.surface : to.surface;
+    return { spur, sample: out, d: Math.sqrt(d2) };
+  };
+
+  const nearest = (x: number, z: number): SpurHit | null => {
+    if (spurs.length === 0) return null;
+    const cells = blockAt(x, z);
+    let bestSpur: SpurLine | null = null;
+    let bestIndex = -1;
+    let bestD2 = Infinity;
+    // Squared throughout, and the winner built once at the end: this runs
+    // under every height query the terrain answers, and a root per candidate
+    // and an object per improvement are both pure waste there.
+    for (let c = 0; c < cells.length; c++) {
+      const cell = cells[c];
+      // The block reaches `SPUR_INDEX_REACH` and the branch the point is
+      // beside is normally in the middle cell, so most of these boxes are already
+      // further off than the answer in hand — see `blockOffsets` for why
+      // the ring order is what makes that true this early.
+      if (boxD2(cell, x, z) >= bestD2) continue;
+      const entries = cell.entries;
+      for (let i = 0; i < entries.length; i++) {
+        const sample = entries[i].sample;
+        const dx = sample.x - x;
+        const dz = sample.z - z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= bestD2) continue;
+        bestD2 = d2;
+        bestSpur = entries[i].spur;
+        bestIndex = entries[i].index;
+      }
+    }
+    if (!bestSpur) return null;
+    return footOf(bestSpur, bestIndex, bestD2, x, z, foot);
+  };
+
+  /** `highest`'s own scratch record — see `foot`. */
+  const crest: SpurSample = { ...foot };
+
+  const highest = (
+    x: number,
+    z: number,
+    climb: number,
+    edgeOf: (spur: SpurLine) => number,
+  ): SpurHit | null => {
+    if (spurs.length === 0) return null;
+    const cells = blockAt(x, z);
+    let bestSpur: SpurLine | null = null;
+    let bestIndex = -1;
+    let bestD2 = Infinity;
+    let best = -Infinity;
+    for (let c = 0; c < cells.length; c++) {
+      const cell = cells[c];
+      // What the cell's highest road could stand at from its box's edge
+      // bounds everything in it. `edgeOf` is a branch's own, so the bound
+      // is read as if the edge were at the box — a little generous, and
+      // only ever reads a cell it need not have.
+      if (cell.maxY - Math.sqrt(boxD2(cell, x, z)) * climb <= best) continue;
+      const entries = cell.entries;
+      for (let i = 0; i < entries.length; i++) {
+        const sample = entries[i].sample;
+        // A road stands no higher than its own elevation, so a sample under
+        // the answer in hand is out before its distance is taken.
+        if (sample.elevation <= best) continue;
+        const dx = sample.x - x;
+        const dz = sample.z - z;
+        const d2 = dx * dx + dz * dz;
+        const out = Math.max(0, Math.sqrt(d2) - edgeOf(entries[i].spur)) * climb;
+        const stands = sample.elevation - out;
+        if (stands <= best) continue;
+        best = stands;
+        bestD2 = d2;
+        bestSpur = entries[i].spur;
+        bestIndex = entries[i].index;
+      }
+    }
+    if (!bestSpur) return null;
+    return footOf(bestSpur, bestIndex, bestD2, x, z, crest);
+  };
+
+  /** `lowest`'s own scratch record — see `foot`. */
+  const trough: SpurSample = { ...foot };
+
+  const lowest = (x: number, z: number, climb: number, bench: number): SpurHit | null => {
+    if (spurs.length === 0) return null;
+    const cells = blockAt(x, z);
+    let bestSpur: SpurLine | null = null;
+    let bestIndex = -1;
+    let bestD2 = Infinity;
+    let best = Infinity;
+    for (let c = 0; c < cells.length; c++) {
+      const cell = cells[c];
+      // What the cell's lowest road could hold the country to from its
+      // box's edge bounds everything in it.
+      if (cell.minY + Math.max(0, Math.sqrt(boxD2(cell, x, z)) - bench) * climb >= best) continue;
+      const entries = cell.entries;
+      for (let i = 0; i < entries.length; i++) {
+        const sample = entries[i].sample;
+        // A cone stands no lower than its own road, so a sample over the
+        // answer in hand is out before its distance is taken.
+        if (sample.elevation >= best) continue;
+        const dx = sample.x - x;
+        const dz = sample.z - z;
+        const d2 = dx * dx + dz * dz;
+        const holds = sample.elevation + Math.max(0, Math.sqrt(d2) - bench) * climb;
+        if (holds >= best) continue;
+        best = holds;
+        bestD2 = d2;
+        bestSpur = entries[i].spur;
+        bestIndex = entries[i].index;
+      }
+    }
+    if (!bestSpur) return null;
+    return footOf(bestSpur, bestIndex, bestD2, x, z, trough);
   };
 
   const pruneBefore = (atS: number): void => {
@@ -1118,5 +1256,5 @@ export function createSpurIndex(): SpurIndex {
     nearCx = NaN;
   };
 
-  return { spurs, add, nearest, pruneBefore };
+  return { spurs, add, nearest, highest, lowest, pruneBefore };
 }

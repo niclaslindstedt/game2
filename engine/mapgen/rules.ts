@@ -139,9 +139,12 @@
 //       it, and `roadClear` of country around both belong to the start. On a
 //       sprint the route may not come back into it and no branch may cross
 //       it — a road floating over the start is the first thing a run ever
-//       sees. A circuit closes onto its own start line by construction
-//       (R22), so what it must not do is come at it ACROSS the apron; its
-//       closure lies along it.
+//       sees. Kept in HEIGHT as well as on the map, by R23's own clause:
+//       the apron is an arm of the stage, and a stretch passing it at the
+//       plain clearance a dozen metres above it leaves the ground between
+//       nothing to be but a face. A circuit closes onto its own start line
+//       by construction (R22), so what it must not do is come at it ACROSS
+//       the apron; its closure lies along it.
 //   R25 A SPRINT's finish line is not the end of its road. It carries on
 //       past the gate for a RUN-OUT — road the car coasts down after the
 //       clock stops, so the finish is a line drawn across a road rather
@@ -196,13 +199,23 @@
 //       triangle can cut up through one.
 //       And NOTHING A ROAD BUILDS IS STEEPER THAN A CAR CAN CLIMB unless it
 //       is rock, and says so. Every slope the terrain shapes — the cone
-//       letting go of the country at the end of its reach, a branch's
-//       embankment running out to the field, a stream's bank — is held
-//       under `verge.climbable`; where a mountain stands over the cone by
-//       more than a climbable slope can take up, the join is a FACE and it
-//       is declared one (`terrain.cutAt`), so the car meets bare rock it
+//       letting go of the country at the end of its reach, a road's or a
+//       branch's embankment running out to the field, a stream's bank — is
+//       held under `verge.climbable`; where a mountain stands over the cone
+//       by more than a climbable slope can take up, the join is a FACE and
+//       it is declared one (`terrain.cutAt`), so the car meets bare rock it
 //       can see and never a grass hillside it cannot get up. The analysis
 //       holds the whole drawn lattice to it (`ground.climb`).
+//       A FILL'S SIDE IS ONE SLOPE, NOT A SUM OF THEM. An embankment falls
+//       at the verge grade until it lands on the country, and is let go
+//       only at the end of the road's reach — never eased toward the
+//       country from the lip, because an ease has a grade of its own and
+//       stood it on top of the embankment's. Where the country itself
+//       falls away from under the road, the side falls at the country's
+//       own grade and what it takes to land within reach, which is what a
+//       fill on a hillside stands at. And the ground between two roads
+//       carries the TALLER fill whichever road is nearer: a fill handed
+//       over at the midline is a step the height of the fill.
 //       What is cut is the LANDSCAPE. A cut is taken against the road the
 //       ground is beside, and it never reaches in under a DIFFERENT road's
 //       own shelf — one road's rideability is not a licence to hollow out
