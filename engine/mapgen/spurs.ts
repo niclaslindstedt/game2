@@ -922,16 +922,24 @@ export type SpurIndex = {
   pruneBefore: (atS: number) => void;
 };
 
-/** Cell edge of the branch lookup, m — a couple of samples per cell. */
-const INDEX_CELL = 24;
+/** Cell edge of the branch lookup, m — ten samples or so per cell. Coarse
+ * on purpose: the reach below is three rings of it, and the same reach
+ * out of five rings of 24 m cells costs every height query a fifth more
+ * (the block is 121 lookups instead of 49, and twice the non-empty cells
+ * to box-test), where a cell's own box throws away the extra samples. */
+const INDEX_CELL = 40;
 
 /** How far from a point `nearest` is GUARANTEED to find a branch, m: the
  * three rings of the block below. Anything shaped off a branch's distance
  * — its verge cone above all — has to be finished by here, because past
  * it the branch is found or not depending on which index cell the point
  * fell in, and a cone that is still cutting when its road stops being
- * found ends in a wall ruled along the cell boundary. */
-export const SPUR_INDEX_REACH = INDEX_CELL * 3;
+ * found ends in a wall ruled along the cell boundary. A hundred and
+ * twenty metres so a branch's cone has a run past the bench before it
+ * lets go (R31, `verge.fade`): at seventy-two the cone let go straight off
+ * the bench, and every hillside beside a branch was the fade's face. */
+const INDEX_RINGS = 3;
+export const SPUR_INDEX_REACH = INDEX_CELL * INDEX_RINGS;
 
 /** One cell of the branch index: the samples in it, and the box they
  * occupy. A branch crosses a cell as a ribbon, so its box is a fraction of
@@ -947,11 +955,11 @@ type SpurCell = {
   maxZ: number;
 };
 
-/** Three rings out — 72 m, comfortably past the corridor AND the shelf blend
- * beyond it. Cutting the search off inside the blend is what leaves fans of
+/** The rings out, comfortably past the corridor AND the shelf blend beyond
+ * it. Cutting the search off inside the blend is what leaves fans of
  * shading radiating from a branch: the ground stops being flattened at the
  * cell boundary instead of at the blend's end. */
-const NEAR_BLOCK = blockOffsets(3);
+const NEAR_BLOCK = blockOffsets(INDEX_RINGS);
 
 export function createSpurIndex(): SpurIndex {
   const spurs: SpurLine[] = [];
@@ -1030,8 +1038,8 @@ export function createSpurIndex(): SpurIndex {
     // and an object per improvement are both pure waste there.
     for (let c = 0; c < nearCells.length; c++) {
       const cell = nearCells[c];
-      // The block reaches 72 m and the branch the point is beside is
-      // normally in the middle cell, so most of these boxes are already
+      // The block reaches `SPUR_INDEX_REACH` and the branch the point is
+      // beside is normally in the middle cell, so most of these boxes are already
       // further off than the answer in hand — see `blockOffsets` for why
       // the ring order is what makes that true this early.
       const bx = x < cell.minX ? cell.minX - x : x > cell.maxX ? x - cell.maxX : 0;

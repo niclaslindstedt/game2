@@ -102,6 +102,24 @@ describe("the rule book is self-consistent", () => {
       // cliff: it has to be drawable on the grid it is built from.
       expect(R.verge.cut.face.max).toBeLessThan(GROUND_CELL);
     });
+
+    it("builds nothing steeper than the car can climb short of a declared rock face", () => {
+      // R31 — `climbable` is the most any slope a road shapes may steepen
+      // to before it is rock and has to say so. Over the runoff's own
+      // grade, under the rock's, and under the car's limit with the same
+      // lattice margin the runoff keeps.
+      expect(R.verge.climbable).toBeGreaterThan(R.verge.climb);
+      expect(R.verge.climbable).toBeLessThan(R.verge.cut.face.min);
+      expect(R.verge.climbable * Math.SQRT2).toBeLessThan(TUNING.collision.climbLimit);
+      // ...and the fade is a real stretch of the cone's reach, not a step.
+      expect(R.verge.fade).toBeGreaterThan(GROUND_CELL * 2);
+    });
+
+    it("stands a corner guard's mound no steeper than the car can climb (R14)", () => {
+      // A raised cosine's steepest point is rise · π / 2; a mound is a hill
+      // that costs the corner-cutter time, never a wall that stops the car.
+      expect((R.guard.rise * Math.PI) / 2).toBeLessThanOrEqual(R.verge.climbable);
+    });
   });
 
   describe("R23/R34/R35 — where a road may go", () => {

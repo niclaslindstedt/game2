@@ -194,6 +194,15 @@
 //       wide because that is the reach of the triangles the ground is drawn
 //       and driven on: pin every corner that could sit over a road, and no
 //       triangle can cut up through one.
+//       And NOTHING A ROAD BUILDS IS STEEPER THAN A CAR CAN CLIMB unless it
+//       is rock, and says so. Every slope the terrain shapes — the cone
+//       letting go of the country at the end of its reach, a branch's
+//       embankment running out to the field, a stream's bank — is held
+//       under `verge.climbable`; where a mountain stands over the cone by
+//       more than a climbable slope can take up, the join is a FACE and it
+//       is declared one (`terrain.cutAt`), so the car meets bare rock it
+//       can see and never a grass hillside it cannot get up. The analysis
+//       holds the whole drawn lattice to it (`ground.climb`).
 //       What is cut is the LANDSCAPE. A cut is taken against the road the
 //       ground is beside, and it never reaches in under a DIFFERENT road's
 //       own shelf — one road's rideability is not a licence to hollow out
@@ -1711,10 +1720,14 @@ export const STAGE_RULES = {
      * `minMoundRadius` it can only ever be a grove, m. */
     minRadius: 2.5,
     minMoundRadius: 7,
-    /** Mound height per meter of its radius, and the ceiling — a mound is
-     * always steep enough that climbing it beats nothing. */
-    rise: 0.9,
-    maxHeight: 18,
+    /** Mound height per meter of its radius, and the ceiling. A mound is a
+     * raised cosine (`guards.ts`), whose steepest point is `rise · π / 2`,
+     * and R31 holds that under `verge.climbable`: a mound is a hill that
+     * costs the corner-cutter time, never a wall that stops the car — at
+     * 0.9 it stood at 55° and did exactly that. Steep enough that climbing
+     * it beats nothing, and no steeper. `rules_test` pins the pair. */
+    rise: 0.39,
+    maxHeight: 6,
   },
 
   /** R15 — the paving field. The stage ALTERNATES: a run of gravel, a run
@@ -2813,19 +2826,34 @@ export const STAGE_RULES = {
      * which slumps. Where the road has been cut through rock instead, R34's
      * `cut` band says what the face is held at. */
     climb: 0.45,
-    /** ...and where the cone LIFTS OFF: how much of the END of its reach it
-     * climbs away over, m. A cone is a min, and a min that simply stops
-     * being asked past its reach ends in a WALL — the country standing
-     * however high it stands one query cell further out, ruled dead
-     * straight along the lattice. Beside a mountain that was fifty metres
-     * of vertical rock two hundred metres from any road, on ground no rule
-     * had touched. So over the last `fade` metres the cone's grade climbs
-     * from `climb` to the steepest face rock is ever held at
-     * (`cut.face.max`), and a cut runs out into the country as a face that
-     * steepens into rock rather than one that stops. At sixty metres that
-     * lifts the route's cone a further 37 m by the edge of its reach — over
-     * ninety metres above the road all told — and only a mountain standing
-     * over that keeps a wall, which the analysis reports as one. */
+    /** THE STEEPEST GROUND A ROAD MAY SHAPE SHORT OF ROCK, m per m. Every
+     * slope the terrain BUILDS beside a road — the cone letting go of the
+     * country at the end of its reach, a branch's embankment running out to
+     * the field, a stream's bank — is held under this, and anything a road
+     * leaves standing steeper is a ROCK FACE and has to say so
+     * (`terrain.cutAt`): bedrock paint, nothing rooted on it, exempt from
+     * the analysis's climb check. That is the whole rule about nature and
+     * the car: the country never stops the car unless it is rock, and rock
+     * is a thing somebody asked for. Held under `collision.climbLimit` by
+     * the lattice's own margin (a triangle across a cell diagonal reads a
+     * field back at up to √2 times its grade), which `rules_test` pins;
+     * `climb` above is the gentler grade the RUNOFF is battered to, and
+     * this is the most any built slope past it may steepen to. */
+    climbable: 0.62,
+    /** ...and where the cone LETS GO: how much of the END of its reach it
+     * blends back onto the country over, m. A cone is a min, and a min that
+     * simply stops being asked past its reach ends in a WALL — the country
+     * standing however high it stands one query cell further out, ruled
+     * dead straight along the lattice. Beside a mountain that was fifty
+     * metres of vertical rock two hundred metres from any road, on ground
+     * no rule had touched. So over the last `fade` metres the cone rises to
+     * meet the ground it was cutting, by exactly the excess that ground
+     * stands over it and no more: where the country is a few metres over
+     * the cone the join is a shoulder a car drives over, and where a
+     * mountain stands fifty metres over it the join is a face — declared as
+     * rock, because it is steeper than `climbable`. Nothing is ever left as
+     * a seam. A branch's cone lets go inside the reach its index is
+     * guaranteed to find it within, for the same reason. */
     fade: 60,
 
     /** R34 — THE CUT. What the road does with ground it cannot go round.

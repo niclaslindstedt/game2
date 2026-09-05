@@ -454,11 +454,14 @@ describe("the field on the road", () => {
     // them may end a step inside each other — the contact model resolves
     // every pair, and a pair it did not resolve is fourteen games driving
     // through one another.
-    // Walked over several seeds rather than one. WHETHER a given stage's
-    // eight cars actually touch depends on how that stage's corners bunch
-    // them, which moves whenever the generator's routing does; that they
-    // touch SOMEWHERE, and are never resolved into each other when they do,
-    // is the rule. Pinning it to one seed made it a test of that seed.
+    // The WHOLE roster on the grid, and walked over several seeds rather
+    // than one. WHETHER a given stage's cars actually touch depends on how
+    // that stage's corners bunch them, which moves whenever the generator's
+    // routing — or the ground beside the road — does: eight cars met on one
+    // seed in five and on none after a terrain change, which made this a
+    // test of that seed. Fourteen cannot get off the line without meeting,
+    // on every seed measured, and that they touch SOMEWHERE and are never
+    // resolved into each other when they do is the rule.
     const reach = TUNING.collision.halfWidth * 2;
     let closest = Infinity;
     let met = 0;
@@ -466,7 +469,7 @@ describe("the field on the road", () => {
       const track = compileStage(seed, "short");
       const field = createField(
         track,
-        { difficulty: "hard", cars: 8, massStart: true, contact: true },
+        { difficulty: "hard", cars: RIVALS.length, massStart: true, contact: true },
         stage,
       );
       for (let i = 0; i < TUNING.physicsHz * 90; i++) {

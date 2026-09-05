@@ -565,6 +565,26 @@ describe("the country is curves (R32)", () => {
     }
   }, 30_000);
 
+  it("stands nothing the car cannot climb short of rock, at the default dials (R31)", () => {
+    // The drawn lattice, every triangle past the road's bench steeper than
+    // the physics' own climb limit, less the declared rock faces, the
+    // rock's deliberate edges and the country's own scoured flanks. What
+    // this catches is any pass that shapes the ground beside a road and
+    // forgets the car has to get back up it: a cone letting go of a
+    // hillside, a branch's fill, a stream's bank, a village's rim, a
+    // guard's mound. Held under the check's FAIL bar here rather than its
+    // tolerance: a quarter of the sweep still carries a few dozen such
+    // triangles apiece — a branch standing over a basin, a fill on a
+    // hillside — and the analyzer reports every one of those as the queue
+    // it is. What no seed may be is a stage with such a hill beside every
+    // corner.
+    for (const seed of SEEDS) {
+      const ground = report(seed).metrics.find((m) => m.id === "ground");
+      const share = (ground?.stats.steepShare ?? 1) as number;
+      expect(share, `seed ${seed}`).toBeLessThan(ANALYSIS.ground.climb.fail);
+    }
+  }, 30_000);
+
   it("opens a sharp edge only past the steepness dial's midpoint", () => {
     // The rock's own word on where it is deliberately sharp, sampled over
     // the map on ground well above the water table — a kettle hole's bank

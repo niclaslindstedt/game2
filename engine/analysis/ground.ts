@@ -36,6 +36,7 @@
 //   roads went round everything — which is what a country with no rock in
 //   it looks like from the driver's seat.
 
+import { TUNING } from "../game/defs/tuning.ts";
 import { LAKE_Y } from "../mapgen/land.ts";
 import { biomeRules } from "../mapgen/biomes.ts";
 import type { Track } from "../mapgen/compile.ts";
@@ -61,8 +62,19 @@ function percentile(sorted: number[], p: number): number {
 
 /** What the fold sweep found: how many lattice edges the country has past
  * the road's bench, how many of them fold past `crease.fold`, the worst
- * such fold in degrees, and how many triangles stand as walls. */
-type Creases = { edges: number; creased: number; worst: number; walls: number };
+ * such fold in degrees, how many triangles stand as walls — and, R31's
+ * own count, how many triangles the sweep saw at all and how many of them
+ * stand steeper than the car can climb on ground nothing declared rock,
+ * with the worst of those. */
+type Creases = {
+  edges: number;
+  creased: number;
+  worst: number;
+  walls: number;
+  triangles: number;
+  steep: number;
+  steepest: number;
+};
 
 /** R32 — THE COUNTRY IS CURVES: every fold on the ground lattice, sorted
  * into the road's, the rock's deliberate ones and the country's own.
@@ -139,9 +151,39 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
   // The road's own strip is the rollers' to judge; the country starts past
   // the bench, a cell out, where R31 promises a hill worth going round.
   const clear = STAGE_RULES.verge.bench + cell;
-  const out: Creases = { edges: 0, creased: 0, worst: 0, walls: 0 };
+  const out: Creases = {
+    edges: 0,
+    creased: 0,
+    worst: 0,
+    walls: 0,
+    triangles: 0,
+    steep: 0,
+    steepest: 0,
+  };
   const worstAt = { x: 0, z: 0 };
   let worstWall = 0;
+  // R31 — the grade past which the car is no longer climbing the ground
+  // but being refused by it, read off the physics rather than restated: a
+  // triangle this steep is a thing the car stops against, wherever it is
+  // and whatever built it, unless it is rock and says so.
+  const L = ANALYSIS.ground.climb;
+  const limit = TUNING.collision.climbLimit;
+  const steepAt = { x: 0, z: 0, built: false };
+  /** Whether the BARE country here is a rock flank: a hillside steeper
+   * than the runoff a road batters beside itself (`verge.climb`), with the
+   * soil scoured off it (R32) — which is what the geology strips a flank
+   * to, what the renderer paints as bedrock, and what nothing roots on.
+   * A road's embankment standing on such a flank has nowhere gentler to
+   * come down to than the flank itself. Read off the bare land, so a fill
+   * or a cut on gentle, soil-covered country never hides behind it. */
+  const far = terrain.farHeightAt;
+  const rockFlank = (x: number, z: number): boolean => {
+    if (terrain.geology.soilAt(x, z) >= ANALYSIS.ground.bare) return false;
+    const h = cell / 2;
+    const dx = (far(x + h, z) - far(x - h, z)) / cell;
+    const dz = (far(x, z + h) - far(x, z - h)) / cell;
+    return Math.hypot(dx, dz) > STAGE_RULES.verge.climb;
+  };
   for (let j = 0; j < h - 2; j++) {
     for (let i = 0; i < w - 2; i++) {
       const x = (i0 + i + 0.5) * cell;
@@ -159,8 +201,9 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
       lower(k + w, next);
       widest = Math.max(widest, fold(up, next));
       out.edges += 3;
+      out.triangles += 2;
       const steepest = Math.max(slope(lo), slope(up));
-      if (widest <= B.fold && steepest <= B.wall.slope) continue;
+      if (widest <= B.fold && steepest <= limit) continue;
       // Worth classifying. Built ground first — it is the common case
       // beside a road and costs a land query per corner; the rock's own
       // word is a geology pass and is asked last.
@@ -172,6 +215,27 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
         isShaped(k + 2) ||
         isShaped(k + 2 * w);
       const sharp = terrain.geology.sharpAt(x, z) >= B.explicit;
+      // R31 — steeper than the car can climb, and neither a face a road
+      // was cut through (R34, or a cone letting go of a mountain — the
+      // field's own word, `cutAt`) nor the rock's deliberate edge, nor the
+      // country's own rock: bare land that stands steeper than a road may
+      // build, with the soil scoured off it, is a mountain flank, and a
+      // flank is rock the driver can see whatever a road did on it.
+      // Counted per triangle, because a car meets one triangle at a time.
+      if (
+        steepest > limit &&
+        !sharp &&
+        terrain.cutAt(x, z) < ANALYSIS.ground.cut.face &&
+        !rockFlank(x, z)
+      ) {
+        out.steep += slope(lo) > limit && slope(up) > limit ? 2 : 1;
+        if (steepest > out.steepest) {
+          out.steepest = steepest;
+          steepAt.x = x;
+          steepAt.z = z;
+          steepAt.built = built;
+        }
+      }
       if (steepest > B.wall.slope && !sharp) {
         out.walls++;
         if (steepest > worstWall) {
@@ -202,6 +266,20 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
   // noise a session learns to skip. What is worth standing in front of
   // is a SHARE past the tolerance, or a single fold twice the bar — a
   // knife-edge, wherever it is.
+  const steepShare = out.steep / Math.max(1, out.triangles);
+  if (out.steep > 0) {
+    const where = steepAt.built ? "on ground a road shaped" : "in open country";
+    findings.push({
+      code: "ground.climb",
+      severity: steepShare > L.tolerated ? "error" : "note",
+      message: `${(steepShare * 100).toFixed(2)}% of the drawn ground stands steeper than the car can climb and is not rock (worst ${(
+        Math.atan(out.steepest) *
+        (180 / Math.PI)
+      ).toFixed(0)}° ${where})`,
+      at: { x: steepAt.x, z: steepAt.z },
+      value: steepShare,
+    });
+  }
   const share = out.creased / Math.max(1, out.edges);
   if (share > B.share.tolerated) {
     findings.push({
@@ -391,6 +469,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
   // ── The folds (R32) ─────────────────────────────────────────────────
   const folds = creases(track, terrain, findings);
   const creasedShare = folds.creased / Math.max(1, folds.edges);
+  const steepShare = folds.steep / Math.max(1, folds.triangles);
   const cutShare = sides > 0 ? cutSides / sides : 0;
   const walledShare = track.length > 0 ? walled / track.length : 0;
   if (corridorRise < C.rise.min) {
@@ -584,6 +663,19 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       value: creasedShare,
       budget: G.crease.share.tolerated,
     },
+    {
+      // The rule about nature and the car, measured where the car meets
+      // it: on the drawn lattice, every triangle steeper than the physics'
+      // own climb limit that is neither a declared rock face nor the rock's
+      // deliberate edge. Weighted like the walls, because a hillside the
+      // car stops against is a wall to the driver whatever angle it is.
+      id: "climb",
+      label: "nothing stops the car but rock, and rock says so (R31)",
+      score: under(steepShare, G.climb.tolerated, G.climb.fail),
+      weight: 1.5,
+      value: steepShare,
+      budget: G.climb.tolerated,
+    },
   ];
 
   return {
@@ -616,6 +708,8 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       creasedShare,
       worstCrease: folds.worst,
       walls: folds.walls,
+      steepShare,
+      steepest: folds.steepest,
     },
     ms: Date.now() - started,
   };

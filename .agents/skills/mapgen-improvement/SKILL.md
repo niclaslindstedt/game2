@@ -361,6 +361,14 @@ undoes it without knowing it was ever a rule.
   distance query has to be finished — lifted off, blended out — INSIDE the
   reach the index guarantees (`verge.fade`, `SPUR_INDEX_REACH`), and
   `ground.wall` is the check that says whether it was.
+- **Nothing a road builds is steeper than `verge.climbable` unless it is
+  rock and says so (R31).** Every pass that eases something level back
+  onto the country — a cone letting go, a shelf, a bank, a rim, a mound —
+  is sized to the DROP it takes up, never to a fixed length, and what
+  cannot be made climbable is declared through `terrain.cutAt` so the
+  props, the paint and the analysis all read it as rock. `ground.climb`
+  measures it on the drawn lattice; a new shaping pass owes that check a
+  clean sweep before it ships.
 - **Sharp is measured on the drawn lattice, never on the field.** Every
   layer is C1; what creases is the 14 m triangulation of it. `ground.crease`
   folds the lattice and holds the country to a curve, exempting only what a
