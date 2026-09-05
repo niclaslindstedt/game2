@@ -48,8 +48,11 @@ const WHEEL = 3;
  * looking back up the road the wheel is about to come down. */
 const SEATS: CameraMode[] = ["chase", "heli", "free"];
 /** Where the planted lens stands: metres ahead of the car along its heading
- * at the moment the wheel goes, metres off to the side, and its height. */
-const VERGE = { ahead: 38, aside: 7, up: 1.7 };
+ * at the moment the wheel goes, metres off to the wheel's side, its height,
+ * and the point on the road it is aimed at — where the car will be a second
+ * on, so the car and the wheel beside it both cross the middle of the frame
+ * at a distance the wheel is a readable size at. */
+const VERGE = { ahead: 42, aside: 14, up: 1.8, aimAhead: 30, fov: 70 };
 
 /** The sheet: tile size, and the columns it wraps at. */
 const TILE = { width: 320, height: 180, cols: 8 };
@@ -117,13 +120,16 @@ async function main(): Promise<void> {
       const cosH = Math.cos(car.heading);
       const x = car.x + sinH * VERGE.ahead + cosH * VERGE.aside;
       const z = car.z + cosH * VERGE.ahead - sinH * VERGE.aside;
+      const aimX = car.x + sinH * VERGE.aimAhead;
+      const aimZ = car.z + cosH * VERGE.aimAhead;
       renderer.setCamera("free");
+      renderer.setFreeFov(VERGE.fov);
       renderer.placeCamera({
         x,
         y: game.terrain.groundAt(x, z) + VERGE.up,
         z,
-        yaw: Math.atan2(car.x - x, car.z - z),
-        pitch: -0.06,
+        yaw: Math.atan2(aimX - x, aimZ - z),
+        pitch: -0.05,
       });
     }
     renderer.onEvents(game, [
