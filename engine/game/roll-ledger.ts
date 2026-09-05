@@ -10,7 +10,7 @@
 // rotational fault this module has ever had turned out to be.
 
 import { TUNING } from "./defs/tuning.ts";
-import { type MassSpread, type Weight, REFERENCE, clearOn, seatOn } from "./roll-hull.ts";
+import { type MassSpread, type Weight, REFERENCE, weightFromOrigin } from "./roll-hull.ts";
 import { rollTilt, type CarState } from "./state.ts";
 
 const T = TUNING;
@@ -18,7 +18,7 @@ const T = TUNING;
 /** How high the weight rides above the ORIGIN at an attitude — the piece
  * that turns the surface's height into `car.y` and back. */
 export function weightOverOrigin(tilt: number, pitch: number, weight: Weight = REFERENCE): number {
-  return seatOn(tilt, pitch, undefined, weight) - clearOn(tilt, pitch);
+  return weightFromOrigin(tilt, pitch, weight).up;
 }
 
 /** THE CRASH'S WHOLE LEDGER, J per kg of car — what it is travelling with,
@@ -54,7 +54,7 @@ export function crashEnergy(car: CarState, mass: MassSpread): number {
     mass.spin.pitch * car.pitchRate * car.pitchRate +
     mass.yaw * car.yawRate * car.yawRate;
   // The WEIGHT's world height: `car.y` is the origin, and the weight rides
-  // `seatOn - clearOn` above it. Read against level for the same reason
+  // `weightOverOrigin` above it. Read against level for the same reason
   // `rollStand` is — this is a world height, not an attitude on a plane.
   const height = car.y + weightOverOrigin(tilt, pitch, mass.weight);
   return 0.5 * (move + spin) + T.air.gravity * height;

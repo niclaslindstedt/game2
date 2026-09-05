@@ -56,6 +56,7 @@ import {
   seatSlopes,
   standingOn,
   turnedPoints,
+  weightFromOrigin,
 } from "./roll-hull.ts";
 import { clamp } from "../lib/math.ts";
 import {
@@ -336,6 +337,10 @@ export function stepRolling(
   // only a crash thrown off a lip into the wild ever showed it: it was 13.5%
   // of `carry`'s whole budget, all of it on `air->air` steps.
   let centre = car.y + weightOverOrigin(tilt, pitch, mass.weight);
+  // ...and where it is ACROSS and ALONG the origin, in the world, for the
+  // same hand-over in the other two axes once the body is in the air.
+  const from = weightFromOrigin(tilt, pitch, mass.weight);
+  const wasHeading = car.heading;
   // `airborne` is the crash's own bit for BETWEEN ITS CONTACTS — which is
   // what airborne honestly means for a car going over, and what the camera,
   // the HUD and the effects want to hear. It cannot be read back off the
@@ -395,8 +400,9 @@ export function stepRolling(
   // never does.
   //
   // How far it walks per radian is how tall the body is standing on that
-  // corner, which is the box's own clearance. In the air there is no corner
-  // and no walk — the body turns about its weight and nothing else.
+  // corner, which is the box's own clearance. In the air there is no corner:
+  // the body turns about its WEIGHT and nothing else, and that walk is taken
+  // below, once the heading has been stepped too.
   const stand = clearOn(nowR, nowP, bed);
   const walk = down ? -stand * (car.roll - wasRoll) : 0;
   const stride = down ? -stand * (car.pitch - wasPitch) : 0;
@@ -453,6 +459,23 @@ export function stepRolling(
   const cosH = Math.cos(car.heading);
   car.x += (sinH * car.u + cosH * car.w) * dt + cosH * walk + sinH * stride;
   car.z += (cosH * car.u - sinH * car.w) * dt - sinH * walk + cosH * stride;
+  if (!down) {
+    // THE AXIS IN THE AIR. A body between contacts turns about its weight,
+    // and the weight flies straight — so the ORIGIN is wherever the attitude
+    // puts it under that weight, and it goes round: half a metre out to the
+    // side with the car on its flank, back under it on the roof. The height
+    // has already been handed over the same way (`centre` above, and `car.y`
+    // from it below); this is the across and the along, in the world, with
+    // the yaw in it. Left out, the origin flies straight instead and the
+    // weight swings round the wheel plane on the arm of its own height — a
+    // car spinning on a bar held at ground level, which reads from any seat
+    // as a body slung round an axis somewhere under it.
+    const to = weightFromOrigin(nowR, nowP, mass.weight);
+    const sinW = Math.sin(wasHeading);
+    const cosW = Math.cos(wasHeading);
+    car.x += cosW * from.across + sinW * from.along - (cosH * to.across + sinH * to.along);
+    car.z += cosW * from.along - sinW * from.across - (cosH * to.along - sinH * to.across);
+  }
 
   // Nothing is standing on the springs, and there is no drift, no spin and no
   // wheelspin to read off a car with no wheels on the ground. The PITCH is

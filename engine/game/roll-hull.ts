@@ -121,6 +121,20 @@ function turned(
   };
 }
 
+/** WHERE THE WEIGHT IS, from the origin: the same three offsets `turned`
+ * gives any point of the box, asked of the one point that is not on it.
+ * `up` is the piece that turns the surface's height into `car.y` and back
+ * (`weightOverOrigin`); `across` and `along` are what the origin has to walk
+ * when the body turns about its WEIGHT rather than about a corner, which is
+ * what a body in the air does (`stepRolling`). */
+export function weightFromOrigin(
+  tilt: number,
+  pitch: number,
+  weight: Weight = REFERENCE,
+): { across: number; up: number; along: number } {
+  return turned([0, weight.up, weight.along], tilt, pitch);
+}
+
 /** ...and how high that is ABOVE THE PLANE: the turned point dotted against
  * the ground's own normal. Level ground gives back the plain height, which
  * is why nothing on flat ground can tell the difference. */
