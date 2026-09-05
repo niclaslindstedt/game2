@@ -138,7 +138,7 @@ describe("the ground under a crash", () => {
     for (const surface of ["asphalt", "sand", "nature"] as const) {
       const state = drop({ surface, roll: Math.PI / 2, pitch: 0.5, rollRate: 4, u: 14 });
       state.rng.next = createRng(7).next;
-      const spread = massSpread(state.spec.mass);
+      const spread = massSpread(state.spec);
       let had = crashEnergy(state.car, spread);
       for (let i = 0; i < TUNING.physicsHz * 3; i += 1) {
         const allowed = crashTurbulence(state.car, spread);

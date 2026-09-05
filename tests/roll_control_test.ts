@@ -25,6 +25,7 @@ import {
   crashEnergy,
   crashTurbulence,
   createGame,
+  driveRolling,
   leanTorque,
   massSpread,
   rollBed,
@@ -63,7 +64,7 @@ function game(): GameState {
  *
  * The sideways speed is NEGATIVE, so the body goes over to the positive side
  * of the roll and a positive steering input is the one opposing it. */
-function trip(input: Partial<CarInput>, seconds = 2.5, over = 0.8, rate = 2.2, w = -8): GameState {
+function trip(input: Partial<CarInput>, seconds = 2.5, over = 0.8, rate = 2.6, w = -8): GameState {
   const state = game();
   const car = state.car;
   car.rolling = true;
@@ -84,9 +85,11 @@ const speedOf = (state: GameState): number => Math.hypot(state.car.u, state.car.
 
 /** A COMMITTED TRIP: one the body has the rotation to get over its own sill
  * corner with, so that left alone it finishes lying down. The default
- * staging's 2.2 rad/s is the marginal case and rocks back onto its wheels by
- * itself, which is a fine thing for a car to do and no use at all for
- * measuring what happens to a car that does not. */
+ * staging's 2.6 rad/s is the case a driver can still CATCH — it was 2.2
+ * while the weight sat at the box's reference, and the saloon's own weight,
+ * carried a hand higher and a little forward, tipped that one over before
+ * any lock could reach it. Either side of a knife edge is no place to stage
+ * a claim: 2.2 rocks back on its own, and 3.4 is past catching. */
 const COMMITTED = 3.4;
 
 /** ONE TRIP, RUN TO ITS OWN END rather than for a fixed number of seconds. A
@@ -211,29 +214,34 @@ describe("the driver, while the car is going over", () => {
     // A car going over is rarely pointed where it is going, and a brake that
     // acted along the heading would push a crossed-up car SIDEWAYS instead of
     // slowing it. Stood crossed right up: all of the travel is across the
-    // body, none of it along.
+    // body, none of it along — so a brake written along the heading has
+    // nothing to take, and one written against the travel takes sideways
+    // speed off a car with no forward speed at all.
     //
-    // Read as a SPEED, never as `u` and `w` apart: the body is spinning, and
-    // `rotateFrame` pours one of those axes into the other every step, so
-    // each on its own says more about the yaw than about the pedal.
-    const crossed = (input: Partial<CarInput>): number => {
-      const state = game();
-      const car = state.car;
-      car.rolling = true;
-      car.planted = false;
-      car.roll = WHEEL_BASIN * 0.8;
-      car.rollRate = 0;
-      car.airborne = false;
-      car.u = 0;
-      car.w = 14;
-      updateSlip(car);
-      for (let i = 0; i < TUNING.physicsHz / 2; i += 1) step(state, { ...NEUTRAL_INPUT, ...input });
-      return Math.hypot(car.u, car.w);
-    };
-    // The pedal reaches a car whose travel is entirely across it, which it
-    // could not if the impulse were written along the heading — that car has
-    // no forward speed for a nose-aligned brake to take.
-    expect(crossed({ brake: 1 })).toBeLessThan(crossed({}) - 1);
+    // Asked of the pedal's own term, for one step's worth of load. Run
+    // through `step` for half a second this was a knife edge: a body dead
+    // sideways is one the weathervane can bring round either way, and which
+    // way it went said more about the speed left than the pedal did — and
+    // with no rotation on it the roll handed the car to the handling model
+    // before the pedal was ever asked, so what passed was the springs' brake.
+    const state = game();
+    const car = state.car;
+    car.rolling = true;
+    car.planted = false;
+    car.roll = WHEEL_BASIN * 0.8;
+    car.airborne = false;
+    car.u = 0;
+    car.w = 14;
+    updateSlip(car);
+    const mass = massSpread(state.spec);
+    const bed = rollBed({ slope: 0, slopeLat: 0 });
+    const load = TUNING.air.gravity * TUNING.dt;
+    const took = driveRolling(car, { ...NEUTRAL_INPUT, brake: 1 }, load, car.roll, 0, bed, mass);
+    // It spent a real share of the patch, took it off the sideways speed,
+    // and put none of it along the nose.
+    expect(took).toBeGreaterThan(0.5);
+    expect(car.w).toBeLessThan(14 - load * 0.4);
+    expect(Math.abs(car.u)).toBeLessThan(1e-6);
   });
 
   it("steers the body back down, or lets it go the rest of the way over", () => {
@@ -271,7 +279,7 @@ describe("the driver, while the car is going over", () => {
     // tyres make that reaches it: positive to the car's right, positive on
     // the rate. The roll's own steering term is written in the same form on
     // the same lever, so both must answer a right-hand lock the same way.
-    const mass = massSpread(game().spec.mass);
+    const mass = massSpread(game().spec);
     const bed = rollBed({ slope: 0, slopeLat: 0 });
     const lean = WHEEL_BASIN * 0.9;
     expect(leanTorque(lean, 0, 1, mass, bed)).toBeGreaterThan(leanTorque(lean, 0, 0, mass, bed));
@@ -325,7 +333,7 @@ describe("the driver, while the car is going over", () => {
       car.u = 18;
       car.w = -8;
       updateSlip(car);
-      const mass = massSpread(state.spec.mass);
+      const mass = massSpread(state.spec);
       let most = 0;
       for (let i = 0; i < TUNING.physicsHz * 2 && car.rolling; i += 1) {
         const had = crashEnergy(car, mass);

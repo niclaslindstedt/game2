@@ -780,7 +780,7 @@ describe("the jump", () => {
     // turns the contact patch FURTHER into the slide that made it, which is
     // anti-damping by construction and wound a car merely lying on its roof
     // from a third of a rad/s up to nearly seven.
-    const mass = massSpread(carById("classic").mass);
+    const mass = massSpread(carById("classic"));
     /** Stand a car on ground laid flat — no terrain to convert against — set
      * it going, and report what the ledger did. */
     const stand = (set: (car: GameState["car"]) => void, seconds: number) => {
@@ -872,7 +872,7 @@ describe("the jump", () => {
     // decision anybody wrote down.
     // Weighed against THIS CAR's own mass distribution — the inertia a roll
     // rate is worth is the car's, not a constant.
-    const mass = massSpread(carById("classic").mass);
+    const mass = massSpread(carById("classic"));
     const climb = TUNING.air.gravity * 0.4;
     const under = Math.sqrt((2 * climb * 0.6) / mass.over.roll);
     const over = Math.sqrt((2 * climb * 2) / mass.over.roll);

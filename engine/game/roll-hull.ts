@@ -2,8 +2,12 @@
 // THE SHAPE A CRASHING CAR IS, and the ground it is lying on.
 //
 // The car is the box in `TUNING.collision`: a length, a width, a height,
-// four wheel contacts inboard of the corners, and a weight at `centreY`.
-// Everything a crash does is that box turning against a plane.
+// four wheel contacts inboard of the corners, and a WEIGHT in it. The box
+// is one box for the whole catalog; the weight is each car's own — how high
+// it rides and how far forward it sits (`CarSpec.centreHeight`, `balance`),
+// carried as `MassSpread.weight` so every question below is asked of the
+// car actually crashing. Everything a crash does is that box turning
+// against a plane.
 //
 // TWO THINGS ARE STATED HERE AND NOWHERE ELSE.
 //
@@ -77,6 +81,21 @@ export function bedNormal(slopeLat = 0, slope = 0): Bed {
 }
 export const LEVEL: Bed = { across: 0, up: 1, along: 0 };
 
+/** WHERE THE WEIGHT IS in the box: how high over the wheel plane, and how
+ * far ahead of the axle midpoint (+ toward the nose). Across the car it is
+ * on the centreline, always — nothing in the catalog is loaded to one side.
+ *
+ * This is what separates the cars once they are over. A tall hatch with
+ * its engine over the front axle climbs its sill corner more easily than a
+ * low coupe and goes over its nose more readily than its tail; every arm
+ * the friction and the contacts work on is measured from here. */
+export type Weight = { readonly up: number; readonly along: number };
+
+/** The catalog's reference weight — the box's own, for anything asking a
+ * geometric question with no car in hand (the labs' basin, the tests'
+ * benches, `onItsWheels`, which does not depend on it). */
+export const REFERENCE: Weight = { up: B.centreY, along: 0 };
+
 /** WHERE A BODY POINT SITS at a given attitude, in the heading frame.
  *
  * The composition is the renderer's, stated once: in the car's local frame
@@ -144,8 +163,13 @@ export function clearOn(tilt: number, pitch: number, bed: Bed = LEVEL): number {
  * lying on, m. The one thing the whole model runs on — its valleys are the
  * faces a body comes to rest on and its ridges are the corners a crash has
  * to climb. */
-export function seatOn(tilt: number, pitch: number, bed: Bed = LEVEL): number {
-  return clearOn(tilt, pitch, bed) + heightOn([0, B.centreY, 0], tilt, pitch, bed);
+export function seatOn(
+  tilt: number,
+  pitch: number,
+  bed: Bed = LEVEL,
+  weight: Weight = REFERENCE,
+): number {
+  return clearOn(tilt, pitch, bed) + heightOn([0, weight.up, weight.along], tilt, pitch, bed);
 }
 
 /** Its two slopes, m per rad — the gravity torque about each of the body's
@@ -153,8 +177,32 @@ export function seatOn(tilt: number, pitch: number, bed: Bed = LEVEL): number {
  * rather than in closed form because the surface is a MIN over the box's
  * corners and has a kink at every handover from one to the next; the
  * difference rounds those off, which is what a tyre and a bent sill do to
- * them anyway. */
+ * them anyway.
+ *
+ * A VALLEY FLOOR IS FLAT. The surface's valleys are the faces a body rests
+ * on, and each is a V with a kink at its bottom rather than a bowl; a
+ * central difference straddling the kink reads the MEAN of the two sides.
+ * With the weight on the box's centreline that mean is zero, which is why
+ * it went unnoticed — but a weight carried ahead of the axle midpoint makes
+ * every V asymmetric (steeper toward the nose than the tail), and the mean
+ * is then a slope of `along` at the very bottom: a car lying flat on its
+ * four wheels was pitched at a third of a g, for ever, by ground it was
+ * resting on. So where the two sides of the difference disagree in sign
+ * and the surface rises both ways, the body is in the valley and the
+ * gradient is nothing — it rests, which is what the face does with the
+ * moment. A ridge (falling both ways) keeps the mean: the body is going
+ * over one side or the other and the question is only which. */
 const STEP = 1e-3;
+
+/** The gradient across a kink: the mean of the two one-sided differences,
+ * unless they disagree in sign with the surface rising both ways — the
+ * bottom of a valley, where a body rests. */
+function kinked(before: number, here: number, after: number): number {
+  const up = (after - here) / STEP;
+  const down = (here - before) / STEP;
+  if (up > 0 && down < 0) return 0;
+  return (up + down) / 2;
+}
 
 /** THE SURFACE'S GRADIENT under a body, m per rad in each plane. Gravity is
  * resolved along it, the seat's own speed under a turning body is read off
@@ -163,10 +211,24 @@ const STEP = 1e-3;
  * disagree about which way a car falls. */
 export type Slopes = { readonly roll: number; readonly pitch: number };
 
-export function seatSlopes(tilt: number, pitch: number, bed: Bed = LEVEL): Slopes {
+export function seatSlopes(
+  tilt: number,
+  pitch: number,
+  bed: Bed = LEVEL,
+  weight: Weight = REFERENCE,
+): Slopes {
+  const here = seatOn(tilt, pitch, bed, weight);
   return {
-    roll: (seatOn(tilt + STEP, pitch, bed) - seatOn(tilt - STEP, pitch, bed)) / (2 * STEP),
-    pitch: (seatOn(tilt, pitch + STEP, bed) - seatOn(tilt, pitch - STEP, bed)) / (2 * STEP),
+    roll: kinked(
+      seatOn(tilt - STEP, pitch, bed, weight),
+      here,
+      seatOn(tilt + STEP, pitch, bed, weight),
+    ),
+    pitch: kinked(
+      seatOn(tilt, pitch - STEP, bed, weight),
+      here,
+      seatOn(tilt, pitch + STEP, bed, weight),
+    ),
   };
 }
 
@@ -245,7 +307,12 @@ const ON_PLANE = 0.02;
  * reach `roll.ts` prices a friction moment against. */
 const ON_FACE = R.settled;
 
-export function standingOn(tilt: number, pitch: number, bed: Bed = LEVEL): Patch {
+export function standingOn(
+  tilt: number,
+  pitch: number,
+  bed: Bed = LEVEL,
+  weight: Weight = REFERENCE,
+): Patch {
   let lowest = Infinity;
   let onIt = turned(HULL[0], tilt, pitch);
   for (const p of HULL) {
@@ -289,7 +356,7 @@ export function standingOn(tilt: number, pitch: number, bed: Bed = LEVEL): Patch
     if (t.along < minAlong) minAlong = t.along;
     if (t.along > maxAlong) maxAlong = t.along;
   }
-  const centre = turned([0, B.centreY, 0], tilt, pitch);
+  const centre = turned([0, weight.up, weight.along], tilt, pitch);
   const spanAcross = (maxAcross - minAcross) / 2;
   const spanAlong = (maxAlong - minAlong) / 2;
   return {
@@ -302,7 +369,7 @@ export function standingOn(tilt: number, pitch: number, bed: Bed = LEVEL): Patch
     sprung,
     across: across / n - centre.across,
     along: along / n - centre.along,
-    height: heightOn([0, B.centreY, 0], tilt, pitch, bed) - lowest,
+    height: heightOn([0, weight.up, weight.along], tilt, pitch, bed) - lowest,
     spanAcross,
     spanAlong,
   };
@@ -387,32 +454,63 @@ export type MassSpread = {
   readonly spin: Record<Axis, number>;
   readonly yaw: number;
   readonly over: Record<Axis, number>;
+  /** ...and where that mass SITS in the box, which every arm above is
+   * measured from and every geometric question below is asked of. */
+  readonly weight: Weight;
 };
 
-/** The arms from the weight out to the corner the body turns about, m² —
- * the sill corner for a barrel roll, the nose corner for an end-over-end. */
-const SILL_ARM = B.halfWidth * B.halfWidth + B.centreY * B.centreY;
-const NOSE_ARM = B.halfLength * B.halfLength + B.centreY * B.centreY;
+/** What a car has to say about its own mass: how much, and where it sits.
+ * A catalog row satisfies it; the two placement fields are read against
+ * the box's reference when a spec leaves them out. */
+export type MassSource = {
+  readonly mass: number;
+  /** Share of the weight over the FRONT axle, 0..1. */
+  readonly balance?: number;
+  /** How high the weight rides over the wheel plane, m. */
+  readonly centreHeight?: number;
+};
 
-const spreads = new Map<number, MassSpread>();
+const spreads = new Map<string, MassSpread>();
 
-/** ...and the car's own, off its kerb mass. Memoised: a roster is three
- * cars and a field is fifteen of them, and this is asked every step. */
-export function massSpread(mass: number): MassSpread {
-  const had = spreads.get(mass);
+/** ...and the car's own, off its kerb mass and where it carries it.
+ * Memoised: a roster is three cars and a field is fifteen of them, and
+ * this is asked every step. */
+export function massSpread(spec: MassSource): MassSpread {
+  const up = spec.centreHeight ?? B.centreY;
+  const balance = spec.balance ?? 0.5;
+  const key = `${spec.mass}:${up}:${balance}`;
+  const had = spreads.get(key);
   if (had) return had;
   const S = R.spread;
+  const mass = spec.mass;
   // The measured regressions, divided by the mass they were measured
-  // against — an inertia per kg is a radius of gyration squared.
-  const roll = S.rollSlope + S.rollBase / mass;
-  const pitch = S.pitchSlope + S.pitchBase / mass;
-  const yaw = S.yawSlope + S.yawBase / mass;
+  // against — an inertia per kg is a radius of gyration squared...
+  let roll = S.rollSlope + S.rollBase / mass;
+  let pitch = S.pitchSlope + S.pitchBase / mass;
+  let yaw = S.yawSlope + S.yawBase / mass;
+  // ...for a ROAD car. A rally car carries a cage the database's cars did
+  // not: tube welded out at the sills, the pillars and the roof, which is
+  // mass a long way from every axis. Its own radii, at its own mass, added
+  // per kilogram of the car it is in (`spread.cage`).
+  const C = S.cage;
+  roll += (C.mass * C.roll * C.roll) / mass;
+  pitch += (C.mass * C.pitch * C.pitch) / mass;
+  yaw += (C.mass * C.yaw * C.yaw) / mass;
+  // The weight sits at the front share's point between the axles: a
+  // front-heavy hatch carries it a hand ahead of the wheelbase's middle.
+  const weight: Weight = { up, along: (balance - 0.5) * 2 * B.halfBase };
+  // The arms from the weight out to the corner the body turns about, m² —
+  // the sill corner for a barrel roll, the end corners for an end-over-end
+  // (the nose's and the tail's, averaged: `over.pitch` serves both ways).
+  const sillArm = B.halfWidth * B.halfWidth + up * up;
+  const endArm = B.halfLength * B.halfLength + weight.along * weight.along + up * up;
   const made: MassSpread = {
     spin: { roll, pitch },
     yaw,
-    over: { roll: roll + SILL_ARM, pitch: pitch + NOSE_ARM },
+    over: { roll: roll + sillArm, pitch: pitch + endArm },
+    weight,
   };
-  spreads.set(mass, made);
+  spreads.set(key, made);
   return made;
 }
 
@@ -423,13 +521,23 @@ export function massSpread(mass: number): MassSpread {
  * this is asked against the plane the body is actually on. Two degrees a
  * step resolves a corner to well under a millimetre of lift. */
 const WALK = (2 * Math.PI) / 180;
-function barrier(axis: Axis, tilt: number, pitch: number, dir: number, bed: Bed): number {
+function barrier(
+  axis: Axis,
+  tilt: number,
+  pitch: number,
+  dir: number,
+  bed: Bed,
+  weight: Weight,
+): number {
   const step = dir > 0 ? WALK : -WALK;
   let highest = -Infinity;
   let at = 0;
   for (let n = 0; n < 90; n += 1) {
     at += step;
-    const h = axis === "roll" ? seatOn(tilt + at, pitch, bed) : seatOn(tilt, pitch + at, bed);
+    const h =
+      axis === "roll"
+        ? seatOn(tilt + at, pitch, bed, weight)
+        : seatOn(tilt, pitch + at, bed, weight);
     if (h > highest) highest = h;
     // Over the ridge and coming down the far side is the next face: the
     // climb up to here is the whole of what the body had to pay.
@@ -454,7 +562,8 @@ export function goesOverOn(
   bed: Bed = LEVEL,
 ): boolean {
   if (rate === 0) return false;
-  const climb = barrier(axis, tilt, pitch, rate, bed) - seatOn(tilt, pitch, bed);
+  const climb =
+    barrier(axis, tilt, pitch, rate, bed, mass.weight) - seatOn(tilt, pitch, bed, mass.weight);
   // Nothing to climb is not a car going over — it is a car falling back into
   // the face it is already beside, which is what a body a fraction of a
   // degree off level and settling is doing on every step of every straight.
@@ -499,12 +608,15 @@ export function pivotKeep(
     }
   }
   // The arms from each corner to the weight, in the plane that is turning:
-  // across the car for a roll, along it for an end-over-end.
+  // across the car for a roll, along it for an end-over-end — and the
+  // weight is where THIS car carries it, so a nose-heavy car's nose corner
+  // is the shorter arm.
   const out = axis === "roll" ? 0 : 2;
-  const ax = -on[out];
-  const ay = B.centreY - on[1];
-  const bx = -arriving[out];
-  const by = B.centreY - arriving[1];
+  const at = axis === "roll" ? 0 : mass.weight.along;
+  const ax = at - on[out];
+  const ay = mass.weight.up - on[1];
+  const bx = at - arriving[out];
+  const by = mass.weight.up - arriving[1];
   const spin = mass.spin[axis];
   const rigid = (spin + ax * bx + ay * by) / (spin + bx * bx + by * by);
   // ...and a SPRUNG corner arriving hands most of that back rather than

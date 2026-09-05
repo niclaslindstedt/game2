@@ -880,7 +880,7 @@ export function stepGrounded(
   // reading the springs' angle instead stands a car merely driving down a
   // steep hill on its own bumper, and every hop and every edge in the suite
   // said so.
-  const mass = massSpread(spec.mass);
+  const mass = massSpread(spec);
   if (
     goesOver(car.roll, car.rollRate, mass, rollBed(ctx)) ||
     goesOverEnd(car.pitch, car.pitchRate, mass, rollBed(ctx)) ||
