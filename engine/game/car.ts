@@ -58,6 +58,26 @@ const T = TUNING;
 /** The drift group, used on nearly every line below. */
 const D = TUNING.drift;
 
+/** HOW MUCH OF THE THROTTLE THE OPEN COUNTRY PUTS DOWN at a ground speed,
+ * 0..1 — everywhere else, all of it. A driven wheel on unconsolidated
+ * ground DIGS instead of driving, so the wild takes `surfaces.natureDig`
+ * out of the pull at a standstill and has given every bit of it back by
+ * `natureDigSpeed`, where the car is skimming the ground rather than
+ * trenching it.
+ *
+ * The shape is the whole point, and it is why there is no longer a speed
+ * cap out there. What the wild costs is TIME — the field is slow to get
+ * out of and a hairpin in it is slower still — and what it does not cost
+ * is a ceiling: past the dig speed nothing is holding the car back but the
+ * gearbox it brought with it, so a long enough run through open country
+ * ends wherever the top gear ends, and a jump off the back of one is taken
+ * at whatever that run was worth. */
+function wildPull(surface: GroundContext["surface"], speed: number): number {
+  if (surface !== "nature") return 1;
+  const dug = 1 - clamp(Math.abs(speed) / T.surfaces.natureDigSpeed, 0, 1);
+  return 1 - T.surfaces.natureDig * dug;
+}
+
 /** One grounded physics step. Returns events emitted this step. */
 export function stepGrounded(
   spec: CarSpec,
@@ -102,7 +122,7 @@ export function stepGrounded(
   // a landing unsticks the car instead of playing an animation at it.
   const surfaceGrip = surfaceGripFor(spec, ctx.surface) * tyreLoad(car);
   const surfaceDrag = T.surfaces.drag[ctx.surface];
-  const surfacePower = T.surfaces.power[ctx.surface];
+  const surfacePower = T.surfaces.power[ctx.surface] * wildPull(ctx.surface, car.u);
   // Everything the crashes have done, as the multipliers the rest of this
   // function drives through (damage.ts). Read once, never written back:
   // collision.ts owns the ledger, the handling model only spends it.
@@ -703,10 +723,6 @@ export function stepGrounded(
   // the standstill the retire rule is waiting for (damage.ts).
   if (hurt.coastBrake > 0 && !car.reversing) {
     car.u -= Math.sign(car.u) * Math.min(Math.abs(car.u), hurt.coastBrake * dt);
-  }
-  if (ctx.surface === "nature") {
-    // The rough-ground cap: open nature is fast but never road-fast.
-    car.u -= Math.max(0, car.u - T.surfaces.natureTop) * T.surfaces.natureOverDrag * dt;
   }
   // Grade: gravity along the road — the hills push back (or push on). A
   // face steeper than the car can climb pushes back HARDER, which is what

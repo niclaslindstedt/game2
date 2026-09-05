@@ -1948,7 +1948,7 @@ export const TUNING = {
      * slide that runs further and settles later than gravel's does. The
      * car's own loose-surface rubber is what it stands on there, exactly as
      * on gravel (`surfaceGripFor`). */
-    drag: { gravel: 0.028, sand: 0.042, asphalt: 0.022, water: 0.5, nature: 0.032 },
+    drag: { gravel: 0.028, sand: 0.042, asphalt: 0.022, water: 0.5, nature: 0.03 },
     /** Lateral grip multiplier per surface. Asphalt is the outlier the
      * stage's paved sections are FOR: the tires hold a third again as
      * much, so the corner that needed a slide on gravel can be driven
@@ -1982,8 +1982,12 @@ export const TUNING = {
      * provoked one clears the readout and the wheel alone still will not,
      * which is the point of a paved section. */
     breakaway: { gravel: 1.0, sand: 1.2, asphalt: 0.62, water: 1.2, nature: 1.1 },
-    /** Throttle effectiveness per surface. */
-    power: { gravel: 1.0, sand: 0.88, asphalt: 1.08, water: 0.7, nature: 0.8 },
+    /** Throttle effectiveness per surface. `nature` is level with graded
+     * stone, and deliberately: what the open country costs is `natureDig`
+     * below, which is charged on the way UP to speed and released once the
+     * car is there. A cut taken here instead would still be charged at the
+     * top of every gear, where the box has almost nothing to spare. */
+    power: { gravel: 1.0, sand: 0.88, asphalt: 1.08, water: 0.7, nature: 1.0 },
     /** THE GROUND GIVES. What a crashing car comes down on is not a plane
      * of steel: gravel displaces, soil furrows, sand swallows a corner, and
      * every bit of that is arrival that neither folds the shell nor turns
@@ -2006,13 +2010,35 @@ export const TUNING = {
      * pavement, and this is that difference. Small against the face's
      * own 0.4–0.6, because it is a furrow and not an anchor. */
     plough: { gravel: 0.03, sand: 0.14, asphalt: 0, water: 0, nature: 0.07 },
-    /** Rough ground caps pace where gearing cannot: above this speed the
-     * nature surface pulls the car back hard (about 150 km/h) — a linear
-     * per-surface drag would instead stall the box under its own upshift
-     * thresholds. Grounded only: a flight keeps what it took off with. */
-    natureTop: 42,
-    /** How hard the wild claws back each m/s over that cap, 1/s. */
-    natureOverDrag: 3,
+    /** WHAT THE OPEN COUNTRY TAKES OUT OF THE PULL FROM A STANDSTILL, 0..1
+     * — and it takes it out of the ACCELERATION, never out of the top end.
+     * Unconsolidated ground is something a driven wheel DIGS rather than
+     * drives: there is torque to spare down there and no road speed under
+     * the tyre, so what the throttle buys in a field is a trench and a
+     * plume of dirt. Faded out entirely by `natureDigSpeed`, where the car
+     * is skimming the ground rather than trenching it.
+     *
+     * This is the WHOLE of what the open country costs, and the reason it
+     * is shaped as a fade rather than as a flat cut is the gearbox:
+     * `gearAccel` is authored to clear drag by a hair at `gearbox.upAt` of
+     * each gear's top (cars.ts), so a penalty still being charged up there
+     * leaves the box short of its own upshift and parks the car in fourth
+     * — a speed cap by accident, and a worse one than a stated cap because
+     * it lands on a different car at a different speed. A penalty that has
+     * let go by `natureDigSpeed` is charged nowhere near a shift point,
+     * which is what lets the wild be slow to get out of and still have no
+     * ceiling but the one the gearbox brought with it. A mile of open
+     * ground is a place to find out what the car will actually do, and the
+     * jump off the end of it is taken at whatever that run was worth. */
+    natureDig: 0.55,
+    /** ...and the speed the wheels stop digging and start skimming, m/s
+     * (about 125 km/h). Chosen against the SHIFT POINTS rather than against
+     * anything the ground does: the slowest car in the roster takes its top
+     * gear at 42 m/s, so the dig is fully released before any car is asking
+     * the box for the ratio it will finish the run in. Move it up much past
+     * this and the wild starts eating the top upshift again, which is the
+     * cap coming back in through the side door. */
+    natureDigSpeed: 35,
   },
 
   hills: {

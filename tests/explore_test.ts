@@ -97,10 +97,13 @@ describe("top speed", () => {
     expect(tops.coupe / tops.classic).toBeGreaterThan(1.15);
   });
 
-  it("open nature allows about 150 km/h — fast, but not road pace", () => {
+  /** The same run across open country: flat out on the flat, until it stops
+   * gaining. Returns the top it reached (km/h) and how long it took to see
+   * 100 km/h (s) — the wild's two numbers, which move opposite ways. */
+  function wildRun(carId: string): { top: number; to100: number } {
     const state = createGame({
       seed: 3,
-      carId: "classic",
+      carId,
       skipCountdown: true,
       track: compileTrack(3, LONG_STRAIGHT),
     });
@@ -108,13 +111,50 @@ describe("top speed", () => {
     state.car.x = 200;
     state.car.y = -0.35;
     let top = 0;
-    for (let i = 0; i < TUNING.physicsHz * 90; i++) {
+    let to100 = Infinity;
+    for (let i = 0; i < TUNING.physicsHz * 150; i++) {
       stepShifting(state, drive());
-      if (state.offRoad) top = Math.max(top, state.car.u);
+      if (!state.offRoad) continue;
+      top = Math.max(top, state.car.u);
+      if (state.car.u * 3.6 >= 100) to100 = Math.min(to100, i / TUNING.physicsHz);
     }
     expect(state.offRoad).toBe(true);
-    expect(top * 3.6).toBeGreaterThan(135);
-    expect(top * 3.6).toBeLessThan(165);
+    return { top: top * 3.6, to100 };
+  }
+
+  it("open nature has no ceiling of its own — the wild runs out to the gearbox's", () => {
+    for (const car of CARS) {
+      const wild = wildRun(car.id);
+      // Within a few km/h of the same car's road top end: what the surface
+      // costs at speed is a little rolling drag, and nothing else. A cap out
+      // here would show up as a car stopping tens of km/h short.
+      expect(wild.top).toBeGreaterThan(flatOutTop(car.id) * 0.97);
+      // ...and every car still walks its box all the way up out there: a
+      // penalty charged at a shift point is a cap wearing a different hat.
+      expect(wild.top).toBeGreaterThan(car.gearTop[car.gearTop.length - 1] * 3.6 * 0.78);
+    }
+  });
+
+  it("...and charges for it on the way up: the wild digs, so it is slow off the line", () => {
+    for (const car of CARS) {
+      const state = createGame({
+        seed: 3,
+        carId: car.id,
+        skipCountdown: true,
+        track: compileTrack(3, LONG_STRAIGHT),
+      });
+      let road = Infinity;
+      for (let i = 0; i < TUNING.physicsHz * 30; i++) {
+        stepShifting(state, drive());
+        if (state.car.u * 3.6 >= 100) {
+          road = i / TUNING.physicsHz;
+          break;
+        }
+      }
+      // A third again as long to 100 km/h in a field as on the road, at
+      // least — the cost of the wild is time, not top speed.
+      expect(wildRun(car.id).to100).toBeGreaterThan(road * 1.3);
+    }
   });
 });
 
