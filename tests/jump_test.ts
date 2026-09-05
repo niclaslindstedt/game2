@@ -599,10 +599,9 @@ describe("the jump", () => {
     // STRIPPED one — its roof was never down. If a change to the roll moves
     // this, re-pick it the same way rather than softening the bar below:
     // sweep the entries and take one that finishes ON ITS ROOF, which is
-    // `Math.abs(rollTilt(roll))` near a half turn. -22 was that entry while
-    // the ground under a crash was steel; once soil learned to give and the
-    // cage to hold, it finished on its wheels and -24 is the one on its roof.
-    const { state } = landSideways(30, -24);
+    // `Math.abs(rollTilt(roll))` near a half turn. A rollover is chaotic
+    // enough that the entries either side of it finish anywhere at all.
+    const { state } = landSideways(30, -25);
     expect(onItsWheels(state.car.roll, state.car.pitch)).toBe(false);
     const damage = state.car.damage;
     for (const pane of ["glassF", "glassB", "glassR", "glassL"]) {

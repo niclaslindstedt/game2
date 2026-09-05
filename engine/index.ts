@@ -137,7 +137,14 @@ export {
 // PATCH the whole crash is read off, so the tests can hold its arm to being
 // continuous through a corner hand-over and its faces to being faces
 // (roll-hull.ts).
-export { bedNormal, seatOn, standingOn, tyreShare, type Patch } from "./game/roll-hull.ts";
+export {
+  bedNormal,
+  seatOn,
+  standingOn,
+  tyreShare,
+  weightFromOrigin,
+  type Patch,
+} from "./game/roll-hull.ts";
 
 // The stage generator.
 export {
