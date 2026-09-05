@@ -949,18 +949,19 @@ export function stepGrounded(
   // A FACE MET AT PACE reaches the belly the way a landing does. The
   // wheels' vertical speed jumping UPWARD in one step — the foot of a bank
   // arriving under a car at speed — is what the springs are handed above,
-  // and they take up to `collision.faceLand` of it in their travel; past
-  // that the body has met the ground before the wheels could lift it, and
-  // the underside folds by the rest, charged as the arrival it is
-  // (`landingDamage`, with the same tolerance a landing has). A bank taken
-  // at the speed that carries the car up it stays free; the same bank at
-  // twice that speed costs the belly. The WHEELS' speed alone, and only
-  // rising: the smoothed grade predicting a drop the wheels have not made
-  // yet — the nose creeping out over an edge — is nothing arriving under
-  // the car, and read against it a car rolling off a table folded its
-  // floor on thin air.
+  // and they lift the body with the wheels up to the most one bump may
+  // throw into them (`suspension.bumpMax`); past that the body has met the
+  // ground before the wheels could lift it, and the underside folds by the
+  // rest, charged as the arrival it is (`landingDamage`, with the tolerance
+  // a landing has — which shot dampers narrow). So it is the SPRINGS that
+  // decide what a bank costs: a bank taken at the speed that carries the
+  // car up it stays free; the same bank at twice that speed costs the
+  // belly. The WHEELS' speed alone, and only rising: the smoothed grade
+  // predicting a drop the wheels have not made yet — the nose creeping out
+  // over an edge — is nothing arriving under the car, and read against it
+  // a car rolling off a table folded its floor on thin air.
   if (!car.airborne) {
-    const over = car.wheelVy - prevWheelVy - T.collision.faceLand;
+    const over = car.wheelVy - prevWheelVy - T.suspension.bumpMax;
     if (over > 0) landingDamage(spec, car, T.collision.hardLandSpeed + over, events, stats);
   }
   // The hopping dies down with them. Only on the ground: a car back in the
