@@ -186,6 +186,33 @@ describe("the crumple field", () => {
     expect(top.y).toBeCloseTo(1.4, 6);
   });
 
+  it("folds a flank into a trunk's V — deep at the zone's centre, gone between zones", () => {
+    const zones = ledger({ 2: 0.3 }).zones;
+    // The peaked kernel is the linear blend at a zone's own centre...
+    expect(crushAt(zones, Math.PI / 2, 2.6)).toBeCloseTo(crushAt(zones, Math.PI / 2, 1));
+    // ...and well under it halfway to the next: that is the V.
+    const between = Math.PI / 2 + Math.PI / 8;
+    expect(crushAt(zones, between, 2.6)).toBeLessThan(crushAt(zones, between, 1) * 0.4);
+    // On the body it is deepest at the belt line and shallower at the sill
+    // and the roof rail, which is where a trunk meets a door.
+    const l = ledger({ 2: 0.3 });
+    const belt = 0.8 - bent(l, 0.8, 0.8, 0).x;
+    const sill = 0.8 - bent(l, 0.8, 0.3, 0).x;
+    const rail = 0.8 - bent(l, 0.8, 1.4, 0).x;
+    expect(belt).toBeGreaterThan(0.15);
+    expect(sill).toBeLessThan(belt);
+    expect(rail).toBeLessThan(belt);
+  });
+
+  it("wraps the car round a trunk in its flank: both ends come toward the hit", () => {
+    const right = ledger({ 2: 0.3 });
+    expect(bent(right, 0, 0.9, 1.9).x).toBeGreaterThan(0.05);
+    expect(bent(right, 0, 0.9, -1.9).x).toBeGreaterThan(0.05);
+    const left = ledger({ 6: 0.3 });
+    expect(bent(left, 0, 0.9, 1.9).x).toBeLessThan(-0.05);
+    expect(bent(left, 0, 0.9, -1.9).x).toBeLessThan(-0.05);
+  });
+
   it("blends the crush between the two nearest zones round a corner", () => {
     const zones = ledger({ 0: 0.4 }).zones;
     expect(crushAt(zones, 0)).toBeCloseTo(0.4);

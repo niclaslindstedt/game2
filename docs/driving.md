@@ -1439,7 +1439,17 @@ goes furthest and the bulkhead not at all; what went in comes OUT through
 the surface as a bulge (a bonnet tents, a wing bows); the panel CORRUGATES
 in accordion creases across the fold; a coherent noise over the position
 tears it; and the whole nose or tail section KINKS about the bulkhead,
-toward the corner that took more and down under a square hit. Every face
+toward the corner that took more and down under a square hit. A FLANK is
+the stage's own accident — a slide that finds a trunk with the door — and
+folds like one: not the cap's square fold but a V (`FLANK_PEAK`), deepest
+at the belt line where the body meets the trunk first (`FLANK_WAIST`), and
+past a certain depth the whole car bows round it, both ends toward the hit
+(`WRAP`). A FLANK is
+the stage's own accident — a slide that finds a trunk with the door — and
+folds like one: not the cap's square fold but a V (`FLANK_PEAK`), deepest
+at the belt line where the body meets the trunk first (`FLANK_WAIST`), and
+past a certain depth the whole car bows round it, both ends toward the hit
+(`WRAP`). Every face
 is then lit again from the plane it now lies in, and the paint scuffs dark
 and chips to primer where — and only where — the metal actually folded.
 Everything bolted to the shell bends with it (the lenses, the bumpers and

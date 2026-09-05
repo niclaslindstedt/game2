@@ -125,6 +125,16 @@ if (has("crew")) {
       "front-right corner into a trunk",
       ledger({ zones: { 1: 0.36, 0: 0.1, 2: 0.14 }, wheels: [0, 0.55, 0, 0], wear: 0.5 }),
     ],
+    // The stage's own accident: a slide that finds a trunk with the door.
+    ["sideways into a tree, 40 km/h", ledger({ zones: { 2: 0.16 }, wear: 0.2 })],
+    [
+      "sideways into a tree, 70 km/h",
+      ledger({ zones: { 2: 0.32, 3: 0.04 }, wheels: [0, 0.45, 0, 0.3], wear: 0.5 }),
+    ],
+    [
+      "rear quarter into a tree",
+      ledger({ zones: { 3: 0.28, 2: 0.05 }, wheels: [0, 0, 0, 0.5], wear: 0.4 }),
+    ],
     [
       "right flank into a rock",
       ledger({ zones: { 2: 0.4, 1: 0.12, 3: 0.14 }, wheels: [0, 0.6, 0, 0.45], wear: 0.6 }),

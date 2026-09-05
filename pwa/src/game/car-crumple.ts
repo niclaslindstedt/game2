@@ -70,7 +70,21 @@ export const FOLD = 1.6;
  * toward the seats rather than an engine bay collapsing: a severe side
  * impact intrudes a third of a metre, and past that the sheet would stand
  * inside the cabin it is meant to be closing. */
-export const FOLD_FLANK = 0.9;
+export const FOLD_FLANK = 1.0;
+/** How much sharper a FLANK's fold is than the ring's linear blend between
+ * zones, as an exponent added to the blend: what meets a flank on a stage
+ * is a TRUNK, sideways, and a trunk leaves a V — deep at one point, dying
+ * out either way along the door — where a cap meeting a wall folds square
+ * across. Zero would leave the flank the same broad dish as the caps. */
+const FLANK_PEAK = 1.6;
+/** A flank hit is deepest at the belt line, where the body is widest and
+ * meets the trunk first, and this share of it still reaches the sill and
+ * the roof rail. */
+const FLANK_WAIST = 0.6;
+/** THE WRAP. A car hit hard in the side bends around the thing that hit
+ * it: both ends come round toward the hit, rad per metre of flank fold,
+ * as a smooth bow along the whole length. */
+const WRAP = 0.12;
 /** How deep into the body a fold at a cap reaches, m — the engine bay or
  * the boot, up to the bulkhead. Past it the metal is unmoved. */
 const REACH_END = 0.95;
@@ -187,14 +201,17 @@ function rimAt(rim: Float32Array, bearing: number): number {
 }
 
 /** The ledger's crush at a bearing, m — blended between the two nearest
- * zones so a fold wraps a corner instead of stepping at it. */
-export function crushAt(zones: readonly number[], bearing: number): number {
+ * zones so a fold wraps a corner instead of stepping at it. `peak` above
+ * zero narrows each zone's fold toward its own centre: at 1 the blend is
+ * linear, and every step up makes the dent between two zones die away
+ * faster — the difference between a wall and a trunk. */
+export function crushAt(zones: readonly number[], bearing: number, peak = 1): number {
   const t = bearing / ((Math.PI * 2) / DAMAGE_ZONES);
   const lo = Math.floor(t);
   const frac = t - lo;
   const a = ((lo % DAMAGE_ZONES) + DAMAGE_ZONES) % DAMAGE_ZONES;
   const b = (a + 1) % DAMAGE_ZONES;
-  return zones[a] * (1 - frac) + zones[b] * frac;
+  return zones[a] * Math.pow(1 - frac, peak) + zones[b] * Math.pow(frac, peak);
 }
 
 /** A vertex bent by the ledger. `out` receives the position; the return
@@ -210,8 +227,12 @@ export function crumple(
 ): number {
   const bearing = Math.atan2(x0, z0);
   const r = Math.hypot(x0, z0);
-  const crush = crushAt(ledger.zones, bearing);
   const zones = ledger.zones;
+  // How much of a cap this bearing is, 0 at a flank to 1 dead ahead or
+  // astern: what separates a wall met square from a trunk met sideways.
+  const along = r > 1e-6 ? Math.abs(z0 / r) : 1;
+  const endness = along * along;
+  const crush = crushAt(zones, bearing, 1 + FLANK_PEAK * (1 - endness));
 
   let x = x0;
   let y = y0;
@@ -231,17 +252,24 @@ export function crumple(
   const rear = (zones[3] + 2 * zones[4] + zones[5]) / 4;
   kink(z0 - (frame.noseZ - HINGE_BACK), 1, zones[1], zones[7], front);
   kink(frame.tailZ + HINGE_BACK - z0, 1, zones[3], zones[5], rear);
+  // THE WRAP: a flank driven in bows the whole car round the trunk, both
+  // ends toward the side that was hit. The engine's right is +x.
+  x += WRAP * (zones[2] - zones[6]) * FOLD_FLANK * z0 * z0;
 
   if (crush > 0 && r > 1e-6) {
     // THE FOLD: back from the rim, dying out with depth. A cap folds deep
-    // (the whole engine bay), a flank shallow (the door skin).
-    const along = Math.abs(z0 / r);
-    const endness = along * along;
+    // (the whole engine bay), a flank shallow (the door skin) — and a
+    // flank deepest at the belt line, which is what a trunk meets first.
     const reach = REACH_FLANK + (REACH_END - REACH_FLANK) * endness;
     const depth = Math.max(0, rimAt(frame.rim, bearing) - r);
     const u = Math.min(1, depth / reach);
     const die = (1 - u) * (1 - u);
-    const fold = crush * (FOLD_FLANK + (FOLD - FOLD_FLANK) * endness);
+    const offBelt = Math.min(
+      1,
+      Math.abs(y0 - frame.beltY) / Math.max(frame.roofY - frame.beltY, frame.beltY - frame.floorY),
+    );
+    const waist = 1 - (1 - FLANK_WAIST) * offBelt * (1 - endness);
+    const fold = crush * (FOLD_FLANK + (FOLD - FOLD_FLANK) * endness) * waist;
     local = crush * die;
     const inward = Math.min(fold * die, r * 0.8);
     x -= (x0 / r) * inward;
