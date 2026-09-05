@@ -299,19 +299,21 @@ function buildRaceNumber(b: MeshBuilder, spec: CarBodySpec, axles: number[]): vo
   }
 }
 
-/** A flat plate spanning ±`halfSpan` across the car and running from a
- * front (y, z) to a rear one — the shape a raked spoiler blade needs and
- * an axis-aligned box cannot make. Wound so every face points outward. */
+/** A flat plate between `x0` and `x1` across the car, running from a front
+ * (y, z) to a rear one — the shape a raked spoiler blade needs and an
+ * axis-aligned box cannot make; narrow, it is a swept wing post. Wound so
+ * every face points outward. */
 function slab(
   b: MeshBuilder,
-  halfSpan: number,
+  x0: number,
+  x1: number,
   front: { y: number; z: number },
   rear: { y: number; z: number },
   thick: number,
   color: number,
 ): void {
   const p = (side: number, dy: number, end: { y: number; z: number }): V3 => [
-    side * halfSpan,
+    side > 0 ? x1 : x0,
     end.y + (dy * thick) / 2,
     end.z,
   ];
@@ -319,7 +321,7 @@ function slab(
   const fb: V3 = p(1, -1, front);
   const rt: V3 = p(1, 1, rear);
   const rb: V3 = p(1, -1, rear);
-  const m = (v: V3): V3 => [-v[0], v[1], v[2]];
+  const m = (v: V3): V3 => [v[0] > x0 ? x0 : x1, v[1], v[2]];
   b.quad(m(ft), ft, rt, m(rt), color); // top
   b.quad(m(rb), rb, fb, m(fb), color); // bottom
   b.quad(m(fb), fb, ft, m(ft), color); // leading edge, facing +z
@@ -350,7 +352,75 @@ function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder
     const zFront = spec.cabin.roofRearZ + 0.03;
     const yFront = spec.cabin.roofY + 0.004;
     const zRear = sp.z - sp.chord / 2;
-    slab(wing, sp.span / 2, { y: yFront, z: zFront }, { y: sp.y, z: zRear }, 0.04, blade);
+    slab(
+      wing,
+      -sp.span / 2,
+      sp.span / 2,
+      { y: yFront, z: zFront },
+      { y: sp.y, z: zRear },
+      0.04,
+      blade,
+    );
+  } else if (sp.kind === "gate") {
+    // The tailgate wing. The blade is a thick raked plate with its trailing
+    // edge lifted; each post is a narrow slab standing on the deck AHEAD of
+    // the blade and sweeping up and back to its underside — swept, because
+    // an upright post under a wing this deep reads as a shelf bracket. The
+    // posts stand at the blade's ends, which is what makes this wing this
+    // wing and not the rally one on its inboard struts.
+    const thick = sp.thick ?? 0.07;
+    const half = sp.span / 2;
+    const zFront = sp.z + sp.chord / 2;
+    const zRear = sp.z - sp.chord / 2;
+    slab(
+      wing,
+      -half,
+      half,
+      { y: sp.y - 0.02, z: zFront },
+      { y: sp.y + 0.02, z: zRear },
+      thick,
+      blade,
+    );
+    const postX = half * (sp.post ?? 0.8);
+    const footZ = sp.z + sp.chord * 0.35;
+    const foot = sampleProfile(spec.profile, footZ).topY;
+    const under = sp.y - thick / 2 + 0.01;
+    // The post's foot is buried in the deck and its top in the blade, so
+    // neither joint shows a seam at any camera distance.
+    const postW = 0.05;
+    for (const side of [-1, 1]) {
+      const x = side * postX;
+      slab(
+        wing,
+        x - postW / 2,
+        x + postW / 2,
+        { y: foot - 0.01, z: footZ + 0.04 },
+        { y: under, z: sp.z - sp.chord * 0.1 },
+        0.06,
+        blade,
+      );
+    }
+    if (sp.lip) {
+      // The second blade: a thin plate on the tailgate's own top edge,
+      // reaching back over the panel below it on a skirt of its own.
+      const lip = sp.lip;
+      const lipHalf = (lip.span ?? sp.span * 0.92) / 2;
+      const lipFront = lip.z + lip.chord / 2;
+      const lipRear = lip.z - lip.chord / 2;
+      const yFront = sampleProfile(spec.profile, lipFront).topY + 0.012;
+      const yRear = yFront + 0.012;
+      slab(
+        wing,
+        -lipHalf,
+        lipHalf,
+        { y: yFront, z: lipFront },
+        { y: yRear, z: lipRear },
+        0.028,
+        blade,
+      );
+      const deck = sampleProfile(spec.profile, lipRear).topY;
+      wing.box(0, (yRear + deck) / 2, lipRear + 0.015, lipHalf * 1.96, yRear - deck, 0.03, blade);
+    }
   } else {
     // A ducktail is bolted to the deck, so it gets a skirt down to it —
     // a bare bar floating above the boot reads as a mistake.

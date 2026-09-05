@@ -38,6 +38,7 @@ const PILLARS = {
   header: 0.045,
   split: 0.5,
   splitZ: undefined as number | undefined,
+  quarterZ: undefined as number | undefined,
   quarterRise: 0,
   /** The backlight's share of the cabin's rear panel, across the car. A
    * SHARE and not the `c` post's metres, because what reads from behind is
@@ -91,6 +92,7 @@ export type CabinFrame = {
  * re-deriving the same numbers and drifting away from them. */
 export function cabinFrame(spec: CarBodySpec): CabinFrame {
   const { cowlZ, roofFrontZ, roofRearZ, baseRearZ, roofY, roofHalf } = spec.cabin;
+  const rearHalf = spec.cabin.roofRearHalf ?? roofHalf;
   const cowl = sampleProfile(spec.profile, cowlZ);
   const tail = sampleProfile(spec.profile, baseRearZ);
   // The cabin sits just inside the body's top edge so the shoulder reads
@@ -103,8 +105,8 @@ export function cabinFrame(spec: CarBodySpec): CabinFrame {
     CR: [xc, cowl.topY, cowlZ],
     FL: [-roofHalf, roofY, roofFrontZ],
     FR: [roofHalf, roofY, roofFrontZ],
-    RL: [-roofHalf, roofY, roofRearZ],
-    RR: [roofHalf, roofY, roofRearZ],
+    RL: [-rearHalf, roofY, roofRearZ],
+    RR: [rearHalf, roofY, roofRearZ],
     TL: [-xt, tail.topY, baseRearZ],
     TR: [xt, tail.topY, baseRearZ],
   };
@@ -268,13 +270,20 @@ export function cabinPanels(spec: CarBodySpec): CabinPanel[] {
     const span = patchSpan(flank);
     const v0 = p.sill / span.v;
     const v1 = 1 - p.header / span.v;
+    const sill = CR[2] - TR[2];
+    const roof = FR[2] - RR[2];
+    // A z along the car as a share of the sill and of the roof edge: the
+    // difference between the two is the lean a plumb edge has to carry.
+    const plumb = (z: number): { foot: number; top: number } => ({
+      foot: (CR[2] - z) / sill,
+      // Held inside the roof edge: an edge placed behind the roof's own end
+      // would lean the glass out past the panel it is cut into.
+      top: Math.min(1, (FR[2] - z) / roof),
+    });
     let doorRear: { u: number; lean: number };
     let quarterFront: { u: number; lean: number };
     if (p.splitZ !== undefined) {
-      const sill = CR[2] - TR[2];
-      const roof = FR[2] - RR[2];
-      const foot = (CR[2] - p.splitZ) / sill;
-      const top = (FR[2] - p.splitZ) / roof;
+      const { foot, top } = plumb(p.splitZ);
       // The post's width is in metres too, so it is the same width at the
       // headliner as at the sill rather than a share of a shorter edge.
       const halfFoot = p.b / 2 / sill;
@@ -286,6 +295,15 @@ export function cabinPanels(spec: CarBodySpec): CabinPanel[] {
       doorRear = { u: p.split - half, lean: 0 };
       quarterFront = { u: p.split + half, lean: 0 };
     }
+    // The quarter glass's rear edge: plumb where the spec states it in
+    // metres, otherwise the C post's width off the flank's end.
+    let quarterRear: { u: number; lean: number };
+    if (p.quarterZ !== undefined) {
+      const { foot, top } = plumb(p.quarterZ);
+      quarterRear = { u: foot, lean: top - foot };
+    } else {
+      quarterRear = { u: 1 - p.c / span.u, lean: 0 };
+    }
     panels.push({
       patch: flank,
       span,
@@ -294,10 +312,11 @@ export function cabinPanels(spec: CarBodySpec): CabinPanel[] {
         { u0: p.a / span.u, u1: doorRear.u, v0, v1, lean1: doorRear.lean },
         {
           u0: quarterFront.u,
-          u1: 1 - p.c / span.u,
+          u1: quarterRear.u,
           v0: v0 + p.quarterRise / span.v,
           v1,
           lean0: quarterFront.lean,
+          lean1: quarterRear.lean,
         },
       ],
     });

@@ -19,6 +19,9 @@ import { gravelTexture } from "../game/textures.ts";
 declare global {
   interface Window {
     __done?: boolean;
+    /** Where every cell's camera put the car's own landmarks, in sheet
+     * pixels — what an overlay on a reference photo registers against. */
+    __marks?: Record<string, Record<string, { x: number; y: number }>>;
   }
 }
 
@@ -186,7 +189,10 @@ async function main(): Promise<void> {
   } = (await res.json()) as {
     cars: Variant[];
     mode?: "crew" | "wrecks";
-    views?: string[];
+    /** Columns by name — or a whole View, for a camera nothing on the
+     * sheet has: a REFERENCE photograph's own viewpoint, fitted from its
+     * landmarks, so the render can be laid over it (car-design skill). */
+    views?: (string | View)[];
     cell?: { w: number; h: number };
   };
   const CELL_W = cell?.w ?? DEFAULT_CELL.w;
@@ -196,7 +202,9 @@ async function main(): Promise<void> {
   // back scaled to fit whatever is reading them, and a cell judged at a
   // third of its size is a cell nobody judged. Naming the columns a change
   // is about is what keeps them full size.
-  const views = only?.length ? only.map((n) => byName([...all, ...ELEVATION_VIEWS], n)) : all;
+  const views = only?.length
+    ? only.map((n) => (typeof n === "string" ? byName([...all, ...ELEVATION_VIEWS], n) : n))
+    : all;
 
   const canvas = document.getElementById("stage") as HTMLCanvasElement;
   const width = CELL_W * views.length;
@@ -217,6 +225,7 @@ async function main(): Promise<void> {
 
   const camera = new THREE.PerspectiveCamera(60, CELL_W / CELL_H, 0.1, 300);
   const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
+  const marks: NonNullable<Window["__marks"]> = {};
 
   cars.forEach((variant, row) => {
     const scene = new THREE.Scene();
@@ -317,17 +326,106 @@ async function main(): Promise<void> {
         ortho.position.set(Math.sin(az) * 20, centreY, Math.cos(az) * 20);
         ortho.lookAt(0, centreY, 0);
         eye = ortho;
+        // A drawing, not a photograph: no ground, so an overlay can key
+        // the sky out and leave only the car on the picture under it.
+        ground.visible = false;
       }
       const y = height - (row + 1) * CELL_H;
       renderer.setViewport(col * CELL_W, y, CELL_W, CELL_H);
       renderer.setScissor(col * CELL_W, y, CELL_W, CELL_H);
       renderer.render(scene, eye);
+      ground.visible = true;
+      // Where the car's landmarks landed, for whatever camera drew the cell
+      // — the overlay on a photograph registers against these. The car's
+      // own yaw is applied, so a game cell reports where its turned car is.
+      const cell: Record<string, { x: number; y: number }> = {};
+      for (const [name, p] of landmarks(variant.spec)) {
+        const v = new THREE.Vector3(...p).applyAxisAngle(UP, car.group.rotation.y).project(eye);
+        cell[name] = {
+          x: col * CELL_W + ((v.x + 1) / 2) * CELL_W,
+          y: row * CELL_H + ((1 - v.y) / 2) * CELL_H,
+        };
+      }
+      marks[`${row}:${col}`] = cell;
       if (row === 0) addLabel(view.name, col, 0);
     });
     addLabel(variant.id, 0, row, 20);
   });
 
+  window.__marks = marks;
   window.__done = true;
+}
+
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** The points on a car a photo can be registered against: the wheel
+ * centres, the tyres' outer contact corners, the roof's corners, the outer
+ * edges of the lamp clusters and the corners of the bumpers at each end,
+ * and the tips of a tailgate wing. Car space, metres. */
+function landmarks(spec: CarBodySpec): [string, [number, number, number]][] {
+  const shift = spec.axleShift ?? 0;
+  const zF = spec.wheelbase / 2 + shift;
+  const zR = -spec.wheelbase / 2 + shift;
+  const r = spec.wheelRadius;
+  const tyre = spec.trackHalf + spec.wheelWidth / 2;
+  const out: [string, [number, number, number]][] = [
+    ["axleF", [0, r, zF]],
+    ["axleR", [0, r, zR]],
+    ["tyreFL", [-tyre, 0, zF]],
+    ["tyreFR", [tyre, 0, zF]],
+    ["tyreRL", [-tyre, 0, zR]],
+    ["tyreRR", [tyre, 0, zR]],
+    ["roof", [0, spec.cabin.roofY, (spec.cabin.roofFrontZ + spec.cabin.roofRearZ) / 2]],
+  ];
+  const head = spec.front?.lights;
+  if (head) {
+    const outer =
+      head.pairGap === undefined
+        ? head.x + head.size
+        : head.x + head.pairGap + (head.pairSize ?? head.size);
+    const edge = outer + (head.kind === "rect" ? (head.bezel ?? 0) : 0);
+    out.push(
+      ["headL", [-edge, head.y, spec.profile[0].z]],
+      ["headR", [edge, head.y, spec.profile[0].z]],
+    );
+  }
+  const tail = spec.rear?.lights;
+  const tailZ = spec.profile[spec.profile.length - 1].z;
+  if (tail) {
+    const edge = tail.x + tail.width / 2 + (tail.bezel ?? 0.016);
+    out.push(["tailL", [-edge, tail.y, tailZ]], ["tailR", [edge, tail.y, tailZ]]);
+  }
+  const { roofHalf, roofY, roofRearZ, roofFrontZ } = spec.cabin;
+  const rearHalf = spec.cabin.roofRearHalf ?? roofHalf;
+  out.push(["roofRL", [-rearHalf, roofY, roofRearZ]], ["roofRR", [rearHalf, roofY, roofRearZ]]);
+  out.push(["roofFL", [-roofHalf, roofY, roofFrontZ]], ["roofFR", [roofHalf, roofY, roofFrontZ]]);
+  const rb = spec.rear?.bumper;
+  if (rb) {
+    const half = rb.width ? rb.width / 2 : spec.profile[spec.profile.length - 1].half;
+    const z = tailZ - (rb.depth - 0.02);
+    out.push(
+      ["bumperRL", [-half, rb.y - rb.height / 2, z]],
+      ["bumperRR", [half, rb.y - rb.height / 2, z]],
+    );
+  }
+  const fb = spec.front?.bumper;
+  if (fb) {
+    const half = fb.width ? fb.width / 2 : spec.profile[0].half;
+    const z = spec.profile[0].z + (fb.depth - 0.02);
+    out.push(
+      ["bumperFL", [-half, fb.y - fb.height / 2, z]],
+      ["bumperFR", [half, fb.y - fb.height / 2, z]],
+    );
+  }
+  const sp = spec.spoiler;
+  if (sp && sp.kind === "gate") {
+    const top = sp.y + (sp.thick ?? 0.07) / 2 + 0.02;
+    out.push(
+      ["wingL", [-sp.span / 2, top, sp.z - sp.chord / 2]],
+      ["wingR", [sp.span / 2, top, sp.z - sp.chord / 2]],
+    );
+  }
+  return out;
 }
 
 void main();

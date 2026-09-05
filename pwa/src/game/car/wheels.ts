@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The wheels: a chunky faceted tire wearing one of three rim faces, plus
+// The wheels: a chunky faceted tire wearing one of four rim faces, plus
 // tread lugs embedded around the rolling surface. The rim breaks the
 // face's rotational symmetry and the lugs break the tread's — together the
 // spin rate is legible at a glance from any angle, which is most of what
@@ -48,16 +48,24 @@ const DISH = 0.075;
 const TIRE = 0x181c22;
 
 /** Per-style rim geometry: how many spokes, how broad, how deep the dish,
- * and whether the studs show. `steel` is a plain rim under a big cap;
- * `split` the wide four-spoke classic; `alloy` the multi-spoke. */
+ * whether the studs show, and whether the spokes CROSS. `steel` is a plain
+ * rim under a big cap; `split` the wide four-spoke classic; `alloy` the
+ * multi-spoke; `lattice` the woven mesh — `spokes` is then the count in
+ * EACH of its two families. */
 const STYLES: Record<
   WheelStyle,
-  { spokes: number; width: number; hub: number; dish: number; bolts: boolean }
+  { spokes: number; width: number; hub: number; dish: number; bolts: boolean; cross?: boolean }
 > = {
   alloy: { spokes: 5, width: 0.24, hub: 0.26, dish: 1, bolts: true },
   steel: { spokes: 0, width: 0, hub: 0.42, dish: 0.4, bolts: true },
   split: { spokes: 4, width: 0.34, hub: 0.28, dish: 1.15, bolts: false },
+  lattice: { spokes: 12, width: 0.04, hub: 0.2, dish: 0.9, bolts: false, cross: true },
 };
+
+/** How far round the rim a lattice spoke lands from where it leaves the
+ * hub, in pitches of its own family. One pitch puts each spoke across the
+ * next one of the other family, which is the weave. */
+const LATTICE_SKEW = 1;
 
 /** A tube on the wheel's axis, in tire radii. THREE builds it in its own
  * axis and this turns it onto the axle, so nothing here is hand-wound and
@@ -109,6 +117,36 @@ function radial(
         .translate(0, at, 0)
         .rotateX(angle)
         .translate(x, 0, 0),
+      color,
+    ),
+  );
+}
+
+/** A box laid in the wheel's plane between two points given in polar
+ * (radius, angle) — a spoke that does NOT run through the centre, which is
+ * what a lattice is made of. The box is built along y, turned to the
+ * segment's own direction and moved onto its midpoint; y = cos a, z = sin a
+ * is the same frame `radial` spins in. */
+function strut(
+  b: MeshBuilder,
+  thick: number,
+  width: number,
+  from: { r: number; a: number },
+  to: { r: number; a: number },
+  x: number,
+  color: number,
+): void {
+  const y0 = from.r * Math.cos(from.a);
+  const z0 = from.r * Math.sin(from.a);
+  const y1 = to.r * Math.cos(to.a);
+  const z1 = to.r * Math.sin(to.a);
+  const dy = y1 - y0;
+  const dz = z1 - z0;
+  b.absorb(
+    bakeShading(
+      new THREE.BoxGeometry(thick, Math.hypot(dy, dz), width)
+        .rotateX(Math.atan2(dz, dy))
+        .translate(x, (y0 + y1) / 2, (z0 + z1) / 2),
       color,
     ),
   );
@@ -173,17 +211,28 @@ function rimFace(
   // floor so their SIDES show. A spoke with no side is a painted line.
   const mid = (s.hub + RIM_BARREL) / 2;
   const face = x(-DISH * s.dish + 0.042);
+  const pitch = (Math.PI * 2) / s.spokes;
   for (let i = 0; i < s.spokes; i++) {
-    radial(
-      b,
-      0.05,
-      RIM_BARREL - s.hub + 0.05,
-      s.width,
-      mid,
-      face,
-      (i / s.spokes) * Math.PI * 2,
-      hubColor,
-    );
+    const angle = i * pitch;
+    if (s.cross) {
+      // Two families: every spoke leaves the hub at its own angle and
+      // meets the rim a pitch round in one direction or the other, so
+      // each crosses the next one of the other family. Both ends run past
+      // the hub and under the flange, as the radial spokes do.
+      for (const dir of [-1, 1]) {
+        strut(
+          b,
+          0.03,
+          s.width,
+          { r: s.hub - 0.025, a: angle },
+          { r: RIM_BARREL + 0.025, a: angle + dir * pitch * LATTICE_SKEW },
+          face,
+          hubColor,
+        );
+      }
+      continue;
+    }
+    radial(b, 0.05, RIM_BARREL - s.hub + 0.05, s.width, mid, face, angle, hubColor);
   }
 
   // The hub, over the spoke roots, and the studs on it.

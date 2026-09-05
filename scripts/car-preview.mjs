@@ -28,6 +28,11 @@
 //   ... car-preview.mjs --cars compact --views "game,rear,rear 3/4"
 //     # only those columns, at full size — an eight-column sheet read at
 //     # any width at all shrinks every cell past the point of judging one
+//   ... car-preview.mjs --cars classic --views "side elevation,rear elevation"
+//     # ORTHOGRAPHIC elevations, ground off, plus <out>.marks.json saying
+//     # where the axles, tyres and lamp edges landed in sheet pixels — lay
+//     # the cell over a reference photo registered on two of them to check
+//     # the proportions against the real car rather than against an eye
 //   ... car-preview.mjs --skip-build
 //     # reuse the last harness bundle (fast spec-only iterations)
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -278,6 +283,13 @@ const box = await sheet.boundingBox();
 await page.setViewportSize({ width: Math.ceil(box.width), height: Math.ceil(box.height) });
 await page.screenshot({ path: join(outDir, `${outName}.png`), fullPage: true });
 console.log(`previews/${outName}.png (${variants.cars.map((c) => c.id).join(", ")})`);
+// An elevation view reports where the car's landmarks landed on the sheet,
+// which is what an overlay on a reference photo registers against.
+const marks = await page.evaluate("window.__marks");
+if (marks && Object.keys(marks).length > 0) {
+  writeFileSync(join(outDir, `${outName}.marks.json`), JSON.stringify(marks, null, 2));
+  console.log(`previews/${outName}.marks.json`);
+}
 
 await browser.close();
 server.close();
