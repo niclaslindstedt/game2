@@ -30,8 +30,7 @@ adds to it:
 - The roof NARROWS and FALLS toward the tail (`cabin.roofRearHalf`,
   `cabin.roofRearY`); one roof width and height puts the rear corners a
   hand too far out and up, and only the fitted rear photograph shows it.
-- A rim of 0.86 of the tyre is a modern wheel; a period one is 0.65, and
-  a woven mesh is `wheelStyle: "lattice"`.
+- A rim of 0.86 of the tyre is modern; a period one is 0.65.
 
 Two bars a faithful measurement runs into, both held by
 `tests/car_geometry_test.ts`: the nose cannot go under 0.84 m
