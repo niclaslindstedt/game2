@@ -842,6 +842,14 @@ describe("the end of the run", () => {
     car.yawRate = 0;
     car.heading = state.track.samples[0].heading;
     updateSlip(car);
+    // ...and the scenery is swept out of its way. A car pulling toward its
+    // missing corner wanders off the road, and what stands at the verge of
+    // this seed decides the next ten seconds: a slab clipped at a scuff
+    // with one contact model, a rock met square at 40 km/h with the next,
+    // and an engine finished by the rock is a run retired for a reason
+    // this test is not about.
+    state.terrain.obstaclesNear = () => [];
+    state.terrain.treesNear = () => [];
     // One wheel off is a car that still crawls...
     for (let i = 0; i < TUNING.physicsHz * 10; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
     expect(state.phase).toBe("racing");

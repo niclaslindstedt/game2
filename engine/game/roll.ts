@@ -33,7 +33,16 @@
 import { TUNING } from "./defs/tuning.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import type { Rng } from "../lib/prng.ts";
-import { arriving, contact, driveRolling, rubGround } from "./roll-contact.ts";
+import type { Surface } from "../mapgen/index.ts";
+import {
+  type Ground,
+  RIGID,
+  arriving,
+  contact,
+  driveRolling,
+  groundOf,
+  rubGround,
+} from "./roll-contact.ts";
 import { weightOverOrigin } from "./roll-ledger.ts";
 import {
   type Bed,
@@ -61,6 +70,7 @@ import {
 
 export { WHEEL_BASIN, massSpread, onItsWheels, type MassSpread } from "./roll-hull.ts";
 export { crashEnergy, crashTurbulence } from "./roll-ledger.ts";
+export { RIGID, groundOf, type Ground } from "./roll-contact.ts";
 
 const T = TUNING;
 const R = TUNING.air.roll;
@@ -74,6 +84,10 @@ export type RollGround = {
   /** Ground slope along the heading and across it, dy/ds. */
   slope: number;
   slopeLat?: number;
+  /** What the ground is MADE of — how much of a contact it swallows and
+   * what it costs to plough (`TUNING.surfaces.give` / `plough`). Absent is
+   * a rigid plane, which is what the bench tests stand on. */
+  surface?: Surface | "nature";
   /** The run's own seeded RNG — the crash's flights draw the same turbulence
    * every other flight does, and from the same source, so a stage driven
    * twice crashes twice the same way. */
@@ -233,6 +247,7 @@ export function landRolled(
   bed: Bed,
   events: GameEvent[],
   stats: RunStats,
+  ground: Ground = RIGID,
 ): void {
   const tilt = rollTilt(car.roll);
   const pitch = rollTilt(car.pitch);
@@ -260,6 +275,7 @@ export function landRolled(
     massSpread(spec.mass),
     events,
     stats,
+    ground,
   );
 }
 
@@ -294,6 +310,7 @@ export function stepRolling(
 ): void {
   const dt = T.dt;
   const bed = rollBed(ctx);
+  const ground = groundOf(ctx.surface);
   const mass = massSpread(spec.mass);
   const tilt = rollTilt(car.roll);
   const pitch = rollTilt(car.pitch);
@@ -344,7 +361,7 @@ export function stepRolling(
     // twice. With no input on the pedals or the wheel this takes nothing and
     // the rub below is exactly the crash the module always ran.
     const asked = driveRolling(car, input, T.air.gravity * dt, tilt, pitch, bed, mass);
-    rubGround(car, T.air.gravity * dt * (1 - asked), tilt, pitch, bed, mass, false);
+    rubGround(car, T.air.gravity * dt * (1 - asked), tilt, pitch, bed, mass, false, ground.plough);
     // What the ground bleeds out of each rotation as it grinds round on it.
     // Panels are not tyres, and the pitch loses it faster because the whole
     // length of the car is lying on the ground while it goes end over end
@@ -381,7 +398,7 @@ export function stepRolling(
   // of an angle crossing a quarter turn, which cannot be asked honestly of a
   // body that is pitched and rolled at once on a plane tilted two ways.
   if (down && !wasFlat && standingOn(nowR, nowP, bed).flat) {
-    contact(arriving(car), spec, car, 0, nowR, nowP, bed, mass, events, stats);
+    contact(arriving(car), spec, car, 0, nowR, nowP, bed, mass, events, stats, ground);
   }
 
   if (down) {
@@ -532,7 +549,7 @@ export function stepRolling(
       centre = rest;
       car.airborne = false;
       car.airTime = 0;
-      contact(arriving(car), spec, car, descent, nowR, nowP, bed, mass, events, stats);
+      contact(arriving(car), spec, car, descent, nowR, nowP, bed, mass, events, stats, ground);
       // ...and the body leaves at the speed the SURFACE is now moving, which
       // the contact has just changed: the reaction turned the body about the
       // corner it landed on, and the seat under a body turning at a new rate

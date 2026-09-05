@@ -34,6 +34,7 @@ import { footOn, readSeat, seatOn, standOn, wheelSpeed, type GroundContext } fro
 import {
   beginRoll,
   goesOver,
+  groundOf,
   landRolled,
   massSpread,
   onItsWheels,
@@ -439,7 +440,7 @@ export function stepAirborne(
   if (car.y <= meets && (car.rolling || !onItsWheels(car.roll, 0))) {
     // Nothing for the tyres to do: it is a corner of the body arriving,
     // and the roll that put it there carries on from the contact.
-    landRolled(spec, car, groundNow, rollBed(ctx), events, stats);
+    landRolled(spec, car, groundNow, rollBed(ctx), events, stats, groundOf(ctx.surface));
     return;
   }
   if (car.y <= meets) {
@@ -502,7 +503,9 @@ export function stepAirborne(
     // small rebound is ONE landing, and a chassis bounce must not stack its
     // way into a car with no grip at all.
     if (!soft) car.settle = Math.max(car.settle, clamp(slam / T.suspension.settleSlam, 0, 1));
-    landingDamage(spec, car, slam, events, stats);
+    // ...and the underside folds around what the GROUND did not take: a
+    // slam into sand is half a furrow, a slam onto tarmac is all car.
+    landingDamage(spec, car, slam * (1 - groundOf(ctx.surface).give), events, stats);
     // Pick the road's own vertical speed back up instead of zeroing: land on
     // a brow and the car may be off the ground again next step, and a stale
     // zero there is a bounce where there should be a flight.

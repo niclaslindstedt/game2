@@ -19,6 +19,14 @@ import { KERB_MARKER, type KerbMarker, type WildObstacle } from "../mapgen/index
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import {
+  type CrushFace,
+  crushCap,
+  folded,
+  landingFace,
+  massRatio,
+  restitutionAt,
+} from "./structure.ts";
+import {
   DAMAGE_ZONES,
   WHEEL_PARTS,
   rollTilt,
@@ -80,24 +88,6 @@ const ROOF_BOLTS: { part: DamagePart; crushAt: number }[] = [
   { part: "hatch", crushAt: T.collision.partAt.roofLid },
 ];
 
-/** WHICH FACE OF THE CAR THE GROUND ARRIVED AT, from the attitude alone —
- * a ring zone for a flank, or one of the two faces the ring has no room
- * for. Positive roll lifts the right side, so a car tilted positive is one
- * lying on its LEFT flank (zone 6).
- *
- * The boundaries are the two the hull's own geometry sets: `rollLandLimit`
- * is as far as a car can lean and still land on its tyres, and three
- * quarters of a turn is the corner between a flank and the roof. */
-export type CrushFace = number | "belly" | "roof";
-const ROOF_FROM = (Math.PI * 3) / 4;
-
-function landingFace(tilt: number): CrushFace {
-  const lean = Math.abs(tilt);
-  if (lean <= T.air.rollLandLimit) return "belly";
-  if (lean >= ROOF_FROM) return "roof";
-  return tilt > 0 ? 6 : 2;
-}
-
 /** Which wheels each ring zone folds onto, as (wheel index, share) pairs —
  * `WHEEL_PARTS` order: FL, FR, RL, RR. A corner is one wheel's; a flank is
  * both wheels on that side, half each; the nose and the tail reach none. */
@@ -117,12 +107,6 @@ const WHEELS_AT: readonly (readonly [number, number])[][] = [
   ],
   [[0, 1]],
 ];
-
-/** The car's mass against the mass every collision number is written for.
- * Above 1 is a heavy car. */
-function massRatio(spec: { mass: number }): number {
-  return spec.mass / T.collision.refMass;
-}
 
 /** The zone an impact angle lands in — angle 0 is the nose, positive is the
  * right side, each zone spans 45°. */
@@ -275,14 +259,15 @@ function dealCrush(
   events.push({ type: "impact", speed, angle, belly: typeof face !== "number" });
   const asked = dealt * car.damageScale;
   if (asked <= 0) return;
-  // WHAT THE FACE ACTUALLY TOOK. Past `zoneMax` the cage is holding and the
-  // panel has nowhere left to fold, so the machinery behind it stops taking
-  // the fold too — only the wear goes on. Without this a car pinned against
-  // one face goes on losing its engine, its wheels and its arms to a panel
-  // that is not moving any more, which is exactly what a roll grinding
-  // along on one flank does for a second and a half.
+  // WHAT THE FACE ACTUALLY TOOK. Past its cap (`crushCap` — the ring's
+  // `zoneMax`, the cage's own stroke for the roof) the cage is holding and
+  // the panel has nowhere left to fold, so the machinery behind it stops
+  // taking the fold too — only the wear goes on. Without this a car pinned
+  // against one face goes on losing its engine, its wheels and its arms to
+  // a panel that is not moving any more, which is exactly what a roll
+  // grinding along on one flank does for a second and a half.
   const before = folded(damage, face);
-  const crush = Math.min(asked, T.collision.zoneMax - before);
+  const crush = Math.min(asked, crushCap(face) - before);
   const wasWear = damage.wear;
   const spent = crush + (asked - crush) * T.collision.wearPastCap;
   damage.wear = Math.min(1, damage.wear + spent * T.collision.wearPerCrush);
@@ -333,13 +318,6 @@ export function shearedParts(damage: CarState["damage"]): DamagePart[] {
   return parts;
 }
 
-/** How far this face has already folded, m. */
-function folded(damage: CarState["damage"], face: CrushFace): number {
-  if (face === "belly") return damage.belly;
-  if (face === "roof") return damage.roof;
-  return damage.zones[face];
-}
-
 /** One part off its bolts, once — a piece already on the road behind the
  * car cannot come off a second time. */
 function shear(damage: CarState["damage"], part: DamagePart, events: GameEvent[]): void {
@@ -374,7 +352,12 @@ export function landingDamage(
       : T.air.roll.shellFree;
   const over = slam - tolerance;
   if (over <= 0) return;
-  const crush = T.collision.crushPerSpeed * over * massRatio(spec);
+  // ...and the ROOF is the cage: the same arrival folds it by less than it
+  // folds a panel, and what it does not fold it passes on to the body
+  // (`structure.foldSpeed`), which is why a car coming down on its roof is
+  // thrown by the contact where one coming down on its nose is stopped.
+  const stiff = face === "roof" ? T.collision.structure.roofCrush : 1;
+  const crush = T.collision.crushPerSpeed * over * massRatio(spec) * stiff;
   if (typeof face !== "number") {
     dealCrush(car, face, crush, 0, slam, events, stats, true);
     return;
@@ -414,11 +397,12 @@ function meetSolid(
   ob: WildObstacle,
   closing: number,
   carMass: number,
+  restitution: number,
 ): { bite: number; yields: boolean; broke: boolean } {
   const S = T.collision.solids;
   const wall = { bite: 1, yields: false, broke: false };
   if (closing <= T.collision.scuffSpeed) return wall;
-  const delivered = (1 + T.collision.restitution) * closing * carMass;
+  const delivered = (1 + restitution) * closing * carMass;
   const anchor = ob.mass * ob.rooted * S.anchorPerMass;
   if (delivered <= Math.min(ob.snap, anchor)) return wall;
   if (ob.snap <= anchor) {
@@ -530,11 +514,16 @@ export function collideCar(
     // scaled by it, so one number carries the difference between a boulder
     // and a stone the car flicks into the trees: the speed lost, the paint
     // scrubbed off the flank, the fold in the panels, and the spin.
-    const { bite, yields, broke } = meetSolid(ob, closing, spec.mass);
+    // WHAT COMES BACK falls with how hard the car arrived: a bumper gives
+    // and returns at walking pace, and at speed the arrival is spent
+    // folding the car, which returns nothing (`restitutionAt`). A car is
+    // distorted by a wall, not bounced off it.
+    const wall = restitutionAt(T.collision.restitution, closing);
+    const { bite, yields, broke } = meetSolid(ob, closing, spec.mass, wall);
     // A thing that came out of the ground is shoved, not bounced off
     // (`looseRestitution`); a wall, and a trunk that stood until it broke,
-    // hand the closing speed back at the full figure.
-    const e = yields && !broke ? T.collision.solids.looseRestitution : T.collision.restitution;
+    // hand the closing speed back at the figure above.
+    const e = yields && !broke ? T.collision.solids.looseRestitution : wall;
     // Only what did NOT give way pushes the car back out: a rock knocked
     // off its bed is not still occupying the ground the car is standing on.
     const push = penetration * (yields ? 1 - bite : 1);
@@ -730,12 +719,13 @@ export function clipSolids(
     // Deaf until the whole body has passed over it — one bite per stone.
     const pace = Math.max(1, Math.hypot(car.u, car.w));
     car.kerbFrom = now + Math.min(K.overFor, (2 * T.collision.halfLength + 2 * ob.radius) / pace);
-    const { bite, yields, broke } = meetSolid(ob, closing, spec.mass);
+    const wall = restitutionAt(T.collision.restitution, closing);
+    const { bite, yields, broke } = meetSolid(ob, closing, spec.mass, wall);
     if (yields) {
       fell?.(ob);
       const sinH = Math.sin(car.heading);
       const cosH = Math.cos(car.heading);
-      const e = broke ? T.collision.restitution : S.looseRestitution;
+      const e = broke ? wall : S.looseRestitution;
       const speed = broke
         ? closing * S.toppleKeep
         : Math.min(S.throwMax, ((1 + e) * bite * closing * spec.mass) / ob.mass);
@@ -893,10 +883,12 @@ export function collideSlope(
   if (closing <= 0) return 0;
 
   // Only the refused fraction is taken out of the velocity, and it comes
-  // back at `restitution`. What runs ALONG the face is untouched: that is
-  // what turns a glancing bank into a berm to lean on rather than a wall.
+  // back at the restitution a contact THAT hard has — a nudge off a bank is
+  // springy, a cliff met at pace folds the nose and returns almost nothing.
+  // What runs ALONG the face is untouched: that is what turns a glancing
+  // bank into a berm to lean on rather than a wall.
   const refused = closing * bite;
-  const kick = refused * (1 + C.restitution);
+  const kick = refused * (1 + restitutionAt(C.restitution, refused));
   car.u -= kick * ez;
   car.w -= kick * ex;
   updateSlip(car);
@@ -1091,9 +1083,11 @@ export function collideCars(a: ContactSide, b: ContactSide): boolean {
     part(carA, carB, nx, nz, penetration, invA, invB, invSum);
     return false;
   }
-  // Along the normal: the exchange. Across it: friction, which bleeds the
-  // relative slide by whatever `tangentKeep` does not keep.
-  const jn = ((1 + C.restitution) * closing) / invSum;
+  // Along the normal: the exchange, at the restitution two shells closing
+  // THIS fast have — two bumpers at a nudge, two crumpling noses at pace.
+  // Across it: friction, which bleeds the relative slide by whatever
+  // `tangentKeep` does not keep.
+  const jn = ((1 + restitutionAt(C.restitution, closing)) * closing) / invSum;
   const tanX = relX - closing * nx;
   const tanZ = relZ - closing * nz;
   const jt = (1 - C.tangentKeep) / invSum;

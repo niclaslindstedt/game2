@@ -15,12 +15,17 @@ became one turn ending on its wheels. A rollover is not a stop.
 The missing physics is the FOLD. A panel is not a billiard ball — it
 collapses at a roughly fixed force over its stroke, so the faster a corner
 arrives the more of the arrival goes into the metal and the less into turning
-what is left of the car. `air.roll.foldSpeed` is that asymptote (2.5 m/s), as
-`arrival × fold / (fold + arrival)`: a gentle contact passes on nearly all of
-it, a violent one about a quarter. It is the same arrival `landingDamage` is
-booking parts off for two lines below, priced once on each side.
+what is left of the car. The asymptote is `collision.structure.fold`, read
+per FACE through `structure.ts`'s `foldSpeed` (a crumple zone, a flank, the
+floorpan, the cage — divided by the car's mass ratio, and climbing toward the
+bare cage's figure as the face folds to its cap), as `arrival × fold / (fold
 
-`foldSpeed` is chaotic in the single scenario — 2.0 gave 0.60 g, 2.5 gave
-0.41, 3.0 gave 0.68 — so judge it on the SPREAD (`make roll`'s twelve rows),
-never on `make crash CRASH=carry` alone. A rollover's outcome is genuinely
-sensitive to its first contact and one number will happily fit one seed.
+- arrival)`: a gentle contact passes on nearly all of it, a violent one about
+a quarter. It is the same arrival `landingDamage` is booking parts off for
+  two lines below, priced once on each side.
+
+The asymptote is chaotic in the single scenario — as one number for every
+face, 2.0 gave 0.60 g, 2.5 gave 0.41, 3.0 gave 0.68 — so judge it on the
+SPREAD (`make roll`'s twelve rows), never on `make crash CRASH=carry` alone.
+A rollover's outcome is genuinely sensitive to its first contact and one
+number will happily fit one seed.

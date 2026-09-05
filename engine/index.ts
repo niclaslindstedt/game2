@@ -36,6 +36,14 @@ export {
   shearedParts,
   type ContactSide,
 } from "./game/collision.ts";
+// What the shell is made of, face by face (structure.ts).
+export {
+  crushCap,
+  foldSpeed,
+  landingFace,
+  restitutionAt,
+  type CrushFace,
+} from "./game/structure.ts";
 export { beyondDriving, damageEffects, lampShare, type DamageEffects } from "./game/damage.ts";
 export { heatPower, stepCooling } from "./game/cooling.ts";
 export {
@@ -113,9 +121,11 @@ export {
   goesOver,
   goesOverEnd,
   leanTorque,
+  groundOf,
   massSpread,
   onItsWheels,
   rollBed,
+  type Ground,
   type MassSpread,
 } from "./game/roll.ts";
 // ...and how much of what is on the ground is still RUBBER, which is the

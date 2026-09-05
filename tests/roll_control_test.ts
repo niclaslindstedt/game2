@@ -172,9 +172,13 @@ describe("the driver, while the car is going over", () => {
     expect(speedOf(trip({ throttle: 1 }, 0.5))).toBeGreaterThan(speedOf(trip({}, 0.5)) + 1);
     // ...and it is the one term that lengthens an accident rather than
     // shortening it: a driven wheel is not a wheel being dragged. Read over
-    // the sweep, because one accident cannot say what a pedal is worth — but
-    // it is a big effect and it is there on every grid.
-    expect(sweep({ throttle: 1 }).seconds).toBeGreaterThan(sweep({}).seconds + 0.2);
+    // the sweep, because one accident cannot say what a pedal is worth. It
+    // was four tenths while the ground under a crash was steel; a road that
+    // gives and a shell whose faces fold differently turn the body less per
+    // contact, so more accidents settle onto a face the throttle cannot
+    // reach through, and what is left is a couple of tenths — still there
+    // on every grid, and still the only pedal that lengthens anything.
+    expect(sweep({ throttle: 1 }).seconds).toBeGreaterThan(sweep({}).seconds + 0.1);
   });
 
   it("lands the accident the right way up on the brake, without shortening it", () => {
