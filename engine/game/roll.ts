@@ -297,11 +297,20 @@ export function stepRolling(
   const mass = massSpread(spec.mass);
   const tilt = rollTilt(car.roll);
   const pitch = rollTilt(car.pitch);
-  // Where the weight is, over the ground it is over. Carried in `car.y` (the
-  // origin) between steps, which is what the rest of the game reads, and
-  // unpacked here through the attitude.
-  const was = rollSeat(car, ctx);
-  let centre = car.y - was + weightOverOrigin(tilt, pitch);
+  // WHERE THE WEIGHT IS, as a WORLD height. Carried in `car.y` (the origin)
+  // between steps, which is what the rest of the game reads, and unpacked
+  // here through the attitude.
+  //
+  // A world height and never a height above the ground under the body. The
+  // surface is what decides where the CONTACT is; it is not a datum a flying
+  // body may be carried relative to. `rollSeat` moves with the terrain AND
+  // with the attitude (`clearOn` is inside it), so a body re-datumed onto it
+  // every step is re-seated onto whatever ground it happens to be over and
+  // climbs hills between contacts for nothing — in steps where the only term
+  // that ran was gravity. On flat ground it cancels exactly, which is why
+  // only a crash thrown off a lip into the wild ever showed it: it was 13.5%
+  // of `carry`'s whole budget, all of it on `air->air` steps.
+  let centre = car.y + weightOverOrigin(tilt, pitch);
   // `airborne` is the crash's own bit for BETWEEN ITS CONTACTS — which is
   // what airborne honestly means for a car going over, and what the camera,
   // the HUD and the effects want to hear. It cannot be read back off the
@@ -447,6 +456,11 @@ export function stepRolling(
 
   const seat = seatOn(nowR, nowP, bed);
   const slopes = seatSlopes(nowR, nowP, bed);
+  // ...and WHERE IT WOULD REST, in the world: the ground under the whole body
+  // plus the arm the attitude holds the weight out on. This is the one place
+  // the terrain enters, and it enters as the height a contact happens AT
+  // rather than as a datum anything is carried relative to.
+  const rest = rollSeat(car, ctx) + seat;
   // How fast the surface itself is moving under the body — it is not a floor,
   // it runs at its own slope times the rate the body is turning, in both
   // planes at once.
@@ -462,7 +476,7 @@ export function stepRolling(
       seat * (car.rollRate * car.rollRate + car.pitchRate * car.pitchRate) +
       (T.air.gravity / mass.over.roll) * slopes.roll * slopes.roll +
       (T.air.gravity / mass.over.pitch) * slopes.pitch * slopes.pitch;
-    centre = seat;
+    centre = rest;
     car.vy = seatVy;
     car.airborne = held > T.air.gravity;
     car.airTime = 0;
@@ -477,7 +491,29 @@ export function stepRolling(
     car.rollRate += (ctx.rng.next() - 0.5) * 2 * T.air.rollTurbulence * dt;
     car.yawRate += (ctx.rng.next() - 0.5) * 2 * T.air.turbulence * dt;
     car.pitchRate += (ctx.rng.next() - 0.5) * 2 * T.air.pitchTurbulence * dt;
-    if (centre <= seat) {
+    // ...AND A CONTACT IS A CORNER CLOSING ON THE GROUND, never a body found
+    // below its own surface. The surface `rest` is the height the weight has
+    // to be at for the box to touch at THIS attitude, so it sweeps up and
+    // down as the body turns — at slope × rate, which past a corner is ten
+    // metres a second — and a body turning at eight rad/s is overtaken by it
+    // and left underneath it every step or two while one and the same corner
+    // is still coming down. Read as arrivals, those steps were charged a full
+    // pivot exchange each: one hand-over billed four times over, 8.24 rad/s
+    // down to 3.30 through a single corner, on contacts reporting a descent
+    // of nothing. `descent` is already capped at `g × airTime` and correctly
+    // gave the friction nothing on them; this is what says the same of the
+    // rotation, and it says it as a fact about the step rather than as
+    // something the body has to remember about the last one.
+    //
+    // The test is the closing itself — is the surface still coming at the
+    // weight — and it is the same quantity the arrival is priced off two
+    // lines down, which is the point: one account of the geometry. Where it
+    // is zero the corner is already on its way back out, and the honest
+    // answer is that nothing arrived: no exchange, no reaction, and no
+    // re-seating the body onto a surface that is dropping away from it, which
+    // would hand it a fall it never took.
+    const closing = Math.max(0, seatVy - car.vy);
+    if (centre <= rest && closing > 0) {
       // ...and comes back to it. ONE contact, at whatever attitude it
       // actually arrived at.
       //
@@ -492,9 +528,8 @@ export function stepRolling(
       // `g × airTime` is the whole of what the ground has to arrest, and the
       // rest of the closing is the body ROTATING over its corner, which the
       // pivot exchange prices and the travel must never be charged for.
-      const closing = Math.max(0, seatVy - car.vy);
       const descent = Math.min(closing, T.air.gravity * car.airTime);
-      centre = seat;
+      centre = rest;
       car.airborne = false;
       car.airTime = 0;
       contact(arriving(car), spec, car, descent, nowR, nowP, bed, mass, events, stats);
@@ -505,12 +540,31 @@ export function stepRolling(
       // contact, the body arrives at the next step already closing on ground
       // it is no longer falling toward, and books a second arrival for the
       // first one's impulse.
+      //
+      // WHAT IS LEFT OF THE LEAK LIVES HERE, and it is not this line's to
+      // fix. A body in flight turns about its own weight; a body on the
+      // ground turns about the corner under it and carries the weight round
+      // on that arm, and the ledger reads the arm's motion as `vy` where the
+      // grounded step integrates it inside `mass.over`. So the two hand-overs
+      // disagree — the takeoff gives the arm up, the touchdown takes it back
+      // — and on a fast bare roll that is one or two steps worth a fifth of
+      // the budget. Both repairs that suggest themselves (scale the rotation
+      // to what the arrival could pay for; settle the residual as a normal
+      // impulse at the corner) DO close it, to a worst 18% from 32%, and both
+      // flatten `make roll` to half a turn at every entry from 24 to 50 m/s,
+      // because they take from the rotation at every one of the touchdowns a
+      // fast roll makes and a slow one does not. The exchange is already
+      // priced once, by `pivotKeep`; charging it again here is the double
+      // charge this module keeps rediscovering. Closing it honestly means the
+      // grounded step coupling the travel to the rotation — inertia `spin +
+      // slopes²` rather than the constant `spin + SILL_ARM` — which is a
+      // different model and a full retune of the crash's feel.
       const after = seatSlopes(nowR, nowP, bed);
       car.vy = after.roll * car.rollRate + after.pitch * car.pitchRate;
     }
   }
   // Back into the origin the rest of the game reads the car's height from.
-  car.y = rollSeat(car, ctx) + centre - weightOverOrigin(nowR, nowP);
+  car.y = centre - weightOverOrigin(nowR, nowP);
   car.settling = false;
 
   car.sliding = false;

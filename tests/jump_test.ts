@@ -634,7 +634,13 @@ describe("the jump", () => {
     // wait to find out: it lies there for `roll.lieFor` and the crew are put
     // back at the split board behind them. This is also the whole of the
     // rule for the FIELD — every rival is stepped through the same code.
-    const { state } = landSideways(28, -16);
+    // A COMMITTED ENTRY, re-picked the way the stripping test above says to:
+    // sweep the entries and take one that finishes off its wheels, from a run
+    // of neighbours that all do. -16 was that once; with the roll's ledger
+    // settled it carries further and comes back down on its tyres, which is a
+    // fine thing for a car to do and no use for testing what happens to one
+    // that does not.
+    const { state } = landSideways(30, -18);
     expect(state.overturned).not.toBeNull();
     const respawns = state.stats.respawns;
     // Nothing moves while it lies there...

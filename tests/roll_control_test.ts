@@ -63,7 +63,7 @@ function game(): GameState {
  *
  * The sideways speed is NEGATIVE, so the body goes over to the positive side
  * of the roll and a positive steering input is the one opposing it. */
-function trip(input: Partial<CarInput>, seconds = 2.5, over = 0.8, rate = 2.2): GameState {
+function trip(input: Partial<CarInput>, seconds = 2.5, over = 0.8, rate = 2.2, w = -8): GameState {
   const state = game();
   const car = state.car;
   car.rolling = true;
@@ -72,7 +72,7 @@ function trip(input: Partial<CarInput>, seconds = 2.5, over = 0.8, rate = 2.2): 
   car.rollRate = rate;
   car.airborne = false;
   car.u = 18;
-  car.w = -8;
+  car.w = w;
   updateSlip(car);
   for (let i = 0; i < Math.round(seconds / TUNING.dt); i += 1) {
     step(state, { ...NEUTRAL_INPUT, ...input });
@@ -82,16 +82,71 @@ function trip(input: Partial<CarInput>, seconds = 2.5, over = 0.8, rate = 2.2): 
 
 const speedOf = (state: GameState): number => Math.hypot(state.car.u, state.car.w);
 
-/** How long the same trip stays a crash, s — the roll's own length, which is
- * the readout most of what the driver does shows up in. */
-function overFor(input: Partial<CarInput>): number {
-  const state = trip(input, 0);
+/** A COMMITTED TRIP: one the body has the rotation to get over its own sill
+ * corner with, so that left alone it finishes lying down. The default
+ * staging's 2.2 rad/s is the marginal case and rocks back onto its wheels by
+ * itself, which is a fine thing for a car to do and no use at all for
+ * measuring what happens to a car that does not. */
+const COMMITTED = 3.4;
+
+/** ONE TRIP, RUN TO ITS OWN END rather than for a fixed number of seconds. A
+ * roll's length is the one thing this model refuses to decide in advance, so
+ * a test that waits out a clock is measuring the clock. */
+function untilStill(
+  input: Partial<CarInput>,
+  over = 0.8,
+  rate = COMMITTED,
+  w = -8,
+): { state: GameState; seconds: number } {
+  const state = trip(input, 0, over, rate, w);
   let steps = 0;
-  while (state.car.rolling && steps < TUNING.physicsHz * 6) {
+  while (state.car.rolling && steps < TUNING.physicsHz * 8) {
     step(state, { ...NEUTRAL_INPUT, ...input });
     steps += 1;
   }
-  return steps * TUNING.dt;
+  // One more, so the run can read the attitude the roll left and book it.
+  step(state, { ...NEUTRAL_INPUT, ...input });
+  return { state, seconds: steps * TUNING.dt };
+}
+
+/** ...AND THE SAME TRIP TAKEN NINETY WAYS, because one accident cannot say
+ * what a pedal is worth.
+ *
+ * A rollover is chaotic in the ordinary sense: a hundredth of a radian at the
+ * first contact decides which face the body comes down on two turns later, so
+ * ANY single staging will show a pedal doing something, and half the time it
+ * will be the opposite of what the pedal does. Measured that way this file
+ * once held that the brake takes four tenths of a second off the roll — and
+ * on the very build that claim was written against, swept over ninety trips,
+ * the brake changed the roll's length by a hundredth of a second. It cannot
+ * do otherwise: the ground is already dragging at the whole of the patch's
+ * budget in the direction the body is travelling, and no pedal can ask for
+ * more friction than the patch has.
+ *
+ * What the sweep DOES show, and steadily, is what the driver actually buys —
+ * the throttle lengthening the accident, and the brake ending it the right
+ * way up more often than not touching anything does. */
+const TRIPS: readonly (readonly [number, number, number])[] = (() => {
+  const out: [number, number, number][] = [];
+  for (const over of [0.7, 0.8, 0.9, 1.0, 1.1, 1.2]) {
+    for (const rate of [2.2, 2.6, 3.0, 3.4, 3.8]) {
+      for (const w of [-8, -11, -14]) out.push([over, rate, w]);
+    }
+  }
+  return out;
+})();
+
+/** How long the sweep's accidents last on average, s, and how many of them
+ * leave the car lying there for the crew. */
+function sweep(input: Partial<CarInput>): { seconds: number; lying: number } {
+  let seconds = 0;
+  let lying = 0;
+  for (const [over, rate, w] of TRIPS) {
+    const done = untilStill(input, over, rate, w);
+    seconds += done.seconds;
+    if (done.state.overturned !== null) lying += 1;
+  }
+  return { seconds: seconds / TRIPS.length, lying };
 }
 
 describe("the driver, while the car is going over", () => {
@@ -116,26 +171,33 @@ describe("the driver, while the car is going over", () => {
     // a claim about the pedals read there is a claim about friction.
     expect(speedOf(trip({ throttle: 1 }, 0.5))).toBeGreaterThan(speedOf(trip({}, 0.5)) + 1);
     // ...and it is the one term that lengthens an accident rather than
-    // shortening it: a driven wheel is not a wheel being dragged.
-    expect(overFor({ throttle: 1 })).toBeGreaterThan(overFor({}));
+    // shortening it: a driven wheel is not a wheel being dragged. Read over
+    // the sweep, because one accident cannot say what a pedal is worth — but
+    // it is a big effect and it is there on every grid.
+    expect(sweep({ throttle: 1 }).seconds).toBeGreaterThan(sweep({}).seconds + 0.2);
   });
 
-  it("shortens the accident on the brake, and lands it the right way up", () => {
+  it("lands the accident the right way up on the brake, without shortening it", () => {
     // WHAT A BRAKE IS WORTH ONCE THE CAR IS OVER, honestly: not a harder
-    // stop. A body already sliding has the ground dragging at the whole of
-    // the patch's budget in the direction it is travelling, and a pedal
-    // cannot ask for more friction than the patch has — so the brake spends
-    // the same budget the ground was spending anyway.
+    // stop, and not a shorter accident either. A body already sliding has the
+    // ground dragging at the whole of the patch's budget in the direction it
+    // is travelling, and a pedal cannot ask for more friction than the patch
+    // has — the brake spends the budget the ground was spending anyway, in
+    // the same direction, so the roll's LENGTH cannot move and does not.
     //
-    // What it buys instead is the crash ENDING SOONER, and ending with the
-    // car on its wheels rather than lying on its side waiting for the crew.
-    // Which is the difference between a bad moment and a retirement.
-    expect(overFor({ brake: 1 })).toBeLessThan(overFor({}) - 0.2);
-    expect(trip({}, 3).overturned).not.toBeNull();
-    expect(trip({ brake: 1 }, 3).overturned).toBeNull();
+    // What it buys is where the car is pointing when it stops: the same
+    // budget spent through the tyres the driver still has turns the body
+    // differently from the ground merely dragging on it, and one accident in
+    // ten that would have left the car lying there for the crew ends with it
+    // on its wheels instead. Which is the difference between a bad moment and
+    // a retirement.
+    const loose = sweep({});
+    const braked = sweep({ brake: 1 });
+    expect(braked.lying).toBeLessThan(loose.lying);
+    expect(Math.abs(braked.seconds - loose.seconds)).toBeLessThan(0.1);
     // The lever is the same ask while the car is over: there are no rear
     // wheels to lock in any sense that means anything.
-    expect(overFor({ handbrake: true })).toBeLessThan(overFor({}) - 0.2);
+    expect(sweep({ handbrake: true }).lying).toBe(braked.lying);
     // ...and a pedal cannot push a car backwards, however long it is held:
     // the brake's impulse is capped at bringing the travel to a stop.
     expect(speedOf(trip({ brake: 1 }, 1.5))).toBeGreaterThanOrEqual(0);
@@ -302,10 +364,12 @@ describe("planted — the car fully back on four wheels", () => {
     // Not while the body is going over, at any point of it...
     expect(trip({}, 0.2).car.planted).toBe(false);
     expect(trip({}, 0.5, Math.PI, 0).car.planted).toBe(false);
-    // ...and not while it lies on its side at the end of one. Read after the
-    // roll lets go and before the respawn clock runs out, or what is measured
-    // is the car put back on the road, which is planted and rightly so.
-    const lying = trip({}, 3);
+    // ...and not while it lies on its side at the end of one. Read the step
+    // the roll lets go on rather than at a clock — a roll has no length the
+    // model will commit to in advance — and before the respawn runs out, or
+    // what is measured is the car put back on the road, which is planted and
+    // rightly so.
+    const { state: lying } = untilStill({});
     expect(lying.car.rolling).toBe(false);
     expect(lying.overturned).not.toBeNull();
     expect(lying.car.planted).toBe(false);
@@ -351,7 +415,7 @@ describe("planted — the car fully back on four wheels", () => {
     // A car put back on the road at its last board is on four wheels by
     // construction, and anything waiting on a full reset is owed that — a
     // respawn IS the full reset.
-    const state = trip({}, 3);
+    const { state } = untilStill({});
     expect(state.car.planted).toBe(false);
     expect(state.overturned).not.toBeNull();
     let guard = 0;
