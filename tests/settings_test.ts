@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The player's options as the menu offers them: two HUD switches spread
-// over the whole panel, seven video levers on three independent picture
+// over the whole panel, eight video levers on three independent picture
 // rows, and a stored blob from an older build landing on something the page
 // can still show.
 
@@ -12,6 +12,7 @@ import {
   DETAIL_PRESETS,
   DRAW_DISTANCE_SCALE,
   DUST_RAISED,
+  EXHAUST_SEEN,
   fogRangeFor,
   freshSettings,
   detailOf,
@@ -124,6 +125,18 @@ describe("the three picture rows", () => {
     localStorage.clear();
   });
 
+  // ...which is also how a lever ADDED to the row reaches a player who has
+  // been driving since before it existed: their blob has no opinion about
+  // the new one, so the stop the rest of it lands on brings its own answer
+  // rather than leaving the renderer reading an undefined knob.
+  it("give a blob from before a lever existed that lever's answer", () => {
+    const before = { ...DEFAULT_VIDEO, ...DETAIL_PRESETS.high } as Record<string, unknown>;
+    delete before.exhaust;
+    stored({ video: before });
+    expect(loadSettings().video.exhaust).toBe(DETAIL_PRESETS.high.exhaust);
+    localStorage.clear();
+  });
+
   // The regression this whole change exists to prevent: the loader used to
   // put the six levers back on ONE preset, so a sharp-but-cheap picture was
   // a picture the player could set and never load again.
@@ -193,6 +206,46 @@ describe("who raises dust at each DETAIL stop", () => {
   it("walks the ladder monotonically", () => {
     const walk = (["low", "medium", "high"] as const).map(
       (id) => DUST_RAISED[DETAIL_PRESETS[id].dust],
+    );
+    for (let i = 1; i < walk.length; i++) {
+      const under = walk[i - 1]!;
+      const over = walk[i]!;
+      expect(over.player || !under.player).toBe(true);
+      expect(over.field || !under.field).toBe(true);
+    }
+  });
+});
+
+// The EXHAUST row asks the same WHO question the dust does, of a different
+// substance, and the two are read at the same two call sites — so what each
+// stop is worth is asserted the same way. The rain is the reason they are
+// not one row and cannot be folded into one: it settles the towed cloud and
+// leaves the pipes smoking, so their answers are free to differ.
+describe("whose pipe smokes at each DETAIL stop", () => {
+  it("takes the exhaust off every car on LOW", () => {
+    expect(EXHAUST_SEEN[DETAIL_PRESETS.low.exhaust]).toEqual({ player: false, field: false });
+  });
+
+  it("leaves it to the car being driven on MEDIUM", () => {
+    expect(EXHAUST_SEEN[DETAIL_PRESETS.medium.exhaust]).toEqual({ player: true, field: false });
+  });
+
+  it("gives the whole entry list a pipe on HIGH", () => {
+    expect(EXHAUST_SEEN[DETAIL_PRESETS.high.exhaust]).toEqual({ player: true, field: true });
+  });
+
+  // A rival steaming behind a car whose own pipe is off reads as a bug in
+  // the car, exactly as it does with the dust, so no stop may do it.
+  it("never smokes a rival the driven car is not", () => {
+    for (const audience of Object.values(EXHAUST_SEEN)) {
+      expect(audience.field && !audience.player).toBe(false);
+    }
+  });
+
+  // ...and the ladder only ever goes one way: cheaper stop, no more smoke.
+  it("walks the ladder monotonically", () => {
+    const walk = (["low", "medium", "high"] as const).map(
+      (id) => EXHAUST_SEEN[DETAIL_PRESETS[id].exhaust],
     );
     for (let i = 1; i < walk.length; i++) {
       const under = walk[i - 1]!;

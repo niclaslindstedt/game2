@@ -178,15 +178,16 @@ export type FieldCars = {
   update: (viewer: GameState, camera: THREE.PerspectiveCamera, dt: number, shown: boolean) => void;
   /** The three things the field's clouds need and only the renderer knows:
    * whether the rain has settled this stage (there is no cloud to tow off a
-   * soaked road), how thick the transient FX are allowed to be, and how much
-   * of that the field's TOWED dust may have.
+   * soaked road), and one budget per cloud — how thick the field's EXHAUST
+   * may be, and how thick its TOWED dust.
    *
-   * The last is its own number rather than a share of the second because the
-   * player owns it directly (settings.ts's DUST row, which can put the
-   * whole entry list's cloud away and leave the driven car's standing), and
+   * A budget each rather than one shared because the player owns them
+   * separately (settings.ts's EXHAUST and DUST rows, either of which can put
+   * the entry list's cloud away and leave the driven car's standing), and
    * because an exhaust is not dust: a grid steaming on the line is the
-   * effect at its best and has nothing to do with what the ground gives up. */
-  setDust: (wet: boolean, fx: number, towed: number) => void;
+   * effect at its best and has nothing to do with what the ground gives up,
+   * which is why the rain reaches one of them and not the other. */
+  setClouds: (wet: boolean, smoked: number, towed: number) => void;
   /** Hang the nearest crews' lamps on the register the clouds are lit from
    * (dust-light.ts) — a rival ahead of you in the dark is a red glow inside
    * its own dust before it is a car. `power` is how much of a beam the
@@ -265,9 +266,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let named = true;
   let watched: RivalRun | null = null;
   let wetGround = false;
-  let fx = 1;
-  /** …and the share of it the towed cloud may spend — see `setDust`. */
+  /** The budget the towed cloud may spend — see `setClouds`. */
   let towedFx = 1;
+  /** …and the one the pipes may spend, which is a separate row's answer. */
+  let smokedFx = 1;
   /** One cloud for the whole entry list — see the module note. Off until
    * somebody is entered (`showCloud`). */
   const plume = createPlume(FIELD_PLUME);
@@ -293,10 +295,11 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
    * texture bind on every pass of every frame. */
   const showCloud = (): void => {
     plume.points.visible = !wetGround && towedFx > 0 && runs.length > 0;
-    // The exhaust takes only the second half of that test. Rain settles what
-    // a wheel PICKS UP; it does nothing to what an engine puts out, and a
-    // grid steaming in the wet is the best the effect ever looks.
-    fumes.points.visible = runs.length > 0;
+    // The exhaust takes its own budget and the same entry-list test, and
+    // NOT the wet one. Rain settles what a wheel PICKS UP; it does nothing
+    // to what an engine puts out, and a grid steaming in the wet is the best
+    // the effect ever looks.
+    fumes.points.visible = smokedFx > 0 && runs.length > 0;
   };
 
   const drop = ({ visual, tag }: FieldCar): void => {
@@ -429,7 +432,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       // shorter reach (`FUME_RANGE`), and the same `pipeWork` the player's
       // own pipe is read with — so a rival sitting on its limiter at the
       // lights smokes for the same reason and by the same rule.
-      if (shown && fx > 0) {
+      if (shown && smokedFx > 0) {
         for (let i = 0; i < near.length && i < FUME_CARS; i++) {
           const crew = near[i];
           if (!crew || crew.range > FUME_RANGE) break;
@@ -438,7 +441,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           const state = crew.run.state;
           const car = state.car;
           body.fumeClock += dt;
-          const pipe = pipeWork(car.rev, car.u, state.phase, fx, FIELD_FUMES);
+          const pipe = pipeWork(car.rev, car.u, state.phase, smokedFx, FIELD_FUMES);
           const bursts = car.airborne ? 0 : pipeBursts(body.fumeClock, pipe.every);
           if (bursts === 0) continue;
           body.fumeClock -= bursts * pipe.every;
@@ -460,9 +463,9 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         }
       }
     },
-    setDust: (wet, budget, towed) => {
+    setClouds: (wet, smoked, towed) => {
       wetGround = wet;
-      fx = budget;
+      smokedFx = smoked;
       towedFx = towed;
       showCloud();
     },

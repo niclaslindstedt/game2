@@ -1769,6 +1769,10 @@ everybody, the tremble and the exhaust follow for nothing: the rivals'
 bodies already read it (`car-mesh.ts`), and the field smokes out of a second
 shared cloud on the same terms as its dust (`field-cars.ts` over
 `fumes.ts`), thinned by `FIELD_FUMES` and capped to the nearest few crews.
+Whose pipe smokes at all is the player's, on the EXHAUST lever of the DETAIL
+row (`EXHAUST_SEEN` in `settings.ts`): a grid steaming on the line is what
+the effect is FOR, so it survives to the second stop of the ladder on the
+car being driven and only a LOW picture puts it away entirely.
 The revs a rival is sat on are the revs its clutch drops on, so the smoke
 and the shake at the lights are a true advertisement of who is about to
 light their tyres up.
