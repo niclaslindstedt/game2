@@ -405,18 +405,21 @@ export const CLASSIC_BODY: CarBodySpec = {
  * width is — a proportion along the car is the photo's, a proportion up
  * or across it is real. Against the front axle at z = 1.19 and the rear
  * at z = −1.21:
- * - the nose cap 0.76 m ahead of the front axle and the bumper's face a
- *   hand past it, the cowl 0.35 m behind it, the roof's front edge 0.82 m
- *   behind it;
+ * - the nose cap (the lamps' face and the bonnet's lip) 0.66 m ahead of
+ *   the front axle, the bumper's face 0.07 m past it and the air dam's lip
+ *   0.09 m; the cowl 0.41 m behind the axle, the roof's front edge 0.82 m;
  * - the front door 0.96 m long from 0.44 m behind the front axle, the
  *   B-pillar plumb at −0.25, the rear door's shut line 0.32 m ahead of the
  *   rear axle, and the side glass running 0.15 m past that axle;
  * - the roof's rear edge 0.24 m ahead of the rear axle, the backlight's
  *   foot 0.17 m behind it, the tail 0.82 m behind it with the bumper's face
  *   a hand past that;
- * - the bonnet climbing 0.14 m from its leading edge to the cowl, most of
- *   it in the half nearest the screen, the door tops at 0.93 m, the boot
- *   0.1 m higher than them, the roof at 1.37 m;
+ * - the bonnet's lip at 0.74 m, the bonnet climbing to 0.94 m at the cowl
+ *   with its last 0.4 m rounding down to that lip, the door tops at 0.93 m,
+ *   the boot 0.1 m higher than them, the roof at 1.37 m;
+ * - the headlamp a 0.1 m band centred 0.64 m up, wrapping 0.19 m round the
+ *   corner onto the fender, amber at its trailing end; the bumper from
+ *   0.40 to 0.53 m; the air dam body colour, down to 0.2 m;
  * - a tyre 0.32 m in radius under a rim two thirds of it, on five broad
  *   blades — the one white wheel in the catalog.
  *
@@ -427,18 +430,24 @@ export const CLASSIC_BODY: CarBodySpec = {
  * the tail paint carrying the roof's black down the posts and across the
  * quarters so the car reads as a white nose pushing a black tail. */
 export const SEDAN_BODY: CarBodySpec = {
-  // The deck FALLS from the cowl to the nose in four steps, and dips again
-  // through the cabin: the door tops sit a hand under the cowl and the boot
-  // stands a hand over them, which is the three-box silhouette in three
-  // numbers. The nose is the lowest thing on the car and stops where it
-  // does because the engine plants a roadside stone as a SOLID by measuring
-  // it against the lowest bonnet in the catalog (tests/car_geometry_test.ts).
+  // The deck FALLS from the cowl to the nose, a little more with each
+  // station, and the door tops behind the cowl sit a finger under it while
+  // the boot stands a hand over them: the three-box silhouette in three
+  // numbers. THE NOSE IS NOT WHERE THE PHOTOGRAPH HAS IT, and deliberately:
+  // the real lip rounds down to 0.74 m, and this one stops at 0.835 m,
+  // because the engine plants a roadside stone as a SOLID by measuring it
+  // against the lowest bonnet in the catalog (SOLID_PROP_HEIGHT, held by
+  // tests/car_geometry_test.ts), and that bar is a world constant every
+  // stage is built against. The last 0.4 m of the bonnet is therefore
+  // flat at that height instead of rounding down; everything under it is
+  // measured.
   profile: [
-    { z: 1.95, topY: 0.85, half: 0.72 },
-    { z: 1.9, topY: 0.86, half: 0.77 },
-    { z: 1.46, topY: 0.905, half: 0.82 },
-    { z: 1.1, topY: 0.955, half: 0.84 },
-    { z: 0.84, topY: 0.985, half: 0.845 },
+    { z: 1.855, topY: 0.835, half: 0.74 },
+    { z: 1.7, topY: 0.835, half: 0.79 },
+    { z: 1.46, topY: 0.84, half: 0.82 },
+    { z: 1.225, topY: 0.873, half: 0.84 },
+    { z: 0.99, topY: 0.906, half: 0.845 },
+    { z: 0.8, topY: 0.94, half: 0.845 },
     { z: 0.7, topY: 0.93, half: 0.845 },
     { z: 0.0, topY: 0.93, half: 0.845 },
     { z: -0.9, topY: 0.94, half: 0.845 },
@@ -473,7 +482,7 @@ export const SEDAN_BODY: CarBodySpec = {
   wheelSpokeWidth: 0.27,
   arches: { radius: 0.4 },
   cabin: {
-    cowlZ: 0.84,
+    cowlZ: 0.8,
     roofFrontZ: 0.37,
     roofRearZ: -0.97,
     baseRearZ: -1.375,
@@ -511,7 +520,7 @@ export const SEDAN_BODY: CarBodySpec = {
   spoiler: { kind: "lip", z: -1.97, y: 1.03, span: 1.3, color: 0x15171b },
   // Two red flashes down the bonnet's outer edges, from the lamps to the
   // cowl — inside the lid, so they leave with it.
-  stripes: [{ offsets: [-0.44, 0.44], width: 0.2, zFrom: 1.84, zTo: 0.9, color: 0xd8262c }],
+  stripes: [{ offsets: [-0.44, 0.44], width: 0.2, zFrom: 1.76, zTo: 0.9, color: 0xd8262c }],
   // Three shut lines: the front door's leading edge just behind the front
   // arch, the B-pillar's line, and the rear door's edge ahead of the rear
   // arch — the rear door is 0.68 m of the flank, the front one 0.96.
@@ -528,7 +537,7 @@ export const SEDAN_BODY: CarBodySpec = {
     // The silver rubbing strip, wheel to wheel at knee height — hardware,
     // so it stays on whatever the car is painted.
     {
-      zFrom: 1.9,
+      zFrom: 1.62,
       zTo: -1.95,
       yFrom: 0.6,
       yTo: 0.625,
@@ -558,12 +567,14 @@ export const SEDAN_BODY: CarBodySpec = {
   mudflaps: { color: 0xd8262c },
   front: {
     // The face: a slim dark slot between two wide rectangular lamps, all
-    // three on one line under the bonnet's edge; the bumper below is body
-    // colour and deep, with the black air dam under it.
+    // three on one line a hand under the bonnet's lip, the lamps carrying
+    // on round the corners; the bumper below is body colour, and so is the
+    // air dam under it — the whole nose is white, and nothing dark hangs
+    // under it to make it read bigger than it is.
     grille: {
       width: 0.6,
-      height: 0.1,
-      y: 0.79,
+      height: 0.08,
+      y: 0.66,
       depth: 0.04,
       surround: 0.012,
       surroundColor: 0x15171b,
@@ -574,26 +585,27 @@ export const SEDAN_BODY: CarBodySpec = {
     lights: {
       kind: "rect",
       x: 0.5,
-      y: 0.745,
+      y: 0.64,
       size: 0.18,
-      height: 0.075,
+      height: 0.052,
       bezel: 0.012,
       bezelColor: 0x2a2e34,
       depth: 0.035,
       cells: 2,
+      wrap: 0.19,
+      wrapColor: 0xe89b23,
     },
-    indicators: { y: 0.5, x: 0.6, width: 0.12, height: 0.05 },
     // Shallow: the bar stands a hand past the lamps, not a foot — the nose
     // of this car is the lamps and the bonnet's edge, with the bumper flush
     // under them.
-    bumper: { y: 0.45, height: 0.14, depth: 0.05, wrap: 0.3, color: 0xf3f1eb },
-    splitter: { y: 0.305, height: 0.13, depth: 0.2, span: 1.42, color: 0x15171b },
-    hood: { half: 0.6, zFrom: 1.88, zTo: 0.86 },
+    bumper: { y: 0.465, height: 0.125, depth: 0.09, wrap: 0.3, color: 0xf3f1eb },
+    splitter: { y: 0.305, height: 0.19, depth: 0.22, span: 1.46, color: 0xf3f1eb },
+    hood: { half: 0.6, zFrom: 1.8, zTo: 0.82 },
     // Four pods: a big pair standing up off the bonnet's corners, and a
     // smaller pair ahead of the grille at lamp height.
     lampPods: [
-      { y: 0.9, z: 1.94, radius: 0.11, offsets: [-0.62, 0.62] },
-      { y: 0.72, z: 1.99, radius: 0.085, offsets: [-0.4, 0.4] },
+      { y: 0.85, z: 1.85, radius: 0.095, offsets: [-0.6, 0.6] },
+      { y: 0.64, z: 1.9, radius: 0.08, offsets: [-0.38, 0.38] },
     ],
   },
   rear: {
