@@ -760,14 +760,15 @@ not a mistake anymore; it is exploration:
   expected size, so a hectare of forest carries exactly as many trunks as
   it did — what changes is that they arrive in knots with light between
   them instead of one per ten-metre cell.
-- **What counts as an obstacle** — `SOLID_PROP_HEIGHT` (0.5 m) is the
-  bar, set as high up the hood as the catalog allows: the bonnets sit
-  about 0.87 m over the ground, and anything standing higher than the bar
-  meets the body and is placed as a solid. Stone shorter than the bar is
+- **What counts as an obstacle** — `SOLID_PROP_HEIGHT` (0.43 m) is the
+  bar, set as high up the hood as the catalog allows: the lowest nose in
+  the catalog rounds down to a 0.74 m lip and the other bonnets sit near
+  0.85 m, and anything standing higher than the bar meets the body and is
+  placed as a solid. Stone shorter than the bar is
   litter the renderer scatters for itself and the wheels ride straight
   over, and it is the only stone the renderer is allowed to plant. Of what
   IS placed, the shortest are still the wheels' business: a solid whose top
-  stands under `TUNING.collision.rideOver` (0.6 m) over the car's own
+  stands under `TUNING.collision.rideOver` (0.52 m) over the car's own
   ground is under the bumper's lower lip, and the car drives OVER it the
   way it drives over an anti-cut block (`clipSolids`) — speed, a lurch, a
   thump, the stone shoved out of its bed and away, never a fold. Only what

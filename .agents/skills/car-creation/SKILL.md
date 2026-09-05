@@ -102,14 +102,17 @@ fill it is a nose a hand too long on the overlay. Only the bumper's
 The other forced numbers, all from the same test: the arch radius is the
 tyre plus the springs' whole travel (`TUNING.suspension.heaveMax`), which
 is bigger than any real arch — accept it; and **the first profile station
-cannot stand under 0.835 m**, because the engine plants a roadside stone
-as a solid against the lowest bonnet in the catalog (`SOLID_PROP_HEIGHT`
-in `engine/mapgen/solids.ts`, `collision.rideOver`) and that bar is a
-world constant every stage is built against. A nose that rounds down to
-a lower lip is drawn flat at the bar instead; say so in the spec's
-comment and to the user, because it is the one miss the overlay will
-keep showing. Lowering the bar is a generator change (`make analyze`,
-`make previews`), not a car change.
+is tied to the world's solid-stone bar**: the engine plants a roadside
+stone as a solid against the lowest bonnet in the catalog
+(`SOLID_PROP_HEIGHT` in `engine/mapgen/solids.ts`, with
+`collision.rideOver` a little over it), and `tests/car_geometry_test.ts`
+holds the bar inside the lowest nose's upper half. Today that nose is the
+four-wheel-drive's 0.74 m lip and the bar sits at 0.43 m; a nose lower
+than about 0.72 m needs the bar lowered again, which is a GENERATOR
+change in its own PR — more stones become solids on every stage — with
+`make analyze` and `make sim` before and after, `make previews`, and the
+suites over solids, collision, the arena and the farms. Never draw a
+nose flat at the bar to dodge that; the overlay keeps showing it.
 
 ## 4. Write the spec — and expect to extend the vocabulary
 
