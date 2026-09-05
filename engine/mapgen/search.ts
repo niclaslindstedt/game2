@@ -377,13 +377,30 @@ export function startZoneDistance(p: Cursor): number {
   return Math.hypot(p.x, p.z - spine);
 }
 
+/** The start the search measures R24 against IN HEIGHT: the line's own
+ * height (the apron behind it is extrapolated flat at it) and the corridor
+ * shelf the road owns, the same pair `createPointField` holds for R23. */
+export type StartGround = { y: number; shelfEnd: number };
+
 /** R24 — does this candidate point come back INTO the start? Only road that
  * has already gone somewhere is asked: the opening straight and the corner
  * off it are the route LEAVING, which is not a return. A CIRCUIT never asks:
  * closing onto its own start line is the whole shape of it (R22), and the
- * road it closes with lies along the apron rather than across it. */
-export function entersStart(p: Cursor, clear: number): boolean {
-  return p.arc >= R.startZone.fromArc && startZoneDistance(p) < clear;
+ * road it closes with lies along the apron rather than across it.
+ *
+ * Asked in height as well as on the map where the search knows both
+ * (`start`): the apron is road like any other arm, and a stretch passing it
+ * at R23's plain clearance but a dozen metres above it leaves the country
+ * between the two nothing to be but a face (`armSeparation`). The point
+ * field cannot see this one — the apron is behind the first committed point
+ * and outside every bucket — so the same clause is asked here. */
+export function entersStart(p: Cursor, clear: number, start?: StartGround): boolean {
+  if (p.arc < R.startZone.fromArc) return false;
+  let need = clear;
+  if (start && p.y !== undefined) {
+    need = Math.max(need, armSeparation(start.shelfEnd, p.y - start.y));
+  }
+  return startZoneDistance(p) < need;
 }
 
 /** Walk a candidate segment from `from`, at the coarse validation spacing. */

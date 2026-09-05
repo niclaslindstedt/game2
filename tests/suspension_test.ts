@@ -296,6 +296,34 @@ describe("the ground as a solid", () => {
     expect(car.y).toBeGreaterThan(10);
   });
 
+  it("a steep bank is climbed at pace and refused at a crawl", () => {
+    // A 1.5 grade — 56°, well past climbLimit and short of wallSlope. At
+    // 30 m/s the momentum carries the car up it: the nose is not folded
+    // and the car ends up well above the foot. At walking pace the same
+    // face is a wall: the car stops against its foot.
+    const bank = (from: number) => (x: number) =>
+      Math.min(30, Math.max(0, (x - (from + 60)) * 1.5));
+    const fast = freshState();
+    const foot = intoTheWild(fast, bank) + 60;
+    fast.car.u = 30;
+    for (let i = 0; i < TUNING.physicsHz * 3; i++) step(fast, drive({ throttle: 1 }));
+    expect(fast.car.damage.zones[0]).toBe(0);
+    expect(fast.car.x).toBeGreaterThan(foot + 8);
+    expect(fast.car.y).toBeGreaterThan(8);
+
+    // The same face a few metres ahead of a car rolling at walking pace
+    // with no throttle: it never carries the speed the face asks for.
+    const slow = freshState();
+    const near = (from: number) => (x: number) => Math.min(30, Math.max(0, (x - (from + 6)) * 1.5));
+    const foot2 = intoTheWild(slow, near) + 6;
+    slow.car.u = 5;
+    for (let i = 0; i < TUNING.physicsHz * 3; i++) step(slow, drive());
+    // Stopped against the foot, or rolled back off it — never up it.
+    expect(slow.car.x).toBeLessThan(foot2 + 3);
+    expect(slow.car.y).toBeLessThan(4);
+    expect(slow.car.u).toBeLessThan(1);
+  });
+
   it("a cliff met at an angle deflects the car along it instead of stopping it", () => {
     const state = freshState();
     const car = state.car;

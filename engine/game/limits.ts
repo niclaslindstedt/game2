@@ -89,6 +89,31 @@ export function askedSlide(spec: CarSpec, provoked: number): number {
   return wheel + Math.max(0, cap - wheel) * clamp(provoked, 0, 1);
 }
 
+/** THE STEEPEST GROUND THE WHEELS CARRY THE CAR ONTO at a speed, m per m.
+ * `collision.climbLimit` from a crawl, `collision.wallSlope` once the car
+ * arrives at `collision.climbSpeed.to`, and the grade between rises with
+ * the speed between: momentum is what takes a car up a bank, and a face
+ * steeper than this at the speed the car meets it with is a wall to it
+ * (`collideSlope`). Read by the seat, the face check and the contact
+ * alike, so the ground a car is standing on is never a ground the contact
+ * model is also refusing. Independent of the car: a heavier car carries
+ * the same grade at the same speed, and pays for it in the fold. */
+export function climbGrade(speed: number): number {
+  const C = T.collision;
+  const t = clamp((speed - C.climbSpeed.from) / (C.climbSpeed.to - C.climbSpeed.from), 0, 1);
+  return C.climbLimit + (C.wallSlope - C.climbLimit) * t;
+}
+
+/** ...and the same line read the other way: the speed a face of `grade`
+ * has to be met with to be carried up, m/s. `climbSpeed.from` for anything
+ * a crawl takes, `climbSpeed.to` at `wallSlope` — and a face at or past
+ * the wall is refused at any speed, which is the contact's own clause. */
+export function climbSpeed(grade: number): number {
+  const C = T.collision;
+  const t = clamp((grade - C.climbLimit) / (C.wallSlope - C.climbLimit), 0, 1);
+  return C.climbSpeed.from + (C.climbSpeed.to - C.climbSpeed.from) * t;
+}
+
 /** THE SPEED FLOOR under all of it, m/s of ground speed: under this the car
  * does not slide at all and the wheel is the only thing steering it. A move
  * lowers it — the corners that need one are the slow ones — but never

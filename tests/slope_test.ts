@@ -59,6 +59,7 @@ function crossRoad(
   state.car.x = at.x + Math.cos(at.heading) * out;
   state.car.z = at.z - Math.sin(at.heading) * out;
   state.car.heading = at.heading - Math.PI / 2;
+  state.car.y = state.terrain.groundAt(state.car.x, state.car.z);
   state.car.u = speed;
   state.car.w = 0;
   state.progressIndex = 60;
@@ -66,18 +67,31 @@ function crossRoad(
   // up while the road turned down under it, the wheels reaching after the
   // ground. `flew` is the wheels leaving it altogether — and a car in the
   // air has no weight on its tyres at all.
+  //
+  // All three read over the CROSSING — the verge, the mat and the verge
+  // beyond — and not over the field the car is put down in. The car is
+  // created on the mat and set down on a cut bench rising toward the
+  // country, with its tail half a metre up the bank: that is a car
+  // propped on a face for a step, whose body then sets off down the bank
+  // from rest while the wheels do not, and the loft of THAT was the
+  // biggest number in the whole run, on every road alike.
+  const across = width / 2 + 4;
   let flew = false;
   let lightest = 1;
   let lift = 0;
   for (let i = 0; i < Math.round(2 / TUNING.dt); i++) {
     step(state, { ...NEUTRAL_INPUT, throttle: 0 });
-    lift = Math.max(lift, state.car.loft);
-    if (state.car.airborne) {
+    const car = state.car;
+    const lat = (car.x - at.x) * Math.cos(at.heading) - (car.z - at.z) * Math.sin(at.heading);
+    // A flight is the crossing's wherever it comes down: a car thrown off
+    // the far verge leaves the ground a few metres past it.
+    if (car.airborne) {
       flew = true;
       lightest = 0;
-    } else {
-      lightest = Math.min(lightest, tyreLoad(state.car));
     }
+    if (Math.abs(lat) > across) continue;
+    lift = Math.max(lift, car.loft);
+    if (!car.airborne) lightest = Math.min(lightest, tyreLoad(car));
   }
   return { flew, lightest, lift, state };
 }
@@ -132,9 +146,15 @@ describe("the road as a shape, taken from the side", () => {
     // the verge handed the physics a step between its two ground readers —
     // that step lofted every crossing by the same 9 cm whatever the road was
     // made of or how fast it was taken, and the assertion passed on the
-    // artifact rather than on the chamfer.
-    expect(crossRoad(10, 20, sealed).lift).toBeGreaterThan(TUNING.air.loft);
-    expect(crossRoad(10, 20).lift).toBeLessThan(TUNING.air.loft);
+    // artifact rather than on the chamfer. (And for as long as the loft was
+    // read over the whole run rather than the crossing, it passed on the
+    // car being set down on the bank beside the road — see `crossRoad`.)
+    // Past the middle twenties the gravel edge's lift stops growing — the
+    // body rides the shoulder's whole shape — while the sealed edge's keeps
+    // climbing until, at 126 km/h, it throws the car off the far side
+    // altogether, where the gravel road still holds it.
+    expect(crossRoad(10, 35, sealed).flew).toBe(true);
+    expect(crossRoad(10, 35).flew).toBe(false);
   });
 
   it("but driving ALONG a level road costs the tires nothing at all", () => {

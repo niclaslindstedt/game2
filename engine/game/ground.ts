@@ -18,6 +18,7 @@ import { clamp } from "../lib/math.ts";
 import { collideSlope } from "./collision.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
+import { climbGrade } from "./limits.ts";
 import type { CarState, GameEvent, RunStats } from "./state.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { Surface } from "../mapgen/index.ts";
@@ -90,11 +91,17 @@ export type GroundContext = GroundUnder & {
 
 export type Seat = { centre: number; seat: number; foot: number };
 
+/** The grade the wheels carry THIS car onto right now — off its ground
+ * speed, the momentum a bank is taken with (`climbGrade`). */
+function climbNow(car: CarState): number {
+  return climbGrade(Math.hypot(car.u, car.w));
+}
+
 /** The four wheel positions' ground, read at the car's heading: the plane
  * they ask the body to sit on (`seat`, see `seatOn`) and their mean
  * (`foot`). A wheel only ever PUSHES: one whose ground has fallen further
  * below the middle than any hill the car could be standing on would put
- * it (`climbLimit` over its distance) plus the wheels' reach (`air.loft`)
+ * it (`climb` over its distance) plus the wheels' reach (`air.loft`)
  * is hanging in the air and says nothing about where the body is, so it
  * counts at the end of its reach — the nose going over an edge leaves the
  * body riding the rear axle, not diving after the fronts. Measured from
@@ -105,6 +112,7 @@ function corners(
   car: CarState,
   centre: number,
   ground: (x: number, z: number) => number,
+  climb: number,
 ): { seat: number; foot: number } {
   const hl = T.collision.halfLength;
   const hw = T.collision.halfWidth;
@@ -122,7 +130,7 @@ function corners(
       const x = car.x + sinH * lz + cosH * lx;
       const z = car.z + cosH * lz - sinH * lx;
       const under = ground(x, z);
-      const reach = Math.hypot(lz, lx) * T.collision.climbLimit;
+      const reach = Math.hypot(lz, lx) * climb;
       // A corner against a WALL — ground rising harder than the wheels
       // could climb — is not standing on it either, so it counts at the top
       // of its reach in the foot as it does in the seat, and the wall's own
@@ -154,12 +162,13 @@ function corners(
  * already holding. Flat ground gives back the centre height exactly, which
  * is why this is safe to run everywhere off the road.
  *
- * A corner over ground that rises harder than `collision.climbLimit` is not
- * standing on it, it is up against a WALL — and a wall pushes a car back, it
- * does not hold its nose in the air. So the rise a corner may claim is capped
- * at the grade the wheels could have climbed to get there, which is the same
- * line the ground-as-a-solid check draws; past it the contact model has the
- * car, not this.
+ * A corner over ground that rises harder than the wheels carry the car at
+ * its speed (`climbGrade` — `collision.climbLimit` from a crawl, up to
+ * `wallSlope` at pace) is not standing on it, it is up against a WALL — and
+ * a wall pushes a car back, it does not hold its nose in the air. So the
+ * rise a corner may claim is capped at the grade the wheels could have
+ * climbed to get there, which is the same line the ground-as-a-solid check
+ * draws; past it the contact model has the car, not this.
  *
  * Exported because anything that PUTS a car on open ground — the beaching at
  * the end of a drowning, in step.ts — owes it the same seat the driving model
@@ -172,7 +181,7 @@ export function seatOn(
   centre: number,
   ground: (x: number, z: number) => number,
 ): number {
-  return corners(car, centre, ground).seat;
+  return corners(car, centre, ground, climbNow(car)).seat;
 }
 
 /** The mean ground under the four wheels, at the car's heading — what the
@@ -180,7 +189,7 @@ export function seatOn(
  * arrived from the air, so the first grounded step has a foot to measure
  * the wheels' speed from. */
 export function footOn(car: CarState, ground: (x: number, z: number) => number): number {
-  return corners(car, ground(car.x, car.z), ground).foot;
+  return corners(car, ground(car.x, car.z), ground, climbNow(car)).foot;
 }
 
 /** PUT A CAR DOWN: the foot the first grounded step measures its wheels'
@@ -209,7 +218,7 @@ export function plant(car: CarState, ground: (x: number, z: number) => number): 
  * road — which is the ONE thing a car leaving a road must never do. */
 export function readSeat(car: CarState, under: GroundUnder): Seat {
   const centre = under.groundAt(car.x, car.z);
-  const { seat, foot } = corners(car, centre, under.groundAt);
+  const { seat, foot } = corners(car, centre, under.groundAt, climbNow(car));
   return { centre, seat: centre + (seat - centre) * under.country, foot };
 }
 
@@ -258,9 +267,10 @@ function hitFace(
  * over the ground the car just covered IS the face's grade, read exactly
  * where the bumper is rather than over the wide baseline the grade term
  * uses — a cliff is metres wide, and a smoothed slope would let the car
- * drive up the side of a mountain at pace. Past `collision.climbLimit` the
- * contact model refuses part of the step and the seat is read again where
- * the car was left. And whatever the ground did, the WHEELS did it: the
+ * drive up the side of a mountain at pace. Past the grade the car's own
+ * speed carries it onto (`climbGrade`) the contact model refuses part of
+ * the step and the seat is read again where the car was left. And
+ * whatever the ground did, the WHEELS did it: the
  * speed they actually moved at this step (`wheelSpeed`), against the speed
  * the smoothed grade predicted, is written to `car.wheelVy` for the springs
  * — see `groundJolt`.
@@ -277,7 +287,7 @@ export function standOn(
   stats: RunStats,
 ): void {
   const run = Math.hypot(car.x - fromX, car.z - fromZ);
-  if (run > 1e-4 && at.seat - car.y > run * T.collision.climbLimit) {
+  if (run > 1e-4 && at.seat - car.y > run * climbNow(car)) {
     hitFace(spec, car, under.groundAt, (at.seat - car.y) / run, fromX, fromZ, events, stats);
     // The contact gave part of the step back, so the car is no longer
     // standing where the seat above was measured.

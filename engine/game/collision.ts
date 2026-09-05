@@ -18,6 +18,7 @@ import { clamp } from "../lib/math.ts";
 import { KERB_MARKER, type KerbMarker, type WildObstacle } from "../mapgen/index.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
+import { climbSpeed } from "./limits.ts";
 import {
   type CrushFace,
   crushCap,
@@ -868,8 +869,7 @@ export function collideSlope(
   stats: RunStats,
 ): number {
   const C = T.collision;
-  const bite = clamp((faceSlope - C.climbLimit) / (C.wallSlope - C.climbLimit), 0, 1);
-  if (bite <= 0) return 0;
+  if (faceSlope <= C.climbLimit) return 0;
   const g = Math.hypot(gradient.x, gradient.z);
   if (g < 1e-6) return 0;
   // The uphill direction in the car frame: `ez` along the nose, `ex` along
@@ -881,6 +881,16 @@ export function collideSlope(
   const ex = (gradient.x * cosH - gradient.z * sinH) / g;
   const closing = car.u * ez + car.w * ex;
   if (closing <= 0) return 0;
+  // What the face refuses is the SHORTFALL: a face this steep has to be
+  // met at `climbSpeed` to be carried up, and the car closing at that or
+  // more is refused nothing — the bank is a hill to it, and the grade term
+  // drains the speed on the way up. Closing slower it is refused by the
+  // share of that speed it is short, all of it at a standstill; and at
+  // `wallSlope` the face is a wall at any speed. Refused every step the
+  // face is met, which is what brings a crawl into a bank to a stop in a
+  // few steps rather than letting the throttle inch it up the face.
+  const bite = faceSlope >= C.wallSlope ? 1 : clamp(1 - closing / climbSpeed(faceSlope), 0, 1);
+  if (bite <= 0) return 0;
 
   // Only the refused fraction is taken out of the velocity, and it comes
   // back at the restitution a contact THAT hard has — a nudge off a bank is

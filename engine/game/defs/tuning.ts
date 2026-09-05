@@ -2616,6 +2616,31 @@ export const TUNING = {
      * the two is what makes a steep bank a berm to lean on rather than a
      * wall: at 55° the face takes about a third of the closing speed. */
     wallSlope: 2.6,
+    /** SPEED CARRIES A CAR UP A FACE. Between `climbLimit` and `wallSlope`
+     * the ground is neither a hill nor a wall but a bank momentum takes:
+     * at `from` m/s the wheels carry the car onto nothing steeper than
+     * `climbLimit`, at `to` onto anything short of `wallSlope`, and the
+     * grade they will take rises with the speed between (`climbGrade`,
+     * limits.ts). A face steeper than the car's speed allows refuses it by
+     * the shortfall — a crawl into a 55° bank is a stop, the same bank at
+     * 80 km/h is climbed, with the grade term draining the speed on the
+     * way up until it is not. Past `wallSlope` the face is a wall at any
+     * speed, and it folds the nose. Whatever the ground is made of: rock
+     * and soil are the same face to a wheel, and what tells them apart is
+     * how steep the country stands them (R31 keeps built soil under
+     * `climbLimit`; rock stands where it stands). */
+    climbSpeed: { from: 6, to: 22 },
+    /** ...and what the SPRINGS take of a face met at pace, m/s of wheel
+     * speed change in one step, before the belly meets the ground. The
+     * foot of a bank arriving under a car at speed throws the wheels
+     * upward at the bank's grade times the car's speed — a 45° bank at
+     * 90 km/h is twenty-five — and the springs lift the body with them up
+     * to this; past it the underside has hit the face and folds by the
+     * rest (car.ts, charged through `landingDamage`). Sized so a bank
+     * taken at the speed that carries the car up it (`climbSpeed`) is
+     * free of damage across the whole climbable band, and the same bank
+     * at twice that speed is not. */
+    faceLand: 25,
     /** Closing speed into a FACE under which the contact is a scrape and
      * not a fold, m/s — its own floor, above the solids' `scuffSpeed`,
      * because a bank is met with the wheels first and a trunk with the
