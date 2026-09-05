@@ -2,7 +2,19 @@
 title: Mirroring across x flips BOTH the normal and the winding — the symptom is a face that is silently not there, on the flank the sheet never shows
 date: 2026-08-27
 scope: pwa/src/game/car/
-concepts: [mirroring, normals, winding, patches, greenhouse, interior, cockpit, culling, door-numbers, contact-sheet]
+concepts:
+  [
+    mirroring,
+    normals,
+    winding,
+    patches,
+    greenhouse,
+    interior,
+    cockpit,
+    culling,
+    door-numbers,
+    contact-sheet,
+  ]
 ---
 
 Three facts that each cost a session, because the failure raises nothing: a
