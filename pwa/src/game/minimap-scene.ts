@@ -41,8 +41,10 @@ import {
 /** The map's own square user space; everything below is in these units. */
 export const VIEW = 100;
 
-/** How much country the box holds, edge to edge, m — one of two framings,
- * because the map has two jobs and only one of them is on every run.
+/** How much country the box holds, edge to edge, m, at the middle of the
+ * speedo's range — one of two framings, because the map has two jobs and
+ * only one of them is on every run. It is the figure the zoom below works
+ * from rather than one the map often sits at.
  *
  * Alone on the road it is drawing the ROAD, and three hundred metres is
  * about ten seconds of it at rally pace: far enough that the next corner is
@@ -59,18 +61,30 @@ export const SPAN = {
   race: 460,
 } as const;
 
-/** ...and how far it OPENS UP with speed. What the map owes the driver is a
- * fixed amount of WARNING, and warning is time rather than distance: at
- * fifty metres a second the same three hundred metres is half the notice it
- * was at twenty-five. So the window is stretched with the speedo — gently,
- * because the picture also has to stay the same picture. `at` is the speed
- * the stretch is full at (km/h) and `lift` is how much wider it is by then. */
-const ZOOM = { at: 180, lift: 0.5 };
+/** ...and how the window BREATHES with the speedo, which is the one thing on
+ * the map a driver reads without looking at it.
+ *
+ * What the map owes the driver is a fixed amount of WARNING, and warning is
+ * time rather than distance: at fifty metres a second the same three hundred
+ * metres is half the notice it was at twenty-five. So the window is tied to
+ * the speedo at BOTH ends rather than merely stretched at the top. Picking a
+ * way through a farmyard at walking pace, it closes right in and the map is a
+ * plan of the ground under the car; at rally pace it opens to most of half a
+ * kilometre and the map is the road about to arrive. The zoom is then
+ * something the eye reads as SPEED — the country visibly pulling back as the
+ * car winds up, and settling as it slows for a corner.
+ *
+ * `at` is the speed the opening is full at (km/h), `close` the fraction of
+ * the base span shown at a standstill, and `far` the fraction shown at `at`
+ * and above. Past `at` the picture settles: a map that kept opening would end
+ * the stage showing a squiggle again. */
+const ZOOM = { at: 180, close: 0.55, far: 1.6 };
 
-/** The window this frame: the run's own framing, opened by the speedo. */
+/** The window this frame: the run's own framing, closed or opened by the
+ * speedo. */
 export function spanFor(base: number, speedKmh: number): number {
   const t = Math.min(1, Math.max(0, speedKmh / ZOOM.at));
-  return base * (1 + ZOOM.lift * t);
+  return base * (ZOOM.close + (ZOOM.far - ZOOM.close) * t);
 }
 
 /** The span the geometry is actually CUT at, m — the shown span rounded up

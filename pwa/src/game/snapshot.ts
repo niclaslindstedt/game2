@@ -312,6 +312,10 @@ export function takeSnapshot(
     shiftUp: shiftLightOn(state),
     shift: shiftWindow(state),
     airborne: state.car.airborne,
+    // The trip counter's own metres — the engine's ground accumulator, which
+    // is reset with the stage, so the lower window on the dial reads this
+    // level and nothing before it.
+    tripM: state.stats.distance,
     minimap: buildMinimap(state, field),
     // The standing answer to what is left of the car, under the map
     // (car-health.ts). Folded here rather than in the HUD so the
@@ -322,7 +326,6 @@ export function takeSnapshot(
     // over a sinking car is the same wrong note as the way-home prompt.
     pacenotes: state.phase === "racing" && !state.drowning ? upcomingPacenotes(state, pace) : [],
     seed: state.seed,
-    carName: state.spec.name,
     training: state.track.arena !== null,
     // The co-driver's way-home call is a DRIVING aid, so a car the water
     // has already taken is neither off-road nor lost as far as the HUD is

@@ -5,8 +5,12 @@
 // Tested rather than looked at because the claims are about the whole of a
 // car's life, and a screenshot only ever shows one moment of one car's:
 //
-//   * it steps every hundred metres and never between — the tick is what
-//     makes it read as a counter, and a drum that crept would be a number;
+//   * the FIGURES step every hundred metres and never between — the tick is
+//     what makes it read as a counter, and a window that crept through the
+//     values in between would be a number;
+//   * the TURN under them does not: the tenths drum is geared to the wheels
+//     and is always part way round, which is the movement a driver glancing
+//     down actually sees;
 //   * the drums CARRY the way a mechanical counter carries: the tens sit
 //     still through nine kilometres and go over with the units on the last
 //     tenth of the tenth, which is the whole look of the thing;
@@ -27,7 +31,8 @@ import { describe, expect, it } from "vitest";
 import { NEUTRAL_INPUT, compileTrack, createGame, skipIntro, step, type CarInput } from "@engine";
 
 import {
-  ODO_DIGITS,
+  TOTAL_DIGITS,
+  TRIP_DIGITS,
   TRIP_TICK_M,
   createTrip,
   loadOdometer,
@@ -35,17 +40,17 @@ import {
   saveOdometer,
 } from "../pwa/src/game/odometer.ts";
 
-/** The window, read as a person reads it: the digit each drum is showing,
- * the tenths drum last. */
-function face(metres: number): string {
-  return odometerDrums(metres)
+/** A window, read as a person reads it: the digit each drum is showing, the
+ * tenths drum last. The trip's four drums unless a width is named. */
+function face(metres: number, digits: number = TRIP_DIGITS): string {
+  return odometerDrums(metres, digits)
     .map((drum) => drum.digit)
     .join("");
 }
 
 /** A drum by its place: 0 is the tenths, 1 the kilometres, 2 the tens. */
-function drum(metres: number, place: number) {
-  const drums = odometerDrums(metres);
+function drum(metres: number, place: number, digits: number = TRIP_DIGITS) {
+  const drums = odometerDrums(metres, digits);
   return drums[drums.length - 1 - place];
 }
 
@@ -66,20 +71,32 @@ function fakeStorage(): Record<string, string> {
 
 describe("the odometer's drums", () => {
   it("shows a car that has never been driven as a full window of zeros", () => {
-    expect(face(0)).toBe("0".repeat(ODO_DIGITS));
-    expect(face(-1)).toBe("0".repeat(ODO_DIGITS));
-    expect(face(Number.NaN)).toBe("0".repeat(ODO_DIGITS));
+    expect(face(0)).toBe("0".repeat(TRIP_DIGITS));
+    expect(face(-1)).toBe("0".repeat(TRIP_DIGITS));
+    expect(face(Number.NaN)).toBe("0".repeat(TRIP_DIGITS));
     for (const d of odometerDrums(0)) expect(d.roll).toBe(0);
   });
 
   it("counts kilometres and tenths, with the leading zeros a counter is read with", () => {
-    expect(face(1_000)).toBe("00010");
-    expect(face(42_300)).toBe("00423");
-    expect(face(9_999_900)).toBe("99999");
+    expect(face(1_000)).toBe("0010");
+    expect(face(42_300)).toBe("0423");
+    expect(face(999_900)).toBe("9999");
   });
 
   it("rolls over at the top of the window, the way the real thing does", () => {
-    expect(face(10_000_000)).toBe("00000");
+    expect(face(1_000_000)).toBe("0000");
+  });
+
+  it("gives the lifetime window five kilometre drums, so it reads to 99999.9", () => {
+    // The trip is this stage and the total is the car's life, so the two
+    // windows are the same instrument at two lengths — and the longer one
+    // has to hold a number no player will ever reach.
+    expect(face(1_000, TOTAL_DIGITS)).toBe("000010");
+    expect(face(99_999_900, TOTAL_DIGITS)).toBe("999999");
+    expect(face(100_000_000, TOTAL_DIGITS)).toBe("000000");
+    // The same distance reads the same on both, as far as the shorter one
+    // goes: nothing about a window's width changes what a drum is showing.
+    expect(face(42_300, TOTAL_DIGITS).endsWith(face(42_300))).toBe(true);
   });
 
   it("steps the tenths drum a whole figure every hundred metres, and never between", () => {
@@ -87,14 +104,30 @@ describe("the odometer's drums", () => {
       const at = tick * TRIP_TICK_M;
       expect(drum(at, 0).digit).toBe(tick);
       // Anywhere inside the hundred metres reads exactly as its start did:
-      // the counter TICKS, and a drum that answered every metre would be a
-      // number pretending to be a drum.
+      // the counter TICKS, and a window that answered every metre would be a
+      // number pretending to be a counter.
       expect(face(at + 99)).toBe(face(at));
-      // …and the tenths drum itself never sits part way round: it is the
-      // one at the end of the train, so nothing drags it over.
-      expect(drum(at + 50, 0).roll).toBe(0);
     }
     expect(face(1_000)).not.toBe(face(900));
+  });
+
+  it("turns the tenths drum continuously, because nothing below it holds it back", () => {
+    // The figure it SHOWS steps; the drum it is printed on is geared to the
+    // wheels and is always part way round. That movement is the whole of why
+    // a counter reads as a counter at a glance rather than as a number.
+    expect(drum(0, 0).roll).toBe(0);
+    expect(drum(25, 0).roll).toBeCloseTo(0.25, 6);
+    expect(drum(50, 0).roll).toBeCloseTo(0.5, 6);
+    expect(drum(99, 0).roll).toBeCloseTo(0.99, 6);
+    // …and it starts each figure again from the top of the window, so the
+    // strip the HUD slides never has to travel backwards.
+    expect(drum(100, 0)).toEqual({ digit: 1, roll: 0 });
+    let last = -1;
+    for (let m = 0; m < 100; m += 5) {
+      const roll = drum(m, 0).roll;
+      expect(roll).toBeGreaterThan(last);
+      last = roll;
+    }
   });
 
   it("drags the kilometre drum over through the last hundred metres", () => {
@@ -125,8 +158,8 @@ describe("the odometer's drums", () => {
   });
 
   it("carries every drum together at the top of a decade", () => {
-    expect(face(99_900)).toBe("00999");
-    expect(face(100_000)).toBe("01000");
+    expect(face(99_900)).toBe("0999");
+    expect(face(100_000)).toBe("1000");
     for (const d of odometerDrums(100_000)) expect(d.roll).toBe(0);
   });
 });

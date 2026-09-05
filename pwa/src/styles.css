@@ -109,11 +109,17 @@ body {
 /* ── HUD chrome ─────────────────────────────────────────────────────────── */
 
 .hud {
-  /* The minimap's edge length — the top bar reserves it, the dock spends it. */
-  --hud-map: clamp(4.8rem, 16vmin, 7.5rem);
-  /* Room the stage chip takes under the map — the pacenote strip clears it
-     in portrait, where everything is stacked down the same column. */
-  --hud-stage: 2.3rem;
+  /* The minimap's edge length — the top bar reserves it, the dock spends it,
+     and the condition schematic under it takes the same width, so the whole
+     right-hand column is this one number. The map is the instrument that is
+     read while the road is moving, and at seven rem a schematic of three
+     hundred metres of country was a squiggle: it is sized to be legible at a
+     glance rather than to be unobtrusive. */
+  --hud-map: clamp(6.24rem, 20.8vmin, 9.75rem);
+  /* Room the stage chip takes under the map — ONE line, since the chip names
+     the stage and nothing else. The pacenote strip clears it in portrait,
+     where everything is stacked down the same column. */
+  --hud-stage: 1.4rem;
   /* ...and the room the condition schematic takes under both of them, at
      the foot of that column, stated as its two halves so neither can drift
      out of step with the other. The MARKS reserve two rows whatever is on
@@ -174,9 +180,9 @@ body {
   opacity: 0.9;
 }
 
-/* Which stage, and in what: under the minimap, right-aligned to hang off
-   its edge. It is read once at the start of a run, so it sits where a
-   label is looked FOR rather than in the corner the clock has earned. */
+/* Which stage: under the minimap, right-aligned to hang off its edge. It is
+   read once at the start of a run, so it sits where a label is looked FOR
+   rather than in the corner the clock has earned. */
 .hud-stage {
   position: absolute;
   top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + 0.3rem);
@@ -1495,12 +1501,13 @@ body {
 /* The tach dial. Drawn in a 100×100 user space by hud.tsx; everything here
    is stroke weight and color, so the geometry stays in one place. */
 .hud-tach {
-  /* Sized for the COUNTER in the middle of it rather than for the needle:
-     six drums across a third of the dial only read at a glance if the dial
-     itself is big, and a rev counter is the one instrument on the panel
-     that can afford the room. */
-  width: clamp(10.9rem, 36vmin, 18rem);
-  height: clamp(10.9rem, 36vmin, 18rem);
+  /* Sized for the COUNTERS on its face rather than for the needle: seven
+     drums across a third of the dial only read at a glance if the dial has
+     some size to it. It is still the instrument that gives room back most
+     cheaply — the revs are read off the needle's ANGLE, which survives being
+     drawn smaller, where a map or a counter loses its figures. */
+  width: clamp(8.72rem, 28.8vmin, 14.4rem);
+  height: clamp(8.72rem, 28.8vmin, 14.4rem);
   overflow: visible;
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
 }
@@ -1540,10 +1547,11 @@ body {
   dominant-baseline: central;
 }
 
-/* THE ODOMETER in the middle of the dial: a dark window, six drums, white
-   figures. It is the one readout on the HUD that is not about this run — the
-   whole life of the car in front of the player, which is why it is small,
-   quiet, and never moves faster than a tenth of a drum at a time. */
+/* THE COUNTERS on the face of the dial: a dark window, white figures, and
+   nothing to tell the trip from the total but how wide it is. They are the
+   quietest readouts on the HUD — one is this stage, the other the whole life
+   of the car in front of the player — and neither ever moves faster than a
+   drum at a time. */
 /* The window is a viewport of its own, and its edges are what the drums
    turn behind: the digit leaving the top and the one arriving from
    underneath are both half outside it, and the window is what cuts them.
@@ -1559,13 +1567,6 @@ body {
   /* The bright frame a counter is set into on a real cluster — it is what
      makes the window read as a hole in the dial rather than as a label
      printed on it. */
-  stroke: rgb(255 255 255 / 85%);
-  stroke-width: 0.7;
-}
-
-/* The tenths drum, painted the other way round (hud-dial.tsx). */
-.hud-odo-tenths {
-  fill: rgb(238 242 250 / 95%);
   stroke: rgb(255 255 255 / 85%);
   stroke-width: 0.7;
 }
@@ -1590,10 +1591,6 @@ body {
   dominant-baseline: central;
 }
 
-.hud-odo-digit-tenths {
-  fill: #10203a;
-}
-
 /* The line between one drum and the next — the gap a real counter has
    between its wheels, which is what stops seven figures reading as a number
    printed on a plate. */
@@ -1603,11 +1600,14 @@ body {
   stroke-width: 0.3;
 }
 
-/* Each hundred metres the strip slides a tenth of the window; the step that
-   carries a drum over replaces the element instead, so this only ever runs
-   forwards (hud-dial.tsx). */
+/* The strip slides as the drum turns; the step that carries a drum over
+   replaces the element instead, so this only ever runs forwards
+   (hud-dial.tsx). LINEAR, and a shade longer than the gap between two HUD
+   snapshots: the tenths drum turns continuously with the wheels, so what is
+   being tweened is a constant speed rather than a step, and easing it would
+   make a drum that climbs steadily look like one that stutters. */
 .hud-odo-drum {
-  transition: transform 140ms ease-out;
+  transition: transform 100ms linear;
 }
 
 .hud-tach-needle {
@@ -2063,7 +2063,12 @@ body {
   height: var(--hud-health);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* Flush RIGHT, not centred in the column. The map above it fills the
+     column's whole width and the stage label is right-aligned under it, so a
+     schematic narrower than the map centred in the same box reads as a third
+     thing floating loose beside the other two. Against the same edge, the
+     stack has one straight side. */
+  align-items: flex-end;
   gap: 0.15rem;
   transition: opacity 400ms linear;
 }
@@ -2111,15 +2116,15 @@ body {
 
 /* The marks for the machinery. An empty row on a sound car — the row
    filling up is the news, so it is never captioned and never explained. */
-/* The block of marks: up to two rows, each one CENTRED on the car above it
-   rather than packed from one end, which is what makes 3 over 2 read as a
-   block instead of as a row with a gap in it. */
+/* The block of marks: up to two rows, hung from the same right edge as the
+   drawing above them, so 3 over 2 reads as a block with one straight side
+   rather than as a row with a gap in it. */
 .hud-health-systems {
   width: 100%;
   height: var(--hud-health-marks);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-start;
   gap: 0.12rem;
 }
@@ -2127,7 +2132,7 @@ body {
 .hud-health-marks {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 0.18rem;
 }
 
@@ -2184,12 +2189,6 @@ body {
     font-size: 0.8rem;
   }
 
-  /* One line instead of two under the map, so the pacenote strip climbs
-     back up with it. */
-  .hud {
-    --hud-stage: 1.2rem;
-  }
-
   .hud-clock-total {
     font-size: 1.5rem;
   }
@@ -2207,6 +2206,23 @@ body {
 
 /* ── Portrait ─────────────────────────────────────────────────────────── */
 @media (orientation: portrait) {
+  /* THE MAP GIVES WAY TO THE MIRROR. Portrait hangs the rear-view glass
+     across the middle of the top of the screen — 52vw wide, centred, so its
+     right edge is at 76vw (mirror.ts) — and the map's column comes in from
+     the right edge to meet it. There is no clear span between them the way
+     landscape has, so the map is sized in the width it actually has rather
+     than in `vmin` with a `rem` floor: on a phone that floor is the LARGER
+     term, and a map sized by it grows straight through the glass.
+
+     18vw leaves a finger's width of gap at every phone size and is still
+     wider than the landscape rule's own `vmin` term asks for down there. The
+     cap stops a tablet, where the mirror is comfortably clear, from being
+     given a map bigger than the one landscape gets; the floor only ever
+     binds under about 300px, where nothing fits anyway. */
+  .hud {
+    --hud-map: clamp(3.4rem, 18vw, 9.75rem);
+  }
+
   /* Below the minimap, always: a percentage top clears the dock on a tall
      phone and slides under it on a short one. */
   .hud-pace {
@@ -6256,9 +6272,15 @@ a.menu-version:focus-visible {
     opacity: 1;
   }
 
-  /* The counter still counts; the drums just step instead of rolling. */
+  /* The counters still count; the drums just step instead of rolling. The
+     transform is parked rather than merely un-tweened, because the tenths
+     drum turns continuously — dropping the transition alone would leave it
+     jumping a twelfth of a turn every snapshot, which is more motion than
+     the smooth version, not less. Overridden with `!important` because the
+     turn is an inline style (hud-dial.tsx). */
   .hud-odo-drum {
     transition: none;
+    transform: none !important;
   }
 }
 
