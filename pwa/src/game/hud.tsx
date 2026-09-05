@@ -555,6 +555,7 @@ export function Hud({
       data-off={snap.offRoad ? "1" : undefined}
       data-air={snap.airborne && snap.phase === "racing" ? "1" : undefined}
       data-glass={glass === "off" ? undefined : "1"}
+      data-seated={seated ? "1" : undefined}
     >
       {/* THE MIRROR IS ITS OWN SWITCH: press the glass to put the rear view
           out, press the grey it leaves behind to bring it back. Only where
