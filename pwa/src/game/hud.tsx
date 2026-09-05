@@ -340,6 +340,12 @@ type HudProps = {
    * hang over the middle of every frame flown out to be photographed instead
    * of ageing out with the clock. */
   flying: boolean;
+  /** Whether the player is sat IN the car. The cluster stands down from the
+   * seat: the revs, the gear and the speed are on the dashboard in front of
+   * the driver (car/cockpit-dials.ts), read off the same numbers, and a
+   * second set printed over the windscreen is the game telling the player
+   * twice. */
+  seated: boolean;
   onPause: () => void;
   onCamera: () => void;
   /** Put the car back on the road at the last split board it took (R28) —
@@ -444,6 +450,7 @@ export function Hud({
   live,
   paused,
   flying,
+  seated,
   flashes,
   split,
   input,
@@ -548,6 +555,7 @@ export function Hud({
       data-off={snap.offRoad ? "1" : undefined}
       data-air={snap.airborne && snap.phase === "racing" ? "1" : undefined}
       data-glass={glass === "off" ? undefined : "1"}
+      data-seated={seated ? "1" : undefined}
     >
       {/* THE MIRROR IS ITS OWN SWITCH: press the glass to put the rear view
           out, press the grey it leaves behind to bring it back. Only where
@@ -749,8 +757,12 @@ export function Hud({
           because anything that can appear mid-run would push an instrument
           off the right edge. The top bar is the same bargain: the stage, the
           clock and the camera. News about the car is SAID instead, in the
-          column across the foot of the screen (`damageCall`). */}
-      {show.cluster && (
+          column across the foot of the screen (`damageCall`).
+          FROM THE SEAT it comes down: the dashboard has the same three
+          readings on it, in front of the driver, and the glass is the whole
+          picture. A spectator's dials stay — the crew being watched is seen
+          from outside. */}
+      {show.cluster && (!seated || spectate) && (
         <div className="hud-speed">
           <div className="hud-cluster">
             {show.tachometer && <Tachometer rpm={snap.rpm} tripM={snap.tripM} odoM={odoM} />}

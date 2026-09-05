@@ -66,7 +66,7 @@ import {
   type MapLayerInfo,
   type MapLayers,
 } from "./map-layers.ts";
-import { createMirror, MIRROR_ASPECT } from "./mirror.ts";
+import { createMirror, fallbackMount } from "./mirror.ts";
 import { createMirrorPace, refillGap, type MirrorTier } from "./mirror-pace.ts";
 import { createNameTag, GHOST_LOOK, TAG_LAYER, type NameTag } from "./name-tag.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
@@ -323,8 +323,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   /** ...and whether it is drawn as the HUD's strip over the frame, as
    * opposed to into the cockpit's own mirror inside it. */
   let mirrorStrip = false;
-  /** The driver's eye height on the car now on the road, body-local m. The
-   * mirror hangs off it so a tall body's glass clears a tall body's roof. */
+  /** The driver's eye height on the car now on the road, body-local m —
+   * where the mirror's lens is hung from on a car with no mirror of its own
+   * to stand it on (mirror.ts `fallbackMount`). */
   let driverEyeY = 1.21;
   // Every pool the car's contact with the world spawns into, built and hung
   // in the scene together (car-fx.ts). The renderer keeps the decisions —
@@ -732,7 +733,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // The rear view goes IN the cockpit's mirror rather than only into the
       // HUD's strip, so the mirror pass's texture is handed to the body that
       // hangs the glass.
-      rearView: { texture: mirror.texture, aspect: MIRROR_ASPECT },
+      rearView: { texture: mirror.texture },
     });
     scene.add(car.group, car.debris);
     car.setLooseWheels(LOOSE_WHEELS[quality.effects]);
@@ -1524,7 +1525,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (mirrorFill) mirrorAge = 0;
     // Aimed on the frames it is filled on, and only those: pointing a camera
     // nothing is about to render through is arithmetic for nobody.
-    if (mirrorFill) mirror.aim(state, driverEyeY, environment.fogFar() * mirrorRange);
+    if (mirrorFill) {
+      const mount = car?.mirrorMount ?? fallbackMount(driverEyeY);
+      mirror.aim(state, mount, environment.fogFar() * mirrorRange);
+    }
     // The road and its scenery are built for the WHOLE stage; the frame
     // only pays for the part the air is still clear enough to show. Last,
     // because the map view sets its fog from the framing it just solved —
@@ -1583,24 +1587,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // pointing at nothing. Nothing else in the scene is camera-bound.
         const arrow = wayHomeArrow.group.visible;
         wayHomeArrow.group.visible = false;
-        // The mirror's lens sits between the player's own seats, so the one
-        // other thing the pass has to lose is the cabin around it — left in,
-        // the glass shows the back of the bulkhead and the mirror stops
-        // answering the only question it is there to answer. That now means
-        // BOTH cabins, the cockpit included: a mirror drawing the fascia it
-        // is bolted to would also be sampling its own texture. The RIVALS
-        // keep theirs — those are cars behind you, seen from outside, and
-        // their crews showing through their screens is the point.
-        const cabin = car?.cabin ?? null;
-        const cockpit = car?.cockpit ?? null;
-        const cockpitUp = cockpit?.visible ?? false;
-        if (cabin) cabin.visible = false;
-        if (cockpit) cockpit.visible = false;
         // The air comes in with the far plane, so the world leaves the
         // mirror's frustum where it had already gone solid — see withHaze.
-        environment.withHaze(mirrorRange, () => mirror.fill(renderer, scene, w, h));
-        if (cabin) cabin.visible = true;
-        if (cockpit) cockpit.visible = cockpitUp;
+        // The car settles which of its cabins the lens looks back through
+        // (`mirrorPass`), whatever view the player is in.
+        const fill = (): void =>
+          environment.withHaze(mirrorRange, () => mirror.fill(renderer, scene, w, h));
+        if (car) car.mirrorPass(fill);
+        else fill();
         wayHomeArrow.group.visible = arrow;
       }
       renderer.setScissorTest(false);

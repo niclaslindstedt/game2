@@ -480,6 +480,16 @@ body {
   --split-top: calc(var(--glass-bottom) + 1.4vh);
 }
 
+/* FROM THE SEAT the strip is not drawn: the rear view is in the mirror
+   hanging in the windscreen, which is geometry and projects lower in the
+   frame than the strip's box — about the top quarter, and higher still when
+   a landing throws the head down. So the stack drops under THAT instead, or
+   the co-driver's call is printed across the one piece of glass the driver
+   reads the road behind off. */
+.hud[data-glass][data-seated] {
+  --split-top: 30vh;
+}
+
 /* The glass as something to PRESS (hud-mirror.tsx). Showing the road, this is
    an empty box on the same three numbers and nothing is drawn in it, because
    the mirror is what is drawn in it. The box never moves between the two

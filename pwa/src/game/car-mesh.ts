@@ -33,7 +33,9 @@ import {
   LENS_MATERIAL,
   type FilmDetail,
   type InteriorDetail,
+  type MirrorMount,
 } from "./car-body.ts";
+import { instrumentReadings } from "./car-instruments.ts";
 import type { CrewLook } from "./car-crew.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, glassSpray, groundTravel, wheelSpray } from "./car-dirt.ts";
@@ -133,17 +135,19 @@ const WHEEL_STEER_RATE = 14;
 
 export type CarVisual = {
   group: THREE.Group;
-  /** The first-person cabin, when this car was built with one. Handed out
-   * for the same reason the cabin is: the rear-view mirror looks back from
-   * between the seats, and a fascia in the way answers nothing. Null on
-   * every car but the player's. */
-  cockpit: THREE.Object3D | null;
-  /** The cabin and the glass over it. Handed out for one reason: the
-   * rear-view mirror's lens sits between this car's own seats, so the mirror
-   * pass has to take both out first or it draws the back of the bulkhead
-   * through the inside of the rear screen instead of the road
-   * (renderer.ts). */
-  cabin: THREE.Object3D;
+  /** Where the rear-view mirror's glass hangs in this car and what it is
+   * aimed at, car-local — the mirror pass stands its lens there (mirror.ts).
+   * Null on a car built without a cockpit, which has no mirror to stand in. */
+  mirrorMount: MirrorMount | null;
+  /** Draw the rear view. The lens stands on the cockpit's own mirror, so
+   * what it sees is decided by which cabin is up around it — and that is
+   * settled HERE for the length of the pass rather than by whatever view the
+   * player is in: the first-person cabin is put up (its seats, its hoop, and
+   * the backlight through the lining), the field's interior is taken down,
+   * and the mirror's own pane comes out so the pass never samples the
+   * texture it is drawing into. A car with no cockpit takes its whole
+   * cabin down instead, the way a lens between the seats has to. */
+  mirrorPass: (draw: () => void) => void;
   /** THE WATER ON THE WINDSCREEN (car/screen-rain.ts). Handed out because
    * it is the one thing on a car the renderer has to DRAW itself: the drops
    * refract the frame, so they go on after the frame is made, in a pass of
@@ -200,7 +204,7 @@ export type CarOptions = {
   /** Build the car as a ghost: see-through, and dimmer where it glows. */
   ghost?: boolean;
   /** The rear view, for the pane in the cockpit mirror's glass. */
-  rearView?: { texture: THREE.Texture; aspect: number };
+  rearView?: { texture: THREE.Texture };
   /** Also build the first-person cabin (car/cockpit.ts) — the player's car
    * only. Fifteen fascias nobody will ever sit behind is fifteen fascias. */
   cockpit?: boolean;
@@ -472,6 +476,40 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     if (body.cockpit?.mirrorGlass) body.cockpit.mirrorGlass.visible = on;
   };
 
+  const mirrorPass = (draw: () => void): void => {
+    const cockpit = body.cockpit;
+    if (!cockpit) {
+      const was = body.cabin.visible;
+      body.cabin.visible = false;
+      draw();
+      body.cabin.visible = was;
+      return;
+    }
+    const wasUp = cockpit.group.visible;
+    const wasTrim = body.cabinTrim?.visible ?? false;
+    const wasGlass = cockpit.mirrorGlass?.visible ?? false;
+    // The lens is looking THROUGH the backlight from inside, whichever seat
+    // the player is in — so the glass is thinned to what a pane looked
+    // through is (`GLASS_INSIDE`) for the pass, or from an outside view the
+    // mirror shows a window washed with the baked sky meant for a lens ten
+    // metres back.
+    const wasOpacity = glassMat?.opacity ?? 0;
+    if (glassMat && !inside) glassMat.opacity = wasOpacity * GLASS_INSIDE;
+    cockpit.group.visible = true;
+    if (body.cabinTrim) body.cabinTrim.visible = false;
+    if (cockpit.mirrorGlass) cockpit.mirrorGlass.visible = false;
+    draw();
+    if (glassMat) glassMat.opacity = wasOpacity;
+    cockpit.group.visible = wasUp;
+    if (body.cabinTrim) body.cabinTrim.visible = wasTrim;
+    if (cockpit.mirrorGlass) cockpit.mirrorGlass.visible = wasGlass;
+  };
+
+  /** The lamp states the cockpit's panels are written from, kept between
+   * frames so a reading that has not moved costs the panel nothing. */
+  const tellTales = new Uint8Array(6);
+  const shiftLamp = new Uint8Array(1);
+
   const update = (state: GameState, dt: number, eye?: THREE.Vector3): void => {
     const car = state.car;
     // THE LOFT: over a brow the body keeps going up while the wheels reach
@@ -537,13 +575,23 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     if (body.steering) body.steering.rotation.z = steeringTurn(lock);
     // The cockpit's own wheel goes further than the one behind the glass —
     // it is read at arm's length rather than through a tinted pane — and its
-    // two needles are the only instruments in the game that are GEOMETRY.
-    // Both are driven off the same numbers the HUD reads, so a glance down
-    // at the dials and a glance up at the readout never disagree.
+    // instruments are the only ones in the game that are GEOMETRY. They are
+    // driven off the same numbers the HUD reads (car-instruments.ts), so
+    // the dials the seat shows and the cluster every other view shows never
+    // disagree about a reading.
     if (body.cockpit && inside) {
+      const dash = body.cockpit.instruments;
+      const read = instrumentReadings(state, lit);
       body.cockpit.steering.rotation.z = cockpitWheelTurn(lock);
-      body.cockpit.tacho.rotation.z = dialAngle(car.rev);
-      body.cockpit.speedo.rotation.z = dialAngle(Math.abs(car.u) / DIAL_TOP_SPEED);
+      dash.tacho.rotation.z = dialAngle(read.rev);
+      dash.speedo.rotation.z = dialAngle(read.speed / DIAL_TOP_SPEED);
+      dash.gear.set(read.gear);
+      dash.total.set(read.total);
+      dash.interval.set(read.interval);
+      shiftLamp[0] = read.shift ? 1 : 0;
+      dash.shift.set(shiftLamp);
+      for (let i = 0; i < tellTales.length; i++) tellTales[i] = read.lamps[i] ? 1 : 0;
+      dash.tellTales.set(tellTales);
     }
 
     dirt.update(state, dt);
@@ -594,8 +642,8 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
 
   return {
     group,
-    cabin: body.cabin,
-    cockpit: body.cockpit?.group ?? null,
+    mirrorMount: body.cockpit?.mirror ?? null,
+    mirrorPass,
     screenRain: body.screenRain,
     debris: damage.debris,
     update,

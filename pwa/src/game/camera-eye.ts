@@ -285,14 +285,18 @@ export type EyeRig = {
  * from it: at the same speed, this is the picture that reads fastest. */
 export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
   cockpit: {
-    // The widest frame on the ladder, and it is spent on CABIN rather than
-    // on road: from the seat, a screen pillar either side of the windscreen
-    // and a mirror hanging in the top of it are what say the player is
-    // inside something. A narrower lens crops all of that away and leaves a
-    // hood cam with a dashboard at the bottom.
-    fov: 58,
-    fovPerSpeed: 0.34,
-    fovMax: 74,
+    // The NARROWEST frame on the ladder, and it is what makes the seat a
+    // seat. A wide lens from in here spends its extra degrees on headliner,
+    // door card and the far pillar, and the windscreen shrinks to a
+    // letterbox in the middle of a room; a long one fills the frame with the
+    // screen, its pillars just inside the edges and the mirror hanging into
+    // the top of it, which is where a driver's own eye has them — and it
+    // puts the glass, and whatever the stage has thrown on it, right up
+    // against the lens. Still wide enough at pace that a pillar stays in
+    // each corner: crop those away and it is a hood cam with a dashboard.
+    fov: 50,
+    fovPerSpeed: 0.28,
+    fovMax: 64,
     fovRate: 5,
     yawRate: 14,
     // The heaviest head on the ladder, and the one that moves least against
