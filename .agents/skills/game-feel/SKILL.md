@@ -74,6 +74,12 @@ What each contributes:
 - **The turn swing** (`swing` in camera.ts): the camera slides toward the
   outside of the corner with yaw rate, so turning reads in the framing before
   the drift angle develops.
+- **The outside camera as an INSTRUMENT** (`CAMERA_FEEL` in
+  `camera-feel.ts`): grip read as height (the lens hovers up as the car goes
+  light, to the top of its travel when it flies), the car's attitude as a
+  degree or two of tilt (back up a climb, banked into a turn or a slide), and
+  pace past the gears as a tremor. Every number is a knob there; the rigs
+  only scale them (`hover`, `shake`).
 - **Speed numbers only feel fast against world scale.** Higher `gearTop`s need
   longer straights, larger soft-turn radii and a wider road
   (`STAGE_RULES`) or the game reads as twitchy instead of quick. Hard-turn

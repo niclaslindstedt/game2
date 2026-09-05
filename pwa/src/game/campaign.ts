@@ -19,6 +19,11 @@
 //   * A LOCATION opens once the one before it has been driven all the way
 //     through and the player is top of its table.
 //
+// The TIME TRIAL is held behind the second of those and not the first — the
+// whole country at once, the moment the campaign opens the country. See
+// `timeTrialOpen`; it is the one place in the game a mode is allowed to run
+// ahead of the ladder, and it only ever runs ahead INSIDE a country.
+//
 // And nothing here is ever spent: a stage can be run again as often as the
 // player likes, and the board keeps the better afternoon. That is the whole
 // shape of the thing — see the country, then go back for the wins it costs to
@@ -620,11 +625,10 @@ export function levelUnlocked(
   return levelCleared(progress, location.levels[index - 1].id);
 }
 
-/** The TIME TRIAL's gate, and it is a different one rather than a stricter
- * one: a stage opens there once it has been driven to the END, podium or
- * not. A time is something you chase on a road you have already seen the
- * finish of — and a stage the player crossed the line on in ninth is
- * exactly the road they now want the clock on. */
+/** DRIVEN TO THE END, podium or not — HEADS UP's gate, and the second half
+ * of the time trial's. A road you have seen the finish of is a road you can
+ * race the crews over again; one you have never seen is a road you should be
+ * learning in the campaign, where it counts for something. */
 export function levelCompleted(level: CampaignLevel, progress: CampaignProgress): boolean {
   return progress.finished.includes(level.id);
 }
@@ -706,6 +710,14 @@ export function stagesDriven(location: CampaignLocation, progress: CampaignProgr
   return location.levels.filter((level) => progress.points[level.id] !== undefined).length;
 }
 
+/** How many of the location's stages have a TIME on them — what the time
+ * trial counts of a country, where the campaign counts stages cleared. Now
+ * that the whole country opens at once, "how many are open" says nothing
+ * about a player and this does. */
+export function stagesTimed(location: CampaignLocation, progress: CampaignProgress): number {
+  return location.levels.filter((level) => progress.best[level.id] !== undefined).length;
+}
+
 /** Every stage of the location driven at least once — a location is not
  * finished while a stage of it has never been started, however well the ones
  * that have are going. */
@@ -727,6 +739,31 @@ export function locationUnlocked(location: CampaignLocation, progress: CampaignP
   const index = LOCATIONS.indexOf(location);
   if (index <= 0) return true;
   return locationWon(LOCATIONS[index - 1], progress);
+}
+
+/** THE TIME TRIAL'S GATE, and it is a COUNTRY rather than a stage: all six
+ * of a location's roads open together, the moment the campaign opens the
+ * location itself.
+ *
+ * It is not a way past the campaign's own lock — the country is behind the
+ * same table it always was — it is a way past the LADDER INSIDE it, which
+ * the clock has no business being held behind. A player who has earned the
+ * desert has earned all six of its roads, and making them podium their way
+ * down the rungs a second time before they may put a clock on the fourth one
+ * is asking for the campaign twice. It is the arrangement a kart game has
+ * used since the beginning — win the cup, and the next cup's four tracks
+ * appear in the time trial together — and the alternative teaches the player
+ * that the trial is where you go once you are DONE, which is the one thing a
+ * board of best times must never be.
+ *
+ * The second half is what a gate hung off the board cannot say on its own: a
+ * stage driven to the line is open here FOREVER, whatever the points do
+ * afterwards. Tearing a location's points up (`resetPoints`) shuts the
+ * country behind it in the campaign, and a road whose finish line has been
+ * seen cannot be un-seen. */
+export function timeTrialOpen(location: CampaignLocation, progress: CampaignProgress): boolean {
+  if (locationUnlocked(location, progress)) return true;
+  return location.levels.some((level) => levelCompleted(level, progress));
 }
 
 /** WHERE THE CAMPAIGN PICKS BACK UP. Forward first: the next stage of the
