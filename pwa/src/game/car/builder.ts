@@ -309,6 +309,50 @@ export function patchSpan(q: Patch): { u: number; v: number } {
   };
 }
 
+/** A sub-rectangle of a patch, in patch (u, v) — and, optionally, a
+ * SHEARED one. `lean0` and `lean1` are how far each u edge has moved by the
+ * time v reaches 1, so an edge runs from `u0` at v = 0 to `u0 + lean0` at
+ * v = 1 — a parallelogram rather than a rectangle. Against absolute v, not
+ * the rect's own v0..v1, so a strip cut from v = 0..1 and the opening cut
+ * from v0..v1 inside it share one edge line by construction.
+ *
+ * It exists for one reason: a cabin flank is a WARPED patch whose top edge
+ * is the raked roof and whose bottom edge is the longer sill, so a line of
+ * constant u leans with the rake — and a real B-pillar does not lean. */
+export type UVRect = {
+  u0: number;
+  u1: number;
+  v0: number;
+  v1: number;
+  lean0?: number;
+  lean1?: number;
+};
+
+/** Where a rect's u edge (`0` for u0, `1` for u1) sits at this v. */
+export function rectU(rect: UVRect, edge: 0 | 1, v: number): number {
+  return edge === 0 ? rect.u0 + (rect.lean0 ?? 0) * v : rect.u1 + (rect.lean1 ?? 0) * v;
+}
+
+/** The rect's corners in (u, v), wound v0 → v1 along u0, then back. */
+export function rectCorners(rect: UVRect): [number, number][] {
+  return [
+    [rectU(rect, 0, rect.v0), rect.v0],
+    [rectU(rect, 1, rect.v0), rect.v0],
+    [rectU(rect, 1, rect.v1), rect.v1],
+    [rectU(rect, 0, rect.v1), rect.v1],
+  ];
+}
+
+/** A point inside the rect by its own fractions: `s` across (u0 → u1) and
+ * `t` up (v0 → v1), with the lean applied — what anything that samples a
+ * pane on a grid has to go through, or its film lands beside a leaning
+ * edge instead of on it. */
+export function rectAt(rect: UVRect, s: number, t: number): [number, number] {
+  const v = rect.v0 + (rect.v1 - rect.v0) * t;
+  const a = rectU(rect, 0, v);
+  return [a + (rectU(rect, 1, v) - a) * s, v];
+}
+
 /** One sub-rectangle of a patch, lifted along its normal so glass sits
  * proud of the metal it is cut into.
  *
@@ -321,7 +365,7 @@ export function patchSpan(q: Patch): { u: number; v: number } {
 export function patchQuad(
   b: MeshBuilder,
   q: Patch,
-  rect: { u0: number; u1: number; v0: number; v1: number },
+  rect: UVRect,
   color: number,
   lift = 0,
   mirrored = false,
@@ -334,7 +378,7 @@ export function patchQuad(
     const q0 = patchAt(q, u, v);
     return [q0[0] + n[0] * out, q0[1] + n[1] * out, q0[2] + n[2] * out];
   };
-  const c = [p(rect.u0, rect.v0), p(rect.u1, rect.v0), p(rect.u1, rect.v1), p(rect.u0, rect.v1)];
+  const c = rectCorners(rect).map(([u, v]) => p(u, v));
   if (mirrored) b.quad(c[3], c[2], c[1], c[0], color, alpha);
   else b.quad(c[0], c[1], c[2], c[3], color, alpha);
 }
@@ -346,7 +390,7 @@ export function patchQuad(
 export function patchFade(
   b: MeshBuilder,
   q: Patch,
-  rect: { u0: number; u1: number; v0: number; v1: number },
+  rect: UVRect,
   color0: number,
   color1: number,
   alpha0: number,
@@ -361,7 +405,7 @@ export function patchFade(
     const q0 = patchAt(q, u, v);
     return [q0[0] + n[0] * out, q0[1] + n[1] * out, q0[2] + n[2] * out];
   };
-  const c = [p(rect.u0, rect.v0), p(rect.u1, rect.v0), p(rect.u1, rect.v1), p(rect.u0, rect.v1)];
+  const c = rectCorners(rect).map(([u, v]) => p(u, v));
   if (mirrored) b.quadFade(c[3], c[2], c[1], c[0], color1, color0, alpha1, alpha0);
   else b.quadFade(c[0], c[1], c[2], c[3], color0, color1, alpha0, alpha1);
 }

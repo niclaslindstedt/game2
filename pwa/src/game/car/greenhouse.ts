@@ -25,7 +25,7 @@
 // they move, and they need to know exactly where the glass is, which is
 // why this file hands the two screens out as `screenPanes`.
 
-import type { MeshBuilder, Patch, V3 } from "./builder.ts";
+import type { MeshBuilder, Patch, UVRect, V3 } from "./builder.ts";
 import { mixHex, patchAt, patchFade, patchQuad, patchSpan } from "./builder.ts";
 import { sampleProfile, sideRatios } from "./shell.ts";
 import type { CarBodySpec } from "./spec.ts";
@@ -37,6 +37,7 @@ const PILLARS = {
   sill: 0.055,
   header: 0.045,
   split: 0.5,
+  splitZ: undefined as number | undefined,
   quarterRise: 0,
   /** The backlight's share of the cabin's rear panel, across the car. A
    * SHARE and not the `c` post's metres, because what reads from behind is
@@ -109,8 +110,9 @@ export function cabinFrame(spec: CarBodySpec): CabinFrame {
   };
 }
 
-/** A sub-rectangle of a patch, in patch (u, v). */
-export type Rect = { u0: number; u1: number; v0: number; v1: number };
+/** A sub-rectangle of a patch, in patch (u, v) — sheared where a pillar
+ * has to stand plumb on a raked flank (`UVRect`). */
+export type Rect = UVRect;
 
 /** One panel of the cabin shell and the windows cut in it. The openings are
  * disjoint along u and given in order, which is what lets a panel be turned
@@ -134,13 +136,17 @@ export type CabinPanel = {
 export function panelMinus(holes: Rect[]): Rect[] {
   const out: Rect[] = [];
   let u = 0;
+  let lean = 0;
+  // Every strip's edges are the edges of the holes beside it, lean and all,
+  // so a pillar between two leaning openings leans with both of them.
   for (const hole of holes) {
-    out.push({ u0: u, u1: hole.u0, v0: 0, v1: 1 });
-    out.push({ u0: hole.u0, u1: hole.u1, v0: 0, v1: hole.v0 });
-    out.push({ u0: hole.u0, u1: hole.u1, v0: hole.v1, v1: 1 });
+    out.push({ u0: u, u1: hole.u0, v0: 0, v1: 1, lean0: lean, lean1: hole.lean0 });
+    out.push({ ...hole, v0: 0, v1: hole.v0 });
+    out.push({ ...hole, v0: hole.v1, v1: 1 });
     u = hole.u1;
+    lean = hole.lean1 ?? 0;
   }
-  out.push({ u0: u, u1: 1, v0: 0, v1: 1 });
+  out.push({ u0: u, u1: 1, v0: 0, v1: 1, lean0: lean });
   return out;
 }
 
@@ -150,10 +156,24 @@ export function panelMinus(holes: Rect[]): Rect[] {
  * glass is opaque and is the entire cabin while it is not. */
 function frameOf(outer: Rect, inner: Rect): Rect[] {
   return [
-    { u0: outer.u0, u1: outer.u1, v0: outer.v0, v1: inner.v0 },
-    { u0: outer.u0, u1: outer.u1, v0: inner.v1, v1: outer.v1 },
-    { u0: outer.u0, u1: inner.u0, v0: inner.v0, v1: inner.v1 },
-    { u0: inner.u1, u1: outer.u1, v0: inner.v0, v1: inner.v1 },
+    { ...outer, v0: outer.v0, v1: inner.v0 },
+    { ...outer, v0: inner.v1, v1: outer.v1 },
+    {
+      u0: outer.u0,
+      u1: inner.u0,
+      v0: inner.v0,
+      v1: inner.v1,
+      lean0: outer.lean0,
+      lean1: inner.lean0,
+    },
+    {
+      u0: inner.u1,
+      u1: outer.u1,
+      v0: inner.v0,
+      v1: inner.v1,
+      lean0: inner.lean1,
+      lean1: outer.lean1,
+    },
   ];
 }
 
@@ -161,6 +181,7 @@ function frameOf(outer: Rect, inner: Rect): Rect[] {
  * the pillar-to-pillar opening. */
 function glassRect(rect: Rect, seal: number, span: { u: number; v: number }): Rect {
   return {
+    ...rect,
     u0: rect.u0 + seal / span.u,
     u1: rect.u1 - seal / span.u,
     v0: rect.v0 + seal / span.v,
@@ -233,24 +254,50 @@ export function cabinPanels(spec: CarBodySpec): CabinPanel[] {
 
   // Flanks: u cowl → tail, v sill → roof. The door glass and the rear
   // quarter glass are two openings with the B-pillar of metal between.
+  //
+  // The B-pillar is the one edge on the car that may not follow the patch.
+  // The flank's sill runs cowl → tail and its roof edge runs a shorter,
+  // raked course above it, so a fixed u lands further forward at the roof
+  // than at the sill and the post leans. `splitZ` states the post in
+  // metres instead: its foot and its top are solved for the same z on
+  // their own edges, and the difference between the two is the lean the
+  // holes either side of it carry (`UVRect`).
   for (const side of [1, -1]) {
     const m = (q: V3): V3 => [q[0] * side, q[1], q[2]];
     const flank: Patch = [m(CR), m(TR), m(RR), m(FR)];
     const span = patchSpan(flank);
     const v0 = p.sill / span.v;
     const v1 = 1 - p.header / span.v;
-    const half = p.b / 2 / span.u;
+    let doorRear: { u: number; lean: number };
+    let quarterFront: { u: number; lean: number };
+    if (p.splitZ !== undefined) {
+      const sill = CR[2] - TR[2];
+      const roof = FR[2] - RR[2];
+      const foot = (CR[2] - p.splitZ) / sill;
+      const top = (FR[2] - p.splitZ) / roof;
+      // The post's width is in metres too, so it is the same width at the
+      // headliner as at the sill rather than a share of a shorter edge.
+      const halfFoot = p.b / 2 / sill;
+      const halfTop = p.b / 2 / roof;
+      doorRear = { u: foot - halfFoot, lean: top - halfTop - (foot - halfFoot) };
+      quarterFront = { u: foot + halfFoot, lean: top + halfTop - (foot + halfFoot) };
+    } else {
+      const half = p.b / 2 / span.u;
+      doorRear = { u: p.split - half, lean: 0 };
+      quarterFront = { u: p.split + half, lean: 0 };
+    }
     panels.push({
       patch: flank,
       span,
       mirrored: side < 0,
       holes: [
-        { u0: p.a / span.u, u1: p.split - half, v0, v1 },
+        { u0: p.a / span.u, u1: doorRear.u, v0, v1, lean1: doorRear.lean },
         {
-          u0: p.split + half,
+          u0: quarterFront.u,
           u1: 1 - p.c / span.u,
           v0: v0 + p.quarterRise / span.v,
           v1,
+          lean0: quarterFront.lean,
         },
       ],
     });

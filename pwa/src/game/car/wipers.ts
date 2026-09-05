@@ -43,7 +43,7 @@
 import * as THREE from "three";
 
 import { NO_DIRT } from "../car-dirt.ts";
-import { MeshBuilder, patchAt, shadeFactor, type V3 } from "./builder.ts";
+import { MeshBuilder, patchAt, rectAt, shadeFactor, type V3 } from "./builder.ts";
 import { GLASS_LIFT, screenPanes, type GlassPane, type ScreenPane } from "./greenhouse.ts";
 import { paneFrame, type PaneFrame } from "./pane-frame.ts";
 import type { CarBodySpec } from "./spec.ts";
@@ -474,8 +474,7 @@ export function buildWipers(
     if (film !== "off") {
       for (let j = 0; j <= rows; j++) {
         for (let i = 0; i <= cols; i++) {
-          const u = pane.rect.u0 + ((pane.rect.u1 - pane.rect.u0) * i) / cols;
-          const v = pane.rect.v0 + ((pane.rect.v1 - pane.rect.v0) * j) / rows;
+          const [u, v] = rectAt(pane.rect, i / cols, j / rows);
           const p = vec(patchAt(pane.patch, u, v)).addScaledVector(frame.normal, FILM_LIFT);
           position.push(p.x, p.y, p.z);
           color.push(0, 0, 0, 0);

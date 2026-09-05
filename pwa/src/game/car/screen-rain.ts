@@ -56,7 +56,7 @@
 
 import * as THREE from "three";
 
-import { patchAt, type V3 } from "./builder.ts";
+import { patchAt, rectAt, type V3 } from "./builder.ts";
 import { GLASS_LIFT, screenPanes, type ScreenPane } from "./greenhouse.ts";
 import { paneFrame } from "./pane-frame.ts";
 import type { CarBodySpec } from "./spec.ts";
@@ -636,8 +636,7 @@ function paneMesh(
     const base = position.length / 3;
     for (let j = 0; j <= grid.rows; j++) {
       for (let i = 0; i <= grid.cols; i++) {
-        const u = pane.rect.u0 + ((pane.rect.u1 - pane.rect.u0) * i) / grid.cols;
-        const v = pane.rect.v0 + ((pane.rect.v1 - pane.rect.v0) * j) / grid.rows;
+        const [u, v] = rectAt(pane.rect, i / grid.cols, j / grid.rows);
         const q: V3 = patchAt(pane.patch, u, v);
         at.set(q[0], q[1], q[2]).addScaledVector(frame.normal, RAIN_LIFT);
         position.push(at.x, at.y, at.z);

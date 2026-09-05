@@ -23,12 +23,21 @@ import * as THREE from "three";
 import { MeshBuilder, bakeShading } from "./builder.ts";
 import type { CarBodySpec, WheelStyle } from "./spec.ts";
 
-/** The rim, as fractions of the tire radius. */
-/** Outer edge of the rim flange — just inside the tire's own radius. */
-const RIM_OUTER = 0.86;
-/** Inner edge of that flange, and the radius of the barrel behind it. */
-const RIM_BARREL = 0.74;
+/** The rim, as fractions of the tire radius: the outer edge of the flange
+ * when a spec does not say (`rimShare`), and how far in from it the barrel
+ * behind the flange starts. */
+const RIM_SHARE = 0.86;
+const RIM_FLANGE = 0.12;
 const RIM_FACETS = 18;
+
+/** The flange's outer radius and the barrel's, both as fractions of the
+ * tire — one place, because the test that tells a wheel's face from its
+ * back counts what sits inside the barrel and has to draw the line where
+ * the builder does. */
+export function rimRadii(spec: CarBodySpec): { outer: number; barrel: number } {
+  const outer = spec.rimShare ?? RIM_SHARE;
+  return { outer, barrel: outer - RIM_FLANGE };
+}
 /** The tire carries more, because its outline is a circle nothing ever
  * covers up and a coarse one reads as a polygon at any speed. */
 const TIRE_FACETS = 26;
@@ -130,10 +139,12 @@ function rimFace(
   hubColor: number,
   spokes: number,
   spokeWidth: number | undefined,
+  rim: { outer: number; barrel: number },
 ): void {
   const s = { ...STYLES[style], spokes, width: spokeWidth ?? STYLES[style].width };
   const barrel = shadeHex(hubColor, 0.6);
   const x = (d: number): number => sidewall + outward * d;
+  const { outer: RIM_OUTER, barrel: RIM_BARREL } = rim;
 
   // The rubber sidewall, from the flange out to the tread. The tire itself
   // is an OPEN tube — it has to be, or its end cap seals the wheel shut and
@@ -219,6 +230,7 @@ export function buildWheel(spec: CarBodySpec, outboard: 1 | -1 = 1): THREE.Buffe
       hub,
       spokes,
       spec.wheelSpokeWidth,
+      rimRadii(spec),
     );
   }
   const rimGeo = rim.geometry();

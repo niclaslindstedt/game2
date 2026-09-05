@@ -245,6 +245,11 @@ export type CarBodySpec = {
   wheelRadius: number;
   wheelWidth: number;
   wheelStyle?: WheelStyle;
+  /** The rim's diameter as a fraction of the tyre's. Left off, the rim
+   * fills most of the wheel — the low-profile look. A period gravel wheel
+   * is a fifteen-inch rim under a tall tyre and sits near two thirds; the
+   * sidewall is most of what dates a wheel at any distance. */
+  rimShare?: number;
   /** Spokes per wheel face, overriding the style's own count. */
   wheelSpokes?: number;
   /** Spoke width as a fraction of the tire radius, overriding the style's
@@ -282,8 +287,17 @@ export type CarBodySpec = {
       /** Metal under the side windows (the door top) and over them. */
       sill?: number;
       header?: number;
-      /** B-pillar position along the cabin, 0 at the cowl, 1 at the tail. */
+      /** B-pillar position along the cabin, 0 at the cowl, 1 at the tail.
+       * A FRACTION of the flank, so the post leans with the flank's own
+       * rake — the roof edge is shorter than the sill, and a fixed share of
+       * each lands at different z. */
       split?: number;
+      /** The B-pillar's centre in METRES along the car (the sill's z),
+       * overriding `split`. Stated this way the post stands PLUMB — its top
+       * is placed straight above its foot — which is what a hatchback's
+       * door frame does, and it is stated in metres so it can be put on the
+       * same line as the `doorSeams` entry the door shuts against. */
+      splitZ?: number;
       /** Extra sill under the rear quarter window — the rally kick-up. */
       quarterRise?: number;
       /** HOW MUCH OF THE CAR'S BACK THE BACKLIGHT TAKES, 0..1 of the

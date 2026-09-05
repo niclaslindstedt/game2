@@ -24,7 +24,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildCarBody, type CarBodySpec } from "../pwa/src/game/car-body.ts";
 import { CAR_BODIES } from "../pwa/src/game/car-styles.ts";
-import { buildWheel } from "../pwa/src/game/car/wheels.ts";
+import { buildWheel, rimRadii } from "../pwa/src/game/car/wheels.ts";
 
 const bodies = Object.entries(CAR_BODIES);
 
@@ -34,8 +34,8 @@ const bodies = Object.entries(CAR_BODIES);
  * the difference this measures. */
 function dishDetail(geo: THREE.BufferGeometry, spec: CarBodySpec): { plus: number; minus: number } {
   const pos = geo.getAttribute("position");
-  // RIM_BARREL, in metres: wheels.ts states it as a fraction of the tire.
-  const barrel = spec.wheelRadius * 0.74;
+  // The barrel, in metres: wheels.ts states it as a fraction of the tire.
+  const barrel = spec.wheelRadius * rimRadii(spec).barrel;
   let plus = 0;
   let minus = 0;
   for (let i = 0; i < pos.count; i++) {
