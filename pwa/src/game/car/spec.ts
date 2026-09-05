@@ -345,6 +345,11 @@ export type CarBodySpec = {
     baseRearZ: number;
     roofY: number;
     roofHalf: number;
+    /** The roof's half-width at its REAR edge, m, where it differs from the
+     * front's — a glasshouse that narrows toward the tail, the way a
+     * fastback's does above its raked backlight. Left off, the roof is one
+     * width. */
+    roofRearHalf?: number;
     roofPaint?: "paint" | "accent";
     /** Body-colored frame left around the glass, m. The cabin is built as
      * a solid shell and the glass is cut into it, so these widths ARE the

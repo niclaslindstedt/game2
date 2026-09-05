@@ -358,6 +358,10 @@ export const CLASSIC_BODY: CarBodySpec = {
     baseRearZ: -1.82,
     roofY: 1.285,
     roofHalf: 0.61,
+    // The glasshouse narrows toward the tail: the roof's rear edge is a
+    // hand narrower each side than its front, which is what the fitted
+    // rear photograph said its corners were.
+    roofRearHalf: 0.56,
     roofPaint: "accent",
     // The three-door glasshouse: a 1.25 m door, a B-pillar standing plumb
     // at its rear edge, a quarter glass nearly as long behind it with its

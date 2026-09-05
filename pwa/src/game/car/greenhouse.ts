@@ -92,6 +92,7 @@ export type CabinFrame = {
  * re-deriving the same numbers and drifting away from them. */
 export function cabinFrame(spec: CarBodySpec): CabinFrame {
   const { cowlZ, roofFrontZ, roofRearZ, baseRearZ, roofY, roofHalf } = spec.cabin;
+  const rearHalf = spec.cabin.roofRearHalf ?? roofHalf;
   const cowl = sampleProfile(spec.profile, cowlZ);
   const tail = sampleProfile(spec.profile, baseRearZ);
   // The cabin sits just inside the body's top edge so the shoulder reads
@@ -104,8 +105,8 @@ export function cabinFrame(spec: CarBodySpec): CabinFrame {
     CR: [xc, cowl.topY, cowlZ],
     FL: [-roofHalf, roofY, roofFrontZ],
     FR: [roofHalf, roofY, roofFrontZ],
-    RL: [-roofHalf, roofY, roofRearZ],
-    RR: [roofHalf, roofY, roofRearZ],
+    RL: [-rearHalf, roofY, roofRearZ],
+    RR: [rearHalf, roofY, roofRearZ],
     TL: [-xt, tail.topY, baseRearZ],
     TR: [xt, tail.topY, baseRearZ],
   };

@@ -81,17 +81,25 @@ skill for any code change.
 4. **Pick the winner, fold it into `car-styles.ts`, re-render.** Spec-only
    iterations can pass `--skip-build` — the harness bundle only needs a
    rebuild when `car-body.ts` or the harness itself changed.
-   **A car measured off a reference is PROVED against it, not eyeballed:**
-   `--views "side elevation,front elevation,rear elevation"` renders
-   orthographic elevations with the ground off and writes
-   `previews/<out>.marks.json` — the axles, the tyres' contact corners and
-   the lamp clusters' outer edges, in sheet pixels. A scratch canvas page
-   (playwright-core, in the scratchpad) keys the sky colour out of the
-   cell and draws it over the photo at half opacity, registered by a
-   similarity transform on two marks — the hubs on a side view, the lamp
-   edges on an end view — then rules the result with the same grid the
-   photo was measured on. Offsets read in centimetres; a car scaled in
-   length but not in height shows itself in one look.
+   **A car measured off a reference is PROVED against it, not eyeballed**,
+   with the three scripts in this skill's `tools/` (run from a scratch
+   directory with the repo's `node_modules` symlinked in):
+   - `rule.mjs` crops a photo with a labelled grid, so every landmark is
+     read as a pixel coordinate.
+   - Every sheet writes `previews/<out>.marks.json` — where each cell put
+     the axles, tyre corners, roof corners, lamp edges, bumper corners and
+     wing tips. `--views "side elevation"` is an orthographic drawing with
+     the ground off: the honest match for a long-lens SIDE photo.
+   - `overlay.mjs` keys the sky out of a cell and lays it over the photo at
+     half opacity, registered on two marks (the hubs on a side view).
+   - An END photo is perspective, and an elevation laid over it puts the
+     roof and the wing in the wrong place however right the car is.
+     `fit-camera.mjs` fits the photo's camera (height, distance) from its
+     landmarks by least squares and writes a `--variants` file whose one
+     view IS that camera; render it, overlay it on the lamp edges, and the
+     residuals it prints are the proportions in photo pixels.
+     Rule the overlay with the same grid and read the offsets in centimetres;
+     a car scaled in length but not in height shows itself in one look.
 5. **Close in the real game**: `make build` then `make screenshots` (the
    `playtest` skill). The contact sheet judges the sculpture; only the game
    proves the read at speed, in fog, against the world palette.

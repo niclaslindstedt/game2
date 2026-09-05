@@ -189,7 +189,10 @@ async function main(): Promise<void> {
   } = (await res.json()) as {
     cars: Variant[];
     mode?: "crew" | "wrecks";
-    views?: string[];
+    /** Columns by name — or a whole View, for a camera nothing on the
+     * sheet has: a REFERENCE photograph's own viewpoint, fitted from its
+     * landmarks, so the render can be laid over it (car-design skill). */
+    views?: (string | View)[];
     cell?: { w: number; h: number };
   };
   const CELL_W = cell?.w ?? DEFAULT_CELL.w;
@@ -387,10 +390,40 @@ function landmarks(spec: CarBodySpec): [string, [number, number, number]][] {
     );
   }
   const tail = spec.rear?.lights;
+  const tailZ = spec.profile[spec.profile.length - 1].z;
   if (tail) {
     const edge = tail.x + tail.width / 2 + (tail.bezel ?? 0.016);
-    const z = spec.profile[spec.profile.length - 1].z;
-    out.push(["tailL", [-edge, tail.y, z]], ["tailR", [edge, tail.y, z]]);
+    out.push(["tailL", [-edge, tail.y, tailZ]], ["tailR", [edge, tail.y, tailZ]]);
+  }
+  const { roofHalf, roofY, roofRearZ, roofFrontZ } = spec.cabin;
+  const rearHalf = spec.cabin.roofRearHalf ?? roofHalf;
+  out.push(["roofRL", [-rearHalf, roofY, roofRearZ]], ["roofRR", [rearHalf, roofY, roofRearZ]]);
+  out.push(["roofFL", [-roofHalf, roofY, roofFrontZ]], ["roofFR", [roofHalf, roofY, roofFrontZ]]);
+  const rb = spec.rear?.bumper;
+  if (rb) {
+    const half = rb.width ? rb.width / 2 : spec.profile[spec.profile.length - 1].half;
+    const z = tailZ - (rb.depth - 0.02);
+    out.push(
+      ["bumperRL", [-half, rb.y - rb.height / 2, z]],
+      ["bumperRR", [half, rb.y - rb.height / 2, z]],
+    );
+  }
+  const fb = spec.front?.bumper;
+  if (fb) {
+    const half = fb.width ? fb.width / 2 : spec.profile[0].half;
+    const z = spec.profile[0].z + (fb.depth - 0.02);
+    out.push(
+      ["bumperFL", [-half, fb.y - fb.height / 2, z]],
+      ["bumperFR", [half, fb.y - fb.height / 2, z]],
+    );
+  }
+  const sp = spec.spoiler;
+  if (sp && sp.kind === "gate") {
+    const top = sp.y + (sp.thick ?? 0.07) / 2 + 0.02;
+    out.push(
+      ["wingL", [-sp.span / 2, top, sp.z - sp.chord / 2]],
+      ["wingR", [sp.span / 2, top, sp.z - sp.chord / 2]],
+    );
   }
   return out;
 }
