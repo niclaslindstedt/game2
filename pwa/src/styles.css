@@ -2063,11 +2063,11 @@ body {
   height: var(--hud-health);
   display: flex;
   flex-direction: column;
-  /* Flush RIGHT, not centred in the column. The map above it fills the
-     column's whole width and the stage label is right-aligned under it, so a
-     schematic narrower than the map centred in the same box reads as a third
-     thing floating loose beside the other two. Against the same edge, the
-     stack has one straight side. */
+  /* Flush RIGHT is the PORTRAIT rule, and landscape overrides it below. On
+     a phone held upright the column is pinched between the screen edge and
+     the mirror hanging across the top, and a schematic narrower than the map
+     centred in that little box reads as a third thing floating loose beside
+     the other two; against the same edge, the stack has one straight side. */
   align-items: flex-end;
   gap: 0.15rem;
   transition: opacity 400ms linear;
@@ -2116,9 +2116,10 @@ body {
 
 /* The marks for the machinery. An empty row on a sound car — the row
    filling up is the news, so it is never captioned and never explained. */
-/* The block of marks: up to two rows, hung from the same right edge as the
-   drawing above them, so 3 over 2 reads as a block with one straight side
-   rather than as a row with a gap in it. */
+/* The block of marks: up to two rows, on the same axis as the drawing above
+   them — the map's centre line in landscape, the screen's right edge in
+   portrait — so 3 over 2 reads as a block rather than as a row with a gap in
+   it. `markRows` balances the rows for the same reason (hud-health.tsx). */
 .hud-health-systems {
   width: 100%;
   height: var(--hud-health-marks);
@@ -2134,6 +2135,28 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 0.18rem;
+}
+
+/* ...but on a WIDE screen the car goes in the MIDDLE of the map's column.
+   Written immediately after the rules it overrides.
+
+   Landscape has room the phone does not: the map sits in a clear corner with
+   nothing crowding it from the left, so the column reads as a column rather
+   than as a strip squeezed against the edge — and once it does, the eye takes
+   the map's own centre line as the axis the whole stack hangs on. The
+   schematic IS a symmetrical drawing of a car, so centring it puts its spine
+   under the middle of the map and the marks under the middle of the car; hard
+   against the right edge it instead sits off-axis under a square, which reads
+   as a drawing that slipped rather than as one that was placed. */
+@media (orientation: landscape) {
+  .hud-health,
+  .hud-health-systems {
+    align-items: center;
+  }
+
+  .hud-health-marks {
+    justify-content: center;
+  }
 }
 
 .hud-health-icon {

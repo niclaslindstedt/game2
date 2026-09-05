@@ -190,10 +190,14 @@ function Sheet() {
                 border-radius: 10px; padding: 10px 6px 8px; display: flex;
                 flex-direction: column; align-items: center; gap: 8px; }
         /* The instrument is placed absolutely off the top-right corner in the
-           game, so each cell stands its own HUD-sized box for it to sit in —
-           the same --hud-map the real layout spends. */
+           game, so each cell stands its own HUD-sized box for it to sit in.
+           The box takes the place of the minimap's column, and the panel is
+           given its full width rather than --hud-map's, so the drawing sits
+           on the box's centre line the way a landscape HUD sits it on the
+           map's — a cell narrow enough to fit eight across is the one thing
+           this page cannot borrow from the real layout. */
         .stand { position: relative; width: 120px; height: 150px; }
-        .stand .hud-health { top: 0; right: 0; }
+        .stand .hud-health { top: 0; right: 0; width: 100%; }
         .name { letter-spacing: 0.12em; text-transform: uppercase; }
         .note { opacity: 0.55; font-weight: 500; font-style: italic; text-align: center; }
         .strip { display: flex; gap: 0; border-radius: 10px; overflow: hidden; }
