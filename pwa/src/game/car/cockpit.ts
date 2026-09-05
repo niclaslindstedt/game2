@@ -7,10 +7,11 @@
 // and contrast, authored to survive tinted glass at a car's length, and
 // built fifteen times over. This file is the opposite bargain. It is built
 // ONCE, for the player's car only, and it is drawn at arm's length — so it
-// can afford a fascia with a face, a binnacle with needles that move, a
-// full-size wheel on a column, pedals on the floor, cage bars up the screen
-// pillars and a tunnel with a lever on it. The two are never up at the same
-// time: the cockpit camera hides the interior and shows this (car-mesh.ts
+// can afford a fascia with a face, a binnacle with needles that move and
+// figures round them (car/cockpit-dials.ts), a full-size wheel on a column
+// with its stalks, pedals on the floor, cage bars up the screen pillars and
+// a tunnel with a lever on it. The two are never up at the same time: the
+// cockpit camera hides the interior and shows this (car-mesh.ts
 // `setInside`), because from the driver's seat they occupy the same space.
 //
 // THE CABIN IS A METRE DEEP HERE, AND THAT IS THE WHOLE REASON THIS WORKS.
@@ -38,9 +39,21 @@
 import * as THREE from "three";
 
 import { NO_DIRT } from "../car-dirt.ts";
-import { MeshBuilder, mixHex, patchAt, plate, slab, solid, tube, type V3 } from "./builder.ts";
+import {
+  MeshBuilder,
+  mixHex,
+  patchAt,
+  plate,
+  rectAt,
+  slab,
+  solid,
+  tube,
+  type V3,
+} from "./builder.ts";
+import { buildBinnacle, faceZOf, type Instruments } from "./cockpit-dials.ts";
+import { HUE, roomOf, wallX, wallZ, type Room } from "./cockpit-room.ts";
 import { screenPanes } from "./greenhouse.ts";
-import { LAYOUT, SEAT_SIDE, TRIM, buildLining, cabinOf, type Cabin } from "./interior.ts";
+import { LAYOUT, SEAT_SIDE, TRIM, buildLining, type Cabin } from "./interior.ts";
 import type { DeckOpening } from "./shell.ts";
 import type { CarBodySpec } from "./spec.ts";
 
@@ -48,6 +61,13 @@ import type { CarBodySpec } from "./spec.ts";
  * else here is built in. camera-eye.ts mounts the lens on this, so the
  * cockpit and the camera cannot disagree about where the seat is. */
 export type CockpitEye = { x: number; y: number; z: number };
+
+/** Where the rear-view mirror's glass hangs and what it is aimed at, both
+ * car-local — the mirror pass (mirror.ts) stands its lens on `at` and
+ * points it at `look`, so the picture in the glass is what a mirror there
+ * would actually show: the backlight, the film on it, and the road through
+ * what is left. */
+export type MirrorMount = { at: CockpitEye; look: CockpitEye };
 
 /** The materials a cockpit is drawn with. It has three of its own rather
  * than sharing the body's one, and each split buys something:
@@ -57,10 +77,11 @@ export type CockpitEye = { x: number; y: number; z: number };
  *   bodywork is a cabin with a light on in it. One material for the whole
  *   room is what makes that a single number rather than a repaint.
  *
- *   `instrument` — the two dials. The only thing in here that is lit from
- *   BEHIND, so it is the only thing that must not take the world's light at
- *   all: at night the cabin goes to almost nothing and the instruments stay
- *   exactly as bright as they were, which is what a driver actually sees.
+ *   `instrument` — the dials and every lit readout. The only things in
+ *   here lit from BEHIND, so the only things that must not take the
+ *   world's light at all: at night the cabin goes to almost nothing and
+ *   the instruments stay exactly as bright as they were, which is what a
+ *   driver actually sees.
  *
  *   `tint` — the sun strip, which is translucent and cannot share a buffer
  *   with either. */
@@ -80,18 +101,20 @@ export type CarCockpit = {
    * switched off, leaving the dark glass behind it. Null when no mirror
    * material was handed in. */
   mirrorGlass: THREE.Object3D | null;
+  /** Where that pane is, and what it looks at. */
+  mirror: MirrorMount;
   /** The steering wheel — car-mesh.ts turns it with the front tyres.
    * Rotating .z turns it in its own raked plane. */
   steering: THREE.Object3D;
-  /** The two needles, in their own raked mounts. Rotating .z sweeps one. */
-  tacho: THREE.Object3D;
-  speedo: THREE.Object3D;
+  /** The needles, the gear figure, the lamps and the tripmeter. */
+  instruments: Instruments;
   eye: CockpitEye;
   dispose: () => void;
 };
 
 /**
- * EVERY KNOB THE COCKPIT HAS.
+ * EVERY KNOB THE CABIN HAS. The instruments' own are `DIALS` in
+ * car/cockpit-dials.ts.
  *
  * Two datums, and which one a number hangs off says what it is really
  * measured against. The FLOOR is the cabin's own pan, cut down to footwell
@@ -121,10 +144,6 @@ export type CarCockpit = {
  * VIEW; these are where their MID setting sits.
  */
 const RIG = {
-  /** How far the cabin floor sits over the body's own underside, m. A real
-   * footwell is a hand's depth above the road; this is that, and it is what
-   * the cut-open deck (`DeckOpening`) makes room for. */
-  floor: 0.1,
   eye: {
     /** Over the sill, m. */
     rise: 0.19,
@@ -151,64 +170,14 @@ const RIG = {
     lip: 0.03,
     /** How far the knee bolster under the fascia is tucked back, m. */
     knee: 0.12,
-    /** Vents in the fascia face: half-width, height and how far apart, m. */
-    vent: { half: 0.07, height: 0.04, gap: 0.3 },
-  },
-  binnacle: {
-    /** The pod over the dials: how far it stands over their tops, m, the
-     * margin it leaves round them, and how far it reaches BACK toward the
-     * driver. That last one is short on purpose — the steering wheel sits
-     * between the driver and the dash, and a pod that reaches past the hub
-     * is a pod drawn over the wheel it is supposed to be read through. */
-    hood: 0.02,
-    margin: 0.015,
-    depth: 0.025,
-    /** How far the instrument face leans back toward the driver, rad. */
-    rake: 0.4,
-  },
-  dials: {
-    /** The rev counter and the speedometer, m. Sized so the PAIR sits inside
-     * the top half of the steering wheel's own opening with air round it:
-     * that is where a driver's eye finds them, and a pair sized to the last
-     * millimetre of the opening is a pair the rim and the hub boss are
-     * permanently cutting the corners off. Two 90 mm dials in a 320 mm wheel
-     * is also about what the real instrument is — anything bigger reads as a
-     * pair of clocks bolted to a toy car. */
-    tacho: 0.045,
-    speedo: 0.04,
-    /** Between their centres, m. Wide enough that the hub boss underneath
-     * clears the bottom of both rather than biting a piece out of each. */
-    gap: 0.105,
-    /** The dial centres over the floor, m — just over the steering wheel's
-     * own hub, which puts them BEHIND the wheel rather than over it. The
-     * pair is then read through the rim's opening with its top arc passing
-     * over them, which is where a driver reads a dial in any car.
-     *
-     * THE CEILING ON THIS IS THE COWL, not taste. The instrument pod stands
-     * `tacho + margin + hood` over the dial centres, and the moment the top
-     * of it rises above the line from the eye to the base of the windscreen
-     * it stops being a dashboard and starts being a thing parked in the
-     * road. Same for the rim of the wheel below it. Both are set here to
-     * land just under that line. */
-    over: 0.58,
-    /** Where a needle stands at zero and how far it sweeps, rad. 7:30 round
-     * to 4:30 over the top — 270° of travel, the period instrument. */
-    zero: (225 * Math.PI) / 180,
-    sweep: (270 * Math.PI) / 180,
-    /** How many graduations round the sweep, and how often one of them is a
-     * long one. Twenty divisions with every fourth long is the period
-     * instrument: 0–10 on the tacho with a mark every 500 rpm. */
-    ticks: 20,
-    majorEvery: 4,
-    /** Where the tacho's red band starts, as a fraction of the sweep. */
-    redline: 0.82,
-    /** How fast the speedometer reads at full deflection, m/s. */
-    topSpeed: 61,
+    /** Vents in the fascia face: half-width, height and how far apart, m,
+     * and how many louvres each is cut into. */
+    vent: { half: 0.07, height: 0.04, gap: 0.3, louvres: 4 },
   },
   wheel: {
     /** The hub, over the floor and ahead of the seat hinge, m — low enough
      * that the top of the rim clears the base of the windscreen (see
-     * `dials.over`), and high enough that the bottom of it stays inside the
+     * `DIALS.over`), and high enough that the bottom of it stays inside the
      * frame. Those two together are the whole of what fixes it. */
     hub: 0.53,
     ahead: 0.58,
@@ -251,6 +220,11 @@ const RIG = {
      * m, and its section. */
     columnDrop: 0.1,
     columnSection: 0.03,
+    /** The two stalks off the column, behind the rim: how far behind the
+     * hub they stand, how far each reaches out from the column, and their
+     * section, m. Indicators on the driver's outside, wipers on the inside
+     * — the one piece of the column a driver actually looks for. */
+    stalk: { behind: 0.085, reach: 0.11, section: 0.008 },
   },
   /** The pedals: how far apart, how big, how far back from the cowl they
    * stand and how far they lean, m and rad. Barely ever in frame — they are
@@ -268,13 +242,14 @@ const RIG = {
     pad: 0.036,
   },
   /** The rear-view mirror, hung off the header at the top middle of the
-   * screen: half-width, half-height, how deep the housing is and how far
-   * back from the header's own line it hangs, m. It is DARK glass rather
-   * than a second view of the road — the rear view the player actually
-   * reads is the HUD's strip, which answers the same question in every
-   * camera. What this one is for is the shape: a mirror hanging in the top
-   * of the windscreen is one of the two or three things that say "sat in a
-   * rally car" before anything else in the frame does. */
+   * screen: half-width, how deep the housing is and how far back from the
+   * header's own line it hangs, m. `side` is where it sits between the
+   * centreline and the driver, 0..1 toward the driver.
+   *
+   * It is not decoration: the mirror pass's picture is put IN it, taken
+   * from a lens stood exactly here looking back through the car — so what
+   * the driver sees in the glass is the backlight and whatever the stage has
+   * caked on it, reversed, the way a mirror shows it. */
   mirror: { half: 0.095, deep: 0.026, back: 0.04, side: 0.5 },
   /** The switch panel on the passenger half of the fascia: how many
    * rockers, how big each is and how far apart, m. */
@@ -287,63 +262,6 @@ const RIG = {
    * says what time of day it is. */
   strip: { drop: 0.16, alpha: 0.5 },
 } as const;
-
-/** The cockpit's own palette. It sits a clear step above car/interior.ts's:
- * that one is read through a tinted pane doing its own blending, and this
- * one is not — but the fullbright bake still takes a third off anything
- * facing away from the sun, and almost every surface in here faces the
- * driver, which is away from it. What has to survive is the LADDER: a dark
- * fascia the road reads against, a lighter pad and door card so the cabin
- * has depth, and one bright thing — the cage — that says rally car. */
-const HUE = {
-  fascia: 0x22262d,
-  /** The floor, a clear step under the fascia above it. */
-  floor: 0x2b3037,
-  /** The inner sills and bulkheads: body-side panels rather than trim, so a
-   * shade between the floor and the lining above them. */
-  hull: 0x343a42,
-  pad: 0x33383f,
-  card: 0x3d434d,
-  face: 0x14171c,
-  bezel: 0xb9c0cb,
-  tick: 0xe6eaf0,
-  needle: 0xe23b32,
-  red: 0xc4353a,
-  rim: 0x1d2026,
-  grip: 0x33383f,
-  lever: 0x22262c,
-  boot: 0x1a1d22,
-  metal: 0x8f97a2,
-  strip: 0x2f6ba8,
-  /** The cage, at arm's length. car/interior.ts paints its bars nearly white
-   * because they are read through tinted glass at a car's length and have to
-   * survive it; from the seat the same white is the brightest thing in the
-   * frame and sits right where the corner is. Muted here — still a clear
-   * step above the trim, no longer the thing the eye goes to. */
-  cage: 0x99a2ae,
-};
-
-/** Everything the cockpit is laid out against, resolved once. `Cabin` gives
- * the glass tray; this adds the floor the deck cut opened up under it. */
-type Room = {
-  cabin: Cabin;
-  /** The cabin floor, m. */
-  floorY: number;
-  /** Half-width of the floor, and of the deck opening over it, m. */
-  half: number;
-  /** Where the driver sits, m off the centreline. */
-  driverX: number;
-};
-
-function roomOf(spec: CarBodySpec): Room {
-  const cabin = cabinOf(spec);
-  return {
-    cabin,
-    floorY: spec.floorY + RIG.floor,
-    half: cabin.inner,
-    driverX: cabin.inner * SEAT_SIDE,
-  };
-}
 
 /** Where the deck has to be cut for this body to hold a cockpit — handed to
  * car/shell.ts, so the loft and the hull that closes it again are derived
@@ -365,58 +283,31 @@ export function cockpitEyeFor(spec: CarBodySpec): CockpitEye {
   };
 }
 
-/** A wall in the plane x = const, and one in the plane z = const, each with
- * its normal pointed where it is asked to.
- *
- * WINDING IS THE TRAP IN THIS WHOLE FILE, and it is a silent one: a
- * single-sided face wound the wrong way round is not an error, it is a
- * surface that is simply not there — and "not there" inside a car body is a
- * hole with the landscape showing through it. Every hand-wound quad in a
- * cockpit faces INWARD, at the driver, which is the opposite of everything
- * car/shell.ts and car/greenhouse.ts wind; and half of them are mirrored,
- * so the same corner order faces opposite ways on the two sides. Stating
- * the facing rather than the corner order is what stops that being a coin
- * flip. Corners are given low-to-high on both axes; `facing` is the sign of
- * the axis the normal points along. */
-function wallX(
-  b: MeshBuilder,
-  x: number,
-  y0: number,
-  y1: number,
-  z0: number,
-  z1: number,
-  color: number,
-  facing: number,
-): void {
-  const p: V3[] = [
-    [x, y0, z0],
-    [x, y0, z1],
-    [x, y1, z1],
-    [x, y1, z0],
-  ];
-  if (facing < 0) b.quad(p[0], p[1], p[2], p[3], color);
-  else b.quad(p[3], p[2], p[1], p[0], color);
+/** Where the mirror's glass is on a given body, and what it is aimed at:
+ * the middle of the backlight, which is what a driver tilts a mirror to
+ * see. Stated apart from the mirror's geometry (`buildMirror`) so the
+ * mirror pass can be aimed from a spec alone, and held to the same numbers
+ * by the test that builds the mirror. */
+export function cockpitMirrorFor(spec: CarBodySpec): MirrorMount {
+  const room = roomOf(spec);
+  const m = RIG.mirror;
+  const headerY = room.cabin.roofY - 0.02;
+  const tall = m.half / MIRROR_SHAPE;
+  const at = {
+    x: room.driverX * m.side,
+    y: headerY - tall - 0.006,
+    z: spec.cabin.roofFrontZ + m.back - m.deep / 2 - 0.004,
+  };
+  const rear = screenPanes(spec).rear;
+  const [u, v] = rectAt(rear.rect, 0.5, 0.5);
+  const centre = patchAt(rear.patch, u, v);
+  return { at, look: { x: centre[0], y: centre[1], z: centre[2] } };
 }
 
-function wallZ(
-  b: MeshBuilder,
-  z: number,
-  x0: number,
-  x1: number,
-  y0: number,
-  y1: number,
-  color: number,
-  facing: number,
-): void {
-  const p: V3[] = [
-    [x0, y0, z],
-    [x1, y0, z],
-    [x1, y1, z],
-    [x0, y1, z],
-  ];
-  if (facing > 0) b.quad(p[0], p[1], p[2], p[3], color);
-  else b.quad(p[3], p[2], p[1], p[0], color);
-}
+/** Width over height of the mirror's pane. The mirror pass renders at this
+ * shape (MIRROR_ASPECT in mirror.ts, which is where it is decided), and a
+ * housing built at any other stretches the picture. */
+const MIRROR_SHAPE = 3.2;
 
 /** THE HULL: the floor, the two inner sills and the bulkhead at each end.
  *
@@ -491,20 +382,35 @@ function buildFascia(b: MeshBuilder, room: Room): void {
     [-wide, kneeY, backZ],
     mixHex(HUE.fascia, HUE.floor, 0.4),
   );
+  // The vents: a dark well with pale louvres across it, rather than one
+  // black slab. At arm's length the louvres are the only thing that says a
+  // rectangle on a dash is a vent and not a hole.
   const v = RIG.dash.vent;
   for (const side of [-1, 1]) {
     slab(b, [v.half * 2, v.height, 0.02], [side * v.gap, topY - 0.055, backZ - 0.005], HUE.face);
+    for (let i = 0; i < v.louvres; i++) {
+      const y = topY - 0.055 + v.height * ((i + 0.5) / v.louvres - 0.5);
+      slab(b, [v.half * 1.9, 0.004, 0.006], [side * v.gap, y, backZ - 0.016], HUE.pad, -0.5);
+    }
   }
   // The switch panel on the passenger half of the fascia — the row of
   // rockers every rally car carries for the lamps, the pumps and the wipers.
   // Small, pale and evenly spaced: at this range what reads is the RHYTHM of
-  // a row of switches, not any one of them.
+  // a row of switches, not any one of them. A pilot lamp over each, because
+  // a switch on a rally car is a switch with a lamp over it.
   const sw = RIG.switches;
   const panelX = -driverX;
+  slab(
+    b,
+    [sw.count * sw.gap + 0.02, sw.height + 0.03, 0.006],
+    [panelX, topY - 0.113, backZ - 0.003],
+    HUE.face,
+  );
   for (let i = 0; i < sw.count; i++) {
     const x = panelX + (i - (sw.count - 1) / 2) * sw.gap;
     slab(b, [sw.width, sw.height, 0.018], [x, topY - 0.115, backZ - 0.009], HUE.pad);
     slab(b, [sw.width * 0.6, sw.height * 0.3, 0.008], [x, topY - 0.11, backZ - 0.018], HUE.metal);
+    slab(b, [0.006, 0.006, 0.004], [x, topY - 0.092, backZ - 0.008], i % 2 ? HUE.warn : HUE.amber);
   }
   // The passenger's grab handle — the one piece of hardware that says
   // somebody else rides in here.
@@ -517,175 +423,34 @@ function buildFascia(b: MeshBuilder, room: Room): void {
     HUE.pad,
     6,
   );
-}
-
-/** One dial, baked into the cockpit's own mesh, with its needle handed back
- * on a mount of its own. Everything is built in the dial's plane and swung
- * onto the binnacle's rake, so a needle only ever has to rotate about its
- * own z. */
-function buildDial(
-  b: MeshBuilder,
-  material: THREE.Material,
-  at: V3,
-  radius: number,
-  redline: boolean,
-  geos: THREE.BufferGeometry[],
-): { mount: THREE.Object3D; needle: THREE.Object3D } {
-  const rake = RIG.binnacle.rake;
-  /** The dial's plane, carried onto the binnacle.
-   *
-   * The half-turn is not decoration and it is not optional. The camera looks
-   * down the car's +z, and a camera looking down +z has world +x on the LEFT
-   * of the frame — so a dial built in the obvious xy plane comes out MIRRORED
-   * (the red band at the bottom left, the sweep running backwards) with its
-   * needle behind the face it is supposed to point at. Turning the whole dial
-   * frame by π about y fixes both at once: the face ends up pointing at the
-   * driver, the dial's own +x ends up on the driver's right, and everything
-   * built a few millimetres in front of the face is a few millimetres nearer
-   * the eye. `mount` below carries the same pair, in the same order. */
-  const onDial = (geo: THREE.BufferGeometry): THREE.BufferGeometry =>
-    geo.rotateY(Math.PI).rotateX(rake).translate(at[0], at[1], at[2]);
-
-  solid(b, onDial(new THREE.CircleGeometry(radius, 28)), HUE.face);
-  solid(b, onDial(new THREE.TorusGeometry(radius, radius * 0.06, 4, 28)), HUE.bezel);
-  // Ticks around the sweep, and a red band over the top of the tacho's: a
-  // needle with nothing to read against is a moving stick.
-  //
-  // MINORS BETWEEN THE MAJORS, and they are what stop the instrument reading
-  // as a toy. A dial is close enough here to see individual marks, and a
-  // half-dozen chunky ones round a black disc is a cartoon of a dial; the
-  // real thing is a fine graduation with every fifth mark longer, and the
-  // eye reads the DENSITY before it reads any single mark.
-  const steps = RIG.dials.ticks;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const a = RIG.dials.zero - t * RIG.dials.sweep;
-    const major = i % RIG.dials.majorEvery === 0;
-    const geo = new THREE.BoxGeometry(
-      radius * (major ? 0.24 : 0.12),
-      radius * (major ? 0.055 : 0.03),
-      0.006,
-    )
-      .translate(radius * (major ? 0.83 : 0.89), 0, 0)
-      .rotateZ(a);
-    solid(b, onDial(geo), redline && t >= RIG.dials.redline ? HUE.red : HUE.tick);
-  }
-  if (redline) {
-    const steps = 5;
-    for (let i = 0; i < steps; i++) {
-      const t = RIG.dials.redline + ((1 - RIG.dials.redline) * i) / (steps - 1);
-      const a = RIG.dials.zero - t * RIG.dials.sweep;
-      const geo = new THREE.BoxGeometry(radius * 0.11, radius * 0.09, 0.005)
-        .translate(radius * 0.63, 0, 0)
-        .rotateZ(a);
-      solid(b, onDial(geo), HUE.red);
-    }
-  }
-
-  const nb = new MeshBuilder();
-  // Thick for its length: the needle is read at a dial 600 mm away through
-  // the rim of a steering wheel, and a scale-correct one is a couple of
-  // pixels wide there — which is a dial with nothing in it.
-  slab(nb, [radius * 0.95, radius * 0.11, 0.006], [radius * 0.33, 0, 0.013], HUE.needle);
+  // The map light on its stalk over the passenger's knees, and the
+  // footwell's fire bottle under the dash on the same side: the co-driver's
+  // corner has things in it, which is what makes it somebody's seat.
+  const lampX = grab + 0.1;
+  tube(
+    b,
+    [lampX, topY - 0.14, backZ - 0.01],
+    [lampX + 0.05, topY - 0.2, backZ - 0.11],
+    0.007,
+    HUE.metal,
+    5,
+  );
+  slab(b, [0.03, 0.02, 0.04], [lampX + 0.055, topY - 0.21, backZ - 0.12], HUE.boot);
+  const bottleY = floorY + 0.09;
+  const bottle = new THREE.CylinderGeometry(0.045, 0.045, 0.3, 9)
+    .rotateZ(Math.PI / 2)
+    .translate(grab, bottleY, kneeZ - 0.12);
+  solid(b, bottle, HUE.warn);
   solid(
-    nb,
-    new THREE.CylinderGeometry(radius * 0.12, radius * 0.12, 0.02, 10).rotateX(Math.PI / 2),
-    HUE.bezel,
+    b,
+    new THREE.CylinderGeometry(0.02, 0.02, 0.06, 7)
+      .rotateZ(Math.PI / 2)
+      .translate(grab + 0.18, bottleY, kneeZ - 0.12),
+    HUE.metal,
   );
-  const geo = nb.geometry();
-  geos.push(geo);
-  const needle = new THREE.Mesh(geo, material);
-  needle.userData[NO_DIRT] = true;
-  // The same rake-then-half-turn `onDial` bakes, as NESTED groups rather than
-  // as one Euler: three's Euler order is a composition rule to look up, and
-  // the needle's own spin has to land inside it, so the chain is spelled out
-  // instead. Outer takes the rake, inner the half-turn, the needle its angle.
-  const mount = new THREE.Group();
-  mount.position.set(at[0], at[1], at[2]);
-  mount.rotation.x = rake;
-  const flip = new THREE.Group();
-  flip.rotation.y = Math.PI;
-  flip.add(needle);
-  mount.add(flip);
-  return { mount, needle };
-}
-
-/** Where the instrument faces stand, m. The binnacle is built on it and the
- * wheel is placed off it, so the two cannot come to different conclusions
- * about which one of them the driver is looking THROUGH. */
-function faceZOf(cabin: Cabin): number {
-  return cabin.cowlZ - RIG.dash.back - 0.012;
-}
-
-/** The instrument pod and the two dials in it. It stands proud of the dash
- * top, which is where a period rally car's binnacle is and — more to the
- * point — is what puts the tops of the dials above the rim of the wheel in
- * front of them. Everything below that line is read through the wheel, the
- * way it is in any car. */
-function buildBinnacle(
-  b: MeshBuilder,
-  dialBuilder: MeshBuilder,
-  material: THREE.Material,
-  room: Room,
-  geos: THREE.BufferGeometry[],
-): { tacho: THREE.Object3D; speedo: THREE.Object3D; mounts: THREE.Object3D[] } {
-  const { cabin, floorY, driverX } = room;
-  const backZ = cabin.cowlZ - RIG.dash.back;
-  const dialY = floorY + RIG.dials.over;
-  const half = RIG.dials.gap / 2 + RIG.dials.tacho + RIG.binnacle.margin;
-  const tall = RIG.dials.tacho + RIG.binnacle.margin;
-  const faceZ = faceZOf(cabin);
-  // The pod: a hood over the top and a cheek either side, open toward the
-  // driver so nothing of it is drawn between the dials and the eye reading
-  // them.
-  const hoodY = dialY + tall + RIG.binnacle.hood;
-  b.quad(
-    [driverX - half, hoodY, backZ],
-    [driverX + half, hoodY, backZ],
-    [driverX + half, hoodY - 0.03, faceZ - RIG.binnacle.depth],
-    [driverX - half, hoodY - 0.03, faceZ - RIG.binnacle.depth],
-    HUE.pad,
-  );
-  for (const side of [-1, 1]) {
-    // The cheeks are the OUTSIDE of the pod, so unlike everything else in
-    // here they face away from its middle.
-    wallX(
-      b,
-      driverX + side * half,
-      dialY - tall,
-      hoodY - 0.03,
-      faceZ - RIG.binnacle.depth,
-      backZ,
-      side > 0 ? HUE.pad : HUE.fascia,
-      side,
-    );
+  for (const dz of [-0.09, 0.07]) {
+    slab(b, [0.11, 0.012, 0.03], [grab, bottleY + 0.04, kneeZ - 0.12 + dz], HUE.metal);
   }
-  const panel = new THREE.BoxGeometry(half * 2, (tall + RIG.binnacle.hood) * 2, 0.012)
-    .rotateX(RIG.binnacle.rake)
-    .translate(driverX, dialY, faceZ);
-  solid(b, panel, mixHex(HUE.face, HUE.fascia, 0.4));
-
-  // Both dials go into the INSTRUMENT builder, not the cabin's: every face
-  // of them — the black disc, the bezel, the graduations, the red band and
-  // the needle — is lit from behind and must stay lit when the cabin around
-  // it goes dark.
-  const tacho = buildDial(
-    dialBuilder,
-    material,
-    [driverX + RIG.dials.gap / 2, dialY, faceZ - 0.008],
-    RIG.dials.tacho,
-    true,
-    geos,
-  );
-  const speedo = buildDial(
-    dialBuilder,
-    material,
-    [driverX - RIG.dials.gap / 2, dialY, faceZ - 0.008],
-    RIG.dials.speedo,
-    false,
-    geos,
-  );
-  return { tacho: tacho.needle, speedo: speedo.needle, mounts: [tacho.mount, speedo.mount] };
 }
 
 /** The wheel, about its own centre and in its own plane, so a mount can
@@ -724,9 +489,11 @@ function buildWheelGeometry(b: MeshBuilder, accent: number): void {
   }
 }
 
-/** The column and the pedals. Neither is in frame often — but a landing
- * throws the driver's head down, and a footwell with nothing in it is the
- * moment the cabin stops being a room. */
+/** The column with its stalks, and the pedals. Neither is in frame often —
+ * but a landing throws the driver's head down, and a footwell with nothing
+ * in it is the moment the cabin stops being a room. The stalks are the
+ * exception: they stand just behind the rim, in shot whenever the wheel
+ * is, and a column with none is a broom handle. */
 function buildFootwell(b: MeshBuilder, room: Room, wheelY: number, wheelZ: number): void {
   const { floorY, driverX } = room;
   tube(
@@ -737,6 +504,22 @@ function buildFootwell(b: MeshBuilder, room: Room, wheelY: number, wheelZ: numbe
     HUE.fascia,
     6,
   );
+  // The cowl round the column behind the wheel, which is what the stalks
+  // come out of.
+  const st = RIG.wheel.stalk;
+  const cowlZ = wheelZ + st.behind;
+  const cowlY = wheelY - st.behind * (RIG.wheel.columnDrop / 0.26);
+  slab(b, [0.11, 0.075, 0.09], [driverX, cowlY, cowlZ], HUE.fascia, -0.35);
+  for (const side of [-1, 1]) {
+    const from: V3 = [driverX + side * 0.05, cowlY, cowlZ];
+    const to: V3 = [driverX + side * (0.05 + st.reach), cowlY - 0.025, cowlZ - 0.02];
+    tube(b, from, to, st.section, HUE.boot, 5);
+    solid(
+      b,
+      new THREE.SphereGeometry(st.section * 1.6, 6, 4).translate(to[0], to[1], to[2]),
+      HUE.boot,
+    );
+  }
   const p = RIG.pedals;
   for (const [i, wide] of [0.9, 1, 1.15].entries()) {
     slab(
@@ -747,6 +530,15 @@ function buildFootwell(b: MeshBuilder, room: Room, wheelY: number, wheelZ: numbe
       p.rake,
     );
   }
+  // The dead pedal outboard of the clutch — a rally car's footrest, braced
+  // for the corner.
+  slab(
+    b,
+    [p.width * 0.8, p.height * 0.9, 0.02],
+    [driverX + 2.1 * p.gap, floorY + p.height * 0.35, room.cabin.cowlZ - p.ahead + 0.03],
+    HUE.boot,
+    p.rake * 0.8,
+  );
 }
 
 /** The screen pillars, the header rail and the door cards. All exist for
@@ -757,7 +549,6 @@ function buildFootwell(b: MeshBuilder, room: Room, wheelY: number, wheelZ: numbe
 function buildPillars(
   b: MeshBuilder,
   room: Room,
-  mirrorAspect: number,
   mirrorMaterial: THREE.Material | null,
 ): THREE.Object3D | null {
   const { cabin, floorY, half } = room;
@@ -794,6 +585,20 @@ function buildPillars(
       [side * (half - 0.03), cabin.sillY + 0.035, (zFront + zRear) / 2],
       HUE.pad,
     );
+    // The door pull — a strap, not a handle, the way a stripped door has —
+    // and the window winder under it.
+    slab(
+      b,
+      [0.02, 0.03, 0.14],
+      [side * (half - 0.03), cabin.panY - 0.02, cabin.hipZ + 0.2],
+      HUE.boot,
+    );
+    slab(
+      b,
+      [0.03, 0.05, 0.012],
+      [side * (half - 0.025), cabin.panY - 0.11, cabin.hipZ + 0.05],
+      HUE.metal,
+    );
   }
   const rail = spec.cabin.roofHalf - 0.08;
   tube(
@@ -804,43 +609,41 @@ function buildPillars(
     HUE.cage,
     6,
   );
-  return buildMirror(b, room, top, mirrorAspect, mirrorMaterial);
+  return buildMirror(b, room, mirrorMaterial);
 }
 
 /** THE REAR-VIEW MIRROR, hanging off the header in the top middle of the
  * windscreen — where a driver's own eye expects to find it.
  *
  * It is not decoration: the mirror pass's picture is put IN it (mirror.ts),
+ * taken from a lens stood on this glass and pointed back through the car,
  * so from the cockpit the road behind is read off a piece of the car rather
  * than off a strip pasted at the top of the screen. Being geometry is the
  * whole point — it hangs where the car hangs it, so it swings with the body
  * on its springs and slides across the frame as the driver's head is thrown
  * about, which a screen-space strip can never do.
  *
- * The pane's UVs run along the car's −x, which cancels the reverse the
- * mirror texture already carries for the HUD's strip. A strip is looked at
- * head-on and needs the flip; a pane INSIDE the scene is seen from the
- * driver's side, where world +x is already on the left of the frame, and
- * flipping it again would put the car overtaking on the left in the right of
- * the glass. */
+ * THE PICTURE IS REVERSED, the way every mirror's is. The pass renders the
+ * road behind the right way round and the texture it lands in is flipped
+ * once (mirror.ts), so its left edge is the car's own left. This pane's UVs
+ * run along the car's −x, which is the driver's RIGHT from a seat looking
+ * down +z — and that puts the texture's left edge on the driver's left,
+ * which is the strip's own orientation and the mirror's: a car coming up
+ * on the left is on the left of the glass. */
 function buildMirror(
   b: MeshBuilder,
   room: Room,
-  headerY: number,
-  aspect: number,
   material: THREE.Material | null,
 ): THREE.Object3D | null {
   const m = RIG.mirror;
-  const tall = m.half / aspect;
-  const z = room.cabin.spec.cabin.roofFrontZ + m.back;
-  const y = headerY - tall - 0.006;
-  // Not on the centreline. A mirror really is bolted to the middle of the
-  // screen, but the driver is not sat there — and from a seat this far off
-  // centre in a cabin this narrow, the middle of the car is most of the way
-  // to the far pillar. Pulled back toward the driver it lands where the eye
-  // expects it, at the top of the screen rather than the corner of it.
-  const x = room.driverX * m.side;
+  const spec = room.cabin.spec;
+  const tall = m.half / MIRROR_SHAPE;
+  const mount = cockpitMirrorFor(spec).at;
+  const z = spec.cabin.roofFrontZ + m.back;
+  const { x, y } = mount;
   slab(b, [m.half * 2, tall * 2, m.deep], [x, y, z], HUE.rim);
+  // The stem up to the header, so the housing hangs off something.
+  tube(b, [x, y + tall, z + 0.008], [x, room.cabin.roofY - 0.02, z + 0.02], 0.008, HUE.rim, 5);
   // The dark backing, so a mirror with no picture in it is still a mirror.
   const face = z - m.deep / 2 - 0.002;
   wallZ(
@@ -899,6 +702,22 @@ function buildFurniture(b: MeshBuilder, room: Room): void {
     HUE.lever,
     6,
   );
+  // The intercom amplifier on the tunnel ahead of the lever, with its
+  // volume knob and the two headset leads coming off it: the box every
+  // crew talks through, and the one thing on the tunnel that is not a
+  // lever.
+  const ampZ = zFront - 0.12;
+  slab(b, [0.1, 0.035, 0.07], [0, topY + 0.018, ampZ], HUE.case);
+  solid(
+    b,
+    new THREE.CylinderGeometry(0.011, 0.011, 0.012, 8).translate(-0.025, topY + 0.042, ampZ),
+    HUE.metal,
+  );
+  slab(b, [0.006, 0.006, 0.004], [0.03, topY + 0.03, ampZ - 0.037], HUE.turn);
+  // The extinguisher pull — a T-handle on the tunnel where either seat can
+  // reach it, in the one colour it is ever painted.
+  slab(b, [0.05, 0.012, 0.012], [0, topY + 0.03, zFront - 0.03], HUE.amber);
+  tube(b, [0, topY, zFront - 0.03], [0, topY + 0.03, zFront - 0.03], 0.005, HUE.metal, 5);
 
   const s = RIG.seat;
   for (const side of [-1, 1]) {
@@ -970,11 +789,7 @@ function buildSunStrip(b: MeshBuilder, cabin: Cabin, accent: number): void {
   );
 }
 
-export function buildCockpit(
-  spec: CarBodySpec,
-  materials: CockpitMaterials,
-  mirrorAspect: number,
-): CarCockpit {
+export function buildCockpit(spec: CarBodySpec, materials: CockpitMaterials): CarCockpit {
   const room = roomOf(spec);
   const { cabin } = room;
   const b = new MeshBuilder();
@@ -988,12 +803,13 @@ export function buildCockpit(
   buildLining(b, cabin, false);
   buildHull(b, room);
   buildFascia(b, room);
-  const { tacho, speedo, mounts } = buildBinnacle(b, ib, materials.instrument, room, geos);
-  const mirrorGlass = buildPillars(b, room, mirrorAspect, materials.mirror);
+  const backZ = cabin.cowlZ - RIG.dash.back;
+  const instruments = buildBinnacle(b, ib, materials.instrument, room, backZ, geos);
+  const mirrorGlass = buildPillars(b, room, materials.mirror);
   buildFurniture(b, room);
 
   const wheelY = room.floorY + RIG.wheel.hub;
-  const wheelZ = Math.min(cabin.hipZ + RIG.wheel.ahead, faceZOf(cabin) - RIG.wheel.clear);
+  const wheelZ = Math.min(cabin.hipZ + RIG.wheel.ahead, faceZOf(backZ) - RIG.wheel.clear);
   buildFootwell(b, room, wheelY, wheelZ);
 
   const wb = new MeshBuilder();
@@ -1015,7 +831,7 @@ export function buildCockpit(
   geos.push(dialGeo);
   const dials = new THREE.Mesh(dialGeo, materials.instrument);
   dials.userData[NO_DIRT] = true;
-  group.add(shell, dials, wheelMount, ...mounts);
+  group.add(shell, dials, wheelMount, ...instruments.objects);
   if (mirrorGlass) {
     geos.push((mirrorGlass as THREE.Mesh).geometry);
     group.add(mirrorGlass);
@@ -1037,12 +853,13 @@ export function buildCockpit(
   return {
     group,
     mirrorGlass,
+    mirror: cockpitMirrorFor(spec),
     steering: wheel,
-    tacho,
-    speedo,
+    instruments,
     eye: cockpitEyeFor(spec),
     dispose: () => {
       for (const geo of geos) geo.dispose();
+      instruments.dispose();
     },
   };
 }
@@ -1053,13 +870,4 @@ export function cockpitWheelTurn(lockFraction: number): number {
   return lockFraction * RIG.wheel.turn;
 }
 
-/** Where a needle stands for a reading of 0..1 of its dial, rad. Stated
- * here so the sweep the ticks were drawn on and the sweep the needle takes
- * are the same number. */
-export function dialAngle(fraction: number): number {
-  const t = Math.max(0, Math.min(1, fraction));
-  return RIG.dials.zero - t * RIG.dials.sweep;
-}
-
-/** What the speedometer reads at full deflection, m/s. */
-export const DIAL_TOP_SPEED = RIG.dials.topSpeed;
+export { DIALS, DIAL_TOP_SPEED, dialAngle } from "./cockpit-dials.ts";

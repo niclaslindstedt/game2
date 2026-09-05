@@ -64,6 +64,7 @@ export {
   dialAngle,
   type CarCockpit,
   type CockpitEye,
+  type MirrorMount,
 } from "./car/cockpit.ts";
 
 import type { CarBodySpec } from "./car/spec.ts";
@@ -199,9 +200,9 @@ export type CarBodyOptions = {
    * that is only ever seen from outside has any use for it. */
   cockpit?: boolean;
   /** The rear view, for the pane in the cockpit's mirror — the mirror
-   * pass's own texture (mirror.ts), and the aspect it renders at. Left off,
-   * the mirror is a dark housing with no picture in it. */
-  rearView?: { texture: THREE.Texture; aspect: number };
+   * pass's own texture (mirror.ts). Left off, the mirror is a dark housing
+   * with no picture in it. */
+  rearView?: { texture: THREE.Texture };
   /** How finely the screens carry the GRIME FILM the wipers clear
    * (car/wipers.ts). The arms are built on any car with glass to see
    * through, filmed or not. `fine` is for the car being driven, where the
@@ -377,10 +378,16 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // under it when the screen is clean, so it carries its own alpha. A solid
   // car gets neither arm: they are the one piece of hardware whose whole
   // job is a window somebody looks through.
+  // DOUBLE-sided, like the glass it lies on, and for the seat's sake: the
+  // coat sits on the OUTSIDE of every pane, so from inside the car the film
+  // is a back face — and a back face is culled, which is a windscreen that
+  // cakes solid for everyone watching from the road and stays spotless for
+  // the one person looking through it.
   const filmMat = new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
     depthWrite: false,
+    side: THREE.DoubleSide,
   });
   const wipers = buildWipers(spec, material, filmMat, options.screens ?? "fine", !solid);
   if (wipers.film) wipers.film.renderOrder = 2;
@@ -412,11 +419,12 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
         map: options.rearView.texture,
       });
     }
-    cockpit = buildCockpit(
-      spec,
-      { shell: cockpitMat, instrument: instrumentMat, tint: tintMat, mirror: mirrorMat },
-      options.rearView?.aspect ?? 3.2,
-    );
+    cockpit = buildCockpit(spec, {
+      shell: cockpitMat,
+      instrument: instrumentMat,
+      tint: tintMat,
+      mirror: mirrorMat,
+    });
     chassis.add(cockpit.group);
   }
 

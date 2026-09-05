@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The rear-view mirror: a second pass over the same scene, taken from the
-// CAR looking back, drawn as a strip of glass at the top of the frame.
+// CAR looking back, drawn as a strip of glass at the top of the frame — or,
+// from the driver's seat, put into the physical mirror hanging in the
+// windscreen (car/cockpit.ts).
 //
 // It is bolted to the body, not to the camera. Whichever way the player is
 // watching the run from — hood, chase, heli, straight down over the roof —
@@ -8,6 +10,13 @@
 // That is the whole point of it. A mirror that swung around with the
 // camera would answer a different question every time the camera key was
 // pressed, and none of them the one being asked.
+//
+// THE LENS STANDS ON THE MIRROR'S OWN GLASS, inside the cabin, looking back
+// through the car: what it sees is the backlight in its frame of lining,
+// the film the stage has thrown on that glass, and the road through
+// whatever is left of it. A lens raised over the roof would show a cleaner
+// road than the driver could, and the whole point of a dirty back window is
+// that the mirror is where you find out about it.
 //
 // The image is FLIPPED left-for-right, because that is what a mirror does
 // and what the player's hands expect: something coming up the inside on the
@@ -24,6 +33,8 @@
 
 import * as THREE from "three";
 import type { GameState } from "@engine";
+
+import type { MirrorMount } from "./car-body.ts";
 
 /** Width over height of the glass. Wide and shallow, like the real thing:
  * what a mirror is for is who is beside and behind, and the sky above them
@@ -56,25 +67,17 @@ const TOP_TALL = 0.135;
 /** Horizontal field of view through the glass, deg. Wider than a road car's
  * mirror on purpose: the useful question is whether anyone is close enough
  * to matter, and a true 35° would answer it only after they were already
- * alongside. */
-const FOV_H = 62;
+ * alongside. Not so wide that the cabin takes the frame, either: from the
+ * mirror the backlight subtends forty degrees or so, and the picture is
+ * that window with a hand of lining round it, not a room with a window at
+ * the back. */
+const FOV_H = 52;
 
-/** Where the eye sits, m above the driver's own — high enough to clear the
- * roof of every body in the roster, so the mirror looks over the car rather
- * than into the back of its own cabin. The tail deck stays in shot at the
- * bottom of the glass, which is what tells the player whose mirror it is. */
+/** Where the lens stands on a car with no cockpit to hang a mirror in — a
+ * ghost, a tool's bare body — m above the driver's own eye, and how far
+ * below level it looks, rad. High enough to clear the roof, so it looks
+ * over the car rather than into the back of its cabin. */
 const RISE = 0.5;
-
-/** How much of the body's attitude the aim takes, 0–1, and how far below
- * level it points, rad. A mirror bolted to a car does move with it — a
- * rigid horizon in a shaking frame reads as a video playing on the
- * windscreen — but it is also an INSTRUMENT, and one that swung the full
- * travel of a landing would be unreadable exactly when it matters. The
- * down-aim is small on purpose: a rally stage is cut through hills, so the
- * ground behind already takes most of a level frame, and spending any real
- * angle on it leaves a strip of nothing but the dirt ten metres back. */
-const PITCH_FOLLOW = 0.55;
-const ROLL_FOLLOW = 0.35;
 const AIM_DOWN = 0.02;
 
 /** The frame around the glass, CSS px, and its colour. Dark and thin: it is
@@ -95,12 +98,15 @@ export type RearMirror = {
   /** The camera the mirror pass draws with — handed to the world's cull so
    * the scenery behind the car is still in the pool when it is asked for. */
   camera: THREE.PerspectiveCamera;
-  /** Aim it from the car for this frame. `far` is how far the mirror is
-   * allowed to see — the forward view's fog distance times the reach of the
-   * rung in force (mirror-pace.ts) — and the fog is pulled in to the same
-   * fraction around the pass, so the world leaves this frustum where the air
-   * had already gone solid rather than being cut off in mid-view. */
-  aim: (state: GameState, driverEyeY: number, far: number) => void;
+  /** Aim it from the car for this frame. `mount` is where the glass hangs
+   * in the car and what it is tilted at, car-local (the cockpit's own
+   * mirror, or `fallbackMount` on a car without one). `far` is how far the
+   * mirror is allowed to see — the forward view's fog distance times the
+   * reach of the rung in force (mirror-pace.ts) — and the fog is pulled in
+   * to the same fraction around the pass, so the world leaves this frustum
+   * where the air had already gone solid rather than being cut off in
+   * mid-view. */
+  aim: (state: GameState, mount: MirrorMount, far: number) => void;
   /** Where the glass sits on a `w`×`h` canvas, CSS px from its top-left. */
   rect: (w: number, h: number) => MirrorRect;
   /** Render the road behind into the mirror's own target. Split from the
@@ -118,8 +124,13 @@ export type RearMirror = {
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
-const RIGHT = new THREE.Vector3(1, 0, 0);
-const NOSE = new THREE.Vector3(0, 0, 1);
+
+/** Where the lens stands on a car with no mirror of its own: over the
+ * driver's eye on the centreline, looking back and a touch down. */
+export function fallbackMount(driverEyeY: number): MirrorMount {
+  const y = driverEyeY + RISE;
+  return { at: { x: 0, y, z: 0 }, look: { x: 0, y: y - Math.tan(AIM_DOWN) * 10, z: -10 } };
+}
 
 export function createMirror(): RearMirror {
   const camera = new THREE.PerspectiveCamera(20, ASPECT, 0.3, 800);
@@ -156,9 +167,38 @@ export function createMirror(): RearMirror {
   glass.frustumCulled = false;
   quadScene.add(bezel, glass);
 
+  // The mount rides the body the way the car's own meshes do (car-mesh.ts):
+  // the springs' heave and the load pitch on the sprung chassis, then the
+  // attitude of the ground under the wheels on the body, then the heading.
+  // Position and aim take the whole of it — this is a piece of the car,
+  // and a mirror that did not swing with the cabin around it would slide
+  // about in its own housing.
+  const chassisEuler = new THREE.Euler();
+  const bodyEuler = new THREE.Euler();
   const yawQ = new THREE.Quaternion();
-  const rollQ = new THREE.Quaternion();
-  const pitchQ = new THREE.Quaternion();
+  const bodyQ = new THREE.Quaternion();
+  const chassisQ = new THREE.Quaternion();
+  const lookQ = new THREE.Quaternion();
+  const at = new THREE.Vector3();
+  const look = new THREE.Vector3();
+  const lookM = new THREE.Matrix4();
+  const origin = new THREE.Vector3();
+  /** A car-local point carried into the world through the body's chain. */
+  const carry = (
+    state: GameState,
+    p: { x: number; y: number; z: number },
+    out: THREE.Vector3,
+  ): void => {
+    const car = state.car;
+    out.set(p.x, p.y, p.z);
+    out.applyEuler(chassisEuler.set(-car.pitchLoad, 0, 0));
+    out.y += car.ride;
+    out.applyEuler(bodyEuler.set(-car.pitch, 0, car.roll));
+    out.applyAxisAngle(UP, car.heading);
+    out.x += car.x;
+    out.y += car.y;
+    out.z += car.z;
+  };
 
   const rect = (w: number, h: number): MirrorRect => {
     const width = Math.round(w * (w > h ? WIDTH_WIDE : WIDTH_TALL));
@@ -171,33 +211,22 @@ export function createMirror(): RearMirror {
     };
   };
 
-  const aim = (state: GameState, driverEyeY: number, far: number): void => {
+  const aim = (state: GameState, mount: MirrorMount, far: number): void => {
     const car = state.car;
-    // The mount rides the body the way the car's own meshes do: the load
-    // pitch the brakes and the power put in, then the springs' heave, then
-    // the attitude of the ground under the wheels. Only the height is
-    // needed — the eye sits on the car's centreline, over its middle — so
-    // the chain collapses to what that height does under each rotation.
-    const local = driverEyeY + RISE;
-    const ly = local * Math.cos(car.pitchLoad) + car.ride;
-    const lz = -local * Math.sin(car.pitchLoad);
-    const py = ly * Math.cos(car.pitch) + lz * Math.sin(car.pitch);
-    const pz = lz * Math.cos(car.pitch) - ly * Math.sin(car.pitch);
-    const bx = -py * Math.sin(car.roll);
-    const by = py * Math.cos(car.roll);
-    const ch = Math.cos(car.heading);
-    const sh = Math.sin(car.heading);
-    camera.position.set(car.x + bx * ch + pz * sh, car.y + by, car.z - bx * sh + pz * ch);
-
-    // The car's local +z is its nose and a three.js camera looks down its
-    // own -z, so a camera wearing the body's own rotation is already facing
-    // backwards. The follow fractions and the down-aim are the only things
-    // added to it. Rotation order matches car-mesh.ts: heading, then roll,
-    // then a nose-up pitch as a NEGATIVE turn about +x.
+    carry(state, mount.at, at);
+    camera.position.copy(at);
+    // The aim is the line from the glass to what it is tilted at, in the
+    // car's own frame, worn under the body's rotation: the same chain the
+    // position went through, as quaternions. A three.js camera looks down
+    // its own -z, and `lookAt` on the local line hands back the turn that
+    // points -z along it with the car's own up.
+    look.set(mount.look.x - mount.at.x, mount.look.y - mount.at.y, mount.look.z - mount.at.z);
+    lookM.lookAt(origin, look, UP);
+    lookQ.setFromRotationMatrix(lookM);
     yawQ.setFromAxisAngle(UP, car.heading);
-    rollQ.setFromAxisAngle(NOSE, car.roll * ROLL_FOLLOW);
-    pitchQ.setFromAxisAngle(RIGHT, -(car.pitch + car.pitchLoad) * PITCH_FOLLOW - AIM_DOWN);
-    camera.quaternion.copy(yawQ).multiply(rollQ).multiply(pitchQ);
+    bodyQ.setFromEuler(bodyEuler.set(-car.pitch, 0, car.roll));
+    chassisQ.setFromEuler(chassisEuler.set(-car.pitchLoad, 0, 0));
+    camera.quaternion.copy(yawQ).multiply(bodyQ).multiply(chassisQ).multiply(lookQ);
 
     camera.far = far;
     camera.updateProjectionMatrix();

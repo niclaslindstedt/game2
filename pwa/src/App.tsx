@@ -1126,6 +1126,13 @@ export function App() {
    * camera has REPLACED the mode there — the ladder the camera key walks is
    * the app's memory, not the renderer's. */
   const playCameraRef = useRef<PlayCamera>(options.camera);
+  /** The same camera as the HUD sees it, so the cluster can stand down
+   * while the player is sat in the car. Written wherever the ref is. */
+  const [hudCamera, setHudCamera] = useState<PlayCamera>(options.camera);
+  const pickPlayCamera = (cam: PlayCamera): void => {
+    playCameraRef.current = cam;
+    setHudCamera(cam);
+  };
   /** God mode and the overlay, as the frame loop sees them. */
   const godRef = useRef(false);
   const debugRef = useRef(options.dev.debug);
@@ -1687,7 +1694,7 @@ export function App() {
     armField(spec, mode, plan);
     armGhost(spec, mode, levelId);
     armTape(spec, mode, levelId);
-    playCameraRef.current = startCamera(optionsRef.current.camera);
+    pickPlayCamera(startCamera(optionsRef.current.camera));
     audioRef.current?.setView(playCameraRef.current);
     // The god-mode effect owns the camera while it is flying; setting a play
     // camera here as well would land the flight every time a run started.
@@ -2011,7 +2018,7 @@ export function App() {
     rendererRef.current?.setNameTags(next.hud.on);
     rendererRef.current?.setView(next.view);
     if (reframe && !menuRef.current) {
-      playCameraRef.current = next.camera;
+      pickPlayCamera(next.camera);
       audioRef.current?.setView(next.camera);
       if (!godRef.current) rendererRef.current?.setCamera(next.camera);
     }
@@ -2314,7 +2321,7 @@ export function App() {
         // which is exactly the run a tooling link is most likely to be
         // capturing.
         logRunStart(`url ${stageQuery(spec)}`);
-        playCameraRef.current = startCamera(optionsRef.current.camera);
+        pickPlayCamera(startCamera(optionsRef.current.camera));
         audioRef.current?.setView(playCameraRef.current);
         renderer.setCamera(godRef.current ? "free" : playCameraRef.current);
         if (godRef.current) renderer.placeCamera(URL_POSE);
@@ -2356,7 +2363,7 @@ export function App() {
         // onto the overhead views, and the one god mode lands back on has to
         // be a camera somebody can drive from.
         if (play) {
-          playCameraRef.current = play.id;
+          pickPlayCamera(play.id);
           // The ear moves with the eye: the same key that walks the camera
           // ladder walks the mix from the cabin to the helicopter.
           audioRef.current?.setView(play.id);
@@ -3542,6 +3549,7 @@ export function App() {
           live={watchFace ? watchLiveRef.current : liveRef.current}
           paused={paused}
           flying={godActive}
+          seated={hudCamera === "cockpit" && !godActive}
           flashes={flashes}
           split={split}
           input={input}

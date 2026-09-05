@@ -21,6 +21,7 @@ import {
 
 import { buildMinimap } from "./minimap-view.ts";
 import { carHealth } from "./car-health.ts";
+import { tachometer } from "./car-instruments.ts";
 import { cornerSign, type PaceSign } from "./pace-shape.ts";
 import { shiftLightOn, shiftWindow } from "./shift-window.ts";
 import type { HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx";
@@ -251,15 +252,6 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
     if (!drawn.includes(key)) mem.shapes.delete(key);
   }
   return out;
-}
-
-/** Tach reading, 0..1 of the dial: the engine's own revs over an idle floor
- * so the needle never falls off the bottom. The revs themselves are the
- * engine's (`car.rev`) — the driven wheels through the gearing on the move,
- * so the needle flares with a lit-up axle, and the throttle itself on the
- * grid, where a driver waiting for the lights can still blip it. */
-function tachometer(state: GameState): number {
-  return Math.min(1, 0.18 + 0.82 * state.car.rev);
 }
 
 /** Whether this run is being TIMED against anything — campaign and time
