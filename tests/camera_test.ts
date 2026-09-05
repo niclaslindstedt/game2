@@ -1527,3 +1527,95 @@ describe("changing view", () => {
     expect(after).toBeLessThan(0.05);
   });
 });
+
+// A crash ends with the car spun round facing back up the road, and the
+// reset button then puts it down at the last board a couple of hundred
+// metres away, pointing down the stage again (`respawn` in step.ts). Every
+// reading the shot holds — the boom's yaw, the neck's gaze, the floor, a
+// verge lens planted for the accident — belongs to where the car WAS, and
+// eased across that gap the camera spends the best part of a second flying
+// round the car to find the stage. That second is the whole of what a
+// player sees of the press, and it is not a shot: it is the game taking
+// the camera away at the exact moment they asked for it back.
+
+/** The reset button, in the three lines the camera can see, taken in `view`
+ * — and the frames after it, in the car's own frame (its heading is zero and
+ * the ground is level, so subtracting its position is exactly that). */
+function respawnDrive(view: CameraMode, frames: number): Frame[] {
+  const state = game();
+  const car = state.car;
+  state.terrain = { ...state.terrain, groundAt: () => car.y, waterAt: () => null };
+  const cam = createGameCamera(1600, 900);
+  cam.setEyes({
+    bumper: { x: 0, y: 0.5, z: 1.95 },
+    hood: { x: -0.16, y: 1.21, z: 0.66 },
+    cockpit: { x: -0.36, y: 1.08, z: 0.1 },
+  });
+  cam.setMode(view);
+  cam.skipStartShot();
+  // Stopped facing back the way it came, and held there long enough that
+  // every angle the rig carries is that heading's.
+  car.heading = Math.PI;
+  car.z = 300;
+  car.u = 0;
+  for (let f = 0; f < SETTLE; f++) cam.update(state, FRAME);
+  // ...and set down at the board, pointing down the stage.
+  car.z = 100;
+  car.heading = 0;
+  car.u = TUNING.offTrack.respawnSpeed;
+  cam.replant(state);
+  const out: Frame[] = [];
+  for (let f = 0; f < frames; f++) {
+    cam.update(state, FRAME);
+    const aim = new THREE.Vector3();
+    cam.camera.getWorldDirection(aim);
+    out.push({
+      at: new THREE.Vector3(
+        cam.camera.position.x - car.x,
+        cam.camera.position.y - car.y,
+        cam.camera.position.z - car.z,
+      ),
+      aim,
+    });
+    car.z += car.u * FRAME;
+  }
+  return out;
+}
+
+describe("the crew put back at the last board", () => {
+  it("stands the shot where the car is rather than flying round to it", () => {
+    // The pose on the FIRST frame after the press is the pose it holds: a
+    // rig that eased out of the old heading would still be swinging a
+    // second later, and half a metre of travel in the car's own frame is
+    // far less than the four the boom would cover going round.
+    const drifting = PLAY_MODES.filter((view) => {
+      const frames = respawnDrive(view, 90);
+      return frames[0].at.distanceTo(frames[frames.length - 1].at) > 0.5;
+    });
+    expect(drifting).toEqual([]);
+  });
+
+  it("is already looking down the stage on that first frame", () => {
+    // Whichever seat it is taken from, the shot faces the way the car has
+    // been pointed — down the road, +z. The overhead rig is looking mostly
+    // at the roof, so what is asked of every view is the same thing at the
+    // strength that view can give it: nothing may be pointing BACK.
+    const wrong = PLAY_MODES.filter((view) => respawnDrive(view, 1)[0].aim.z <= 0);
+    expect(wrong).toEqual([]);
+  });
+
+  it("costs the press nothing to look at — no swing, in any seat", () => {
+    // The frame-to-frame movement of a stood shot is the car creeping
+    // forward under it at walking pace and nothing else. A boom unwinding
+    // half a turn crosses metres per frame at the start of it.
+    const swinging = PLAY_MODES.filter((view) => {
+      const frames = respawnDrive(view, 90);
+      let worst = 0;
+      for (let i = 1; i < frames.length; i++) {
+        worst = Math.max(worst, frames[i].at.distanceTo(frames[i - 1].at));
+      }
+      return worst > 0.05;
+    });
+    expect(swinging).toEqual([]);
+  });
+});

@@ -926,6 +926,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           "contact",
         );
       } else if (ev.type === "respawn") {
+        // THE CREW PUT BACK AT THE LAST BOARD. The car is somewhere else on
+        // the road and pointing down the stage again, and every reading the
+        // shot is holding belongs to where it was — so the rig is stood
+        // around it rather than flown across the gap, and the blow is the
+        // whole of what the player is shown moving.
+        chase.replant(state);
         chase.kick(0.3, undefined, "reset");
       } else if (ev.type === "repair") {
         // THE CAR HANDED BACK WHOLE (step.ts). The body wears its damage in

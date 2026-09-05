@@ -683,6 +683,13 @@ export function createEyeCamera(): EyeCamera {
       // A fresh stage, a respawn, or a press of the camera key: the seat has
       // been picked up and put down somewhere else, and no neck stretches
       // across that.
+      //
+      // The GAZE goes with the neck. It lags the nose by design — that lag
+      // is the head staying pointed where the car was going while the body
+      // turns under it — but a car set back down facing the other way was
+      // never going anywhere the old lag points, and unwound at `yawRate`
+      // it is a fifth of a second of the driver looking at the scenery.
+      yaw = car.heading;
       lean.long = lean.lat = lean.vert = 0;
       leanVel.long = leanVel.lat = leanVel.vert = 0;
       load.long = load.lat = load.vert = 0;

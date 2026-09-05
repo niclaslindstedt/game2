@@ -504,6 +504,16 @@ export type GameCamera = {
    * results card is the destination there, and a shot nobody is going to look
    * at is not worth a second. */
   retake: (state: GameState, fly?: boolean) => void;
+  /** THE CAR HAS BEEN PICKED UP AND PUT DOWN ON THE SAME RUN — a respawn:
+   * drowned, driven off the map, or the reset button pressed. Everything a
+   * rig carries from frame to frame is an angle, a standoff and a floor
+   * measured where the car WAS, and the car is now back at the last split
+   * board, quite possibly facing the way it came. Eased across that gap the
+   * boom spends the best part of a second swinging round the car to find the
+   * stage again — which is the game taking the camera away at the exact
+   * moment the player asked for it back. So the readings are dropped and the
+   * shot is STOOD where the car is, in the one frame the press cost. */
+  replant: (state: GameState) => void;
   update: (state: GameState, dt: number) => void;
   /** Hand the shot a blow. `dir` is the world direction it came FROM the
    * car's middle toward — the in-car views throw the driver's head along it
@@ -1008,6 +1018,22 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // No time in it, so nothing eases: this writes the pose, it does not
       // fly to it.
       placeFor(IN_CAR.includes(mode as InCarCamera) ? (mode as InCarCamera) : null, state, 0);
+    },
+    replant: (state) => {
+      // A verge lens planted for the accident, a flight between two seats,
+      // a fall the cliff is still holding height for: all of them are
+      // readings off the piece of road the car has just been taken off, and
+      // none of them survives the move. `restand` is the same drop the rig
+      // takes when it is hung on another crew's car, and `planted` is what
+      // stands the standoff and the lens rather than easing them out of a
+      // shot that ended.
+      rollShot.release();
+      change.reset();
+      eye.reseat();
+      restand = true;
+      planted = false;
+      held = 0;
+      takeoff = state.car.y;
     },
     cycle: () => {
       // Genuinely a no-op from the overhead views: the drone and the map are
