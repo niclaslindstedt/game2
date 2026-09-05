@@ -21,6 +21,12 @@
   --hud-bad: #ff5a4e;
   --hud-info: #9fd8ff;
   --hud-steer: #2f7bff;
+  /* Not a fourth signal colour: `--hud-good` is the arcade yellow that means
+     a reading has gone the player's way, and this is the narrower thing that
+     means it is WELL — a system with nothing wrong with it, a piece of road
+     nobody has ever covered quicker. It is only ever the news itself, never
+     the reading it stands beside. */
+  --hud-green: #4cd964;
 
   /* THE CONDITION LANGUAGE, four colours (hud-health.tsx): green is well,
      yellow is damaged, orange is very damaged, red is broken. Yellow and
@@ -30,7 +36,7 @@
      orange are the pair that fills the ladder in, picked to hold their
      distance from each other and from the yellow between them at the ten
      pixels a wheel block is actually drawn at. */
-  --hud-hp-ok: #4cd964;
+  --hud-hp-ok: var(--hud-green);
   --hud-hp-hurt: var(--hud-good);
   --hud-hp-spent: #ff9a3c;
   --hud-hp-dead: var(--hud-bad);
@@ -426,6 +432,52 @@ body {
   }
 }
 
+/* ── The band under the glass, and the calls under THAT ─────────────────── */
+
+/* THE TOP OF THE FRAME, DIVIDED ONCE. Three things stack down the middle of
+   it — the split's flash (R28), the co-driver's calls, and the run's own news
+   (a torn-off wing, a board missed, a clean landing) — and every one of them
+   is placed off the band above it rather than off a percentage of the screen.
+   A percentage cannot do this job: the calls are sized in `vmin` with `rem`
+   caps, so how much room they take is a different FRACTION of the height on a
+   1080p monitor, a laptop and a phone held sideways, and one number that
+   clears them on any of the three is written straight across them on another.
+
+   EVERY BAND IS RESERVED WHETHER OR NOT ANYTHING IS IN IT. A split is up for
+   a few seconds a board and gone again (SPLIT_HOLD in App.tsx), and a damage
+   call comes and goes with the damage; instruments that made room for each
+   other as they arrived would slide down the screen and back exactly while
+   the corner call among them was being read, which is the one thing that
+   strip may not do. Empty space at the top of the frame is cheap; a call
+   that moves is not.
+
+   Each band is measured off what it holds, so the type and the room it is
+   given can never drift apart. */
+.hud {
+  /* THE SPLIT: the segment time, the gap under it, and a little air. */
+  --split-time: clamp(1.4rem, 5.5vmin, 2.6rem);
+  --split-gap: clamp(0.75rem, 2.6vmin, 1.2rem);
+  --split-band: calc(var(--split-time) + var(--split-gap) * 1.15 + 0.45rem);
+  /* THE CALLS: one plate is the sign plus the plate's own padding, and the
+     strip at its tallest is the call being driven with the corner behind it.
+     That second plate is DRAWN at 0.58 by a transform, which leaves its
+     layout box overhanging what it paints — so the room reserved is the
+     painted extent, not the box. */
+  --pace-sign: clamp(2.4rem, 9vmin, 4.2rem);
+  --pace-pad: 0.25rem;
+  --pace-call: calc(var(--pace-sign) + var(--pace-pad) * 2);
+  --pace-band: calc(var(--pace-call) * 1.58 + 0.15rem);
+  --split-top: 11%;
+  --pace-top: calc(var(--split-top) + var(--split-band));
+  --flash-top: calc(var(--pace-top) + var(--pace-band) + 1vh);
+}
+
+/* With a mirror up — showing the road or blanked, since the dead glass takes
+   exactly the room the picture did — the whole stack drops below it. */
+.hud[data-glass] {
+  --split-top: calc(var(--glass-bottom) + 1.4vh);
+}
+
 /* The glass as something to PRESS (hud-mirror.tsx). Showing the road, this is
    an empty box on the same three numbers and nothing is drawn in it, because
    the mirror is what is drawn in it. The box never moves between the two
@@ -507,7 +559,7 @@ body {
 
 .hud-pace {
   position: absolute;
-  top: 11%;
+  top: var(--pace-top);
   left: 0;
   right: 0;
   display: flex;
@@ -596,8 +648,8 @@ body {
 }
 
 .hud-pace-arrow {
-  width: clamp(2.4rem, 9vmin, 4.2rem);
-  height: clamp(2.4rem, 9vmin, 4.2rem);
+  width: var(--pace-sign);
+  height: var(--pace-sign);
   filter: drop-shadow(2px 2px 0 var(--hud-shadow));
 }
 
@@ -616,17 +668,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* With the mirror up, the co-driver drops below the glass. A corner call is
-   the one thing on this screen that may never be covered up, and the glass is
-   the one thing that would cover it: they share the top of the frame. */
-.hud-pace-under-glass {
-  top: calc(var(--glass-bottom) + 1.4vh);
-}
-
-/* Words off: the call is the arrow, so the plate shrinks to it rather than
-   leaving a pill of empty background where the text used to be. */
+/* A CORNER CALL carries no words — the plate is the corner's own shape, its
+   colour and its point — so it shrinks to the sign rather than leaving a
+   pill of empty background around it. The two calls that DO letter something
+   (the way home, and turn around) keep the wider plate above: they are
+   sentences, not signs. */
 .hud-pace-glyphs .hud-pace-call {
-  padding: 0.25rem calc(0.45rem + var(--pace-trail)) 0.25rem calc(0.45rem + var(--pace-lead));
+  padding: var(--pace-pad) calc(0.45rem + var(--pace-trail)) var(--pace-pad)
+    calc(0.45rem + var(--pace-lead));
   gap: 0.25rem;
 }
 
@@ -1427,44 +1476,75 @@ body {
   color: var(--hud-shadow);
 }
 
-/* R28 — the split board. It stands where the flashes do and above them, in
-   the middle of the screen where a driver's eyes already are, because the
-   gap is read in the half second after a corner exit and nothing on the
-   edges of the HUD gets read at all at that moment. The GAP is the whole
-   instrument; the clock and who it is against are a caption under it. */
-/* R28 — the split, in the clock's own column. The middle of the screen is
-   the co-driver's (`.hud-pace`, 11%) and the corner call is the one reading
-   a driver may never have covered up, so the split reports where the time
-   already lives instead. */
+/* R28 — the split, in its own band under the mirror (`--split-top`). It is
+   read in the half second after a board goes by, out of a pair of eyes that
+   are on the road, so it stands at the top of the frame where the mirror and
+   the corner calls already are rather than out on an edge nobody looks at.
+
+   THE SEGMENT TIME IS THE INSTRUMENT — how long the piece of road that has
+   just gone by took — with the board's number beside it and, when it was the
+   quickest that piece has ever been taken here, two words in green. The gap
+   to whatever the run is chasing is the caption under it. */
 .hud-split {
+  position: absolute;
+  top: var(--split-top);
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.05rem;
-  margin-top: 0.15rem;
-  color: var(--hud-info);
+  color: var(--hud-ink);
+  pointer-events: none;
   /* Fades IN and then holds: the run's clock decides when it goes (see
      SPLIT_HOLD in App.tsx), so the animation must not take it away on a
-     timeline of its own — and an entry that only touches opacity leaves the
-     column's box where it is, instead of shifting the clock above it. */
+     timeline of its own. */
   animation: hud-split-in 220ms ease-out;
 }
 
-.hud-split-of {
-  opacity: 0.6;
-}
-
-.hud-split-gap {
-  font-size: clamp(1.4rem, 5.5vmin, 2.6rem);
+.hud-split-time {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: var(--split-time);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
-.hud-split-sub {
-  font-size: clamp(0.6rem, 2vmin, 0.9rem);
+/* Which board it was. Small and quiet: it answers "how far in am I", which
+   is a question asked after the time has already been read. */
+.hud-split-of {
+  font-size: 0.5em;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+
+/* THE ONLY THING THE RECORD BOOK EVER SAYS. The time it beat is not shown
+   anywhere — a second time beside the first is arithmetic at 140 km/h, and
+   the news is not how much quicker, it is that it was quicker at all. */
+.hud-split-record {
+  font-size: 0.52em;
+  letter-spacing: 0.08em;
+  color: var(--hud-green);
+}
+
+/* The gap to whoever the run is measured against, and who that is. */
+.hud-split-gap {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: var(--split-gap);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.1em;
-  opacity: 0.8;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: var(--hud-info);
+}
+
+.hud-split-against {
+  font-size: 0.75em;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+  color: var(--hud-ink);
 }
 
 .hud-split-up .hud-split-gap {
@@ -1487,9 +1567,13 @@ body {
   }
 }
 
+/* The damage calls and the rest of the run's news, under everything the top
+   of the frame stacks — the mirror, the split's band and the co-driver's two
+   calls — because a torn-off wing announced across a corner call is two
+   readings and neither of them arrives. */
 .hud-flashes {
   position: absolute;
-  top: 32%;
+  top: var(--flash-top);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2282,21 +2366,20 @@ body {
   }
 
   /* Below the minimap, always: a percentage top clears the dock on a tall
-     phone and slides under it on a short one. */
-  .hud-pace {
-    top: calc(
+     phone and slides under it on a short one. The band moves, not the strip
+     — `--pace-top` follows it, so the split and the calls stay stacked. */
+  .hud {
+    --split-top: calc(
       max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) +
         var(--hud-health) + 0.55rem
     );
   }
 
   /* ...and below the GLASS when the glass is up, which on a phone hangs
-     lower and wider than the dock the rule above clears. Restated inside the
-     media query because the rule above is later in the sheet than the base
-     `.hud-pace-under-glass` and carries the same weight: without this the
-     mirror is drawn straight across the corner call. */
-  .hud-pace-under-glass {
-    top: calc(var(--glass-bottom) + 1.4vh);
+     lower and wider than the dock the rule above clears. Its own selector is
+     one specificity step above that one, so it wins wherever it is written. */
+  .hud[data-glass] {
+    --split-top: calc(var(--glass-bottom) + 1.4vh);
   }
 
   .hud-speed {

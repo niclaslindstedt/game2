@@ -87,6 +87,12 @@ import {
   type HudSplit,
 } from "./game/hud.tsx";
 import type { FinishRace, FinishScores, FinishStandings } from "./game/hud-finish.tsx";
+import {
+  loadSplitRecords,
+  postSplitRecord,
+  splitStageId,
+  type SplitRecords,
+} from "./game/split-records.ts";
 import { warmPortraits } from "./game/car-portraits.ts";
 import type { SheetRow } from "./game/results-sheet.tsx";
 import {
@@ -977,6 +983,17 @@ export function App() {
    * run prefers the LEADER's split, which is not knowable in advance and is
    * read off the field as each board goes by. */
   const splitsRef = useRef<{ times: number[]; against: string }>({ times: [], against: "" });
+  /** R28 — THE SEGMENT RECORDS: the quickest this machine has ever covered
+   * the road between one board and the next, and the race clock at the last
+   * board so the segment can be measured off it. Kept for the run rather
+   * than read back off storage per board, so a machine that cannot store
+   * anything still calls the records set this session. `id` is empty on a
+   * stage that keeps no book at all (`armSplitRecords`). */
+  const recordsRef = useRef<{ id: string; best: SplitRecords; lastBoard: number }>({
+    id: "",
+    best: [],
+    lastBoard: 0,
+  });
   /** R29 — THE FIELD: fourteen rival games on the same road, stepped beside
    * the player's. Null on every run with nobody entered (Roam, time trial,
    * the menu's demo). */
@@ -1261,13 +1278,32 @@ export function App() {
     // there is a field, and your own best run when there is not.
     const reference =
       measured ?? (times[split] === undefined ? null : { time: times[split], against });
+    // THE READING IS THE SEGMENT — the road since the last board, which is
+    // the piece of stage that has just been driven. Off the run's own clock
+    // rather than off `checkpointTimes`, so a board missed and driven back
+    // to (R28) measures from wherever the last one actually was.
+    const book = recordsRef.current;
+    const segment = Math.max(0, time - book.lastBoard);
+    book.lastBoard = time;
+    // Boards are numbered on the LAP, and so are the records: on a circuit
+    // the road between board two and board three is the same road every time
+    // round, and a record kept per board of the whole RUN would give a
+    // three-lap stage three books that never meet.
+    //
+    // God mode posts nothing. A car that can be flown to the next board is
+    // not driving to it, and a record it left behind could never be taken
+    // off the stage again.
+    const record =
+      book.id !== "" && !godRef.current && postSplitRecord(book.id, book.best, index - 1, segment);
     setSplit({
       id: ++flashId,
       index,
       count,
       time,
+      segment,
       delta: reference === null ? null : time - reference.time,
       against: reference?.against ?? "",
+      record,
     });
   };
 
@@ -1443,11 +1479,26 @@ export function App() {
   const armFieldRef = useRef(armField);
   armFieldRef.current = armField;
 
+  /** R28 — open this stage's record book. Called wherever the splits are
+   * reset, because the segment times are read off the same boards: a book
+   * carried over from the last attempt would measure the first segment of
+   * this run off the last one's clock.
+   *
+   * An ENDLESS stage keeps none. Its boards are laid as the road streams, so
+   * how far in a given board number stands depends on how far the run got —
+   * there is no fixed piece of road for a record to be a record OF. Nor does
+   * the training ground, which is not a stage and has no boards on it. */
+  const armSplitRecords = (spec: StageSpec): void => {
+    const id = !spec.arena && spec.length !== "endless" ? splitStageId(spec) : "";
+    recordsRef.current = { id, best: id === "" ? [] : loadSplitRecords(id), lastBoard: 0 };
+  };
+
   const armGhost = (spec: StageSpec, mode: PlayMode, levelId?: string): void => {
     const renderer = rendererRef.current;
     recorderRef.current = null;
     ghostRef.current = null;
     splitsRef.current = { times: [], against: "" };
+    armSplitRecords(spec);
     setSplit(null);
     renderer?.setGhost(null);
     ghostOnFileRef.current = false;

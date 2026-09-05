@@ -662,11 +662,20 @@ owed so the HUD can say which one it is. The way back is the way it always
 is: turn round and drive to it, or take the way-home button, which puts the
 car at the last board it DID take and hands it the road from there.
 
-Two things read the splits. The HUD puts the gap up under the race clock for
-a few seconds — measured against the ghost's own splits, which ride on the
-tape (`GhostRun.splits`) rather than being read back off the replay, so the
-number is there from the first board even on a run that is well up the road
-on its ghost. And a respawn goes to the last board (above). The minimap
+Two things read the splits. The HUD flashes the board under the mirror for
+a few seconds: the SEGMENT — how long the road since the last board took —
+big, which board it was beside it, and under that the gap to whatever the run
+is chasing, measured against the ghost's own splits, which ride on the tape
+(`GhostRun.splits`) rather than being read back off the replay, so the number
+is there from the first board even on a run that is well up the road on its
+ghost. That segment is also offered to the machine's own record book
+(`pwa/src/game/split-records.ts`): quicker between those two boards than
+anything ever driven here and the flash says NEW RECORD! in green. The book is
+per stage and per board on the lap, it is written the moment the board goes
+by rather than at the finish, and the time it holds is never shown — the news
+is that it was beaten, not by how much. God mode posts nothing, and neither
+does an endless stage, whose boards stand wherever the road happened to
+stream. And a respawn goes to the last board (above). The minimap
 marks the board still owed — a ring while it is inside the window it draws,
 a chevron on the rim pointing at it while it is not, which on a stage of any
 length is most of the time. It is the mark to steer at from a field or a
