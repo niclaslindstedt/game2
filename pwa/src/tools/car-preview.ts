@@ -397,7 +397,8 @@ function landmarks(spec: CarBodySpec): [string, [number, number, number]][] {
   }
   const { roofHalf, roofY, roofRearZ, roofFrontZ } = spec.cabin;
   const rearHalf = spec.cabin.roofRearHalf ?? roofHalf;
-  out.push(["roofRL", [-rearHalf, roofY, roofRearZ]], ["roofRR", [rearHalf, roofY, roofRearZ]]);
+  const rearY = spec.cabin.roofRearY ?? roofY;
+  out.push(["roofRL", [-rearHalf, rearY, roofRearZ]], ["roofRR", [rearHalf, rearY, roofRearZ]]);
   out.push(["roofFL", [-roofHalf, roofY, roofFrontZ]], ["roofFR", [roofHalf, roofY, roofFrontZ]]);
   const rb = spec.rear?.bumper;
   if (rb) {

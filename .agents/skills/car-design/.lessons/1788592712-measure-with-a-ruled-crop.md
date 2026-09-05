@@ -9,17 +9,23 @@ Measuring a car off photographs is the `car-creation` skill's pass (the
 ruled crop, the compression rule, the overlay). What a three-door FASTBACK
 adds to it:
 
-- `cabin.baseRearZ` is the BACKLIGHT'S FOOT, so a big raked rear glass is
-  the tail patch itself; put the wing's posts on the deck just ahead of it
-  (`spoiler.kind: "gate"`) and the profile drops from there to the lamps.
-- The quarter glass's rear edge goes in metres (`pillars.quarterZ`) so it
-  stands plumb; what is left of the flank behind it is the sail-panel
-  wedge, wide at the deck and a hand at the roof — which is the C-pillar
-  of such a car, not a post. A B-pillar likewise leans at a fixed `split`;
+- `cabin.baseRearZ` is the BACKLIGHT'S FOOT and `roofRearZ` is where the
+  roof's SHEET ends — read that bend off the ruled photo, not the glass's
+  own top, and it is earlier than it looks: on a fastback the backlight is
+  one long shallow pane (thirty-odd degrees, half a metre of run) and a
+  roof carried too far back makes it a short steep box under the wing. The
+  wing's posts (`spoiler.kind: "gate"`) stand on that glass.
+- The quarter glass is a RIGHT TRAPEZOID, not a rectangle: read BOTH ends
+  of its trailing edge off the ruled photo. Its foot goes in metres
+  (`pillars.quarterZ`) and its top `quarterRake` ahead of that — 0.85 m on
+  a car whose diagonal parallels the backlight — and what is left of the
+  flank behind the diagonal is the big blank sail panel. Read only the
+  foot and the glass comes out square, which is the first thing anyone
+  who knows the car sees. A B-pillar likewise leans at a fixed `split`;
   state it as `splitZ`.
-- The roof NARROWS toward the tail (`cabin.roofRearHalf`); a single roof
-  width puts the rear corners a hand too far out, and only the fitted rear
-  photograph shows it.
+- The roof NARROWS and FALLS toward the tail (`cabin.roofRearHalf`,
+  `cabin.roofRearY`); one roof width and height puts the rear corners a
+  hand too far out and up, and only the fitted rear photograph shows it.
 - A rim of 0.86 of the tyre is a modern wheel; a period one is 0.65, and
   a woven mesh is `wheelStyle: "lattice"`.
 

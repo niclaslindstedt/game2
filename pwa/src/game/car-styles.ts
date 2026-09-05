@@ -310,8 +310,10 @@ export const COMPACT_BODY: CarBodySpec = {
 export const CLASSIC_BODY: CarBodySpec = {
   // The bonnet's leading edge 0.62 m ahead of the front axle (the bumper
   // face 0.12 m past it), the cowl 0.46 m behind it, the roof's front edge
-  // 1.04 m behind it. The roof's rear edge 0.34 m behind the REAR axle, the
-  // foot of the backlight 0.66 m behind it, the tail face 0.78 m behind it.
+  // 1.04 m behind it. The roof's sheet ENDS 0.18 m behind the REAR axle,
+  // and from there the backlight is one long shallow pane — thirty-odd
+  // degrees, half a metre of run — down to the tailgate's edge 0.70 m
+  // behind the axle; the tail face is 0.78 m behind it.
   //
   // The bonnet is all but flat from the cowl to the bar the nose stops at.
   // Behind the cowl the deck is the door tops, one line rising a hair to
@@ -328,8 +330,8 @@ export const CLASSIC_BODY: CarBodySpec = {
     { z: -0.42, topY: 0.9, half: 0.83 },
     { z: -1.16, topY: 0.905, half: 0.83 },
     { z: -1.5, topY: 0.91, half: 0.82 },
-    { z: -1.82, topY: 0.925, half: 0.81 },
-    { z: -1.88, topY: 0.87, half: 0.805 },
+    { z: -1.86, topY: 0.925, half: 0.81 },
+    { z: -1.9, topY: 0.87, half: 0.805 },
     { z: -1.94, topY: 0.81, half: 0.8 },
   ],
   // The sill skirts run down to a hand and a half off the ground.
@@ -358,29 +360,34 @@ export const CLASSIC_BODY: CarBodySpec = {
   cabin: {
     cowlZ: 0.86,
     roofFrontZ: 0.28,
-    roofRearZ: -1.5,
-    baseRearZ: -1.82,
+    roofRearZ: -1.34,
+    baseRearZ: -1.86,
     roofY: 1.35,
     roofHalf: 0.64,
-    // The glasshouse narrows toward the tail: the roof's rear edge is a
-    // hand narrower each side than its front, which is what the fitted
-    // rear photograph said its corners were.
+    // The glasshouse narrows and falls toward the tail: the roof's rear
+    // edge is a hand narrower each side than its front and a few
+    // centimetres lower, which is what the ruled photographs said its
+    // corners were — and it ENDS early, so the backlight can lie down.
     roofRearHalf: 0.59,
+    roofRearY: 1.32,
     roofPaint: "accent",
     // The three-door glasshouse: a 1.25 m door, a B-pillar standing plumb
-    // at its rear edge, a quarter glass nearly as long behind it with its
-    // own rear edge plumb 0.28 m behind the rear axle, and what is left of
-    // the flank behind THAT is the sail panel — half a metre at the deck, a
-    // hand at the roof. The glass runs close to the metal: this is the
-    // flush-glazed body that did away with the rain gutter. The backlight
-    // takes nearly the whole width of the tail.
+    // at its rear edge, and behind it the quarter glass this shape is
+    // known by — a right trapezoid. Its top edge runs level from the pillar
+    // for 0.45 m, then its trailing edge is one long diagonal, parallel to
+    // the backlight, down to a foot on the sill 0.55 m behind the rear
+    // axle; what is left of the flank behind that edge is the big blank
+    // sail panel, 0.65 m of it along the roof. The glass runs close to the
+    // metal: this is the flush-glazed body that did away with the rain
+    // gutter. The backlight takes nearly the whole width of the tail.
     pillars: {
       a: 0.09,
       b: 0.08,
       sill: 0.04,
       header: 0.035,
       splitZ: -0.42,
-      quarterZ: -1.44,
+      quarterZ: -1.71,
+      quarterRake: 0.85,
       quarterRise: 0,
       backWidth: 0.92,
     },
@@ -390,19 +397,20 @@ export const CLASSIC_BODY: CarBodySpec = {
   // Blistered arches rather than bolted-on boxes: the lips swell out of the
   // wings and fade back into the doors.
   flare: { extra: 0.03, length: 0.95 },
-  // THE WING. Blade centre 0.66 m behind the rear axle at 1.13 m — over the
-  // lower half of the backlight — 1.7 m across, on posts standing at four
-  // fifths of the half span; and the second, flat lip on the tailgate's own
-  // top edge under it.
+  // THE WING. Blade centre 0.64 m behind the rear axle at 1.15 m, its
+  // leading edge over the backlight and its trailing edge over the bumper,
+  // 1.7 m across, on posts standing at four fifths of the half span on the
+  // glass's own foot; and the second, flat lip on the tailgate's top edge
+  // just behind that foot.
   spoiler: {
     kind: "gate",
-    z: -1.82,
-    y: 1.13,
+    z: -1.8,
+    y: 1.15,
     span: 1.7,
-    chord: 0.32,
+    chord: 0.4,
     thick: 0.075,
     post: 0.8,
-    lip: { z: -1.8, chord: 0.1 },
+    lip: { z: -1.89, chord: 0.08 },
   },
   doorSeams: [0.83, -0.42],
   handles: { z: [-0.56], y: 0.78 },
@@ -500,7 +508,7 @@ export const CLASSIC_BODY: CarBodySpec = {
     exhaust: { x: -0.52, y: 0.2, radius: 0.04 },
     // The tailgate's lower panel, between the backlight's foot and the lamps,
     // with the shut line round it.
-    deck: { half: 0.67, zFrom: -1.82, zTo: -1.92 },
+    deck: { half: 0.67, zFrom: -1.86, zTo: -1.93 },
   },
   colors: {
     paint: 0xf2f0ea,

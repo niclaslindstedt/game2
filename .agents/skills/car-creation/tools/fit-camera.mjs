@@ -64,8 +64,9 @@ function landmarks(spec) {
   }
   const { roofHalf, roofY, roofRearZ, roofFrontZ } = spec.cabin;
   const rearHalf = spec.cabin.roofRearHalf ?? roofHalf;
-  out.roofRL = [-rearHalf, roofY, roofRearZ];
-  out.roofRR = [rearHalf, roofY, roofRearZ];
+  const rearY = spec.cabin.roofRearY ?? roofY;
+  out.roofRL = [-rearHalf, rearY, roofRearZ];
+  out.roofRR = [rearHalf, rearY, roofRearZ];
   out.roofFL = [-roofHalf, roofY, roofFrontZ];
   out.roofFR = [roofHalf, roofY, roofFrontZ];
   const rb = spec.rear?.bumper;

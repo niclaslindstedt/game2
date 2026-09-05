@@ -9,6 +9,7 @@
 import type { DamagePart } from "@engine";
 
 import type { MeshBuilder, V3 } from "./builder.ts";
+import { backlightY } from "./greenhouse.ts";
 import { archAt, flankX, flareAt, sampleProfile, sideBand, sideRatios } from "./shell.ts";
 import type { CarBodySpec } from "./spec.ts";
 
@@ -382,8 +383,11 @@ function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder
       blade,
     );
     const postX = half * (sp.post ?? 0.8);
-    const footZ = sp.z + sp.chord * 0.35;
-    const foot = sampleProfile(spec.profile, footZ).topY;
+    // The posts stand a little ahead of the blade's centre and sweep back
+    // up to it — on the BACKLIGHT where the foot lands under that pane,
+    // since the deck there is the cabin's floor, and on the deck otherwise.
+    const footZ = sp.z + sp.chord * 0.1;
+    const foot = backlightY(spec, footZ) ?? sampleProfile(spec.profile, footZ).topY;
     const under = sp.y - thick / 2 + 0.01;
     // The post's foot is buried in the deck and its top in the blade, so
     // neither joint shows a seam at any camera distance.
@@ -395,7 +399,7 @@ function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder
         x - postW / 2,
         x + postW / 2,
         { y: foot - 0.01, z: footZ + 0.04 },
-        { y: under, z: sp.z - sp.chord * 0.1 },
+        { y: under, z: sp.z - sp.chord * 0.2 },
         0.06,
         blade,
       );
