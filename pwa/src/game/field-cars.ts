@@ -223,13 +223,13 @@ export type FieldCars = {
    * renderer, which owns all three. */
   paint: (tint: THREE.Color, lampsLit: boolean, rain: number) => void;
   /** How much of a rival is built for the sake of what is only visible up
-   * close: how much cabin its glass has behind it — the player's VIDEO
-   * option, taken down a level here (`fieldInterior`) — and how finely its
-   * screens carry the grime film its wipers clear. Both read when a car is
-   * BUILT, so they land on the next stage rather than mid-run, which is the
-   * same contract the undergrowth setting keeps; one call because they are
-   * one setting. */
-  setCarDetail: (detail: InteriorDetail, screens: FilmDetail) => void;
+   * close: how much cabin its glass has behind it — what the renderer has
+   * already decided the field deserves off the VIDEO rows, taken down a
+   * level here (`fieldInterior`) — and how finely its screens carry the
+   * grime film its wipers clear. Both read when a car is BUILT, so they
+   * land on the next stage rather than mid-run, which is the same contract
+   * the undergrowth setting keeps; one call because they are one setting. */
+  setCarDetail: (detail: { interior: InteriorDetail; screens: FilmDetail }) => void;
   /** How many rival cars are being drawn right now (the debug overlay). */
   drawn: () => number;
   dispose: () => void;
@@ -241,15 +241,14 @@ export type FieldCars = {
  * put every pipe in the field on the same beat. */
 type FieldCar = { visual: CarVisual; tag: NameTag; fumeClock: number };
 
-/** What a RIVAL's cabin is built at, given what the player chose for their
- * own. A level down off the top one: the full cabin's extra is a roll cage
+/** What a RIVAL's cabin is built at, given the level the renderer hands the
+ * field. A level down off the top one: the full cabin's extra is a roll cage
  * and a steering wheel that turns on its own mesh, and neither of those is
  * readable through somebody else's glass at the distance one is seen from —
  * while eight of them are eight cages and eight more draw calls. The lower
- * two settings are left alone: a player already on the cheap cabin has paid
- * the smallest bill there is, and taking the crews out of the cars around
- * them on top of it would be a change to what the field LOOKS like rather
- * than to what it costs. */
+ * two are left alone: `low` is the read (the crew behind the glass), and
+ * `off` is the solid car the renderer sends when the GLASS row keeps the
+ * cabins to the car being driven. */
 function fieldInterior(detail: InteriorDetail): InteriorDetail {
   return detail === "high" ? "low" : detail;
 }
@@ -479,9 +478,9 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         if (rival) lightDust(rival, power, power);
       }
     },
-    setCarDetail: (detail, grime) => {
-      interior = fieldInterior(detail);
-      screens = grime;
+    setCarDetail: (detail) => {
+      interior = fieldInterior(detail.interior);
+      screens = detail.screens;
     },
     setNames: (on) => {
       named = on;

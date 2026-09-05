@@ -26,6 +26,7 @@ import {
   DUST_RAISED,
   EFFECTS_SCALE,
   EXHAUST_SEEN,
+  GLASS_SEEN_THROUGH,
   INTERIOR_DETAIL,
   SCREEN_GRIME,
   FLORA_SCALE,
@@ -34,6 +35,7 @@ import {
   type VideoSettings,
   type ViewSettings,
 } from "./settings.ts";
+import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { carEyes } from "./car-styles.ts";
 import {
@@ -455,11 +457,28 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let ghost: GameState | null = null;
   let ghostCar: CarVisual | null = null;
   let ghostTag: NameTag | null = null;
+  /** How much of a car is built for what is only visible up close — the
+   * cabin behind its glass and the film on it — for the car the frame is
+   * rendered FROM and for everyone else on the road. The INTERIOR row is
+   * the level; the GLASS row says whether it reaches the field at all, and
+   * a car it does not reach is the solid one: opaque windows, nothing
+   * behind them, no wiper arms, no film. The screen resolution differs
+   * whatever the row says: the player's is the one screen anybody looks
+   * THROUGH, where the arc a blade leaves is read at arm's length, and
+   * every other car is read from outside, where its glass only has to go
+   * brown (car/wipers.ts). */
+  const carDetail = (
+    whose: "player" | "field",
+  ): { interior: InteriorDetail; screens: FilmDetail } => {
+    const furnished = GLASS_SEEN_THROUGH[quality.glass][whose];
+    const grime = furnished && SCREEN_GRIME[quality.interior];
+    return {
+      interior: furnished ? INTERIOR_DETAIL[quality.interior] : "off",
+      screens: grime ? (whose === "player" ? "fine" : "coarse") : "off",
+    };
+  };
   const field = createFieldCars(scene);
-  field.setCarDetail(
-    INTERIOR_DETAIL[quality.interior],
-    SCREEN_GRIME[quality.interior] ? "coarse" : "off",
-  );
+  field.setCarDetail(carDetail("field"));
   /** Whether the cars that are not the player's are named. */
   let nameTags = true;
   /** The stage that is standing, as the state it was last shown with —
@@ -631,10 +650,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     quality = next;
     applyResolution();
     environment.shadows.setQuality(quality.effects);
-    field.setCarDetail(
-      INTERIOR_DETAIL[quality.interior],
-      SCREEN_GRIME[quality.interior] ? "coarse" : "off",
-    );
+    field.setCarDetail(carDetail("field"));
     // Unlike the rest of the DETAIL row, the dust and the exhaust are not
     // geometry and do not wait for the next stage: the pools are standing in
     // the scene already, so switching either row is switching them, mid-run
@@ -708,10 +724,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // The player's car is the one car on the stage with a first-person
     // cabin: it is the only one anybody will ever sit in.
     car = buildCar(state.spec, {
-      interior: INTERIOR_DETAIL[quality.interior],
-      // The one screen anybody looks THROUGH, so it is the one that gets the
-      // fine film — the arc a blade leaves is read at arm's length here.
-      screens: SCREEN_GRIME[quality.interior] ? "fine" : "off",
+      ...carDetail("player"),
       cockpit: true,
       // The rear view goes IN the cockpit's mirror rather than only into the
       // HUD's strip, so the mirror pass's texture is handed to the body that
@@ -804,11 +817,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     ghost = state;
     ghostCar = buildCar(state.spec, {
       ghost: true,
-      interior: INTERIOR_DETAIL[quality.interior],
       // A ghost is a picture of a lap, seen from outside and half
-      // transparent, so it takes the same coarse film every other car on the
-      // road does rather than the one built to be looked through.
-      screens: SCREEN_GRIME[quality.interior] ? "coarse" : "off",
+      // transparent, so it is built the way every other car on the road is
+      // rather than the way the one being looked out of is.
+      ...carDetail("field"),
     });
     // The ghost gets the same plate the field does, for the same reason: on
     // a road with two cars on it, which of them is the one to beat is

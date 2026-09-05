@@ -184,8 +184,10 @@ export type CarBodyParts = {
 };
 
 export type CarBodyOptions = {
-  /** How much cabin is built behind the glass. `off` also leaves the glass
-   * solid, which is the car this game shipped with. */
+  /** How much cabin is built behind the glass. `off` is the SOLID car: the
+   * glass an opaque panel with nothing behind it, and no wiper arms on it
+   * either — hardware on a window nobody looks through, which is what makes
+   * it the one level that costs no extra draw call per car on a road. */
   interior?: InteriorDetail;
   /** Who is sat in it (car-crew.ts). Left off, it is the player's own crew —
    * one car on a stage is the player's, and every tool that builds a body
@@ -201,23 +203,17 @@ export type CarBodyOptions = {
    * the mirror is a dark housing with no picture in it. */
   rearView?: { texture: THREE.Texture; aspect: number };
   /** How finely the screens carry the GRIME FILM the wipers clear
-   * (car/wipers.ts). The arms are built either way. `fine` is for the car
-   * being driven, where the swept arc is read close up; `coarse` is for
-   * everyone else, where the glass only has to go brown; `off` leaves every
-   * screen permanently clean. Defaults to `fine`, so every tool that builds
-   * a body without saying whose it is gets the full one. */
+   * (car/wipers.ts). The arms are built on any car with glass to see
+   * through, filmed or not. `fine` is for the car being driven, where the
+   * swept arc is read close up; `coarse` is for everyone else, where the
+   * glass only has to go brown; `off` leaves every screen permanently clean.
+   * Defaults to `fine`, so every tool that builds a body without saying
+   * whose it is gets the full one. */
   screens?: FilmDetail;
 };
 
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
-  // A cockpit car keeps an interior whatever the video option says: it is
-  // the interior's pan that closes the cut-open deck in every view the
-  // cockpit itself is not up in, and `off` would also solidify the glass.
-  const detail = options.cockpit
-    ? options.interior === "off"
-      ? "low"
-      : (options.interior ?? "high")
-    : (options.interior ?? "high");
+  const detail = options.interior ?? "high";
   const group = new THREE.Group();
   const material = new THREE.MeshBasicMaterial({ vertexColors: true });
   const shift = spec.axleShift ?? 0;
@@ -243,8 +239,9 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // the hole again with a well). Under the CABIN it comes out on a car that
   // is going to be SAT IN, which is the only way a driver and a wheel fit in
   // one (car/cockpit.ts) — closed by the cockpit's own hull while that
-  // camera is up and by car/interior.ts's pan in every other view, which is
-  // why a cockpit car is never built with its interior off.
+  // camera is up and by car/interior.ts's pan in every other view. With the
+  // interior `off` there is no pan, and none is needed: the glass over the
+  // hole is then a solid panel, and a hole nothing can see into is closed.
   const stations = buildStations(spec, axles);
   const bay = bayOpening(spec);
   buildShell(b, spec, stations, {
@@ -377,13 +374,15 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // Last onto the chassis: the film has to be laid over glass that already
   // exists, and the blades over the film. The blades are hardware and stay
   // on the body's own material; the film is a coat of dirt with nothing
-  // under it when the screen is clean, so it carries its own alpha.
+  // under it when the screen is clean, so it carries its own alpha. A solid
+  // car gets neither arm: they are the one piece of hardware whose whole
+  // job is a window somebody looks through.
   const filmMat = new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
     depthWrite: false,
   });
-  const wipers = buildWipers(spec, material, filmMat, options.screens ?? "fine");
+  const wipers = buildWipers(spec, material, filmMat, options.screens ?? "fine", !solid);
   if (wipers.film) wipers.film.renderOrder = 2;
   chassis.add(wipers.group);
 

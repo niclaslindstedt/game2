@@ -16,9 +16,9 @@
 // them from the URL. They are the game's knobs rather than the player's.
 //
 // The PICTURE is the one place that grouping is drawn deliberately rather
-// than by default: eight renderer levers, three player rows. RESOLUTION and
+// than by default: nine renderer levers, three player rows. RESOLUTION and
 // DISTANCE stand alone because they are separate costs a machine can be
-// separately short of, and the six that decide how much world gets built
+// separately short of, and the seven that decide how much world gets built
 // ride one DETAIL row (`DETAIL_PRESETS`) because they are one judgement —
 // a simple game does not hand somebody a question about undergrowth
 // density. Which levers share a row is a design decision; see
@@ -214,7 +214,7 @@ export type AudioSettings = {
  * a big low-density screen wants the opposite. Tying them together only ever
  * charges a player for something they did not ask for.
  *
- * The remaining six are HOW MUCH WORLD IS DRAWN, and they are one row
+ * The remaining seven are HOW MUCH WORLD IS DRAWN, and they are one row
  * (`DETAIL_PRESETS`) because they are one judgement with one answer: they
  * all move together with how much headroom the machine has, and nobody has
  * an opinion about undergrowth density that is not also an opinion about
@@ -235,24 +235,42 @@ export type VideoSettings = {
    * close — the two things behind and on the glass, on one ladder because
    * they are one judgement: how much does a car you are looking AT deserve.
    *
-   * The cabin: `off` leaves the windows solid the way they used to be — the
-   * cheapest car, and the only level that costs no extra draw call per car
-   * on the road. `low` furnishes the read: the trim, the dash, the seats and
-   * the crew sat in them. `full` adds the roll cage, the harnesses and a
-   * steering wheel that turns with the front tyres.
+   * The cabin: `off` is the solid car — every window an opaque panel with
+   * nothing behind it and no wiper arms on it, the cheapest car there is,
+   * and the only level that costs no extra draw call per car on the road.
+   * `low` furnishes the read: the trim, the dash, the seats and the crew
+   * sat in them. `full` adds the roll cage, the harnesses and a steering
+   * wheel that turns with the front tyres.
    *
    * The grime film the wipers clear (`SCREEN_GRIME`) rides along: `off`
    * leaves every screen permanently clean, and both levels above it wet the
-   * whole road's glass — a rival's at a resolution that costs 48 triangles
-   * rather than 3,456, which is what makes giving it to a whole grid
-   * affordable at all. The RAIN on the player's own windscreen
-   * (car/screen-rain.ts) rides the same row for the same reason: it is one
-   * more thing on the glass, and a player who has asked for clean screens is
-   * asking for clean screens.
+   * glass — a rival's at a resolution that costs 48 triangles rather than
+   * 3,456, which is what makes giving it to a whole grid affordable at all.
+   * The RAIN on the player's own windscreen (car/screen-rain.ts) rides the
+   * same row for the same reason: it is one more thing on the glass, and a
+   * player who has asked for clean screens is asking for clean screens.
+   *
+   * WHICH cars this row reaches is the `glass` row under it: the car being
+   * driven always, the rest of the road only when that row says so.
    *
    * Applies to the NEXT stage built, like the undergrowth: both are
    * geometry, and geometry is decided when a car is made. */
   interior: "off" | "low" | "full";
+  /** WHOSE WINDOWS CAN BE SEEN THROUGH: which cars on the road get the
+   * cabin the INTERIOR row describes, with the wiper arms and the grime on
+   * the screens that go with it. Part of DETAIL, and geometry like the
+   * cabin, so it lands on the next stage built.
+   *
+   * Two stops because the cost is per car and the road can carry fifteen.
+   * A cabin behind glass is a second cabin's worth of triangles and three
+   * extra draw calls on every car that has one — the furniture, the glass
+   * in the transparent pass, and the film over it — and on a rival read at
+   * two hundred metres none of it is a car's worth of picture. `player` is
+   * a grid where only the car being driven is built that way: every other
+   * car is the solid one the INTERIOR row's `off` builds, whatever that row
+   * says. `all` furnishes the whole entry list, which is what a rally looks
+   * like from the car behind. */
+  glass: "player" | "all";
   /** How thickly the world is planted with the SOFT stuff — undergrowth,
    * shrubs, stumps. Part of DETAIL, and applies to the NEXT stage built.
    * The undergrowth only: the FOREST's own density is a generator dial the
@@ -434,6 +452,23 @@ export const SCREEN_GRIME: Record<VideoSettings["interior"], boolean> = {
   full: true,
 };
 
+/** Which cars the INTERIOR row reaches at each stop of the GLASS row: the
+ * car the frame is rendered FROM, and the rest of the entry list. A car it
+ * does not reach is built solid — opaque windows, no cabin, no wiper arms,
+ * no film — whatever the INTERIOR row says.
+ *
+ * A record rather than a comparison at the call sites, for the reason
+ * `DUST_RAISED` is one: the field must never be furnished while the driven
+ * car is not, or a grid of glass cabins around a solid car would read as a
+ * bug in the car. */
+export const GLASS_SEEN_THROUGH: Record<
+  VideoSettings["glass"],
+  { player: boolean; field: boolean }
+> = {
+  player: { player: true, field: false },
+  all: { player: true, field: true },
+};
+
 /** Flora density multiplier — the scatter chance for everything the world
  * plants that the physics does not collide with. The engine's own trunk
  * field is never thinned: those are solid, and a tree you can hit but
@@ -482,12 +517,12 @@ export const EXHAUST_SEEN: Record<VideoSettings["exhaust"], { player: boolean; f
 };
 
 /** THE PICTURE, AS THREE QUESTIONS: how sharp, how much, how far. Every one
- * of the eight levers above is real and still read by the renderer, but a
+ * of the nine levers above is real and still read by the renderer, but a
  * player does not have an opinion about undergrowth density — they have an
  * opinion about whether the game is smooth, and about which of the things
  * making it unsmooth they would rather keep. Three rows is what lets them
  * answer that: RESOLUTION and DISTANCE are single levers, and DETAIL is the
- * six that are one judgement.
+ * seven that are one judgement.
  *
  * The point of the split is that the three costs are NOT the same cost.
  * Resolution is pixels — every one of them, every frame, whatever is on
@@ -500,12 +535,12 @@ export const EXHAUST_SEEN: Record<VideoSettings["exhaust"], { player: boolean; f
  * expressed at all. */
 export type Detail = "low" | "medium" | "high";
 
-/** The six levers DETAIL owns. Named as a slice of `VideoSettings` rather
- * than restated, so adding a ninth lever is a decision about which row it
+/** The seven levers DETAIL owns. Named as a slice of `VideoSettings` rather
+ * than restated, so adding a tenth lever is a decision about which row it
  * belongs on instead of a silent omission from both. */
 export type DetailSettings = Pick<
   VideoSettings,
-  "effects" | "interior" | "flora" | "ground" | "dust" | "exhaust"
+  "effects" | "interior" | "glass" | "flora" | "ground" | "dust" | "exhaust"
 >;
 
 /** What each DETAIL stop is worth, cheapest first — the order the ladder is
@@ -513,35 +548,38 @@ export type DetailSettings = Pick<
  * changes what LOW, MEDIUM and HIGH mean everywhere, including for every
  * blob already stored. */
 export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
-  // The phone that stutters: the windows solid, the verges bare, under half
-  // the particles, nobody on the road raising any ground, and no pipe
-  // smoking.
+  // The phone that stutters: every window solid and every wiper off, the
+  // verges bare, under half the particles, nobody on the road raising any
+  // ground, and no pipe smoking.
   low: {
     effects: "low",
     interior: "off",
+    glass: "player",
     flora: "sparse",
     ground: "plain",
     dust: "off",
     exhaust: "off",
   },
   // The design point — every lever at the number the game was tuned on, and
-  // both clouds spent where they are worth the most: the car being driven
-  // digs and smokes, and the field's shared pair is what the machine buys
-  // back.
+  // everything that is per car spent on the one car it is worth the most
+  // on: the car being driven has the cabin, the wipers, the dust and the
+  // smoke, and the field's share of all four is what the machine buys back.
   medium: {
     effects: "full",
     interior: "full",
+    glass: "player",
     flora: "normal",
     ground: "normal",
     dust: "player",
     exhaust: "player",
   },
   // A machine with headroom: a thicker forest floor, stonier verges, and the
-  // whole entry list towing dust and steaming on the line the way a rally
-  // actually looks.
+  // whole entry list furnished behind its glass, towing dust and steaming on
+  // the line the way a rally actually looks.
   high: {
     effects: "full",
     interior: "full",
+    glass: "all",
     flora: "lush",
     ground: "rich",
     dust: "all",
@@ -582,11 +620,11 @@ export const DEFAULT_VIDEO: VideoSettings = {
 };
 
 /** Which DETAIL stop a set of video knobs IS: by exact match, else the stop
- * that agrees with the most of the six, ties going to the CHEAPER picture
+ * that agrees with the most of the seven, ties going to the CHEAPER picture
  * because `DETAIL_PRESETS` is walked cheapest first. So a blob written on
  * another build's ladder — or on the old single QUALITY row — lands on the
  * picture it most resembles, and never on a heavier one than it asked for.
- * A blob with none of the six in it is a blob with no opinion, which is
+ * A blob with none of the seven in it is a blob with no opinion, which is
  * MEDIUM: the design point, not the floor. */
 export function detailOf(video: Partial<VideoSettings>): Detail {
   const ids = Object.keys(DETAIL_PRESETS) as Detail[];
@@ -1123,7 +1161,7 @@ export function loadSettings(): Settings {
     }
     if (parsed.audio) Object.assign(settings.audio, parsed.audio);
     // Row by row, because the rows are independent: the two single levers
-    // are checked against their own ladders and the other six are snapped
+    // are checked against their own ladders and the other seven are snapped
     // together onto a DETAIL stop. Checked rather than merged for the reason
     // the view is snapped to its ladders — a value off a ladder is a place
     // the menu could never put the player back to once they moved off it —

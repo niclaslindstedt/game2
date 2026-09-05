@@ -10,6 +10,7 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_VIDEO,
   DETAIL_PRESETS,
+  GLASS_SEEN_THROUGH,
   DRAW_DISTANCE_SCALE,
   DUST_RAISED,
   EXHAUST_SEEN,
@@ -110,9 +111,11 @@ describe("the three picture rows", () => {
   it("land a set of levers off the ladder on the picture it most resembles", () => {
     expect(detailOf({ ...DETAIL_PRESETS.low, effects: "full" })).toBe("low");
     expect(detailOf({ ...DETAIL_PRESETS.high, effects: "off" })).toBe("high");
-    // Two of HIGH's three own levers given back to MEDIUM, which is what a
+    // Most of HIGH's own levers given back to MEDIUM, which is what a
     // player stepping down the row and a half-migrated blob both look like.
-    expect(detailOf({ ...DETAIL_PRESETS.high, ground: "normal", dust: "player" })).toBe("medium");
+    expect(
+      detailOf({ ...DETAIL_PRESETS.high, ground: "normal", dust: "player", glass: "player" }),
+    ).toBe("medium");
     // A blob carrying one lever MEDIUM and HIGH agree on is a genuine tie,
     // and it goes to the picture that costs less to draw.
     expect(detailOf({ effects: "full" })).toBe("medium");
@@ -338,5 +341,51 @@ describe("the defaults", () => {
     expect(DEFAULT_SETTINGS.hud.on).toBe(true);
     expect(DEFAULT_SETTINGS.keys.camera).toEqual(["KeyC", "KeyV"]);
     expect(DEFAULT_SETTINGS.video.resolution).toBe("medium");
+  });
+});
+
+// The GLASS row asks the WHO question of the cabins: which cars get the
+// INTERIOR row's cabin behind their windows, and the wiper arms and the film
+// that go with it. A rival is read at range, where a furnished cabin is a
+// second body's worth of triangles and three more draw calls for a dark
+// shape, so it is the field's share that the cheaper stops give up.
+describe("whose windows can be seen through at each DETAIL stop", () => {
+  it("builds every car solid on LOW", () => {
+    // The row keeps the cabins to the driven car, and the INTERIOR row then
+    // takes even that one away: nothing on the road has glass or wipers.
+    expect(GLASS_SEEN_THROUGH[DETAIL_PRESETS.low.glass].field).toBe(false);
+    expect(DETAIL_PRESETS.low.interior).toBe("off");
+  });
+
+  it("furnishes only the car being driven on MEDIUM", () => {
+    expect(GLASS_SEEN_THROUGH[DETAIL_PRESETS.medium.glass]).toEqual({
+      player: true,
+      field: false,
+    });
+    expect(DETAIL_PRESETS.medium.interior).not.toBe("off");
+  });
+
+  it("furnishes the whole entry list on HIGH", () => {
+    expect(GLASS_SEEN_THROUGH[DETAIL_PRESETS.high.glass]).toEqual({ player: true, field: true });
+  });
+
+  // A grid of glass cabins around a solid car would read as a bug in the
+  // car rather than as a setting, so no stop may do it.
+  it("never furnishes a rival the driven car is not", () => {
+    for (const audience of Object.values(GLASS_SEEN_THROUGH)) {
+      expect(audience.field && !audience.player).toBe(false);
+    }
+  });
+
+  it("walks the ladder monotonically", () => {
+    const walk = (["low", "medium", "high"] as const).map(
+      (id) => GLASS_SEEN_THROUGH[DETAIL_PRESETS[id].glass],
+    );
+    for (let i = 1; i < walk.length; i++) {
+      const under = walk[i - 1]!;
+      const over = walk[i]!;
+      expect(over.player || !under.player).toBe(true);
+      expect(over.field || !under.field).toBe(true);
+    }
   });
 });
