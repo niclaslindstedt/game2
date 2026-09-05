@@ -5,10 +5,11 @@
 // Tested rather than looked at because the claims are about the whole of a
 // car's life, and a screenshot only ever shows one moment of one car's:
 //
-//   * the FIGURES step every hundred metres and never between — the tick is
-//     what makes it read as a counter, and a window that crept through the
-//     values in between would be a number;
-//   * the TURN under them does not: the tenths drum is geared to the wheels
+//   * the FIGURES step on the window's own tick and never between — a
+//     hundred metres on the trip, a whole kilometre on the lifetime total —
+//     and a window that crept through the values in between would be a
+//     number rather than a counter;
+//   * the TURN under them does not: the end drum is geared to the wheels
 //     and is always part way round, which is the movement a driver glancing
 //     down actually sees;
 //   * the drums CARRY the way a mechanical counter carries: the tens sit
@@ -32,6 +33,7 @@ import { NEUTRAL_INPUT, compileTrack, createGame, skipIntro, step, type CarInput
 
 import {
   TOTAL_DIGITS,
+  TOTAL_TICK_M,
   TRIP_DIGITS,
   TRIP_TICK_M,
   createTrip,
@@ -41,17 +43,29 @@ import {
 } from "../pwa/src/game/odometer.ts";
 
 /** A window, read as a person reads it: the digit each drum is showing, the
- * tenths drum last. The trip's four drums unless a width is named. */
-function face(metres: number, digits: number = TRIP_DIGITS): string {
-  return odometerDrums(metres, digits)
+ * end drum last. The trip's four tenth-of-a-kilometre drums unless a width
+ * and a tick are named. */
+function face(metres: number, digits: number = TRIP_DIGITS, tick: number = TRIP_TICK_M): string {
+  return odometerDrums(metres, digits, tick)
     .map((drum) => drum.digit)
     .join("");
 }
 
-/** A drum by its place: 0 is the tenths, 1 the kilometres, 2 the tens. */
-function drum(metres: number, place: number, digits: number = TRIP_DIGITS) {
-  const drums = odometerDrums(metres, digits);
+/** A drum by its place, counting up from the end drum: on the trip 0 is the
+ * tenths, 1 the kilometres, 2 the tens. */
+function drum(
+  metres: number,
+  place: number,
+  digits: number = TRIP_DIGITS,
+  tick: number = TRIP_TICK_M,
+) {
+  const drums = odometerDrums(metres, digits, tick);
   return drums[drums.length - 1 - place];
+}
+
+/** The lifetime window: six drums, every one of them a kilometre. */
+function total(metres: number): string {
+  return face(metres, TOTAL_DIGITS, TOTAL_TICK_M);
 }
 
 function fakeStorage(): Record<string, string> {
@@ -87,16 +101,42 @@ describe("the odometer's drums", () => {
     expect(face(1_000_000)).toBe("0000");
   });
 
-  it("gives the lifetime window five kilometre drums, so it reads to 99999.9", () => {
+  it("gives the lifetime window six kilometre drums, so it reads to 999999 km", () => {
     // The trip is this stage and the total is the car's life, so the two
     // windows are the same instrument at two lengths — and the longer one
-    // has to hold a number no player will ever reach.
-    expect(face(1_000, TOTAL_DIGITS)).toBe("000010");
-    expect(face(99_999_900, TOTAL_DIGITS)).toBe("999999");
-    expect(face(100_000_000, TOTAL_DIGITS)).toBe("000000");
-    // The same distance reads the same on both, as far as the shorter one
-    // goes: nothing about a window's width changes what a drum is showing.
-    expect(face(42_300, TOTAL_DIGITS).endsWith(face(42_300))).toBe(true);
+    // spends none of its drums on tenths, because a lifetime reading is
+    // quoted in kilometres and the decade is worth more than the figure.
+    expect(total(1_000)).toBe("000001");
+    expect(total(999_999_000)).toBe("999999");
+    expect(total(1_000_000_000)).toBe("000000");
+    // The distance a tenths window of the same width would have rolled over
+    // at still has a whole decade of drum left above it.
+    expect(total(99_999_900)).toBe("099999");
+  });
+
+  it("steps the lifetime window a figure per kilometre, and never inside one", () => {
+    // Every metre of the kilometre reads as the kilometre it is in…
+    expect(total(42_300)).toBe("000042");
+    expect(total(42_999)).toBe(total(42_000));
+    expect(total(43_000)).not.toBe(total(42_999));
+    // …and the same distance reads DIFFERENTLY on the trip, which is the
+    // point of the two ticks: 42.3 km down there, 42 whole ones up here.
+    expect(face(42_300)).toBe("0423");
+  });
+
+  it("turns the lifetime window's end drum through the whole kilometre", () => {
+    // It is the drum geared to the wheels on that window, so it is always
+    // part way round — a hundred metres is a tenth of a turn, not a step.
+    const km = (metres: number) => drum(metres, 0, TOTAL_DIGITS, TOTAL_TICK_M);
+    expect(km(42_000).roll).toBe(0);
+    expect(km(42_500).roll).toBeCloseTo(0.5, 6);
+    expect(km(42_900).roll).toBeCloseTo(0.9, 6);
+    expect(km(43_000)).toEqual({ digit: 3, roll: 0 });
+    // …and the drum above it waits for the last tenth of that kilometre.
+    const tens = (metres: number) => drum(metres, 1, TOTAL_DIGITS, TOTAL_TICK_M);
+    for (const m of [40_000, 44_000, 48_999]) expect(tens(m).roll).toBe(0);
+    expect(tens(49_500).roll).toBeCloseTo(0.5, 6);
+    expect(tens(50_000)).toEqual({ digit: 5, roll: 0 });
   });
 
   it("steps the tenths drum a whole figure every hundred metres, and never between", () => {

@@ -10,7 +10,7 @@
 import type { CSSProperties } from "react";
 
 import { clamp } from "../lib/util.ts";
-import { TOTAL_DIGITS, TRIP_DIGITS, odometerDrums } from "./odometer.ts";
+import { TOTAL_DIGITS, TOTAL_TICK_M, TRIP_DIGITS, TRIP_TICK_M, odometerDrums } from "./odometer.ts";
 
 /** The dial is laid out like the arcade cluster it comes from: it reads
  * 0–9 (thousands) counter-clockwise from the bottom, red from 7.5 up, and
@@ -81,10 +81,21 @@ const ODO_OFFSET = 16.15;
  * has nothing to tween BACKWARDS when the offset returns to zero.
  *
  * `above` puts the window in the upper half of the face instead of the
- * lower one; `digits` is how wide it is, which is the only thing that
- * separates the total from the trip. */
-function Counter({ metres, digits, above }: { metres: number; digits: number; above: boolean }) {
-  const drums = odometerDrums(metres, digits);
+ * lower one; `digits` is how wide it is and `tick` what one step of the end
+ * drum is worth, which between them are all that separates the total from
+ * the trip. */
+function Counter({
+  metres,
+  digits,
+  tick,
+  above,
+}: {
+  metres: number;
+  digits: number;
+  tick: number;
+  above: boolean;
+}) {
+  const drums = odometerDrums(metres, digits, tick);
   const width = ODO_CELL * digits;
   const y = 50 + (above ? -ODO_OFFSET : ODO_OFFSET) - ODO_H / 2;
   return (
@@ -176,12 +187,16 @@ export function Tachometer({
       })}
       {/* THE TWO COUNTERS, on the face of the gauge where a car keeps them.
           Above the hub, the TOTAL: every kilometre this car has ever been
-          driven, in any discipline. Below it, the TRIP: this stage, from
-          zero. Both are drawn before the needle so the needle sweeps over
-          their windows rather than under them, which is the way round a
-          real cluster is built. */}
-      {odoM !== null && <Counter metres={odoM} digits={TOTAL_DIGITS} above={true} />}
-      <Counter metres={tripM} digits={TRIP_DIGITS} above={false} />
+          driven, in any discipline, read in whole kilometres so its six
+          drums reach a working life. Below it, the TRIP: this stage, from
+          zero, with the tenths a stage is short enough to need. Both are
+          drawn before the needle so the needle sweeps over their windows
+          rather than under them, which is the way round a real cluster is
+          built. */}
+      {odoM !== null && (
+        <Counter metres={odoM} digits={TOTAL_DIGITS} tick={TOTAL_TICK_M} above={true} />
+      )}
+      <Counter metres={tripM} digits={TRIP_DIGITS} tick={TRIP_TICK_M} above={false} />
       {/* The needle is transformed rather than re-pathed so the browser can
           tween it between HUD snapshots — the dial reads smooth at 12 Hz. */}
       <g className="hud-tach-needle" style={{ transform: `rotate(${dialAngle(value)}deg)` }}>
