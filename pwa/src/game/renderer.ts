@@ -28,6 +28,7 @@ import {
   EXHAUST_SEEN,
   GLASS_SEEN_THROUGH,
   INTERIOR_DETAIL,
+  LOOSE_WHEELS,
   SCREEN_GRIME,
   FLORA_SCALE,
   GROUND_SCALE,
@@ -478,7 +479,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     };
   };
   const field = createFieldCars(scene);
-  field.setCarDetail(carDetail("field"));
+  field.setCarDetail({ ...carDetail("field"), looseWheels: LOOSE_WHEELS[quality.effects] });
   /** Whether the cars that are not the player's are named. */
   let nameTags = true;
   /** The stage that is standing, as the state it was last shown with —
@@ -650,7 +651,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     quality = next;
     applyResolution();
     environment.shadows.setQuality(quality.effects);
-    field.setCarDetail(carDetail("field"));
+    field.setCarDetail({ ...carDetail("field"), looseWheels: LOOSE_WHEELS[quality.effects] });
+    car?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
+    ghostCar?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     // Unlike the rest of the DETAIL row, the dust and the exhaust are not
     // geometry and do not wait for the next stage: the pools are standing in
     // the scene already, so switching either row is switching them, mid-run
@@ -732,6 +735,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       rearView: { texture: mirror.texture, aspect: MIRROR_ASPECT },
     });
     scene.add(car.group, car.debris);
+    car.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     const eyes = carEyes(state.spec);
     chase.setEyes(eyes);
     driverEyeY = eyes.hood.y;
@@ -828,6 +832,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // crew's, so the plate is as much a picture as the car under it.
     ghostTag = createNameTag("Ghost", null, GHOST_LOOK);
     scene.add(ghostCar.group, ghostCar.debris, ghostTag.sprite);
+    ghostCar.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     applyTint();
   };
 

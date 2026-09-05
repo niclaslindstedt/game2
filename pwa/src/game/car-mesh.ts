@@ -167,6 +167,10 @@ export type CarVisual = {
    * cockpit mirror's pane rather than leaving it dark glass. */
   setRearView: (on: boolean) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
+  /** Whether a wheel torn off this car leaves as a rolling body or is
+   * simply gone — the video options' call, pushed by whoever built the car
+   * (`LOOSE_WHEELS` in settings.ts). */
+  setLooseWheels: (on: boolean) => void;
   /** Whether the run's light is gone — the lamps burn harder when it is,
    * and their lenses stop taking the tint the paint takes. Pushed from the
    * environment, which owns both decisions, along with the tint itself so
@@ -598,6 +602,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     setInside,
     setRearView,
     onEvents: damage.onEvents,
+    setLooseWheels: damage.setLooseWheels,
     setLights,
     setWet,
     grime: dirt.level,

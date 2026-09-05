@@ -21,7 +21,9 @@
 // Three more things the ledger says, drawn here because they are the body
 // coming apart rather than something thrown off it: the WHEELS, which go
 // flat and bent on their own ledger and then come off (the corner drops
-// onto its hub, and the whole car sits crooked from then on — `pose`); the
+// onto its hub, and the whole car sits crooked from then on — `pose`; the
+// wheel itself leaves as a body of its own, loose-wheel.ts, when the video
+// options allow one); the
 // GLASS, which shatters out of its frame rather than flying (its slice of
 // the glass buffer goes to alpha zero, and the grime film over it with it);
 // and the DOORS, which fly like any other part and leave the cabin open
@@ -34,6 +36,7 @@ import { TUNING, WHEEL_PARTS, type DamagePart, type GameEvent, type GameState } 
 import type { CarBodyParts, GlassPane } from "./car-body.ts";
 import { lambert } from "./car/builder.ts";
 import { crumple, noise, rimOf, type CrumpleFrame } from "./car-crumple.ts";
+import { looseWheel, stepLooseWheel, throwWheel, type LooseWheel } from "./loose-wheel.ts";
 import { stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
 
 /** Scuffed metal darkens toward this fraction of its paint... */
@@ -65,8 +68,10 @@ const BEND_EVERY = 0.05;
 /** How far over the ground a torn-off piece's centre ends up over and
  * above its own half-thickness, m — the gravel it is lying on. */
 const DEBRIS_REST = 0.02;
-/** ...and a wheel's, which lies on its side with its own half-width up. */
-const WHEEL_REST = 0.1;
+/** What the hit that tears a wheel off adds to the corner's own velocity,
+ * m/s: out of the arch and up over it. The rest of what the wheel leaves
+ * with is the car's speed and the tread's spin (loose-wheel.ts). */
+const WHEEL_KICK = { out: 2.2, up: 3 };
 /** Which of a torn-off panel's own axes is its face — the one the tumbler
  * turns upward so it comes to rest lying flat (tumble.ts). A lamp or a
  * mirror is a lump and lies however it lands. */
@@ -116,6 +121,9 @@ export type CarDamageVisual = {
   pose: CarPose;
   update: (state: GameState, dt: number) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
+  /** Whether a torn-off wheel is thrown as a rolling body or simply gone —
+   * the video options' call (`LOOSE_WHEELS` in settings.ts). */
+  setLooseWheels: (on: boolean) => void;
   dispose: () => void;
 };
 
@@ -216,6 +224,13 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
 
   const debris = new THREE.Group();
   const flying: TumbleBody[] = [];
+  /** The wheels off this car, still moving. */
+  const rolling: LooseWheel[] = [];
+  let wheelsRoll = true;
+  /** Whether the ledger has been read once: a car BUILT with damage in its
+   * ledger — a rival that lost a wheel out of sight — wears it from the
+   * first frame, and throws nothing (`breakOff`'s `thrown`). */
+  let caughtUp = false;
   const detached = new Set<DamagePart>();
   const pose: CarPose = { roll: 0, pitch: 0, drop: 0 };
   let bentVersion = -1;
@@ -387,16 +402,28 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     body.wipers.shatter(pane);
   };
 
-  /** A wheel off the car: the one on the hub goes flying as a copy of
-   * itself, and what is left at the corner is the hub it was bolted to. */
-  const loseWheel = (index: number, state: GameState): void => {
+  /** A wheel off the car: what is left at the corner is the hub it was
+   * bolted to, and the wheel itself leaves as a body of its own — a copy
+   * of the mesh on the hub, let go at the corner's speed with the tread's
+   * spin, from here on the world's (loose-wheel.ts). `thrown` false leaves
+   * only the hub. */
+  const loseWheel = (index: number, state: GameState, thrown: boolean): void => {
     const wheel = body.wheelGroups[index];
     const spin = body.wheelSpin[index] as THREE.Mesh;
-    const loose = new THREE.Mesh(spin.geometry, spin.material);
-    wheel.add(loose);
-    loose.position.copy(spin.position);
-    loose.rotation.copy(spin.rotation);
-    throwOff(loose, state, WHEEL_REST);
+    if (thrown && wheelsRoll) {
+      const loose = new THREE.Mesh(spin.geometry, spin.material);
+      wheel.add(loose);
+      loose.position.copy(spin.position);
+      loose.rotation.copy(spin.rotation);
+      // attach() keeps the world transform while re-parenting into the
+      // world-anchored debris group — the wheel separates mid-motion, and
+      // its own X in the world is the axle it was turning on.
+      debris.attach(loose);
+      const axle = new THREE.Vector3(1, 0, 0).applyQuaternion(loose.quaternion);
+      const corner = { fwd: wheel.position.z, right: wheel.position.x };
+      const start = throwWheel(state.car, corner, axle, spec.wheelRadius, WHEEL_KICK);
+      rolling.push(looseWheel(loose, start.vel, start.spin, spec.wheelRadius, spec.wheelWidth / 2));
+    }
     spin.visible = false;
     if (!hubGeo) {
       hubGeo = new THREE.CylinderGeometry(hubY * 0.9, hubY * 0.9, 0.12, 10).rotateZ(Math.PI / 2);
@@ -406,13 +433,15 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     wheel.add(hub);
   };
 
-  /** Tear a part off the body and hand it to the world to tumble. */
-  const breakOff = (part: DamagePart, state: GameState): void => {
+  /** Tear a part off the body and hand it to the world to tumble — or,
+   * with `thrown` false, take it off the body and throw nothing: the car
+   * was built with the part already gone. */
+  const breakOff = (part: DamagePart, state: GameState, thrown = true): void => {
     if (detached.has(part)) return;
     const wheel = WHEEL_PARTS.indexOf(part);
     if (wheel >= 0) {
       detached.add(part);
-      loseWheel(wheel, state);
+      loseWheel(wheel, state, thrown);
       bentVersion = -1;
       return;
     }
@@ -437,6 +466,11 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     // the shape the ledger had already folded it into: from here on it is
     // the world's, and no longer re-derived from its pristine copy.
     panels.delete(mesh);
+    if (!thrown) {
+      mesh.removeFromParent();
+      if (part === "doorL" || part === "doorR") bentVersion = -1;
+      return;
+    }
     const geo = mesh.geometry;
     geo.computeBoundingBox();
     const box = geo.boundingBox as THREE.Box3;
@@ -458,8 +492,11 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
 
   const update = (state: GameState, dt: number): void => {
     // Events can only be missed across a rebuild; the ledger cannot —
-    // anything it says is broken and still bolted on comes off now.
-    for (const part of state.car.damage.broken) breakOff(part, state);
+    // anything it says is broken and still bolted on comes off now. On
+    // the first read it comes off without flying: whatever tore it off
+    // happened before this body existed.
+    for (const part of state.car.damage.broken) breakOff(part, state, caughtUp);
+    caughtUp = true;
     sinceBend += dt;
     if (state.car.damage.version !== bentVersion && sinceBend >= BEND_EVERY) bend(state);
 
@@ -478,11 +515,23 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     for (let i = flying.length - 1; i >= 0; i--) {
       if (!stepTumble(flying[i], dt, ground)) flying.splice(i, 1);
     }
+    // The wheels are bodies: they meet the ground, the car they came off
+    // and whatever stands in the way, and the ones that have stopped are
+    // scenery like everything else.
+    for (let i = rolling.length - 1; i >= 0; i--) {
+      if (!stepLooseWheel(rolling[i], dt, ground, state.car, state.terrain)) rolling.splice(i, 1);
+    }
+  };
+
+  const setLooseWheels = (on: boolean): void => {
+    wheelsRoll = on;
   };
 
   const dispose = (): void => {
     for (const d of flying) debris.remove(d.object);
     flying.length = 0;
+    for (const w of rolling) debris.remove(w.object);
+    rolling.length = 0;
     hubGeo?.dispose();
     for (const wheel of body.wheelGroups) {
       const hub = wheel.getObjectByName("hub") as THREE.Mesh | undefined;
@@ -490,7 +539,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     }
   };
 
-  return { debris, pose, update, onEvents, dispose };
+  return { debris, pose, update, onEvents, setLooseWheels, dispose };
 }
 
 function smoothstep(a: number, b: number, t: number): number {

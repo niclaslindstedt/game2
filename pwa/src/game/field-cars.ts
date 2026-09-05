@@ -228,8 +228,16 @@ export type FieldCars = {
    * level here (`fieldInterior`) — and how finely its screens carry the
    * grime film its wipers clear. Both read when a car is BUILT, so they
    * land on the next stage rather than mid-run, which is the same contract
-   * the undergrowth setting keeps; one call because they are one setting. */
-  setCarDetail: (detail: { interior: InteriorDetail; screens: FilmDetail }) => void;
+   * the undergrowth setting keeps; one call because they are one setting.
+   * `looseWheels` is the third question on the same row — whether a wheel
+   * a rival loses is thrown as a rolling body — and unlike the two above it
+   * lands on the cars already built, because a wheel is thrown by an event
+   * rather than baked into a geometry. */
+  setCarDetail: (detail: {
+    interior: InteriorDetail;
+    screens: FilmDetail;
+    looseWheels: boolean;
+  }) => void;
   /** How many rival cars are being drawn right now (the debug overlay). */
   drawn: () => number;
   dispose: () => void;
@@ -259,6 +267,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let drawn = 0;
   let interior: InteriorDetail = fieldInterior("high");
   let screens: FilmDetail = "coarse";
+  let wheelsRoll = true;
   let tint = new THREE.Color(1, 1, 1);
   let lampsLit = false;
   let rain = 0;
@@ -390,6 +399,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           scene.add(visual.group, visual.debris, tag.sprite);
           const fresh = { visual, tag, fumeClock: 0 };
           built.set(run, fresh);
+          visual.setLooseWheels(wheelsRoll);
           tintCar(visual, tint, lampsLit, rain);
           visual.update(run.state, 0, camera.position);
           show(fresh, false);
@@ -481,6 +491,8 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
     setCarDetail: (detail) => {
       interior = fieldInterior(detail.interior);
       screens = detail.screens;
+      wheelsRoll = detail.looseWheels;
+      for (const { visual } of built.values()) visual.setLooseWheels(detail.looseWheels);
     },
     setNames: (on) => {
       named = on;

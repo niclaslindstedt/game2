@@ -45,6 +45,7 @@
     "health": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/health-preview.mjs",
     "transit": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/transit-preview.mjs",
     "rollcam": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/roll-cam.mjs",
+    "wheel": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/wheel-lab.mjs",
     "views": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/views-preview.mjs",
     "audition": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/audition.mjs",
     "profile": "node scripts/profile-render.mjs",
