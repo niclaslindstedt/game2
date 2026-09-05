@@ -410,7 +410,7 @@ And the grade is felt on the CAR's own axes, not the road's. A road states its s
 | Sand        | The desert's bladed road (R40): a fifth less grip than gravel, a breakaway a fifth further out, half again the drag and some of the throttle swallowed — slower in a straight line, sideways sooner in every corner, and a slide that runs further and settles later. Same loose-surface rubber        |
 | **Asphalt** | A third more lateral grip, a sharper wheel to spend it with, and under two thirds of the breakaway angle: the corner that needed a slide is driven round, the drift has to be ASKED for and stays small when it comes — and it throws nothing at all until a tire is overwhelmed, then smokes it black |
 | Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                                                                                                              |
-| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                                                                                                                    |
+| Nature      | The open landscape off the road: loose grip, and NO top end of its own — the wild digs at the driven wheels off the line (`natureDig`) and lets go of them by ~125 km/h, so it is slow to get out of and then runs to whatever the gearbox is worth                                                    |
 
 Asphalt is not a different handling model, because there isn't one: it is
 three numbers on the same one, and the first two pull opposite ways.
@@ -710,9 +710,21 @@ not a mistake anymore; it is exploration:
   back the moment the wheels touch them, the nose pitches with the local
   hillside, and a side slope pulls the car toward its downhill side. The
   brow keeps the road's wide baseline, so a cliff edge or a sharp bank at
-  pace still throws the car — spontaneous jumps, no ramp required. Rough
-  ground caps pace around 150 km/h (`TUNING.surfaces.natureTop`); the road
-  is faster, always.
+  pace still throws the car — spontaneous jumps, no ramp required.
+  Rough ground costs ACCELERATION, not top speed: a driven wheel on
+  unconsolidated ground digs rather than drives, so the wild takes
+  `TUNING.surfaces.natureDig` out of the throttle from a standstill and has
+  given all of it back by `natureDigSpeed` (~125 km/h). A field is half
+  again as long to 100 km/h as the road is — and past that it is a road
+  with nothing painted on it. Nothing but the gearbox holds the top end:
+  ground flat and open enough runs a car out to the same 190–240 km/h the
+  stage does, and the crest at the end of that run is taken at whatever it
+  was worth. In practice the LANDSCAPE is the limit — hills, trees and the
+  grade underfoot settle a straight-line excursion somewhere between 130
+  and 200 km/h depending on the country — which is the limit worth having,
+  because finding a plain and using it is a thing the player did. What the
+  wild costs is the time it takes to build the speed, and the corner that
+  cannot be taken once it is built (`grip` out there is 0.7).
 - **Water** — the landscape floods below the water table
   (`terrain.LAKE_Y`): lakes, sea basins, and the rivers that run into them
   (R18). Shallows and fords slow the car and splash; **deep water is the
