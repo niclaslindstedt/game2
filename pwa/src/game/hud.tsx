@@ -9,15 +9,7 @@
 // input manager at pointer rate), and that is a different job from drawing a
 // readout.
 
-import type {
-  DamageCall,
-  DamagePart,
-  DamageStage,
-  GamePhase,
-  JumpSize,
-  RetireReason,
-  TurnSeverity,
-} from "@engine";
+import type { DamageCall, DamagePart, DamageStage, GamePhase, RetireReason } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
 import { FlyControls } from "./hud-fly.tsx";
@@ -33,42 +25,23 @@ import {
   type NextStage,
 } from "./hud-finish.tsx";
 import { SpectateBanner, SpectateGap, type SpectateProps } from "./hud-spectate.tsx";
-import { MirrorSwitch, paceUnderGlass, type GlassSlot } from "./hud-mirror.tsx";
+import { MirrorSwitch, type GlassSlot } from "./hud-mirror.tsx";
 import { Minimap } from "./minimap.tsx";
 import type { HudMinimap } from "./minimap-view.ts";
 import { CarHealthPanel } from "./hud-health.tsx";
 import type { CarHealth } from "./car-health.ts";
-import type { PaceSign } from "./pace-shape.ts";
 import type { HudShow, TouchSettings } from "./settings.ts";
 import type { ShiftWindow } from "./shift-window.ts";
-import { clamp, formatTime } from "../lib/util.ts";
 import { RaceClock, StartLights } from "./hud-clock.tsx";
+import { Pacenotes, TurnAroundCall, WayHomeCall, type HudPacenote } from "./hud-pace.tsx";
+import { SplitBoard, type HudSplit } from "./hud-split.tsx";
 import type { LiveRun } from "./snapshot.ts";
 
-/** One co-driver call, already flipped into SCREEN space by the snapshot
- * (left means the road bends left through the windshield). */
-export type HudPacenote =
-  | {
-      kind: "turn";
-      dir: "left" | "right";
-      severity: TurnSeverity;
-      /** True when the turn holds long enough to earn the LONG modifier. */
-      long: boolean;
-      /** Meters from the car to the turn entry (0 while inside the turn). */
-      distance: number;
-      /** The corner's own shape, ready to draw in the sign's 100x100 box — the
-       * stage's plan view of this turn, already in screen axes (pace-shape.ts). */
-      sign: PaceSign;
-    }
-  | {
-      kind: "jump";
-      /** How much air the lip gives — the engine's own reading of the ramp
-       * and the road past it (`jumpSize`), not of how fast the car is
-       * going, so the call cannot change under the lift it asks for. */
-      size: JumpSize;
-      /** Meters from the car to the takeoff lip. */
-      distance: number;
-    };
+// The co-driver's calls and the split's flash live in modules of their own,
+// but they are parts of THIS screen: the snapshot writes one and the app
+// holds the other in state, so both shapes stay reachable where every other
+// HUD type is.
+export type { HudPacenote, HudSplit };
 
 /** The car is in the start control — either beat of it. Nothing is geared
  * and no clock is running, which is what the instruments read off. */
@@ -307,25 +280,6 @@ export function wheelCall(wheel: number, off: boolean): { text: string; tone: Hu
   return { text: `${where} WHEEL LOST`, tone: "bad" };
 }
 
-/** R28 — the SPLIT: what the board the car has just gone through said. Held
- * on screen for a few seconds and then gone, the way a split board is: it
- * is read at 140 km/h out of the corner of an eye, so the number that
- * matters — the gap — is the big one and everything else is a caption. */
-export type HudSplit = {
-  id: number;
-  /** Which board it was, 1-based, and how many the lap has. */
-  index: number;
-  count: number;
-  /** The race clock as the car went through, seconds. */
-  time: number;
-  /** Seconds up (positive: slower) or down (negative: quicker) on whoever
-   * this run is being measured against — null when it is measured against
-   * nobody, which is a stage nothing has been driven on yet. */
-  delta: number | null;
-  /** Who that is, for the caption under the gap. */
-  against: string;
-};
-
 type HudProps = {
   /** THE CAR THIS SCREEN IS ABOUT. The player's own, normally — and, while a
    * run-out is being WATCHED, the crew under the camera instead (spectate.ts).
@@ -430,251 +384,6 @@ type HudProps = {
    * presses that change which car it is. Null the rest of the time. */
   spectate: SpectateProps | null;
 };
-
-/** The pacenote sign: the corner's own shape, drawn like a rally note board.
- * The line is the road — the approach at the bottom, the bend the way the
- * bend goes — with a heavy head on the exit. pace-shape.ts has squared both
- * up and fitted them to this 100x100 box, so all that is left here is the
- * hand they are drawn in: one chunky rounded stroke in the severity's
- * colour, and the head filled in the same. */
-function PacenoteArrow({ sign }: { sign: PaceSign }) {
-  return (
-    <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-      <path
-        d={`M ${sign.line.map((p) => p.join(" ")).join(" L ")}`}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="13"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <polygon points={sign.head.map((p) => p.join(",")).join(" ")} fill="currentColor" />
-    </svg>
-  );
-}
-
-const SEVERITY_WORD: Record<TurnSeverity, string> = {
-  soft: "EASY",
-  medium: "MEDIUM",
-  hard: "HARD",
-};
-
-/** The co-driver's word for each size. The middle one is unmodified on
- * purpose — half the lips on a stage are ordinary jumps, and a strip that
- * qualifies every one of them has nothing left to say when a big one comes
- * up. The modifier IS the warning. */
-const JUMP_WORD: Record<JumpSize, string> = {
-  small: "SMALL JUMP",
-  medium: "JUMP",
-  big: "BIG JUMP",
-};
-
-function pacenoteText(note: HudPacenote): string {
-  if (note.kind === "jump") return JUMP_WORD[note.size];
-  return `${note.long ? "LONG " : ""}${SEVERITY_WORD[note.severity]} ${note.dir.toUpperCase()}`;
-}
-
-/** How high the ramp throws the arrow in the icon's 100x100 box, per size.
- * The road under it stays at 72 and the arrow always leaves at the same x,
- * so a bigger jump is drawn as a STEEPER ramp — the shape reads at a glance
- * from the corner of the eye, which is the only way it is ever read, and it
- * says the same thing as the word under it for a driver who does not have a
- * spare tenth of a second to read words. */
-const JUMP_LAUNCH: Record<JumpSize, number> = { small: 52, medium: 35, big: 20 };
-
-function PacenoteIcon({ note }: { note: HudPacenote }) {
-  if (note.kind === "jump") {
-    const top = JUMP_LAUNCH[note.size];
-    return (
-      <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-        <path
-          d={`M 15 72 L 39 72 L 55 ${top} L 77 ${top}`}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="13"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <polygon points={`76,${top - 18} 96,${top} 76,${top + 18}`} fill="currentColor" />
-      </svg>
-    );
-  }
-  return <PacenoteArrow sign={note.sign} />;
-}
-
-function pacenoteClass(note: HudPacenote): string {
-  return note.kind === "jump" ? `hud-pace-jump-${note.size}` : `hud-pace-${note.severity}`;
-}
-
-/** The way home, in the co-driver's own slot. Off the road there is no next
- * corner to call — the road itself is the thing that has to be found again —
- * so the strip stops reading the stage and starts reading the way back. The
- * metres are the distance to the exact point the arrow over the car points
- * at, and that the reset key hands you directly. */
-function WayHomeCall({ distance, glass }: { distance: number; glass: GlassSlot }) {
-  return (
-    <div className={`hud-pace ${paceUnderGlass(glass)}`}>
-      <div className="hud-pace-call hud-pace-home">
-        {/* A warning triangle, drawn in the co-driver strip's own hand —
-            chunky rounded strokes, one color — so it reads as the same
-            instrument as the corner calls it stands in for. */}
-        <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-          <path
-            d="M 50 17 L 89 83 L 11 83 Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="11"
-            strokeLinejoin="round"
-          />
-          <path d="M 50 41 L 50 60" stroke="currentColor" strokeWidth="11" strokeLinecap="round" />
-          <circle cx="50" cy="72" r="6" fill="currentColor" />
-        </svg>
-        <span className="hud-pace-text">
-          RETURN TO TRACK
-          <span className="hud-pace-dist">{Math.round(distance)}m</span>
-          {/* What the RESET key does, which is not the same as what the
-              arrow points at: driving back keeps the road, and the key hands
-              it back to the last checkpoint (R28). A driver deciding between
-              the two has to be told the price. */}
-          <span className="hud-pace-cost">↺ LAST CP</span>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/** Turned round and driving back up the stage, in the co-driver's slot. The
- * road is still under the wheels, so there is nothing to find and no
- * distance to quote — the whole call is one instruction and the mark that
- * says it without being read. */
-function TurnAroundCall({ glass }: { glass: GlassSlot }) {
-  return (
-    <div className={`hud-pace ${paceUnderGlass(glass)}`}>
-      <div className="hud-pace-call hud-pace-turn">
-        {/* The U-turn off a road sign: up the near side, over the top, and
-            back down the far one under a solid head. Drawn in the strip's
-            own hand — one colour, chunky rounded strokes — so it reads as
-            the same instrument as the corner calls it stands in for. */}
-        <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-          <path
-            d="M 76 86 L 76 42 A 24 24 0 0 0 28 42 L 28 54"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="13"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <polygon points="6,52 50,52 28,90" fill="currentColor" />
-        </svg>
-        <span className="hud-pace-text">TURN AROUND</span>
-      </div>
-    </div>
-  );
-}
-
-/** R28 — the split, as the car goes through a board. The GAP is the whole
- * instrument: yellow and leading with a minus when the run is up on what it
- * is chasing, red and a plus when it is down, with which board it was and
- * the clock as a caption under it. A stage nobody has driven yet has no gap
- * to show, and then the caption is the whole readout — a second set of big
- * digits under the race clock would read as a second race clock, and a zero
- * would read as dead level with a car that is not there. It goes up under
- * the race clock and ages off it: a split is read once, at speed, and then
- * it is behind you. */
-function SplitBoard({ split }: { split: HudSplit }) {
-  const { delta } = split;
-  const up = delta !== null && delta < 0;
-  return (
-    <div
-      className={`hud-split ${delta === null ? "" : up ? "hud-split-up" : "hud-split-down"}`}
-      role="status"
-    >
-      {delta !== null && (
-        <div className="hud-split-gap">
-          {up ? "−" : "+"}
-          {Math.abs(delta).toFixed(2)}
-        </div>
-      )}
-      <div className="hud-split-sub">
-        CP {split.index}
-        <span className="hud-split-of">/{split.count}</span>
-        {` · ${formatTime(split.time)}`}
-        {delta !== null && ` · ${split.against}`}
-      </div>
-    </div>
-  );
-}
-
-/** How far out a call is at its faintest, and how close it has to come to
- * be fully lit, meters. The far end is the co-driver's own lead at speed
- * (CALL_LEAD_MAX in snapshot.ts); the near end is about where the braking is
- * already happening, so the call finishes arriving before it matters. */
-const CALL_FADE_FAR = 150;
-const CALL_FADE_NEAR = 30;
-
-/** The faintest the call being driven ever goes. Deliberately ABOVE the
- * next-corner plate's 0.5: however far off the corner is, the call that is
- * next is never dimmer than the one queued behind it. */
-const CALL_FADE_FLOOR = 0.62;
-
-/** The call's opacity, as a distance: far is faint, near is solid. */
-function callFade(distance: number): number {
-  const near = clamp((CALL_FADE_FAR - distance) / (CALL_FADE_FAR - CALL_FADE_NEAR), 0, 1);
-  return CALL_FADE_FLOOR + (1 - CALL_FADE_FLOOR) * near;
-}
-
-/** The co-driver strip: the current call big, and — only when the next
- * corner lands inside the same lead — that one small and half transparent
- * underneath, "HARD LEFT … into easy right", the way a crew reads a stage.
- * A corner further out than that is not on the strip at all; the snapshot
- * hands it over when the car gets to it.
- *
- * HOW FAR OFF the corner is, is the call's OPACITY rather than a number of
- * metres beside it. A distance printed on a sign has to be read and then
- * converted into a feeling of imminence; a sign that hardens as the corner
- * comes IS that feeling, delivered in the corner of an eye already busy with
- * the road. It also means the strip carries one instruction and no arithmetic.
- *
- * With the words switched off it is the SIGNS alone. A sign that is the
- * corner's own shape carries the direction and the severity by being that
- * corner, the colour says the severity again, and the fade carries the
- * distance — so nothing about the call is lost. What goes is the READING,
- * which at rally pace is the expensive part. */
-function Pacenotes({
-  notes,
-  words,
-  glass,
-}: {
-  notes: HudPacenote[];
-  words: boolean;
-  glass: GlassSlot;
-}) {
-  const now = notes[0];
-  const next = notes[1];
-  return (
-    <div className={`hud-pace ${words ? "" : "hud-pace-glyphs"} ${paceUnderGlass(glass)}`}>
-      <div
-        className={`hud-pace-call ${pacenoteClass(now)}${
-          now.kind === "turn" ? ` hud-pace-to-${now.dir}` : ""
-        }`}
-        style={{ opacity: callFade(now.distance) }}
-      >
-        <PacenoteIcon note={now} />
-        {words && <span className="hud-pace-text">{pacenoteText(now)}</span>}
-      </div>
-      {next && (
-        <div
-          className={`hud-pace-call hud-pace-next ${pacenoteClass(next)}${
-            next.kind === "turn" ? ` hud-pace-to-${next.dir}` : ""
-          }`}
-        >
-          <PacenoteIcon note={next} />
-          {words && <span className="hud-pace-text">{pacenoteText(next)}</span>}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** The camera button's glyph: a movie camera — body, lens cone, and the two
  * film reels on top. Drawn rather than lettered because the top bar is the
@@ -818,11 +527,18 @@ export function Hud({
       </div>
     );
   }
+  // `data-glass` is WHERE THE TOP OF THE FRAME STARTS, for everything that
+  // hangs from it: the split's flash and the co-driver's calls under it both
+  // come off `--split-top` in styles.css, and the mirror is the one thing
+  // that can push it down. It is stated once, on the root, rather than as a
+  // class on each instrument — a custom property cascades to descendants, so
+  // two readings placed off one number can never drift apart.
   return (
     <div
       className="hud pointer-events-none absolute inset-0 select-none"
       data-off={snap.offRoad ? "1" : undefined}
       data-air={snap.airborne && snap.phase === "racing" ? "1" : undefined}
+      data-glass={glass === "off" ? undefined : "1"}
     >
       {/* THE MIRROR IS ITS OWN SWITCH: press the glass to put the rear view
           out, press the grey it leaves behind to bring it back. Only where
@@ -855,15 +571,6 @@ export function Hud({
               {snap.ghostGap < 0 ? "−" : "+"}
               {Math.abs(Math.round(snap.ghostGap))}m<span className="hud-chip-sub">GHOST</span>
             </div>
-          )}
-          {/* R28 — the split, under the clock it is a reading of. The
-              co-driver owns the top of the screen and the corner call is
-              the one thing a driver may never have covered up, so a board
-              reports where the time already lives. It is the PLAYER's board,
-              though — a reading of a run that is over — so it stays down
-              while the screen is somebody else's car. */}
-          {show.timer && !spectate && split && snap.phase === "racing" && (
-            <SplitBoard split={split} />
           )}
         </div>
         <div className="hud-actions pointer-events-auto">
@@ -956,6 +663,16 @@ export function Hud({
           `hud-speed` below), and this is a fifth instrument. */}
       {show.damage && !flying && <CarHealthPanel health={snap.health} />}
 
+      {/* R28 — the split, in its own band under the mirror. It is read in the
+          half second after a board goes by, at the top of the frame where the
+          eyes already are, and the band is reserved whether or not a reading
+          is in it: the co-driver's calls hang off the bottom of it, and a
+          corner call that jumped down the screen every time a board went past
+          would be moving exactly while it was being read. It is the PLAYER's
+          board — a reading of a run that is over — so it stays down while the
+          screen is somebody else's car. */}
+      {show.timer && !spectate && split && snap.phase === "racing" && <SplitBoard split={split} />}
+
       {/* The co-driver's slot: corner calls while there is a road to call,
           the way back the moment there isn't, and TURN AROUND for the road
           that is still there and being driven the wrong way down. The first
@@ -971,14 +688,11 @@ export function Hud({
       ) : (
         snap.phase === "racing" &&
         (snap.lost ? (
-          <WayHomeCall distance={snap.homeDistance} glass={glass} />
+          <WayHomeCall distance={snap.homeDistance} />
         ) : snap.wrongWay ? (
-          <TurnAroundCall glass={glass} />
+          <TurnAroundCall />
         ) : (
-          show.pacenotes &&
-          snap.pacenotes.length > 0 && (
-            <Pacenotes notes={snap.pacenotes} words={show.pacenoteText} glass={glass} />
-          )
+          show.pacenotes && snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
         ))
       )}
 

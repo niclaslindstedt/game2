@@ -166,7 +166,6 @@ export type HudInstrument =
   | "nameTags"
   | "cameraButton"
   | "pacenotes"
-  | "pacenoteText"
   | "tachometer"
   | "timer"
   | "stage"
@@ -185,7 +184,6 @@ export function hudShow(hud: HudSettings): HudShow {
     nameTags: on,
     cameraButton: on,
     pacenotes: on,
-    pacenoteText: on,
     tachometer: on,
     timer: on,
     stage: on,

@@ -142,7 +142,10 @@ async function atNextCall(page) {
     `(() => {
       const call = document.querySelector('.hud-pace-call');
       if (!call) return false;
-      const text = call.querySelector('.hud-pace-text')?.textContent ?? '';
+      // The plate carries no words any more — the sign IS the call — so the
+      // direction is read off its LABEL, which is where the co-driver's
+      // vocabulary still lives (pacenoteText in hud.tsx).
+      const text = call.getAttribute('aria-label') ?? '';
       return text.includes('LEFT') ? 'ArrowLeft' : text.includes('RIGHT') ? 'ArrowRight' : false;
     })()`,
     null,
@@ -1978,15 +1981,16 @@ for (const lip of [
   );
 }
 
-// R28 — the SPLIT, as the car goes through the first checkpoint. The bot
-// drives: a board stands a corner or two into the stage and reaching one is
-// the whole point of the shot, not something a scripted key press can
-// stage. Captured as the CLOCK COLUMN rather than the whole frame — the
-// split times itself off the screen in a few seconds, and a full-frame
-// screenshot of a software-rendered stage takes long enough to miss it.
+// R28 — the SPLIT, as the car goes through the first checkpoint: the segment
+// time, which board it was, and the gap to what the run is chasing. The bot
+// drives, because a board stands a corner or two into the stage and reaching
+// one is the whole point of the shot rather than something a scripted key
+// press can stage. Captured as the READING rather than the whole frame — it
+// times itself off the screen in a few seconds, and a full-frame screenshot
+// of a software-rendered stage takes long enough to miss it.
 await captureElement(
   "shot-checkpoint",
-  ".hud-topleft",
+  ".hud-split",
   async (page) => {
     await racing(page);
     await page.waitForSelector(".hud-split", { timeout: 240000 });

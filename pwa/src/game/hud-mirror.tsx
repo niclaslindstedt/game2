@@ -40,17 +40,13 @@
 
 import { useEffect, useRef, useState } from "react";
 
-/** Where the co-driver's slot hangs, which is whatever the mirror is doing
+/** Where the top of the frame hangs, which is whatever the mirror is doing
  * over it: the picture, the blanked glass it toggles to, or nothing at all.
- * The first two hang in the same box, and only the third frees it. */
+ * The first two hang in the same box — a blanked mirror takes up exactly the
+ * room the picture did — and only the third frees it. The HUD's root writes
+ * it out as `data-glass`, and styles.css drops the split's band and the
+ * co-driver's calls below the glass off that one attribute. */
 export type GlassSlot = "live" | "blank" | "off";
-
-/** The class that drops a `.hud-pace` strip clear of the mirror. Both states
- * of a mirror that EXISTS need it — the blanked glass takes up exactly the
- * room the picture did — and a stage with no mirror on it needs none. */
-export function paceUnderGlass(glass: GlassSlot): string {
-  return glass === "off" ? "" : "hud-pace-under-glass";
-}
 
 /** How long the label stands over a mirror that has just come back on, ms.
  * Matched to the fade in styles.css: the words are gone from the DOM on the
