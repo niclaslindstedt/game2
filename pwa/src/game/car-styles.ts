@@ -361,7 +361,7 @@ export const CLASSIC_BODY: CarBodySpec = {
   cabin: {
     cowlZ: 0.86,
     roofFrontZ: 0.28,
-    roofRearZ: -0.9,
+    roofRearZ: -0.98,
     baseRearZ: -1.86,
     roofY: 1.35,
     roofHalf: 0.64,
@@ -370,7 +370,7 @@ export const CLASSIC_BODY: CarBodySpec = {
     // what the ruled photographs said its corners were — and the roof ENDS
     // over the rear seats, so the backlight can lie down behind it.
     roofRearHalf: 0.59,
-    roofRearY: 1.33,
+    roofRearY: 1.32,
     roofPaint: "accent",
     // The three-door glasshouse: a 1.25 m door, a B-pillar standing plumb
     // at its rear edge, and behind it the quarter glass this shape is
@@ -379,19 +379,21 @@ export const CLASSIC_BODY: CarBodySpec = {
     // parallel to the backlight beside it, down to a foot on the sill
     // 0.55 m behind the rear axle; between that edge and the backlight is
     // the pillar, a hand wide at the top and a hand and a half at the sill.
-    // The glass runs close to the metal: this is the flush-glazed body that
-    // did away with the rain gutter. The backlight takes nearly the whole
-    // width of the tail.
+    // This is the flush-glazed body that did away with the rain gutter.
     pillars: {
       a: 0.09,
       b: 0.08,
       sill: 0.04,
-      header: 0.035,
+      // The side glass sits a hand under the roofline, not against it.
+      header: 0.06,
       splitZ: -0.42,
       quarterZ: -1.71,
-      quarterRake: 0.89,
+      quarterRake: 0.81,
       quarterRise: 0,
-      backWidth: 0.92,
+      // Measured off the rear elevation: the backlight is 86% of the tail's
+      // width at its top and its foot alike, a pillar's width of paint
+      // either side of it.
+      backWidth: 0.86,
     },
     wipers: true,
     seal: 0.018,
@@ -399,17 +401,17 @@ export const CLASSIC_BODY: CarBodySpec = {
   // Blistered arches rather than bolted-on boxes: the lips swell out of the
   // wings and fade back into the doors.
   flare: { extra: 0.03, length: 0.95 },
-  // THE WING. Blade centre 0.64 m behind the rear axle at 1.15 m, its
-  // leading edge over the backlight and its trailing edge over the bumper,
-  // 1.7 m across, on posts standing at four fifths of the half span on the
-  // glass's own foot; and the second, flat lip on the tailgate's top edge
-  // just behind that foot.
+  // THE WING. Blade centre 0.64 m behind the rear axle at 1.15 m, half a
+  // metre deep in side view — its leading edge well up the backlight and
+  // its trailing edge over the bumper — 1.7 m across, on posts standing at
+  // four fifths of the half span on the glass's own foot; and the second,
+  // flat lip on the tailgate's top edge just behind that foot.
   spoiler: {
     kind: "gate",
     z: -1.8,
     y: 1.15,
     span: 1.7,
-    chord: 0.4,
+    chord: 0.5,
     thick: 0.075,
     post: 0.8,
     lip: { z: -1.89, chord: 0.08 },
