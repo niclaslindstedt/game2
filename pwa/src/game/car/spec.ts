@@ -28,12 +28,31 @@ export type Spoiler =
   /** The full rally wing: posts, blade, endplates. */
   | { kind: "wing"; z: number; y: number; span: number; chord: number; color?: number }
   /** A hatchback's roof-edge blade, on stubby end posts. */
-  | { kind: "roof"; z: number; y: number; span: number; chord: number; color?: number };
+  | { kind: "roof"; z: number; y: number; span: number; chord: number; color?: number }
+  /** A TAILGATE wing: a deep blade carried on two swept posts standing at
+   * its ENDS, rising off the tailgate's top edge and back over the glass —
+   * the whale tail of the late-80s homologation hatch. `z` and `y` are the
+   * blade's centre; `post` is where the posts stand as a fraction of the
+   * half span. `lip` adds the second, flat blade on the tailgate's own edge
+   * under it — the extra the evolution model of such a car carried. */
+  | {
+      kind: "gate";
+      z: number;
+      y: number;
+      span: number;
+      chord: number;
+      thick?: number;
+      post?: number;
+      lip?: { z: number; chord: number; span?: number };
+      color?: number;
+    };
 
 /** Wheel faces, in rally-car vocabulary. `alloy` is a multi-spoke rim;
  * `steel` is a painted rim under a small hubcap; `split` is the wide
- * four-spoke period classic with a polished lip. */
-export type WheelStyle = "alloy" | "steel" | "split";
+ * four-spoke period classic with a polished lip; `lattice` is the woven
+ * cross-spoke mesh of the 80s performance saloon, every spoke running from
+ * the hub to the rim a pitch off the radius so the two families cross. */
+export type WheelStyle = "alloy" | "steel" | "split" | "lattice";
 
 /** A flat band laid on the flank between two z stations — livery stripes,
  * a rubbing strip, a rocker skirt. Heights are absolute, m. */
@@ -164,6 +183,10 @@ export type TailLights = {
   bezelColor?: number;
   /** How many cells the lens is divided into across its width. */
   cells?: number;
+  /** The lens colour of each cell, OUTBOARD cell first — the amber, red and
+   * white a period cluster runs across its width in. A shorter list repeats
+   * its last entry; left off, every cell is `color`. */
+  cellColors?: number[];
   /** How far the reflector bowls sink into the cap, m. */
   depth?: number;
 };
@@ -176,20 +199,49 @@ export type Indicators = { y: number; x: number; width: number; height: number; 
  * carries two rows. */
 export type LampPods = { y: number; z: number; radius: number; offsets: number[]; color?: number };
 
+/** A bumper bar. `wrap` runs it back along the flanks around the corners;
+ * a shallow `height` reads as a 70s chrome blade, a deep one as the plastic
+ * slab of an 80s car. `strip` is the rubbing strip let into a body-coloured
+ * slab: a dark band across its face and round its wraps, which is most of
+ * what stops a painted bumper reading as more bodywork. */
+export type Bumper = {
+  y: number;
+  height: number;
+  depth: number;
+  wrap?: number;
+  color?: number;
+  /** The bar's full width, m. Left off it is the cap's; stated, the bar
+   * can stand wider than the body it is bolted to — the aero bumper of a
+   * late-80s saloon is the widest thing on the car, wider than the tail
+   * above it — and its wraps run in from that width to the flank. */
+  width?: number;
+  strip?: { y: number; height: number; color?: number };
+};
+
+/** Louvred vents let into the bonnet, one per x offset, m — the pair over
+ * the intercooler that mark out the turbocharged car from the one it was
+ * built from. `z` is their centre along the car, `length` their run. */
+export type HoodVents = {
+  z: number;
+  width: number;
+  length: number;
+  offsets: number[];
+  color?: number;
+};
+
 /** The front clip: everything laid onto the nose cap. */
 export type FrontSpec = {
   grille?: Grille;
   lights?: Lights;
   /** Amber corner lamps, sized as a fraction of the nose half-width. */
   indicators?: Indicators;
-  /** The bumper bar. `wrap` runs it back along the flanks around the
-   * corners; a shallow `height` reads as a 70s chrome blade, a deep one
-   * as the plastic slab of an 80s car. */
-  bumper?: { y: number; height: number; depth: number; wrap?: number; color?: number };
+  bumper?: Bumper;
   /** Air dam / chin spoiler under the bumper. */
   splitter?: { y: number; height: number; depth: number; span: number; color?: number };
   /** Bonnet shut line: the hood's half-width and how far back it runs. */
   hood?: { half: number; zFrom: number; zTo: number };
+  /** Vents let into that bonnet; they come off with it. */
+  vents?: HoodVents;
   /** The auxiliary lamps the rally cars carry — one row, or several at
    * their own heights and sizes. */
   lampPods?: LampPods | LampPods[];
@@ -223,7 +275,7 @@ export type Tailgate = {
 /** The rear clip: everything laid onto the tail cap. */
 export type RearSpec = {
   lights?: TailLights;
-  bumper?: { y: number; height: number; depth: number; wrap?: number; color?: number };
+  bumper?: Bumper;
   /** Recessed number plate, m. */
   plate?: { y: number; width: number; height: number; color?: number };
   /** Exhaust pipe under the valance, at +x of the centerline (m). */
@@ -315,6 +367,13 @@ export type CarBodySpec = {
        * door frame does, and it is stated in metres so it can be put on the
        * same line as the `doorSeams` entry the door shuts against. */
       splitZ?: number;
+      /** The quarter glass's REAR edge in METRES along the car, overriding
+       * `c` the way `splitZ` overrides `split`: the edge is placed at one z
+       * on the sill and on the roof edge alike, so it stands plumb, and what
+       * is left of the flank behind it is the sail panel beside the
+       * backlight — wide at the deck and a hand at the roof, which is what
+       * the C-pillar of a three-door fastback IS. */
+      quarterZ?: number;
       /** Extra sill under the rear quarter window — the rally kick-up. */
       quarterRise?: number;
       /** HOW MUCH OF THE CAR'S BACK THE BACKLIGHT TAKES, 0..1 of the

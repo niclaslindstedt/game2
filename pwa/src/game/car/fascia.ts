@@ -26,7 +26,7 @@ import {
   type LampSurfaces,
 } from "./lamps.ts";
 import { flankX, paintAt, sampleProfile, shade, sideBand } from "./shell.ts";
-import type { CarBodySpec, Grille, Tailgate } from "./spec.ts";
+import type { Bumper, CarBodySpec, Grille, HoodVents, Tailgate } from "./spec.ts";
 
 /** How far a lamp lens, a grille panel or a badge floats off the cap it is
  * laid on, m — enough to beat depth fighting at any camera distance. */
@@ -111,7 +111,7 @@ function buildBumper(
   b: MeshBuilder,
   spec: CarBodySpec,
   axles: number[],
-  bar: { y: number; height: number; depth: number; wrap?: number; color?: number },
+  bar: Bumper,
   zEnd: number,
   dir: number,
   fallback: number,
@@ -119,7 +119,12 @@ function buildBumper(
   const color = bar.color ?? fallback;
   const cap = sampleProfile(spec.profile, zEnd);
   const wrap = bar.wrap ?? 0;
-  const half = Math.max(cap.half * 0.98, flankX(spec, axles, zEnd, bar.y));
+  const flank = Math.max(cap.half * 0.98, flankX(spec, axles, zEnd, bar.y));
+  const half = bar.width ? bar.width / 2.02 : flank;
+  // How far the bar stands out past the flank at the cap, run back to
+  // nothing over the wraps.
+  const flare = Math.max(0, half - flank);
+  const face = zEnd + dir * (bar.depth - 0.02);
   b.taperBox(
     0,
     bar.y,
@@ -130,15 +135,52 @@ function buildBumper(
     bar.depth,
     color,
   );
+  // The rubbing strip: a band a few millimetres proud of the face, and of
+  // each wrap below, in the dark tone that reads as the rubber it is.
+  const strip = bar.strip;
+  const stripColor = strip?.color ?? spec.colors.trim ?? 0x14181f;
+  if (strip)
+    b.box(0, strip.y, face + dir * PROUD * 0.5, half * 1.86, strip.height, PROUD, stripColor);
   if (wrap <= 0) return;
   const steps = 3;
   for (let i = 0; i < steps; i++) {
     const z0 = zEnd - (dir * (wrap * i)) / steps;
     const z1 = zEnd - (dir * (wrap * (i + 1))) / steps;
     const zc = (z0 + z1) / 2;
-    const x = flankX(spec, axles, zc, bar.y) + 0.006;
+    const x = flankX(spec, axles, zc, bar.y) + 0.006 + flare * (1 - (i + 0.5) / steps);
     for (const side of [-1, 1]) {
       b.box(side * x, bar.y, zc, bar.depth * 0.5, bar.height * 0.9, Math.abs(z1 - z0), color);
+      if (strip) {
+        const sx = x + bar.depth * 0.25 + PROUD * 0.5;
+        b.box(side * sx, strip.y, zc, PROUD, strip.height, Math.abs(z1 - z0) * 0.96, stripColor);
+      }
+    }
+  }
+}
+
+/** The bonnet's vents: a dark let-in plate each, with the louvre bars
+ * across it in the paint. They ride the deck at the LID's own lift, so
+ * they sit on the bonnet rather than under it, and they go onto the
+ * bonnet's builder so an impact that takes the panel takes them with it. */
+function buildVents(hood: MeshBuilder, spec: CarBodySpec, vents: HoodVents): void {
+  const dark = vents.color ?? 0x14171c;
+  const paint = spec.colors.paint;
+  // buildPanel lifts the lid this far off the deck; the plate sits on it.
+  const lift = 0.02 + PROUD * 0.5;
+  const z0 = vents.z + vents.length / 2;
+  const z1 = vents.z - vents.length / 2;
+  const y0 = sampleProfile(spec.profile, z0).topY + lift;
+  const y1 = sampleProfile(spec.profile, z1).topY + lift;
+  for (const x of vents.offsets) {
+    const w = vents.width / 2;
+    hood.quad([x - w, y0, z0], [x + w, y0, z0], [x + w, y1, z1], [x - w, y1, z1], dark);
+    // Three louvres, the plate's own length, standing a hair over it.
+    const bars = 3;
+    for (let i = 0; i < bars; i++) {
+      const t = (i + 0.5) / bars;
+      const z = z0 + (z1 - z0) * t;
+      const y = y0 + (y1 - y0) * t + 0.004;
+      hood.box(x, y, z, vents.width * 0.9, 0.006, (vents.length / bars) * 0.3, paint);
     }
   }
 }
@@ -222,6 +264,7 @@ export function buildFront(
   // there, and car/engine-bay.ts paints the flange around the hole — so the
   // flat bay below would be a lid drawn straight over the well.
   buildPanel(b, spec, part("hood"), f.hood, "hood", !options.engineBay);
+  if (f.vents) buildVents(part("hood"), spec, f.vents);
 }
 
 export function buildRear(

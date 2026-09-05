@@ -32,7 +32,7 @@ skill for any code change.
 | `pwa/src/game/car/fascia.ts`     | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid                                                                                                                                             |
 | `pwa/src/game/car/engine-bay.ts` | What is under that bonnet once an impact takes it off: the well cut into the deck, and the engine standing in it                                                                                                                               |
 | `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                                                                                                                                                             |
-| `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                                                                                                                                                                  |
+| `pwa/src/game/car/wheels.ts`     | The tire and four rim styles (multi-spoke, steel, split, cross-spoke lattice)                                                                                                                                                                  |
 | `pwa/src/game/car-styles.ts`     | The specs — one `CarBodySpec` per catalog id. **Pure data, no three.js import** (Node tooling loads it)                                                                                                                                        |
 | `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes × patterns, and `applyLivery`, which repaints any spec. Pure data too                                                                                                                                              |
 | `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes x patterns, and `applyLivery` — a repaint of any spec. Pure data too                                                                                                                                               |
@@ -81,6 +81,17 @@ skill for any code change.
 4. **Pick the winner, fold it into `car-styles.ts`, re-render.** Spec-only
    iterations can pass `--skip-build` — the harness bundle only needs a
    rebuild when `car-body.ts` or the harness itself changed.
+   **A car measured off a reference is PROVED against it, not eyeballed:**
+   `--views "side elevation,front elevation,rear elevation"` renders
+   orthographic elevations with the ground off and writes
+   `previews/<out>.marks.json` — the axles, the tyres' contact corners and
+   the lamp clusters' outer edges, in sheet pixels. A scratch canvas page
+   (playwright-core, in the scratchpad) keys the sky colour out of the
+   cell and draws it over the photo at half opacity, registered by a
+   similarity transform on two marks — the hubs on a side view, the lamp
+   edges on an end view — then rules the result with the same grid the
+   photo was measured on. Offsets read in centimetres; a car scaled in
+   length but not in height shows itself in one look.
 5. **Close in the real game**: `make build` then `make screenshots` (the
    `playtest` skill). The contact sheet judges the sculpture; only the game
    proves the read at speed, in fog, against the world palette.
@@ -91,8 +102,9 @@ skill for any code change.
   up, mid-drift, at 30 px tall — silhouette, roof color, and wing must read
   THERE. Turntable views only diagnose.
 - **Identity per car, one glance apart**: the small car is short, tall,
-  boxy (white roof, lip spoiler); the big car is long, low, rear-set cabin
-  with the full wing. Any new car needs its own one-glance signature.
+  boxy (white over blue, roof blade); the big car is long, low, a fastback
+  under a whale tail on a red roof; the coupe is red on box flares. Any new
+  car needs its own one-glance signature.
 - **Match the world's art direction**: fullbright, faceted, chunky. No
   smooth curves — the loft's hard stations ARE the style. Keep glass light
   (an arcade near-sky tone, not black): a dark greenhouse reads as a hole.

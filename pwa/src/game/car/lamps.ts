@@ -261,7 +261,7 @@ function cluster(
   cells: number,
   depth: number,
   dir: number,
-  tone: LampTone,
+  tone: LampTone | LampTone[],
   bar: number,
   barColor: number,
 ): void {
@@ -274,7 +274,10 @@ function cluster(
   const gap = cells > 1 ? Math.min(bar > 0 ? bar : 0.012, cellW * 0.18) : 0;
   for (let i = 0; i < cells; i++) {
     const x = cx - halfW + cellW * (i + 0.5);
-    bowl(s.lens, x, cy, zPan, cellW / 2 - gap / 2, halfH, depth, dir, tone);
+    // A list of tones is one per cell, in the cluster's own -x → +x order;
+    // a short list runs out into its last entry.
+    const cell = Array.isArray(tone) ? tone[Math.min(i, tone.length - 1)] : tone;
+    bowl(s.lens, x, cy, zPan, cellW / 2 - gap / 2, halfH, depth, dir, cell);
     // The divider between this cell and the next, standing the same height
     // as the housing so the two read as one moulding.
     if (i < cells - 1) {
@@ -329,7 +332,8 @@ export function buildHeadlights(s: LampSurfaces, l: Lights, z: number): void {
 
 /** The tail clusters: the main lens across the top, and — where a spec asks
  * for one — the reverse/amber band under it, both divided into the same
- * cells so the divider bars line up down the whole cluster. */
+ * cells so the divider bars line up down the whole cluster. A cluster that
+ * runs its colours ACROSS instead (`cellColors`) gets one tone per cell. */
 export function buildTailLights(s: LampSurfaces, l: TailLights, z: number): void {
   const lens = l.color ?? 0xc4231b;
   const lower = l.lower ?? 0;
@@ -342,7 +346,11 @@ export function buildTailLights(s: LampSurfaces, l: TailLights, z: number): void
     const x = side * l.x;
     const upperH = (l.height * (1 - lower)) / 2;
     const upper = l.y + (l.height * lower) / 2;
-    cluster(s, x, upper, z, halfW, upperH, cells, depth, -1, glassTone(lens), bar, barColor);
+    // The cells are laid -x → +x, so the outboard-first list reads straight
+    // on the left cluster and backwards on the right one.
+    const tones = l.cellColors?.map(glassTone);
+    const tone = tones ? (side < 0 ? tones : [...tones].reverse()) : glassTone(lens);
+    cluster(s, x, upper, z, halfW, upperH, cells, depth, -1, tone, bar, barColor);
     if (lower > 0) {
       const lowerH = (l.height * lower) / 2;
       cluster(
