@@ -26,3 +26,6 @@ for the whole run; naming it again was a line of screen saying what the
 picture already said, and the pacenote strip has climbed back up into it.
 The condition schematic under it is right-aligned now rather than centred, so
 the map, the stage number and the car's own state share one straight edge.
+In PORTRAIT the map is sized in the width it actually has beside the
+rear-view glass instead of growing through it — which it did on every phone
+before, worse since the map grew.

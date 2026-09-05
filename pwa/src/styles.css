@@ -2206,6 +2206,23 @@ body {
 
 /* ── Portrait ─────────────────────────────────────────────────────────── */
 @media (orientation: portrait) {
+  /* THE MAP GIVES WAY TO THE MIRROR. Portrait hangs the rear-view glass
+     across the middle of the top of the screen — 52vw wide, centred, so its
+     right edge is at 76vw (mirror.ts) — and the map's column comes in from
+     the right edge to meet it. There is no clear span between them the way
+     landscape has, so the map is sized in the width it actually has rather
+     than in `vmin` with a `rem` floor: on a phone that floor is the LARGER
+     term, and a map sized by it grows straight through the glass.
+
+     18vw leaves a finger's width of gap at every phone size and is still
+     wider than the landscape rule's own `vmin` term asks for down there. The
+     cap stops a tablet, where the mirror is comfortably clear, from being
+     given a map bigger than the one landscape gets; the floor only ever
+     binds under about 300px, where nothing fits anyway. */
+  .hud {
+    --hud-map: clamp(3.4rem, 18vw, 9.75rem);
+  }
+
   /* Below the minimap, always: a percentage top clears the dock on a tall
      phone and slides under it on a short one. */
   .hud-pace {
