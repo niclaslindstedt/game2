@@ -146,16 +146,17 @@ const SIDE_COAT_MAX = 0.6;
 const SOIL = {
   front: { rain: 0.17, road: 0.0023 },
   rear: { rain: 0.2, road: 0.005 },
-  // Well under the screens, and it has to be: NOTHING takes this back off. A
+  // Under the screens, and it has to be: NOTHING takes this back off. A
   // screen's rate is what it regains between strokes, so it can be fast and
   // still read as a screen being kept clear; a flank's is the whole of what
-  // it will ever carry, so the same number there is a car whose side windows
-  // are opaque half a minute after the start. These are sized to reach the
-  // ceiling a kilometre or two into a gravel stage — sooner in the slides —
-  // which is what makes the flanks read as a run's worth of road rather than
-  // as a setting, and what lets the driver's own side glass close in on
-  // them over a stage rather than only in its last corner.
-  side: { rain: 0.02, road: 0.00045 },
+  // it will ever carry, and its ceiling (`SIDE_COAT_MAX`) is what stops it
+  // going opaque. These are sized to reach that ceiling about a kilometre
+  // into a gravel stage — sooner in the slides — so from the seat the side
+  // glass has closed in by the first few corners rather than in the last
+  // one: half a coat on a flank is a faint warmth over the trees that
+  // nobody reads as dirt, and the whole point of the flanks is that the
+  // driver is boxed in by them.
+  side: { rain: 0.035, road: 0.0009 },
 };
 
 /** What a blade leaves behind, as a fraction of what it found — and it is
