@@ -29,12 +29,31 @@ touches. Load **`skill-reflection`** at both ends of the session.
 | `make screenshots`       | Runs it against the BUILT app (`make build` first); `CHROMIUM_PATH=/opt/pw-browsers/chromium` in web sessions |
 | Read tool on the PNGs    | The evaluation itself — every judgement is made on a screenshot, not on source                                |
 | `npm run dev`            | Headed spot-checks (hover states, the update toast's timing, touch behavior in devtools emulation)            |
+| `scripts/debug-shot.mjs` | ONE driving frame, any viewport — the cheap way to audit a single instrument's placement                      |
 
 The two shipped viewports are the floor, not the ceiling: when a change is
 layout-sensitive, add a capture at the tight cases — landscape phone
 (844×390, the harshest axis for a HUD strip) and a small phone (375×667) —
 by passing a viewport in a scene. A surface tuned to exactly fit 390×844 runs
 out of room on the SE class first.
+
+**When the change is ONE instrument's placement rather than a surface, take
+one frame per viewport instead of the whole sweep.** `debug-shot.mjs` wants a
+repro line, but a bare seed is a valid one — it fills in the rest and drops
+you on the grid with the HUD up:
+
+```sh
+make build
+CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/debug-shot.mjs '?seed=42' --out land
+node scripts/debug-shot.mjs '?seed=42' --portrait --out port
+node scripts/debug-shot.mjs '?seed=42' --viewport 844x390 --out phone-land
+```
+
+Each is about half a minute against a built `pwa/dist`, which makes the
+before/after pair affordable on every orientation the rule splits on. The
+frames carry the debug overlay (the script forces `debug=1`), so read the
+corner the change is in and leave the boxes alone. It cannot stage a moment —
+a drift, a landing, a finish card still needs `make screenshots`.
 
 ## The quality bar
 
