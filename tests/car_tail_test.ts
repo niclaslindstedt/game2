@@ -17,7 +17,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import { MeshBuilder, patchAt } from "../pwa/src/game/car/builder.ts";
-import { cabinPanels } from "../pwa/src/game/car/greenhouse.ts";
+import { backlightY, cabinPanels } from "../pwa/src/game/car/greenhouse.ts";
 import { buildTailLights } from "../pwa/src/game/car/lamps.ts";
 import { bodyHalfLength, sampleProfile } from "../pwa/src/game/car/shell.ts";
 import type { CarBodySpec } from "../pwa/src/game/car/spec.ts";
@@ -79,9 +79,10 @@ describe("a tail cluster whose colours run across it", () => {
 });
 
 describe("a quarter glass stated in metres", () => {
-  it("stands plumb on both flanks, at the z the spec named", () => {
+  it("puts its foot at the z the spec named and its top the rake ahead, on both flanks", () => {
     const spec = CLASSIC_BODY;
     const quarterZ = spec.cabin.pillars?.quarterZ;
+    const rake = spec.cabin.pillars?.quarterRake ?? 0;
     expect(quarterZ).toBeDefined();
     const [, , ...flanks] = cabinPanels(spec);
     expect(flanks).toHaveLength(2);
@@ -90,8 +91,24 @@ describe("a quarter glass stated in metres", () => {
       const foot = patchAt(flank.patch, quarter.u1, 0)[2];
       const top = patchAt(flank.patch, quarter.u1 + (quarter.lean1 ?? 0), 1)[2];
       expect(foot).toBeCloseTo(quarterZ!, 3);
-      expect(top).toBeCloseTo(quarterZ!, 3);
+      expect(top).toBeCloseTo(quarterZ! + rake, 3);
     }
+  });
+
+  it("stands plumb when no rake is stated", () => {
+    // A foot the roof edge still reaches over, so a plumb top exists.
+    const spec: CarBodySpec = {
+      ...CLASSIC_BODY,
+      cabin: {
+        ...CLASSIC_BODY.cabin,
+        pillars: { ...CLASSIC_BODY.cabin.pillars, quarterZ: -0.8, quarterRake: undefined },
+      },
+    };
+    const [, , flank] = cabinPanels(spec);
+    const quarter = flank.holes[1];
+    const foot = patchAt(flank.patch, quarter.u1, 0)[2];
+    const top = patchAt(flank.patch, quarter.u1 + (quarter.lean1 ?? 0), 1)[2];
+    expect(top).toBeCloseTo(foot, 3);
   });
 
   it("still leans with the patch on a car that states the post's width instead", () => {
@@ -153,13 +170,16 @@ describe("a tailgate wing on posts at its ends", () => {
     geo.dispose();
   });
 
-  it("plants its posts on the deck at the ends, not on inboard struts", () => {
+  it("plants its posts on the glass at the ends, not on inboard struts", () => {
     if (sp?.kind !== "gate") return;
     const geo = spoilerGeometry();
     const pos = geo.getAttribute("position");
     const postX = (sp.span / 2) * (sp.post ?? 0.8);
     const lipHalf = (sp.lip?.span ?? sp.span * 0.92) / 2;
-    const deck = sampleProfile(spec.profile, sp.z).topY;
+    // The surface the feet stand on: the backlight where it runs under
+    // them, the deck where it does not.
+    const footZ = sp.z + sp.chord * 0.1;
+    const deck = backlightY(spec, footZ) ?? sampleProfile(spec.profile, footZ).topY;
     // Everything of the wing that reaches down to the deck is a post foot
     // or the lip, and the lip only has vertices at its own ends — so what
     // is down there inboard of those ends is a post, standing where the

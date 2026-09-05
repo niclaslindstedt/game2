@@ -103,8 +103,10 @@ export type SideBand = {
   dashes?: { count: number; duty?: number; phase?: number };
 };
 
-/** Stripes laid along the top surfaces — hood, boot lid. They sample the
- * silhouette, so a stripe that crosses a fold climbs it. */
+/** Stripes laid along the top surfaces — hood, boot lid, and the roof.
+ * On the deck they sample the silhouette, so a stripe that crosses a fold
+ * climbs it; on the roof they lie on the roof panel between its front and
+ * rear edges. */
 export type DeckStripes = {
   /** x centers, m — one stripe per entry. */
   offsets: number[];
@@ -112,6 +114,10 @@ export type DeckStripes = {
   zFrom: number;
   zTo: number;
   color?: number;
+  /** Which panel carries the run: the profile's deck (the default) or the
+   * roof. A race car's twin stripes are two groups — one on the bonnet up
+   * to the cowl, one on the roof — with the windscreen left between them. */
+  on?: "deck" | "roof";
 };
 
 /** A grille: a recessed dark panel with a colored surround (the bright
@@ -350,6 +356,10 @@ export type CarBodySpec = {
      * fastback's does above its raked backlight. Left off, the roof is one
      * width. */
     roofRearHalf?: number;
+    /** The roof's height at its REAR edge, m, where it falls toward the
+     * backlight rather than running level to it. Left off, the roof is one
+     * height. */
+    roofRearY?: number;
     roofPaint?: "paint" | "accent";
     /** Body-colored frame left around the glass, m. The cabin is built as
      * a solid shell and the glass is cut into it, so these widths ARE the
@@ -379,6 +389,18 @@ export type CarBodySpec = {
        * backlight — wide at the deck and a hand at the roof, which is what
        * the C-pillar of a three-door fastback IS. */
       quarterZ?: number;
+      /** How far AHEAD of that foot the quarter glass's rear edge stands at
+       * the roof, m — a trailing edge raked forward, the way a three-door
+       * fastback's runs parallel to its backlight and leaves the sail panel
+       * as a wedge behind it. Zero, the default, is a plumb edge. Only read
+       * with `quarterZ`. */
+      quarterRake?: number;
+      /** The height, m, at which that raked trailing edge stops and the
+       * glass turns DOWN to the sill — a rounded rear corner rather than
+       * a point running on to the pillar. The tip the rake would have cut
+       * is filled with the pillar's paint in two facets. Only read with
+       * `quarterRake`. */
+      quarterCornerY?: number;
       /** Extra sill under the rear quarter window — the rally kick-up. */
       quarterRise?: number;
       /** HOW MUCH OF THE CAR'S BACK THE BACKLIGHT TAKES, 0..1 of the

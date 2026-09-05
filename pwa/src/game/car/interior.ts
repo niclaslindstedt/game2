@@ -207,7 +207,9 @@ export function cabinOf(spec: CarBodySpec): Cabin {
     inner: Math.min(f.CR[0], f.TR[0], roofHalf) - 0.055,
     panY: deck + 0.012,
     sillY: cowlY + (spec.cabin.pillars?.sill ?? PILLAR_SILL),
-    roofY: roofY - 0.035,
+    // Under the LOWER of the roof's two edges: a headliner hung from the
+    // front's height pokes out through a roof that falls toward the tail.
+    roofY: Math.min(roofY, spec.cabin.roofRearY ?? roofY) - 0.035,
     cowlY,
     cowlZ,
     rake: roofY > cowlY ? (f.FL[2] - cowlZ) / (roofY - cowlY) : 0,

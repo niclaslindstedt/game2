@@ -69,7 +69,10 @@ The procedure:
    seven high, and both survived a first overlay. Read every landmark
    twice, from two crops, as a pixel coordinate, and read the picture with
    the `Read` tool. The same tool rules an OVERLAY, which is how a miss is
-   read in centimetres rather than seen.
+   read in centimetres rather than seen. Read every window as FOUR
+   corners, never as a span: a quarter glass with a raked trailing edge
+   and a roof that ends before its backlight both come out as "square"
+   glass the moment either is measured at one end only.
 2. **Scale from the wheelbase.** The two wheel centres are the only
    points nothing can argue with: `mm per pixel = real wheelbase / pixel
 distance between hub centres`. Cross-check against the tyre diameter.

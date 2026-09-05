@@ -26,7 +26,7 @@
 // why this file hands the two screens out as `screenPanes`.
 
 import type { MeshBuilder, Patch, UVRect, V3 } from "./builder.ts";
-import { mixHex, patchAt, patchFade, patchQuad, patchSpan } from "./builder.ts";
+import { mixHex, patchAt, patchFade, patchNormal, patchQuad, patchSpan } from "./builder.ts";
 import { roofColor, sampleProfile, sideRatios } from "./shell.ts";
 import type { CarBodySpec } from "./spec.ts";
 
@@ -39,6 +39,8 @@ const PILLARS = {
   split: 0.5,
   splitZ: undefined as number | undefined,
   quarterZ: undefined as number | undefined,
+  quarterRake: 0,
+  quarterCornerY: undefined as number | undefined,
   quarterRise: 0,
   /** The backlight's share of the cabin's rear panel, across the car. A
    * SHARE and not the `c` post's metres, because what reads from behind is
@@ -93,6 +95,7 @@ export type CabinFrame = {
 export function cabinFrame(spec: CarBodySpec): CabinFrame {
   const { cowlZ, roofFrontZ, roofRearZ, baseRearZ, roofY, roofHalf } = spec.cabin;
   const rearHalf = spec.cabin.roofRearHalf ?? roofHalf;
+  const rearY = spec.cabin.roofRearY ?? roofY;
   const cowl = sampleProfile(spec.profile, cowlZ);
   const tail = sampleProfile(spec.profile, baseRearZ);
   // The cabin sits just inside the body's top edge so the shoulder reads
@@ -105,11 +108,23 @@ export function cabinFrame(spec: CarBodySpec): CabinFrame {
     CR: [xc, cowl.topY, cowlZ],
     FL: [-roofHalf, roofY, roofFrontZ],
     FR: [roofHalf, roofY, roofFrontZ],
-    RL: [-rearHalf, roofY, roofRearZ],
-    RR: [rearHalf, roofY, roofRearZ],
+    RL: [-rearHalf, rearY, roofRearZ],
+    RR: [rearHalf, rearY, roofRearZ],
     TL: [-xt, tail.topY, baseRearZ],
     TR: [xt, tail.topY, baseRearZ],
   };
+}
+
+/** The height of the BACKLIGHT along the car's centreline at `z`, m —
+ * the cabin's tail patch, from the roof's rear edge down to its foot on
+ * the deck — or undefined where `z` is not under that pane. What a thing
+ * standing on the glass (a tailgate wing's post) has to be planted on:
+ * the deck under it is inside the cabin. */
+export function backlightY(spec: CarBodySpec, z: number): number | undefined {
+  const { RL, TL } = cabinFrame(spec);
+  if (z > RL[2] || z < TL[2]) return undefined;
+  const t = (RL[2] - z) / (RL[2] - TL[2] || 1);
+  return RL[1] + (TL[1] - RL[1]) * t;
 }
 
 /** A sub-rectangle of a patch, in patch (u, v) — sheared where a pillar
@@ -295,11 +310,14 @@ export function cabinPanels(spec: CarBodySpec): CabinPanel[] {
       doorRear = { u: p.split - half, lean: 0 };
       quarterFront = { u: p.split + half, lean: 0 };
     }
-    // The quarter glass's rear edge: plumb where the spec states it in
-    // metres, otherwise the C post's width off the flank's end.
+    // The quarter glass's rear edge: where the spec states it in metres,
+    // its foot at `quarterZ` and its top `quarterRake` ahead of that — plumb
+    // at zero, a diagonal otherwise; without either, the C post's width off
+    // the flank's end.
     let quarterRear: { u: number; lean: number };
     if (p.quarterZ !== undefined) {
-      const { foot, top } = plumb(p.quarterZ);
+      const { foot } = plumb(p.quarterZ);
+      const { top } = plumb(p.quarterZ + (p.quarterRake ?? 0));
       quarterRear = { u: foot, lean: top - foot };
     } else {
       quarterRear = { u: 1 - p.c / span.u, lean: 0 };
@@ -428,9 +446,68 @@ export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpe
   }
 
   patchQuad(b, [FL, FR, RR, RL], { u0: 0, u1: 1, v0: 0, v1: 1 }, roof);
+  buildQuarterCorners(b, spec, panels, pillar);
   buildGutters(b, spec);
   buildRoofVents(b, spec);
   return panes;
+}
+
+/** The rounded rear corner of a raked quarter glass. The opening is cut
+ * with one straight raked edge, so what the glass really has — a diagonal
+ * that turns down to the sill at `quarterCornerY` — is made by painting the
+ * cut-off tip back in: a fan of pillar paint over the glass and its seal,
+ * from the point on the raked edge at that height down to the sill under
+ * it, in two facets so the turn reads as a round at any distance. */
+function buildQuarterCorners(
+  b: MeshBuilder,
+  spec: CarBodySpec,
+  panels: CabinPanel[],
+  pillar: number,
+): void {
+  const p = { ...PILLARS, ...spec.cabin.pillars };
+  const cornerY = p.quarterCornerY;
+  if (cornerY === undefined || p.quarterZ === undefined || !p.quarterRake) return;
+  // Proud of the seal and the glass alike, so it paints over both.
+  const lift = GLASS_PROUD + 0.004;
+  for (const panel of panels.slice(2)) {
+    const { patch, holes, mirrored } = panel;
+    const hole = holes[1];
+    const lean = hole.lean1 ?? 0;
+    // The height each v stands at along the hole's rear edge, and the v
+    // that height is reached at — the patch is bilinear, so along one edge
+    // it is linear enough to invert directly.
+    const yAt = (v: number): number => patchAt(patch, hole.u1 + lean * v, v)[1];
+    const y0 = yAt(hole.v0);
+    const y1 = yAt(hole.v1);
+    const vc = hole.v0 + ((cornerY - y0) / (y1 - y0 || 1)) * (hole.v1 - hole.v0);
+    if (vc <= hole.v0 || vc >= hole.v1) continue;
+    // A: the turn on the raked edge. B: the rake's own foot on the sill.
+    // C: the sill straight under A. M: a facet between A and C, set back a
+    // little toward B so the turn is a round and not a corner.
+    const uA = hole.u1 + lean * vc;
+    const uB = hole.u1 + lean * hole.v0;
+    const A = patchAt(patch, uA, vc);
+    const B = patchAt(patch, uB, hole.v0);
+    const C = patchAt(patch, uA, hole.v0);
+    const M = patchAt(patch, uA + (uB - uA) * 0.35, hole.v0 + (vc - hole.v0) * 0.4);
+    const n = patchNormal(patch);
+    const sign = mirrored ? -1 : 1;
+    const out = (q: V3): V3 => [
+      q[0] + n[0] * lift * sign,
+      q[1] + n[1] * lift * sign,
+      q[2] + n[2] * lift * sign,
+    ];
+    const [a, m, c, d] = [out(A), out(M), out(C), out(B)];
+    // Wound with the patch's own corners, and reversed on the mirrored
+    // flank, the way patchQuad keeps its winding.
+    if (mirrored) {
+      b.tri(a, d, m, pillar);
+      b.tri(m, d, c, pillar);
+    } else {
+      b.tri(a, m, d, pillar);
+      b.tri(m, c, d, pillar);
+    }
+  }
 }
 
 /** The roof scoops: a box each on the roof, with a dark mouth on its
