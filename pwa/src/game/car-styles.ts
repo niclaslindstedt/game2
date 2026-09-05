@@ -5,14 +5,15 @@
 // (scripts/car-preview.mjs) can load it too.
 //
 // Three period rally silhouettes ship, one glance apart: a short upright
-// two-box hatch, a long low three-box race sedan, and a wide-arched
-// two-door coupe. They differ on the axes that survive being 30 px tall in
+// two-box hatch, a long low three-box race sedan of the sixties, and a
+// four-door turbo sedan of the Group A years. They differ on the axes that survive being 30 px tall in
 // a chase cam — overall shape, roof color, body color — before they differ
 // on any of the detail below.
 //
 // Every one of them is an ORIGINAL design in a period idiom. Nothing here
 // reproduces a real manufacturer's model, badge, wordmark or team livery;
-// the shapes are generic 1970s-80s rally vocabulary and the liveries are
+// the shapes are the rally vocabulary of the 1960s-80s, with their
+// proportions measured off elevations of the era, and the liveries are
 // plain color blocking and a door number.
 //
 // Dimensions are metres and honest: these are 3.8-4.1 m cars on a 2.4 m
@@ -384,112 +385,244 @@ export const CLASSIC_BODY: CarBodySpec = {
   },
 };
 
-/** The four-wheel-drive: a homologation two-door standing on box flares, with
- * a quad-lamp black grille panel, a deep air dam and red wheels. Red over
- * a white flank, so it never gets confused with the two white cars. */
-export const COUPE_BODY: CarBodySpec = {
+/** The four-wheel-drive: a four-door turbo sedan in the Group A idiom of
+ * the late eighties — the shape the works teams took rallying once the
+ * homologation specials were banned. A long wedge of a bonnet off a low
+ * nose, a greenhouse that starts well forward and runs most of the car on
+ * thin posts, a raked backlight down to a short high boot with a lip on
+ * it, and a tail that is one full-width band of lamps. Flush-fitting, not
+ * bolted-on: the arches are pressed blisters and the skirts are body
+ * colour, and what says "works car" is the furniture — two scoops on the
+ * roof, four lamp pods on the nose, red flaps — and the colour blocking.
+ *
+ * MEASURED, not judged: every line below was read as a pixel off a ruled
+ * side elevation and converted against the two things nothing can argue
+ * with, the wheel centres. The wheelbase set the scale (2.567 mm a pixel),
+ * heights come off the ground under the tyres, and everything along the
+ * car is stated from the axles. The real car is 4.56 m long on a 2.6 m
+ * wheelbase; the one collision box the catalog shares stops at 2.1 m from
+ * the middle, so every LENGTH here is scaled by 0.921 and no height or
+ * width is — a proportion along the car is the photo's, a proportion up
+ * or across it is real. Against the front axle at z = 1.19 and the rear
+ * at z = −1.21:
+ * - the bonnet's leading edge 0.73 m ahead of the front axle, the cowl
+ *   0.35 m behind it, the roof's front edge 0.82 m behind it;
+ * - the front door 0.96 m long from 0.44 m behind the front axle, the
+ *   B-pillar plumb at −0.25, the rear door's shut line 0.32 m ahead of the
+ *   rear axle, and the side glass running 0.15 m past that axle;
+ * - the roof's rear edge 0.24 m ahead of the rear axle, the backlight's
+ *   foot 0.17 m behind it, the tail 0.80 m behind it;
+ * - the bonnet climbing 0.12 m from its leading edge to the cowl, the door
+ *   tops at 0.92 m, the boot 0.1 m higher than them, the roof at 1.37 m;
+ * - a tyre 0.32 m in radius under a rim two thirds of it, on five broad
+ *   blades — the one white wheel in the catalog.
+ *
+ * The BACK is where the geometry is spent, because it is the panel the
+ * chase camera holds for the whole stage: a lamp band the width of the car
+ * with the plate let into the middle of it, a deep body-colour bumper with
+ * the black valance under it, the lip on the boot, the two red flaps, and
+ * the tail paint carrying the roof's black down the posts and across the
+ * quarters so the car reads as a white nose pushing a black tail. */
+export const SEDAN_BODY: CarBodySpec = {
+  // The deck FALLS from the cowl to the nose in four steps, and dips again
+  // through the cabin: the door tops sit a hand under the cowl and the boot
+  // stands a hand over them, which is the three-box silhouette in three
+  // numbers. The nose is the lowest thing on the car and stops where it
+  // does because the engine plants a roadside stone as a SOLID by measuring
+  // it against the lowest bonnet in the catalog (tests/car_geometry_test.ts).
   profile: [
-    { z: 2.0, topY: 0.9, half: 0.7 },
-    { z: 1.86, topY: 0.92, half: 0.74 },
-    { z: 1.2, topY: 0.94, half: 0.77 },
-    { z: 0.66, topY: 0.99, half: 0.77 },
-    { z: -1.0, topY: 1.01, half: 0.77 },
-    { z: -1.46, topY: 0.97, half: 0.76 },
-    { z: -1.86, topY: 0.95, half: 0.73 },
-    { z: -2.0, topY: 0.9, half: 0.7 },
+    { z: 1.99, topY: 0.85, half: 0.72 },
+    { z: 1.92, topY: 0.87, half: 0.77 },
+    { z: 1.5, topY: 0.9, half: 0.82 },
+    { z: 1.19, topY: 0.925, half: 0.84 },
+    { z: 0.84, topY: 0.975, half: 0.845 },
+    { z: 0.7, topY: 0.925, half: 0.845 },
+    { z: 0.0, topY: 0.93, half: 0.845 },
+    { z: -0.9, topY: 0.94, half: 0.845 },
+    { z: -1.375, topY: 1.03, half: 0.84 },
+    { z: -1.8, topY: 1.005, half: 0.8 },
+    { z: -2.01, topY: 0.975, half: 0.74 },
   ],
-  floorY: 0.28,
-  beltY: 0.84,
+  // Low over its wheels: the sill on the real car is a hand off the ground
+  // at rally height.
+  floorY: 0.24,
+  beltY: 0.82,
+  // Flat flanks with a soft turn-in at the shoulder — a pressed-steel
+  // sedan, not a slab.
   side: { rocker: 0.95, shoulder: 0.93 },
-  wheelbase: 2.38,
-  axleShift: 0.02,
-  // Tucked in under the flares: the tire face sits barely proud of the
-  // box arch, which is the whole point of bolting one on.
-  trackHalf: 0.72,
-  wheelRadius: 0.33,
-  wheelWidth: 0.3,
+  wheelbase: 2.4,
+  // A hair rearward: the tail bumper's face is what reaches the collision
+  // box's end, and both overhangs come out at 0.8 m to the caps.
+  axleShift: -0.01,
+  trackHalf: 0.74,
+  // A fifteen-inch gravel wheel: the tyre a quarter of the roof height, the
+  // arch clearing it by the springs' whole travel and not a millimetre more
+  // (the tightest tests/car_geometry_test.ts allows), and the rim two
+  // thirds of the tyre. The face is five broad blades off a small hub,
+  // painted white with the car — the rim the works cars ran, and the one
+  // white wheel in the catalog, which is what sells the car at a glance
+  // from the seat behind it.
+  wheelRadius: 0.32,
+  wheelWidth: 0.25,
   wheelStyle: "alloy",
-  wheelSpokes: 8,
-  arches: { radius: 0.42 },
+  rimShare: 0.67,
+  wheelSpokes: 5,
+  wheelSpokeWidth: 0.27,
+  arches: { radius: 0.4 },
   cabin: {
-    cowlZ: 0.66,
-    roofFrontZ: 0.06,
-    roofRearZ: -0.98,
-    baseRearZ: -1.42,
-    roofY: 1.34,
-    roofHalf: 0.635,
+    cowlZ: 0.84,
+    roofFrontZ: 0.37,
+    roofRearZ: -0.97,
+    baseRearZ: -1.375,
+    roofY: 1.37,
+    roofHalf: 0.64,
+    // The roof, every post and the tail paint are one colour: the works
+    // blackout that runs from the screen's top edge off the back of the car.
     roofPaint: "accent",
+    pillarPaint: "accent",
+    // Four-door glass: a front door pane, a plumb B-pillar on the door's
+    // shut line, a rear door pane nearly as long, and a rear post that leans
+    // with the backlight. Thin posts and a low sill — the glass is a third
+    // of the car's height, which is the number that puts it in its decade.
     pillars: {
-      a: 0.1,
-      b: 0.09,
-      c: 0.26,
-      sill: 0.055,
-      header: 0.045,
-      split: 0.58,
-      quarterRise: 0.03,
+      a: 0.09,
+      b: 0.08,
+      c: 0.16,
+      sill: 0.045,
+      header: 0.04,
+      splitZ: -0.25,
+      quarterRise: 0,
+      backWidth: 0.84,
     },
-    gutter: { width: 0.026 },
+    gutter: { width: 0.02 },
     wipers: true,
     seal: 0.016,
+    // The two scoops at the front of the roof: the first thing on the car
+    // the chase camera sees over the backlight.
+    roofVents: { z: 0.2, offsets: [-0.42, 0.42], width: 0.2, length: 0.16, height: 0.04 },
   },
-  flare: { extra: 0.085, length: 1.2, kind: "box" },
-  spoiler: { kind: "lip", z: -1.88, y: 1.06, span: 1.32, color: 0x1b1e23 },
-  stripes: { offsets: [-0.3, 0.3], width: 0.1, zFrom: 1.88, zTo: 0.7, color: 0xf2efe6 },
-  doorSeams: [0.5, -0.68],
-  handles: { z: [-0.36], y: 0.8 },
+  // Pressed blisters rather than box flares: the works car's arches are
+  // swollen from the panel, three centimetres a side, and stop at the doors.
+  flare: { extra: 0.03, length: 1.15, kind: "smooth" },
+  // The boot's lip, a hand above the deck and the width of the lid.
+  spoiler: { kind: "lip", z: -1.95, y: 1.03, span: 1.3, color: 0x15171b },
+  // Two red flashes down the bonnet's outer edges, from the lamps to the
+  // cowl — inside the lid, so they leave with it.
+  stripes: [{ offsets: [-0.44, 0.44], width: 0.2, zFrom: 1.86, zTo: 0.9, color: 0xd8262c }],
+  // Three shut lines: the front door's leading edge just behind the front
+  // arch, the B-pillar's line, and the rear door's edge ahead of the rear
+  // arch — the rear door is 0.68 m of the flank, the front one 0.96.
+  doorSeams: [0.75, -0.21, -0.89],
+  // A hand ahead of each door's rear edge, just under the glass.
+  handles: { z: [-0.02, -0.65], y: 0.87 },
+  // The tail paint's break: from here back the loft, the cap and the boot
+  // lid wear the roof's black. It stands where the red band's rear edge
+  // reaches the door top, so the red is laid over black from there down
+  // and its slanted edge IS the edge of the blackout — no second band, and
+  // no line where two paints of the same black would meet.
+  tailPaint: { z: -0.84 },
   sideBands: [
-    // The livery is blocked, not striped: white front wing, white rear
-    // quarter, and the door number's own panel between them.
-    { zFrom: 1.9, zTo: 0.52, yFrom: 0.42, yTo: 0.82, color: 0xf2efe6, proud: 0.012 },
-    { zFrom: -0.7, zTo: -1.9, yFrom: 0.42, yTo: 0.82, color: 0xf2efe6, proud: 0.012 },
+    // The silver rubbing strip, wheel to wheel at knee height — hardware,
+    // so it stays on whatever the car is painted.
+    {
+      zFrom: 1.9,
+      zTo: -1.95,
+      yFrom: 0.6,
+      yTo: 0.625,
+      role: "trim",
+      color: 0xb8bcc2,
+      proud: 0.01,
+    },
+    // The colour blocking: a red diagonal across the rear door, leaning
+    // forward as it climbs, from the sill to the door top. Its foot runs
+    // onto the rear arch and is clipped by it, as the paint on the real
+    // car is; its rear edge is where the white ends.
+    {
+      zFrom: -0.52,
+      zTo: -1.08,
+      yFrom: 0.24,
+      yTo: 0.94,
+      slant: 0.36,
+      color: 0xd8262c,
+      proud: 0.006,
+    },
   ],
-  raceNumber: {
-    text: "27",
-    z: -0.1,
-    y: 0.62,
-    size: 0.28,
-    color: 0x1b1e23,
-    panel: { width: 0.66, height: 0.44, color: 0xf2efe6 },
-  },
+  // On the front door, high on the flank, with no roundel — the door is
+  // white already.
+  raceNumber: { text: "27", z: 0.27, y: 0.58, size: 0.24, color: 0x15171b },
+  // Red flaps: under a black tail they are the one thing down there that
+  // catches the eye, and the works cars ran them red for the same reason.
+  mudflaps: { color: 0xd8262c },
   front: {
+    // The face: a slim dark slot between two wide rectangular lamps, all
+    // three on one line under the bonnet's edge; the bumper below is body
+    // colour and deep, with the black air dam under it.
     grille: {
-      width: 1.14,
-      height: 0.26,
-      y: 0.7,
-      depth: 0.05,
-      surround: 0.016,
-      surroundColor: 0x1b1e23,
+      width: 0.6,
+      height: 0.1,
+      y: 0.79,
+      depth: 0.04,
+      surround: 0.012,
+      surroundColor: 0x15171b,
       color: 0x101317,
+      bars: 2,
+      barColor: 0x2c3138,
     },
     lights: {
-      kind: "round",
-      x: 0.24,
-      y: 0.7,
-      size: 0.105,
-      pairGap: 0.23,
-      bezel: 0.014,
-      bezelColor: 0x3a4048,
+      kind: "rect",
+      x: 0.5,
+      y: 0.745,
+      size: 0.18,
+      height: 0.075,
+      bezel: 0.012,
+      bezelColor: 0x2a2e34,
+      depth: 0.035,
+      cells: 2,
     },
-    indicators: { y: 0.5, x: 0.5, width: 0.13, height: 0.06 },
-    bumper: { y: 0.5, height: 0.11, depth: 0.12, wrap: 0.18, color: 0x1b1e23 },
-    splitter: { y: 0.35, height: 0.1, depth: 0.26, span: 1.3, color: 0xf2efe6 },
-    hood: { half: 0.58, zFrom: 1.9, zTo: 0.68 },
-    lampPods: { y: 0.52, z: 2.08, radius: 0.075, offsets: [-0.3, 0.3] },
+    indicators: { y: 0.5, x: 0.6, width: 0.12, height: 0.05 },
+    bumper: { y: 0.45, height: 0.14, depth: 0.1, wrap: 0.3, color: 0xf3f1eb },
+    splitter: { y: 0.305, height: 0.13, depth: 0.24, span: 1.42, color: 0x15171b },
+    hood: { half: 0.6, zFrom: 1.9, zTo: 0.86 },
+    // Four pods: a big pair standing up off the bonnet's corners, and a
+    // smaller pair ahead of the grille at lamp height.
+    lampPods: [
+      { y: 0.9, z: 1.98, radius: 0.11, offsets: [-0.62, 0.62] },
+      { y: 0.72, z: 2.05, radius: 0.085, offsets: [-0.4, 0.4] },
+    ],
   },
   rear: {
-    lights: { x: 0.42, y: 0.72, width: 0.32, height: 0.2, lower: 0.32 },
-    bumper: { y: 0.5, height: 0.11, depth: 0.12, wrap: 0.16, color: 0x1b1e23 },
-    plate: { y: 0.66, width: 0.3, height: 0.1 },
-    exhaust: { x: -0.44, y: 0.34, radius: 0.04 },
-    deck: { half: 0.58, zFrom: -1.5, zTo: -1.88 },
+    // One band of lamps the width of the car: each cluster runs from a
+    // hand inside the corner in to the plate, three cells across with the
+    // pale reversing strip under them.
+    lights: {
+      x: 0.47,
+      y: 0.79,
+      width: 0.5,
+      height: 0.24,
+      cells: 3,
+      lower: 0.35,
+      lowerColor: 0xe8e4d8,
+      bezel: 0.012,
+      bezelColor: 0x17191d,
+      depth: 0.04,
+    },
+    // The plate sits IN the lamp band, between the two clusters.
+    plate: { y: 0.79, width: 0.36, height: 0.11 },
+    // A deep body-colour bumper, and the black valance running down under
+    // it to where the skirt ends — every centimetre of paint under a black
+    // skirt is a centimetre the car looks jacked up.
+    bumper: { y: 0.565, height: 0.19, depth: 0.1, wrap: 0.3, color: 0xf3f1eb },
+    valance: { y: 0.39, height: 0.16, depth: 0.2, span: 1.4, color: 0x15171b },
+    exhaust: { x: -0.4, y: 0.36, radius: 0.045 },
+    deck: { half: 0.62, zFrom: -1.4, zTo: -1.93 },
   },
   colors: {
-    paint: 0xc8352b,
-    accent: 0xf2efe6,
+    paint: 0xf3f1eb,
+    accent: 0x15171b,
     glass: 0x8fb0d2,
-    trim: 0x1b1e23,
-    hub: 0xc0392b,
-    bumper: 0x1b1e23,
+    trim: 0x15171b,
+    hub: 0xf3f1eb,
+    bumper: 0xf3f1eb,
     shadow: 0x14171b,
   },
 };
@@ -497,7 +630,8 @@ export const COUPE_BODY: CarBodySpec = {
 export const CAR_BODIES: Record<string, CarBodySpec> = {
   compact: COMPACT_BODY,
   classic: CLASSIC_BODY,
-  coupe: COUPE_BODY,
+  // Keyed by the catalog id, which predates the shape.
+  coupe: SEDAN_BODY,
 };
 
 /** Body spec for a catalog car; unknown ids fall back to the compact

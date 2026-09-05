@@ -154,6 +154,9 @@ export function buildStations(spec: CarBodySpec, axles: number[]): Station[] {
       }
     }
   }
+  // The paint break is a station so the second colour starts on a line
+  // rather than on whichever station happens to be nearest.
+  if (spec.tailPaint) zs.push(spec.tailPaint.z);
   const seams = new Map<number, "floor" | "wall">();
   for (const z of spec.doorSeams ?? []) {
     for (const [dz, kind] of [
@@ -310,13 +313,26 @@ export function deckCuts(
   });
 }
 
+/** The roof's colour — the accent under a two-tone roof, the paint
+ * otherwise. Stated once, because the tail paint and the boot lid follow
+ * the roof and have to agree with it. */
+export function roofColor(spec: CarBodySpec): number {
+  return spec.cabin.roofPaint === "accent" ? spec.colors.accent : spec.colors.paint;
+}
+
+/** The body colour at a point along the car: the paint, or the roof's
+ * colour from the tail-paint break back. */
+export function paintAt(spec: CarBodySpec, z: number): number {
+  const tail = spec.tailPaint;
+  return tail && z <= tail.z + 1e-6 ? roofColor(spec) : spec.colors.paint;
+}
+
 export function buildShell(
   b: MeshBuilder,
   spec: CarBodySpec,
   stations: Station[],
   options: ShellOptions = {},
 ): void {
-  const paint = spec.colors.paint;
   const under = spec.colors.trim ?? 0x14181f;
   const well = spec.colors.shadow ?? 0x191d24;
   const cuts = deckCuts(spec, stations, options.openings ?? []);
@@ -332,13 +348,16 @@ export function buildShell(
     const gap = sa.seam !== undefined && sc.seam !== undefined && sa.z - sc.z < SEAM_WALL * 2.2;
     const a = ring(spec, sa);
     const c = ring(spec, sc);
+    // A quad is painted by its FRONT station, so the tail's colour starts
+    // exactly on the break station and nowhere ahead of it.
+    const paint = paintAt(spec, sa.z);
     // The deck's own two segments run from the right shoulder in to the
     // centreline (7) and back out to the left one (8). Cutting the deck
     // open pulls their inner edge out to `half` and drops what is inside it.
     const ledge = (st: Station, side: number): V3 => [side * open!.half, st.topY, st.z];
     for (let k = 0; k < a.length; k++) {
       const k2 = (k + 1) % a.length;
-      const base = segmentColor(k, spec.colors, under, well);
+      const base = segmentColor(k, { paint, lower: spec.colors.lower }, under, well);
       // Only the visible flank and deck carry the line; the underbody is
       // already shadow-colored. A two-tone's lower half darkens into its
       // OWN shade, or the groove reads as a stripe of the wrong color.
@@ -362,6 +381,7 @@ export function buildShell(
   // Caps: nose faces +z, tail −z, fanned from the ring centroid.
   const cap = (st: Station, forward: boolean): void => {
     const pts = ring(spec, st);
+    const paint = paintAt(spec, st.z);
     let cx = 0;
     let cy = 0;
     for (const p of pts) {
@@ -430,6 +450,7 @@ export type BandShape = {
   yFrom: number;
   yTo: number;
   rise?: number;
+  slant?: number;
   proud?: number;
   /** ONE flank rather than both — a door skin is a door, and a car has one
    * on each side that come off separately. Left off, the band is laid on
@@ -494,11 +515,27 @@ function bandStrip(
   const height = band.yTo - band.yFrom;
   const wave = shape.wave;
   const taper = shape.taper ?? 1;
+  // Slanted ends lean the band's top corners `slant` m along per m of
+  // height, so the band reaches past its own zFrom/zTo by that much at the
+  // top, and the ladder has to run out to the leaning corners and land a
+  // sample on each of the four, or the diagonal edge is cut across.
+  const slant = band.slant ?? 0;
+  const lean = slant * height;
+  const front = Math.max(band.zFrom, band.zFrom + lean);
+  const rear = Math.min(band.zTo, band.zTo + lean);
   // The band's own samples PLUS every z where the flank itself changes
   // direction. A uniform sampling cuts a straight chord across a box
   // flare's step and the bodywork bursts through the paint; landing a
   // sample on each fold is the only thing that stops it.
-  const zs = bandSamples(spec, axles, band.zFrom, band.zTo);
+  const zs = bandSamples(spec, axles, front, rear);
+  if (slant !== 0) {
+    for (const corner of [band.zFrom, band.zTo, band.zFrom + lean, band.zTo + lean]) {
+      if (corner > rear && corner < front && !zs.some((z) => Math.abs(z - corner) < 1e-6)) {
+        zs.push(corner);
+      }
+    }
+    zs.sort((p, q) => q - p);
+  }
   const steps = zs.length - 1;
   // A band never hangs in a wheel opening. `clip` lets the arch eat into
   // it (a panel that stops where the metal stops); `ride` keeps its full
@@ -508,8 +545,7 @@ function bandStrip(
   // the spec ITSELF asks for is not that accident, so the cap opens up to
   // whatever height the rake and the wave were authored to reach.
   const ceiling =
-    spec.beltY +
-    0.04 +
+    Math.max(spec.beltY + 0.04, band.yTo) +
     Math.max(0, rise) +
     Math.abs(wave?.amp ?? 0) +
     Math.max(0, taper - 1) * height;
@@ -521,31 +557,55 @@ function bandStrip(
       ? wave.amp * Math.sin(2 * Math.PI * ((wave.cycles ?? 0.5) * t + (wave.phase ?? 0)))
       : 0;
     const lift = rise * (1 - t) + swept;
+    // Between the slanted ends the band is its full height; across each
+    // end it is the strip of heights whose leaning edge has passed this z,
+    // which closes to a point at the two corners.
+    let yFrom = band.yFrom;
+    let yTo = band.yTo;
+    if (slant !== 0) {
+      const ya = band.yFrom + (z - band.zFrom) / slant;
+      const yb = band.yFrom + (z - band.zTo) / slant;
+      yFrom = Math.max(band.yFrom, Math.min(ya, yb));
+      yTo = Math.max(yFrom, Math.min(band.yTo, Math.max(ya, yb)));
+    }
     // The taper hangs off the TOP edge, so a dart pinches shut against its
     // own baseline instead of sliding up the flank as it narrows.
-    const tall = height * (1 + (taper - 1) * t);
+    const tall = (yTo - yFrom) * (1 + (taper - 1) * t);
     const floor = archAt(spec, axles, z) + 0.012;
-    const y0 = Math.max(band.yFrom + lift, floor);
-    const top = band.yFrom + lift + tall;
-    const wanted = band.overArch === "ride" ? Math.max(top, y0 + height) : top;
+    const y0 = Math.max(yFrom + lift, floor);
+    const top = yFrom + lift + tall;
+    const wanted = band.overArch === "ride" ? Math.max(top, y0 + (yTo - yFrom)) : top;
     // Never inverted: a band whose top has been pushed below its bottom
     // draws back to front and bleeds ragged streaks into the paint.
     return { z, y0, y1: Math.max(y0, Math.min(wanted, ceiling)) };
   };
+  // The flank folds OUT at the belt and back in over the shoulder, so a
+  // quad run straight from the sill to above the belt is a chord inside
+  // the body and the paint vanishes into it across the middle. A band that
+  // crosses the belt is laid as two rows, with a vertex row on the fold.
+  const belt = spec.beltY;
   for (let i = 0; i < steps; i++) {
     const a = at(i);
     const c = at(i + 1);
     // Where the arch has eaten the whole band there is nothing to draw.
     if (a.y1 - a.y0 < 0.008 && c.y1 - c.y0 < 0.008) continue;
+    const cut = (s: { y0: number; y1: number }): number => Math.min(s.y1, Math.max(s.y0, belt));
+    const rows: [number, number, number, number][] = [
+      [a.y0, cut(a), c.y0, cut(c)],
+      [cut(a), a.y1, cut(c), c.y1],
+    ];
     for (const side of band.side ? [band.side] : [1, -1]) {
-      const p = (s: { z: number; y0: number; y1: number }, y: number): V3 => [
+      const p = (s: { z: number }, y: number): V3 => [
         side * (flankX(spec, axles, s.z, y) + proud),
         y,
         s.z,
       ];
-      const q = [p(a, a.y0), p(c, c.y0), p(c, c.y1), p(a, a.y1)];
-      if (side > 0) b.quad(q[0], q[1], q[2], q[3], color);
-      else b.quad(q[3], q[2], q[1], q[0], color);
+      for (const [a0, a1, c0, c1] of rows) {
+        if (a1 - a0 < 1e-4 && c1 - c0 < 1e-4) continue;
+        const q = [p(a, a0), p(c, c0), p(c, c1), p(a, a1)];
+        if (side > 0) b.quad(q[0], q[1], q[2], q[3], color);
+        else b.quad(q[3], q[2], q[1], q[0], color);
+      }
     }
   }
 }

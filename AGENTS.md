@@ -399,6 +399,7 @@ Skills live in `.agents/skills/` (`.claude/skills` symlinks there) — each a `S
   drivetrain and engine tables, and the roster-balance sweep that proves no
   car is best everywhere.
 - **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, the field's paint schemes (including what each named rival is painted), the sixteen crew characters behind the glass, and the `make cars` / `make liveries` / `make field` / `make crew` render-compare-iterate loop.
+- **`car-creation`** — a car REMADE AFTER A REAL ONE, from photographs: which pictures to ask for, the ruled-crop measurement against the axles, fitting the collision box, the elevation-over-photograph overlay that proves the body, and the rule that the car is never named in the repo. Loads `car-design` for the builder.
 - **`nature`** — the biomes, trees and flora, ground cover, terrain paint, and the rally-gate dressing: the world the road runs through.
 
 **Maintenance** (each with a `.last-updated` baseline):

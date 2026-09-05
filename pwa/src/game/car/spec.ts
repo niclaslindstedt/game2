@@ -55,6 +55,12 @@ export type SideBand = {
   /** How far proud of the flank it floats, m. Bigger than a decal's few
    * mm turns the band into a physical rubbing strip. */
   proud?: number;
+  /** How far the band's two ENDS lean, m of z per m of height: the top of
+   * each end stands this much further forward than its foot, so the band
+   * is a parallelogram with slanted ends and level edges — the diagonal
+   * flash a works livery cuts across a door. `zFrom`/`zTo` are the ends at
+   * `yFrom`; the band's top corners are that much further along. */
+  slant?: number;
   /** What the band does where a wheel arch has cut the flank away.
    * `clip` (the default) lets the opening eat into it, so a painted panel
    * stops where the metal does; `ride` keeps the band's full height and
@@ -157,7 +163,9 @@ export type TailLights = {
 /** Amber corner lamps, laid on the bumper's own face. */
 export type Indicators = { y: number; x: number; width: number; height: number; color?: number };
 
-/** The tow-hook lamp bar a rally car carries, x offsets in m. */
+/** A row of auxiliary lamps on the nose, x offsets in m. One row is the
+ * bumper bar; a car with a second, bigger pair up at the bonnet's corners
+ * carries two rows. */
 export type LampPods = { y: number; z: number; radius: number; offsets: number[]; color?: number };
 
 /** The front clip: everything laid onto the nose cap. */
@@ -174,8 +182,9 @@ export type FrontSpec = {
   splitter?: { y: number; height: number; depth: number; span: number; color?: number };
   /** Bonnet shut line: the hood's half-width and how far back it runs. */
   hood?: { half: number; zFrom: number; zTo: number };
-  /** A tow hook / lamp bar the rally cars carry, x offsets in m. */
-  lampPods?: LampPods;
+  /** The auxiliary lamps the rally cars carry — one row, or several at
+   * their own heights and sizes. */
+  lampPods?: LampPods | LampPods[];
 };
 
 /** A hatchback's tailgate: the panel that IS the back of the car, standing
@@ -320,6 +329,18 @@ export type CarBodySpec = {
     /** Black-out band around the glass openings, m. Reads as the rubber
      * seal that separates a glass opening from a painted panel. */
     seal?: number;
+    /** Scoops standing on the roof — the cabin vents a works car of the
+     * late eighties wore at the front of its roof, one each side. `z` is
+     * their centre along the car; `offsets` the x of each; the box is
+     * `width` across, `length` along and `height` tall, m. */
+    roofVents?: {
+      z: number;
+      offsets: number[];
+      width: number;
+      length: number;
+      height: number;
+      color?: number;
+    };
   };
   /** Fender flares: extra belt half-width over each axle, m. `smooth`
    * swells to a peak over the axle and tapers away; `box` holds the full
@@ -348,7 +369,18 @@ export type CarBodySpec = {
   };
   front?: FrontSpec;
   rear?: RearSpec;
-  mudflaps?: boolean;
+  /** Mud flaps behind every wheel, in the trim colour — or, given an
+   * object, in a colour of their own: a works car's flaps are the one
+   * thing under the tail painted to be seen. */
+  mudflaps?: boolean | { color: number };
+  /** THE TAIL IN THE ROOF'S COLOUR: everything on the loft from this z
+   * back — deck, flank and cap — and the boot lid over it, painted the
+   * way the roof is, so an accent roof runs down the rear posts, across
+   * the quarters and off the back. It is the blacked-out rear third of a
+   * works sedan, and it is what the chase camera looks at all stage. The
+   * break lands on a station of its own, and it must fall BEHIND the door
+   * seams: a door skin is painted body colour whatever stands behind it. */
+  tailPaint?: { z: number };
   mirrors?: boolean;
   /** Door handles on the flank, one per door seam gap. */
   handles?: { z: number[]; y: number };

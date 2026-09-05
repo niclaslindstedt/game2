@@ -27,7 +27,7 @@
 
 import type { MeshBuilder, Patch, UVRect, V3 } from "./builder.ts";
 import { mixHex, patchAt, patchFade, patchQuad, patchSpan } from "./builder.ts";
-import { sampleProfile, sideRatios } from "./shell.ts";
+import { roofColor, sampleProfile, sideRatios } from "./shell.ts";
 import type { CarBodySpec } from "./spec.ts";
 
 const PILLARS = {
@@ -357,7 +357,7 @@ const PANEL_PANE: GlassPane[] = ["glassF", "glassB", "glassR", "glassL"];
  * where in `g` each pane landed, so a shattered one can be taken out. */
 export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpec): GlassPanes {
   const glass = spec.colors.glass ?? 0x1b2430;
-  const roofColor = spec.cabin.roofPaint === "accent" ? spec.colors.accent : spec.colors.paint;
+  const roof = roofColor(spec);
   const pillar = spec.cabin.pillarPaint === "accent" ? spec.colors.accent : spec.colors.paint;
   const seal = spec.cabin.seal ?? 0;
   const { CL, FL, FR, RL, RR, TL } = cabinFrame(spec);
@@ -408,9 +408,25 @@ export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpe
     }
   }
 
-  patchQuad(b, [FL, FR, RR, RL], { u0: 0, u1: 1, v0: 0, v1: 1 }, roofColor);
+  patchQuad(b, [FL, FR, RR, RL], { u0: 0, u1: 1, v0: 0, v1: 1 }, roof);
   buildGutters(b, spec);
+  buildRoofVents(b, spec);
   return panes;
+}
+
+/** The roof scoops: a box each on the roof, with a dark mouth on its
+ * front face — the one thing on a plain roof the chase camera can see, and
+ * a works-car signature that costs twelve triangles a vent. */
+function buildRoofVents(b: MeshBuilder, spec: CarBodySpec): void {
+  const v = spec.cabin.roofVents;
+  if (!v) return;
+  const color = v.color ?? spec.colors.trim ?? 0x14181f;
+  const mouth = spec.colors.shadow ?? 0x191d24;
+  const y = spec.cabin.roofY + v.height / 2;
+  for (const x of v.offsets) {
+    b.box(x, y, v.z, v.width, v.height, v.length, color);
+    b.box(x, y + v.height * 0.1, v.z + v.length / 2, v.width * 0.8, v.height * 0.6, 0.012, mouth);
+  }
 }
 
 /** Rain gutters: a thin rail down each roof edge, running the length of

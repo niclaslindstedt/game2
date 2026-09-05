@@ -115,7 +115,8 @@ function buildHandles(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void 
  * bodywork so they read as bolted on, not floating alongside it. */
 function buildMudflaps(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void {
   if (spec.mudflaps === false) return;
-  const trim = spec.colors.trim ?? 0x14181f;
+  const trim =
+    typeof spec.mudflaps === "object" ? spec.mudflaps.color : (spec.colors.trim ?? 0x14181f);
   const r = spec.arches?.radius ?? spec.wheelRadius;
   const bottom = 0.06;
   for (const axle of axles) {

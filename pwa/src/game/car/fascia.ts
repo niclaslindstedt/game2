@@ -25,7 +25,7 @@ import {
   disc,
   type LampSurfaces,
 } from "./lamps.ts";
-import { flankX, sampleProfile, shade } from "./shell.ts";
+import { flankX, paintAt, sampleProfile, shade } from "./shell.ts";
 import type { CarBodySpec, Grille, Tailgate } from "./spec.ts";
 
 /** How far a lamp lens, a grille panel or a badge floats off the cap it is
@@ -189,7 +189,7 @@ export function buildFront(
     );
   }
 
-  if (f.lampPods) buildLampPods(s, f.lampPods, trim);
+  for (const row of f.lampPods ? [f.lampPods].flat() : []) buildLampPods(s, row, trim);
 
   // A car with a real engine bay under the bonnet has the deck cut away
   // there, and car/engine-bay.ts paints the flange around the hole — so the
@@ -357,11 +357,13 @@ function buildPanel(
 ): void {
   if (!lid) return;
   const steps = 6;
-  const bay = shade(spec.colors.paint, 0.34);
-  const paint = spec.colors.paint;
+  // The lid wears the colour of the deck it sits in — a boot lid behind the
+  // tail-paint break is painted with the tail, not with the bonnet.
+  const paint = paintAt(spec, lid.zFrom);
+  const bay = shade(paint, 0.34);
   // The skirt is the shut line: painting it in the bay tone is what makes
   // the lid read as a separate panel rather than a bulge in the deck.
-  const edge = shade(spec.colors.paint, 0.5);
+  const edge = shade(paint, 0.5);
   const lift = 0.02;
   const zAt = (i: number): number => lid.zFrom + ((lid.zTo - lid.zFrom) * i) / steps;
   const topAt = (z: number): number => sampleProfile(spec.profile, z).topY;
