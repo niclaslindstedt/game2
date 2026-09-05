@@ -2593,14 +2593,15 @@ export const TUNING = {
      * WHEELS climb it and the body passes over, resolved like an anti-cut
      * block (`clipSolids`: speed, a lurch, a thump, never a fold). Above it
      * the thing meets the body and the contact model has it. It sits a
-     * little over the placement bar (`SOLID_PROP_HEIGHT`, 0.5 m — the
+     * little over the placement bar (`SOLID_PROP_HEIGHT`, 0.43 m — the
      * field stands up anything taller than that), so the SHORTEST solids
      * the field places are mounted rather than hit: the bottom of the nose
      * is soft, and a stone the height of a wheel is a bump in the ride and
      * not the end of the run. Held under the lowest hood by
      * tests/car_geometry_test.ts, because past the hood the body plainly
-     * meets it. */
-    rideOver: 0.6,
+     * meets it — and the lowest hood is the four-wheel-drive's 0.74 m lip,
+     * which is what put this bar where it is. */
+    rideOver: 0.52,
     /** THE GROUND AS A SOLID. Grade (dy/dx) the wheels can still scrabble
      * up: below it a rise is a hill the car climbs and the grade term
      * pushes back on, above it the ground starts REFUSING the car. 0.95 is

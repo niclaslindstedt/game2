@@ -132,14 +132,17 @@ export const WALL_STOREY = 2.7;
 export const PARKED_HALF = 1.1;
 
 /** A prop standing this tall over its foot is SOLID — the car hits it.
- * The catalog's bonnets sit about 0.87 m over the ground, so this is the
- * hood's upper half: a rock reaching above it meets the body and stops the
- * car, one below it is litter the wheels ride over and the renderer
- * scatters for itself. Set as high as the hoods allow rather than at their
- * exact middle — the wild is a place to DRIVE, and a stone the bumper
- * clears is a bump, not a hit. Everything the terrain field places clears
- * this bar; nothing the renderer plants on its own may. */
-export const SOLID_PROP_HEIGHT = 0.5;
+ * The lowest nose in the catalog rounds down to a 0.74 m lip (the
+ * four-wheel-drive's) and the other bonnets sit near 0.85 m, so this is
+ * that lowest hood's upper half: a rock reaching above it meets the body
+ * and stops the car, one below it is litter the wheels ride over and the
+ * renderer scatters for itself. Set as high as the hoods allow rather than
+ * at their exact middle — the wild is a place to DRIVE, and a stone the
+ * bumper clears is a bump, not a hit — and held to the lowest hood by
+ * tests/car_geometry_test.ts, so a lower nose in the catalog is a lower
+ * bar here. Everything the terrain field places clears this bar; nothing
+ * the renderer plants on its own may. */
+export const SOLID_PROP_HEIGHT = 0.43;
 
 /** R13 — one bay of a parapet: its collision circle in the ground plane and
  * how high the wall stands over the deck. Declared beside SOLID_PROP_HEIGHT

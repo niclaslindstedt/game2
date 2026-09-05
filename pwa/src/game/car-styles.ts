@@ -543,8 +543,9 @@ export const CLASSIC_BODY: CarBodySpec = {
  *   foot 0.17 m behind it, the tail 0.82 m behind it with the bumper's face
  *   a hand past that;
  * - the bonnet's lip at 0.74 m, the bonnet climbing to 0.94 m at the cowl
- *   with its last 0.4 m rounding down to that lip, the door tops at 0.93 m,
- *   the boot 0.1 m higher than them, the roof at 1.37 m;
+ *   with its last 0.4 m rounding down to that lip — the lowest nose in the
+ *   catalog, and the one the engine's solid-stone bar is now set against;
+ *   the door tops at 0.93 m, the boot 0.1 m higher, the roof at 1.37 m;
  * - the headlamp a 0.1 m band centred 0.64 m up, wrapping 0.19 m round the
  *   corner onto the fender, amber at its trailing end; the bumper from
  *   0.40 to 0.53 m; the air dam body colour, down to 0.2 m;
@@ -559,20 +560,18 @@ export const CLASSIC_BODY: CarBodySpec = {
  * quarters so the car reads as a white nose pushing a black tail. */
 export const SEDAN_BODY: CarBodySpec = {
   // The deck FALLS from the cowl to the nose, a little more with each
-  // station, and the door tops behind the cowl sit a finger under it while
-  // the boot stands a hand over them: the three-box silhouette in three
-  // numbers. THE NOSE IS NOT WHERE THE PHOTOGRAPH HAS IT, and deliberately:
-  // the real lip rounds down to 0.74 m, and this one stops at 0.835 m,
-  // because the engine plants a roadside stone as a SOLID by measuring it
-  // against the lowest bonnet in the catalog (SOLID_PROP_HEIGHT, held by
-  // tests/car_geometry_test.ts), and that bar is a world constant every
-  // stage is built against. The last 0.4 m of the bonnet is therefore
-  // flat at that height instead of rounding down; everything under it is
-  // measured.
+  // station, and its last 0.4 m ROUNDS DOWN to the lip — the wedge of a
+  // late-eighties nose, and the one line on the car that makes it low. The
+  // door tops behind the cowl sit a finger under it while the boot stands a
+  // hand over them: the three-box silhouette in three numbers. This is the
+  // lowest nose in the catalog, and the engine plants a roadside stone as a
+  // SOLID by measuring it against exactly that (SOLID_PROP_HEIGHT, held by
+  // tests/car_geometry_test.ts): a lip lower than this wants the bar lower.
   profile: [
-    { z: 1.855, topY: 0.835, half: 0.74 },
-    { z: 1.7, topY: 0.835, half: 0.79 },
-    { z: 1.46, topY: 0.84, half: 0.82 },
+    { z: 1.855, topY: 0.735, half: 0.74 },
+    { z: 1.75, topY: 0.78, half: 0.79 },
+    { z: 1.62, topY: 0.805, half: 0.81 },
+    { z: 1.46, topY: 0.832, half: 0.82 },
     { z: 1.225, topY: 0.873, half: 0.84 },
     { z: 0.99, topY: 0.906, half: 0.845 },
     { z: 0.8, topY: 0.94, half: 0.845 },
@@ -732,7 +731,7 @@ export const SEDAN_BODY: CarBodySpec = {
     // Four pods: a big pair standing up off the bonnet's corners, and a
     // smaller pair ahead of the grille at lamp height.
     lampPods: [
-      { y: 0.85, z: 1.85, radius: 0.095, offsets: [-0.6, 0.6] },
+      { y: 0.8, z: 1.85, radius: 0.095, offsets: [-0.6, 0.6] },
       { y: 0.64, z: 1.9, radius: 0.08, offsets: [-0.38, 0.38] },
     ],
   },
