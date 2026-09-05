@@ -294,17 +294,19 @@ export const COMPACT_BODY: CarBodySpec = {
  *
  * Measured off ruled side, front and rear elevations, against the wheel
  * centres, and stated here in metres from the axles (front at z = 1.32,
- * rear at z = -1.16). THE WHOLE CAR IS THE REAL ONE AT 95%: the collision
- * box every car shares stops at 2.1 m from the centre and the real bumper
- * faces would stand past it, and a car shortened without being lowered and
- * narrowed is a different car — laid over the photographs, registered on
- * the axles, every height of it read tall. The one line that is not the
- * measurement is the bonnet's leading edge, a hand higher than the real
- * one: the engine plants a roadside stone as a solid by measuring it
- * against the lowest bonnet in the catalog, and that bar
- * (tests/car_geometry_test.ts) is written for a bonnet no lower than the
- * hatch's. Everything else — the cowl, the roof, the belt, the door, the
- * glass, the lamps, the bumpers, the wing — is where the ruler put it. */
+ * rear at z = -1.16) — then PROVED against the same photographs, the side
+ * laid over as an elevation and the ends rendered through each photograph's
+ * own fitted camera (the `car-creation` skill). The real car is 4.46 m long
+ * on a 2.61 m wheelbase, 1.73 m wide and 1.35 m tall. Every LENGTH here is
+ * the real one at 95%, because the collision box every car shares stops at
+ * 2.1 m from the centre and the real bumper faces would stand past it;
+ * every height and width is real, which is the catalog's rule for a
+ * compressed car. The one line off the ruler is the bonnet's leading edge,
+ * a hand higher than the real one: the engine plants a roadside stone as a
+ * solid by measuring it against the lowest bonnet in the catalog, and that
+ * bar (tests/car_geometry_test.ts) is written for a bonnet no lower than
+ * the hatch's. Everything else — the cowl, the roof, the belt, the door,
+ * the glass, the lamps, the bumpers, the wing — is where the ruler put it. */
 export const CLASSIC_BODY: CarBodySpec = {
   // The bonnet's leading edge 0.62 m ahead of the front axle (the bumper
   // face 0.12 m past it), the cowl 0.46 m behind it, the roof's front edge
@@ -319,49 +321,51 @@ export const CLASSIC_BODY: CarBodySpec = {
   // plate are on. The tail is nearly as wide at the lamps as the doors are:
   // the clusters run out to the corners.
   profile: [
-    { z: 1.94, topY: 0.84, half: 0.68 },
-    { z: 1.84, topY: 0.845, half: 0.75 },
-    { z: 1.32, topY: 0.848, half: 0.78 },
-    { z: 0.86, topY: 0.85, half: 0.78 },
-    { z: -0.42, topY: 0.855, half: 0.78 },
-    { z: -1.16, topY: 0.86, half: 0.78 },
-    { z: -1.5, topY: 0.865, half: 0.775 },
-    { z: -1.82, topY: 0.878, half: 0.77 },
-    { z: -1.88, topY: 0.825, half: 0.765 },
-    { z: -1.94, topY: 0.77, half: 0.76 },
+    { z: 1.94, topY: 0.84, half: 0.72 },
+    { z: 1.84, topY: 0.85, half: 0.79 },
+    { z: 1.32, topY: 0.86, half: 0.83 },
+    { z: 0.86, topY: 0.895, half: 0.83 },
+    { z: -0.42, topY: 0.9, half: 0.83 },
+    { z: -1.16, topY: 0.905, half: 0.83 },
+    { z: -1.5, topY: 0.91, half: 0.82 },
+    { z: -1.82, topY: 0.925, half: 0.81 },
+    { z: -1.88, topY: 0.87, half: 0.805 },
+    { z: -1.94, topY: 0.81, half: 0.8 },
   ],
   // The sill skirts run down to a hand and a half off the ground.
-  floorY: 0.2,
+  floorY: 0.21,
   // The widest point of the section is a little under the door tops — the
-  // flank tumbles home slightly from there up to the glass.
-  beltY: 0.76,
+  // flank tumbles home slightly from there up to the glass — and it has to
+  // sit under BOTH caps' decks, which is what puts it here rather than at
+  // the real car's 0.85.
+  beltY: 0.8,
   side: { rocker: 0.95, shoulder: 0.94 },
   wheelbase: 2.48,
   // The tail overhang is the longer one: a fastback carries its length
   // behind the rear axle.
   axleShift: 0.08,
-  trackHalf: 0.7,
+  trackHalf: 0.735,
   // A fifteen-inch wheel under a 50-series tyre: the rim is two thirds of
   // the tyre and the tyre is small — this is the one car in the catalog
   // that came on low-profile rubber, and the wheel is what dates it.
-  wheelRadius: 0.285,
-  wheelWidth: 0.22,
+  wheelRadius: 0.3,
+  wheelWidth: 0.23,
   wheelStyle: "lattice",
   rimShare: 0.65,
   // The real arch clears the tyre by a few centimetres; this one clears it
   // by the springs' whole travel, which is the least the tests allow.
-  arches: { radius: 0.365 },
+  arches: { radius: 0.38 },
   cabin: {
     cowlZ: 0.86,
     roofFrontZ: 0.28,
     roofRearZ: -1.5,
     baseRearZ: -1.82,
-    roofY: 1.285,
-    roofHalf: 0.61,
+    roofY: 1.35,
+    roofHalf: 0.64,
     // The glasshouse narrows toward the tail: the roof's rear edge is a
     // hand narrower each side than its front, which is what the fitted
     // rear photograph said its corners were.
-    roofRearHalf: 0.56,
+    roofRearHalf: 0.59,
     roofPaint: "accent",
     // The three-door glasshouse: a 1.25 m door, a B-pillar standing plumb
     // at its rear edge, a quarter glass nearly as long behind it with its
@@ -386,22 +390,22 @@ export const CLASSIC_BODY: CarBodySpec = {
   // Blistered arches rather than bolted-on boxes: the lips swell out of the
   // wings and fade back into the doors.
   flare: { extra: 0.03, length: 0.95 },
-  // THE WING. Blade centre 0.66 m behind the rear axle at 1.07 m — over the
-  // lower half of the backlight — 1.62 m across, on posts standing at four
+  // THE WING. Blade centre 0.66 m behind the rear axle at 1.13 m — over the
+  // lower half of the backlight — 1.7 m across, on posts standing at four
   // fifths of the half span; and the second, flat lip on the tailgate's own
   // top edge under it.
   spoiler: {
     kind: "gate",
     z: -1.82,
-    y: 1.074,
-    span: 1.62,
+    y: 1.13,
+    span: 1.7,
     chord: 0.32,
-    thick: 0.07,
+    thick: 0.075,
     post: 0.8,
     lip: { z: -1.8, chord: 0.1 },
   },
   doorSeams: [0.83, -0.42],
-  handles: { z: [-0.56], y: 0.74 },
+  handles: { z: [-0.56], y: 0.78 },
   // The rubbing strip: one dark line at knee height from wheel to wheel,
   // the arches eating into it, and picked up again on both bumpers by the
   // strip let into each (`front.bumper.strip`, `rear.bumper.strip`).
@@ -410,21 +414,21 @@ export const CLASSIC_BODY: CarBodySpec = {
       zFrom: 1.6,
       zTo: -1.6,
       role: "trim",
-      yFrom: 0.455,
-      yTo: 0.5,
+      yFrom: 0.48,
+      yTo: 0.525,
       color: 0x1b1e23,
       proud: 0.008,
       overArch: "clip",
     },
   ],
-  raceNumber: { text: "25", z: 0.2, y: 0.57, size: 0.28, color: 0x1b1e23 },
+  raceNumber: { text: "25", z: 0.2, y: 0.6, size: 0.3, color: 0x1b1e23 },
   front: {
     // A slot, not a mouth: the whole face is lamps, and the grille is the
     // hand's breadth of black mesh between the two pairs.
     grille: {
-      width: 0.37,
-      height: 0.065,
-      y: 0.63,
+      width: 0.39,
+      height: 0.07,
+      y: 0.665,
       depth: 0.04,
       surround: 0.012,
       surroundColor: 0x1b1e23,
@@ -435,68 +439,68 @@ export const CLASSIC_BODY: CarBodySpec = {
     // hand off the grille out to a hand in from the corner.
     lights: {
       kind: "rect",
-      x: 0.45,
-      y: 0.63,
-      size: 0.17,
-      height: 0.08,
+      x: 0.47,
+      y: 0.665,
+      size: 0.18,
+      height: 0.085,
       cells: 2,
       bezel: 0.012,
       bezelColor: 0x2a2e34,
       depth: 0.045,
     },
     // The corner lamps are in the bumper, under the lamps' outer cells.
-    indicators: { y: 0.45, x: 0.49, width: 0.23, height: 0.065 },
+    indicators: { y: 0.475, x: 0.52, width: 0.24, height: 0.07 },
     // Body-coloured, DEEP — the aero bumper is one slab from under the
     // lamps to the air dam — the widest thing on the car, wrapped right
     // back to the arch, with the black strip along its top edge.
     bumper: {
-      y: 0.41,
-      height: 0.18,
+      y: 0.43,
+      height: 0.19,
       depth: 0.14,
       wrap: 0.52,
-      width: 1.64,
+      width: 1.72,
       color: 0xf2f0ea,
-      strip: { y: 0.49, height: 0.024 },
+      strip: { y: 0.515, height: 0.025 },
     },
-    splitter: { y: 0.255, height: 0.13, depth: 0.15, span: 1.46, color: 0xf2f0ea },
-    hood: { half: 0.64, zFrom: 1.9, zTo: 0.88 },
+    splitter: { y: 0.27, height: 0.14, depth: 0.15, span: 1.54, color: 0xf2f0ea },
+    hood: { half: 0.67, zFrom: 1.9, zTo: 0.88 },
     // The two louvred vents over the intercooler, a third of the way down
     // the bonnet.
-    vents: { z: 1.58, width: 0.15, length: 0.14, offsets: [-0.38, 0.38] },
+    vents: { z: 1.58, width: 0.16, length: 0.15, offsets: [-0.4, 0.4] },
   },
   rear: {
     // Measured off the rear elevation: each cluster runs from just past the
     // plate out to the body's corner, and its colours run ACROSS — amber at
     // the corner, red, the reversing lamp's white, red again by the plate.
     lights: {
-      x: 0.5,
-      y: 0.624,
-      width: 0.46,
-      height: 0.136,
+      x: 0.53,
+      y: 0.657,
+      width: 0.48,
+      height: 0.143,
       cells: 4,
       cellColors: [0xe0a326, 0xc4231b, 0xe8e4d8, 0xc4231b],
       bezel: 0.014,
       bezelColor: 0x17191d,
       depth: 0.04,
     },
-    plate: { y: 0.624, width: 0.46, height: 0.12 },
+    plate: { y: 0.657, width: 0.49, height: 0.127 },
     // The same deep body-coloured slab as the nose's, with its strip — and
     // like it, the widest thing on the car: wider than the tail above it.
     bumper: {
-      y: 0.43,
-      height: 0.16,
+      y: 0.455,
+      height: 0.17,
       depth: 0.14,
       wrap: 0.5,
-      width: 1.64,
+      width: 1.72,
       color: 0xf2f0ea,
-      strip: { y: 0.485, height: 0.024 },
+      strip: { y: 0.515, height: 0.025 },
     },
-    valance: { y: 0.27, height: 0.12, depth: 0.12, span: 1.46, color: 0x1b1e23 },
+    valance: { y: 0.29, height: 0.13, depth: 0.12, span: 1.54, color: 0x1b1e23 },
     // One pipe, out of the left, under the valance.
-    exhaust: { x: -0.5, y: 0.185, radius: 0.038 },
+    exhaust: { x: -0.52, y: 0.2, radius: 0.04 },
     // The tailgate's lower panel, between the backlight's foot and the lamps,
     // with the shut line round it.
-    deck: { half: 0.64, zFrom: -1.82, zTo: -1.92 },
+    deck: { half: 0.67, zFrom: -1.82, zTo: -1.92 },
   },
   colors: {
     paint: 0xf2f0ea,

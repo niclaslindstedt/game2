@@ -59,14 +59,17 @@ Never read a proportion off a picture by eye. Two eyeball reads of the
 same elevation disagreed by twenty centimetres (`car-design`'s lesson).
 The procedure:
 
-1. **Rule the picture — FINE.** A Playwright page that draws the
-   photograph scaled and rules a labelled line every N source pixels.
-   Twenty source pixels at three times zoom, over a third of the car at a
-   time (nose, doors, tail, wheels); a fifty-pixel grid at twice zoom read
-   a rounded nose ten centimetres high and a cowl seven high, and both
-   survived a first overlay. Read every landmark twice, from two crops. PIL and ImageMagick are not installed in a web session; a
-   twenty-line `.mjs` in the scratchpad is the tool. Read every landmark
-   as a pixel coordinate, and read the picture with the `Read` tool.
+1. **Rule the picture — FINE.** `tools/rule.mjs` beside this skill draws
+   the photograph scaled and rules a labelled line every N source pixels
+   (`node rule.mjs photo.jpg x0 y0 x1 y1 scale step out.png`; run it from
+   a scratch directory with the repo's `node_modules` symlinked in, and
+   `CHROMIUM_PATH` set). Twenty source pixels at three times zoom, over a
+   third of the car at a time (nose, doors, tail, wheels); a fifty-pixel
+   grid at twice zoom read a rounded nose ten centimetres high and a cowl
+   seven high, and both survived a first overlay. Read every landmark
+   twice, from two crops, as a pixel coordinate, and read the picture with
+   the `Read` tool. The same tool rules an OVERLAY, which is how a miss is
+   read in centimetres rather than seen.
 2. **Scale from the wheelbase.** The two wheel centres are the only
    points nothing can argue with: `mm per pixel = real wheelbase / pixel
 distance between hub centres`. Cross-check against the tyre diameter.
@@ -143,18 +146,37 @@ node scripts/overlay.mjs --under photo.jpg --over previews/elev.png \
   --scale-x <photo px/m ÷ render px/m ÷ length factor> --scale-y <photo px/m ÷ render px/m>
 ```
 
-The render's hub is at cell `(460 − z·200, 315 + (0.7 − y)·200)` for a
-920-wide cell; the cell's px/m is width ÷ 4.6. The horizontal scale
-carries the length compression from §3, so a correctly measured body
-lands ON the photograph and every miss is visible as a doubled edge:
-a post too wide at the top, pods too far in, a lamp band a hand too high.
-Fix, re-render with `--skip-build`, overlay again. Two things the overlay
-shows that are not misses: a 3 cm halo over a bonnet with deck stripes
-(the lid is 2 cm proud of the loft and the paint 1 cm over that, on every
-car), and an arch a hand bigger than the photograph's (the springs'
-travel, forced by the geometry test). **Only the side elevation is a
-measuring overlay**; the front and rear photographs are
-perspective, and their overlays confirm layout and width, not heights.
+Every sheet also writes `previews/<out>.marks.json` — where each cell's
+camera put the car's landmarks (axles, tyre corners, roof corners, lamp
+edges, bumper corners, wing tips), in sheet pixels — so the overlay can
+register itself: `--marks previews/elev.marks.json --cell 0:0 --on
+axleF=<photo x,y> --on axleR=<photo x,y> --length-factor 0.95 --key` lands
+the first mark on its photo point, scales by the marks' distance (the hubs
+put the compressed lengths on the real ones by construction, so the
+factor goes on the real HEIGHTS instead), and keys the sky out so only the
+car lies on the picture. A correctly measured body lands ON the photograph and
+every miss is visible as a doubled edge: a post too wide at the top, pods
+too far in, a lamp band a hand too high. Fix, re-render with
+`--skip-build`, overlay again. Two things the overlay shows that are not misses: a 3 cm halo over a
+bonnet with deck stripes (the lid is 2 cm proud of the loft and the paint
+1 cm over that, on every car), and an arch a hand bigger than the
+photograph's (the springs' travel, forced by the geometry test).
+
+**The side elevation is the measuring overlay.** A front or rear
+photograph is PERSPECTIVE: laid under an elevation registered on the
+lamps, its roof and its wing sit lower than the drawing's however right
+the car is, and the tail reads "too high" for no reason in the spec. To
+measure an END view, fit the photograph's camera:
+`tools/fit-camera.mjs <car> <az> points.json out.json` (az 0 for the
+nose, π for the tail; `points.json` names the landmarks with their photo
+pixels — mind that the engine's +x is the car's LEFT, so from behind the
+"R" landmarks are on the photo's left). It searches height and distance
+by least squares, prints every landmark's residual in photo pixels, and
+writes a `--variants` file whose one view IS that camera; render it, then
+overlay it on the lamp edges with `--marks` and no length factor (an end
+view's axes are both real). Residuals under ten pixels on a 1800-pixel
+frame are a match; the ones that stay say where the spec is wrong — a roof
+that does not narrow toward the tail, a wing too short across.
 
 Then `make build` and a shot in the real game
 (`node scripts/debug-shot.mjs '?seed=42&start=1&debug=1&car=<id>&bot=1'`),
