@@ -46,8 +46,36 @@ body {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
   font-family: "Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+}
+
+/* NO TEXT INTERACTION ANYWHERE — the loupe, the callout, the word select.
+   iOS reads a double tap (and a press-and-hold) as the start of "put the
+   caret somewhere" and answers it with a magnifying lens over the page. On a
+   document that is the point; on a game it is a lens over the road because a
+   thumb bounced on the screen.
+
+   Stated on EVERY element rather than inherited from the shell, and that is
+   the whole substance of the rule: iOS decides whether to arm its text
+   interaction from the element under the touch, and an element that carries
+   its own `user-select`/`-webkit-touch-callout` — from a UA stylesheet, or
+   from a rule somebody adds three thousand lines below — never sees what the
+   shell passed down. Restating it per element means only a rule that MEANT
+   to allow typing can. `*` is specificity zero, so the three surfaces that
+   do take typed text (`.dev-log`, `.knob-field`, `.hud-initials-field`) win
+   simply by naming a class.
+
+   `-webkit-touch-callout` is the same gesture's other half — the long-press
+   action sheet (COPY / LOOK UP / SHARE) — and had been said only on the
+   splash card, so every other screen was still offering it. */
+*,
+*::before,
+*::after {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 #root,
@@ -1248,6 +1276,13 @@ body {
   pointer-events: none;
   outline: none;
   white-space: pre;
+  /* ...and it is an EDITING HOST, so it needs the text interaction the shell
+     bans everywhere else: a contenteditable a browser will not let a caret
+     into is a contenteditable no on-screen keyboard opens for. It is one
+     pixel, transparent and deaf to the pointer, so nothing can be
+     double-tapped here — the lens this re-enables has nothing to sit on. */
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* A name being entered on a phone held sideways. The card keeps its size and
@@ -5578,6 +5613,11 @@ a.menu-version:focus-visible {
   cursor: text;
   text-shadow: none;
   font-variant-numeric: tabular-nums;
+  /* One of the three places in the game a caret belongs, so it takes its
+     text interaction back from the shell's blanket ban. A field that cannot
+     be selected in is a field you cannot correct a seed in. */
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* A touch screen has no hover to find a control with, so the box is always
@@ -6078,11 +6118,6 @@ a.menu-version:focus-visible {
   font-style: italic;
   opacity: 1;
   transition: opacity 340ms ease-out;
-  /* An opening card is not a document: nothing on it is selectable and no
-     long-press menu belongs on it. */
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
 }
 
 /* Cleared — fade out of the way. The duration must match FADE_MS in
