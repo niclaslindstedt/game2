@@ -312,6 +312,27 @@ function dealCrush(
   }
 }
 
+/** EVERY PART A LEDGER HAS SHEARED, read back from the bolt lists rather
+ * than from `damage.broken` — what a ledger WRITTEN BY HAND (a staged wreck
+ * in a preview tool, a test fixture) owes its `broken` list, so the parts
+ * the renderer tears off agree with the folds it draws. The live game never
+ * needs it: `dealCrush` shears each part on the bite that reaches its bolt.
+ * A wheel at 1 is off the car like anything else on the list. */
+export function shearedParts(damage: CarState["damage"]): DamagePart[] {
+  const parts: DamagePart[] = [];
+  const add = (part: DamagePart): void => {
+    if (!parts.includes(part)) parts.push(part);
+  };
+  for (const bolt of PART_BOLTS) {
+    if (bolt.zones.some((zone) => damage.zones[zone] >= bolt.crushAt)) add(bolt.part);
+  }
+  for (const bolt of ROOF_BOLTS) if (damage.roof >= bolt.crushAt) add(bolt.part);
+  damage.wheels.forEach((w, i) => {
+    if (w >= 1) add(WHEEL_PARTS[i]);
+  });
+  return parts;
+}
+
 /** How far this face has already folded, m. */
 function folded(damage: CarState["damage"], face: CrushFace): number {
   if (face === "belly") return damage.belly;

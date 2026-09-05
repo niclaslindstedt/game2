@@ -15,6 +15,10 @@
 //   ... car-preview.mjs --field --out field
 //     # R29 — the campaign's fourteen rivals, each in their OWN car and
 //     # their own paint, labelled by start number and alias
+//   ... car-preview.mjs --wrecks compact --out wrecks
+//     # THE WRECK LAB: one body through every accident the damage ledger
+//     # can describe, bent by the real damage visual — a row per wreck;
+//     # `--scene flank --views side --cell 1320x930` is one of them, close
 //   ... car-preview.mjs --crew --out crew
 //     # the sixteen characters (car-crew.ts), one row each, close up on the
 //     # cabin with the glass off; `--crew blink,diesel` renders a subset
@@ -82,6 +86,90 @@ if (has("crew")) {
     })),
   };
   if (variants.cars.length === 0) throw new Error(`no such character: ${wanted}`);
+} else if (has("wrecks")) {
+  // THE WRECK LAB. One body, staged through the accidents the ledger can
+  // describe — a brush, a head-on at two speeds, a corner into a trunk, a
+  // flank into a rock, a rear shunt, a roll, and the car past saving — each
+  // written straight into `CarDamage` in the engine's own metres, with the
+  // parts the engine's bolt lists say those folds shear. The page bends the
+  // real body with the real damage visual, so the sheet is what a player
+  // sees and nothing else: no physics, no scenery, no camera in the way.
+  const { CAR_BODIES } = await import("../pwa/src/game/car-styles.ts");
+  const { shearedParts } = await import("../engine/index.ts");
+  const carId = value("wrecks") ?? "compact";
+  const base = CAR_BODIES[carId];
+  if (!base) throw new Error(`unknown car id: ${carId} (have ${Object.keys(CAR_BODIES)})`);
+  /** A ledger from the few numbers a scene is about — zone crush in m,
+   * keyed by zone (0 nose, clockwise in map view), plus the faces the
+   * ring has no room for. */
+  const ledger = ({ zones = {}, belly = 0, roof = 0, wear = 0, wheels = [0, 0, 0, 0] }) => {
+    const damage = {
+      zones: Array.from({ length: 8 }, (_, i) => zones[i] ?? 0),
+      belly,
+      roof,
+      wear,
+      systems: { engine: 0, cooling: 0, suspension: 0, gearbox: 0, steering: 0, brakes: 0 },
+      wheels,
+      broken: [],
+      version: 1,
+    };
+    damage.broken = shearedParts(damage);
+    return damage;
+  };
+  const scenes = [
+    ["pristine", ledger({})],
+    ["brush, left flank", ledger({ zones: { 6: 0.07, 7: 0.03 } })],
+    ["head-on, 50 km/h", ledger({ zones: { 0: 0.15, 7: 0.08, 1: 0.08 }, wear: 0.3 })],
+    ["head-on, 100 km/h", ledger({ zones: { 0: 0.34, 7: 0.2, 1: 0.2 }, wear: 0.7 })],
+    [
+      "front-right corner into a trunk",
+      ledger({ zones: { 1: 0.36, 0: 0.1, 2: 0.14 }, wheels: [0, 0.55, 0, 0], wear: 0.5 }),
+    ],
+    // The stage's own accident: a slide that finds a trunk with the door.
+    ["sideways into a tree, 40 km/h", ledger({ zones: { 2: 0.16 }, wear: 0.2 })],
+    [
+      "sideways into a tree, 70 km/h",
+      ledger({ zones: { 2: 0.32, 3: 0.04 }, wheels: [0, 0.45, 0, 0.3], wear: 0.5 }),
+    ],
+    [
+      "rear quarter into a tree",
+      ledger({ zones: { 3: 0.28, 2: 0.05 }, wheels: [0, 0, 0, 0.5], wear: 0.4 }),
+    ],
+    [
+      "right flank into a rock",
+      ledger({ zones: { 2: 0.4, 1: 0.12, 3: 0.14 }, wheels: [0, 0.6, 0, 0.45], wear: 0.6 }),
+    ],
+    ["rear shunt", ledger({ zones: { 4: 0.3, 3: 0.12, 5: 0.12 }, wear: 0.4 })],
+    [
+      "rolled",
+      ledger({
+        roof: 0.26,
+        zones: { 2: 0.14, 6: 0.1, 1: 0.05 },
+        belly: 0.06,
+        wheels: [0, 0.5, 0, 0],
+      }),
+    ],
+    [
+      "the wreck",
+      ledger({
+        zones: { 0: 0.4, 1: 0.4, 2: 0.35, 3: 0.25, 4: 0.35, 5: 0.25, 6: 0.3, 7: 0.4 },
+        belly: 0.2,
+        roof: 0.3,
+        wear: 1,
+        wheels: [1, 0.7, 0.3, 1],
+      }),
+    ],
+  ];
+  // `--scene flank,rolled` keeps the rows whose name contains a word — one
+  // accident at a full-size cell is how a fold gets looked at properly.
+  const scene = value("scene")?.split(",");
+  variants = {
+    mode: "wrecks",
+    cars: scenes
+      .filter(([id]) => !scene || scene.some((word) => id.includes(word)))
+      .map(([id, damage]) => ({ id: `${carId} — ${id}`, spec: base, damage })),
+  };
+  if (variants.cars.length === 0) throw new Error(`no such wreck: ${scene}`);
 } else if (has("field")) {
   // R29 — THE ACTUAL START LIST. `--liveries` answers "do these schemes read
   // apart on one body"; this answers the question that decides whether the
@@ -134,6 +222,7 @@ if (!has("skip-build") || !existsSync(join(buildDir, "car-preview.html"))) {
     logLevel: "warn",
     root: join(root, "pwa"),
     base: "./",
+    resolve: { alias: { "@engine": join(root, "engine", "index.ts") } },
     build: {
       outDir: buildDir,
       emptyOutDir: true,

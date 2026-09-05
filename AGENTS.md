@@ -36,6 +36,7 @@ make sky          # render the atmosphere to previews/sky.png (every weather x t
 make traffic      # the HIGH TRAFFIC over a stage: five skies x four moments of ONE race — REQUIRED before/after any change to the aircraft or their contrails
 make glyphs       # render the menu's marks at the three sizes they are read at
 make health       # THE CONDITION LAB: the car's health schematic in every state, over every ground — REQUIRED before/after any change to it
+make wrecks       # THE WRECK LAB: one body through every accident the damage ledger can describe, bent by the real damage visual — REQUIRED before/after any change to how a damaged car is DRAWN
 make transit      # photograph the camera going from the finish line to a crew still out, frame by frame
 make views        # photograph the CAMERA KEY: every step of the ladder, six consecutive frames each
 make rollcam      # photograph the CAMERA WHILE THE CAR GOES OVER — one roll, frame by frame, from two seats
@@ -221,6 +222,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | How the body TREMBLES when the engine is being worked        | `pwa/src/game/car-shake.ts` — DOM-free; read by `car-mesh.ts` (the shell) and `camera-eye.ts` (the seat)                                                                     |
 | The SHADOW a car throws, and when the light throws one       | `pwa/src/game/car-shadow.ts` (the sun's shadow map: who casts, who receives, the frame) off `sunHardness` in `sky.ts` (how hard)                                             |
 | Things the car knocks loose (cones, posts, torn-off parts)   | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them                                                     |
+| How a DAMAGED car is DRAWN (the fold, the creases, the kink) | `pwa/src/game/car-crumple.ts` (the field, DOM-free) read by `car-damage.ts` (every mesh bent, lit again, scuffed); `make wrecks` is the lab — the `collision` skill          |
 | Anything HEARD (a hit, a landing, a menu click)              | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                                                                            |
 | A continuous sound (engine, tyres, wind, the slide)          | `engine-voice.ts` / `road-voice.ts` in `pwa/src/game/audio/` — steered LAYERS, never grains; `drive-bed.ts` reads the state                                                  |
 | What the WORLD sounds like (birds, a paddock, a train)       | `pwa/src/game/audio/ambience.ts` (the roster and the layers) + `bank-world.ts` (the calls) — the `sound-effects` skill                                                       |

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs health transit views rollcam audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -203,6 +203,15 @@ cars:
 # cars or as one car nine times. CAR picks the body, COUNT how many slots.
 liveries:
 	npm run cars -- --liveries $(or $(CAR),compact) --count $(or $(COUNT),9) --out liveries
+
+# THE WRECK LAB (previews/wrecks.png): one body through every accident the
+# damage ledger can describe — a brush, two head-ons, a corner, a flank, a
+# rear shunt, a roll, the wreck — bent by the real damage visual, from the
+# chase camera and the turntable. CAR picks the body (CAR=classic). REQUIRED
+# before/after any change to how a damaged car is DRAWN.
+wrecks:
+	npm run cars -- --wrecks $(or $(CAR),compact) --out $(or $(OUT),wrecks) \
+		$(if $(SCENE),--scene $(SCENE),) $(if $(VIEWS),--views $(VIEWS),) $(if $(CELL),--cell $(CELL),)
 
 # The sixteen crew characters (previews/crew.png): each one close up in the
 # cabin with the glass off, then through it, then from the chase camera —

@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The damage made visible: the engine's crush ledger (state.car.damage)
 // bent into the body's actual polygons, and its partBreak events turned
-// into pieces tumbling off down the road. The body mesh keeps a pristine
-// copy of its vertices; whenever the ledger's version moves, every vertex
-// is re-derived from that copy — pulled inward by the crush of the zone it
-// faces, torn about by a deterministic per-vertex crumple, sagged by the
-// underside's belly crush, caved from above by the roof's, and scuffed
-// darker where the metal folded. The
-// engine owns every number here; this module only draws what it says.
+// into pieces tumbling off down the road. Every mesh on the car keeps a
+// pristine copy of its vertices; whenever the ledger's version moves, each
+// vertex is re-derived from that copy through ONE displacement field
+// (car-crumple.ts: the fold, the bulge, the creases, the tear, the kink,
+// the sagged belly and the caved roof), every face is then LIT AGAIN from
+// the plane it now lies in, and the paint is scuffed and chipped where the
+// metal folded. The engine owns every number here; this module only draws
+// what it says.
 //
-// The LENSES bend on the same terms, out of the same routine. They are a
-// separate mesh only because a lamp is lit rather than painted (car-body.ts),
-// and they sit exactly where a nose or a tail gets crushed — left pristine,
-// a lamp would stand out in front of a folded cap as the one undamaged
-// thing on the car. The scuff darkens them too, which is a smashed lamp.
+// Everything bolted to the shell bends WITH it, out of the same routine:
+// the lamp lenses (their own mesh only because a lamp is lit rather than
+// painted), the bolt-on panels (a bumper is the first thing to meet a
+// trunk, and one left pristine in front of a folded nose is the one wrong
+// thing on the car), and the cabin, whose cage would otherwise stand up
+// through a caved roof. The field is a function of rest position alone, so
+// meshes bent apart stay joined where they meet.
 //
 // Three more things the ledger says, drawn here because they are the body
 // coming apart rather than something thrown off it: the WHEELS, which go
@@ -26,62 +29,25 @@
 // hole, stripes and all).
 
 import * as THREE from "three";
-import {
-  DAMAGE_ZONES,
-  TUNING,
-  WHEEL_PARTS,
-  type DamagePart,
-  type GameEvent,
-  type GameState,
-} from "@engine";
+import { TUNING, WHEEL_PARTS, type DamagePart, type GameEvent, type GameState } from "@engine";
 
 import type { CarBodyParts, GlassPane } from "./car-body.ts";
+import { lambert } from "./car/builder.ts";
+import { crumple, noise, rimOf, type CrumpleFrame } from "./car-crumple.ts";
 import { stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
 
-/** Crumple hash — any cheap deterministic per-vertex jitter works; the
- * shape only has to look torn, not be reproducible across sessions. */
-function jitter(i: number): number {
-  const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-/** How far in from the rim a vertex still crumples (fraction of its radial
- * distance kept as reach) — the centerline never moves, so the cabin keeps
- * its volume however hard the panels fold. */
-const REACH_START = 0.2;
-/** How far the fold reaches at full crush, as a multiple of the ledger's
- * metres: a head-on at 100 km/h writes a quarter of a metre down, and the
- * nose it leaves has to read as HALF A METRE shorter and a wreck, not as a
- * bumper pushed in — the front of a car that has hit something square is
- * the part that no longer exists. */
-const FOLD = 1.6;
-/** The crumple's spread about that fold, 0..1 of it: adjacent vertices
- * pulled in by different amounts is what makes a fold look torn rather
- * than scaled. */
-const CRUMPLE = 0.7;
-/** How far the metal is thrown sideways and up as it folds, as a multiple
- * of the fold: a panel does not slide in along a line, it buckles. */
-const WARP = 0.55;
 /** Scuffed metal darkens toward this fraction of its paint... */
 const SCUFF = 0.45;
-/** ...over this much crush, m — the first bad hit takes the paint off. */
-const SCUFF_OVER = 0.2;
-/** The body sits this much lower per meter of belly crush (shot springs). */
-const BELLY_SAG = 0.6;
-/** THE CAVED ROOF. Where the greenhouse starts, m above the wheel plane —
- * the waist line, under which nothing a roll folds from above reaches... */
-const ROOF_FROM = 0.7;
-/** ...and how far above it the fold is at its full depth, m: the roof
- * panel itself. Between the two the pillars take a share of it, which is
- * what makes the cabin lean rather than telescope. */
-const ROOF_SPAN = 0.65;
-/** How far the deck comes down per meter of roof crush — more than one, as
- * the belly's sag is less: the ledger measures the fold, and a roof folding
- * takes the pillars under it with it. */
-const ROOF_FOLD = 1.3;
-/** ...and how far in, as a share of that: a roof does not come straight
- * down, it goes over to the side the car was turning onto. */
-const ROOF_LEAN = 0.45;
+/** ...over this much local crush, m — the first bad hit takes the paint
+ * off the metal that folded, and only that metal. */
+const SCUFF_OVER = 0.12;
+/** The scuff is uneven: this share of it rides a noise, so folded paint
+ * reads as scraped rather than dyed. */
+const SCUFF_GRAIN = 0.5;
+/** Where the paint has come off altogether: bare primer, and the size of
+ * the chips, m. */
+const PRIMER = { r: 0.5, g: 0.5, b: 0.52 };
+const CHIP_SCALE = 0.12;
 /** What the cabin behind a missing door is painted: the dark of a room
  * seen from outside. */
 const HOLE = new THREE.Color(0x0d1013);
@@ -89,18 +55,39 @@ const HOLE = new THREE.Color(0x0d1013);
  * fraction of the body's widest half — the underbody and the floor are
  * inboard of this and stay whatever colour they were. */
 const HOLE_REACH = 0.55;
+/** The ledger can move dozens of times a second while a roll grinds along
+ * on one flank, and every move is a full re-bend of fifteen thousand
+ * vertices: at most one per this many seconds, which is still every
+ * third frame. The last move is never lost — a version left unbent is
+ * bent on the next frame that is allowed to. */
+const BEND_EVERY = 0.05;
 
-/** How far a torn-off piece's own origin ends up sitting over the ground —
- * the body's parts are modelled around their mounting point, not around the
- * face that ends up lying in the dirt. */
-const DEBRIS_REST = 0.08;
+/** How far over the ground a torn-off piece's centre ends up over and
+ * above its own half-thickness, m — the gravel it is lying on. */
+const DEBRIS_REST = 0.02;
 /** ...and a wheel's, which lies on its side with its own half-width up. */
 const WHEEL_REST = 0.1;
+/** Which of a torn-off panel's own axes is its face — the one the tumbler
+ * turns upward so it comes to rest lying flat (tumble.ts). A lamp or a
+ * mirror is a lump and lies however it lands. */
+const PANEL_FACE: Partial<Record<DamagePart, "x" | "y" | "z">> = {
+  hood: "y",
+  hatch: "y",
+  spoiler: "y",
+  doorL: "x",
+  doorR: "x",
+  bumperF: "z",
+  bumperR: "z",
+};
 
 /** THE FLAT. A tyre with no air in it is this much of its height... */
 const FLAT_SQUASH = 0.78;
+/** ...and this much longer where it spreads on the road. */
+const FLAT_SPREAD = 1.08;
 /** ...leaning this far in at the top, rad — the rim is bent with it... */
 const BENT_CAMBER = 0.16;
+/** ...knocked this far out of line, rad — a bent upright toes the wheel... */
+const BENT_TOE = 0.1;
 /** ...and wobbling this far either way once per turn, rad: a bent rim is
  * never round again, and the wheel says so at every speed. */
 const BENT_WOBBLE = 0.07;
@@ -133,24 +120,77 @@ export type CarDamageVisual = {
 };
 
 /** One mesh's vertices, plus the pristine copy every bend is re-derived
- * from — the shell and the lenses each get one, and `bend` walks them all. */
+ * from — every mesh on the car gets one, and `bend` walks them all. */
 type Crumpleable = {
   pos: THREE.BufferAttribute;
   col: THREE.BufferAttribute;
   restPos: Float32Array;
-  restCol: Float32Array;
+  /** The colour each vertex was baked with, DIVIDED BACK OUT of the sun's
+   * term for the face it sat in: the paint itself, to be lit again from
+   * whatever plane the fold leaves the face in. */
+  paint: Float32Array;
 };
 
 function crumpleable(mesh: THREE.Mesh): Crumpleable {
   const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
   const col = mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
-  return {
-    pos,
-    col,
-    restPos: new Float32Array(pos.array as Float32Array),
-    restCol: new Float32Array(col.array as Float32Array),
-  };
+  const restPos = new Float32Array(pos.array as Float32Array);
+  const paint = new Float32Array(pos.count * 3);
+  const stride = col.itemSize;
+  for (let i = 0; i + 2 < pos.count; i += 3) {
+    const k = faceLight(restPos, i);
+    for (let v = i; v < i + 3; v++) {
+      paint[v * 3] = col.array[v * stride] / k;
+      paint[v * 3 + 1] = col.array[v * stride + 1] / k;
+      paint[v * 3 + 2] = col.array[v * stride + 2] / k;
+    }
+  }
+  return { pos, col, restPos, paint };
 }
+
+/** The baked sun's term for the triangle starting at vertex `i` of a
+ * position buffer. A face the fold has flattened to nothing keeps the
+ * light of a face pointing straight up — no plane, no shade. */
+function faceLight(p: ArrayLike<number>, i: number): number {
+  const ax = p[i * 3];
+  const ay = p[i * 3 + 1];
+  const az = p[i * 3 + 2];
+  const bx = p[i * 3 + 3] - ax;
+  const by = p[i * 3 + 4] - ay;
+  const bz = p[i * 3 + 5] - az;
+  const cx = p[i * 3 + 6] - ax;
+  const cy = p[i * 3 + 7] - ay;
+  const cz = p[i * 3 + 8] - az;
+  const nx = by * cz - bz * cy;
+  const ny = bz * cx - bx * cz;
+  const nz = bx * cy - by * cx;
+  const l = Math.hypot(nx, ny, nz);
+  if (l < 1e-9) return lambert(0, 1, 0);
+  return lambert(nx / l, ny / l, nz / l);
+}
+
+/** The meshes the field bends: everything on the sprung body that is
+ * painted, lit, or bolted on — and the cabin, which is inside the shell and
+ * has to come down with the roof. Only meshes sat at the chassis's own
+ * origin qualify: a part on a mount of its own (the steering wheel) holds
+ * its vertices in the mount's frame, and the field would read them as a
+ * point at the middle of the car. */
+function bendable(body: CarBodyParts): Map<THREE.Mesh, Crumpleable> {
+  const meshes: THREE.Mesh[] = [body.body];
+  if (body.lenses) meshes.push(body.lenses);
+  if (body.boltOns) meshes.push(body.boltOns);
+  for (const mesh of Object.values(body.breakables)) meshes.push(mesh);
+  if (body.cabinTrim) {
+    for (const child of body.cabinTrim.children) {
+      if (!(child instanceof THREE.Mesh) || !child.geometry.getAttribute("color")) continue;
+      if (child.position.lengthSq() > 0 || !child.quaternion.equals(IDENTITY)) continue;
+      meshes.push(child);
+    }
+  }
+  return new Map(meshes.map((mesh) => [mesh, crumpleable(mesh)]));
+}
+
+const IDENTITY = new THREE.Quaternion();
 
 const GLASS_PANES: readonly GlassPane[] = ["glassF", "glassB", "glassL", "glassR"];
 
@@ -159,102 +199,90 @@ function isGlass(part: DamagePart): part is GlassPane {
 }
 
 export function createCarDamage(body: CarBodyParts): CarDamageVisual {
-  const panels = [crumpleable(body.body)];
-  if (body.lenses) panels.push(crumpleable(body.lenses));
+  const panels = bendable(body);
   const glassCol = body.glassMesh
     ? (body.glassMesh.geometry.getAttribute("color") as THREE.BufferAttribute)
     : null;
+  const spec = body.spec;
+  const frame: CrumpleFrame = {
+    rim: rimOf((panels.get(body.body) as Crumpleable).restPos),
+    halfWidth: Math.max(...spec.profile.map((p) => p.half)),
+    floorY: spec.floorY,
+    beltY: spec.beltY,
+    roofY: spec.cabin.roofY,
+    noseZ: spec.profile[0].z,
+    tailZ: spec.profile[spec.profile.length - 1].z,
+  };
 
   const debris = new THREE.Group();
   const flying: TumbleBody[] = [];
   const detached = new Set<DamagePart>();
   const pose: CarPose = { roll: 0, pitch: 0, drop: 0 };
   let bentVersion = -1;
+  let sinceBend = BEND_EVERY;
   const halfWidth = widest(body);
   const hubY = body.wheelRadius * HUB_SHARE;
   let hubGeo: THREE.BufferGeometry | null = null;
+  const bent = { x: 0, y: 0, z: 0 };
+  const folded = new Float32Array(3);
 
-  /** One mesh's worth of that. */
+  /** One mesh's worth of that: every triangle bent, lit again, scuffed. */
   const bendPanel = (
-    { pos, col, restPos, restCol }: Crumpleable,
+    { pos, col, restPos, paint }: Crumpleable,
     damage: GameState["car"]["damage"],
-    span: number,
   ): void => {
-    const zones = damage.zones;
     const holes = body.doors.filter((door) => damage.broken.includes(door.part));
-    for (let i = 0; i < pos.count; i++) {
-      const x0 = restPos[i * 3];
-      const y0 = restPos[i * 3 + 1];
-      const z0 = restPos[i * 3 + 2];
-      // Ring crush at this vertex's bearing, blended between the two
-      // nearest zones so the folds wrap the corners instead of stepping.
-      const a = Math.atan2(x0, z0);
-      const t = a / span;
-      const lo = Math.floor(t);
-      const frac = t - lo;
-      const zoneA = ((lo % DAMAGE_ZONES) + DAMAGE_ZONES) % DAMAGE_ZONES;
-      const zoneB = (zoneA + 1) % DAMAGE_ZONES;
-      const crush = zones[zoneA] * (1 - frac) + zones[zoneB] * frac;
-
-      const r = Math.hypot(x0, z0);
-      const reach = Math.min(1, Math.max(0, (r - REACH_START) / 1.0));
-      const fold = crush * FOLD * reach;
-      const crumple = 1 - CRUMPLE / 2 + CRUMPLE * jitter(i);
-      const inward = Math.min(fold * crumple, r * 0.8);
-      const scale = r > 1e-6 ? 1 - inward / r : 1;
-      // The buckle: the metal that is not going inward is going somewhere,
-      // and it goes up and across — a different somewhere per vertex.
-      const warp = fold * WARP;
-      const up = warp * (jitter(i * 3 + 1) - 0.5);
-      const across = warp * (jitter(i * 5 + 2) - 0.5);
-      // Across the fold's own direction, in the ground plane.
-      const tx = r > 1e-6 ? z0 / r : 0;
-      const tz = r > 1e-6 ? -x0 / r : 0;
-
-      // Belly: the whole body settles on its shot springs, and the low
-      // panels wrinkle — a beaten floorpan reads in the rocker line.
-      const low = Math.max(0, 1 - y0 / 1.1);
-      const sag = damage.belly * BELLY_SAG * low;
-      const wrinkle = damage.belly * low * (jitter(i * 7 + 3) - 0.5) * 0.5;
-
-      // Roof: the mirror of it, and the one fold a car cannot get without
-      // having been upside down. Only the greenhouse moves — the deck comes
-      // down and goes over, the pillars under it take a share, and the
-      // waist and everything below it stay where they were.
-      const high = Math.min(1, Math.max(0, (y0 - ROOF_FROM) / ROOF_SPAN));
-      const cave = damage.roof * ROOF_FOLD * high * (1 - CRUMPLE / 2 + CRUMPLE * jitter(i * 11));
-      const lean = cave * ROOF_LEAN;
-
-      pos.setXYZ(
-        i,
-        x0 * scale + wrinkle + tx * across + lean,
-        Math.max(0.05, y0 - sag - cave + up),
-        z0 * scale + wrinkle + tz * across,
-      );
-
-      // Scuff: folded metal loses its paint toward primer-dark.
-      const mark = Math.min(1, (crush + damage.belly * low + damage.roof * high) / SCUFF_OVER);
-      const keep = 1 - (1 - SCUFF) * mark;
-      let cr = restCol[i * 3] * keep;
-      let cg = restCol[i * 3 + 1] * keep;
-      let cb = restCol[i * 3 + 2] * keep;
-      // The hole where a door was: everything on that flank inside the
-      // door's rectangle — the shell and whatever stripe was painted over
-      // it — is the dark of the cabin now.
-      for (const hole of holes) {
-        if (
-          hole.side * x0 > halfWidth * HOLE_REACH &&
-          z0 <= hole.zFrom &&
-          z0 >= hole.zTo &&
-          y0 >= hole.yFrom &&
-          y0 <= hole.yTo
-        ) {
-          cr = HOLE.r;
-          cg = HOLE.g;
-          cb = HOLE.b;
-        }
+    const out = pos.array as Float32Array;
+    for (let i = 0; i + 2 < pos.count; i += 3) {
+      for (let v = 0; v < 3; v++) {
+        const j = i + v;
+        folded[v] = crumple(
+          damage,
+          frame,
+          restPos[j * 3],
+          restPos[j * 3 + 1],
+          restPos[j * 3 + 2],
+          bent,
+        );
+        out[j * 3] = bent.x;
+        out[j * 3 + 1] = bent.y;
+        out[j * 3 + 2] = bent.z;
       }
-      col.setXYZ(i, cr, cg, cb);
+      const light = faceLight(out, i);
+      for (let v = 0; v < 3; v++) {
+        const j = i + v;
+        const x0 = restPos[j * 3];
+        const y0 = restPos[j * 3 + 1];
+        const z0 = restPos[j * 3 + 2];
+        // Scuff: folded metal loses its paint toward primer-dark, unevenly,
+        // and in patches loses it altogether.
+        const mark = Math.min(1, folded[v] / SCUFF_OVER);
+        const grain = 1 - SCUFF_GRAIN + SCUFF_GRAIN * (0.5 + 0.5 * noise(x0 * 6, y0 * 6, z0 * 6));
+        const keep = 1 - (1 - SCUFF) * mark * grain;
+        const chip =
+          mark *
+          smoothstep(0.25, 0.7, noise(x0 / CHIP_SCALE + 5.1, y0 / CHIP_SCALE, z0 / CHIP_SCALE));
+        let cr = (paint[j * 3] * keep * (1 - chip) + PRIMER.r * chip) * light;
+        let cg = (paint[j * 3 + 1] * keep * (1 - chip) + PRIMER.g * chip) * light;
+        let cb = (paint[j * 3 + 2] * keep * (1 - chip) + PRIMER.b * chip) * light;
+        // The hole where a door was: everything on that flank inside the
+        // door's rectangle — the shell and whatever stripe was painted over
+        // it — is the dark of the cabin now.
+        for (const hole of holes) {
+          if (
+            hole.side * x0 > halfWidth * HOLE_REACH &&
+            z0 <= hole.zFrom &&
+            z0 >= hole.zTo &&
+            y0 >= hole.yFrom &&
+            y0 <= hole.yTo
+          ) {
+            cr = HOLE.r;
+            cg = HOLE.g;
+            cb = HOLE.b;
+          }
+        }
+        col.setXYZ(j, cr, cg, cb);
+      }
     }
     pos.needsUpdate = true;
     col.needsUpdate = true;
@@ -265,64 +293,62 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
    * leaves their lean, their squash and their height to this. */
   const bendWheels = (damage: GameState["car"]["damage"]): void => {
     const flatAt = TUNING.collision.chassis.wheelFlat;
-    for (let i = 0; i < body.wheelGroups.length; i++) {
-      const wheel = body.wheelGroups[i];
-      const side = i % 2 === 1 ? 1 : -1;
-      if (detached.has(WHEEL_PARTS[i])) {
-        wheel.scale.y = 1;
-        wheel.position.y = hubY;
-        wheel.rotation.z = 0;
-      } else if (damage.wheels[i] >= flatAt) {
-        wheel.scale.y = FLAT_SQUASH;
-        wheel.position.y = body.wheelRadius * FLAT_SQUASH;
-        wheel.rotation.z = side * BENT_CAMBER;
-      } else {
-        wheel.scale.y = 1;
-        wheel.position.y = body.wheelRadius;
-        wheel.rotation.z = 0;
-      }
-    }
     // How the body sits on what is left. Each corner's height is fitted to
     // a plane: the mean is the drop, the sides' difference the roll, the
     // ends' difference the pitch. The wheel groups know where the corners
     // are — x is the track, z the axle.
-    let sum = 0;
-    let right = 0;
-    let left = 0;
-    let front = 0;
-    let rear = 0;
-    const drop = -(body.wheelRadius - hubY);
+    const heights = [0, 0, 0, 0];
     for (let i = 0; i < body.wheelGroups.length; i++) {
-      const h = detached.has(WHEEL_PARTS[i]) ? drop : 0;
-      sum += h;
-      if (i % 2 === 1) right += h;
-      else left += h;
-      if (i < 2) front += h;
-      else rear += h;
+      const wheel = body.wheelGroups[i];
+      const side = i % 2 === 1 ? 1 : -1;
+      if (detached.has(WHEEL_PARTS[i])) {
+        wheel.scale.set(1, 1, 1);
+        wheel.position.y = hubY;
+        wheel.rotation.z = 0;
+        wheel.rotation.y = 0;
+        heights[i] = hubY - body.wheelRadius;
+      } else if (damage.wheels[i] >= flatAt) {
+        wheel.scale.set(1, FLAT_SQUASH, FLAT_SPREAD);
+        wheel.position.y = body.wheelRadius * FLAT_SQUASH;
+        wheel.rotation.z = side * BENT_CAMBER;
+        wheel.rotation.y = side * BENT_TOE;
+        heights[i] = body.wheelRadius * (FLAT_SQUASH - 1);
+      } else {
+        wheel.scale.set(1, 1, 1);
+        wheel.position.y = body.wheelRadius;
+        wheel.rotation.z = 0;
+        wheel.rotation.y = 0;
+      }
     }
+    const [fl, fr, rl, rr] = heights;
     const track = Math.abs(body.wheelGroups[0]?.position.x ?? 0.8) * 2;
     const wheelbase = Math.abs(
       (body.wheelGroups[0]?.position.z ?? 1.2) - (body.wheelGroups[2]?.position.z ?? -1.2),
     );
-    pose.drop = sum / 4;
-    pose.roll = track > 0 ? (right - left) / 2 / track : 0;
-    pose.pitch = wheelbase > 0 ? (front - rear) / 2 / wheelbase : 0;
+    pose.drop = (fl + fr + rl + rr) / 4;
+    pose.roll = track > 0 ? (fr + rr - fl - rl) / 2 / track : 0;
+    pose.pitch = wheelbase > 0 ? (fl + fr - rl - rr) / 2 / wheelbase : 0;
   };
 
-  /** Re-derive every body vertex from its pristine copy and the ledger. */
+  /** Re-derive every vertex on the car from its pristine copy and the ledger. */
   const bend = (state: GameState): void => {
     const damage = state.car.damage;
-    const span = (Math.PI * 2) / DAMAGE_ZONES;
-    for (const panel of panels) bendPanel(panel, damage, span);
+    for (const panel of panels.values()) bendPanel(panel, damage);
     bendWheels(damage);
     bentVersion = damage.version;
+    sinceBend = 0;
   };
 
   /** Send a mesh flying from where it stands on the car, at the car's own
    * speed, thrown up and out — and then the world has it: it falls onto the
    * ground under wherever it gets to, not onto a plane at the height the
    * car happened to be at when it tore off. */
-  const throwOff = (mesh: THREE.Object3D, state: GameState, rest: number): void => {
+  const throwOff = (
+    mesh: THREE.Object3D,
+    state: GameState,
+    rest: number,
+    flat: "x" | "y" | "z" | null = null,
+  ): void => {
     // attach() keeps the world transform while re-parenting into the
     // world-anchored debris group — the piece separates mid-motion.
     debris.attach(mesh);
@@ -343,6 +369,8 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
           (Math.random() - 0.5) * 14,
         ),
         rest,
+        false,
+        flat,
       ),
     );
   };
@@ -403,7 +431,21 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     // bolted on: until here they are drawn as a single mesh (car-body.ts),
     // and this is the frame that hands each of them back its own.
     body.unbolt();
-    throwOff(mesh, state, DEBRIS_REST);
+    // A part is modelled where it sits on the car, around the car's own
+    // origin — and a loose piece has to turn about ITSELF. So its vertices
+    // are moved onto its centre and the mesh is stood where they were, in
+    // the shape the ledger had already folded it into: from here on it is
+    // the world's, and no longer re-derived from its pristine copy.
+    panels.delete(mesh);
+    const geo = mesh.geometry;
+    geo.computeBoundingBox();
+    const box = geo.boundingBox as THREE.Box3;
+    const centre = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    geo.translate(-centre.x, -centre.y, -centre.z);
+    mesh.position.copy(centre);
+    const rest = Math.min(size.x, size.y, size.z) / 2 + DEBRIS_REST;
+    throwOff(mesh, state, rest, PANEL_FACE[part] ?? null);
     // A door leaves a hole that is painted into the flank: re-bend.
     if (part === "doorL" || part === "doorR") bentVersion = -1;
   };
@@ -418,7 +460,8 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     // Events can only be missed across a rebuild; the ledger cannot —
     // anything it says is broken and still bolted on comes off now.
     for (const part of state.car.damage.broken) breakOff(part, state);
-    if (state.car.damage.version !== bentVersion) bend(state);
+    sinceBend += dt;
+    if (state.car.damage.version !== bentVersion && sinceBend >= BEND_EVERY) bend(state);
 
     // A bent rim wobbles as it turns: once per turn, either way.
     const flatAt = TUNING.collision.chassis.wheelFlat;
@@ -448,6 +491,11 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
   };
 
   return { debris, pose, update, onEvents, dispose };
+}
+
+function smoothstep(a: number, b: number, t: number): number {
+  const u = Math.min(1, Math.max(0, (t - a) / (b - a)));
+  return u * u * (3 - 2 * u);
 }
 
 /** The body's widest half, m, read off the wheels — the flank sits about
