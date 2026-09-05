@@ -128,7 +128,6 @@ export type HudSnapshot = {
    * above it (odometer.ts). */
   tripM: number;
   seed: number;
-  carName: string;
   /** THE TRAINING GROUND is standing rather than a stage (`mapgen/arena.ts`).
    * The HUD drops the clock for it and names the place instead of the seed:
    * nothing there is timed, and a running clock over a practice ground is
@@ -935,12 +934,14 @@ export function Hud({
         </div>
       )}
 
-      {/* Which stage, and in what — hung off the bottom edge of the map,
-          where a label the player reads once a run belongs. */}
+      {/* WHICH STAGE — hung off the bottom edge of the map, where a label the
+          player reads once a run belongs. The stage is the only thing on it:
+          what the car is was chosen two cards ago and is in front of the
+          player for the whole run, so naming it here is a line of screen
+          spent saying something the picture already says. */}
       {show.stage && (
         <div className="hud-chip hud-stage">
           {snap.training ? "TRAINING" : `STAGE ${snap.seed}`}
-          <span className="hud-chip-sub">{snap.carName}</span>
           {/* The frame rate, under the map with the rest of the run's
               label — developers only. */}
           {fps !== null && <span className="hud-chip-sub hud-fps">{fps} FPS</span>}

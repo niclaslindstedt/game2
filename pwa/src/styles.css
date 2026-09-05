@@ -116,9 +116,10 @@ body {
      hundred metres of country was a squiggle: it is sized to be legible at a
      glance rather than to be unobtrusive. */
   --hud-map: clamp(6.24rem, 20.8vmin, 9.75rem);
-  /* Room the stage chip takes under the map — the pacenote strip clears it
-     in portrait, where everything is stacked down the same column. */
-  --hud-stage: 2.3rem;
+  /* Room the stage chip takes under the map — ONE line, since the chip names
+     the stage and nothing else. The pacenote strip clears it in portrait,
+     where everything is stacked down the same column. */
+  --hud-stage: 1.4rem;
   /* ...and the room the condition schematic takes under both of them, at
      the foot of that column, stated as its two halves so neither can drift
      out of step with the other. The MARKS reserve two rows whatever is on
@@ -179,9 +180,9 @@ body {
   opacity: 0.9;
 }
 
-/* Which stage, and in what: under the minimap, right-aligned to hang off
-   its edge. It is read once at the start of a run, so it sits where a
-   label is looked FOR rather than in the corner the clock has earned. */
+/* Which stage: under the minimap, right-aligned to hang off its edge. It is
+   read once at the start of a run, so it sits where a label is looked FOR
+   rather than in the corner the clock has earned. */
 .hud-stage {
   position: absolute;
   top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + 0.3rem);
@@ -2062,7 +2063,12 @@ body {
   height: var(--hud-health);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* Flush RIGHT, not centred in the column. The map above it fills the
+     column's whole width and the stage label is right-aligned under it, so a
+     schematic narrower than the map centred in the same box reads as a third
+     thing floating loose beside the other two. Against the same edge, the
+     stack has one straight side. */
+  align-items: flex-end;
   gap: 0.15rem;
   transition: opacity 400ms linear;
 }
@@ -2110,15 +2116,15 @@ body {
 
 /* The marks for the machinery. An empty row on a sound car — the row
    filling up is the news, so it is never captioned and never explained. */
-/* The block of marks: up to two rows, each one CENTRED on the car above it
-   rather than packed from one end, which is what makes 3 over 2 read as a
-   block instead of as a row with a gap in it. */
+/* The block of marks: up to two rows, hung from the same right edge as the
+   drawing above them, so 3 over 2 reads as a block with one straight side
+   rather than as a row with a gap in it. */
 .hud-health-systems {
   width: 100%;
   height: var(--hud-health-marks);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-start;
   gap: 0.12rem;
 }
@@ -2126,7 +2132,7 @@ body {
 .hud-health-marks {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 0.18rem;
 }
 
@@ -2181,12 +2187,6 @@ body {
 
   .hud-chip {
     font-size: 0.8rem;
-  }
-
-  /* One line instead of two under the map, so the pacenote strip climbs
-     back up with it. */
-  .hud {
-    --hud-stage: 1.2rem;
   }
 
   .hud-clock-total {

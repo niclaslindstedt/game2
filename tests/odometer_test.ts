@@ -87,13 +87,13 @@ describe("the odometer's drums", () => {
     expect(face(1_000_000)).toBe("0000");
   });
 
-  it("gives the lifetime window six kilometre drums, so it reads to 999999.9", () => {
+  it("gives the lifetime window five kilometre drums, so it reads to 99999.9", () => {
     // The trip is this stage and the total is the car's life, so the two
     // windows are the same instrument at two lengths — and the longer one
     // has to hold a number no player will ever reach.
-    expect(face(1_000, TOTAL_DIGITS)).toBe("0000010");
-    expect(face(999_999_900, TOTAL_DIGITS)).toBe("9999999");
-    expect(face(1_000_000_000, TOTAL_DIGITS)).toBe("0000000");
+    expect(face(1_000, TOTAL_DIGITS)).toBe("000010");
+    expect(face(99_999_900, TOTAL_DIGITS)).toBe("999999");
+    expect(face(100_000_000, TOTAL_DIGITS)).toBe("000000");
     // The same distance reads the same on both, as far as the shorter one
     // goes: nothing about a window's width changes what a drum is showing.
     expect(face(42_300, TOTAL_DIGITS).endsWith(face(42_300))).toBe(true);

@@ -44,11 +44,11 @@ export const TRIP_TICK_M = 100;
  * the whole of one many times over. */
 export const TRIP_DIGITS = 4;
 
-/** ...and in the TOTAL's: six kilometre drums under the same tenths drum, so
- * the counter reads to 999999.9 km before it rolls quietly back to zero, the
- * way the real thing does. Three digits more than the trip is also what tells
+/** ...and in the TOTAL's: five kilometre drums under the same tenths drum, so
+ * the counter reads to 99999.9 km before it rolls quietly back to zero, the
+ * way the real thing does. Two digits more than the trip is also what tells
  * the two windows apart at a glance without a word printed on either. */
-export const TOTAL_DIGITS = 7;
+export const TOTAL_DIGITS = 6;
 
 /** How much of a drum's turn is spent carrying the one above it. A counter
  * does not move its tens drum through the whole of a kilometre — the tens
