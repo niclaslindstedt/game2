@@ -18,6 +18,16 @@ Five modules answer it, and the split matters:
   friction, the fall's reaction, the driver's tyres) and `turnAt`, the one
   place any of them becomes rotation.
 - **`roll-ledger.ts`** — `crashEnergy`, the invariant the labs hold it to.
+- **`structure.ts`** — what the SHELL is made of: which face arrived, what
+  that face passes on rather than folds (`foldSpeed` — a crumple zone, a
+  door, the floorpan, the cage; divided by the mass; hardening toward the
+  bare cage as the face is used up), how far it may fold (`crushCap`), and
+  what comes back off a solid (`restitutionAt`). Knobs in
+  `TUNING.collision.structure` and `collision.elasticSpeed`.
+- **the ground's GIVE and PLOUGH** — `groundOf` in `roll-contact.ts` over
+  `TUNING.surfaces.give` / `plough`: a surface takes a share of every shell
+  arrival as its own furrow, and dragging that furrow costs friction over
+  the shell's coefficient, on the grind only.
 - **`flight.ts`'s `tripOnLanding`** — the landing that starts one, and
   `tripBite`, what the driver's hands, pedals and arrival do to it. Knobs in
   `TUNING.air` (`tripSlide`, `tripRoll`, `tripMax`, `tripKeep`, `tripLock`,
@@ -264,6 +274,15 @@ pitch)` is the honest "is it on its wheels", because a body at roll 0 and
 - **After changing `car.u` or `car.w`, call `updateSlip(car)`** — the grounded
   redirect rebuilds velocity from `car.slip` and silently erases an impulse
   applied against a stale angle.
+- **THE GROUND GIVES, AND IT GIVES AT THE ARRIVAL ONLY.** A surface's
+  `give` comes off the arrival before `slamTurn` and `landingDamage` read it
+  — a corner sunk into sand turned nothing and dented nothing — while the
+  normal impulse the friction is priced off stays whole, because the descent
+  was arrested either way. Its `plough` goes onto the grounded step's rub and
+  never onto a contact's: an arrival's budget is already `grip × descent`,
+  and a coefficient added there let the travel and a rotation each take a
+  full stop of the same slip, which the bench ledger reported as energy made
+  at the touchdown. A `RollGround` with no surface is a rigid plane.
 - **A change here moves the DAMAGE too.** Fewer spurious contacts is less
   wear, and `tests/jump_test.ts`'s "a roll STRIPS the car" is calibrated
   against it. Re-read that bar deliberately rather than nudging it — and see

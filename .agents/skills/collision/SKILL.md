@@ -168,7 +168,16 @@ STAND, and **`test-scenario`** for staging exact contacts.
   Move `wearPerCrush` to change how many big hits a run survives; move
   `partAt` bolts to change how gladly parts fly.
 - `restitution` low + `tangentKeep` high is what makes forest driving
-  playable: brushes are scrapes, only square hits stop you.
+  playable: brushes are scrapes, only square hits stop you. The restitution
+  is a GENTLE contact's and falls with the closing speed (`elasticSpeed`,
+  `structure.ts`'s `restitutionAt`) — a car is folded by a wall, never
+  bounced off it — and `meetSolid`'s snap/anchor thresholds are calibrated
+  against the `(1 + e)` that leaves, so they move with it.
+- What the shell passes on to the body, and how far each face folds, is
+  `collision.structure` (`structure.ts`): the crumple zones, the flank, the
+  floorpan and the cage each have their own fold asymptote, the roof its own
+  stroke (`roofMax`) and crush rate, and every face hardens toward the cage
+  as it is used up.
 - `yawKick` sells the crash — too low reads as hitting glue, too high
   turns every brush into a spin.
 - `hardLandSpeed` sits just over a designed ramp jump's touchdown, so

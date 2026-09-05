@@ -126,10 +126,13 @@ const SCREEN_LAMPS: readonly DamagePart[] = [
 const PART_GONE = 0.9;
 
 /** How much of a face's crush counts as that panel being finished. The
- * ledger caps every face at `zoneMax`, so a face folded to the cage is a
- * panel with nothing left — 1 — and everything under it ramps to that. */
-function crushScore(depth: number): number {
-  return clamp(depth / C.zoneMax, 0, 1);
+ * ledger caps every face at its own stroke — `zoneMax` for the ring and
+ * the floorpan, the cage's `roofMax` for the roof — so a face folded to the
+ * cage is a panel with nothing left — 1 — and everything under it ramps to
+ * that. Read against the face's OWN cap, or a roof at the cage reads as a
+ * roof barely marked. */
+function crushScore(depth: number, cap: number = C.zoneMax): number {
+  return clamp(depth / cap, 0, 1);
 }
 
 /** A WHEEL, remapped into the ledger's own space. The wheel ledger has two
@@ -182,7 +185,7 @@ export function carHealth(damage: CarDamage): CarHealth {
     damage.broken.includes("glassF") ? 1 : 0,
     gone("glassL") * 0.55,
     gone("glassR") * 0.55,
-    crushScore(damage.roof),
+    crushScore(damage.roof, C.structure.roofMax),
   ]);
   // THE CABIN is the shell itself — the flanks, the doors, and the wear
   // that is the shell giving up its shape for good. Wear reaching 1 is the

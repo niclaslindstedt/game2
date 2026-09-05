@@ -394,9 +394,12 @@ describe("the jump", () => {
       seconds += TUNING.dt;
     }
     // It ground its way to a stop over real ground, and quickly: a roof and
-    // its pillars dug into gravel is a far better brake than four tyres.
+    // its pillars dug into soil is a far better brake than four tyres. The
+    // floor under the slide is the distance a body braking at a whole g
+    // would need — the most the ground can take from anything — so a car
+    // that stopped shorter than that was frozen, not stopped.
     const slid = Math.hypot(state.car.x - x0, state.car.z - z0);
-    expect(slid).toBeGreaterThan(6);
+    expect(slid).toBeGreaterThan((carrying * carrying) / (2 * TUNING.air.gravity));
     expect(Math.hypot(state.car.u, state.car.w)).toBeLessThanOrEqual(TUNING.air.roll.restSpeed);
     expect(carrying / seconds).toBeGreaterThan(TUNING.air.gravity * 0.4);
     // ...and only THEN is it a car lying on its roof for the crew to be
@@ -596,8 +599,10 @@ describe("the jump", () => {
     // STRIPPED one — its roof was never down. If a change to the roll moves
     // this, re-pick it the same way rather than softening the bar below:
     // sweep the entries and take one that finishes ON ITS ROOF, which is
-    // `Math.abs(rollTilt(roll))` near a half turn.
-    const { state } = landSideways(30, -22);
+    // `Math.abs(rollTilt(roll))` near a half turn. -22 was that entry while
+    // the ground under a crash was steel; once soil learned to give and the
+    // cage to hold, it finished on its wheels and -24 is the one on its roof.
+    const { state } = landSideways(30, -24);
     expect(onItsWheels(state.car.roll, state.car.pitch)).toBe(false);
     const damage = state.car.damage;
     for (const pane of ["glassF", "glassB", "glassR", "glassL"]) {

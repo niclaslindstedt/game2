@@ -175,12 +175,16 @@ export const PARAPET_INSET = PARAPET_RADIUS - PARAPET_THICK / 2;
 const DENSITY = { stone: 1500, wood: 500, steel: 7800, rubber: 1100 };
 
 /** The impulse a material's structure survives per kilogram of itself,
- * N·s/kg. Wood at 30 puts the smallest trunk on a stage inside a rally
+ * N·s/kg. Wood at 24 puts the smallest trunk on a stage inside a rally
  * car's momentum at about 40 km/h and the biggest at about 120, which is
  * the whole point of the number: a sapling goes down under an ordinary
  * excursion, an old spruce is a wall until you are properly committed —
- * and going through one costs very nearly everything you arrived with. */
-const SNAP_PER_MASS = { stone: Infinity, wood: 30, steel: Infinity, rubber: 14 };
+ * and going through one costs very nearly everything you arrived with.
+ * (It was 30 while the car bounced off everything at a constant three
+ * tenths, which is a third more impulse delivered than a folding car
+ * delivers; the speeds above are what the number is set against, and they
+ * did not move.) */
+const SNAP_PER_MASS = { stone: Infinity, wood: 24, steel: Infinity, rubber: 14 };
 
 /** How much of a tree's collision circle is actually WOOD — the rest of it
  * is the lowest boughs, which stop nothing and weigh little — and what the

@@ -1725,24 +1725,11 @@ export const TUNING = {
        * trip, and nothing about the ledger was ever an argument about
        * rubber. */
       faceGrip: { wheels: 0.85, flank: 0.42, end: 0.5, roof: 0.58 },
-      /** HOW MUCH OF AN ARRIVAL THE SHELL PASSES ON to the body rather than
-       * folding, m/s — the most any single contact can turn the car with,
-       * however hard it came down.
-       *
-       * A panel is not a billiard ball. It collapses at a roughly fixed
-       * force over its stroke, so the faster a corner arrives the more of
-       * that arrival goes into the metal and the less into rotating what is
-       * left of the car: below this the structure carries the blow and the
-       * body takes nearly all of it, well above it the extra is almost
-       * entirely fold. It is the same arrival `landingDamage` is booking
-       * parts off for in the same breath, priced once on each side.
-       *
-       * Without it a car thrown off a lip at eight rad/s met the ground at
-       * ten metres a second, had the whole of that resolved through the arm
-       * of the corner it caught, and came out at 0.8 rad/s — one turn, on
-       * its wheels, from an accident that used to run to two and a half.
-       * A rollover is not a stop. */
-      foldSpeed: 2.5,
+      /** How much of an arrival the shell passes on to the body rather than
+       * folding is not a number here any more: it is the FACE that arrived,
+       * the mass behind it and how much of that face is already folded —
+       * `collision.structure.fold`, read through `structure.ts`. A
+       * rollover is not a stop, and a car is not one material. */
       /** How fast the roll bleeds into the ground it is grinding round on,
        * 1/s. Panels are not tyres. */
       drag: 0.9,
@@ -1975,6 +1962,28 @@ export const TUNING = {
     breakaway: { gravel: 1.0, sand: 1.2, asphalt: 0.62, water: 1.2, nature: 1.1 },
     /** Throttle effectiveness per surface. */
     power: { gravel: 1.0, sand: 0.88, asphalt: 1.08, water: 0.7, nature: 0.8 },
+    /** THE GROUND GIVES. What a crashing car comes down on is not a plane
+     * of steel: gravel displaces, soil furrows, sand swallows a corner, and
+     * every bit of that is arrival that neither folds the shell nor turns
+     * the body — the ground took it. This is that share, 0..1, of a SHELL
+     * arrival (a roll's contacts, and the landing that starts one) and of a
+     * hard landing's descent: the reaction the body is turned by and the
+     * crush the panel is folded by are both read net of it (`roll-contact.ts`,
+     * `contact`; `flight.ts`'s landing). Tarmac gives nothing, which is why
+     * a rollover on a sealed road is the one that strips the car — and a
+     * GRADED road gives little: a rally road is compacted stone under a
+     * loose skin, and a sill scrapes the skin off and meets the base. The
+     * open country and the desert are where a corner sinks in. */
+    give: { gravel: 0.06, sand: 0.35, asphalt: 0, water: 0.5, nature: 0.25 },
+    /** ...AND WHAT IT COSTS TO PLOUGH IT. A sill or a roof rail digging into
+     * loose ground is dragging a furrow, and that is friction over and above
+     * the shell's own coefficient (`air.roll.faceGrip`): added to the
+     * Coulomb budget for whatever of the patch is SHELL rather than tyre,
+     * because a tyre rolls over what a panel ploughs. Accident
+     * reconstruction has a rollover on soil stopping harder than one on
+     * pavement, and this is that difference. Small against the face's
+     * own 0.4–0.6, because it is a furrow and not an anchor. */
+    plough: { gravel: 0.03, sand: 0.14, asphalt: 0, water: 0, nature: 0.07 },
     /** Rough ground caps pace where gearing cannot: above this speed the
      * nature surface pulls the car back hard (about 150 km/h) — a linear
      * per-surface drag would instead stall the box under its own upshift
@@ -2226,9 +2235,69 @@ export const TUNING = {
     floorY: 0.28,
     roofY: 1.4,
     centreY: 0.5,
-    /** Fraction of the closing speed bounced back off a solid, 0..1 — low:
-     * a tree absorbs a rally car, it does not trampoline it. */
+    /** Fraction of the closing speed bounced back off a solid AT A GENTLE
+     * CONTACT, 0..1 — the bumpers and the bark giving and returning. It is
+     * the top of a curve and not a constant: past `scuffSpeed` the arrival
+     * is spent deforming the car, and deformation returns nothing, so the
+     * coefficient falls as `elasticSpeed / (elasticSpeed + over)`
+     * (`structure.ts`, `restitutionAt`). A constant coefficient, however
+     * low, threw a car that met a wall at 120 km/h back up the road at 35 —
+     * a rubber ball where there should be a wreck. */
     restitution: 0.3,
+    /** ...and the closing speed over the scuff floor at which that has
+     * halved, m/s. Barrier tests put a car's restitution at about a third
+     * at walking pace, a tenth at 50 km/h and a twentieth at 100; this sits
+     * that curve on those points: 0.1 at 50 km/h, 0.05 at 120. */
+    elasticSpeed: 6,
+    /** WHAT THE SHELL IS MADE OF, face by face — read through
+     * `structure.ts`, which is the one place a contact asks how the car is
+     * built before deciding what a blow does to it. */
+    structure: {
+      /** HOW MUCH OF AN ARRIVAL EACH FACE PASSES ON to the body rather than
+       * folding, m/s — the asymptote a contact's reaction saturates at. A
+       * structure collapses at a roughly fixed force, so the faster a
+       * corner arrives the more of the arrival goes into the metal and the
+       * less into turning what is left of the car: under this figure the
+       * body takes nearly all of it, well over it the extra is almost
+       * entirely fold. It is the same arrival `landingDamage` books the
+       * crush off, priced once on each side — and it is per face because
+       * the faces are different things:
+       *
+       * - `crumple` is the nose and the tail: zones BUILT to fold, at a
+       *   moderate force, over half a metre. They pass on the least, so a
+       *   car coming down on its nose is stopped by the contact.
+       * - `flank` is a door skin over door bars — less room to fold, and a
+       *   stiffer answer when it does.
+       * - `belly` is the floorpan on the sills, met by a hard landing on
+       *   the wheels. Stiff: there is no crumple zone under a car.
+       * - `roof` is the CAGE, the stiffest thing on a rally car. It folds a
+       *   hand's breadth and passes the rest on, so a car coming down on
+       *   its roof is THROWN by the contact — which is what a rollover on a
+       *   caged car looks like, and why it keeps going.
+       * - `cage` is what any face becomes once it has folded to its cap:
+       *   the panel is gone and the structure behind it is what the ground
+       *   meets. Every face climbs toward this as it is used up, so a car
+       *   gets HARDER as it is destroyed, and the fifth contact of a roll
+       *   kicks the body where the first one stopped it.
+       *
+       * The figures are for `refMass`; a fixed force changes a heavier
+       * body's speed less, so they are divided by the car's own mass ratio.
+       * The old single number for every face and every car was 2.5, and the
+       * spread here is centred on it: a roll's outcome is chaotic in this
+       * figure (2.0 gave 0.60 g, 2.5 gave 0.41, 3.0 gave 0.68 on one seed),
+       * so judge any move on `make roll`'s twelve rows, never on one crash. */
+      fold: { crumple: 1.7, flank: 2.5, belly: 3.2, roof: 3.8, cage: 5.5 },
+      /** How far the ROOF may fold, m — the cage's own stroke, against the
+       * ring's `zoneMax`. A rally cage keeps the roof off the crew: 15 cm
+       * is a roofline that has come down to the top of the door frames,
+       * and past it the cage holds and only the wear goes on. It is also
+       * the whole scale the health schematic reads the roof against. */
+      roofMax: 0.15,
+      /** ...and how much of `crushPerSpeed` a roof arrival folds, 0..1. The
+       * cage is stiffer than any panel, so the same arrival dents it less —
+       * and what it does not fold it passes on to the body (`fold.roof`). */
+      roofCrush: 0.5,
+    },
     /** Fraction of the speed ALONG the surface kept through the contact —
      * a glancing blow scrubs paint and carries on. */
     tangentKeep: 0.82,
@@ -2295,8 +2364,12 @@ export const TUNING = {
        * which is how a rally car actually rolls: not off a bank, off a
        * rock. Roll rate per m/s of the sideways velocity the contact took,
        * rad/s. Sized so a flank sliding at pace into something low and
-       * solid goes over, and an ordinary clip only leans. */
-      trip: 0.18,
+       * solid goes over, and an ordinary clip only leans — against the
+       * velocity change a car that FOLDS against the rail actually makes
+       * (`restitutionAt` at pace is a twentieth, not the constant three
+       * tenths the old 0.18 was sized against, and the same rail took a
+       * fifth less out of the car). The roll lane's rail is the bench. */
+      trip: 0.22,
       /** Everything at or below this stands under the car's centre of mass
        * and trips it fully, m... */
       tripTop: 0.55,
@@ -2465,8 +2538,13 @@ export const TUNING = {
        * lids let go last, when the folding has pulled far enough forward
        * and back to reach their hinges. */
       roofGlass: 0.04,
-      roofMirror: 0.06,
-      roofLid: 0.22,
+      /** The mirrors are the widest thing on the car and hang off the
+       * pillars the same fold takes, so they go with the glass. */
+      roofMirror: 0.04,
+      /** ...inside the cage's own stroke (`structure.roofMax`): a bolt the
+       * roof can never fold far enough to reach is a lid that never comes
+       * off a rolled car. */
+      roofLid: 0.12,
     },
     /** THE END OF THE RUN, short of the line. A car whose engine has died
      * (`systems.engine` at 1) or that has fewer than three wheels left is

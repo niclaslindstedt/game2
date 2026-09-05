@@ -19,8 +19,10 @@
 
 import { TUNING } from "./defs/tuning.ts";
 import type { CarSpec } from "./defs/cars.ts";
+import type { Surface } from "../mapgen/index.ts";
 import { landingDamage } from "./collision.ts";
 import { crashEnergy } from "./roll-ledger.ts";
+import { foldSpeed, landingFace } from "./structure.ts";
 import {
   type Axis,
   type Bed,
@@ -44,6 +46,23 @@ import {
 const T = TUNING;
 const R = TUNING.air.roll;
 const DR = TUNING.air.roll.driver;
+
+/** WHAT THE GROUND UNDER A CRASH IS MADE OF — the two ways a surface that
+ * is not steel enters the contact. `give` is the share of an arrival the
+ * ground takes as its own deformation (a furrow, a corner sunk into sand):
+ * arrival that neither turns the body nor folds the shell. `plough` is the
+ * friction dragging that furrow costs, over the shell's own coefficient. */
+export type Ground = { readonly give: number; readonly plough: number };
+
+/** A surface that does neither: what a contact is resolved against when
+ * nobody said what the ground was, and what the bench tests stand on. */
+export const RIGID: Ground = { give: 0, plough: 0 };
+
+/** ...and what a stage's surface is worth, read off `TUNING.surfaces`. */
+export function groundOf(surface?: Surface | "nature"): Ground {
+  if (!surface) return RIGID;
+  return { give: T.surfaces.give[surface], plough: T.surfaces.plough[surface] };
+}
 
 /** What is left of a friction impulse's moment once the face under the body
  * has answered as much of it as it can, signed. `hold` is the moment that
@@ -100,7 +119,12 @@ function stopping(slip: number, lever: number, inertia: number): number {
  * at `rate × the weight's height` on top of the travel.
  *
  * `budget` is m/s of velocity change the normal load can pay for: `grip × g ×
- * dt` for a body grinding along, `grip × descent` for one arriving. */
+ * dt` for a body grinding along, `grip × descent` for one arriving.
+ *
+ * `plough` is what the GROUND adds to the shell's coefficient — a sill
+ * dragging a furrow through soil — and it is added for the share of the
+ * patch that is shell rather than tyre, because a tyre rolls over what a
+ * panel ploughs. */
 export function rubGround(
   car: CarState,
   normal: number,
@@ -109,8 +133,10 @@ export function rubGround(
   bed: Bed,
   mass: MassSpread,
   swept: boolean,
+  plough = 0,
 ): void {
-  const budget = gripOn(tilt, pitch, bed) * normal;
+  const shell = 1 - tyreShare(tilt, pitch, bed);
+  const budget = (gripOn(tilt, pitch, bed) + plough * shell) * normal;
   if (budget <= 0) return;
   const patch = standingOn(tilt, pitch, bed);
   const lever = patch.height;
@@ -328,14 +354,22 @@ export function driveRolling(
  * cannot afford is two accounts of the same geometry.
  *
  * `arrival` is how fast the weight is closing on that surface, already net
- * of the rotation carrying the surface up to meet it. */
-function slamTurn(car: CarState, slopes: Slopes, mass: MassSpread, arrival: number): void {
+ * of the rotation carrying the surface up to meet it and of whatever the
+ * ground itself gave. `fold` is the asymptote the FACE that arrived passes
+ * on (`structure.foldSpeed`): a crumple zone's, a door's, or the cage's. */
+function slamTurn(
+  car: CarState,
+  slopes: Slopes,
+  mass: MassSpread,
+  arrival: number,
+  fold: number,
+): void {
   if (arrival <= 0) return;
-  // WHAT THE SHELL PASSED ON, rather than folding — a panel collapses at a
-  // roughly fixed force, so what reaches the body saturates however hard the
-  // corner came down (`R.foldSpeed`). The rest is the fold, which the damage
-  // ledger books in the same breath a few lines below.
-  const impulse = (arrival * R.foldSpeed) / (R.foldSpeed + arrival);
+  // WHAT THE SHELL PASSED ON, rather than folding — a structure collapses at
+  // a roughly fixed force, so what reaches the body saturates however hard
+  // the corner came down. The rest is the fold, which the damage ledger
+  // books in the same breath a few lines below.
+  const impulse = (arrival * fold) / (fold + arrival);
   const share =
     1 +
     (slopes.roll * slopes.roll) / mass.spin.roll +
@@ -362,7 +396,19 @@ function slamTurn(car: CarState, slopes: Slopes, mass: MassSpread, arrival: numb
  * with the next corner already down pays the swap in full, one with it a long
  * way up pays none of it, because the ground has met the corner the body was
  * turning about anyway. That is the difference between a crash tapping its
- * way round and one stopping dead on the face it puts down. */
+ * way round and one stopping dead on the face it puts down.
+ *
+ * `ground` is what the car came down ON. The ground's own give comes off
+ * the arrival before the shell is asked what it folds and the body what it
+ * turns by — a corner sunk into sand turned nothing and dented nothing. The
+ * normal impulse itself is whole either way: the descent was arrested, in
+ * the furrow or on the panel, and the momentum does not care which. Its
+ * plough is NOT here: a furrow is dragged over the grind, not struck at the
+ * arrival, so it belongs to the grounded step's rub (`stepRolling`) — and
+ * an arrival's budget is already `grip × descent`, large enough that a
+ * coefficient added on top of it overspent the patch (the travel rub and
+ * each rotation's cap are taken separately) and read as energy made at the
+ * touchdown. */
 export function contact(
   axis: Axis,
   spec: CarSpec,
@@ -374,6 +420,7 @@ export function contact(
   mass: MassSpread,
   events: GameEvent[],
   stats: RunStats,
+  ground: Ground = RIGID,
 ): void {
   // What the body had before the ground got to it — the other end of this
   // is a few lines down, and the difference is the whole of what the
@@ -395,12 +442,18 @@ export function contact(
   // the second turn came out at 3 km/h, on its wheels, having touched
   // nothing at all.
   const drag = pivot.sprung ? 1 - R.sprung : 1;
+  // WHAT THE GROUND TOOK FIRST. Soil furrows and sand swallows a corner, and
+  // that share of the arrival reaches neither the body nor the shell.
+  const held = 1 - ground.give;
   // THE REACTION FIRST, then the friction it pays for. They are one arrival
   // and the order between them is a step's worth of arithmetic, but the
   // normal impulse is the larger of the two and the rub reads the rates it
   // leaves — so the drag under a corner that has just been kicked into a new
-  // plane is the drag of the body that is actually there.
-  slamTurn(car, seatSlopes(tilt, pitch, bed), mass, descent * drag);
+  // plane is the drag of the body that is actually there. The reaction is
+  // the FACE's: what a crumple zone passes on and what the cage passes on
+  // are different things, and a face already folded to its cap is the cage.
+  const fold = foldSpeed(spec, car.damage, landingFace(tilt));
+  slamTurn(car, seatSlopes(tilt, pitch, bed), mass, descent * drag * held, fold);
   rubGround(car, descent * drag, tilt, pitch, bed, mass, true);
   if (Math.abs(before) < R.slamAt && descent <= 0) return;
   // How hard it hit, for what it FOLDS: how fast the arriving corner was
@@ -412,7 +465,10 @@ export function contact(
   // arriving, so pricing the fold by the exchange made the three-turn rolls
   // the CHEAPEST thing a car could do.
   const slam = Math.max(descent, Math.abs(before) * R.slam);
-  landingDamage(spec, car, slam, events, stats);
+  // ...and the shell folds around what the ground did not take. The settle
+  // and the burst below read the whole slam: a corner sunk into a furrow
+  // is a corner that threw the most ground of all.
+  landingDamage(spec, car, slam * held, events, stats);
   car.settle = Math.max(car.settle, Math.min(1, slam / T.suspension.settleSlam));
   // A crash grinding itself out taps the ground a dozen times on the way, and
   // a car heard landing a dozen times is a car nobody can hear rolling. The

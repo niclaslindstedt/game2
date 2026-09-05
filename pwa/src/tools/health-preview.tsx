@@ -32,6 +32,7 @@ import { CarHealthPanel } from "../game/hud-health.tsx";
 const CALL = TUNING.collision.callAt;
 const FLAT = TUNING.collision.chassis.wheelFlat;
 const ZONE = TUNING.collision.zoneMax;
+const ROOF = TUNING.collision.structure.roofMax;
 
 /** A sound ledger, the shape a run starts with. */
 function sound(): CarDamage {
@@ -104,7 +105,7 @@ const CASES: { name: string; note: string; damage: CarDamage }[] = [
     name: "rolled",
     note: "over, and back on its wheels",
     damage: make((d) => {
-      d.roof = ZONE;
+      d.roof = ROOF;
       d.zones[2] = ZONE * 0.9;
       d.zones[6] = ZONE * 0.7;
       d.wear = 0.8;
@@ -139,7 +140,7 @@ const CASES: { name: string; note: string; damage: CarDamage }[] = [
     note: "the run is over where it stops",
     damage: make((d) => {
       d.zones = d.zones.map(() => ZONE);
-      d.roof = ZONE;
+      d.roof = ROOF;
       d.belly = ZONE;
       d.wear = 1;
       for (const system of INTERNAL_SYSTEMS) d.systems[system] = 1;
