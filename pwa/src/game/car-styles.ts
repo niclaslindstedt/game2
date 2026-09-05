@@ -405,15 +405,18 @@ export const CLASSIC_BODY: CarBodySpec = {
  * width is — a proportion along the car is the photo's, a proportion up
  * or across it is real. Against the front axle at z = 1.19 and the rear
  * at z = −1.21:
- * - the bonnet's leading edge 0.73 m ahead of the front axle, the cowl
- *   0.35 m behind it, the roof's front edge 0.82 m behind it;
+ * - the nose cap 0.76 m ahead of the front axle and the bumper's face a
+ *   hand past it, the cowl 0.35 m behind it, the roof's front edge 0.82 m
+ *   behind it;
  * - the front door 0.96 m long from 0.44 m behind the front axle, the
  *   B-pillar plumb at −0.25, the rear door's shut line 0.32 m ahead of the
  *   rear axle, and the side glass running 0.15 m past that axle;
  * - the roof's rear edge 0.24 m ahead of the rear axle, the backlight's
- *   foot 0.17 m behind it, the tail 0.80 m behind it;
- * - the bonnet climbing 0.12 m from its leading edge to the cowl, the door
- *   tops at 0.92 m, the boot 0.1 m higher than them, the roof at 1.37 m;
+ *   foot 0.17 m behind it, the tail 0.82 m behind it with the bumper's face
+ *   a hand past that;
+ * - the bonnet climbing 0.14 m from its leading edge to the cowl, most of
+ *   it in the half nearest the screen, the door tops at 0.93 m, the boot
+ *   0.1 m higher than them, the roof at 1.37 m;
  * - a tyre 0.32 m in radius under a rim two thirds of it, on five broad
  *   blades — the one white wheel in the catalog.
  *
@@ -431,17 +434,17 @@ export const SEDAN_BODY: CarBodySpec = {
   // does because the engine plants a roadside stone as a SOLID by measuring
   // it against the lowest bonnet in the catalog (tests/car_geometry_test.ts).
   profile: [
-    { z: 1.99, topY: 0.85, half: 0.72 },
-    { z: 1.92, topY: 0.87, half: 0.77 },
-    { z: 1.5, topY: 0.9, half: 0.82 },
-    { z: 1.19, topY: 0.925, half: 0.84 },
-    { z: 0.84, topY: 0.975, half: 0.845 },
-    { z: 0.7, topY: 0.925, half: 0.845 },
+    { z: 1.95, topY: 0.85, half: 0.72 },
+    { z: 1.9, topY: 0.86, half: 0.77 },
+    { z: 1.46, topY: 0.905, half: 0.82 },
+    { z: 1.1, topY: 0.955, half: 0.84 },
+    { z: 0.84, topY: 0.985, half: 0.845 },
+    { z: 0.7, topY: 0.93, half: 0.845 },
     { z: 0.0, topY: 0.93, half: 0.845 },
     { z: -0.9, topY: 0.94, half: 0.845 },
     { z: -1.375, topY: 1.03, half: 0.84 },
     { z: -1.8, topY: 1.005, half: 0.8 },
-    { z: -2.01, topY: 0.975, half: 0.74 },
+    { z: -2.03, topY: 0.975, half: 0.74 },
   ],
   // Low over its wheels: the sill on the real car is a hand off the ground
   // at rally height.
@@ -451,8 +454,8 @@ export const SEDAN_BODY: CarBodySpec = {
   // sedan, not a slab.
   side: { rocker: 0.95, shoulder: 0.93 },
   wheelbase: 2.4,
-  // A hair rearward: the tail bumper's face is what reaches the collision
-  // box's end, and both overhangs come out at 0.8 m to the caps.
+  // A hair rearward: the rear overhang is the longer one on this car, and
+  // its bumper's face is what reaches the collision box's end.
   axleShift: -0.01,
   trackHalf: 0.74,
   // A fifteen-inch gravel wheel: the tyre a quarter of the roof height, the
@@ -505,10 +508,10 @@ export const SEDAN_BODY: CarBodySpec = {
   // swollen from the panel, three centimetres a side, and stop at the doors.
   flare: { extra: 0.03, length: 1.15, kind: "smooth" },
   // The boot's lip, a hand above the deck and the width of the lid.
-  spoiler: { kind: "lip", z: -1.95, y: 1.03, span: 1.3, color: 0x15171b },
+  spoiler: { kind: "lip", z: -1.97, y: 1.03, span: 1.3, color: 0x15171b },
   // Two red flashes down the bonnet's outer edges, from the lamps to the
   // cowl — inside the lid, so they leave with it.
-  stripes: [{ offsets: [-0.44, 0.44], width: 0.2, zFrom: 1.86, zTo: 0.9, color: 0xd8262c }],
+  stripes: [{ offsets: [-0.44, 0.44], width: 0.2, zFrom: 1.84, zTo: 0.9, color: 0xd8262c }],
   // Three shut lines: the front door's leading edge just behind the front
   // arch, the B-pillar's line, and the rear door's edge ahead of the rear
   // arch — the rear door is 0.68 m of the flank, the front one 0.96.
@@ -580,14 +583,17 @@ export const SEDAN_BODY: CarBodySpec = {
       cells: 2,
     },
     indicators: { y: 0.5, x: 0.6, width: 0.12, height: 0.05 },
-    bumper: { y: 0.45, height: 0.14, depth: 0.1, wrap: 0.3, color: 0xf3f1eb },
-    splitter: { y: 0.305, height: 0.13, depth: 0.24, span: 1.42, color: 0x15171b },
-    hood: { half: 0.6, zFrom: 1.9, zTo: 0.86 },
+    // Shallow: the bar stands a hand past the lamps, not a foot — the nose
+    // of this car is the lamps and the bonnet's edge, with the bumper flush
+    // under them.
+    bumper: { y: 0.45, height: 0.14, depth: 0.05, wrap: 0.3, color: 0xf3f1eb },
+    splitter: { y: 0.305, height: 0.13, depth: 0.2, span: 1.42, color: 0x15171b },
+    hood: { half: 0.6, zFrom: 1.88, zTo: 0.86 },
     // Four pods: a big pair standing up off the bonnet's corners, and a
     // smaller pair ahead of the grille at lamp height.
     lampPods: [
-      { y: 0.9, z: 1.98, radius: 0.11, offsets: [-0.62, 0.62] },
-      { y: 0.72, z: 2.05, radius: 0.085, offsets: [-0.4, 0.4] },
+      { y: 0.9, z: 1.94, radius: 0.11, offsets: [-0.62, 0.62] },
+      { y: 0.72, z: 1.99, radius: 0.085, offsets: [-0.4, 0.4] },
     ],
   },
   rear: {
@@ -611,10 +617,10 @@ export const SEDAN_BODY: CarBodySpec = {
     // A deep body-colour bumper, and the black valance running down under
     // it to where the skirt ends — every centimetre of paint under a black
     // skirt is a centimetre the car looks jacked up.
-    bumper: { y: 0.565, height: 0.19, depth: 0.1, wrap: 0.3, color: 0xf3f1eb },
-    valance: { y: 0.39, height: 0.16, depth: 0.2, span: 1.4, color: 0x15171b },
+    bumper: { y: 0.565, height: 0.19, depth: 0.08, wrap: 0.3, color: 0xf3f1eb },
+    valance: { y: 0.39, height: 0.16, depth: 0.18, span: 1.4, color: 0x15171b },
     exhaust: { x: -0.4, y: 0.36, radius: 0.045 },
-    deck: { half: 0.62, zFrom: -1.4, zTo: -1.93 },
+    deck: { half: 0.62, zFrom: -1.4, zTo: -1.95 },
   },
   colors: {
     paint: 0xf3f1eb,
