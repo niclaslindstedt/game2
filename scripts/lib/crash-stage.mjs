@@ -482,7 +482,7 @@ export function stageCrash(name, { car: carId = "classic", seed = 1 } = {}) {
   // `grd->grd` is the grounded model itself, which is exactly conservative and
   // ought to read zero. Split that way, a flat 20% went to three unrelated
   // faults on the first run of it.
-  const spread = massSpread(carById(carId).mass);
+  const spread = massSpread(carById(carId));
   let energy = crashEnergy(state.car, spread);
   const budget = { into: energy, gained: 0, steps: 0, worst: 0, regimes: {} };
   for (let i = 0; i < TUNING.physicsHz * scenario.seconds; i++) {

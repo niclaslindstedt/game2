@@ -70,6 +70,25 @@ export type CarSpec = {
    * already an acceleration, so making mass divide it twice would just
    * make the heavy car slow. */
   mass: number;
+  /** WHERE THAT MASS SITS, which is what separates the cars once they are
+   * OVER (`roll-hull.ts`, through `massSpread`). Neither touches the
+   * handling model: a car on its springs is kept flat on purpose, and the
+   * load transfer the tyres feel is the drivetrain table's business.
+   *
+   * The share of the weight over the FRONT axle, 0..1. An engine ahead of
+   * the front wheels puts it well past half; a rear-driver with its engine
+   * behind the axle line sits near it. Read by the roll as how far ahead
+   * of the wheelbase's middle the weight is: the nose corner is that much
+   * nearer, the tail corner that much further, so a nose-heavy car goes
+   * over its nose more readily and is spun about its tail by the ground. */
+  balance: number;
+  /** ...and how high it rides over the wheel plane, m. A tall two-box on
+   * its springs carries it higher than a low coupe; a caged rally car a
+   * little higher again. The lever every contact and the friction turn
+   * the body on, and the climb to the sill corner a trip has to pay —
+   * a hand's breadth here is the difference between a car that lurches
+   * and one that goes over. */
+  centreHeight: number;
   /** Top speed of each gear, m/s — the last entry is the car's top speed. */
   gearTop: number[];
   /** Peak longitudinal acceleration per gear, m/s². */
@@ -143,6 +162,10 @@ export const CARS: CarSpec[] = [
       "EASIEST — washes wide if you only steer. Turn in on the brake or the handbrake; the throttle then pulls it straight",
     drive: "fwd",
     mass: 1020,
+    // Engine and box ahead of the front axle, and a tall two-box shell on
+    // soft springs: the most nose-heavy and the highest weight of the three.
+    balance: 0.63,
+    centreHeight: 0.54,
     gearTop: [12, 20, 28, 38, 49, 62],
     // gearAccel[4] holds clear headroom over drag at 0.94·gearTop[4], or
     // the auto box parks just under its own upshift threshold forever.
@@ -176,6 +199,10 @@ export const CARS: CarSpec[] = [
       "IN BETWEEN — four driven wheels, so point it and go. Slides a little on the power and gathers itself up",
     drive: "awd",
     mass: 1300,
+    // A longitudinal turbo four over the front axle with the transfer box
+    // behind it: nose-heavy, but a low, wide four-door carries it lowest.
+    balance: 0.58,
+    centreHeight: 0.49,
     gearTop: [13, 22, 31, 42, 55, 72],
     gearAccel: [10.8, 9.4, 9.4, 9.6, 8.2, 5.6],
     torque: 0.9,
@@ -207,6 +234,10 @@ export const CARS: CarSpec[] = [
       "HARDEST — the tail steps out on the throttle at any speed. Hold the slide on the power, catch it on opposite lock",
     drive: "rwd",
     mass: 1080,
+    // Front engine, rear drive, a light three-box: the most even of the
+    // roster, carried at a sixties saloon's height.
+    balance: 0.53,
+    centreHeight: 0.51,
     gearTop: [11, 18, 26, 35, 45, 57],
     gearAccel: [15.0, 13.0, 11.0, 9.2, 6.2, 3.0],
     torque: 1.12,

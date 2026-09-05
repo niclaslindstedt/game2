@@ -68,9 +68,17 @@ import {
   type RunStats,
 } from "./state.ts";
 
-export { WHEEL_BASIN, massSpread, onItsWheels, type MassSpread } from "./roll-hull.ts";
+export {
+  REFERENCE,
+  WHEEL_BASIN,
+  massSpread,
+  onItsWheels,
+  type MassSource,
+  type MassSpread,
+  type Weight,
+} from "./roll-hull.ts";
 export { crashEnergy, crashTurbulence } from "./roll-ledger.ts";
-export { RIGID, groundOf, type Ground } from "./roll-contact.ts";
+export { RIGID, driveRolling, groundOf, type Ground } from "./roll-contact.ts";
 
 const T = TUNING;
 const R = TUNING.air.roll;
@@ -217,8 +225,8 @@ export function leanTorque(
 ): number {
   const tilt = rollTilt(roll);
   const nose = rollTilt(pitch);
-  const height = standingOn(tilt, nose, bed).height;
-  const slopes = seatSlopes(tilt, nose, bed);
+  const height = standingOn(tilt, nose, bed, mass.weight).height;
+  const slopes = seatSlopes(tilt, nose, bed, mass.weight);
   return (aLat * height - T.air.gravity * slopes.roll) / mass.over.roll;
 }
 
@@ -272,7 +280,7 @@ export function landRolled(
     tilt,
     pitch,
     bed,
-    massSpread(spec.mass),
+    massSpread(spec),
     events,
     stats,
     ground,
@@ -311,7 +319,7 @@ export function stepRolling(
   const dt = T.dt;
   const bed = rollBed(ctx);
   const ground = groundOf(ctx.surface);
-  const mass = massSpread(spec.mass);
+  const mass = massSpread(spec);
   const tilt = rollTilt(car.roll);
   const pitch = rollTilt(car.pitch);
   // WHERE THE WEIGHT IS, as a WORLD height. Carried in `car.y` (the origin)
@@ -327,7 +335,7 @@ export function stepRolling(
   // that ran was gravity. On flat ground it cancels exactly, which is why
   // only a crash thrown off a lip into the wild ever showed it: it was 13.5%
   // of `carry`'s whole budget, all of it on `air->air` steps.
-  let centre = car.y + weightOverOrigin(tilt, pitch);
+  let centre = car.y + weightOverOrigin(tilt, pitch, mass.weight);
   // `airborne` is the crash's own bit for BETWEEN ITS CONTACTS — which is
   // what airborne honestly means for a car going over, and what the camera,
   // the HUD and the effects want to hear. It cannot be read back off the
@@ -336,7 +344,7 @@ export function stepRolling(
   // tolerance coarse enough not to chatter on that is coarse enough to glue
   // it back down for the first several steps of every flight.
   const down = !car.airborne;
-  const wasFlat = standingOn(tilt, pitch, bed).flat;
+  const wasFlat = standingOn(tilt, pitch, bed, mass.weight).flat;
 
   if (down) {
     // GRAVITY along the surface, in both planes at once — downhill toward the
@@ -345,7 +353,7 @@ export function stepRolling(
     // one. A car on its roof on a bank lies on the BANK, a bank's worth of
     // angle round from upside down, and sits in a genuine minimum there:
     // which is what "it just slides down" means.
-    const slopes = seatSlopes(tilt, pitch, bed);
+    const slopes = seatSlopes(tilt, pitch, bed, mass.weight);
     car.rollRate -= (T.air.gravity / mass.over.roll) * slopes.roll * dt;
     car.pitchRate -= (T.air.gravity / mass.over.pitch) * slopes.pitch * dt;
     // ...and THE GROUND, which is the same friction that is slowing the car
@@ -397,7 +405,7 @@ export function stepRolling(
   // a face that was not flat on the plane a step ago and is now — rather than
   // of an angle crossing a quarter turn, which cannot be asked honestly of a
   // body that is pitched and rolled at once on a plane tilted two ways.
-  if (down && !wasFlat && standingOn(nowR, nowP, bed).flat) {
+  if (down && !wasFlat && standingOn(nowR, nowP, bed, mass.weight).flat) {
     contact(arriving(car), spec, car, 0, nowR, nowP, bed, mass, events, stats, ground);
   }
 
@@ -471,8 +479,8 @@ export function stepRolling(
   // A body off its wheels is never planted, whatever it is doing next step.
   car.planted = false;
 
-  const seat = seatOn(nowR, nowP, bed);
-  const slopes = seatSlopes(nowR, nowP, bed);
+  const seat = seatOn(nowR, nowP, bed, mass.weight);
+  const slopes = seatSlopes(nowR, nowP, bed, mass.weight);
   // ...and WHERE IT WOULD REST, in the world: the ground under the whole body
   // plus the arm the attitude holds the weight out on. This is the one place
   // the terrain enters, and it enters as the height a contact happens AT
@@ -576,17 +584,17 @@ export function stepRolling(
       // grounded step coupling the travel to the rotation — inertia `spin +
       // slopes²` rather than the constant `spin + SILL_ARM` — which is a
       // different model and a full retune of the crash's feel.
-      const after = seatSlopes(nowR, nowP, bed);
+      const after = seatSlopes(nowR, nowP, bed, mass.weight);
       car.vy = after.roll * car.rollRate + after.pitch * car.pitchRate;
     }
   }
   // Back into the origin the rest of the game reads the car's height from.
-  car.y = centre - weightOverOrigin(nowR, nowP);
+  car.y = centre - weightOverOrigin(nowR, nowP, mass.weight);
   car.settling = false;
 
   car.sliding = false;
   if (car.airborne) return;
-  const patch = standingOn(nowR, nowP, bed);
+  const patch = standingOn(nowR, nowP, bed, mass.weight);
   // ON ITS TYRES AND NOT GOING ANYWHERE ELSE: the driver gets the car back,
   // LEANING OR NOT, and that is the whole of what balancing a car on two
   // wheels is.

@@ -1664,6 +1664,18 @@ export const TUNING = {
         pitchBase: -1728.8,
         yawSlope: 3.176,
         yawBase: -1754.2,
+        /** ...AND THE CAGE, which none of the database's cars carried. A
+         * rally cage is forty-odd kilograms of tube welded out at the
+         * sills, up the pillars and across the roof: mass at the very
+         * edge of the body, which is where it counts most against an
+         * axis. Its own radii of gyration, m, about each of the car's
+         * axes — roughly the half-width and the half-height for the roll,
+         * the cabin's half-length for the other two — at this mass, added
+         * to each spread per kilogram of the car it is in. Three to four
+         * per cent on every axis for this roster, all of it resisting the
+         * turn. The cage's own share of the weight's HEIGHT is the car's
+         * `centreHeight` to state. */
+        cage: { mass: 45, roll: 0.62, pitch: 1.05, yaw: 1.05 },
       },
       /** ...and how much of that exchange a SPRUNG corner gives back
        * instead of taking, 0..1. A shell corner arriving at the ground is
@@ -2222,7 +2234,7 @@ export const TUNING = {
      * reads all four: they are the outline a car off its wheels turns over
      * on, and the height its centre has to be lifted through to get from
      * one face of it to the next. Everything about where a roll ENDS comes
-     * out of these four numbers and nothing else.
+     * out of these numbers and the car's own weight placement.
      * tests/car_geometry_test.ts holds them against the drawn shells. */
     halfTrack: 0.74,
     /** ...and how far ALONG the car those wheel contacts sit, m — half the
@@ -2234,6 +2246,11 @@ export const TUNING = {
     halfBase: 1.2,
     floorY: 0.28,
     roofY: 1.4,
+    /** ...and how high the REFERENCE weight rides, m — the box's own, for
+     * a geometric question asked with no car in hand. Each car carries its
+     * weight at its own height and its own place along the wheelbase
+     * (`CarSpec.centreHeight`, `balance`), and the roll asks every
+     * question of that one (`roll-hull.ts`, `MassSpread.weight`). */
     centreY: 0.5,
     /** Fraction of the closing speed bounced back off a solid AT A GENTLE
      * CONTACT, 0..1 — the bumpers and the bark giving and returning. It is

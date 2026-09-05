@@ -138,7 +138,7 @@ export function rubGround(
   const shell = 1 - tyreShare(tilt, pitch, bed);
   const budget = (gripOn(tilt, pitch, bed) + plough * shell) * normal;
   if (budget <= 0) return;
-  const patch = standingOn(tilt, pitch, bed);
+  const patch = standingOn(tilt, pitch, bed, mass.weight);
   const lever = patch.height;
   const spin = swept ? lever : 0;
   // Where the patch is actually going: the car's travel, plus what the
@@ -305,7 +305,7 @@ export function driveRolling(
     car.u *= keep;
     car.w *= keep;
   }
-  turnAt(car, standingOn(tilt, pitch, bed), normal, mass, dU, dW);
+  turnAt(car, standingOn(tilt, pitch, bed, mass.weight), normal, mass, dU, dW);
   updateSlip(car);
   return mine / patch;
 }
@@ -453,7 +453,7 @@ export function contact(
   // the FACE's: what a crumple zone passes on and what the cage passes on
   // are different things, and a face already folded to its cap is the cage.
   const fold = foldSpeed(spec, car.damage, landingFace(tilt));
-  slamTurn(car, seatSlopes(tilt, pitch, bed), mass, descent * drag * held, fold);
+  slamTurn(car, seatSlopes(tilt, pitch, bed, mass.weight), mass, descent * drag * held, fold);
   rubGround(car, descent * drag, tilt, pitch, bed, mass, true);
   if (Math.abs(before) < R.slamAt && descent <= 0) return;
   // How hard it hit, for what it FOLDS: how fast the arriving corner was

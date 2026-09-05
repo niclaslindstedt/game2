@@ -121,12 +121,16 @@ export {
   goesOver,
   goesOverEnd,
   leanTorque,
+  driveRolling,
   groundOf,
   massSpread,
   onItsWheels,
   rollBed,
+  REFERENCE,
   type Ground,
+  type MassSource,
   type MassSpread,
+  type Weight,
 } from "./game/roll.ts";
 // ...and how much of what is on the ground is still RUBBER, which is the
 // whole of what a driver has left while the car is going over — beside the

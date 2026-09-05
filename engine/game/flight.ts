@@ -639,7 +639,7 @@ function tripOnLanding(
     car.w *= 1 - (1 - A.tripKeep) * clamp(bite, 0, 1);
     updateSlip(car);
   }
-  if (!goesOver(car.roll, car.rollRate, massSpread(spec.mass))) return false;
+  if (!goesOver(car.roll, car.rollRate, massSpread(spec))) return false;
   beginRoll(car, events, stats);
   return true;
 }

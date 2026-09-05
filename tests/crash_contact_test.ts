@@ -192,7 +192,7 @@ describe("the ground, arriving at a body that is going over", () => {
     // ...and this one wants its turbulence back: the ledger has to hold with
     // the only term that puts energy in actually running.
     state.rng.next = createRng(7).next;
-    const spread = massSpread(state.spec.mass);
+    const spread = massSpread(state.spec);
     let had = crashEnergy(state.car, spread);
     for (let i = 0; i < TUNING.physicsHz * 3; i += 1) {
       const allowed = crashTurbulence(state.car, spread);
