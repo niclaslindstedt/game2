@@ -25,6 +25,7 @@ import {
   DRAW_DISTANCE_SCALE,
   DUST_RAISED,
   EFFECTS_SCALE,
+  EXHAUST_SEEN,
   INTERIOR_DETAIL,
   SCREEN_GRIME,
   FLORA_SCALE,
@@ -522,20 +523,31 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * keeps the plain effects budget. */
   const dustFx = (): number => (DUST_RAISED[quality.dust].player ? fxScale() : 0);
 
-  /** Which of the two pools that hold NOTHING BUT ground are drawn at all.
-   * `dustFx` already stops them being spawned into, but a `THREE.Points` in
-   * the scene is a draw call and its whole vertex buffer submitted every
-   * frame whether or not a grain is alive in it — and frames are the entire
-   * point of switching the dust off. The wheel pools are not on this list:
-   * `dust` and `mud` are also where a landing, a lost wheel and an impact
-   * throw, and none of those is this row's business.
+  /** …and the same question for the pipe on the back of that car (the
+   * EXHAUST row). Its own reader rather than a share of `dustFx` because
+   * what the engine puts out and what the wheels pick up are two substances
+   * with two settings: a soaked stage takes the towed cloud away and leaves
+   * the exhaust exactly where it was. */
+  const exhaustFx = (): number => (EXHAUST_SEEN[quality.exhaust].player ? fxScale() : 0);
+
+  /** Which of the pools that hold NOTHING BUT one substance are drawn at
+   * all — the two that are pure ground, and the one that is pure exhaust.
+   * `dustFx` and `exhaustFx` already stop them being spawned into, but a
+   * `THREE.Points` in the scene is a draw call and its whole vertex buffer
+   * submitted every frame whether or not a grain is alive in it — and frames
+   * are the entire point of switching either row off. The wheel pools are
+   * not on this list: `dust` and `mud` are also where a landing, a lost
+   * wheel and an impact throw, and none of those is a row's business.
    *
    * The towed cloud takes the wet stage's answer on top: a soaked road hangs
-   * nothing behind a car, it throws clods, and those are the wheel pools'. */
-  const applyDust = (): void => {
+   * nothing behind a car, it throws clods, and those are the wheel pools'.
+   * The pipe does not — rain settles what a wheel picks up and nothing that
+   * comes out of an engine. */
+  const applyClouds = (): void => {
     const raised = DUST_RAISED[quality.dust].player;
     plume.points.visible = raised && !wetGround;
     gravel.points.visible = raised;
+    fumes.points.visible = EXHAUST_SEEN[quality.exhaust].player;
   };
 
   /** Cut the world to the island, or stop cutting it. The planes are solved
@@ -609,7 +621,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // squall breathes, and the sheet has to breathe with it. Read against
     // the country (R40): a desert storm is wind and sand, and soaks nothing.
     wetGround = wetnessOf(state.env, biome) > 0;
-    applyDust();
+    applyClouds();
     mud.points.visible = wetGround;
     applyRange();
     applyTint();
@@ -623,10 +635,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       INTERIOR_DETAIL[quality.interior],
       SCREEN_GRIME[quality.interior] ? "coarse" : "off",
     );
-    // Unlike the rest of the DETAIL row, the dust is not geometry and does
-    // not wait for the next stage: the pools are standing in the scene
-    // already, so switching the row is switching them, mid-run included.
-    applyDust();
+    // Unlike the rest of the DETAIL row, the dust and the exhaust are not
+    // geometry and do not wait for the next stage: the pools are standing in
+    // the scene already, so switching either row is switching them, mid-run
+    // included.
+    applyClouds();
     if (game) setConditions(game);
     else applyRange();
   };
@@ -1214,9 +1227,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // into road speed, so it smokes harder than one at pace — `car.rev` is
     // the throttle itself anywhere in the start control, and gearing plus
     // speed at every other moment, which is why the read is phase-gated.
-    const pipe = pipeWork(c.rev, c.u, state.phase, fx);
+    const pipeFx = exhaustFx();
+    const pipe = pipeWork(c.rev, c.u, state.phase, pipeFx);
     fumeClock += dt;
-    const bursts = fx > 0 && !c.airborne ? pipeBursts(fumeClock, pipe.every) : 0;
+    const bursts = pipeFx > 0 && !c.airborne ? pipeBursts(fumeClock, pipe.every) : 0;
     if (bursts > 0) {
       fumeClock -= bursts * pipe.every;
       for (let i = 0; i < bursts * pipe.puffs; i++) {
@@ -1328,12 +1342,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (ghost && ghostCar) ghostCar.update(ghost, dt, chase.camera.position);
     // The entry list, off their own games; off under the map view like the
     // player's own body below.
-    // ...and the two budgets they spend: the effects one on their exhausts,
-    // and the DUST row's own answer for the field on the cloud they tow —
-    // which is the half a struggling machine gives up first, because a
-    // rival's plume is worth everything to the picture and nothing to the
-    // driving (settings.ts).
-    field.setDust(wetGround, fx, DUST_RAISED[quality.dust].field ? fx : 0);
+    // ...and the two budgets they spend: one per cloud, each the effects
+    // budget or nothing, because the EXHAUST and DUST rows are both asked
+    // about the FIELD separately from the car being driven — the half a
+    // struggling machine gives up first, since a rival's plume and a rival's
+    // pipe are worth everything to the picture and nothing to the driving
+    // (settings.ts).
+    field.setClouds(
+      wetGround,
+      EXHAUST_SEEN[quality.exhaust].field ? fx : 0,
+      DUST_RAISED[quality.dust].field ? fx : 0,
+    );
     field.update(state, chase.camera, dt, view !== "map");
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
     // drone, the map view and god mode's free camera there is nobody lost

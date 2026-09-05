@@ -16,9 +16,9 @@
 // them from the URL. They are the game's knobs rather than the player's.
 //
 // The PICTURE is the one place that grouping is drawn deliberately rather
-// than by default: six renderer levers, three player rows. RESOLUTION and
+// than by default: eight renderer levers, three player rows. RESOLUTION and
 // DISTANCE stand alone because they are separate costs a machine can be
-// separately short of, and the four that decide how much world gets built
+// separately short of, and the six that decide how much world gets built
 // ride one DETAIL row (`DETAIL_PRESETS`) because they are one judgement —
 // a simple game does not hand somebody a question about undergrowth
 // density. Which levers share a row is a design decision; see
@@ -214,7 +214,7 @@ export type AudioSettings = {
  * a big low-density screen wants the opposite. Tying them together only ever
  * charges a player for something they did not ask for.
  *
- * The remaining five are HOW MUCH WORLD IS DRAWN, and they are one row
+ * The remaining six are HOW MUCH WORLD IS DRAWN, and they are one row
  * (`DETAIL_PRESETS`) because they are one judgement with one answer: they
  * all move together with how much headroom the machine has, and nobody has
  * an opinion about undergrowth density that is not also an opinion about
@@ -290,6 +290,29 @@ export type VideoSettings = {
    * over the stage, they are the moment they belong to, and they ride the
    * EFFECTS budget with every other burst. */
   dust: "off" | "player" | "all";
+  /** WHOSE PIPE SMOKES: the puffs off a tailpipe (fumes.ts) — the cloud a
+   * car hangs on the line while it is revved, and the thinner one it trails
+   * at pace. Part of DETAIL, and like the dust it applies the instant it is
+   * set: an exhaust is not geometry, it is a pool spawned into per frame.
+   *
+   * Its own row rather than a share of the DUST one because the two answer
+   * the same question about different substances and the answers do not have
+   * to agree: rain settles what a wheel picks up and does nothing at all to
+   * what an engine puts out, so a soaked stage where nobody is towing a
+   * cloud is still a stage where a grid steams on the line.
+   *
+   * Three stops for the reason the dust has three. The player's own pipe is
+   * read from a couple of metres away, out of the back of the car the frame
+   * is drawn from, and it is what the engine looks like from the seat. The
+   * field's is one shared pool feeding every crew in range — worth a great
+   * deal on a start line and nothing to the driving, so it is the half that
+   * goes first: `player` is a stage where only the car being driven smokes.
+   * `off` is neither, for the phone that would rather have the frames.
+   *
+   * It does not reach the ENGINE SMOKE a holed radiator boils off the
+   * bonnet: that is damage news the player has to be able to read, not
+   * decoration, and it rides the EFFECTS budget with every other burst. */
+  exhaust: "off" | "player" | "all";
 };
 
 /** HOW MANY FRAMES A SECOND A PHONE IS ASKED FOR, at most.
@@ -447,13 +470,24 @@ export const DUST_RAISED: Record<VideoSettings["dust"], { player: boolean; field
   all: { player: true, field: true },
 };
 
+/** Whose pipe is allowed to smoke at each stop of the EXHAUST row, as the
+ * same two questions the dust is asked: the car the frame is rendered FROM,
+ * and the rest of the entry list. One record for the same reason DUST_RAISED
+ * is one: a stage where the field is smoking and the car being driven is not
+ * would read as a bug in the car. */
+export const EXHAUST_SEEN: Record<VideoSettings["exhaust"], { player: boolean; field: boolean }> = {
+  off: { player: false, field: false },
+  player: { player: true, field: false },
+  all: { player: true, field: true },
+};
+
 /** THE PICTURE, AS THREE QUESTIONS: how sharp, how much, how far. Every one
- * of the six levers above is real and still read by the renderer, but a
+ * of the eight levers above is real and still read by the renderer, but a
  * player does not have an opinion about undergrowth density — they have an
  * opinion about whether the game is smooth, and about which of the things
  * making it unsmooth they would rather keep. Three rows is what lets them
  * answer that: RESOLUTION and DISTANCE are single levers, and DETAIL is the
- * four that are one judgement.
+ * six that are one judgement.
  *
  * The point of the split is that the three costs are NOT the same cost.
  * Resolution is pixels — every one of them, every frame, whatever is on
@@ -466,12 +500,12 @@ export const DUST_RAISED: Record<VideoSettings["dust"], { player: boolean; field
  * expressed at all. */
 export type Detail = "low" | "medium" | "high";
 
-/** The five levers DETAIL owns. Named as a slice of `VideoSettings` rather
- * than restated, so adding an eighth lever is a decision about which row it
+/** The six levers DETAIL owns. Named as a slice of `VideoSettings` rather
+ * than restated, so adding a ninth lever is a decision about which row it
  * belongs on instead of a silent omission from both. */
 export type DetailSettings = Pick<
   VideoSettings,
-  "effects" | "interior" | "flora" | "ground" | "dust"
+  "effects" | "interior" | "flora" | "ground" | "dust" | "exhaust"
 >;
 
 /** What each DETAIL stop is worth, cheapest first — the order the ladder is
@@ -480,15 +514,39 @@ export type DetailSettings = Pick<
  * blob already stored. */
 export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   // The phone that stutters: the windows solid, the verges bare, under half
-  // the particles, and nobody on the road raising any ground at all.
-  low: { effects: "low", interior: "off", flora: "sparse", ground: "plain", dust: "off" },
+  // the particles, nobody on the road raising any ground, and no pipe
+  // smoking.
+  low: {
+    effects: "low",
+    interior: "off",
+    flora: "sparse",
+    ground: "plain",
+    dust: "off",
+    exhaust: "off",
+  },
   // The design point — every lever at the number the game was tuned on, and
-  // the dust spent where it is worth the most: the car being driven digs,
-  // and the field's shared cloud is what the machine buys back.
-  medium: { effects: "full", interior: "full", flora: "normal", ground: "normal", dust: "player" },
+  // both clouds spent where they are worth the most: the car being driven
+  // digs and smokes, and the field's shared pair is what the machine buys
+  // back.
+  medium: {
+    effects: "full",
+    interior: "full",
+    flora: "normal",
+    ground: "normal",
+    dust: "player",
+    exhaust: "player",
+  },
   // A machine with headroom: a thicker forest floor, stonier verges, and the
-  // whole entry list towing dust the way a rally actually looks.
-  high: { effects: "full", interior: "full", flora: "lush", ground: "rich", dust: "all" },
+  // whole entry list towing dust and steaming on the line the way a rally
+  // actually looks.
+  high: {
+    effects: "full",
+    interior: "full",
+    flora: "lush",
+    ground: "rich",
+    dust: "all",
+    exhaust: "all",
+  },
 };
 
 /** The three picture ladders, as the menu walks them. No hints: what the
@@ -524,11 +582,11 @@ export const DEFAULT_VIDEO: VideoSettings = {
 };
 
 /** Which DETAIL stop a set of video knobs IS: by exact match, else the stop
- * that agrees with the most of the five, ties going to the CHEAPER picture
+ * that agrees with the most of the six, ties going to the CHEAPER picture
  * because `DETAIL_PRESETS` is walked cheapest first. So a blob written on
  * another build's ladder — or on the old single QUALITY row — lands on the
  * picture it most resembles, and never on a heavier one than it asked for.
- * A blob with none of the four in it is a blob with no opinion, which is
+ * A blob with none of the six in it is a blob with no opinion, which is
  * MEDIUM: the design point, not the floor. */
 export function detailOf(video: Partial<VideoSettings>): Detail {
   const ids = Object.keys(DETAIL_PRESETS) as Detail[];
@@ -1065,7 +1123,7 @@ export function loadSettings(): Settings {
     }
     if (parsed.audio) Object.assign(settings.audio, parsed.audio);
     // Row by row, because the rows are independent: the two single levers
-    // are checked against their own ladders and the other four are snapped
+    // are checked against their own ladders and the other six are snapped
     // together onto a DETAIL stop. Checked rather than merged for the reason
     // the view is snapped to its ladders — a value off a ladder is a place
     // the menu could never put the player back to once they moved off it —
