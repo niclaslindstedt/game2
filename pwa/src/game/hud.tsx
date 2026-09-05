@@ -150,15 +150,24 @@ export type HudStanding = {
   of: number;
 };
 
-export type HudFlash = { id: number; text: string; tone: "good" | "bad" | "info" };
+/** A line in the news column. `out` is a line a newer one has pushed off
+ * the TOP of the stack before its own fifteen seconds were up; it stays
+ * rendered while it fades, so the column shrinks from the top instead of
+ * snapping a row out from under the ones still being read. */
+export type HudFlash = {
+  id: number;
+  text: string;
+  tone: "good" | "bad" | "info";
+  out?: boolean;
+};
 
 /** WHAT A BROKEN CAR SAYS ABOUT ITSELF. The damage a player can see is
  * already on the screen — the wing is folded, the bonnet went over the roof
  * three corners ago — and the damage they cannot see is the machinery under
  * it. A gauge for that is a thing in a corner, read by nobody who is busy
- * driving; so it is SAID instead, in the middle of the screen where every
- * other piece of news is said, once per line a part crosses on its way out
- * (`systemFail`, engine-side).
+ * driving; so it is SAID instead, in the news column at the foot of the
+ * screen where every other piece of news is said, once per line a part
+ * crosses on its way out (`systemFail`, engine-side).
  *
  * EVERY LINE HERE HAS TO BE TRUE OF THE CAR THE PLAYER IS DRIVING. A call
  * is the only account a driver gets of machinery they cannot see, so a word
@@ -696,10 +705,10 @@ export function Hud({
         ))
       )}
 
-      {/* Center: countdown / finish / event flashes. All three belong to the
-          player's own run — the gantry they left, the card their time earned,
-          the calls their car threw off — so the middle of the screen is empty
-          while somebody else's is on it. */}
+      {/* Center: the countdown and the finish card. Both belong to the
+          player's own run — the gantry they left, the card their time earned
+          — so the middle of the screen is empty while somebody else's run is
+          on it. */}
       {!spectate && (
         <div className="hud-center">
           {/* Away entirely while god mode flies — same reasoning as the
@@ -707,13 +716,31 @@ export function Hud({
               an aid for somebody driving, and nobody is. */}
           {!flying && <StartLights live={live} muted={paused} />}
           {finish}
-          <div className="hud-flashes">
-            {flashes.map((f) => (
-              <div key={f.id} className={`hud-flash hud-flash-${f.tone}`}>
-                {f.text}
-              </div>
-            ))}
-          </div>
+        </div>
+      )}
+
+      {/* THE NEWS COLUMN, in the bottom-right corner: what the car has just
+          thrown off — a part gone, the temperature, a lamp, a missed split, a
+          clean landing. It stacks NEWEST AT THE BOTTOM, nearest the corner,
+          because that is the line worth reading and the one place in the
+          column that does not move when the line above it goes.
+
+          It is out of the middle of the screen and small on purpose: the
+          middle is where the road is, and a run that breaks something every
+          corner would otherwise be reading its own damage report through the
+          next one. Five lines stand, each for fifteen seconds — long enough
+          that a driver who was busy at the moment can still find out what
+          happened (App.tsx owns both numbers). */}
+      {!spectate && (
+        <div className="hud-flashes">
+          {flashes.map((f) => (
+            <div
+              key={f.id}
+              className={`hud-flash hud-flash-${f.tone}${f.out ? " hud-flash-out" : ""}`}
+            >
+              {f.text}
+            </div>
+          ))}
         </div>
       )}
 
@@ -722,7 +749,7 @@ export function Hud({
           because anything that can appear mid-run would push an instrument
           off the right edge. The top bar is the same bargain: the stage, the
           clock and the camera. News about the car is SAID instead, in the
-          middle of the screen (`damageCall`). */}
+          column across the foot of the screen (`damageCall`). */}
       {show.cluster && (
         <div className="hud-speed">
           <div className="hud-cluster">

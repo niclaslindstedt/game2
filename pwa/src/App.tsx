@@ -737,6 +737,21 @@ function startCamera(chosen: PlayCamera): PlayCamera {
 
 let flashId = 0;
 
+/** THE NEWS COLUMN, at the foot of the screen (`.hud-flashes`). Five lines
+ * STAND at a time and each one holds its place for fifteen seconds: news
+ * about the car arrives while the driver is busy with a corner, and a line
+ * that has come and gone by the time they look up has told nobody anything.
+ * Five is what the corner holds at that size without becoming a wall.
+ *
+ * A sixth line does not wait for the oldest one's clock to run out — it puts
+ * it out early, over FLASH_FADE, which is the same fade its own fifteen
+ * seconds would have ended in. The CSS runs both fades (`hud-flash-fade`);
+ * these numbers only have to agree with it, because the row is dropped when
+ * the fade it is playing is over. */
+const FLASH_LINES = 5;
+const FLASH_LIFE = 15000;
+const FLASH_FADE = 400;
+
 /** How long a split stays on screen, SECONDS OF THE RUN. Long enough to read
  * the gap and the clock under it at speed, and a small fraction of the gap
  * between boards, so a second split is always the first one long gone.
@@ -972,6 +987,10 @@ export function App() {
    * there is somebody to read it. */
   const [hudFps, setHudFps] = useState(0);
   const [flashes, setFlashes] = useState<HudFlash[]>([]);
+  /** The same column in a ref, because every line's own timer expires it
+   * from outside the render: `flash` has to read the column that is UP to
+   * decide whether the line it is adding pushes an old one out. */
+  const flashesRef = useRef<HudFlash[]>([]);
   /** R28 — the split just driven through, until the run's clock times it
    * out. Mirrored in a ref: the frame loop is created once and expires it
    * from there, off the same clock the split is a reading of. */
@@ -1166,9 +1185,26 @@ export function App() {
   const forcedUpdate = useMemo(() => updateNudgeForced(), []);
 
   const flash = (text: string, tone: HudFlash["tone"]): void => {
+    const put = (column: HudFlash[]): void => {
+      flashesRef.current = column;
+      setFlashes(column);
+    };
+    const drop = (gone: number): void => put(flashesRef.current.filter((f) => f.id !== gone));
     const id = ++flashId;
-    setFlashes((prev) => [...prev.slice(-2), { id, text, tone }]);
-    setTimeout(() => setFlashes((prev) => prev.filter((f) => f.id !== id)), 1800);
+    const column: HudFlash[] = [...flashesRef.current, { id, text, tone }];
+    // Only the newest five STAND; anything this line has pushed past the top
+    // of the stack starts fading now instead of sitting out its fifteen.
+    const standing = column.filter((f) => !f.out);
+    const pushed = new Set(
+      standing.slice(0, Math.max(0, standing.length - FLASH_LINES)).map((f) => f.id),
+    );
+    put(
+      pushed.size === 0 ? column : column.map((f) => (pushed.has(f.id) ? { ...f, out: true } : f)),
+    );
+    for (const gone of pushed) setTimeout(() => drop(gone), FLASH_FADE);
+    // The line's own clock. The CSS fades it out over the last of these, so
+    // the row is already invisible by the time it leaves the column.
+    setTimeout(() => drop(id), FLASH_LIFE);
   };
 
   /** Whether the rear-view glass has the road in it, this session. The HUD
@@ -1500,6 +1536,12 @@ export function App() {
     splitsRef.current = { times: [], against: "" };
     armSplitRecords(spec);
     setSplit(null);
+    // The news column goes with it. A line stands for fifteen seconds now,
+    // which is long enough to outlive the run it was about: a restart whose
+    // first corner is read past LEFT REAR WHEEL OFF from the attempt before
+    // is a HUD lying about the car under the player.
+    flashesRef.current = [];
+    setFlashes([]);
     renderer?.setGhost(null);
     ghostOnFileRef.current = false;
     if (!renderer || !trackRef.current || menuRef.current) return;
