@@ -25,17 +25,24 @@
 // storage can be unavailable (private mode) or full, and a car whose total
 // cannot be kept still reads correctly for as long as the tab is open.
 //
-// WHY A HUNDRED METRES. A mechanical counter's rightmost drum turns with
-// the wheels, and the tenth marks on it are what makes a counter READ as a
-// counter rather than as a number: something is always moving, and every
-// hundred metres it moves a visible step. So the reading is quantized to
-// the tenth of a kilometre, the drum shows the fraction it has turned, and
-// the flush to storage rides the same tick — the cadence that is visible is
-// the cadence that is saved.
+// WHAT THE DRUM ON THE END IS WORTH, and it is not the same on the two. A
+// mechanical counter's rightmost drum turns with the wheels, and that is
+// what makes a counter READ as a counter rather than as a number: something
+// is always moving, and every step of it is a figure. The TRIP's end drum
+// is worth a tenth of a kilometre, the way a car's own trip counter is,
+// because a stage is a few kilometres and a window that only stepped at the
+// kilometre would sit still for a minute at a time. The TOTAL's is worth a
+// whole kilometre: it is the same six drums either way, and spending one of
+// them on tenths buys a figure nobody reads on a lifetime reading and costs
+// the counter a decade of its range.
 
-/** The step the counter reads in, metres. A tenth of a kilometre, which is
+/** The step the TRIP reads in, metres. A tenth of a kilometre, which is
  * what the tenth marks on a real drum are. */
 export const TRIP_TICK_M = 100;
+
+/** ...and the step the TOTAL reads in: a whole kilometre, so a lifetime
+ * reading spends every one of its drums on the unit it is quoted in. */
+export const TOTAL_TICK_M = 1000;
 
 /** Drums in the TRIP's window: three for the kilometres and ONE MORE for the
  * tenths, which is the layout on a car's own trip counter and the reason the
@@ -44,10 +51,12 @@ export const TRIP_TICK_M = 100;
  * the whole of one many times over. */
 export const TRIP_DIGITS = 4;
 
-/** ...and in the TOTAL's: five kilometre drums under the same tenths drum, so
- * the counter reads to 99999.9 km before it rolls quietly back to zero, the
- * way the real thing does. Two digits more than the trip is also what tells
- * the two windows apart at a glance without a word printed on either. */
+/** ...and in the TOTAL's: six drums, every one of them a kilometre, so the
+ * counter reads to 999999 km — the better part of a hundred thousand miles,
+ * which is a car's whole working life — before it rolls quietly back to
+ * zero, the way the real thing does. Two digits more than the trip is also
+ * what tells the two windows apart at a glance without a word printed on
+ * either. */
 export const TOTAL_DIGITS = 6;
 
 /** How much of a drum's turn is spent carrying the one above it. A counter
@@ -55,9 +64,6 @@ export const TOTAL_DIGITS = 6;
  * sit still until the units drum is on its last tenth, and then both go
  * over together. That lateness is the whole look of the thing. */
 const CARRY = 0.9;
-
-/** Metres in a kilometre — the unit the drums above the tenths count in. */
-const KM = 1000;
 
 const KEY_PREFIX = "sf.odometer.";
 
@@ -68,34 +74,37 @@ export type Drum = { digit: number; roll: number };
 
 /** The counter's faces, LEFT TO RIGHT as they are read — the most
  * significant drum first, so a component maps this array straight across
- * its window. The last entry is the TENTHS drum.
+ * its window. The last entry is the END drum, the one geared to the wheels,
+ * and `tickM` is what one step of it is worth.
  *
- * THE READING is quantized to the tick — every digit comes off the hundred
- * metres, so the window can never show a half-carried figure — but the TURN
- * is not, and that difference is the whole of what makes the thing look
- * mechanical. The tenths drum is geared straight to the wheels: at any
- * moment it is part way from the figure it is showing to the next one, and
- * a driver glancing down sees it climbing. The drums above it do not JUMP
- * either; each is dragged over through the last tenth of the drum below it,
- * which on the kilometre drum is the last hundred metres of the kilometre.
+ * THE READING is quantized to that tick — every digit comes off it, so the
+ * window can never show a half-carried figure — but the TURN is not, and
+ * that difference is the whole of what makes the thing look mechanical. The
+ * end drum is geared straight to the wheels: at any moment it is part way
+ * from the figure it is showing to the next one, and a driver glancing down
+ * sees it climbing. The drums above it do not JUMP either; each is dragged
+ * over through the last tenth of the drum below it.
  *
  * `metres` is a distance covered; anything that is not one reads as a car
  * that has never been driven. */
-export function odometerDrums(metres: number, digits: number = TRIP_DIGITS): Drum[] {
+export function odometerDrums(
+  metres: number,
+  digits: number = TRIP_DIGITS,
+  tickM: number = TRIP_TICK_M,
+): Drum[] {
   const driven = Number.isFinite(metres) && metres > 0 ? metres : 0;
-  /** The reading, in tenths of a kilometre — every drum's digit comes off
-   * this one number, so the window can never show a half-carried figure. */
-  const ticks = Math.floor(driven / TRIP_TICK_M);
+  /** The reading, in whole ticks — every drum's digit comes off this one
+   * number, so the window can never show a half-carried figure. */
+  const ticks = Math.floor(driven / tickM);
   const out: Drum[] = [];
   for (let place = digits - 1; place >= 0; place--) {
-    // The turn this drum is part way through, in its OWN units: the tenths
-    // drum's tenth of a kilometre, the units drum's kilometre, the tens
-    // drum's ten kilometres.
-    const turns = driven / (KM * 10 ** (place - 1));
+    // The turn this drum is part way through, in its OWN units: the end
+    // drum's tick, the one above it ten of them, and so on up the window.
+    const turns = driven / (tickM * 10 ** place);
     const part = turns - Math.floor(turns);
-    // The tenths drum has nothing below it to wait for, so it turns through
-    // the whole of its own hundred metres; every drum above it sits still
-    // until the one below reaches its last tenth, and then goes over with it.
+    // The end drum has nothing below it to wait for, so it turns through the
+    // whole of its own tick; every drum above it sits still until the one
+    // below reaches its last tenth, and then goes over with it.
     const carry = place === 0 ? 0 : CARRY;
     out.push({
       digit: Math.floor(ticks / 10 ** place) % 10,
@@ -166,8 +175,9 @@ export function createTrip(carId: string): Trip {
       if (seen !== null && run >= seen) total += run - seen;
       seen = run;
       const tick = Math.floor(total / TRIP_TICK_M);
-      // The flush rides the tick the drum steps on: a hundred metres is one
-      // write, and the frames in between cost nothing.
+      // The flush rides a hundred metres — finer than the total's own drum,
+      // on purpose: a tab closed mid-kilometre keeps what it covered, and
+      // the frames in between still cost nothing.
       if (tick !== savedTick) {
         savedTick = tick;
         saveOdometer(carId, total);

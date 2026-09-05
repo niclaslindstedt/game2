@@ -4,10 +4,10 @@ title: Two counters on the dial, and a map that breathes with the speedo
 ---
 
 The rev counter now carries the pair of counters a car's own cluster has: a
-TRIP in the lower window, which is this stage from zero, and the car's whole
-life in the upper one, widened to five kilometre drums so it reads to
-99999.9 km. Every drum is dark now, and the one on the end turns
-continuously with the wheels instead of flicking over — there is always
+TRIP in the lower window, which is this stage from zero and counts in tenths
+of a kilometre, and the car's whole life in the upper one, six kilometre
+drums reading to 999999 km. Every drum is dark now, and the one on the end
+turns continuously with the wheels instead of flicking over — there is always
 something moving down there. The dial itself is a fifth smaller, and the
 minimap a third larger, which is the swap that matters: the revs are read
 off a needle's angle and survive being drawn smaller, where a schematic of
