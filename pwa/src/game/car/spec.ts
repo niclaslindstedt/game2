@@ -103,8 +103,10 @@ export type SideBand = {
   dashes?: { count: number; duty?: number; phase?: number };
 };
 
-/** Stripes laid along the top surfaces — hood, boot lid. They sample the
- * silhouette, so a stripe that crosses a fold climbs it. */
+/** Stripes laid along the top surfaces — hood, boot lid, and the roof.
+ * On the deck they sample the silhouette, so a stripe that crosses a fold
+ * climbs it; on the roof they lie on the roof panel between its front and
+ * rear edges. */
 export type DeckStripes = {
   /** x centers, m — one stripe per entry. */
   offsets: number[];
@@ -112,6 +114,10 @@ export type DeckStripes = {
   zFrom: number;
   zTo: number;
   color?: number;
+  /** Which panel carries the run: the profile's deck (the default) or the
+   * roof. A race car's twin stripes are two groups — one on the bonnet up
+   * to the cowl, one on the roof — with the windscreen left between them. */
+  on?: "deck" | "roof";
 };
 
 /** A grille: a recessed dark panel with a colored surround (the bright
@@ -389,6 +395,12 @@ export type CarBodySpec = {
        * as a wedge behind it. Zero, the default, is a plumb edge. Only read
        * with `quarterZ`. */
       quarterRake?: number;
+      /** The height, m, at which that raked trailing edge stops and the
+       * glass turns DOWN to the sill — a rounded rear corner rather than
+       * a point running on to the pillar. The tip the rake would have cut
+       * is filled with the pillar's paint in two facets. Only read with
+       * `quarterRake`. */
+      quarterCornerY?: number;
       /** Extra sill under the rear quarter window — the rally kick-up. */
       quarterRise?: number;
       /** HOW MUCH OF THE CAR'S BACK THE BACKLIGHT TAKES, 0..1 of the

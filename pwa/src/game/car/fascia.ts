@@ -142,17 +142,48 @@ function buildBumper(
   if (strip)
     b.box(0, strip.y, face + dir * PROUD * 0.5, half * 1.86, strip.height, PROUD, stripColor);
   if (wrap <= 0) return;
+  // The wraps: a wedge down each flank, buried in the bodywork on its inner
+  // side and tapering from the bar's own corner back to a lip on the
+  // flank. Tapered boxes, so a bar that stands wide of the cap runs back
+  // into the wing as one surface rather than as a stair of plates.
   const steps = 3;
+  const outer = (z: number, t: number): number =>
+    flankX(spec, axles, z, bar.y) + 0.006 + flare * (1 - t);
   for (let i = 0; i < steps; i++) {
     const z0 = zEnd - (dir * (wrap * i)) / steps;
     const z1 = zEnd - (dir * (wrap * (i + 1))) / steps;
-    const zc = (z0 + z1) / 2;
-    const x = flankX(spec, axles, zc, bar.y) + 0.006 + flare * (1 - (i + 0.5) / steps);
+    const o0 = outer(z0, i / steps);
+    const o1 = outer(z1, (i + 1) / steps);
+    const inner = Math.min(flankX(spec, axles, z0, bar.y), flankX(spec, axles, z1, bar.y)) - 0.05;
+    // taperBox names its widths by the +z face and the -z face; which end
+    // of this step is nearer the cap depends on the end of the car.
+    const [wPlus, wMinus] = dir > 0 ? [o0 - inner, o1 - inner] : [o1 - inner, o0 - inner];
+    const cx = (inner + o0) / 2;
     for (const side of [-1, 1]) {
-      b.box(side * x, bar.y, zc, bar.depth * 0.5, bar.height * 0.9, Math.abs(z1 - z0), color);
+      b.taperBox(
+        side * cx,
+        bar.y,
+        (z0 + z1) / 2,
+        wPlus,
+        wMinus,
+        bar.height * 0.9,
+        Math.abs(z1 - z0),
+        color,
+      );
       if (strip) {
-        const sx = x + bar.depth * 0.25 + PROUD * 0.5;
-        b.box(side * sx, strip.y, zc, PROUD, strip.height, Math.abs(z1 - z0) * 0.96, stripColor);
+        const sw = PROUD;
+        const scx = (o0 + o1) / 2 + PROUD * 0.5;
+        const [sPlus, sMinus] = dir > 0 ? [sw + (o0 - o1), sw] : [sw, sw + (o0 - o1)];
+        b.taperBox(
+          side * scx,
+          strip.y,
+          (z0 + z1) / 2,
+          sPlus,
+          sMinus,
+          strip.height,
+          Math.abs(z1 - z0) * 0.96,
+          stripColor,
+        );
       }
     }
   }

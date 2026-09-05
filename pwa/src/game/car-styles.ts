@@ -371,14 +371,16 @@ export const CLASSIC_BODY: CarBodySpec = {
     // over the rear seats, so the backlight can lie down behind it.
     roofRearHalf: 0.59,
     roofRearY: 1.32,
-    roofPaint: "accent",
+    // One colour over the whole car: the roof is the body's white, and the
+    // red is the twin stripes down the middle of it instead.
+    roofPaint: "paint",
     // The three-door glasshouse: a 1.25 m door, a B-pillar standing plumb
     // at its rear edge, and behind it the quarter glass this shape is
-    // known by — a right trapezoid. Its top edge runs level from the pillar
-    // to the roof's own end, then its trailing edge is one long diagonal,
-    // parallel to the backlight beside it, down to a foot on the sill
-    // 0.55 m behind the rear axle; between that edge and the backlight is
-    // the pillar, a hand wide at the top and a hand and a half at the sill.
+    // known by. Its top edge runs level from the pillar to the roof's own
+    // end, then its trailing edge is a long diagonal parallel to the
+    // backlight beside it that turns down into a rounded rear corner a
+    // quarter metre behind the rear axle; between that edge and the
+    // backlight is the pillar.
     // This is the flush-glazed body that did away with the rain gutter.
     pillars: {
       a: 0.09,
@@ -387,8 +389,13 @@ export const CLASSIC_BODY: CarBodySpec = {
       // The side glass sits a hand under the roofline, not against it.
       header: 0.06,
       splitZ: -0.42,
-      quarterZ: -1.71,
-      quarterRake: 0.81,
+      // The rake's chord runs from the roof's end to a foot 0.34 m behind
+      // the rear axle, and the glass turns down off it at a metre up to end
+      // in a ROUND corner 0.25 m behind the axle — not the point the chord
+      // alone would run on to.
+      quarterZ: -1.5,
+      quarterRake: 0.6,
+      quarterCornerY: 1.0,
       quarterRise: 0,
       // Measured off the rear elevation: the backlight is 86% of the tail's
       // width at its top and its foot alike, a pillar's width of paint
@@ -417,7 +424,16 @@ export const CLASSIC_BODY: CarBodySpec = {
     lip: { z: -1.89, chord: 0.08 },
   },
   doorSeams: [0.83, -0.42],
-  handles: { z: [-0.56], y: 0.78 },
+  // On the door, a hand ahead of its rear shut line, just under the belt.
+  handles: { z: [-0.29], y: 0.79 },
+  // The race car's twin stripes: two red bands a hand apart down the
+  // middle of the car, from the nose to the cowl on the bonnet and from
+  // the screen's header to the roof's end over the cabin — the windscreen
+  // left clear between the two runs.
+  stripes: [
+    { offsets: [-0.17, 0.17], width: 0.2, zFrom: 1.88, zTo: 0.88 },
+    { offsets: [-0.17, 0.17], width: 0.2, zFrom: 0.28, zTo: -0.98, on: "roof" },
+  ],
   // The rubbing strip: one dark line at knee height from wheel to wheel,
   // the arches eating into it, and picked up again on both bumpers by the
   // strip let into each (`front.bumper.strip`, `rear.bumper.strip`).
@@ -463,13 +479,13 @@ export const CLASSIC_BODY: CarBodySpec = {
     // The corner lamps are in the bumper, under the lamps' outer cells.
     indicators: { y: 0.475, x: 0.52, width: 0.24, height: 0.07 },
     // Body-coloured, DEEP — the aero bumper is one slab from under the
-    // lamps to the air dam — the widest thing on the car, wrapped right
-    // back to the arch, with the black strip along its top edge.
+    // lamps to the air dam — the widest thing on the car, wrapped back to
+    // the arch's leading edge, with the black strip along its top edge.
     bumper: {
       y: 0.43,
       height: 0.19,
       depth: 0.14,
-      wrap: 0.52,
+      wrap: 0.28,
       width: 1.72,
       color: 0xf2f0ea,
       strip: { y: 0.515, height: 0.025 },
@@ -502,7 +518,7 @@ export const CLASSIC_BODY: CarBodySpec = {
       y: 0.455,
       height: 0.17,
       depth: 0.14,
-      wrap: 0.5,
+      wrap: 0.42,
       width: 1.72,
       color: 0xf2f0ea,
       strip: { y: 0.515, height: 0.025 },

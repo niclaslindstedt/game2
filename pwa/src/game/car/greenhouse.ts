@@ -26,7 +26,7 @@
 // why this file hands the two screens out as `screenPanes`.
 
 import type { MeshBuilder, Patch, UVRect, V3 } from "./builder.ts";
-import { mixHex, patchAt, patchFade, patchQuad, patchSpan } from "./builder.ts";
+import { mixHex, patchAt, patchFade, patchNormal, patchQuad, patchSpan } from "./builder.ts";
 import { roofColor, sampleProfile, sideRatios } from "./shell.ts";
 import type { CarBodySpec } from "./spec.ts";
 
@@ -40,6 +40,7 @@ const PILLARS = {
   splitZ: undefined as number | undefined,
   quarterZ: undefined as number | undefined,
   quarterRake: 0,
+  quarterCornerY: undefined as number | undefined,
   quarterRise: 0,
   /** The backlight's share of the cabin's rear panel, across the car. A
    * SHARE and not the `c` post's metres, because what reads from behind is
@@ -445,9 +446,68 @@ export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpe
   }
 
   patchQuad(b, [FL, FR, RR, RL], { u0: 0, u1: 1, v0: 0, v1: 1 }, roof);
+  buildQuarterCorners(b, spec, panels, pillar);
   buildGutters(b, spec);
   buildRoofVents(b, spec);
   return panes;
+}
+
+/** The rounded rear corner of a raked quarter glass. The opening is cut
+ * with one straight raked edge, so what the glass really has — a diagonal
+ * that turns down to the sill at `quarterCornerY` — is made by painting the
+ * cut-off tip back in: a fan of pillar paint over the glass and its seal,
+ * from the point on the raked edge at that height down to the sill under
+ * it, in two facets so the turn reads as a round at any distance. */
+function buildQuarterCorners(
+  b: MeshBuilder,
+  spec: CarBodySpec,
+  panels: CabinPanel[],
+  pillar: number,
+): void {
+  const p = { ...PILLARS, ...spec.cabin.pillars };
+  const cornerY = p.quarterCornerY;
+  if (cornerY === undefined || p.quarterZ === undefined || !p.quarterRake) return;
+  // Proud of the seal and the glass alike, so it paints over both.
+  const lift = GLASS_PROUD + 0.004;
+  for (const panel of panels.slice(2)) {
+    const { patch, holes, mirrored } = panel;
+    const hole = holes[1];
+    const lean = hole.lean1 ?? 0;
+    // The height each v stands at along the hole's rear edge, and the v
+    // that height is reached at — the patch is bilinear, so along one edge
+    // it is linear enough to invert directly.
+    const yAt = (v: number): number => patchAt(patch, hole.u1 + lean * v, v)[1];
+    const y0 = yAt(hole.v0);
+    const y1 = yAt(hole.v1);
+    const vc = hole.v0 + ((cornerY - y0) / (y1 - y0 || 1)) * (hole.v1 - hole.v0);
+    if (vc <= hole.v0 || vc >= hole.v1) continue;
+    // A: the turn on the raked edge. B: the rake's own foot on the sill.
+    // C: the sill straight under A. M: a facet between A and C, set back a
+    // little toward B so the turn is a round and not a corner.
+    const uA = hole.u1 + lean * vc;
+    const uB = hole.u1 + lean * hole.v0;
+    const A = patchAt(patch, uA, vc);
+    const B = patchAt(patch, uB, hole.v0);
+    const C = patchAt(patch, uA, hole.v0);
+    const M = patchAt(patch, uA + (uB - uA) * 0.35, hole.v0 + (vc - hole.v0) * 0.4);
+    const n = patchNormal(patch);
+    const sign = mirrored ? -1 : 1;
+    const out = (q: V3): V3 => [
+      q[0] + n[0] * lift * sign,
+      q[1] + n[1] * lift * sign,
+      q[2] + n[2] * lift * sign,
+    ];
+    const [a, m, c, d] = [out(A), out(M), out(C), out(B)];
+    // Wound with the patch's own corners, and reversed on the mirrored
+    // flank, the way patchQuad keeps its winding.
+    if (mirrored) {
+      b.tri(a, d, m, pillar);
+      b.tri(m, d, c, pillar);
+    } else {
+      b.tri(a, m, d, pillar);
+      b.tri(m, c, d, pillar);
+    }
+  }
 }
 
 /** The roof scoops: a box each on the roof, with a dark mouth on its

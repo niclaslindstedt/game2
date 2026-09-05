@@ -11,7 +11,7 @@ import type { DamagePart } from "@engine";
 import type { MeshBuilder, V3 } from "./builder.ts";
 import { backlightY } from "./greenhouse.ts";
 import { archAt, flankX, flareAt, sampleProfile, sideBand, sideRatios } from "./shell.ts";
-import type { CarBodySpec } from "./spec.ts";
+import type { CarBodySpec, DeckStripes } from "./spec.ts";
 
 /** A blocky 3x5 digit set — the register a stage-rally door number should
  * be drawn in at this poly count, and cheap: one quad per lit cell. Rows
@@ -178,6 +178,10 @@ function buildStripes(
     // an edging line down a painted bonnet panel — z-fight into a stipple
     // that flickers with the camera.
     const lift = 0.03 + gi * 0.004;
+    if (st.on === "roof") {
+      buildRoofStripes(b, spec, st, color, gi);
+      return;
+    }
     for (const off of st.offsets) {
       const w = st.width / 2;
       // The lid edges join the ladder, so a stripe that runs off the end of
@@ -203,6 +207,42 @@ function buildStripes(
       }
     }
   });
+}
+
+/** A stripe group on the roof panel: flat quads from the roof's front
+ * edge to its rear, on the line the roof itself runs between the two
+ * heights — the roof is one bilinear panel, so there is no silhouette to
+ * sample. Held inside the roof's own z range; a stripe that overran the
+ * rear edge would hang in the air over the backlight. */
+function buildRoofStripes(
+  b: MeshBuilder,
+  spec: CarBodySpec,
+  st: DeckStripes,
+  color: number,
+  gi: number,
+): void {
+  const { roofFrontZ, roofRearZ, roofY } = spec.cabin;
+  const rearY = spec.cabin.roofRearY ?? roofY;
+  const clamp = (z: number): number => Math.min(roofFrontZ, Math.max(roofRearZ, z));
+  const za = clamp(st.zFrom);
+  const zb = clamp(st.zTo);
+  if (Math.abs(za - zb) < 1e-3) return;
+  const yAt = (z: number): number =>
+    roofY + ((rearY - roofY) * (roofFrontZ - z)) / (roofFrontZ - roofRearZ || 1);
+  // Above the roof's own skin by less than the glass is above its frame:
+  // a stripe standing higher than the windscreen's top edge reads as a
+  // ridge from the chase camera.
+  const lift = 0.005 + gi * 0.003;
+  for (const off of st.offsets) {
+    const w = st.width / 2;
+    b.quad(
+      [off - w, yAt(za) + lift, za],
+      [off + w, yAt(za) + lift, za],
+      [off + w, yAt(zb) + lift, zb],
+      [off - w, yAt(zb) + lift, zb],
+      color,
+    );
+  }
 }
 
 /** A stripe's z ladder: an even run, plus every lid edge that falls inside
