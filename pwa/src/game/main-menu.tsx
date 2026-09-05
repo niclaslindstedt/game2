@@ -41,6 +41,8 @@ import {
   locationWon,
   playerStanding,
   stagesDriven,
+  stagesTimed,
+  timeTrialOpen,
   type CampaignLevel,
   type CampaignLocation,
   type CampaignProgress,
@@ -523,10 +525,12 @@ function LocationPage({
  * for the clock alone. Two steps, the campaign's own: which country, then
  * which of its six.
  *
- * The gate is the stricter one, and it is the same on both steps: a stage
- * opens here once it has been FINISHED, and a country opens once one of its
- * stages has. A time is something you chase on a road you have already
- * driven to the end.
+ * The gate is a COUNTRY here (`timeTrialOpen`), which is the one place in
+ * the game a mode runs ahead of the campaign's ladder: open a country in the
+ * campaign and all six of its roads are open to the clock at once, in any
+ * order, without podiuming down the rungs a second time to reach the last
+ * one. It never runs ahead of the COUNTRIES — the desert is behind the
+ * taiga's table here exactly as it is next door.
  *
  * There is no board on this page. The ten best times for a stage are the
  * arcade's invitation, and an invitation is worth something at the moment a
@@ -542,26 +546,30 @@ function TimeTrialPage({
   progress: CampaignProgress;
   onNavigate: (page: MenuPage) => void;
 }) {
-  const open = (level: CampaignLevel): boolean => levelCompleted(level, progress);
-  const driven = (location: CampaignLocation): boolean => location.levels.some(open);
+  const open = (location: CampaignLocation): boolean => timeTrialOpen(location, progress);
   if (locationId === null) {
-    // The furthest country with a finished stage in it: where the cursor
-    // stands, and what START takes.
-    const resume = LOCATIONS.filter(driven).at(-1);
+    // The furthest country open, which is the one a player coming back is
+    // driving. The first one always is, so this page is never empty.
+    const resume = LOCATIONS.filter(open).at(-1);
     return (
       <div className="menu-card">
         <MenuHead back={() => onNavigate({ page: "root" })} backLabel="MENU" title="TIME TRIAL" />
-        {resume === undefined && (
-          <div className="menu-empty">Drive a stage to the end in the campaign first.</div>
-        )}
         <LocationList
-          open={driven}
-          hint={() => "Finish a stage here in the campaign"}
-          line={(location) => (
-            <span className="menu-location-progress">
-              {location.levels.filter(open).length} / {location.levels.length} OPEN
-            </span>
-          )}
+          open={open}
+          // The same reason the campaign gives, because it is the same lock:
+          // a country is opened by the previous country's TABLE.
+          hint={(_location, index) => `Top the ${LOCATIONS[index - 1].name} table`}
+          line={(location) => {
+            const timed = stagesTimed(location, progress);
+            return (
+              <span
+                className="menu-location-progress"
+                title={`${timed} of ${location.levels.length} stages timed`}
+              >
+                {timed} / {location.levels.length} TIMED
+              </span>
+            );
+          }}
           next={resume}
           onPick={(location) => onNavigate({ page: "timetrial", locationId: location.id })}
         />
@@ -569,6 +577,14 @@ function TimeTrialPage({
     );
   }
   const location = locationById(locationId);
+  const before = LOCATIONS[LOCATIONS.indexOf(location) - 1];
+  // Every stage of an open country is open, so the grid asks the COUNTRY its
+  // question once and hands the same answer to all six boxes.
+  const here = open(location);
+  // The cursor still stands on the furthest road actually driven rather than
+  // on the last box in the country: a player coming back lands where they
+  // are, and a country nobody has timed yet opens on its first stage.
+  const driven = (level: CampaignLevel): boolean => levelCompleted(level, progress);
   return (
     <div className="menu-card menu-card-wide">
       <MenuHead
@@ -579,9 +595,9 @@ function TimeTrialPage({
       <LevelGrid
         location={location}
         progress={progress}
-        open={open}
-        hint="Finish this stage in the campaign"
-        next={latestOpen(location, open)}
+        open={() => here}
+        hint={before ? `Top the ${before.name} table` : ""}
+        next={latestOpen(location, driven) ?? location.levels[0]}
         onPlay={(level) => onNavigate({ page: "car", levelId: level.id, mode: "timetrial" })}
       />
     </div>

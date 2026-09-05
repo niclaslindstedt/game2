@@ -53,6 +53,8 @@ import {
   recordFinish,
   recordResult,
   resetPoints,
+  stagesTimed,
+  timeTrialOpen,
   unlockEverything,
   type CampaignLevel,
 } from "../pwa/src/game/campaign.ts";
@@ -237,10 +239,10 @@ describe("the location's table", () => {
     recordResult(TAIGA.levels[0].id, sheet([PLAYER_ID]));
     expect(latestOpen(TAIGA, campaign)?.id).toBe(TAIGA.levels[1].id);
 
-    // …while the time trial's opens anything driven to the END, podium or
-    // not, so the two gates answer differently on the same progress. A stage
+    // …while HEADS UP opens anything driven to the END, podium or not, so
+    // the two gates answer differently on the same progress. A stage
     // finished off the podium opens no further campaign box and is still the
-    // furthest road the clock is offered on.
+    // furthest road a race can be had on.
     const finished = (level: CampaignLevel): boolean => levelCompleted(level, loadProgress());
     recordFinish(TAIGA.levels[1].id, 100, { place: 9, difficulty: "medium" });
     expect(latestOpen(TAIGA, finished)?.id).toBe(TAIGA.levels[1].id);
@@ -495,5 +497,54 @@ describe("the desert (R40)", () => {
     expect(locationUnlocked(DESERT, loadProgress())).toBe(true);
     const step = ladderAfter(TAIGA.levels[TAIGA.levels.length - 1].id, loadProgress());
     expect(step.kind === "next" && step.level.id).toBe(DESERT.levels[0].id);
+  });
+});
+
+describe("the time trial's country gate", () => {
+  const DESERT = LOCATIONS[1];
+
+  beforeEach(() => {
+    stubStorage();
+  });
+
+  it("opens the whole first country before a metre has been driven", () => {
+    // The point of the rule: a fresh save can put a clock on any of the six
+    // taiga roads without podiuming down the ladder to reach them.
+    const progress = loadProgress();
+    expect(timeTrialOpen(TAIGA, progress)).toBe(true);
+    for (const level of TAIGA.levels) expect(levelCompleted(level, progress)).toBe(false);
+  });
+
+  it("holds the next country behind the table, exactly as the campaign does", () => {
+    expect(timeTrialOpen(DESERT, loadProgress())).toBe(false);
+    // Driving all six is not enough while somebody else is top of the table:
+    // the trial skips the LADDER inside a country and never the countries.
+    driveLocation(2);
+    expect(locationComplete(TAIGA, loadProgress())).toBe(true);
+    expect(timeTrialOpen(DESERT, loadProgress())).toBe(false);
+    driveLocation(1);
+    expect(locationUnlocked(DESERT, loadProgress())).toBe(true);
+    expect(timeTrialOpen(DESERT, loadProgress())).toBe(true);
+  });
+
+  it("keeps a country whose finish line has been seen, whatever the board does", () => {
+    driveLocation(1);
+    recordFinish(DESERT.levels[0].id, 100, { place: 9, difficulty: "medium" });
+    // Tearing the taiga's points up shuts the desert in the CAMPAIGN — and a
+    // road already driven to the line cannot be un-driven, so the clock keeps
+    // the country it was already being offered.
+    resetPoints(TAIGA.id);
+    expect(locationUnlocked(DESERT, loadProgress())).toBe(false);
+    expect(timeTrialOpen(DESERT, loadProgress())).toBe(true);
+  });
+
+  it("counts a country by the times on it, since every stage is open", () => {
+    expect(stagesTimed(TAIGA, loadProgress())).toBe(0);
+    recordFinish(TAIGA.levels[3].id, 100, null);
+    expect(stagesTimed(TAIGA, loadProgress())).toBe(1);
+    // A better run on the same road is the same road: the count is stages
+    // with a time on them, not runs.
+    recordFinish(TAIGA.levels[3].id, 90, null);
+    expect(stagesTimed(TAIGA, loadProgress())).toBe(1);
   });
 });
