@@ -17,7 +17,7 @@ table, a face at a crawl. The seat (`corners`) already lifts the body clear
 of a face; the attitude does not need to follow it.
 
 And a face met at pace reaches the belly only through what the WHEELS did:
-`wheelVy − prevWheelVy` over `collision.faceLand`. Read against the smoothed
+`wheelVy − prevWheelVy` over `suspension.bumpMax` — the springs own the line. Read against the smoothed
 grade's prediction as well, a car creeping off a table — the grade reading a
 40 m drop the wheels had not made — folded its floor on thin air.
 

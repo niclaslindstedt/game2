@@ -1226,7 +1226,17 @@ export const TUNING = {
      * or the kerb is quietly clamped out of existence. What bounds the body
      * is the bump stops and `heaveMax`, not this; this only keeps a
      * degenerate reading (a lattice seam metres tall) from throwing a
-     * number into the springs that the next step cannot take back. */
+     * number into the springs that the next step cannot take back.
+     *
+     * ...and it is the line past which a FACE MET AT PACE reaches the
+     * belly (car.ts): the foot of a bank arriving under a car at speed
+     * throws the wheels upward at the bank's grade times the car's speed
+     * — a 45° bank at 90 km/h is twenty-five — and the springs lift the
+     * body with them up to this; past it the underside has hit the face
+     * and folds by the rest, charged through `landingDamage` with the
+     * tolerance shot dampers narrow. A bank taken at the speed that
+     * carries the car up it (`collision.climbSpeed`) is free across the
+     * whole climbable band; the same bank at twice that speed is not. */
     bumpMax: 25,
     /** THE TRAVEL IS A BODYWORK MEASUREMENT, not a spring one: the arches
      * clear the tires by 0.08–0.11 m (car-styles.ts), and past that the
@@ -2630,17 +2640,6 @@ export const TUNING = {
      * how steep the country stands them (R31 keeps built soil under
      * `climbLimit`; rock stands where it stands). */
     climbSpeed: { from: 6, to: 22 },
-    /** ...and what the SPRINGS take of a face met at pace, m/s of wheel
-     * speed change in one step, before the belly meets the ground. The
-     * foot of a bank arriving under a car at speed throws the wheels
-     * upward at the bank's grade times the car's speed — a 45° bank at
-     * 90 km/h is twenty-five — and the springs lift the body with them up
-     * to this; past it the underside has hit the face and folds by the
-     * rest (car.ts, charged through `landingDamage`). Sized so a bank
-     * taken at the speed that carries the car up it (`climbSpeed`) is
-     * free of damage across the whole climbable band, and the same bank
-     * at twice that speed is not. */
-    faceLand: 25,
     /** Closing speed into a FACE under which the contact is a scrape and
      * not a fold, m/s — its own floor, above the solids' `scuffSpeed`,
      * because a bank is met with the wheels first and a trunk with the

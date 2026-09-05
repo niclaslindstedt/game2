@@ -310,11 +310,29 @@ describe("the ground as a solid", () => {
     expect(fast.car.damage.zones[0]).toBe(0);
     expect(fast.car.x).toBeGreaterThan(foot + 8);
     expect(fast.car.y).toBeGreaterThan(8);
+    // ...but THE SPRINGS decide what the arrival costs. At 30 m/s the foot
+    // of a 1.5 bank throws the wheels up at 45 m/s in one step, more than
+    // one bump may put into the springs (`suspension.bumpMax`): the body
+    // meets the face before the wheels can lift it, and the floor folds.
+    expect(fast.car.damage.belly).toBeGreaterThan(0);
+
+    // The same bank a few metres ahead of a car at a pace that still
+    // carries it up — but throws the wheels up within what the springs
+    // take — is free: the suspension lifts the body over the face and
+    // nothing touches. (A few metres ahead, so the throttle has no run to
+    // turn the pace into the fast case above.)
+    const near = (from: number) => (x: number) => Math.min(30, Math.max(0, (x - (from + 6)) * 1.5));
+    const pace = freshState();
+    const foot3 = intoTheWild(pace, near) + 6;
+    pace.car.u = 14;
+    for (let i = 0; i < TUNING.physicsHz * 3; i++) step(pace, drive({ throttle: 1 }));
+    expect(pace.car.x).toBeGreaterThan(foot3);
+    expect(pace.car.damage.zones[0]).toBe(0);
+    expect(pace.car.damage.belly).toBe(0);
 
     // The same face a few metres ahead of a car rolling at walking pace
     // with no throttle: it never carries the speed the face asks for.
     const slow = freshState();
-    const near = (from: number) => (x: number) => Math.min(30, Math.max(0, (x - (from + 6)) * 1.5));
     const foot2 = intoTheWild(slow, near) + 6;
     slow.car.u = 5;
     for (let i = 0; i < TUNING.physicsHz * 3; i++) step(slow, drive());

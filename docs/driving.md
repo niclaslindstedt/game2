@@ -1124,11 +1124,12 @@ every solid is a circle, and a hit does several things at once:
   nose while one met at an angle deflects the car along it — and the car is
   backed out of however much of the step the face refused, which is why it
   never ends up inside a mountain. A bank the speed DOES carry the car up
-  is still an arrival: the wheels' vertical speed jumping by more than
-  `collision.faceLand` in one step is more than the springs take up in
-  their travel, and the rest reaches the belly as a hard landing would — a
-  bank taken at the speed it asks for is free, the same bank at twice that
-  costs the floor. A face has its own scuff floor
+  is still an arrival, and the SPRINGS decide what it costs: the wheels'
+  vertical speed jumping by more than the most one bump may throw into
+  them (`suspension.bumpMax`) in one step is more than they can lift the
+  body with, and the rest reaches the belly as a hard landing would, with
+  the tolerance shot dampers narrow — a bank taken at the speed it asks
+  for is free, the same bank at twice that costs the floor. A face has its own scuff floor
   (`faceScuff`, above the solids' `scuffSpeed`): a steep bank taken at
   50 km/h costs speed and paint, never the run, while a cliff at pace still
   folds the nose.
