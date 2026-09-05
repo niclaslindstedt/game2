@@ -11,8 +11,11 @@ owes the whole chain. The RIGHT-HAND one hangs off `--hud-map`, declared as
 chip's clearance, the condition schematic (`calc(var(--hud-map) * 0.78)`) and
 the top bar's right stop all derive from it — `grep -n "var(--hud-map)"`
 before resizing anything, because those offsets read as unrelated rules. The
-TOP-OF-FRAME one is `--glass-bottom` → `--split-top` → `--pace-top` →
-`--flash-top`: the mirror, the split's flash, the calls, the run's news.
+TOP-OF-FRAME one is `--glass-bottom` → `--split-top` → `--pace-top`: the
+mirror, the split's flash, the calls. The run's news was its last link
+(`--flash-top`) until the news column moved to the bottom-right corner —
+which is the same lesson from the other end, and the reason a band whose
+tenant leaves is deleted rather than left standing empty.
 
 The tach inverts it: `.hud-tach`'s width/height are the ONLY size it has,
 since `hud-dial.tsx` draws into `viewBox="0 0 100 100"` and every tick and
@@ -22,9 +25,10 @@ counter drum is a fixed fraction of that box.
 `vmin` with `rem` caps, so the room it takes is a different FRACTION of the
 height on a 1080p monitor, a laptop and a phone held sideways — `.hud-flashes`
 at a fixed 32% cleared the calls on one viewport and was written straight
-across them on the other three. Reserve each band off what it HOLDS
-(`--split-band` is its own two font sizes; `--pace-band` is the sign's clamp),
-and reserve it whether or not anything is in it — a band that appears pushes
+across them on the other three (it is out of this stack now; the percentage is
+still what was wrong with it). Reserve each band off what it HOLDS
+(`--split-band` is its own two font sizes), and reserve it whether or not
+anything is in it — a band that appears pushes
 the corner call down the screen exactly while it is being read.
 
 **And a state that moves the column is a data attribute on the root, not a

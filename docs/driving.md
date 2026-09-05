@@ -1384,10 +1384,10 @@ means nothing, which is the whole reason the state exists.
 
 Nothing repairs mid-run. It is reported twice, and the split is deliberate.
 
-**A CALL IS NEWS; THE SCHEMATIC IS STATE.** A line in the middle of the screen
-is how something that just happened gets said, and then it ages out and the
-driver is on their own again — which is the right way to break news and the
-wrong way to hold an answer to "what have I got left". So under the minimap
+**A CALL IS NEWS; THE SCHEMATIC IS STATE.** A line in the news column at the
+bottom-right corner is how something that just happened gets said, and then it
+ages out and the driver is on their own again — which is the right way to break
+news and the wrong way to hold an answer to "what have I got left". So under the minimap
 there is a plan of the car with a colour per piece
 (`pwa/src/game/hud-health.tsx`, off the DOM-free fold in `car-health.ts`):
 green is well, yellow is damaged, orange is very damaged, red is broken. The
@@ -1427,8 +1427,12 @@ overstates it is worse than no word at all: a car told its engine is DEAD and
 then driven away from the spot is a car whose HUD nobody has a reason to
 believe again. Each system, and the shell around them, crosses up to three
 lines on its way out (`TUNING.collision.callAt` → `DamageStage`), and each
-crossing is one `systemFail` event the app puts up in the middle of the screen
-where the splits and the lap times are said:
+crossing is one `systemFail` event the app puts up in the news column in the
+bottom-right corner, where a lap time and a missed board are said too. Five
+lines stand there at a time, newest against the corner, each for fifteen
+seconds (`FLASH_LINES` / `FLASH_LIFE` in `App.tsx`) — out of the middle of the
+frame, which is the road, and up for long enough that a call that landed
+mid-corner can still be read at the exit:
 
 | Stage   | At   | Says                                                                                                                |
 | ------- | ---- | ------------------------------------------------------------------------------------------------------------------- |

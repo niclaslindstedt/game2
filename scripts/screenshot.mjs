@@ -1121,12 +1121,12 @@ await captureElement(
 // and this shot is what says so: nothing that comes and goes belongs in this
 // corner, because every phone width is sized to exactly these three.
 //
-// What a broken car has to SAY is not photographed here, and cannot be: the
-// machinery calls out in the middle of the screen (`damageCall` in hud.tsx)
-// for under two seconds, and the shutter takes several under software
-// rendering. The call is an ordinary `.hud-flash` — the same one a lap time
-// and a clean-air call go up in — so there is nothing about its look that
-// this sweep does not already photograph.
+// What a broken car has to SAY is not photographed here: the machinery calls
+// out in the news column in the OTHER bottom corner (`damageCall` in
+// hud.tsx), which is a separate element and not in this crop. The call is an
+// ordinary `.hud-flash` — the same one a lap time and a clean-air call go up
+// in — so there is nothing about its look that this sweep does not already
+// photograph.
 await captureElement("shot-instrument-cluster", ".hud-speed", async (page) => {
   await page.keyboard.down("ArrowUp");
   await racing(page);

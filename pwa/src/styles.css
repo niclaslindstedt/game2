@@ -166,6 +166,12 @@ body {
   --hud-health-marks: calc(var(--hud-health-row) * 2 + 0.12rem);
   --hud-health-car: calc(var(--hud-map) * 0.78);
   --hud-health: calc(var(--hud-health-car) + var(--hud-health-marks) + 0.15rem);
+  /* The OTHER corner's one number: the tach's edge length, which is also the
+     height of the whole instrument cluster, because the dial is the tallest
+     thing in that row. Anything that has to stand clear of the panel — the
+     news column in portrait, where the panel has the width of the screen —
+     measures itself against this. */
+  --hud-tach: clamp(8.72rem, 28.8vmin, 14.4rem);
   color: var(--hud-ink);
   font-weight: 800;
   font-style: italic;
@@ -434,22 +440,23 @@ body {
 
 /* ── The band under the glass, and the calls under THAT ─────────────────── */
 
-/* THE TOP OF THE FRAME, DIVIDED ONCE. Three things stack down the middle of
-   it — the split's flash (R28), the co-driver's calls, and the run's own news
-   (a torn-off wing, a board missed, a clean landing) — and every one of them
-   is placed off the band above it rather than off a percentage of the screen.
-   A percentage cannot do this job: the calls are sized in `vmin` with `rem`
+/* THE TOP OF THE FRAME, DIVIDED ONCE. Two things stack down the middle of it
+   — the split's flash (R28) and the co-driver's calls — and the lower is
+   placed off the band above it rather than off a percentage of the screen. A
+   percentage cannot do this job: the calls are sized in `vmin` with `rem`
    caps, so how much room they take is a different FRACTION of the height on a
    1080p monitor, a laptop and a phone held sideways, and one number that
    clears them on any of the three is written straight across them on another.
+   The run's own news used to be the third band here; it is in the bottom
+   right corner now (`.hud-flashes`), which is the same complaint answered by
+   leaving the stack rather than by being measured into it.
 
    EVERY BAND IS RESERVED WHETHER OR NOT ANYTHING IS IN IT. A split is up for
-   a few seconds a board and gone again (SPLIT_HOLD in App.tsx), and a damage
-   call comes and goes with the damage; instruments that made room for each
-   other as they arrived would slide down the screen and back exactly while
-   the corner call among them was being read, which is the one thing that
-   strip may not do. Empty space at the top of the frame is cheap; a call
-   that moves is not.
+   a few seconds a board and gone again (SPLIT_HOLD in App.tsx); instruments
+   that made room for each other as they arrived would slide down the screen
+   and back exactly while the corner call among them was being read, which is
+   the one thing that strip may not do. Empty space at the top of the frame is
+   cheap; a call that moves is not.
 
    Each band is measured off what it holds, so the type and the room it is
    given can never drift apart. */
@@ -458,18 +465,13 @@ body {
   --split-time: clamp(1.4rem, 5.5vmin, 2.6rem);
   --split-gap: clamp(0.75rem, 2.6vmin, 1.2rem);
   --split-band: calc(var(--split-time) + var(--split-gap) * 1.15 + 0.45rem);
-  /* THE CALLS: one plate is the sign plus the plate's own padding, and the
-     strip at its tallest is the call being driven with the corner behind it.
-     That second plate is DRAWN at 0.58 by a transform, which leaves its
-     layout box overhanging what it paints — so the room reserved is the
-     painted extent, not the box. */
+  /* THE CALLS: one plate is the sign plus the plate's own padding. Nothing
+     stands under them any more, so the strip reserves no band of its own —
+     it is the last thing in this stack, and what it does not use is road. */
   --pace-sign: clamp(2.4rem, 9vmin, 4.2rem);
   --pace-pad: 0.25rem;
-  --pace-call: calc(var(--pace-sign) + var(--pace-pad) * 2);
-  --pace-band: calc(var(--pace-call) * 1.58 + 0.15rem);
   --split-top: 11%;
   --pace-top: calc(var(--split-top) + var(--split-band));
-  --flash-top: calc(var(--pace-top) + var(--pace-band) + 1vh);
 }
 
 /* With a mirror up — showing the road or blanked, since the dead glass takes
@@ -1567,22 +1569,44 @@ body {
   }
 }
 
-/* The damage calls and the rest of the run's news, under everything the top
-   of the frame stacks — the mirror, the split's band and the co-driver's two
-   calls — because a torn-off wing announced across a corner call is two
-   readings and neither of them arrives. */
+/* THE NEWS COLUMN, in the bottom-right corner. It is small and out of the
+   way because it is a LOG, not an alarm: the thing it has to say has already
+   happened, the middle of the screen is where the road is, and a stage that
+   breaks something every corner would otherwise be read through its own
+   damage report.
+
+   NEWEST AT THE BOTTOM, against the corner. The column is anchored by its
+   foot, so a new line pushes the stack UPWARDS and the line just written is
+   always in the same place — and when the oldest goes off the top, nothing
+   below it moves. Right-aligned for the same reason: the edge the eye comes
+   back to is straight whatever the lines say. */
 .hud-flashes {
   position: absolute;
-  top: var(--flash-top);
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
+  align-items: flex-end;
+  gap: 0.12rem;
+  text-align: right;
 }
 
+/* Up from under the line before it, then a long hold, then out — the whole
+   life of a line is the two animations on this rule, and the row is dropped
+   from the column at the end of the second (FLASH_LIFE in App.tsx). */
 .hud-flash {
-  font-size: clamp(1.1rem, 4.5vmin, 2.2rem);
-  animation: hud-rise 1.8s forwards;
+  font-size: clamp(0.62rem, 2vmin, 0.95rem);
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  animation:
+    hud-flash-pop 180ms ease-out,
+    hud-flash-fade 600ms ease-in 14.4s forwards;
+}
+
+/* Pushed out early by a sixth line: one fade, and nothing of the hold left
+   to play. Must match FLASH_FADE in App.tsx, which drops the row. */
+.hud-flash-out {
+  animation: hud-flash-fade 400ms ease-in forwards;
 }
 
 .hud-flash-good {
@@ -1625,8 +1649,8 @@ body {
      some size to it. It is still the instrument that gives room back most
      cheaply — the revs are read off the needle's ANGLE, which survives being
      drawn smaller, where a map or a counter loses its figures. */
-  width: clamp(8.72rem, 28.8vmin, 14.4rem);
-  height: clamp(8.72rem, 28.8vmin, 14.4rem);
+  width: var(--hud-tach);
+  height: var(--hud-tach);
   overflow: visible;
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
 }
@@ -2389,6 +2413,17 @@ body {
   .hud-cluster {
     width: 100%;
   }
+
+  /* The instrument panel spreads across the WHOLE foot of the screen here
+     (the two rules above), so the news column cannot have the corner: it
+     stands on the panel instead, still against the right edge. The lift is
+     the cluster's own height, reserved whether or not the tach that sets it
+     is switched on — the same bargain the condition schematic makes, and for
+     the same reason: a column that moves up and down with an option is a
+     column the eye has to find twice. */
+  .hud-flashes {
+    bottom: calc(max(1rem, env(safe-area-inset-bottom)) + var(--hud-tach) + 0.4rem);
+  }
 }
 
 /* ── Touch controls ─────────────────────────────────────────────────────── */
@@ -2773,24 +2808,35 @@ body {
   }
 }
 
-@keyframes hud-rise {
+/* A line POPS: up from where the line before it sits, overshooting its size
+   a touch on the way. Short, because the column is at the edge of the eye
+   and the movement is the only thing that fetches it there. */
+@keyframes hud-flash-pop {
   0% {
     opacity: 0;
-    transform: translateY(0.8rem) scale(0.8);
+    transform: translateY(0.7rem) scale(0.82);
   }
 
-  15% {
+  70% {
     opacity: 1;
-    transform: translateY(0) scale(1.05);
-  }
-
-  80% {
-    opacity: 1;
+    transform: translateY(0) scale(1.06);
   }
 
   100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ...and goes the same way it came, without the movement: a line leaving the
+   top of the column must not drag the eye back up to it. */
+@keyframes hud-flash-fade {
+  from {
+    opacity: 1;
+  }
+
+  to {
     opacity: 0;
-    transform: translateY(-1rem);
   }
 }
 
