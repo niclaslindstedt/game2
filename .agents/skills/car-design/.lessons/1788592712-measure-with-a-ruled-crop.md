@@ -12,7 +12,9 @@ photo disagreed by twenty centimetres, so neither was a measurement.
 
 What works: crop the reference into thirds with a gridded canvas — a
 Playwright page that draws the image scaled and rules a labelled line every
-hundred source pixels (a twenty-line `.mjs` in the scratchpad; PIL and
+twenty source pixels at three times zoom (a fifty-pixel grid at twice zoom
+read a rounded nose ten centimetres high, and the miss survived a first
+overlay) (a twenty-line `.mjs` in the scratchpad; PIL and
 ImageMagick are not installed in a web session) — then read every landmark
 as a pixel coordinate and convert against the two things nothing can argue
 with: the wheel centres. Scale from the wheelbase, place z from the axles,

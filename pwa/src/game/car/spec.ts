@@ -137,6 +137,14 @@ export type Lights = {
   /** Rect lamps only — how many cells the opening is divided into across
    * its width. Two is a low/high pair; one is a single sealed unit. */
   cells?: number;
+  /** Rect lamps only — how far the lens carries on round the corner along
+   * the FLANK, m: the wraparound cluster of a late-eighties car, and the
+   * whole of what a headlamp is from the side. Laid on the flank in the
+   * lamp's own height, framed like the face. */
+  wrap?: number;
+  /** The colour of the wrap's trailing third — amber where that is the
+   * side repeater. Left off, the whole wrap is the lamp's own glass. */
+  wrapColor?: number;
 };
 
 /** The tail cluster: one framed opening per side, divided into cells. */

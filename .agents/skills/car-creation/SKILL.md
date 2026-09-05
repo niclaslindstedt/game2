@@ -59,10 +59,12 @@ Never read a proportion off a picture by eye. Two eyeball reads of the
 same elevation disagreed by twenty centimetres (`car-design`'s lesson).
 The procedure:
 
-1. **Rule the picture.** A Playwright page that draws the photograph
-   scaled and rules a labelled line every N source pixels, cropped to a
-   third of the car at a time (nose, doors, tail) and to the wheels at
-   higher zoom. PIL and ImageMagick are not installed in a web session; a
+1. **Rule the picture — FINE.** A Playwright page that draws the
+   photograph scaled and rules a labelled line every N source pixels.
+   Twenty source pixels at three times zoom, over a third of the car at a
+   time (nose, doors, tail, wheels); a fifty-pixel grid at twice zoom read
+   a rounded nose ten centimetres high and a cowl seven high, and both
+   survived a first overlay. Read every landmark twice, from two crops. PIL and ImageMagick are not installed in a web session; a
    twenty-line `.mjs` in the scratchpad is the tool. Read every landmark
    as a pixel coordinate, and read the picture with the `Read` tool.
 2. **Scale from the wheelbase.** The two wheel centres are the only
@@ -89,13 +91,22 @@ compression is **scale every LENGTH by one factor and no height or width**
 and across it stay real — and the factor goes in the comment. Then put the
 tail cap and the nose cap where the two bumper faces both land inside the
 box, using `axleShift` to centre the overhangs rather than shortening
-one of them.
+one of them. **Put the caps where the picture has them, never out at the
+box's edge**: the box is a ceiling, not a target, and a cap pushed out to
+fill it is a nose a hand too long on the overlay. Only the bumper's
+`depth` flexes, and it should be shallow on a car whose nose is its lamps.
 
-The other forced numbers, both from the same test: the arch radius is the
+The other forced numbers, all from the same test: the arch radius is the
 tyre plus the springs' whole travel (`TUNING.suspension.heaveMax`), which
-is bigger than any real arch — accept it; and the nose is the lowest
-bonnet in the catalog only if `SOLID_PROP_HEIGHT` still sits in its
-middle.
+is bigger than any real arch — accept it; and **the first profile station
+cannot stand under 0.835 m**, because the engine plants a roadside stone
+as a solid against the lowest bonnet in the catalog (`SOLID_PROP_HEIGHT`
+in `engine/mapgen/solids.ts`, `collision.rideOver`) and that bar is a
+world constant every stage is built against. A nose that rounds down to
+a lower lip is drawn flat at the bar instead; say so in the spec's
+comment and to the user, because it is the one miss the overlay will
+keep showing. Lowering the bar is a generator change (`make analyze`,
+`make previews`), not a car change.
 
 ## 4. Write the spec — and expect to extend the vocabulary
 
@@ -137,8 +148,12 @@ The render's hub is at cell `(460 − z·200, 315 + (0.7 − y)·200)` for a
 carries the length compression from §3, so a correctly measured body
 lands ON the photograph and every miss is visible as a doubled edge:
 a post too wide at the top, pods too far in, a lamp band a hand too high.
-Fix, re-render with `--skip-build`, overlay again. **Only the side
-elevation is a measuring overlay**; the front and rear photographs are
+Fix, re-render with `--skip-build`, overlay again. Two things the overlay
+shows that are not misses: a 3 cm halo over a bonnet with deck stripes
+(the lid is 2 cm proud of the loft and the paint 1 cm over that, on every
+car), and an arch a hand bigger than the photograph's (the springs'
+travel, forced by the geometry test). **Only the side elevation is a
+measuring overlay**; the front and rear photographs are
 perspective, and their overlays confirm layout and width, not heights.
 
 Then `make build` and a shot in the real game

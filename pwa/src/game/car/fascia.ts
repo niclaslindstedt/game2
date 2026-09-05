@@ -25,7 +25,7 @@ import {
   disc,
   type LampSurfaces,
 } from "./lamps.ts";
-import { flankX, paintAt, sampleProfile, shade } from "./shell.ts";
+import { flankX, paintAt, sampleProfile, shade, sideBand } from "./shell.ts";
 import type { CarBodySpec, Grille, Tailgate } from "./spec.ts";
 
 /** How far a lamp lens, a grille panel or a badge floats off the cap it is
@@ -158,7 +158,34 @@ export function buildFront(
   const trim = spec.colors.trim ?? 0x14181f;
 
   if (f.grille) buildGrille(b, f.grille, z, spec.colors.paint);
-  if (f.lights) buildHeadlights(s, f.lights, z);
+  if (f.lights) {
+    buildHeadlights(s, f.lights, z);
+    const l = f.lights;
+    if (l.kind === "rect" && l.wrap) {
+      // The lens carrying on round the corner: two bands on the flank, the
+      // housing under the glass, both sampled along the nose's taper so
+      // they hug the fender instead of standing off its narrowing end.
+      const h = l.height ?? l.size * 0.55;
+      const bar = l.bezel ?? 0.012;
+      const lens = l.color ?? 0xf7f2dc;
+      // The trailing third of the wrap is the repeater, in its own colour
+      // when the spec gives one; the rest is the headlamp's own glass.
+      const split = l.wrapColor === undefined ? z - l.wrap : z - l.wrap * 0.62;
+      const housing = { zFrom: z, zTo: z - l.wrap - bar, yFrom: l.y - h - bar, yTo: l.y + h + bar };
+      sideBand(b, spec, axles, { ...housing, proud: 0.004 }, l.bezelColor ?? 0xb9bec6);
+      sideBand(
+        s.lens,
+        spec,
+        axles,
+        { zFrom: z, zTo: split, yFrom: l.y - h, yTo: l.y + h, proud: 0.009 },
+        lens,
+      );
+      if (l.wrapColor !== undefined) {
+        const tail = { zFrom: split, zTo: z - l.wrap, yFrom: l.y - h, yTo: l.y + h, proud: 0.009 };
+        sideBand(s.lens, spec, axles, tail, l.wrapColor);
+      }
+    }
+  }
 
   if (f.indicators) {
     // Corner lamps sit in the bumper on a car of this era, so they have to
