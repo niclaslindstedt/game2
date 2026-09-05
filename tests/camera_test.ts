@@ -140,7 +140,7 @@ describe("chase camera over a cliff", () => {
     }
   });
 
-  it("leaves an ordinary jump's framing alone", () => {
+  it("holds its standoff over an ordinary jump and rises to its hover", () => {
     const state = game();
     const car = state.car;
     cliffGround(state, car.z - 1e6, -500, -500);
@@ -163,13 +163,17 @@ describe("chase camera over a cliff", () => {
       s.car.vy = vy;
       s.car.z += 28 * FRAME;
     });
-    // What little there is over the rig's 2 m ride height is its own
-    // descent lift (`dropLift`) on the way down, plus the frame or two the
-    // camera takes to settle onto the landed car (HEIGHT_SPRING — in the air
-    // the spring is stiff enough to sit on the arc, on the ground it is a
-    // mass that has to be got moving); the cliff hold contributes none of
-    // it.
-    expect(Math.max(...overs.slice(4))).toBeLessThan(3.0);
+    // The STANDOFF holds; the height reads the grip. In the air there is
+    // none, so the lens stands at the top of the rig's hover over its ride
+    // height (camera-feel.ts, `hover` in CHASE_RIGS — 0.8 m over 2.45),
+    // plus its own descent lift (`dropLift`) on the way down and the frame
+    // or two the camera takes to settle onto the landed car (HEIGHT_SPRING
+    // — in the air the spring is stiff enough to sit on the arc, on the
+    // ground it is a mass that has to be got moving). The cliff hold
+    // contributes none of it: a designed jump is not a cliff.
+    const peak = Math.max(...overs.slice(4));
+    expect(peak).toBeGreaterThan(2.45 + 0.4);
+    expect(peak).toBeLessThan(2.45 + 0.8 + 0.7);
   });
 });
 

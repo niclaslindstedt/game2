@@ -100,6 +100,7 @@ import {
 } from "./camera-free.ts";
 import { createViewChange } from "./camera-change.ts";
 import { createDroneCamera } from "./camera-drone.ts";
+import { createCameraFeel } from "./camera-feel.ts";
 import { createFinishCamera } from "./camera-finish.ts";
 import {
   CHASE_CLEARANCE,
@@ -256,6 +257,12 @@ type ChaseRig = {
    * that already fly a long way over the terrain take a fraction: from
    * twenty metres up, holding another twelve only makes the car small. */
   cliff: number;
+  /** How far the camera HOVERS UP over its height when the car has no grip
+   * at all, m — the top of the grip read (camera-feel.ts), which is where
+   * it stands while the car is flying. Scaled to the rig's height: a metre
+   * is a clear lift from six metres behind the car and nothing from twenty
+   * above it. */
+  hover: number;
 };
 
 /** The ladder, in numbers. `chase` is the reference frame — proportions read
@@ -296,9 +303,13 @@ type ChaseRig = {
  * makes a distant camera read as FLOWN starts at `far`, where the standoff
  * is long enough that the sway is legible as a gesture of its own.
  *
- * The frame does NOT change when the car leaves the ground: pulling back
- * for a jump makes the biggest moment in the stage read as small and safe,
- * and it is the one moment the camera should hold its nerve. */
+ * The STANDOFF does not change when the car leaves the ground: pulling
+ * back for a jump makes the biggest moment in the stage read as small and
+ * safe, and it is the one moment the camera should hold its nerve. What the
+ * frame does do in the air is stand at the top of its `hover` — the grip
+ * read (camera-feel.ts) has nothing to read — and it is the same lift a
+ * brow or a landing's skitter buys a share of, which is what makes it a
+ * reading rather than a jump animation. */
 const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
   close: {
     dist: 4.4,
@@ -321,6 +332,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     heave: 0.45,
     shake: 1.15,
     cliff: 1,
+    hover: 0.6,
   },
   chase: {
     dist: 5.8,
@@ -343,6 +355,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     heave: 0.4,
     shake: 1,
     cliff: 1,
+    hover: 0.8,
   },
   far: {
     dist: 9.8,
@@ -365,6 +378,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     heave: 0.3,
     shake: 0.85,
     cliff: 0.9,
+    hover: 1.1,
   },
   // Standoff and aim are a pair: 10 m up and 18 m back puts the car 29°
   // below the horizontal, and an aim 12 m ahead pitches the shot 17° down,
@@ -391,6 +405,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     heave: 0,
     shake: 0.35,
     cliff: 0.4,
+    hover: 2.0,
   },
   // Over the roof, tilted only far enough to see what is coming. The wide
   // fov is what buys that tilt: with the camera almost directly above the
@@ -420,6 +435,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     heave: 0,
     shake: 0.3,
     cliff: 0.25,
+    hover: 3.0,
   },
 };
 
@@ -614,6 +630,9 @@ export function createGameCamera(width: number, height: number): GameCamera {
   const sweepShot = createSweepCamera();
   /** The menu's backdrop, flown (camera-drone.ts). */
   const drone = createDroneCamera();
+  /** What the outside rigs CONVEY of the car over their framing — grip as
+   * height, attitude as tilt, speed as a tremor (camera-feel.ts). */
+  const feel = createCameraFeel();
   /** …and the move from one seat to the next, for a player changing view
    * (camera-change.ts). */
   const change = createViewChange();
@@ -633,6 +652,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
       groundSpring.drop();
       climbVy = car.vy;
       slackWas = Number.NaN;
+      feel.drop(state);
     }
     // The height the shot is built from — the car's, less whatever of it is
     // only the road's cross-section (SLACK), carried on a spring led by the
@@ -749,23 +769,36 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // CAR moving in the frame, which is the half of a bump the outside shot
     // is supposed to show.
     const rattle = rattleAt(orbit, shake * rig.shake, shakePhase);
-    const sx = rattle.x;
-    const sy = rattle.y;
-    const ride = ground + height_ + car.ride * rig.heave * CAMERA_SHAKE.heave + held;
-    camera.position.set(camX + sx, Math.max(ride, floor) + sy, camZ);
+    // The road's gradient as the shot reads it (vy/u while grounded) — the
+    // eased one, since it is applied straight to the aim and the attitude,
+    // and read raw it was the pitch of the shot flickering with every
+    // ripple in the ground.
+    const climb = clamp(climbVy / Math.max(10, car.u), -0.4, 0.4);
+    // What the frame says about the car over its framing (camera-feel.ts):
+    // the hover the grip read stands the lens off its height by, the
+    // tremor pace puts in it, and the attitude taken after the aim.
+    const felt = feel.step(state, climb, rig.hover, rig.shake, orbit, dt);
+    const sx = rattle.x + felt.x * rightX;
+    const sz = felt.x * rightZ;
+    const sy = rattle.y + felt.y;
+    const ride = ground + height_ + car.ride * rig.heave * CAMERA_SHAKE.heave + held + felt.lift;
+    camera.position.set(camX + sx, Math.max(ride, floor) + sy, camZ + sz);
     // The drop from camera to aim point over the run between them IS the
     // pitch of the shot — a few degrees for the chase rigs, most of a right
-    // angle for the one over the roof. On a slope the aim rides the climb
-    // (vy/u is the road's gradient while grounded) — the eased one, since
-    // this is metres of aim height per unit of grade applied straight to
-    // the lookAt, and read raw it was the pitch of the shot flickering with
-    // every ripple in the ground.
-    const climb = clamp(climbVy / Math.max(10, car.u), -0.4, 0.4);
+    // angle for the one over the roof. On a slope the aim rides the climb,
+    // metres of aim height per unit of grade applied straight to the
+    // lookAt, so the brow shows over the car.
     camera.lookAt(
       car.x + Math.sin(yaw) * rig.aimAhead,
       ground + rig.aimHeight + climb * rig.aimClimb + sy * 0.5,
       car.z + Math.cos(yaw) * rig.aimAhead,
     );
+    // ...and the ATTITUDE on top of the aim, as local turns about the lens's
+    // own axes: back over the brow, into the turn. A bank into a
+    // right-hander tips the up vector to the right, which is a negative
+    // turn about the lens's backward-pointing z.
+    camera.rotateX(felt.pitch);
+    camera.rotateZ(-felt.bank);
   };
 
   /** One step of the free camera, and the accumulated nudges it consumes.

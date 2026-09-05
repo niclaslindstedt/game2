@@ -106,6 +106,7 @@ export {
   latCeiling,
   slideCap,
   slideFloor,
+  surfaceGripFor,
   wheelSlide,
 } from "./game/limits.ts";
 // ...and how much of the car is standing on the road at this instant, which
