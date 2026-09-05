@@ -5,7 +5,7 @@ scope: pwa/src/game/
 concepts: [file-size, camera, renderer, module-split]
 ---
 
-`renderer.ts` sits past the cap and `camera.ts` runs close to it, and nothing
+`renderer.ts` and `settings.ts` sit past the cap and `camera.ts` runs close to it, and nothing
 in `make lint` enforces §20.5 — measure with `wc -l` before adding to either.
 
 Two different calls, depending on which side of the line the file is on:

@@ -406,17 +406,22 @@ function bladeGeometry(reach: number): THREE.BufferGeometry {
 }
 
 /** Build the arms, and the grime pane they clear at whichever resolution the
- * car warrants (`FilmDetail`). The arms are the same at every level: a car
- * with no film still sweeps, it simply has nothing drawn to take off. */
+ * car warrants (`FilmDetail`). The two are separate questions: a car with no
+ * film still sweeps, it simply has nothing drawn to take off, and a car with
+ * `arms` off carries the film and never clears it — the solid car, whose
+ * glass nobody looks through and whose wipers would be hardware on a panel.
+ * The spec has the last word either way: a body authored without wipers
+ * never grows any. */
 export function buildWipers(
   spec: CarBodySpec,
   material: THREE.Material,
   filmMaterial: THREE.Material,
   film: FilmDetail = "fine",
+  arms = true,
 ): CarWipers {
   const group = new THREE.Group();
   const panes = screenPanes(spec);
-  const armed = spec.cabin.wipers === true;
+  const armed = arms && spec.cabin.wipers === true;
 
   const position: number[] = [];
   const color: number[] = [];
