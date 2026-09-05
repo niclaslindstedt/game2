@@ -433,6 +433,19 @@ export const EFFECTS_SCALE: Record<VideoSettings["effects"], number> = {
   full: 1,
 };
 
+/** Whether a wheel torn off a car is thrown as a BODY — a rolling, bouncing
+ * wheel with mass and grip (loose-wheel.ts), on every car on the road,
+ * the field's included — or not thrown at all, leaving the hub. It rides
+ * the particles' row: a wheel is stepped two hundred and forty times a
+ * second while it is moving, the field can have a dozen loose at once,
+ * and the picture that setting is cheapest on is the one that cannot
+ * afford them. */
+export const LOOSE_WHEELS: Record<VideoSettings["effects"], boolean> = {
+  off: false,
+  low: false,
+  full: true,
+};
+
 /** The player's option, as the detail level car-body.ts builds against. The
  * two are not one enum because the setting lives in a module the menus load
  * and the level lives in one that imports three.js. */
@@ -549,8 +562,8 @@ export type DetailSettings = Pick<
  * blob already stored. */
 export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   // The phone that stutters: every window solid and every wiper off, the
-  // verges bare, under half the particles, nobody on the road raising any
-  // ground, and no pipe smoking.
+  // verges bare, under half the particles, a lost wheel gone rather than
+  // rolling, nobody on the road raising any ground, and no pipe smoking.
   low: {
     effects: "low",
     interior: "off",

@@ -1265,8 +1265,12 @@ belly, and — on a landing taken on the side — the side they came down on
 bent: the corner loses `flatGrip`, the car pulls toward it (`flatPull`, in
 lock, held down every straight) and the rim drags (`flatDrag`); the drawn wheel
 squashes, leans and wobbles once per turn. At 1 the wheel is OFF THE CAR — a
-`partBreak` the renderer sends tumbling, with the corner dropped onto its hub
-for the rest of the run — and the same three costs come at `wheelOff…` size,
+`partBreak` the renderer turns into a wheel with a life of its own
+(`pwa/src/game/loose-wheel.ts`: it leaves at the corner's speed with the
+tread still turning, bounces on its tyre, rolls on ahead for a long way,
+keels over once slow and settles flat — on every car on the road, unless the
+video options' EFFECTS row has switched loose wheels off), with the corner
+dropped onto its hub for the rest of the run — and the same three costs come at `wheelOff…` size,
 plus `wheelOffPower` of the engine's push gone into a hub ploughing the road.
 One wheel off is a car that crawls, crookedly; two is the run.
 

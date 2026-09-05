@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -290,6 +290,15 @@ transit:
 # `screenshots`.
 rollcam:
 	npm run rollcam
+
+# THE WHEEL LAB — photograph A WHEEL COMING OFF (previews/wheel.png): the
+# throw, the bounce off the tyre, the landing that turns into a roll and the
+# roll running on ahead of the car, frame by consecutive frame, from the
+# chase camera, the helicopter and a lens planted at the verge. REQUIRED
+# before/after any change to loose-wheel.ts. Same Chromium requirements as
+# `screenshots`.
+wheel:
+	npm run wheel
 
 # Photograph the CAMERA KEY being pressed, at every step of the ladder
 # (previews/views.png) — six consecutive frames per step, with the lens's own
