@@ -3,11 +3,11 @@
 //
 // Three pages show the same stages behind three different gates, and they
 // have to look identical while they do it: the CAMPAIGN opens the next rung
-// of the ladder, the TIME TRIAL opens anything driven to the end, and HEADS
-// UP opens the same finished stages to race the field over again. So the
-// boxes live here and the gate is passed in — a page decides what is open
-// and what a locked box asks for, and nothing else about a stage box is a
-// page's business.
+// of the ladder, the TIME TRIAL opens a whole COUNTRY at a time (all six the
+// moment the campaign opens the country), and HEADS UP opens anything driven
+// to the end, to race the field over again. So the boxes live here and the
+// gate is passed in — a page decides what is open and what a locked box asks
+// for, and nothing else about a stage box is a page's business.
 //
 // The same stages come round a fourth time behind NO gate at all —
 // `StagePicker`, at the foot of this file — for Roam and for the developer's

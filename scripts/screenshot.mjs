@@ -1319,6 +1319,36 @@ for (const [name, viewport] of [
   );
 }
 
+// THE TIME TRIAL, both of its steps. Its gate is the one that is not the
+// campaign's — a whole COUNTRY opens at once, the moment the campaign opens
+// the country — so the two surfaces worth a picture are the country list
+// (the taiga open on a save three stages in, the desert still behind the
+// table) and the grid behind it, where all six boxes are lit and only three
+// of them carry a time.
+for (const [name, step] of [
+  ["shot-menu-timetrial", async (page) => await tile(page, "timetrial")],
+  [
+    "shot-menu-timetrial-stages",
+    async (page) => {
+      await tile(page, "timetrial");
+      await page.locator(".menu-location").first().click();
+    },
+  ],
+]) {
+  await capture(
+    name,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await menuUp(page);
+      await step(page);
+      await page.waitForTimeout(2500);
+    },
+    { menu: "1" },
+    "load",
+    { initScript: PLAYED_IN },
+  );
+}
+
 // ...and the table behind the head's STANDINGS press, which is where
 // everything the old panel printed under the boxes now lives. Both shapes:
 // the page it cuts its rows to is measured off the room the modal has, and a
