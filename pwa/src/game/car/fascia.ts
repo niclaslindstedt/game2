@@ -146,47 +146,84 @@ function buildBumper(
   // side and tapering from the bar's own corner back to a lip on the
   // flank. Tapered boxes, so a bar that stands wide of the cap runs back
   // into the wing as one surface rather than as a stair of plates.
-  const steps = 3;
-  const outer = (z: number, t: number): number =>
-    flankX(spec, axles, z, bar.y) + 0.006 + flare * (1 - t);
-  for (let i = 0; i < steps; i++) {
-    const z0 = zEnd - (dir * (wrap * i)) / steps;
-    const z1 = zEnd - (dir * (wrap * (i + 1))) / steps;
-    const o0 = outer(z0, i / steps);
-    const o1 = outer(z1, (i + 1) / steps);
-    const inner = Math.min(flankX(spec, axles, z0, bar.y), flankX(spec, axles, z1, bar.y)) - 0.05;
-    // taperBox names its widths by the +z face and the -z face; which end
+  //
+  // taperBox is SYMMETRIC about its centre, so a step lands BOTH of its
+  // faces where they were meant to go only if the centre is the one plane
+  // they share — the buried inner one. Centred on the cap end's own midline
+  // instead, the far end's outer face comes out half way back to the body,
+  // and the wing saws through the paint as a row of teeth.
+  const zs = wrapStations(spec, axles, zEnd, zEnd - dir * wrap);
+  const outer = (z: number): number =>
+    flankX(spec, axles, z, bar.y) + 0.006 + flare * (1 - Math.abs(z - zEnd) / wrap);
+  for (let i = 0; i < zs.length - 1; i++) {
+    const z0 = zs[i];
+    const z1 = zs[i + 1];
+    const o0 = outer(z0);
+    const o1 = outer(z1);
+    // The shared centre: a hand inside the flank, and never outside the
+    // faces it has to reach, or the step would come out inside out.
+    const mid = Math.min(
+      flankX(spec, axles, z0, bar.y) - 0.05,
+      flankX(spec, axles, z1, bar.y) - 0.05,
+      o0,
+      o1,
+    );
+    // taperBox names its widths by the +z face and the −z face; which end
     // of this step is nearer the cap depends on the end of the car.
-    const [wPlus, wMinus] = dir > 0 ? [o0 - inner, o1 - inner] : [o1 - inner, o0 - inner];
-    const cx = (inner + o0) / 2;
+    const [wPlus, wMinus] = dir > 0 ? [o0, o1] : [o1, o0];
     for (const side of [-1, 1]) {
       b.taperBox(
-        side * cx,
+        side * mid,
         bar.y,
         (z0 + z1) / 2,
-        wPlus,
-        wMinus,
+        (wPlus - mid) * 2,
+        (wMinus - mid) * 2,
         bar.height * 0.9,
         Math.abs(z1 - z0),
         color,
       );
-      if (strip) {
-        const sw = PROUD;
-        const scx = (o0 + o1) / 2 + PROUD * 0.5;
-        const [sPlus, sMinus] = dir > 0 ? [sw + (o0 - o1), sw] : [sw, sw + (o0 - o1)];
+      // The strip rides the same centre a hair further out, so it stands
+      // proud of the wrap all the way round instead of sinking into it.
+      if (strip)
         b.taperBox(
-          side * scx,
+          side * mid,
           strip.y,
           (z0 + z1) / 2,
-          sPlus,
-          sMinus,
+          (wPlus + PROUD - mid) * 2,
+          (wMinus + PROUD - mid) * 2,
           strip.height,
-          Math.abs(z1 - z0) * 0.96,
+          Math.abs(z1 - z0),
           stripColor,
         );
-      }
     }
   }
+}
+
+/** Where a wrap has to be sampled along z. A wrap is a chain of straight
+ * steps laid on a flank that is not straight, so a step spanning a fold
+ * cuts its chord UNDER the bodywork and the wing comes through the bumper.
+ * The stations are a short ladder plus every fold the flank has inside the
+ * span: the profile's own, the flare's ramps, and the wheel arch — whose
+ * leading edge is a STEP in `archAt` and whose curve is steepest just
+ * inside it. */
+function wrapStations(spec: CarBodySpec, axles: number[], zEnd: number, zTo: number): number[] {
+  const lo = Math.min(zEnd, zTo);
+  const hi = Math.max(zEnd, zTo);
+  const zs = new Set<number>([zEnd, zTo]);
+  const ladder = 4;
+  for (let i = 1; i < ladder; i++) zs.add(lo + ((hi - lo) * i) / ladder);
+  const folds: number[] = spec.profile.map((p) => p.z);
+  if (spec.flare) {
+    const h = spec.flare.length / 2;
+    for (const axle of axles) folds.push(axle + h, axle + h * 0.9, axle - h * 0.9, axle - h);
+  }
+  if (spec.arches) {
+    const r = spec.arches.radius;
+    for (const axle of axles) for (const f of [1, 0.9, 0.6]) folds.push(axle + r * f, axle - r * f);
+  }
+  for (const z of folds) if (z > lo && z < hi) zs.add(z);
+  const out = [...zs].sort((a, b) => a - b);
+  return zEnd > zTo ? out.reverse() : out;
 }
 
 /** The bonnet's vents: a dark let-in plate each, with the louvre bars
