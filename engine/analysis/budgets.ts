@@ -846,6 +846,30 @@ export const ANALYSIS = {
       wall: { slope: 2.6, fail: 10 },
       explicit: 0.25,
     },
+
+    /** R31 — NOTHING STOPS THE CAR BUT ROCK. The share of the drawn
+     * lattice's triangles, past the road's bench, standing steeper than
+     * `TUNING.collision.climbLimit` — the grade the physics stops climbing
+     * at and starts refusing — on ground that is neither a declared rock
+     * face (`cutAt` past `cut.face`: a cutting, or a cone letting go of a
+     * mountain) nor the rock's deliberate edge (`sharpAt`). The slope is
+     * the physics' own number and is read from there, not restated here.
+     *
+     * A share and not a count, because a bigger map has more of
+     * everything; and a small tolerance rather than zero, because the
+     * bare country keeps a few of its own — a hill's scoured flank, a
+     * tarn's rim just under the sharp bar, a lattice diagonal reading a
+     * curve back steeper than it is. MEASURED over seeds 1-24 at the
+     * default dials with the cone letting go, the branch shelves running
+     * out, the banks and rims widened, the mounds lowered and the apron
+     * seam closed: three seeds in four stand 0.00-0.03% of their triangles
+     * that steep, and the rest 0.08-0.19% — a branch standing over a
+     * basin, a fill on a hillside — where before it was 0.05-1.9% on every
+     * seed and the worst was a cone standing a grass hillside up at sixty
+     * degrees. `tolerated` sits over the healthy three quarters, so the
+     * rest are reported as the queue they are; `fail` is a stage with such
+     * a hillside beside every corner. */
+    climb: { tolerated: 0.0006, fail: 0.004 },
   },
 
   /** COST. The generator runs in the game, on a phone, every time a stage

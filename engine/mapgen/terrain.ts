@@ -92,15 +92,30 @@ export type Stream = {
   /** Arc position of the crossing this piece belongs to (chunk
    * association / pruning). */
   centerS: number;
-  /** Loose bounding box (bed + banks), for cheap carve rejection. */
+  /** Loose bounding box (bed + the widest bank), for cheap carve rejection. */
   minX: number;
   maxX: number;
   minZ: number;
   maxZ: number;
+  /** The lowest the bed gets along this piece, m — what bounds the widest
+   * bank any point could owe it, so a query over flat country is rejected
+   * on the nine-metre bank and not the fifty-metre one. */
+  bedMin: number;
 };
 
 /** How far below the water surface a ford's bed is carved, meters. */
 const BED_DEPTH = 0.45;
+/** R31 — a BANK IS A SLOPE A CAR CAN CLIMB OUT OF. The channel blends from
+ * its bed back onto the country over `BANK` metres at least, and further
+ * wherever the country stands high enough over the bed that nine metres
+ * would make a wall of it: the blend is a smoothstep, whose steepest point
+ * is one and a half times its mean, so the run a drop needs is that over
+ * `verge.climbable`. A brook in flat country keeps its nine-metre banks; a
+ * river ten metres down in a valley gets a bank twenty-five metres wide,
+ * which is what a river bank is. `BANK_MAX` bounds it, and sizes the box a
+ * stream's carve is rejected by. */
+const BANK_RUN = 1.5 / R.verge.climbable;
+const BANK_MAX = 50;
 /** How far a surface may stand over water and still be IN it, m — a ford's
  * crown sheds the water it wades, and a road's camber is not a bank. */
 const WADE_LIP = 0.2;
@@ -138,7 +153,9 @@ function sliceRiver(river: River): Stream[] {
         }
       }
     }
-    const pad = halfWidth + BANK;
+    const pad = halfWidth + BANK_MAX;
+    let bedMin = Infinity;
+    for (const p of slice) if (p.y - river.depth < bedMin) bedMin = p.y - river.depth;
     out.push({
       points: slice.map((p) => ({ x: p.x, z: p.z, y: p.y, w: p.halfWidth })),
       halfWidth,
@@ -149,6 +166,7 @@ function sliceRiver(river: River): Stream[] {
       maxX: maxX + pad,
       minZ: minZ - pad,
       maxZ: maxZ + pad,
+      bedMin,
     });
   }
   return out;
@@ -332,11 +350,22 @@ function nearestOnStream(
 export function carveGround(streams: Stream[], x: number, z: number, base: number): number {
   let ground = base;
   for (const s of streams) {
-    if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
+    // The widest bank this piece could owe a point at this height, and the
+    // box shrunk to it: the walk down the piece's points is the whole cost
+    // of the carve, and over flat country almost every piece in the box is
+    // thrown away here on its nine-metre bank.
+    const widest = Math.min(BANK_MAX, Math.max(BANK, (base - s.bedMin) * BANK_RUN));
+    const slack = BANK_MAX - widest;
+    if (x < s.minX + slack || x > s.maxX - slack || z < s.minZ + slack || z > s.maxZ - slack) {
+      continue;
+    }
     const { d, waterY, width } = nearestOnStream(s, x, z);
-    if (d > width + BANK) continue;
+    if (d > width + widest) continue;
     const bed = waterY - s.depth;
-    const target = bed + smooth(clamp01((d - width) / BANK)) * Math.max(0, base - bed);
+    const drop = Math.max(0, base - bed);
+    const bank = Math.min(BANK_MAX, Math.max(BANK, drop * BANK_RUN));
+    if (d > width + bank) continue;
+    const target = bed + smooth(clamp01((d - width) / bank)) * drop;
     if (target < ground) ground = target;
   }
   return ground;
@@ -591,6 +620,11 @@ export function createTerrain(track: Track): TerrainField {
     minZ: number;
     maxZ: number;
     minFloor: number;
+    /** ...and the span of ARC the cell's samples cover, as indices, so a
+     * search for the OTHER arm of the stage can skip a cell holding only
+     * the arm it already has. */
+    minIndex: number;
+    maxIndex: number;
   };
   const emptyCell = (): Cell => ({
     index: [],
@@ -606,6 +640,8 @@ export function createTerrain(track: Track): TerrainField {
     minZ: Infinity,
     maxZ: -Infinity,
     minFloor: Infinity,
+    minIndex: Infinity,
+    maxIndex: -Infinity,
   });
   let grid = new Map<number, Cell>();
   let firstIndexed = 0;
@@ -699,6 +735,8 @@ export function createTerrain(track: Track): TerrainField {
       if (s.z < cell.minZ) cell.minZ = s.z;
       if (s.z > cell.maxZ) cell.maxZ = s.z;
       if (floor < cell.minFloor) cell.minFloor = floor;
+      if (i < cell.minIndex) cell.minIndex = i;
+      if (i > cell.maxIndex) cell.maxIndex = i;
     }
     nearCx = NaN;
   };
@@ -750,7 +788,10 @@ export function createTerrain(track: Track): TerrainField {
   type Near = RoadNear & {
     /** R31 — the highest the ground may stand here for this road's sake:
      * the lowest nearby corridor's own underside, opening upward at
-     * `verge.climb` once past the bench. Infinity where no road reaches. */
+     * `verge.climb` once past the bench. Infinity where no road reaches.
+     * FINAL only over the cones outside their fade: the ones letting go are
+     * left in `fadeCone` for `fadeCeiling` to finish once the ground they
+     * rise toward is known. */
     ceiling: number;
     /** ...and the same cone over the road this point is BESIDE alone. A cone
      * may cut the country between two arms of a stage; it may not cut the
@@ -762,7 +803,22 @@ export function createTerrain(track: Track): TerrainField {
      * the difference standing as a lip right at the corridor's lip, which
      * on a blasted cutting is metres of it. */
     ownClimb: number;
+    /** THE OTHER ARM: the nearest sample of a different stretch of the
+     * stage — more than `ARM_WINDOW` samples of arc from the nearest — with
+     * its distance and signed lateral, or -1 where the corridor's blend
+     * reach holds only the one arm. `shapeAt` carries that arm's FILL across
+     * the line where this one becomes nearer: the country between two arms
+     * at two heights belongs to the higher one's embankment until that has
+     * come down to the ground, not to whichever happens to be closer. */
+    other: number;
+    otherD: number;
+    otherLateral: number;
   };
+  /** How far apart along the stage two samples have to be before they are
+   * two ARMS rather than one road, in samples: a couple of hundred metres
+   * of arc. A hairpin's two legs are inside it, and they are one road at
+   * one height — nothing to carry between them. */
+  const ARM_WINDOW = 100;
 
   /** Pick up the non-empty cells of the block around `(cx, cz)` into
    * `nearCells`, if the last query was not already standing in it. */
@@ -777,21 +833,37 @@ export function createTerrain(track: Track): TerrainField {
     }
   };
 
-  /** Past either stage end the distance to the end SAMPLE would swing the
-   * shelf away under the road apron, so it is measured from the apron's
-   * spine instead while within its reach. Both searches end here. */
-  const apronDistance = (
-    best: number,
-    x: number,
-    z: number,
-    lateral: number,
-    d: number,
-  ): number => {
-    if (best !== firstIndexed && best !== samples.length - 1) return d;
-    const s = samples[best];
-    const lon = (x - s.x) * Math.sin(s.heading) + (z - s.z) * Math.cos(s.heading);
-    const out = best === firstIndexed ? -lon : lon;
-    return out > 0 ? Math.hypot(lateral, Math.max(0, out - APRON)) : d;
+  /** The stage's END APRONS (R24): the dirt extrapolated straight past each
+   * end sample, which is road the terrain shelves like road. A point past
+   * an end is as far from the road as it is from the apron's SPINE — the
+   * end sample's line, out to `APRON` — and the sample it belongs to is
+   * that end sample. Asked on EVERY query, not only when the end sample
+   * happens to be the nearest: past a curved end an earlier sample of the
+   * route can be nearer than the end one, and a distance that switched
+   * from the spine's to that sample's — sixty metres, across one lattice
+   * cell — took the corridor's whole cross-section with it, a wall beside
+   * the apron at either end of the stage. Writes the nearer end into
+   * `apron` and says whether there was one. Both searches end here. */
+  const apron = { index: -1, d: 0, lateral: 0 };
+  const nearerApron = (x: number, z: number, d: number): boolean => {
+    apron.index = -1;
+    for (let end = 0; end < 2; end++) {
+      const i = end === 0 ? firstIndexed : samples.length - 1;
+      const s = samples[i];
+      const sinH = Math.sin(s.heading);
+      const cosH = Math.cos(s.heading);
+      const lon = (x - s.x) * sinH + (z - s.z) * cosH;
+      const out = end === 0 ? -lon : lon;
+      if (out <= 0) continue;
+      const lateral = (x - s.x) * cosH - (z - s.z) * sinH;
+      const spine = Math.hypot(lateral, Math.max(0, out - APRON));
+      if (spine >= d) continue;
+      d = spine;
+      apron.index = i;
+      apron.d = spine;
+      apron.lateral = lateral;
+    }
+    return apron.index >= 0;
   };
 
   /** The nearest road sample and nothing else — no verge cone, and so no
@@ -824,19 +896,18 @@ export function createTerrain(track: Track): TerrainField {
       }
     }
     if (best < 0) return null;
+    const d = Math.sqrt(bestD2);
+    if (nearerApron(x, z, d)) return { d: apron.d, index: apron.index, lateral: apron.lateral };
     const s = samples[best];
     const lateral = (x - s.x) * Math.cos(s.heading) - (z - s.z) * Math.sin(s.heading);
-    return {
-      d: apronDistance(best, x, z, lateral, Math.sqrt(bestD2)),
-      index: best,
-      lateral,
-    };
+    return { d, index: best, lateral };
   };
 
   const nearestSample = (x: number, z: number): Near | null => {
     block(Math.floor(x / GRID), Math.floor(z / GRID));
     let best = -1;
     let bestD2 = Infinity;
+    fadeCount = 0;
     // R31 — the verge cone, taken over every sample in reach rather than
     // over the nearest one alone. At a hairpin the two arms are a road's
     // width apart and it is the LOWER one that says how high the ground
@@ -885,14 +956,52 @@ export function createTerrain(track: Track): TerrainField {
           const hold = BENCH / d;
           const rise =
             cell.top[k] + (ddx * cell.px[k] + ddz * cell.pz[k]) * hold + coneRise(d, cell.climb[k]);
-          if (rise < ceiling) ceiling = rise;
+          if (rise >= ceiling) continue;
+          // In the fade the cone is not final — it rises toward ground the
+          // walk has not built yet — so it is kept, not taken. Only ever
+          // below the running min, which is a bound on it either way.
+          if (d2 >= FADE_FROM2) keepFade(rise, fadeWeight(d, CORRIDOR_RANGE), cell.climb[k]);
+          else ceiling = rise;
         }
       }
     }
     if (best < 0) return null;
+    const d = Math.sqrt(bestD2);
+    const onApron = nearerApron(x, z, d);
     const s = samples[best];
     const lateral = (x - s.x) * Math.cos(s.heading) - (z - s.z) * Math.sin(s.heading);
-    const d = Math.sqrt(bestD2);
+    // The other arm, where there is one in reach. Only asked once the point
+    // is past the nearest arm's own shelf — inside it that arm owns the
+    // ground outright — and rejected cell by cell on the box AND on the arc
+    // the cell holds, so a stage with one arm here costs a few comparisons.
+    let other = -1;
+    let otherD2 = CONE_REACH2;
+    if (bestD2 > SHELF_END2) {
+      const lo = best - ARM_WINDOW;
+      const hi = best + ARM_WINDOW;
+      for (let c = 0; c < nearCells.length; c++) {
+        const cell = nearCells[c];
+        if (cell.minIndex >= lo && cell.maxIndex <= hi) continue;
+        if (boxDistance2(cell, x, z) >= otherD2) continue;
+        const cellX = cell.x;
+        const cellZ = cell.z;
+        for (let k = 0; k < cellX.length; k++) {
+          const index = cell.index[k];
+          if (index >= lo && index <= hi) continue;
+          const ddx = x - cellX[k];
+          const ddz = z - cellZ[k];
+          const d2 = ddx * ddx + ddz * ddz;
+          if (d2 >= otherD2) continue;
+          otherD2 = d2;
+          other = index;
+        }
+      }
+    }
+    let otherLateral = 0;
+    if (other >= 0) {
+      const o = samples[other];
+      otherLateral = (x - o.x) * Math.cos(o.heading) - (z - o.z) * Math.sin(o.heading);
+    }
     // The NEARBY cone: the same min, over the road this point is actually
     // beside rather than over every corridor in reach. `rawHeight` uses it
     // as a floor, so that a road sixty metres off and twenty metres down
@@ -950,12 +1059,15 @@ export function createTerrain(track: Track): TerrainField {
       }
     }
     return {
-      d: apronDistance(best, x, z, lateral, d),
-      index: best,
-      lateral,
+      d: onApron ? apron.d : d,
+      index: onApron ? apron.index : best,
+      lateral: onApron ? apron.lateral : lateral,
       ceiling,
       own,
       ownClimb,
+      other,
+      otherD: Math.sqrt(otherD2),
+      otherLateral,
     };
   };
 
@@ -1006,6 +1118,7 @@ export function createTerrain(track: Track): TerrainField {
 
   const half = track.width / 2;
   const shelfEnd = half + ROAD_CROSS.reach; // the ribbon's own outer edge
+  const SHELF_END2 = shelfEnd * shelfEnd;
   /** How far past the nominal edge a lip has to stand to be a junction
    * mouth's FLARE (R17) rather than R33's gravel wander, m — a quarter of
    * the road: the wander is under a fifth, the flare a whole one. */
@@ -1057,9 +1170,15 @@ export function createTerrain(track: Track): TerrainField {
   const carParks: CarParkField = createCarParkField(track);
 
   /** How far past a branch's own corridor its shelf blends back into the
-   * landscape, m — inside the branch index's search reach, or the blend
-   * would end at a cell boundary instead of where it means to. */
-  const SPUR_BLEND = 30;
+   * landscape, m — the whole of the branch index's search reach less the
+   * widest corridor a branch has and a cell of slack, because a blend that
+   * has not finished where the index stops finding the branch ends at a
+   * cell boundary instead of where it means to. As long as it can be,
+   * because the shelf runs out to the country at the verge grade and the
+   * blend is what eases the toe: the shorter it is, the more of a fill's
+   * drop it takes in one smoothstep, and at thirty metres a twenty metre
+   * fill stood its sides steeper than a car could climb. */
+  const SPUR_BLEND = SPUR_INDEX_REACH - R.roadWidth.max / 2 - ROAD_CROSS.reach - GROUND_CELL / 2;
 
   // ── R31: the rideable verge ───────────────────────────────────────────
   // A rally car spends half a stage off the road, and the one thing it must
@@ -1073,6 +1192,7 @@ export function createTerrain(track: Track): TerrainField {
   const BENCH = Math.max(shelfEnd, R.verge.bench);
   const BENCH2 = BENCH * BENCH;
   const VERGE_CLIMB: number = R.verge.climb;
+  const CLIMBABLE: number = R.verge.climbable;
   /** R34 — how far out a CUT FACE may begin, m from the centerline. The
    * bench is one lattice cell diagonal, sized so every corner of a cell the
    * road crosses is pinned under it; the face has to start a whole cell
@@ -1090,40 +1210,105 @@ export function createTerrain(track: Track): TerrainField {
    * inside the bench. One function, four callers (the ceiling walk, the
    * two `own` walks and the floor that takes the rise back off), because
    * a cone measured one way and undone another is a lip along the road. */
-  const coneRise = (d: number, climb: number, reach: number = CORRIDOR_RANGE): number =>
+  const coneRise = (d: number, climb: number): number =>
     d <= BENCH
       ? 0
-      : (Math.min(d, CUT_FROM) - BENCH) * VERGE_CLIMB +
-        Math.max(0, d - CUT_FROM) * climb +
-        liftOff(d, reach);
-  /** R31 — where a cone LIFTS OFF: how far its ceiling climbs away over the
-   * last `verge.fade` metres of its reach. A cone is a min, and a min that
+      : (Math.min(d, CUT_FROM) - BENCH) * VERGE_CLIMB + Math.max(0, d - CUT_FROM) * climb;
+  /** R31 — where a cone LETS GO: how much of the ground it was cutting it
+   * has given back at distance `d`, 0 at the start of the last `verge.fade`
+   * metres of its reach and 1 at the reach. A cone is a min, and a min that
    * is simply not asked past its reach ends in a WALL — the country
    * standing however high it stands one query cell further out, ruled
    * dead straight along the lattice. Beside a mountain that was fifty
    * metres of vertical rock, two hundred metres from any road, on ground
-   * no rule had touched. So over the fade the cone's grade climbs from its
-   * own to the steepest face rock is ever held at (R34's `cut.face.max`),
-   * and a cut runs out into the country as a face that steepens into
-   * rock. What still stands over THAT at the reach keeps its wall — the
-   * analysis reports it — and the fade is sized so that is a mountain
-   * standing the best part of a hundred metres over the road at the edge
-   * of its reach, and nothing less. Zero inside the fade's start, so every
-   * caller that undoes the cone undoes this with it. */
-  const liftOff = (d: number, reach: number): number => {
-    const from = Math.max(BENCH, reach - R.verge.fade);
-    if (d <= from) return 0;
-    const over = Math.min(d, reach) - from;
-    return ((R.verge.cut.face.max - VERGE_CLIMB) * over * over) / (2 * (reach - from));
+   * no rule had touched. So over the fade the cone RISES TO MEET the
+   * ground it is cutting, by this much of the excess that ground stands
+   * over it: at the reach it stands exactly on the ground and there is no
+   * seam to find, however high the mountain. A shoulder a few metres over
+   * the cone is given back as a shoulder; a mountain is given back as a
+   * face — and `cutAt` reads that face's grade off `fadeGrade` and calls it
+   * rock where it is steeper than a car can climb (`verge.climbable`), so
+   * the one thing this never builds is a grass hillside the car stops
+   * against. A smoothstep, so the cone's own grade is C1 into the fade and
+   * the fade's steepest point is one and a half times its mean. */
+  const FADE = R.verge.fade;
+  const fadeFrom = (reach: number): number => Math.max(BENCH, reach - FADE);
+  const fadeWeight = (d: number, reach: number): number => {
+    const from = fadeFrom(reach);
+    return d <= from ? 0 : smooth(clamp01((d - from) / (reach - from)));
   };
+  /** The grade a cone letting go stands the ground at, m per m, for an
+   * excess of `over` metres at distance `d`: what is left of its own climb,
+   * plus the fade's STEEPEST point — its mean over the fade, times the
+   * smoothstep's peak — rather than the slope at this one point. The
+   * point's own slope is exact for the analytic field and wrong for the
+   * ground: a lattice cell spans a seventh of the fade, and a triangle
+   * whose middle reads a gentle start has a corner on the steep part. The
+   * peak is the face the whole band is, and the band is what gets called
+   * rock. */
+  const fadeGrade = (w: number, reach: number, climb: number, over: number): number =>
+    (1 - w) * climb + (1.5 * over) / (reach - fadeFrom(reach));
   /** How far out the cone is still worth asking about, m. By here it stands
    * tens of metres over the road and binds on nothing but a cliff — and
    * where it does not bind, dropping it costs the query nothing. */
   const CONE_REACH2 = CORRIDOR_RANGE * CORRIDOR_RANGE;
+  const FADE_FROM2 = fadeFrom(CORRIDOR_RANGE) ** 2;
   /** ...and how far a BRANCH's cone reaches, m: the distance its index is
-   * guaranteed to find it within, so the cone has lifted off before the
-   * branch can stop being found. */
+   * guaranteed to find it within, so the cone has let go before the branch
+   * can stop being found. */
   const SPUR_CONE_REACH = SPUR_INDEX_REACH;
+  /** The route's cones caught LETTING GO on the last walk: each one's
+   * height without the fade, how far it has let go (`fadeWeight`), and the
+   * sample's own grade. The fade rises toward the ground the roads have
+   * SHAPED at this point — a branch's shelf, a guard's mound — and that
+   * ground is not known until `shapeAt` has built it, after the walk; so
+   * the walk keeps the cones it cannot yet resolve and `fadeCeiling`
+   * finishes them. Scratch, rewritten per query, and kept as a PARETO
+   * FRONT: a cone standing no lower than another that has let go no
+   * further can never end up under it, whatever the ground turns out to
+   * be, so it is dropped on arrival. A road passing a hundred metres off
+   * puts a couple of hundred samples in the fade, and the walk meets the
+   * near ones first, so what survives is a handful — the lowest road at
+   * each distance. */
+  const fadeCone: number[] = [];
+  const fadeW: number[] = [];
+  const fadeClimb: number[] = [];
+  let fadeCount = 0;
+  const keepFade = (cone: number, w: number, climb: number): void => {
+    let n = 0;
+    for (let i = 0; i < fadeCount; i++) {
+      if (fadeCone[i] <= cone && fadeW[i] <= w) return;
+      if (fadeCone[i] >= cone && fadeW[i] >= w) continue;
+      fadeCone[n] = fadeCone[i];
+      fadeW[n] = fadeW[i];
+      fadeClimb[n] = fadeClimb[i];
+      n++;
+    }
+    fadeCone[n] = cone;
+    fadeW[n] = w;
+    fadeClimb[n] = climb;
+    fadeCount = n + 1;
+  };
+  /** R31 — the fade resolved: the lowest the route's cones stand once each
+   * has risen toward `ground` by its own fade. `ceiling` is the min over
+   * the cones NOT in the fade (already final). Writes the grade the winning
+   * fade stands the ground at into `shape.fadeGrade` — zero when a cone
+   * outside the fade wins, or when nothing stands over the fade. */
+  const fadeCeiling = (ceiling: number, ground: number): number => {
+    let grade = 0;
+    for (let i = 0; i < fadeCount; i++) {
+      const cone = fadeCone[i];
+      const over = ground - cone;
+      const w = fadeW[i];
+      const here = over > 0 ? cone + w * over : cone;
+      if (here < ceiling) {
+        ceiling = here;
+        grade = over > 0 ? fadeGrade(w, CORRIDOR_RANGE, fadeClimb[i], over) : 0;
+      }
+    }
+    shape.fadeGrade = grade;
+    return ceiling;
+  };
   /** How much further than the nearest road a corridor may be and still
    * count as the road this point is BESIDE, m — see `Near.own`. Comfortably
    * over the sample spacing, so a corner's whole neighbourhood is in; well
@@ -1184,29 +1369,45 @@ export function createTerrain(track: Track): TerrainField {
   let windFarmCount = 0;
   let solarFarmCount = 0;
   let powerLineCount = 0;
+  /** R31 — A RIM IS A SLOPE A CAR CAN CLIMB. A pad or a village's band is
+   * eased back onto the country over its `blend` at least, and over more
+   * wherever the country stands far enough over or under it that the
+   * blend would make a wall of the rim: a smoothstep's steepest point is
+   * one and a half times its mean, so the run a drop needs is that over
+   * `verge.climbable`. A yard on a flat keeps its eleven metres; a village
+   * graded into a hillside twenty metres below the ground behind its back
+   * gardens gets a bank fifty metres wide instead of a cliff — which is
+   * what the back of a hillside village is. `RIM_MAX` bounds it, and is
+   * the reach a pad is rejected by. */
+  const RIM_RUN = 1.5 / CLIMBABLE;
+  const RIM_MAX = 60;
+  const rimOf = (blend: number, drop: number): number =>
+    Math.min(RIM_MAX, Math.max(blend, Math.abs(drop) * RIM_RUN));
+
   /** How much of a pad's level applies at a point — 1 on the pad, fading
-   * to 0 over its `blend` past the rim — and the level itself. Where two
+   * to 0 over its rim past its radius — and the level itself. `ground` is
+   * what the rim eases onto, which is what sizes it. Where two
    * pads reach the same point (a street's lots overlap at their rims) the
    * nearest pad's level holds on the pad itself and gives way to the
    * others' only through its rim, so a row of lots on a grade is a row of
    * level pads with a shallow step in each gap, and never a face where two
    * discs meet — nor a lot that leans toward its neighbour. Null anywhere
    * no pad reaches. */
-  const padAt = (x: number, z: number): { y: number; weight: number } | null => {
+  const padAt = (x: number, z: number, ground: number): { y: number; weight: number } | null => {
     let weight = 0;
     let level = 0;
     let othersSum = 0;
     let othersWeight = 0;
     for (let i = 0; i < pads.length; i++) {
       const pad = pads[i];
-      const reach = pad.radius + pad.blend;
+      const reach = pad.radius + RIM_MAX;
       const dx = x - pad.x;
       const dz = z - pad.z;
       if (dx * dx + dz * dz >= reach * reach) continue;
       const d = Math.sqrt(dx * dx + dz * dz);
-      const w = 1 - smooth(clamp01((d - pad.radius) / pad.blend));
-      if (w <= 0) continue;
       const here = pad.y - pad.sink + pad.grade.x * dx + pad.grade.z * dz;
+      const w = 1 - smooth(clamp01((d - pad.radius) / rimOf(pad.blend, here - ground)));
+      if (w <= 0) continue;
       if (w > weight) {
         if (weight > 0) {
           othersSum += level * weight;
@@ -1318,23 +1519,27 @@ export function createTerrain(track: Track): TerrainField {
   };
 
   /** The level a town's band grades the ground to at a point and how much
-   * of it applies there — 1 inside the band, fading to 0 over its rim, and
+   * of it applies there — 1 inside the band, fading to 0 over its rim
+   * (sized against `ground`, what the rim eases onto — see `rimOf`), and
    * null where no band reaches. */
   const platformAt = (
     x: number,
     z: number,
+    ground: number,
   ): { y: number; weight: number; band: Platform } | null => {
     const hit = nearestBand(x, z);
     if (hit === null) return null;
     const { band, a, b, t, d, lat, out } = hit;
-    const weight = 1 - smooth(clamp01((d - out) / band.blend));
-    if (weight <= 0) return null;
+    if (d - out >= RIM_MAX) return null;
     // The two verges' levels, crossed over between them, so the band is one
     // continuous plane from one side of the street to the other.
     const toRight = smooth(clamp01((lat + band.lip) / (2 * band.lip)));
     const right = a.right + (b.right - a.right) * t;
     const left = a.left + (b.left - a.left) * t;
-    return { y: left + (right - left) * toRight, weight, band };
+    const y = left + (right - left) * toRight;
+    const weight = 1 - smooth(clamp01((d - out) / rimOf(band.blend, y - ground)));
+    if (weight <= 0) return null;
+    return { y, weight, band };
   };
 
   /** R23 + R31 — how much of a point inside a village's band the band is
@@ -1460,11 +1665,70 @@ export function createTerrain(track: Track): TerrainField {
    * takes the road's own edge down with it. */
   const holdOf = (d: number, edge: number): number => 1 - smooth(clamp01((d - edge) / GROUND_CELL));
 
-  /** What `shapeAt` answered last: the country as the roads shaped it, and
-   * the ceiling R31 holds it under. One record rewritten per query rather
-   * than one allocated, because this is under every height the field
-   * answers. */
-  const shape = { raised: 0, ceiling: 0 };
+  /** The corridor's cross-section BEYOND ITS LIP, for the sample at `index`
+   * seen from `d` metres off on the side `lateral` says: the embankment or
+   * the cutting the road imposes, bounded by the country and eased back
+   * onto it.
+   *
+   * `sideGrade` is a shape the road imposes — a cutting on the uphill
+   * side, an embankment on the downhill one, drawn from noise rather than
+   * measured off the land. Run out unbounded it is a hillside the road
+   * invents — at seventy metres a third of a grade is twenty metres of
+   * ground that is not there, and because it is keyed to whichever sample
+   * happens to be NEAREST, two arms of a stage passing each other hand
+   * adjacent lattice corners two different inventions: seed 19's junction
+   * had 38.6 m of it beside 11.1 m, a twenty-eight metre cliff between two
+   * corners fourteen metres apart, on ground whose real height was
+   * seventeen. That is a wall the car falls off.
+   *
+   * A real cutting's face climbs until it reaches the natural ground and
+   * then it is the natural ground; a real embankment's side falls until it
+   * lands on it. So the bench is bounded BY the country on whichever side
+   * it is working (R34): it can cut into it or stand out from it, but it
+   * cannot carry on past it and keep going. */
+  const shelfBeyond = (index: number, d: number, lateral: number, lip: number, far: number) => {
+    const s = samples[index];
+    let grade = sideGrade(s.s, lateral >= 0 ? 1 : -1);
+    // R34 — a cut is only a cut where there is country to cut INTO. On a
+    // side where the land stands BELOW the road there is nothing above it
+    // to climb, and a rising grade drawn there is bounded by the far field
+    // — fifty metres down on a high fill, the whole drop taken over the
+    // blend below: a face along the outside of every embankment the noise
+    // happened to draw as a cutting. Such a side is a fill's side whatever
+    // the dice said, and falls at the fill's own slope until it lands on
+    // the country.
+    if (grade >= 0 && far < s.elevation) grade = -VERGE_CLIMB;
+    const embankment = s.elevation + (d - lip) * grade;
+    const bounded = grade >= 0 ? Math.min(embankment, far) : Math.max(embankment, far);
+    const toFar = smooth(clamp01((d - lip) / 110));
+    return bounded * (1 - toFar) + far * toFar;
+  };
+
+  /** The FILL the sample at `index` stands out over the country by, seen
+   * from `d` metres off, eased back onto it the way `shelfBeyond` eases an
+   * embankment — and `far` where the road stands at or under the country.
+   * The one grade a fill has, whichever side it is read from: this is
+   * asked of the OTHER arm, whose nearest sample can jump from one leg of
+   * a bend to the other as the point moves, and a side read off that
+   * sample (`sideGrade`) jumps with it, from a cutting's rise to an
+   * embankment's fall — thirty metres of ground between two lattice
+   * corners. */
+  const fillBeyond = (index: number, d: number, lip: number, far: number): number => {
+    const s = samples[index];
+    if (far >= s.elevation) return far;
+    const embankment = Math.max(far, s.elevation - Math.max(0, d - lip) * VERGE_CLIMB);
+    const toFar = smooth(clamp01((d - lip) / 110));
+    return embankment * (1 - toFar) + far * toFar;
+  };
+
+  /** What `shapeAt` answered last: the country as the roads shaped it, the
+   * ceiling R31 holds it under, and what the cone was doing where it binds
+   * — the grade the road it is beside was cut at (R34), and the grade a
+   * cone letting go stands the ground at (`fadeGrade`, zero where none
+   * binds) — which is what `cutAt` reads rock off. One record rewritten
+   * per query rather than one allocated, because this is under every
+   * height the field answers. */
+  const shape = { raised: 0, ceiling: 0, cone: Infinity, ownClimb: 0, fadeGrade: 0 };
   /** The landscape before any stream is cut through it, in its two halves
    * — the ground as everything above the cone shaped it, and the cone —
    * into `shape`. The min of the two is the height; the analysis wants
@@ -1512,40 +1776,22 @@ export function createTerrain(track: Track): TerrainField {
         // a fifth of one, and is not a flare.
         if (lip > shelfEnd + FLARE_LIP) ownShelf = corridorY;
       } else {
-        let grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
-        // R34 — a cut is only a cut where there is country to cut INTO. On
-        // a side where the land stands BELOW the road there is nothing
-        // above it to climb, and a rising grade drawn there is bounded by
-        // the far field — fifty metres down on a high fill, the whole drop
-        // taken over the blend below: a face along the outside of every
-        // embankment the noise happened to draw as a cutting. Such a side
-        // is a fill's side whatever the dice said, and falls at the fill's
-        // own slope until it lands on the country.
-        if (grade >= 0 && far < s.elevation) grade = -VERGE_CLIMB;
-        const embankment = s.elevation + (near.d - lip) * grade;
-        // R34 — and the bench STOPS WHERE IT MEETS THE COUNTRY.
-        //
-        // `grade` is a shape the road imposes: a cutting on the uphill side,
-        // an embankment on the downhill one, drawn from noise rather than
-        // measured off the land. Run out unbounded it is a hillside the road
-        // invents — at seventy metres a third of a grade is twenty metres of
-        // ground that is not there, and because it is keyed to whichever
-        // sample happens to be NEAREST, two arms of a stage passing each
-        // other hand adjacent lattice corners two different inventions:
-        // seed 19's junction had 38.6 m of it beside 11.1 m, a twenty-eight
-        // metre cliff between two corners fourteen metres apart, on ground
-        // whose real height was seventeen. That is a wall the car falls off.
-        //
-        // A real cutting's face climbs until it reaches the natural ground
-        // and then it is the natural ground; a real embankment's side falls
-        // until it lands on it. So the bench is bounded BY the country on
-        // whichever side it is working: it can cut into it or stand out from
-        // it, but it cannot carry on past it and keep going.
-        const bounded = grade >= 0 ? Math.min(embankment, far) : Math.max(embankment, far);
-        const toFar = smooth(clamp01((near.d - lip) / 110));
-        const shaped = bounded * (1 - toFar) + far * toFar;
+        const shaped = shelfBeyond(near.index, near.d, near.lateral, lip, far);
         const off = smooth(clamp01((near.d - lip) / 26));
         base = corridorY * (1 - off) + shaped * off;
+      }
+      // THE OTHER ARM'S FILL. The ground between two arms of the stage at
+      // two heights is the nearer arm's out to the line where the other
+      // becomes nearer — and there the higher arm's embankment, still a
+      // dozen metres over the country, was simply dropped for the lower
+      // arm's own cross-section: a step along that line, beside every
+      // place the stage passes itself. So an embankment is carried until
+      // it has come down to the ground, whichever arm is nearer: only its
+      // FILL — what stands over the country — because a cut is the cone's
+      // business and the cone is already a min over every arm in reach.
+      if (near.other >= 0) {
+        const fill = fillBeyond(near.other, near.otherD, lipAt(near.other), far);
+        if (fill > base) base = fill;
       }
     }
     // A branch flattens its own shelf through whatever the landscape was
@@ -1569,10 +1815,19 @@ export function createTerrain(track: Track): TerrainField {
         // fall lands below the stage's verge as a step across the rank.
         // The stage's shoulder is the floor there.
         if (near && near.d < lipAt(near.index) + ROAD_CROSS.reach && shelf < base) shelf = base;
+        // R31, read the other way round: past its lip the shelf RUNS OUT to
+        // the country at the verge grade — an embankment's side falls no
+        // harder than a car could drive back up it, a cutting's climbs no
+        // harder than the cone lets it — and stops where it meets the
+        // ground. Blended straight from its level, a branch on a twenty
+        // metre fill was a wall down both sides of it. What is left for the
+        // blend to smooth is the toe.
+        const out = Math.max(0, spur.d - edge) * VERGE_CLIMB;
+        const bounded = base < shelf ? Math.max(base, shelf - out) : Math.min(base, shelf + out);
         const reach = 1 - smooth(clamp01((spur.d - edge) / SPUR_BLEND));
         const mine = smooth(clamp01((roadD - spur.d) / 12));
         const t = reach * mine;
-        base = shelf * t + base * (1 - t);
+        base = bounded * t + base * (1 - t);
       }
     }
     // R39 — and a whole VILLAGE is graded level with its street, from under
@@ -1580,7 +1835,7 @@ export function createTerrain(track: Track): TerrainField {
     // own pads because it is the ground they are painted on: the band
     // decides the level, and a pad graded to the same street only agrees
     // with it.
-    const platform = platforms.length > 0 ? platformAt(x, z) : null;
+    const platform = platforms.length > 0 ? platformAt(x, z, base) : null;
     /** The band's level here, weighted — a floor on the cone below, for the
      * reason a pad's is. */
     let platformFlat = -Infinity;
@@ -1592,7 +1847,7 @@ export function createTerrain(track: Track): TerrainField {
     }
     // R37 — a yard is graded flat, and the drive that runs onto it was
     // already eased onto its level, so the two agree where they overlap.
-    const pad = pads.length > 0 ? padAt(x, z) : null;
+    const pad = pads.length > 0 ? padAt(x, z, base) : null;
     /** The pad's own level here, weighted — a floor on the cone below. */
     let padFlat = -Infinity;
     let padWeight = 0;
@@ -1644,27 +1899,46 @@ export function createTerrain(track: Track): TerrainField {
      * back off — at the grade it was actually opened at (R34), not at the
      * verge's, or a cutting leaves the difference standing as a lip along
      * its own corridor. */
-    const floorOf = (
-      level: number,
-      d: number,
-      edge: number,
-      climb: number,
-      reach: number = CORRIDOR_RANGE,
-    ): number => level - coneRise(d, climb, reach) - Math.max(0, d - edge) * VERGE_CLIMB;
+    const floorOf = (level: number, d: number, edge: number, climb: number): number =>
+      level - coneRise(d, climb) - Math.max(0, d - edge) * VERGE_CLIMB;
     // It only ever RAISES the ceiling, so this takes no ground away and
     // fills nothing in: `raised` still bounds the result from above, and a
     // valley, a ford's dip and the ravine under a bridge are all exactly as
     // deep as the landscape made them.
+    //
+    // R31 — the ground every cone RISES TOWARD as it lets go is the ground
+    // the roads have shaped here, mounds and shelves included, so a cone at
+    // the end of its reach stands on whatever is there and clips nothing:
+    // let go toward the bare country instead and every branch's embankment
+    // crossing the route's reach gets a step cut across it along the
+    // circle where the route stops being found.
+    const raised = base + guards.riseAt(x, z);
+    shape.fadeGrade = 0;
+    if (near) ceiling = fadeCeiling(ceiling, raised);
     // A branch is never banked and the index carries no signed lateral, so
     // its cone is the plain one: its own underside, opening upward past the
     // bench. Nor is a branch ever CUT (R34): it is the road the stage did
     // not take, abandoned to the country, and nobody blasts a cutting for a
     // road nobody is going to drive. Every cone is in before any floor is
     // put on the result, or a floor a later cone undercuts was no floor.
-    const branch = spur
-      ? ceilingOf(spur.sample) + coneRise(spur.d, VERGE_CLIMB, SPUR_CONE_REACH)
-      : Infinity;
-    if (branch < ceiling) ceiling = branch;
+    /** The branch's cone as opened — what its own floor below is undone
+     * against — before it lets go toward the shaped ground the way the
+     * route's does, inside the reach its index finds it within. */
+    const branch = spur ? ceilingOf(spur.sample) + coneRise(spur.d, VERGE_CLIMB) : Infinity;
+    if (spur) {
+      const over = raised - branch;
+      let gone = branch;
+      let grade = 0;
+      if (over > 0) {
+        const w = fadeWeight(spur.d, SPUR_CONE_REACH);
+        gone += w * over;
+        grade = fadeGrade(w, SPUR_CONE_REACH, VERGE_CLIMB, over);
+      }
+      if (gone < ceiling) {
+        ceiling = gone;
+        shape.fadeGrade = grade;
+      }
+    }
     if (near) {
       const hold = holdOf(near.d, shelfEnd);
       const floor = Math.max(ownShelf, floorOf(near.own, near.d, shelfEnd, near.ownClimb));
@@ -1682,7 +1956,7 @@ export function createTerrain(track: Track): TerrainField {
       // verge line across every mouth on the map.
       const edge = spur.spur.width / 2 + ROAD_CROSS.reach;
       const hold = holdOf(spur.d, edge);
-      const floor = floorOf(branch, spur.d, edge, VERGE_CLIMB, SPUR_CONE_REACH);
+      const floor = floorOf(branch, spur.d, edge, VERGE_CLIMB);
       if (hold > 0 && floor > ceiling) ceiling += (floor - ceiling) * hold;
     }
     // R37 — nor may a cone cut a PAD. A yard is graded level with the drive
@@ -1698,8 +1972,10 @@ export function createTerrain(track: Track): TerrainField {
       ceiling += (platformFlat - ceiling) * platformWeight;
     }
     if (padWeight > 0 && padFlat > ceiling) ceiling += (padFlat - ceiling) * padWeight;
-    shape.raised = base + guards.riseAt(x, z);
+    shape.raised = raised;
     shape.ceiling = ceiling;
+    shape.cone = near ? near.ceiling : Infinity;
+    shape.ownClimb = near ? near.ownClimb : VERGE_CLIMB;
   };
   const rawHeight = (x: number, z: number): number => {
     shapeAt(x, z);
@@ -1737,7 +2013,7 @@ export function createTerrain(track: Track): TerrainField {
     // metre of hillside under a front wall, and the band is what the houses
     // are standing on.
     if (platforms.length > 0) {
-      const platform = platformAt(x, z);
+      const platform = platformAt(x, z, raw);
       if (platform) carved = raw + (carved - raw) * (1 - platform.weight);
       if (carved >= raw) return raw;
     }
@@ -1761,25 +2037,41 @@ export function createTerrain(track: Track): TerrainField {
    * THROUGH, 0 (open country, or a bank battered back to something a car
    * could climb) to 1 (blasted rock standing over the verge).
    *
-   * Two questions, multiplied. How hard was this piece of road cut — which
-   * is the cone's own grade, already decided per sample by `cutClimb` off
-   * the surface, the cover and the dial. And how much country is actually
-   * standing on the cut here: a cutting is only a cutting where the land
-   * WANTED to be above the road, and the same blasted tarmac running out
-   * across a flat has no face beside it at all.
+   * Two faces, and the larger of them is the answer. The CUTTING: how hard
+   * this piece of road was cut — the cone's own grade, already decided per
+   * sample by `cutClimb` off the surface, the cover and the dial — times
+   * how much country is actually standing on the cut here, because a
+   * cutting is only a cutting where the land WANTED to be above the road,
+   * and the same blasted tarmac running out across a flat has no face
+   * beside it at all. And the JOIN (R31): where a cone lets go of a
+   * mountain standing over it, the ground it stands up between the two is
+   * as steep as the excess makes it, and past `verge.climbable` that is
+   * rock too — the one face a road builds without blasting, and the reason
+   * the car never meets a grass hillside it cannot climb.
    *
    * Cheap where it has to be. Almost every point the props ask about is
-   * nowhere near a road, and that answer costs one index lookup — the bare
-   * landscape is only read once a road is close enough to have cut it. */
+   * nowhere near a road, and that answer costs an index lookup or two —
+   * the ground is only shaped once a road is close enough to have cut
+   * it. */
   const cutAt = (x: number, z: number): number => {
     const C = R.verge.cut;
-    const near = nearestSample(x, z);
-    if (!near || near.d > CORRIDOR_RANGE) return 0;
-    const blast = clamp01((near.ownClimb - VERGE_CLIMB) / Math.max(1e-6, C.face.max - VERGE_CLIMB));
-    if (blast <= 0) return 0;
-    const over = farField(x, z) - near.ceiling;
-    if (over <= C.bare.over) return 0;
-    return blast * smooth(clamp01((over - C.bare.over) / (C.bare.full - C.bare.over)));
+    const near = nearestRoad(x, z);
+    if (!near || near.d > CORRIDOR_RANGE) {
+      const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
+      if (!spur || spur.d > SPUR_CONE_REACH) return 0;
+    }
+    shapeAt(x, z);
+    const join = clamp01((shape.fadeGrade - CLIMBABLE) / (C.face.max - CLIMBABLE));
+    const blast = clamp01(
+      (shape.ownClimb - VERGE_CLIMB) / Math.max(1e-6, C.face.max - VERGE_CLIMB),
+    );
+    if (blast <= 0) return join;
+    const over = farField(x, z) - shape.cone;
+    if (over <= C.bare.over) return join;
+    return Math.max(
+      join,
+      blast * smooth(clamp01((over - C.bare.over) / (C.bare.full - C.bare.over))),
+    );
   };
 
   /** The DRAWN corridor surface at a point — the ribbon the road mesh
@@ -2185,7 +2477,7 @@ export function createTerrain(track: Track): TerrainField {
       // itself is road the field already has — the route, or a branch.
       for (; townCount < track.towns.length; townCount++) {
         const town = track.towns[townCount];
-        const reach = Math.max(town.platform.right, town.platform.left) + town.platform.blend;
+        const reach = Math.max(town.platform.right, town.platform.left) + RIM_MAX;
         let minX = Infinity;
         let maxX = -Infinity;
         let minZ = Infinity;

@@ -111,7 +111,9 @@ export function createGuardField(track: Track): GuardField {
       if (d >= guard.radius) continue;
       // A raised cosine: flat-topped at the crown, tangent to the ground
       // at the rim. A cone would put a crease where the car hits it and a
-      // spike where it does not.
+      // spike where it does not. Its steepest point, halfway down, is
+      // `height · π / (2 · radius)` — which is what `guard.rise` is sized
+      // against, so the mound stays a hill the car can climb (R31).
       rise = Math.max(rise, guard.height * 0.5 * (1 + Math.cos((Math.PI * d) / guard.radius)));
     }
     return rise;
