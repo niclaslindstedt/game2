@@ -1613,7 +1613,7 @@ ANSWERS to the same stage rather than three points on one scale:
   loose stage into a series of drifts. It spins its wheels off the line on
   anything slippery and has nothing to lean on when the road is sealed.
   Owns dry gravel; worst of the three on tarmac.
-- **Kestrel RS (AWD)** — a flared two-door with a turbocharged four and
+- **Kestrel RS (AWD)** — a four-door turbo sedan of the Group A years, with
   drive to all of it. Heaviest, most powerful, tallest-geared, and the only
   one that puts its torque down whatever it is standing on. Lazy to turn in
   and never as playful as the other two — and quicker than both wherever the

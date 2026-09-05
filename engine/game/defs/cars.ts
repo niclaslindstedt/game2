@@ -161,8 +161,8 @@ export const CARS: CarSpec[] = [
     accent: 0xffffff,
   },
   {
-    // THE HOMOLOGATION SPECIAL — a flared two-door with a turbocharged four
-    // and drive to all of it. Heaviest, most powerful, tallest-geared and
+    // THE WORKS SEDAN — a four-door Group A turbo car with drive to all of
+    // it. Heaviest, most powerful, tallest-geared and
     // the only car that puts its torque down whatever it is standing on, so
     // the long open stage, the climb and the wet one are all its. What it
     // pays is agility: the mass and the composure that keep it calm at

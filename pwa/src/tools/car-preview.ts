@@ -40,6 +40,11 @@ type View = {
   game?: { carYaw: number };
   /** Turntable: azimuth from the nose, elevation, distance in car lengths. */
   orbit?: { az: number; el: number; dist: number };
+  /** A true ELEVATION: an orthographic camera level with the car at this
+   * azimuth, with `span` metres across the cell — so a pixel is a known
+   * fraction of a metre and the picture can be laid over a reference
+   * photograph and measured against it, which a perspective cell cannot. */
+  elevation?: { az: number; span: number };
   /** Aimed at a SEAT rather than at the car, with the distance in metres:
    * the crew sheet is a portrait of two people 400 mm apart, and a frame
    * measured in car lengths cannot get near enough to judge one. */
@@ -52,6 +57,16 @@ type View = {
    * accumulates, so a dirty view has to come after every clean one. */
   dirt?: DirtCoat;
 };
+
+/** Never on the default sheet; asked for by name (`--views "elevation
+ * side"`) when a body is being measured rather than judged. The cell is
+ * 4.6 m across and centred 0.7 m up, whatever its size, so the scale is
+ * cell width / 4.6 pixels a metre and the ground is a known line. */
+const ELEVATION_VIEWS: View[] = [
+  { name: "elevation side", fov: 0, elevation: { az: Math.PI / 2, span: 4.6 } },
+  { name: "elevation front", fov: 0, elevation: { az: 0, span: 4.6 } },
+  { name: "elevation rear", fov: 0, elevation: { az: Math.PI, span: 4.6 } },
+];
 
 const VIEWS: View[] = [
   { name: "game", fov: 64, game: { carYaw: 0 } },
@@ -181,7 +196,7 @@ async function main(): Promise<void> {
   // back scaled to fit whatever is reading them, and a cell judged at a
   // third of its size is a cell nobody judged. Naming the columns a change
   // is about is what keeps them full size.
-  const views = only?.length ? only.map((n) => byName(all, n)) : all;
+  const views = only?.length ? only.map((n) => byName([...all, ...ELEVATION_VIEWS], n)) : all;
 
   const canvas = document.getElementById("stage") as HTMLCanvasElement;
   const width = CELL_W * views.length;
@@ -201,6 +216,7 @@ async function main(): Promise<void> {
   };
 
   const camera = new THREE.PerspectiveCamera(60, CELL_W / CELL_H, 0.1, 300);
+  const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
 
   cars.forEach((variant, row) => {
     const scene = new THREE.Scene();
@@ -261,6 +277,7 @@ async function main(): Promise<void> {
       }
       camera.fov = view.fov;
       camera.updateProjectionMatrix();
+      let eye: THREE.Camera = camera;
       if (glassMesh) (glassMesh as THREE.Object3D).visible = !view.bare;
       if (view.cabin) {
         car.group.rotation.y = 0;
@@ -287,11 +304,24 @@ async function main(): Promise<void> {
           target.z + Math.cos(az) * Math.cos(el) * d,
         );
         camera.lookAt(target);
+      } else if (view.elevation) {
+        car.group.rotation.y = 0;
+        const { az, span } = view.elevation;
+        const half = span / 2;
+        const centreY = 0.7;
+        ortho.left = -half;
+        ortho.right = half;
+        ortho.top = half * (CELL_H / CELL_W);
+        ortho.bottom = -half * (CELL_H / CELL_W);
+        ortho.updateProjectionMatrix();
+        ortho.position.set(Math.sin(az) * 20, centreY, Math.cos(az) * 20);
+        ortho.lookAt(0, centreY, 0);
+        eye = ortho;
       }
       const y = height - (row + 1) * CELL_H;
       renderer.setViewport(col * CELL_W, y, CELL_W, CELL_H);
       renderer.setScissor(col * CELL_W, y, CELL_W, CELL_H);
-      renderer.render(scene, camera);
+      renderer.render(scene, eye);
       if (row === 0) addLabel(view.name, col, 0);
     });
     addLabel(variant.id, 0, row, 20);
