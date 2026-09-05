@@ -173,7 +173,12 @@ describe("the bot backing out of a wedge", () => {
     state.car.heading = -Math.PI / 2;
     let pushedAfterBackingOut = false;
     let backedOut = false;
-    for (let i = 0; i < TUNING.physicsHz * 4; i++) {
+    // Six seconds, not four, and the two extra are `surfaces.natureDig`:
+    // out here the standing start is the wheels digging in, so the whole
+    // back-out-and-go-again cycle takes about 4.2 s where a car with the
+    // full pull under it took 3.4. What is under test is that the bot
+    // takes another run at all, not how briskly the wild lets it.
+    for (let i = 0; i < TUNING.physicsHz * 6; i++) {
       step(state, botInput(state));
       if (state.car.u < -3) backedOut = true;
       if (backedOut && state.car.u > 3) pushedAfterBackingOut = true;
