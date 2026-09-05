@@ -19,7 +19,7 @@
 
 import * as THREE from "three";
 
-import { patchAt, patchNormal } from "./builder.ts";
+import { patchAt, patchNormal, rectU } from "./builder.ts";
 import type { ScreenPane } from "./greenhouse.ts";
 import type { V3 } from "./builder.ts";
 
@@ -56,8 +56,8 @@ export function paneFrame(pane: ScreenPane): PaneFrame {
   const height = up.length() || 1;
   up.divideScalar(height);
 
-  const left = vec(patchAt(patch, rect.u0, vBottom));
-  const right = vec(patchAt(patch, rect.u1, vBottom)).sub(left);
+  const left = vec(patchAt(patch, rectU(rect, 0, vBottom), vBottom));
+  const right = vec(patchAt(patch, rectU(rect, 1, vBottom), vBottom)).sub(left);
   const width = right.length() || 1;
   right.divideScalar(width);
   // Orthogonalise against `up`, then point the frame the same way the panel
