@@ -115,6 +115,15 @@ describe("the rule book is self-consistent", () => {
       expect(R.verge.fade).toBeGreaterThan(GROUND_CELL * 2);
     });
 
+    it("rounds a fill's crest over more than a lattice cell (R31)", () => {
+      // A kink at the lip is a shape the 14 m lattice cannot draw: a tile
+      // triangle chords under it by up to half a cell's fall. Rounded over
+      // less than two cells the crest is the kink again, one corner over;
+      // and the run stays inside the reach a fill has to land by.
+      expect(R.verge.crest).toBeGreaterThanOrEqual(GROUND_CELL * 2);
+      expect(R.verge.crest).toBeLessThan(R.verge.fade);
+    });
+
     it("stands a corner guard's mound no steeper than the car can climb (R14)", () => {
       // A raised cosine's steepest point is rise · π / 2; a mound is a hill
       // that costs the corner-cutter time, never a wall that stops the car.
