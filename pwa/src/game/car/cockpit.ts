@@ -159,10 +159,13 @@ const RIG = {
     side: SEAT_SIDE,
   },
   dash: {
-    /** Top of the fascia, under the sill, m. A real dash top sits BELOW the
-     * base of the windscreen, and now that there is room for one it can:
-     * what that buys is the sliver of the car's own bonnet under the wipers,
-     * which is most of what says this is a view from inside something. */
+    /** Top of the fascia at its rear edge, under the sill, m. Its FRONT
+     * edge is not a knob: it runs up to the base of the windscreen's glass,
+     * the way a real dash top does, and it has to — the panel between the
+     * cowl and the glass is the screen's sill strip, whose inner lining
+     * lies under the dash, so a fascia stopping at the cowl leaves the
+     * driver looking over its edge at the bonnet through a band nothing
+     * covers. */
     top: -0.03,
     /** How far back from the cowl the fascia's rear edge stands, m. */
     back: 0.34,
@@ -355,13 +358,23 @@ function buildFascia(b: MeshBuilder, room: Room): void {
   const backZ = cabin.cowlZ - RIG.dash.back;
   const topY = cabin.sillY + RIG.dash.top;
   const wide = half * 0.99;
-  // Down to the base of the screen: the front edge lands ON the cowl, so
-  // there is no gap between the dash and the glass for the landscape to
-  // show through.
-  const frontY = cabin.cowlY + 0.006;
+  // Up to the BASE OF THE GLASS and a hair up the inside of it, so there
+  // is no band between the dash and the film for the bonnet to show through
+  // (see `RIG.dash.top`). The screen's base is the pane's own bottom edge,
+  // which stands above and behind the cowl by the sill strip and the seal —
+  // and the edge has to land ABOVE that base, not under it: the eye is well
+  // over the dash, so a ray grazing an edge a few millimetres below the
+  // glass passes under the pane and out through the sill strip, which is a
+  // bright line of bonnet along the whole width. Overlapping the bottom
+  // few millimetres of the glass from inside costs nothing anyone can see.
+  const front = screenPanes(cabin.spec).front;
+  const [baseU, baseV] = rectAt(front.rect, 0.5, 0);
+  const base = patchAt(front.patch, baseU, baseV);
+  const frontY = base[1] + 0.006;
+  const frontZ = base[2] - 0.004;
   b.quad(
-    [-wide, frontY, cabin.cowlZ],
-    [wide, frontY, cabin.cowlZ],
+    [-wide, frontY, frontZ],
+    [wide, frontY, frontZ],
     [wide, topY, backZ],
     [-wide, topY, backZ],
     HUE.fascia,

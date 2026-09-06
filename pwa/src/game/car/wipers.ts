@@ -259,6 +259,16 @@ const ARM_COLOR = 0x2b2f36;
  * swept. Without it a fast stroke at a low frame rate leaves gaps. */
 const WIPE_EDGE = 0.05;
 
+/** THE RIDGE ALONG THE SILL, as a fraction of the pane's height: the band at
+ * the bottom of a screen no stroke ever clears. The arm parks lying flat on
+ * the sill and starts its sweep from there, so by the arc alone the strip
+ * along the bottom edge is inside the fan and comes out as clean as the
+ * middle — and from the driver's seat that is a bright band of bonnet
+ * between the caked glass and the dash, which is not what a wiped screen
+ * looks like. A real blade pushes what it lifts into a ridge along the edge
+ * it starts from, and that ridge is the dirtiest line on the glass. */
+const RIDGE = 0.07;
+
 /** WHAT THE BLADE ON ONE SCREEN IS DOING, in that screen's own frame
  * (car/pane-frame.ts) — handed out live rather than copied, so a reader gets
  * this frame's stroke without the wipers having to know who is reading.
@@ -368,6 +378,9 @@ type Film = {
   /** The vertices some blade can actually reach — what "how dirty is this
    * screen" is asked of. See the module note. */
   swept: Int32Array;
+  /** The vertices in the ridge along the sill (`RIDGE`), which no stroke
+   * touches — one per vertex, nonzero inside the band. */
+  ridge: Uint8Array;
   /** How much of what is on this screen came off the ROAD rather than out
    * of the sky, 0..1 — the mix between the water film and the grime. */
   mud: number;
@@ -559,11 +572,13 @@ export function buildWipers(
 
     const shade = shadeFactor([frame.normal.x, frame.normal.y, frame.normal.z]);
     const bias = new Float32Array(count);
+    const ridge = new Uint8Array(count);
     for (let k = 0; k < count; k++) {
       // Streaky, and heavier down the screen: what runs down the glass
       // gathers at the bottom of it.
       const down = 1 - local[k * 2 + 1] / frame.height;
       bias[k] = (0.5 + 0.9 * hash(offset + k)) * (0.7 + 0.6 * down);
+      if (arm && local[k * 2 + 1] < RIDGE * frame.height) ridge[k] = 1;
     }
 
     // WHICH VERTICES A BLADE CAN GET TO — the same reach and arc test the
@@ -579,6 +594,7 @@ export function buildWipers(
     const swungLo = arm ? Math.min(arm.park, arm.park + arm.sweep) - WIPE_EDGE : 0;
     const swungHi = arm ? Math.max(arm.park, arm.park + arm.sweep) + WIPE_EDGE : 0;
     for (let k = 0; k < count; k++) {
+      if (ridge[k]) continue;
       for (const p of pivots) {
         const inner = p.reach * BLADE.from;
         const r = p.radius[k] as number;
@@ -599,6 +615,7 @@ export function buildWipers(
       bias,
       soil: screen.soil,
       swept: Int32Array.from(reachable),
+      ridge,
       mud: 0,
       soak: 0,
       tone: new THREE.Color(),
@@ -716,6 +733,7 @@ export function buildWipers(
     for (const pivot of f.pivots) {
       const inner = pivot.reach * BLADE.from;
       for (let k = 0; k < f.count; k++) {
+        if (f.ridge[k]) continue;
         const r = pivot.radius[k];
         if (r < inner || r > pivot.reach) continue;
         const a = pivot.angle[k];

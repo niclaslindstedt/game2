@@ -196,7 +196,7 @@ function frameOf(outer: Rect, inner: Rect): Rect[] {
 
 /** The opening the GLASS fills, once the seal band has taken its share of
  * the pillar-to-pillar opening. */
-function glassRect(rect: Rect, seal: number, span: { u: number; v: number }): Rect {
+export function glassRect(rect: Rect, seal: number, span: { u: number; v: number }): Rect {
   return {
     ...rect,
     u0: rect.u0 + seal / span.u,
