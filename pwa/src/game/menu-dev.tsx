@@ -4,13 +4,14 @@
 // rather than playing it, which is the point — it is how the whole thing
 // gets tested without driving four stages first.
 //
-// Two pages. The first is the switchboard: open every stage, and the three
-// tools that make something somebody saw into something somebody else can
-// stand in front of — god mode and the debug overlay for a PLACE, and race
-// data collection for a DRIVE (game/run-tape.ts), which is the same idea
-// aimed at time instead of space. The second is the debug log, which is the
-// other half of a screenshot: the picture says where, the log says what led
-// there.
+// Three pages. The first is the switchboard: the way to the locks, and the
+// three tools that make something somebody saw into something somebody else
+// can stand in front of — god mode and the debug overlay for a PLACE, and
+// race data collection for a DRIVE (game/run-tape.ts), which is the same
+// idea aimed at time instead of space. The second is the debug log, which is
+// the other half of a screenshot: the picture says where, the log says what
+// led there. The third is UNLOCKS, which is the campaign's own ladder as a
+// row of switches — country by country, both ways.
 //
 // MAP VIEWER opens the stage READER (menu-map-viewer.tsx) on the stage list
 // every page that offers the shipped roads shares (menu-levels.tsx). It is
@@ -26,7 +27,15 @@ import { useState } from "react";
 
 import { BENCHMARK, type BenchmarkStatus } from "./benchmark.ts";
 import { INDEX_REAL, benchPlot, type BenchPlot } from "./benchmark-index.ts";
-import { LOCATIONS, findLevel, levelCleared, type CampaignProgress } from "./campaign.ts";
+import {
+  LOCATIONS,
+  findLevel,
+  levelCleared,
+  levelCompleted,
+  locationUnlocked,
+  type CampaignLocation,
+  type CampaignProgress,
+} from "./campaign.ts";
 import { clearDebugLog, debugLogCounts, debugLogTail, debugLogText } from "./debug-log.ts";
 import { playUi } from "./audio/ui.ts";
 import { ToggleRow } from "./menu.tsx";
@@ -285,11 +294,145 @@ export function BenchmarkCard({
   );
 }
 
+/** One country's row on the UNLOCKS page: what it reads, and whether either
+ * press has anything left to do. Worked out here rather than in the markup
+ * because it is a fact about the BOARD — see `unlockRows`. */
+type UnlockRow = {
+  location: CampaignLocation;
+  /** Stages of it the player is on points for. */
+  cleared: number;
+  /** Whether the campaign will let the player into the country at all. */
+  open: boolean;
+  /** Nothing for UNLOCK to do: this country and every one behind it is won. */
+  won: boolean;
+  /** Nothing for LOCK to do: this country and every one in front of it has
+   * never been driven. */
+  shut: boolean;
+};
+
+/** THE LADDER AS A ROW OF SWITCHES. Both presses work on a PREFIX of the
+ * countries (see `unlockLocation` / `lockLocation`), so both disabled states
+ * are read over a RUN of them rather than over the country on the row: the
+ * unlock is spent once everything up to here is won, and the lock once
+ * everything from here on is untouched. */
+function unlockRows(progress: CampaignProgress): UnlockRow[] {
+  const cleared = LOCATIONS.map((l) => l.levels.filter((v) => levelCleared(progress, v.id)).length);
+  const won = LOCATIONS.map((l, i) => cleared[i] === l.levels.length);
+  const driven = LOCATIONS.map((l) =>
+    l.levels.some((v) => levelCompleted(v, progress) || levelCleared(progress, v.id)),
+  );
+  return LOCATIONS.map((location, i) => ({
+    location,
+    cleared: cleared[i],
+    open: locationUnlocked(location, progress),
+    won: won.slice(0, i + 1).every(Boolean),
+    shut: !driven.slice(i).some(Boolean),
+  }));
+}
+
+type UnlockProps = {
+  progress: CampaignProgress;
+  /** Open the campaign up to this country, or the whole ladder for null. */
+  onUnlock: (locationId: string | null) => void;
+  /** Shut this country and everything in front of it; null shuts the lot. */
+  onLock: (locationId: string | null) => void;
+  onBack: () => void;
+};
+
+/** UNLOCKS — the campaign's progress as something to set rather than earn.
+ * Every country both ways, plus the two presses that take the whole ladder
+ * at once, so a state that would cost four evenings of driving to reach is
+ * one press away and a state that would cost clearing the browser's storage
+ * is another. */
+export function UnlockPage({ progress, onUnlock, onLock, onBack }: UnlockProps) {
+  const rows = unlockRows(progress);
+  const total = LOCATIONS.reduce((n, l) => n + l.levels.length, 0);
+  const cleared = rows.reduce((n, row) => n + row.cleared, 0);
+  const allOpen = cleared >= total;
+  /** Nothing anywhere on the board: the first country's own LOCK is spent,
+   * and that one reads over every country there is. */
+  const untouched = rows[0]?.shut ?? true;
+  return (
+    <div className="menu-card menu-card-wide">
+      <button type="button" className="menu-back" data-nav-back onClick={onBack}>
+        ‹ DEVELOPER
+      </button>
+      <div className="menu-title menu-title-dev">UNLOCKS</div>
+      <div className="menu-sub">
+        {cleared} of {total} stages cleared · best times are kept either way
+      </div>
+      <button
+        type="button"
+        className="menu-item menu-item-dev"
+        onClick={() => onUnlock(null)}
+        disabled={allOpen}
+      >
+        UNLOCK EVERYTHING
+        <span className="menu-item-sub">
+          {allOpen
+            ? "Every stage is already open, in campaign and time trial"
+            : "Win every stage of every country — campaign and time trial both"}
+        </span>
+      </button>
+      <button
+        type="button"
+        className="menu-item menu-item-dev"
+        onClick={() => onLock(null)}
+        disabled={untouched}
+      >
+        LOCK EVERYTHING
+        <span className="menu-item-sub">
+          {untouched
+            ? "Nothing has been driven — the campaign is already back at its first stage"
+            : "Back to a save that has never driven a stage"}
+        </span>
+      </button>
+      {/* The rule is on the page rather than only in a tooltip: a phone has
+          no hover, and a press whose reach is a surprise is a press nobody
+          trusts twice. */}
+      <div className="menu-sub">
+        A country at a time. UNLOCK wins it and every country before it; LOCK undrives it and every
+        country after — a campaign is a ladder, and it has no rung hanging in mid-air.
+      </div>
+      <div className="dev-locks">
+        {rows.map((row) => (
+          <div className="dev-lock" key={row.location.id}>
+            <span className="dev-lock-text">
+              <b>{row.location.name.toUpperCase()}</b>
+              <span className="menu-item-sub">
+                {row.cleared} of {row.location.levels.length} cleared · {row.open ? "open" : "shut"}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="menu-item menu-item-dev dev-lock-act"
+              onClick={() => onUnlock(row.location.id)}
+              disabled={row.won}
+              title={`Win every stage of ${row.location.name} and every country before it`}
+            >
+              UNLOCK
+            </button>
+            <button
+              type="button"
+              className="menu-item menu-item-dev dev-lock-act"
+              onClick={() => onLock(row.location.id)}
+              disabled={row.shut}
+              title={`Put ${row.location.name} and every country after it back to never driven`}
+            >
+              LOCK
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type DeveloperProps = {
   progress: CampaignProgress;
   dev: DevSettings;
   onDev: (dev: DevSettings) => void;
-  onUnlockEverything: () => void;
+  onUnlocks: () => void;
   onBack: () => void;
   onDebugLog: () => void;
   onMapViewer: () => void;
@@ -300,7 +443,7 @@ export function DeveloperPage({
   progress,
   dev,
   onDev,
-  onUnlockEverything,
+  onUnlocks,
   onBack,
   onDebugLog,
   onMapViewer,
@@ -311,7 +454,6 @@ export function DeveloperPage({
     (n, l) => n + l.levels.filter((v) => levelCleared(progress, v.id)).length,
     0,
   );
-  const allOpen = cleared >= total;
   return (
     <div className="menu-card menu-card-wide">
       <button type="button" className="menu-back" data-nav-back onClick={onBack}>
@@ -321,17 +463,11 @@ export function DeveloperPage({
       <div className="menu-sub">
         {cleared} of {total} stages cleared
       </div>
-      <button
-        type="button"
-        className="menu-item menu-item-dev"
-        onClick={onUnlockEverything}
-        disabled={allOpen}
-      >
-        UNLOCK EVERYTHING
+      <button type="button" className="menu-item menu-item-dev" onClick={onUnlocks}>
+        UNLOCKS
         <span className="menu-item-sub">
-          {allOpen
-            ? "Every stage is already open, in campaign and time trial"
-            : "Open every stage in campaign and time trial. Best times are kept."}
+          Set the campaign where you want it — every country open or shut on its own, or the whole
+          ladder at once. Best times are kept.
         </span>
       </button>
       <div className="opt-toggles">

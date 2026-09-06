@@ -689,21 +689,63 @@ export function levelCleared(progress: CampaignProgress, id: string): boolean {
   return (progress.points[id]?.[PLAYER_ID] ?? 0) > 0;
 }
 
-/** Mark every stage in every location won, which is what opens all of them in
- * the campaign, opens every country behind them, and opens the lot in time
- * trial. Best times and best places are left alone: an unlock is not a result,
- * and wiping the board would cost a real one. */
-export function unlockEverything(): CampaignProgress {
-  const progress = loadProgress();
-  const all = LOCATIONS.flatMap((l) => l.levels.map((v) => v.id));
+/** THE DEVELOPER'S LOCKS, and the rule both halves are built on: THE LADDER
+ * IS A PREFIX. A country opens once the one before it has been won
+ * (`locationUnlocked`), so opening one country means opening the run up TO
+ * it and shutting one means shutting everything IN FRONT of it — a board
+ * with a hole in the middle is a country the game itself still refuses to
+ * open. Best times and best places are left alone by both: a lock is no
+ * more a result than an unlock is, and wiping the board would cost a real
+ * one. */
+function openLevels(
+  progress: CampaignProgress,
+  locations: readonly CampaignLocation[],
+): CampaignProgress {
+  const all = locations.flatMap((l) => l.levels.map((v) => v.id));
   const points = { ...progress.points };
   for (const id of all) points[id] = { ...(points[id] ?? {}), [PLAYER_ID]: POINTS[0] };
-  return save({
-    finished: [...new Set([...progress.finished, ...all])],
-    points,
-    best: progress.best,
-    places: progress.places,
-  });
+  return save({ ...progress, finished: [...new Set([...progress.finished, ...all])], points });
+}
+
+/** Every stage of these locations back to never having been driven. The
+ * points go, and so does the FINISH LINE — a stage merely un-scored stays
+ * open in the time trial (`timeTrialOpen`), and a country meant to read as
+ * unreached cannot have six roads open in another mode. */
+function shutLevels(
+  progress: CampaignProgress,
+  locations: readonly CampaignLocation[],
+): CampaignProgress {
+  const gone = new Set(locations.flatMap((l) => l.levels.map((v) => v.id)));
+  const points = { ...progress.points };
+  for (const id of gone) delete points[id];
+  return save({ ...progress, finished: progress.finished.filter((id) => !gone.has(id)), points });
+}
+
+/** Mark every stage in every location won, which is what opens all of them in
+ * the campaign, opens every country behind them, and opens the lot in time
+ * trial. */
+export function unlockEverything(): CampaignProgress {
+  return openLevels(loadProgress(), LOCATIONS);
+}
+
+/** Open the campaign AS FAR AS one country — its stages and every stage
+ * behind it, which is the only shape the ladder has (see `openLevels`). */
+export function unlockLocation(locationId: string): CampaignProgress {
+  const index = LOCATIONS.findIndex((l) => l.id === locationId);
+  return openLevels(loadProgress(), index < 0 ? LOCATIONS : LOCATIONS.slice(0, index + 1));
+}
+
+/** Shut one country and everything in FRONT of it: the campaign reads as
+ * having stopped at the country before this one. */
+export function lockLocation(locationId: string): CampaignProgress {
+  const index = LOCATIONS.findIndex((l) => l.id === locationId);
+  return shutLevels(loadProgress(), index < 0 ? LOCATIONS : LOCATIONS.slice(index));
+}
+
+/** Back to a save that has never driven a stage — every country shut, every
+ * best time kept. */
+export function lockEverything(): CampaignProgress {
+  return shutLevels(loadProgress(), LOCATIONS);
 }
 
 /** Tear a location's board up and drive it again. Every stage of it stays

@@ -6848,6 +6848,45 @@ a.menu-version:focus-visible {
   color: var(--hud-good);
 }
 
+/* THE LOCKS, one country per row: what the country's board says on the left,
+   and the two presses that set it on the right. The buttons keep `.menu-item`
+   so they are the same target size as every other row on the page — the row
+   only takes the width back off the label, which is the one part that can
+   afford to wrap. */
+.dev-locks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.dev-lock {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.dev-lock-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.12rem;
+  font-size: clamp(1.1rem, 4.2vmin, 1.6rem);
+  letter-spacing: 0.1em;
+}
+
+/* Wide enough for the longer of the two words at every size, so UNLOCK and
+   LOCK line up down the column instead of each row sizing to its own text. */
+.dev-lock-act {
+  flex: 0 0 auto;
+  width: clamp(5.4rem, 22vmin, 7.5rem);
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.8rem, 3vmin, 1.05rem);
+  padding: 0.5rem 0.4rem;
+}
+
 /* The debug log's tail, in the developer menu. Selectable for the same
    reason the repro line is: a clipboard the browser refuses must not be the
    only way out. */

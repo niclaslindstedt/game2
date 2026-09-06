@@ -179,6 +179,8 @@ import {
   ladderAfter,
   levelLaps,
   loadProgress,
+  lockEverything,
+  lockLocation,
   locationStandings,
   locationWon,
   pointsFor,
@@ -187,6 +189,7 @@ import {
   resetPoints,
   stagePoints,
   unlockEverything,
+  unlockLocation,
   type CampaignLevel,
   type CampaignProgress,
   campaignKnobs,
@@ -3769,7 +3772,12 @@ export function App() {
           settings={options}
           onSettings={applyOptions}
           onDeveloper={revealDeveloper}
-          onUnlockEverything={() => setProgress(unlockEverything())}
+          onUnlock={(locationId) =>
+            setProgress(locationId === null ? unlockEverything() : unlockLocation(locationId))
+          }
+          onLock={(locationId) =>
+            setProgress(locationId === null ? lockEverything() : lockLocation(locationId))
+          }
           onResetPoints={(locationId) => setProgress(resetPoints(locationId))}
           onMapRect={setMapRect}
           mapView={mapView}
