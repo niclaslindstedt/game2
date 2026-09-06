@@ -395,7 +395,7 @@ export function createClouds(): Clouds {
       }
     } else {
       litTone.set(p.cloud);
-      shadedTone.set(p.cloud).multiplyScalar(0.8);
+      shadedTone.set(p.cloudShade);
       for (const cloud of cloudList) cloud.y = cloud.sky;
     }
     cloudMat.color.copy(litTone);

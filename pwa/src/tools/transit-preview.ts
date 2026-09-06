@@ -49,7 +49,7 @@ const FIELD = { difficulty: "medium", cars: 8, massStart: true, contact: true } 
 const STAGE = {
   seed: SEED,
   laps: 1,
-  timeOfDay: "day",
+  hour: 12,
   weather: "clear",
   season: "summer",
 } as const;

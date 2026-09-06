@@ -48,7 +48,7 @@ const STAGE: GhostStage = {
     width: 0.5,
     challenge: 0.5,
   },
-  timeOfDay: "day",
+  hour: 12,
   weather: "clear",
 };
 
@@ -217,7 +217,7 @@ describe("ghost tape", () => {
     expect(ghostMatches(run, { ...STAGE, seed: STAGE.seed + 1 })).toBe(false);
     expect(ghostMatches(run, { ...STAGE, length: "long" })).toBe(false);
     expect(ghostMatches(run, { ...STAGE, weather: "storm" })).toBe(false);
-    expect(ghostMatches(run, { ...STAGE, timeOfDay: "night" })).toBe(false);
+    expect(ghostMatches(run, { ...STAGE, hour: 0 })).toBe(false);
     expect(ghostMatches(run, { ...STAGE, knobs: { ...STAGE.knobs, water: 0.9 } })).toBe(false);
   });
 });

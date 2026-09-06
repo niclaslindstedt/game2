@@ -344,7 +344,7 @@ describe("the grid ritual", () => {
     const field = createField(
       track,
       { difficulty: "medium", cars: 8, massStart: true, contact: true },
-      { seed: 42, laps: 1, timeOfDay: "day", weather: "clear", season: "summer" },
+      { seed: 42, laps: 1, hour: 12, weather: "clear", season: "summer" },
     );
     // Two thirds of the way through the ritual: past the first blips, short
     // of the held note everybody ends on.

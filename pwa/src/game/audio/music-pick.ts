@@ -19,7 +19,9 @@
 //   3. THE SKY over the taiga. A storm or rain takes the dark score; dusk,
 //      night and dawn take the cold one; a clear day is the anthem.
 
-import type { BiomeId, GameState, TimeOfDay, Weather } from "@engine";
+import type { BiomeId, GameState, Weather } from "@engine";
+
+import { daylightAt, type Daylight } from "../daylight.ts";
 
 /** Every score this build has. */
 export type TrackId =
@@ -29,7 +31,8 @@ export type TrackId =
 export type Setting = {
   biome: BiomeId;
   weather: Weather;
-  timeOfDay: TimeOfDay;
+  /** The light the stage STARTS in — a score is picked once, on the line. */
+  daylight: Daylight;
   circuit: boolean;
   endless: boolean;
 };
@@ -40,7 +43,7 @@ export function trackFor(setting: Setting): TrackId {
   if (setting.biome === "desert") return "desert";
   if (setting.biome === "alpine") return "alpine";
   if (setting.weather !== "clear") return "spruce";
-  if (setting.timeOfDay !== "day") return "polar";
+  if (setting.daylight !== "day") return "polar";
   return "taiga";
 }
 
@@ -49,7 +52,7 @@ export function stageTrack(state: Pick<GameState, "track" | "env">): TrackId {
   return trackFor({
     biome: state.track.knobs.biome,
     weather: state.env.weather,
-    timeOfDay: state.env.timeOfDay,
+    daylight: daylightAt(state.env.hour, state.env.season, state.track.knobs.biome),
     circuit: state.track.circuit,
     endless: state.track.endless,
   });

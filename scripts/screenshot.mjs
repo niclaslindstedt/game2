@@ -12,7 +12,7 @@
 //                                              # contains one of these
 //
 // The app boots to the STUDIO CARD and then the main menu; driving captures
-// pass ?start=1 (plus ?seed=, ?tod=, ?weather=, ?camera=) to pin a run and
+// pass ?start=1 (plus ?seed=, ?hour= or the old ?tod= word, ?weather=, ?camera=) to pin a run and
 // skip both.
 // The menu captures pass ?menu=1 to force the menu back, and ?splash=1 to
 // see the card itself.

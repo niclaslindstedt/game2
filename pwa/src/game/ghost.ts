@@ -38,7 +38,6 @@ import {
   type FiniteStageLength,
   type Season,
   type StageKnobs,
-  type TimeOfDay,
   type Weather,
 } from "@engine";
 
@@ -92,7 +91,9 @@ export type GhostStage = {
   seed: number;
   length: FiniteStageLength;
   knobs: StageKnobs;
-  timeOfDay: TimeOfDay;
+  /** The hour the run started at (`RaceEnv.hour`). A run written when a
+   * stage was set by a word instead carries none, and never matches. */
+  hour: number;
   weather: Weather;
   /** The climate (climate.ts) — part of the road since a winter is snow on
    * it, so a run set on the summer's gravel is not a ghost for the winter's
@@ -299,7 +300,7 @@ export function ghostMatches(run: GhostRun, stage: GhostStage): boolean {
     run.format === GHOST_FORMAT &&
     run.seed === stage.seed &&
     run.length === stage.length &&
-    run.timeOfDay === stage.timeOfDay &&
+    run.hour === stage.hour &&
     run.weather === stage.weather &&
     (run.season ?? "summer") === (stage.season ?? "summer") &&
     (run.temperature ?? null) === (stage.temperature ?? null) &&

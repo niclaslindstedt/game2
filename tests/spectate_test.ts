@@ -28,7 +28,7 @@ import { readWatch, walkWatch, watchLeader } from "../pwa/src/game/spectate.ts";
 const stage = {
   seed: 38,
   laps: 1,
-  timeOfDay: "day",
+  hour: 12,
   weather: "clear",
   season: "summer",
 } as const;

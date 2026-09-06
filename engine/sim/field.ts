@@ -55,7 +55,7 @@
 
 import { collideCars } from "../game/collision.ts";
 import { TUNING } from "../game/defs/tuning.ts";
-import type { GameEvent, GameState, Season, TimeOfDay, Weather } from "../game/state.ts";
+import type { GameEvent, GameState, Season, Weather } from "../game/state.ts";
 import { createGame, skipIntro, step } from "../game/step.ts";
 import type { Track } from "../mapgen/index.ts";
 import { botInput, type TrafficCar } from "./bot.ts";
@@ -171,7 +171,8 @@ export const RALLY_FIELD: FieldPlan = {
 export type FieldStage = {
   seed: number;
   laps: number;
-  timeOfDay: TimeOfDay;
+  /** The hour the stage starts at (`RaceEnv.hour`). */
+  hour: number;
   weather: Weather;
   season: Season;
 };
@@ -252,7 +253,7 @@ export function createField(track: Track, plan: FieldPlan, stage: FieldStage): R
       // back with. Pole is owed nothing and gets nothing.
       catchUp:
         slot && slot.gain > 0 ? { gain: slot.gain, untilS: TUNING.massStart.catchUpS } : undefined,
-      env: { timeOfDay: stage.timeOfDay, weather: stage.weather, season: stage.season },
+      env: { hour: stage.hour, weather: stage.weather, season: stage.season },
     });
     const ghost = !plan.contact;
     return {

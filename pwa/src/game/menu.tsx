@@ -34,7 +34,6 @@ import {
   type StageLength,
   type Season,
   type StageShape,
-  type TimeOfDay,
   type Weather,
 } from "@engine";
 
@@ -57,7 +56,9 @@ import { PLAY_CAMERAS, type DevSettings, type Settings } from "./settings.ts";
 export type PlayMode = "campaign" | "timetrial" | "headsup" | "roam" | "training";
 
 export type RaceSettings = {
-  timeOfDay: TimeOfDay;
+  /** The hour the stage starts at, 0..24 — the sun's clock runs on from
+   * it at an hour a minute (`RaceEnv.hour`). */
+  hour: number;
   weather: Weather;
   season: Season;
   /** The air at the datum, °C, or null for the season's own in the
@@ -382,13 +383,6 @@ export const STAGE_LENGTH_OPTIONS: { id: StageLength; label: string }[] = [
   { id: "long", label: "LONG" },
   { id: "xlong", label: "X-LONG" },
   { id: "endless", label: "ENDLESS" },
-];
-
-export const TIMES_OF_DAY: { id: TimeOfDay; label: string }[] = [
-  { id: "dawn", label: "DAWN" },
-  { id: "day", label: "DAY" },
-  { id: "dusk", label: "DUSK" },
-  { id: "night", label: "NIGHT" },
 ];
 
 /** The four. Winter is the one that reaches the wheels: a frozen country

@@ -56,7 +56,7 @@ if (has("list")) {
   LEVELS.forEach((level, k) => {
     console.log(
       `${String(k + 1).padStart(2)}  ${level.id.padEnd(9)} ${level.name.padEnd(16)} seed ${String(level.seed).padStart(3)}  ` +
-        `${level.length.padEnd(6)} ${(level.shape ?? "sprint").padEnd(7)} ${level.timeOfDay}/${level.weather}/${level.season}  ${level.blurb}`,
+        `${level.length.padEnd(6)} ${(level.shape ?? "sprint").padEnd(7)} ${level.hour}h/${level.weather}/${level.season}  ${level.blurb}`,
     );
   });
   process.exit(0);
@@ -124,7 +124,7 @@ const pct = (v) =>
     .padStart(2, "0")}`;
 const heading = level
   ? `LEVEL ${LEVELS.indexOf(level) + 1} · ${level.name} (${level.id}) — seed ${seed}, ${length} ${shape}, ` +
-    `${level.timeOfDay}/${level.weather}/${level.season}`
+    `${level.hour}h/${level.weather}/${level.season}`
   : `SEED ${seed} — ${length} ${shape}`;
 const dialLine =
   `dials: elevation ${dials.elevation} water ${dials.water} trees ${dials.trees} ` +
@@ -207,9 +207,7 @@ if (!has("no-image")) {
     level
       ? `${level.id.toUpperCase()}  SEED ${seed}  ${length.toUpperCase()} ${shape.toUpperCase()}`
       : `${length.toUpperCase()} ${shape.toUpperCase()}`,
-    level
-      ? `${level.timeOfDay} ${level.weather} ${level.season}`.toUpperCase()
-      : "DEFAULT CONDITIONS",
+    level ? `${level.hour}H ${level.weather} ${level.season}`.toUpperCase() : "DEFAULT CONDITIONS",
     `ELEV ${pct(dials.elevation)} WATER ${pct(dials.water)} TREES ${pct(dials.trees)}`,
     `TARMAC ${pct(dials.asphalt)} WIDTH ${pct(dials.width)} STEEP ${pct(dials.steepness)}`,
     focus

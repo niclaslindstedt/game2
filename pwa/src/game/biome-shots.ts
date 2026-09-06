@@ -18,7 +18,7 @@ export type BiomeShot = {
   seed: number;
   length: string;
   shape: string;
-  timeOfDay: string;
+  hour: number;
   weather: string;
   season: string;
 };
@@ -29,7 +29,7 @@ export const BIOME_SHOTS: Record<string, BiomeShot> = {
     seed: 38,
     length: "short",
     shape: "sprint",
-    timeOfDay: "day",
+    hour: 13,
     weather: "clear",
     season: "summer",
   },
@@ -38,7 +38,7 @@ export const BIOME_SHOTS: Record<string, BiomeShot> = {
     seed: 16,
     length: "short",
     shape: "sprint",
-    timeOfDay: "day",
+    hour: 12,
     weather: "clear",
     season: "summer",
   },
@@ -47,7 +47,7 @@ export const BIOME_SHOTS: Record<string, BiomeShot> = {
     seed: 17,
     length: "short",
     shape: "sprint",
-    timeOfDay: "day",
+    hour: 12,
     weather: "clear",
     season: "summer",
   },

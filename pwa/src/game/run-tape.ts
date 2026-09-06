@@ -32,7 +32,6 @@ import {
   type StageLength,
   type StageShape,
   type TapeRecorder,
-  type TimeOfDay,
   type Weather,
 } from "@engine";
 
@@ -48,7 +47,7 @@ export type RunTapeStart = {
   knobs: StageKnobs;
   carId: string;
   gearbox: "auto" | "manual";
-  timeOfDay: TimeOfDay;
+  hour: number;
   weather: Weather;
   season: Season;
   /** The air at the datum, °C, or null for the season's own (climate.ts). */
@@ -106,7 +105,7 @@ export function createRunTape(start: RunTapeStart): RunTapeRecorder {
       shape: start.shape,
       laps: start.laps,
       knobs: start.knobs,
-      timeOfDay: start.timeOfDay,
+      hour: start.hour,
       weather: start.weather,
       season: start.season,
     },

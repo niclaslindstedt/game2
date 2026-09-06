@@ -34,7 +34,9 @@
 // scheduler takes its clock and its dice as arguments so the tests can run
 // it by hand.
 
-import type { BiomeId, BiomeRules, Season, TimeOfDay } from "@engine";
+import type { BiomeId, BiomeRules, Season } from "@engine";
+
+import type { Daylight } from "../daylight.ts";
 
 import type { LayerSpec, LayerTarget, Synth } from "../../lib/voice.ts";
 
@@ -46,7 +48,9 @@ import type { PlayShape } from "./types.ts";
 /** What the country is doing around the car this instant. */
 export type WorldVoice = {
   biome: BiomeId;
-  timeOfDay: TimeOfDay;
+  /** What kind of light it is this moment (daylight.ts) — the sun moves
+   * during a run, so a stage started at dusk is a night stage by its end. */
+  daylight: Daylight;
   /** Which season is being driven — read by the birds on passage, and by
    * nothing else: everything else out there sounds the same in May as it
    * does in September. */
@@ -174,7 +178,7 @@ export type WorldCall = {
 function passageCalls(voice: WorldVoice, dry: number): WorldCall[] {
   if (voice.biome === "desert") return [];
   const passage = voice.season !== "summer";
-  const night = voice.timeOfDay === "night";
+  const night = voice.daylight === "night";
   if (!passage && night) return [];
   // High and going somewhere: the weather thins them rather than grounding
   // them, and only a gale actually keeps them down.
@@ -202,7 +206,7 @@ function passageCalls(voice: WorldVoice, dry: number): WorldCall[] {
  * night belongs to the crickets and, out on the flats, a coyote. Rain
  * sends the birds to cover, and nothing flies in a storm or a gale. */
 export function worldRoster(voice: WorldVoice): WorldCall[] {
-  const { biome, timeOfDay, wet, gale, exposure } = voice;
+  const { biome, daylight, wet, gale, exposure } = voice;
   const dry = 1 - 0.85 * wet;
   const calls: WorldCall[] = [];
   calls.push(...passageCalls(voice, dry));
@@ -214,12 +218,12 @@ export function worldRoster(voice: WorldVoice): WorldCall[] {
     const flying = dry * (1 - wet) * (1 - 0.6 * gale);
     const alm = 1 - 0.8 * exposure;
     const scree = 0.4 + 0.6 * exposure;
-    if (timeOfDay === "day") {
+    if (daylight === "day") {
       calls.push({ id: "chough", gap: [5, 14], gain: flying });
       calls.push({ id: "cowbell", gap: [6, 16], gain: alm * dry });
       calls.push({ id: "marmot", gap: [40, 110], gain: scree * dry });
       calls.push({ id: "raven", gap: [25, 60], gain: 0.8 });
-    } else if (timeOfDay === "dawn" || timeOfDay === "dusk") {
+    } else if (daylight === "dawn" || daylight === "dusk") {
       // The herd is on the move at both ends of the day, so the bells are
       // busier than at noon; the flock is going to roost or coming off it.
       calls.push({ id: "chough", gap: [10, 26], gain: 0.7 * flying });
@@ -234,11 +238,11 @@ export function worldRoster(voice: WorldVoice): WorldCall[] {
     }
     if (voice.water > 0) calls.push({ id: "meltwater", gap: [4, 9], gain: voice.water });
   } else if (biome === "taiga") {
-    if (timeOfDay === "day" || timeOfDay === "dawn") {
+    if (daylight === "day" || daylight === "dawn") {
       calls.push({ id: "bird_chirp", gap: [2, 6], gain: dry });
       calls.push({ id: "bird_trill", gap: [6, 16], gain: dry });
       calls.push({ id: "raven", gap: [18, 50], gain: 0.9 });
-    } else if (timeOfDay === "dusk") {
+    } else if (daylight === "dusk") {
       calls.push({ id: "bird_chirp", gap: [5, 14], gain: 0.7 * dry });
       calls.push({ id: "owl", gap: [9, 24], gain: 1 });
       calls.push({ id: "raven", gap: [25, 60], gain: 0.8 });
@@ -247,10 +251,10 @@ export function worldRoster(voice: WorldVoice): WorldCall[] {
       calls.push({ id: "bird_chirp", gap: [20, 50], gain: 0.4 * dry });
     }
   } else {
-    if (timeOfDay === "day") {
+    if (daylight === "day") {
       calls.push({ id: "cicada", gap: [2.5, 7], gain: 1 });
       calls.push({ id: "raven", gap: [20, 55], gain: 0.8 });
-    } else if (timeOfDay === "dawn" || timeOfDay === "dusk") {
+    } else if (daylight === "dawn" || daylight === "dusk") {
       calls.push({ id: "cicada", gap: [5, 12], gain: 0.7 });
       calls.push({ id: "cricket", gap: [2, 5], gain: 0.8 });
       calls.push({ id: "owl", gap: [14, 34], gain: 0.8 });

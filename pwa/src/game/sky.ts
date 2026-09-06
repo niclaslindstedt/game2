@@ -1,20 +1,29 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// WHAT COLOUR THE AIR IS — the time of day, the weather and the season
+// WHAT COLOUR THE AIR IS — where the sun is, the weather and the season
 // turned into one `Preset` the renderer can hang a sky on. Pure data and
 // colour arithmetic: nothing here owns a mesh, a light or a frame, which is
 // what lets `environment.ts` stay about the scene it builds out of this.
 //
-// Three layers, applied in that order and in that order for a reason:
+// Four layers, applied in that order and in that order for a reason:
 //
-//   TIME OF DAY  the authored art direction — where the sun is and what
-//                colour it makes everything (`PRESETS`).
+//   THE SUN      astronomy (daylight.ts) — how high it stands this hour,
+//                this season, over this country, and which way it is going.
+//   THE LADDER   the authored art direction, keyed on that elevation: a rung
+//                for the dark, for civil twilight, for the sun on the
+//                horizon, for the golden hour, for the morning and for the
+//                day, with the dawn rungs and the dusk rungs painted
+//                differently (`KEYS`). The sky at any moment is the blend of
+//                the two rungs its elevation lies between, so a stage started
+//                at sunset slides down the ladder into the night without a
+//                cut anywhere.
 //   WEATHER      a LID over the top of it (`weathered`). Rain and a storm
 //                are not the same sky dimmed by different amounts: one is
 //                white and one is black, and both replace the gradient
 //                overhead with the underside of a cloud deck.
-//   SEASON       astronomy under both (`seasoned`): how high the sun gets
-//                at this latitude at this time of year, and how much air
-//                its beam has to come through to arrive.
+//   SEASON       the year's colour casts and the winter's cold air
+//                (`seasoned`) — the ASTRONOMY of the season is already in
+//                the elevation, so this is only what the season does to the
+//                air and the ground, never to where the sun is.
 
 import * as THREE from "three";
 import {
@@ -24,17 +33,16 @@ import {
   type BiomeId,
   type RaceEnv,
   type Season,
-  type TimeOfDay,
   type Weather,
 } from "@engine";
 
+import { daylightOf, litAt, moonAt, sunAt, type Daylight, type SunPlace } from "./daylight.ts";
+import { CASTS, LOOKS, TAIGA_LOOKS } from "./sky-looks.ts";
 import { coverOf } from "./weather.ts";
 
-/** Where the sun/moon sits on the compass, radians — fixed for every stage
- * so dawn and dusk always have a lit side; stages bend enough that every
- * run crosses the light at some point. */
-export const SUN_AZIMUTH = 0.9;
 export const DOME_RADIUS = 560;
+
+const DEG = Math.PI / 180;
 
 /**
  * THE CLOUD DECK — an overcast sky's LID, and the whole difference between
@@ -64,7 +72,7 @@ export type Deck = {
   overhead: number;
   /** …and out at the rim, where the light comes in under the base. */
   rim: number;
-  /** How far above the camera the base hangs, m. */
+  /** How far above the road the base hangs, m. */
   base: number;
   /** How lumpy the underside is, 0..1 — a smooth stratus sheet at nothing,
    * a ragged mammatus ceiling at one. */
@@ -77,11 +85,22 @@ export type Preset = {
   /** Horizon glow color around the sun's azimuth, and how far it spreads. */
   glow: number;
   glowStrength: number;
-  /** The directional "sun" (the moon at night). */
+  /** THE KEY LIGHT: the sun by day, the moon by night, and a blend of the
+   * two through the twilight between. */
   sun: number;
   sunIntensity: number;
-  /** Radians above the horizon. */
+  /** Radians above the horizon — never under it: a key light from below the
+   * ground lights nothing. */
   sunElevation: number;
+  /** World heading the key light stands at (daylight.ts's convention). */
+  sunAzimuth: number;
+  /** THE REAL SUN, wherever it is — under the horizon included. Anything
+   * that asks how much sun a thing at altitude gets (a contrail, a cirrus
+   * sheet, the mist in the valley) reads these rather than the key. */
+  sunUp: number;
+  sunBearing: number;
+  /** The word for this light, for anything that keys on one. */
+  daylight: Daylight;
   /** How much of that light arrives as a BEAM rather than as skylight that
    * has been scattered on the way down, 0..1. An open sky is all beam; a
    * deck is a lampshade over the stage, and what comes through it arrives
@@ -95,7 +114,8 @@ export type Preset = {
   fog: number;
   fogNear: number;
   fogFar: number;
-  /** The visible disc and its halo. */
+  /** The visible disc and its halo, at the KEY's place — the sun, or the
+   * moon once it has taken over. */
   disc: number;
   discSize: number;
   halo: number;
@@ -103,7 +123,13 @@ export type Preset = {
   haloOpacity: number;
   /** 0–1 star opacity. */
   stars: number;
+  /** What a cloud in full sun is coloured this hour, and what its shaded
+   * underside is. By day the two are white and a pale grey; at sunset the
+   * lit face is orange and the shade a purple-grey, and the layered sky
+   * decides per layer which of the two a cloud gets by whether the sun
+   * still reaches its altitude (`litAt`). */
   cloud: number;
+  cloudShade: number;
   cloudOpacity: number;
   /** How much of the fair-weather cumulus ring this sky carries, 0..1 — a
    * COUNT, not a fade. A country with little weather in it gets fewer
@@ -120,378 +146,404 @@ export type Preset = {
   thunder: number;
 };
 
-// The four times of day, authored for clear weather. Dawn is Valheim's
-// misty peach morning; day is the bright arcade baseline; dusk is the Sega
-// Rally mountain sunset (magenta clouds over a purple sky); night is a
-// moonlit blue that stays readable.
-const PRESETS: Record<TimeOfDay, Preset> = {
-  dawn: {
-    zenith: 0x5f7fc0,
-    horizon: 0xffc9a0,
-    glow: 0xff9a58,
-    glowStrength: 1.1,
-    sun: 0xffc08a,
-    sunIntensity: 1.3,
-    sunElevation: 0.14,
-    beam: 1,
-    hemiSky: 0xd8dcff,
-    hemiGround: 0x8a7a66,
-    hemiIntensity: 0.72,
-    fog: 0xf0c8a6,
-    fogNear: 70,
-    fogFar: 400,
-    disc: 0xffe0b8,
-    discSize: 26,
-    halo: 0xffa060,
-    haloSize: 170,
-    haloOpacity: 0.55,
-    stars: 0,
-    cloud: 0xffd9c0,
-    cloudOpacity: 1,
-    cloudShare: 1,
-    headlights: false,
-    deck: null,
-    rain: 0,
-    thunder: 0,
-  },
-  day: {
-    zenith: 0x1f7fe0,
-    horizon: 0xbfe3ff,
-    glow: 0xfff3c8,
-    glowStrength: 0.35,
-    sun: 0xfff2d8,
-    sunIntensity: 1.5,
-    sunElevation: 0.95,
-    beam: 1,
-    hemiSky: 0xffffff,
-    hemiGround: 0xb0a894,
-    hemiIntensity: 0.95,
-    fog: 0xbfe3ff,
-    fogNear: 160,
-    fogFar: 520,
-    disc: 0xfff8dc,
-    discSize: 18,
-    halo: 0xfff3c8,
-    haloSize: 110,
-    haloOpacity: 0.35,
-    stars: 0,
-    cloud: 0xffffff,
-    cloudOpacity: 1,
-    cloudShare: 1,
-    headlights: false,
-    deck: null,
-    rain: 0,
-    thunder: 0,
-  },
-  dusk: {
-    zenith: 0x3a2f6e,
-    horizon: 0xff6a3d,
-    glow: 0xff4f5a,
-    glowStrength: 1.25,
-    sun: 0xff9663,
-    sunIntensity: 1.15,
-    sunElevation: 0.09,
-    beam: 1,
-    hemiSky: 0xc9a0c8,
-    hemiGround: 0x6e5a4a,
-    hemiIntensity: 0.62,
-    fog: 0xe08a6a,
-    fogNear: 90,
-    fogFar: 430,
-    disc: 0xffb36a,
-    discSize: 30,
-    halo: 0xff5f46,
-    haloSize: 210,
-    haloOpacity: 0.6,
-    stars: 0.15,
-    cloud: 0xd86a8a,
-    cloudOpacity: 1,
-    cloudShare: 1,
-    headlights: true,
-    deck: null,
-    rain: 0,
-    thunder: 0,
-  },
-  night: {
-    zenith: 0x0a1230,
-    horizon: 0x1d2d55,
-    glow: 0x9fb6ff,
-    glowStrength: 0.5,
-    sun: 0xb8ccff,
-    sunIntensity: 0.55,
-    sunElevation: 0.65,
-    beam: 1,
-    hemiSky: 0x3a5580,
-    hemiGround: 0x1e2840,
-    hemiIntensity: 0.55,
-    fog: 0x101c38,
-    fogNear: 80,
-    fogFar: 380,
-    disc: 0xeef2ff,
-    discSize: 14,
-    halo: 0xb8ccff,
-    haloSize: 95,
-    haloOpacity: 0.4,
-    stars: 1,
-    cloud: 0x2b3a5a,
-    cloudOpacity: 0.85,
-    cloudShare: 1,
-    headlights: true,
-    deck: null,
-    rain: 0,
-    thunder: 0,
-  },
+/** One rung of the ladder: everything about a clear sky that is authored
+ * rather than derived, at one elevation of the sun. */
+type Rung = {
+  zenith: number;
+  horizon: number;
+  glow: number;
+  glowStrength: number;
+  sun: number;
+  sunIntensity: number;
+  hemiSky: number;
+  hemiGround: number;
+  hemiIntensity: number;
+  fog: number;
+  fogNear: number;
+  fogFar: number;
+  disc: number;
+  discSize: number;
+  halo: number;
+  haloSize: number;
+  haloOpacity: number;
+  stars: number;
+  cloud: number;
+  cloudShade: number;
+  cloudOpacity: number;
 };
+
+/** THE LADDER, rung by rung. The elevation each rung stands at, degrees,
+ * and the sky painted for it — with the rungs the sun climbs through in
+ * the morning painted differently from the ones it comes down in the
+ * evening, because a dawn and a dusk are not the same picture run
+ * backwards: the morning air is clear and cold and the light in it is
+ * peach and mist, the evening air has the whole day's dust and heat in it
+ * and burns magenta and orange. Above the golden hour the two meet.
+ *
+ * DARK is nautical twilight and everything under it — moonlit, and the
+ * moon is the key. TWILIGHT is the civil kind, the sun six degrees under:
+ * the afterglow on the horizon, the first stars, the world lit by the sky
+ * alone. SET is the sun on the horizon. LOW is the golden hour, the sun
+ * eight degrees up. MORNING is the plain light of mid-morning, and DAY is
+ * the bright arcade baseline every other light in the game was authored
+ * against.
+ *
+ * The sun's OWN intensity on the rungs under SET is not the sun's — it is
+ * under the horizon — but the KEY's: the afterglow's warm skylight, given a
+ * direction so the world still has a lit side, fading toward the moon's
+ * take-over. */
+const DARK: Rung = {
+  zenith: 0x0a1230,
+  horizon: 0x1d2d55,
+  glow: 0x9fb6ff,
+  glowStrength: 0.5,
+  sun: 0xb8ccff,
+  sunIntensity: 0.55,
+  hemiSky: 0x3a5580,
+  hemiGround: 0x1e2840,
+  hemiIntensity: 0.55,
+  fog: 0x101c38,
+  fogNear: 80,
+  fogFar: 380,
+  disc: 0xeef2ff,
+  discSize: 14,
+  halo: 0xb8ccff,
+  haloSize: 95,
+  haloOpacity: 0.4,
+  stars: 1,
+  cloud: 0x2b3a5a,
+  cloudShade: 0x1a2438,
+  cloudOpacity: 0.85,
+};
+
+const DUSK_TWILIGHT: Rung = {
+  zenith: 0x1e1a48,
+  horizon: 0x6e4670,
+  glow: 0xf06a52,
+  glowStrength: 1.45,
+  sun: 0xd9a8b8,
+  sunIntensity: 0.22,
+  hemiSky: 0x4a4a84,
+  hemiGround: 0x2a2432,
+  hemiIntensity: 0.5,
+  fog: 0x4e4264,
+  fogNear: 70,
+  fogFar: 360,
+  disc: 0xffb36a,
+  discSize: 0,
+  halo: 0xff6a4a,
+  haloSize: 280,
+  haloOpacity: 0.32,
+  stars: 0.55,
+  cloud: 0xe0868e,
+  cloudShade: 0x3a3054,
+  cloudOpacity: 1,
+};
+
+const DAWN_TWILIGHT: Rung = {
+  zenith: 0x24305e,
+  horizon: 0x8e7488,
+  glow: 0xffa070,
+  glowStrength: 1.2,
+  sun: 0xd8bcc4,
+  sunIntensity: 0.22,
+  hemiSky: 0x5c6494,
+  hemiGround: 0x2e3038,
+  hemiIntensity: 0.5,
+  fog: 0x625a76,
+  fogNear: 60,
+  fogFar: 340,
+  disc: 0xffe0b8,
+  discSize: 0,
+  halo: 0xffa060,
+  haloSize: 240,
+  haloOpacity: 0.3,
+  stars: 0.5,
+  cloud: 0xf0a898,
+  cloudShade: 0x46405c,
+  cloudOpacity: 1,
+};
+
+// The Sega Rally mountain sunset: magenta clouds over a purple sky, the
+// disc a swollen orange coin on the rim. The horizon is a warm salmon
+// rather than the glow's red, because the red belongs to the band round
+// the sun; away from it the rim goes rose and the sky over it purple.
+const DUSK_SET: Rung = {
+  zenith: 0x3a2f6e,
+  horizon: 0xf0885c,
+  glow: 0xff4f46,
+  glowStrength: 1.35,
+  sun: 0xff9663,
+  sunIntensity: 1.15,
+  hemiSky: 0xc9a0c8,
+  hemiGround: 0x6e5a4a,
+  hemiIntensity: 0.62,
+  fog: 0xd8927c,
+  fogNear: 90,
+  fogFar: 430,
+  disc: 0xffb36a,
+  discSize: 30,
+  halo: 0xff5f46,
+  haloSize: 210,
+  haloOpacity: 0.6,
+  stars: 0.12,
+  cloud: 0xff9a74,
+  cloudShade: 0x7e5a80,
+  cloudOpacity: 1,
+};
+
+// Valheim's misty peach morning, the disc pale and huge in the haze.
+const DAWN_SET: Rung = {
+  zenith: 0x5670b4,
+  horizon: 0xffbe96,
+  glow: 0xff9a58,
+  glowStrength: 1.15,
+  sun: 0xffb884,
+  sunIntensity: 1.1,
+  hemiSky: 0xd0d0f4,
+  hemiGround: 0x7e7060,
+  hemiIntensity: 0.66,
+  fog: 0xecc0a4,
+  fogNear: 60,
+  fogFar: 380,
+  disc: 0xffe0b8,
+  discSize: 30,
+  halo: 0xffa060,
+  haloSize: 200,
+  haloOpacity: 0.55,
+  stars: 0.1,
+  cloud: 0xffc0a8,
+  cloudShade: 0x8a7890,
+  cloudOpacity: 1,
+};
+
+const DUSK_LOW: Rung = {
+  zenith: 0x3c5eb0,
+  horizon: 0xffb070,
+  glow: 0xff8a50,
+  glowStrength: 1,
+  sun: 0xffb070,
+  sunIntensity: 1.3,
+  hemiSky: 0xe0c8d0,
+  hemiGround: 0x8a7060,
+  hemiIntensity: 0.72,
+  fog: 0xe8b090,
+  fogNear: 100,
+  fogFar: 440,
+  disc: 0xffd090,
+  discSize: 26,
+  halo: 0xffa060,
+  haloSize: 170,
+  haloOpacity: 0.5,
+  stars: 0,
+  cloud: 0xffd0b0,
+  cloudShade: 0xa08898,
+  cloudOpacity: 1,
+};
+
+const DAWN_LOW: Rung = {
+  zenith: 0x5f7fc0,
+  horizon: 0xffc9a0,
+  glow: 0xff9a58,
+  glowStrength: 1.1,
+  sun: 0xffc08a,
+  sunIntensity: 1.3,
+  hemiSky: 0xd8dcff,
+  hemiGround: 0x8a7a66,
+  hemiIntensity: 0.72,
+  fog: 0xf0c8a6,
+  fogNear: 70,
+  fogFar: 400,
+  disc: 0xffe0b8,
+  discSize: 26,
+  halo: 0xffa060,
+  haloSize: 170,
+  haloOpacity: 0.55,
+  stars: 0,
+  cloud: 0xffd9c0,
+  cloudShade: 0xa89aa8,
+  cloudOpacity: 1,
+};
+
+const MORNING: Rung = {
+  zenith: 0x2b74d8,
+  horizon: 0xd8e6f8,
+  glow: 0xffe8c0,
+  glowStrength: 0.55,
+  sun: 0xffe8c4,
+  sunIntensity: 1.45,
+  hemiSky: 0xf6f6ff,
+  hemiGround: 0xa8a090,
+  hemiIntensity: 0.88,
+  fog: 0xc8e0f4,
+  fogNear: 130,
+  fogFar: 480,
+  disc: 0xfff4e0,
+  discSize: 20,
+  halo: 0xfff0d0,
+  haloSize: 130,
+  haloOpacity: 0.4,
+  stars: 0,
+  cloud: 0xfff4ea,
+  cloudShade: 0xc8ccd8,
+  cloudOpacity: 1,
+};
+
+const DAY: Rung = {
+  zenith: 0x1f7fe0,
+  horizon: 0xbfe3ff,
+  glow: 0xfff3c8,
+  glowStrength: 0.35,
+  sun: 0xfff2d8,
+  sunIntensity: 1.5,
+  hemiSky: 0xffffff,
+  hemiGround: 0xb0a894,
+  hemiIntensity: 0.95,
+  fog: 0xbfe3ff,
+  fogNear: 160,
+  fogFar: 520,
+  disc: 0xfff8dc,
+  discSize: 18,
+  halo: 0xfff3c8,
+  haloSize: 110,
+  haloOpacity: 0.35,
+  stars: 0,
+  cloud: 0xffffff,
+  cloudShade: 0xdde4ee,
+  cloudOpacity: 1,
+};
+
+/** The rungs in order of elevation, degrees, for each half of the day. */
+const KEYS: { at: number; dawn: Rung; dusk: Rung }[] = [
+  { at: -12, dawn: DARK, dusk: DARK },
+  { at: -5, dawn: DAWN_TWILIGHT, dusk: DUSK_TWILIGHT },
+  { at: 0, dawn: DAWN_SET, dusk: DUSK_SET },
+  { at: 8, dawn: DAWN_LOW, dusk: DUSK_LOW },
+  { at: 22, dawn: MORNING, dusk: MORNING },
+  { at: 40, dawn: DAY, dusk: DAY },
+];
+
+/** Between which elevations the key light hands over from the sun to the
+ * moon, degrees under the horizon. Above the top of the band the world is
+ * lit by the afterglow's skylight from the sun's side; below the bottom it
+ * is moonlit from the other. */
+const MOON_TAKES_OVER = { from: -3, to: -9 };
+
+/** The key light is never allowed under this, radians: a sun on the
+ * horizon still lights the world from the side, and one under it would
+ * light nothing at all. */
+const KEY_FLOOR = 2 * DEG;
+
+/** Under this the car has its lights on — the sun's own rule; the weather
+ * has its own (`WeatherLook.lampsAt`). Four degrees: the golden hour is
+ * driven on daylight, the sunset on lamps. */
+const LAMPS_UNDER = 4 * DEG;
+
+function clamp01(t: number): number {
+  return t < 0 ? 0 : t > 1 ? 1 : t;
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+/** Mix two packed colours, `t` of the way from `a` to `b`. */
+function mixHex(a: number, b: number, t: number): number {
+  return new THREE.Color(a).lerp(new THREE.Color(b), t).getHex();
+}
+
+/** One rung blended into the next. */
+function blendRung(a: Rung, b: Rung, t: number): Rung {
+  const out = {} as Rung;
+  for (const key of Object.keys(a) as (keyof Rung)[]) {
+    const x = a[key];
+    const y = b[key];
+    // Colours are the fields authored as hex; everything else is a number
+    // on a scale. The two are told apart by which fields they are, not by
+    // their size — a fog distance of 400 is not a colour.
+    out[key] = COLOUR_FIELDS.has(key) ? mixHex(x, y, t) : lerp(x, y, t);
+  }
+  return out;
+}
+
+const COLOUR_FIELDS = new Set<keyof Rung>([
+  "zenith",
+  "horizon",
+  "glow",
+  "sun",
+  "hemiSky",
+  "hemiGround",
+  "fog",
+  "disc",
+  "halo",
+  "cloud",
+  "cloudShade",
+]);
+
+/** The clear sky for this much sun, going this way. */
+function rungAt(elevation: number, rising: boolean): Rung {
+  const el = elevation / DEG;
+  const side = rising ? "dawn" : "dusk";
+  if (el <= KEYS[0].at) return { ...KEYS[0][side] };
+  for (let i = 1; i < KEYS.length; i++) {
+    if (el <= KEYS[i].at) {
+      const t = (el - KEYS[i - 1].at) / (KEYS[i].at - KEYS[i - 1].at);
+      return blendRung(KEYS[i - 1][side], KEYS[i][side], smooth(t));
+    }
+  }
+  return { ...KEYS[KEYS.length - 1][side] };
+}
+
+function smooth(t: number): number {
+  const x = clamp01(t);
+  return x * x * (3 - 2 * x);
+}
+
+/** THE CLEAR SKY for a sun at `sun`: the rung, and the key light placed. */
+function clearSky(sun: SunPlace): Preset {
+  const rung = rungAt(sun.elevation, sun.rising);
+  const moon = moonAt(sun);
+  // How far the moon has taken the key over, 0..1.
+  const handed = clamp01(
+    (sun.elevation / DEG - MOON_TAKES_OVER.from) / (MOON_TAKES_OVER.to - MOON_TAKES_OVER.from),
+  );
+  // The sun's side of the sky keeps the key while the afterglow lasts; the
+  // moon's takes it as the dark comes down. Both stand off the floor.
+  const sunKey = Math.max(KEY_FLOOR, sun.elevation);
+  const moonKey = Math.max(KEY_FLOOR, moon.elevation);
+  const sunElevation = lerp(sunKey, moonKey, handed);
+  const sunAzimuth = sun.azimuth + Math.PI * handed;
+  return {
+    ...rung,
+    sunElevation,
+    sunAzimuth,
+    sunUp: sun.elevation,
+    sunBearing: sun.azimuth,
+    daylight: daylightOf(sun),
+    beam: 1,
+    cloudShare: 1,
+    headlights: sun.elevation < LAMPS_UNDER,
+    deck: null,
+    rain: 0,
+    thunder: 0,
+  };
+}
 
 /** The clear-weather baseline, for anything that needs a reference sky
  * rather than the one being drawn (the car's tint measures against noon). */
-export const NOON = PRESETS.day;
-
-/**
- * ONE WEATHER, AT ITS LIGHTEST AND AT ITS HEAVIEST.
- *
- * Every pair here is read at the stage's own `cover` (see `coverOf`), so no
- * two wet stages are the same sky: one rally is run under a high thin
- * ceiling with the light still coming through it, the next under a low
- * black one. A single authored grey is what makes every wet stage in a game
- * look like the same wet stage.
- */
-type WeatherLook = {
-  /** What the open sky left under the deck is mixed toward, and how far. */
-  grey: number;
-  mix: number;
-  /** What survives of the sun's beam and of the skylight, thin cover →
-   * thick. A heavy deck is not a filter over daylight — a thunderstorm at
-   * noon puts a few per cent of full sun on the ground, which is why the
-   * headlights go on under one. */
-  dim: [number, number];
-  hemi: [number, number];
-  /** How thick the deck has to be before the car turns its lights on. */
-  lampsAt: number;
-  /** Fog distances, as fractions of the clear preset's own, thin cover →
-   * thick. Heavier weather is not only darker, it is SHORTER: the water in
-   * the air between the car and the next corner is what a downpour
-   * actually does to driving. */
-  fogNear: [number, number];
-  fogFar: [number, number];
-  /** How much of the DECK's colour the distance takes: rain whitens the
-   * air, a storm blackens it, and in both cases what the far trees fade
-   * into is the underside of the cloud rather than the blue behind it. */
-  fogDeck: number;
-  /** The deck's underside overhead, thin cover → thick. */
-  overhead: [number, number];
-  /** The strip at the rim, and how far the horizon's own colour is pulled
-   * toward it (0..1) — which is what keeps a night storm's rim dark. */
-  rim: number;
-  rimMix: number;
-  /** How high the base hangs and how ragged it is, thin → thick. */
-  base: [number, number];
-  relief: [number, number];
-  /** How hard it rains, thin → thick. */
-  rain: [number, number];
-  /** How electric it is, thin → thick. */
-  thunder: [number, number];
-  /** How much of the sun's BEAM comes through the deck, thin → thick — a
-   * lit patch on a thin sheet of rain cloud, nothing at all behind a
-   * thunderstorm's, and a pale disc the whole way through blowing sand. */
-  through: [number, number];
-};
-
-type Looks = Record<Exclude<Weather, "clear">, WeatherLook>;
-
-const TAIGA_LOOKS: Looks = {
-  // RAIN IS A WHITE SKY. The deck is thin enough that the sun lights it
-  // from above and it glows — overhead it is the brightest thing in the
-  // frame, brighter than the road, which is exactly why a photograph of a
-  // rainy day comes back with a blown-out sky. It greys off toward the rim
-  // because that line of sight runs the long way through the cloud.
-  rain: {
-    grey: 0x9aa4b0,
-    mix: 0.45,
-    dim: [0.85, 0.55],
-    hemi: [0.95, 0.72],
-    lampsAt: 0.8,
-    fogNear: [0.72, 0.5],
-    fogFar: [0.74, 0.5],
-    fogDeck: 0.55,
-    overhead: [0xf4f7fa, 0x939ca6],
-    rim: 0xb4bcc4,
-    rimMix: 0.5,
-    base: [320, 165],
-    relief: [0.1, 0.3],
-    rain: [0.4, 0.8],
-    // Rain has weather in it without being a thunderstorm: the odd distant
-    // flash on the heaviest stages, never the overhead crack.
-    thunder: [0, 0.25],
-    through: [1, 0],
-  },
-  // A STORM IS A BLACK ONE, and it is black for the opposite reason: the
-  // deck is kilometres thick, nothing gets through it, and the underside is
-  // in its own shadow. The single bright thing left in the sky is the strip
-  // at the rim where daylight arrives under the base from outside the
-  // weather — the gust front look, and the reason a storm reads as
-  // something arriving rather than as a night that came early.
-  storm: {
-    grey: 0x59616e,
-    mix: 0.62,
-    dim: [0.5, 0.22],
-    hemi: [0.72, 0.4],
-    lampsAt: 0.25,
-    fogNear: [0.52, 0.34],
-    fogFar: [0.56, 0.38],
-    fogDeck: 0.7,
-    overhead: [0x39404b, 0x101319],
-    rim: 0xc6ccd4,
-    rimMix: 0.62,
-    base: [210, 115],
-    relief: [0.3, 0.55],
-    rain: [0.85, 1],
-    thunder: [0.6, 1],
-    through: [0, 0],
-  },
-};
-
-/** R40 — THE DESERT'S WEATHER, which is dry. Its `storm` is a DUST STORM:
- * a wall of blown sand the colour of the ground, so low the base is on
- * the ridges and so thick the road runs out a hundred metres ahead; the
- * sun is a pale disc in it, never gone, and the one bright thing left is
- * the strip under the base where clear air still shows. Dry lightning
- * rides the heaviest of them. Nothing here rains: the `rain` pair is zero
- * on both rows, which is what keeps the wipers parked and the road dry.
- *
- * Its `rain` is not offered by the country (`biomeRules().weathers`), but
- * a dial can still be left on it, so it has a look: a HAZE, the same sand
- * in the air at a fraction of the density — the desert on a windy day. */
-const DESERT_LOOKS: Looks = {
-  rain: {
-    grey: 0xc9ad7c,
-    mix: 0.3,
-    dim: [0.92, 0.75],
-    hemi: [0.98, 0.85],
-    lampsAt: 2,
-    fogNear: [0.8, 0.55],
-    fogFar: [0.85, 0.55],
-    fogDeck: 0.5,
-    overhead: [0xd8c39a, 0xbfa070],
-    rim: 0xdcc59a,
-    rimMix: 0.5,
-    base: [420, 260],
-    relief: [0.05, 0.15],
-    rain: [0, 0],
-    thunder: [0, 0],
-    through: [0.9, 0.55],
-  },
-  storm: {
-    grey: 0xb8925c,
-    mix: 0.72,
-    dim: [0.55, 0.28],
-    hemi: [0.82, 0.55],
-    lampsAt: 0.45,
-    fogNear: [0.38, 0.14],
-    fogFar: [0.42, 0.16],
-    fogDeck: 0.88,
-    overhead: [0xc9a36a, 0x8f6a3c],
-    rim: 0xdcb87a,
-    rimMix: 0.7,
-    base: [150, 70],
-    relief: [0.5, 0.8],
-    rain: [0, 0],
-    thunder: [0.05, 0.35],
-    through: [0.55, 0.12],
-  },
-};
-
-/** R47 — THE MOUNTAIN'S WEATHER. Its `rain` is a cloud base come down onto
- * the flanks: a low grey lid, the far peaks gone, the road running into
- * mist a few hundred metres ahead — the same wet as the taiga's but with
- * the ceiling on the mountain rather than over it, because a mountain road
- * is IN the weather the valley only sees from below. Its `storm` is a
- * summer thunderstorm on the pass: black, close, thunder rolling round the
- * cirque, and rain hard enough to run across the road. */
-const ALPINE_LOOKS: Looks = {
-  rain: {
-    ...TAIGA_LOOKS.rain,
-    grey: 0xb9c1c8,
-    mix: 0.5,
-    fogNear: [0.55, 0.3],
-    fogFar: [0.6, 0.32],
-    fogDeck: 0.85,
-    base: [240, 120],
-    relief: [0.25, 0.5],
-    through: [0.3, 0.1],
-  },
-  storm: {
-    ...TAIGA_LOOKS.storm,
-    grey: 0x4a5058,
-    fogNear: [0.42, 0.22],
-    fogFar: [0.46, 0.24],
-    base: [180, 95],
-    relief: [0.4, 0.65],
-    thunder: [0.7, 1],
-  },
-};
-
-const LOOKS: Record<BiomeId, Looks> = {
-  taiga: TAIGA_LOOKS,
-  desert: DESERT_LOOKS,
-  alpine: ALPINE_LOOKS,
-};
-
-/** R40 — what a COUNTRY does to the clear sky over it, before any weather
- * is put on top. The presets were authored for the taiga; the desert's air
- * is drier and clearer, its horizon hazed warm by the dust that is always
- * in it, its sun a shade warmer and harder, and — the one that matters
- * most to the look of the ground — the light bouncing back up off it is
- * sand, not moss. Every mix is toward a colour, so the four times of day
- * keep their own character under it. */
-type Cast = {
-  horizon: [number, number];
-  zenith: [number, number];
-  fog: [number, number];
-  fogReach: number;
-  sun: [number, number];
-  sunStrength: number;
-  hemiGround: [number, number];
-  cloudCover: number;
-  /** …and how many of them there are at all. See `Preset.cloudShare`: over
-   * a dry country the sky is EMPTIER, not hazier. */
-  cloudShare: number;
-};
-
-const CASTS: Record<BiomeId, Cast | null> = {
-  taiga: null,
-  desert: {
-    horizon: [0xe8d3b0, 0.28],
-    zenith: [0x2f7fd8, 0.18],
-    fog: [0xe6d2a8, 0.32],
-    fogReach: 1.25,
-    sun: [0xfff0d0, 0.3],
-    sunStrength: 1.06,
-    hemiGround: [0xc9a870, 0.65],
-    // It almost never rains here, and a desert sky shows it: a handful of
-    // cumulus in a great deal of blue. Nearly solid where they are, because
-    // what makes the sky read as dry is the EMPTINESS between them — faded
-    // clouds over the whole ring only read as a rendering fault.
-    cloudCover: 0.92,
-    cloudShare: 0.3,
-  },
-  // R47 — THE MOUNTAIN AIR: thin, dry and clear, so the sky is a deeper
-  // blue overhead and the horizon reads further; the light is cooler and
-  // harder than the forest's, and what bounces back up off the ground is
-  // pale rock and snow as much as grass. Fewer clouds than the taiga and
-  // more than the desert, each one sharp-edged: fair-weather cumulus
-  // building over the peaks.
-  alpine: {
-    horizon: [0xd6e4f2, 0.22],
-    zenith: [0x1e56b8, 0.3],
-    fog: [0xd0dceb, 0.25],
-    fogReach: 1.45,
-    sun: [0xfff6e6, 0.25],
-    sunStrength: 1.08,
-    hemiGround: [0xb9bcb4, 0.35],
-    cloudCover: 1,
-    cloudShare: 0.6,
-  },
+export const NOON: Preset = {
+  ...DAY,
+  sunElevation: 0.95,
+  sunAzimuth: 0.9,
+  sunUp: 0.95,
+  sunBearing: 0.9,
+  daylight: "day",
+  beam: 1,
+  cloudShare: 1,
+  headlights: false,
+  deck: null,
+  rain: 0,
+  thunder: 0,
 };
 
 function countried(p: Preset, biome: BiomeId): Preset {
@@ -510,33 +562,27 @@ function countried(p: Preset, biome: BiomeId): Preset {
   return p;
 }
 
-function clamp01(t: number): number {
-  return t < 0 ? 0 : t > 1 ? 1 : t;
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
-/** Mix two packed colours, `t` of the way from `a` to `b`. */
-function mixHex(a: number, b: number, t: number): number {
-  return new THREE.Color(a).lerp(new THREE.Color(b), t).getHex();
-}
-
-/** Weather sits on top of the time of day. Clear leaves it alone; anything
- * else puts a lid on the sky, closes the air, and takes the sun away. */
-/** `wet` says the weather RAINS here (`rainsIn`, climate.ts): a desert in
- * its wet season is under the taiga's own deck, a real one that comes down,
- * rather than under its dry haze and its wall of sand. */
+/** Weather sits on top of the hour. Clear leaves it alone; anything else
+ * puts a lid on the sky, closes the air, and takes the sun away. `wet`
+ * says the weather RAINS here (`rainsIn`, climate.ts): a desert in its wet
+ * season is under the taiga's own deck, a real one that comes down, rather
+ * than under its dry haze and its wall of sand. */
 function weathered(
-  time: TimeOfDay,
+  sun: SunPlace,
   weather: Weather,
   cover: number,
   biome: BiomeId,
   wet: boolean,
 ): Preset {
-  const p = countried({ ...PRESETS[time] }, biome);
+  const p = countried(clearSky(sun), biome);
   if (weather === "clear") return p;
+  // How lit the deck is from above, 0..1 — what its own brightness is
+  // scaled by, so a ceiling over a sun that has set is dark rather than a
+  // white sheet over a dark stage. Saturating: any real daylight lights a
+  // rain deck to its authored white (an autumn noon is half a June one and
+  // the sky under rain is white in both), and it is only the last of the
+  // light going that takes the ceiling down with it.
+  const light = smooth((dayLight(p) - 0.1) / 0.4);
   const look = (wet && !biomeRules(biome).rain ? TAIGA_LOOKS : LOOKS[biome])[weather];
   const toward = (c: number): number => mixHex(c, look.grey, look.mix);
   p.zenith = toward(p.zenith);
@@ -569,12 +615,16 @@ function weathered(
   p.discSize = 0;
   p.stars *= 0.2 * through;
   p.cloud = toward(p.cloud);
+  p.cloudShade = toward(p.cloudShade);
+  const overheadLit = mixHex(look.overhead[0], look.overhead[1], cover);
   const deck: Deck = {
-    overhead: mixHex(look.overhead[0], look.overhead[1], cover),
-    // The rim is the time of day's own horizon pulled toward the strip's
-    // tone, so a midnight storm keeps a dark one and a noon storm gets the
-    // lit gap under the base.
-    rim: mixHex(p.horizon, look.rim, look.rimMix),
+    // The underside is lit from ABOVE, by whatever day there is: at night
+    // it is as dark as the sky it hides.
+    overhead: mixHex(0x06080c, overheadLit, 0.06 + 0.94 * light),
+    // The rim is the hour's own horizon pulled toward the strip's tone, so
+    // a midnight storm keeps a dark one and a noon storm gets the lit gap
+    // under the base.
+    rim: mixHex(p.horizon, look.rim, look.rimMix * (0.35 + 0.65 * light)),
     base: lerp(look.base[0], look.base[1], cover),
     relief: lerp(look.relief[0], look.relief[1], cover),
   };
@@ -590,76 +640,15 @@ function weathered(
   return p;
 }
 
-// ── The seasons, as astronomy rather than art direction ───────────────────
-// The single biggest difference between a May stage and a September one is
-// not the leaves — it is where the sun IS. A taiga rally is run at around
-// 62°N (central Scandinavia), and the sun's noon elevation there is
-// 90° − latitude + declination. The declination runs from +23.44° at the
-// summer solstice down through zero at the equinoxes, so:
-//
-//   mid-May          90 − 62 + 17.5  ≈ 45° above the horizon at noon
-//   summer solstice  90 − 62 + 23.4  ≈ 51°
-//   late September   90 − 62 −  1.8  ≈ 26°
-//
-// Half the height, at the season the north's colour peaks. Everything else
-// here falls out of that one number: longer shadows, a dimmer and warmer
-// beam, and a colder, lower key over the whole landscape.
+// ── The seasons, as what they do to the AIR ───────────────────────────────
+// Where the sun stands in each season is astronomy and is already in the
+// elevation this preset was built for (daylight.ts). What is left to the
+// season here is the colour of the air and of the ground under it: pollen
+// haze in May, the straw-and-bilberry bounce in September, and the cold
+// clear air of a winter that reaches every country.
 
-/** The sun's declination in the middle of each season, degrees — mid-May,
- * the June solstice, and the last week of September, which is when "ruska"
- * (the north's autumn colour) peaks. Winter is not a season of this biome:
- * the boreal forest under snow is the arctic one. The desert keeps the
- * same three moments of the year; where it is on the earth is the
- * country's (`biomeRules().latitude`, R40), and at 33°N the same
- * September sun stands fifty degrees up instead of twenty-six. */
-const DECLINATION: Record<Season, number> = {
-  spring: 17.5,
-  summer: 23.4,
-  autumn: -1.8,
-  winter: -23.4,
-};
-
-/** The sine of the noon solar elevation — which is both how high the sun
- * gets and, because irradiance on flat ground goes as the cosine of the
- * zenith angle, how much of its light lands there. */
-function noonSun(season: Season, latitude: number): number {
-  return Math.sin(((90 - latitude + DECLINATION[season]) * Math.PI) / 180);
-}
-
-/** Rayleigh optical depth of the whole clear atmosphere at sea level, per
- * air mass, at the wavelengths the renderer's three channels stand for
- * (~650, 550 and 450 nm). Scattering goes as λ⁻⁴, so blue is stripped out
- * of a beam about four and a half times as fast as red — which is why the
- * sky is blue, why a low sun is orange, and why a September noon is warmer
- * than a June one before a single cloud is involved. */
-const RAYLEIGH = { r: 0.049, g: 0.097, b: 0.221 };
-
-/** The season sits UNDER the time of day: it decides how high the sun gets
- * at all, and the time of day then says where along that arc it is. So the
- * elevation is SCALED rather than shifted — a dawn sun sits on the horizon
- * in every season; it is the noon one that moves — and the extra air the
- * lower beam has to come through is charged once, at the season's own noon,
- * rather than compounded onto a dawn that is already the length of the
- * atmosphere. */
 function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number): Preset {
   if (season === "summer") return p;
-  const latitude = biomeRules(biome).latitude;
-  const here = noonSun(season, latitude);
-  const peak = noonSun("summer", latitude);
-  p.sunElevation = Math.asin(Math.min(1, Math.sin(p.sunElevation) * (here / peak)));
-  // Air mass is 1/sin(elevation): the path a beam takes through the
-  // atmosphere, in units of the straight-up one.
-  const extraAir = 1 / here - 1 / peak;
-  const through = (depth: number): number => Math.exp(-depth * extraAir);
-  const tr = through(RAYLEIGH.r);
-  const tg = through(RAYLEIGH.g);
-  const tb = through(RAYLEIGH.b);
-  // What survives the trip, channel by channel. Applied to the sun's COLOR
-  // rather than its intensity because that is what it physically is: a beam
-  // that has lost more blue than red is both warmer and weaker, and one
-  // multiply says both.
-  const sun = new THREE.Color(p.sun);
-  p.sun = sun.setRGB(sun.r * tr, sun.g * tg, sun.b * tb).getHex();
   // WINTER is the one cast every country shares, because it is not a
   // colour of the ground so much as of the AIR: cold air holds almost no
   // water, so a clear winter sky is the deepest blue of the year and the
@@ -689,8 +678,8 @@ function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number
   }
   // The colour casts below are the TAIGA's year — pollen haze in May, the
   // straw-and-bilberry bounce in September. The desert's year is the
-  // astronomy above and very little else: a wet spring puts a little more
-  // dust in the air, and that is the whole of it.
+  // astronomy and very little else: a wet spring puts a little more dust
+  // in the air, and that is the whole of it.
   if (biome !== "taiga") {
     if (season === "spring") p.fogFar *= 0.96;
     return p;
@@ -721,15 +710,23 @@ function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number
   return p;
 }
 
-/** The whole sky for one run's conditions, over one country (R40). */
-export function skyFor(env: RaceEnv, biome: BiomeId = "taiga"): Preset {
+/** The whole sky at `hour` on one run's conditions, over one country
+ * (R40). The hour is the SUN's clock rather than the stage's start: the
+ * environment reads it off the race clock every frame (`sunHourAt`). */
+export function skyAt(env: RaceEnv, biome: BiomeId, hour: number): Preset {
   const wet = rainsIn(biome, env.season);
+  const sun = sunAt(hour, env.season, biome);
   return seasoned(
-    weathered(env.timeOfDay, env.weather, coverOf(env), biome, wet),
+    weathered(sun, env.weather, coverOf(env), biome, wet),
     env.season,
     biome,
     env.temperature,
   );
+}
+
+/** The sky a run STARTS under. */
+export function skyFor(env: RaceEnv, biome: BiomeId = "taiga"): Preset {
+  return skyAt(env, biome, env.hour);
 }
 
 /** How dark the car is ever allowed to get, as a fraction of its daylight
@@ -847,7 +844,12 @@ export function sunHardness(p: Preset): number {
 }
 
 /** The beam's share of the light on the ground, 0..1 — what is missing from
- * the shadow, which is what makes it dark. */
+ * the shadow, which is what makes it dark. What the country's shadow and a
+ * cloud's take off the ground (height-fog.ts) is the same share. */
+export function beamShareOf(p: Preset): number {
+  return beamShare(p);
+}
+
 function beamShare(p: Preset): number {
   const beam = lum(new THREE.Color(p.sun)) * p.sunIntensity * Math.sin(Math.max(0, p.sunElevation));
   const sky = lum(new THREE.Color(p.hemiSky)) * p.hemiIntensity;
@@ -885,8 +887,24 @@ export function snowTone(p: Preset): THREE.Color {
   return light.lerp(new THREE.Color(0xffffff), 0.45).multiplyScalar(0.92);
 }
 
-/** Direction from the origin toward the sun for elevation `el`. */
-export function sunDir(el: number): THREE.Vector3 {
+/**
+ * WHAT COLOUR A THING AT ALTITUDE IS LIT — a cloud, a contrail.
+ *
+ * The sun sets on the ground first. A cirrus sheet ten kilometres up is in
+ * full sun for a quarter of an hour after the valley has lost it, so it
+ * burns the sunset's orange over a landscape that has gone grey, and then
+ * goes grey itself — and a contrail at airliner height does exactly the
+ * same. The lit tone and the shade are the preset's; how much of each a
+ * given altitude gets is where the real sun is (`litAt`).
+ */
+export function highLightFor(p: Preset, altitude: number): THREE.Color {
+  const lit = litAt(altitude, p.sunUp);
+  return new THREE.Color(p.cloudShade).lerp(new THREE.Color(p.cloud), lit);
+}
+
+/** Direction from the origin toward a light at elevation `el` on world
+ * heading `az`. */
+export function sunDir(el: number, az: number): THREE.Vector3 {
   const c = Math.cos(el);
-  return new THREE.Vector3(Math.sin(SUN_AZIMUTH) * c, Math.sin(el), Math.cos(SUN_AZIMUTH) * c);
+  return new THREE.Vector3(Math.sin(az) * c, Math.sin(el), Math.cos(az) * c);
 }

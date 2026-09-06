@@ -590,10 +590,22 @@ export function rollTilt(roll: number): number {
   return roll - Math.round(roll / turn) * turn;
 }
 
-/** When the stage is driven — presentation picks lighting from it; the
- * engine itself only cares about weather (which sets the wind). */
-export type TimeOfDay = "dawn" | "day" | "dusk" | "night";
 export type Weather = "clear" | "rain" | "storm";
+
+/** How fast the sun's clock runs against the race clock: ONE MINUTE OF
+ * RACING IS ONE HOUR OF SUN. A stage started at sunset is driven into the
+ * dark; one started in the small hours drives into the dawn. Stated here
+ * because the engine owns the race clock the presentation reads the sun off
+ * (`RaceEnv.hour` + `t / SUN_SECONDS_PER_HOUR`), though nothing in the
+ * simulation itself ever looks at the sun. */
+export const SUN_SECONDS_PER_HOUR = 60;
+
+/** The clock on the sun at race time `t`, hours 0..24 — the hour the stage
+ * started at, run on at `SUN_SECONDS_PER_HOUR`. */
+export function sunHourAt(env: Pick<RaceEnv, "hour">, t: number): number {
+  const h = (env.hour + t / SUN_SECONDS_PER_HOUR) % 24;
+  return h < 0 ? h + 24 : h;
+}
 /** Which season a stage is driven in. Winter is the one that reaches the
  * WHEELS: under it a frozen country is snow on the road and a blanket off
  * it (`climate.ts`), where the other three only change what the year has
@@ -601,7 +613,11 @@ export type Weather = "clear" | "rain" | "storm";
 export type Season = "spring" | "summer" | "autumn" | "winter";
 
 export type RaceEnv = {
-  timeOfDay: TimeOfDay;
+  /** The hour the stage STARTS at, 0..24 local solar time — presentation
+   * picks the sun's place in the sky from it (with the season and the
+   * country's latitude) and runs it on with the race clock (`sunHourAt`).
+   * The engine itself only cares about the weather, which sets the wind. */
+  hour: number;
   weather: Weather;
   season: Season;
   /** Air temperature at the datum (y = 0), °C — the track's own

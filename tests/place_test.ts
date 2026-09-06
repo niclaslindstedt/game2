@@ -194,7 +194,7 @@ describe("placing the field with the run", () => {
       {
         seed: SEED,
         laps: 1,
-        timeOfDay: "day",
+        hour: 12,
         weather: "clear",
         season: "summer",
       },
@@ -226,7 +226,7 @@ describe("placing the field with the run", () => {
       {
         seed: SEED,
         laps: 1,
-        timeOfDay: "day",
+        hour: 12,
         weather: "clear",
         season: "summer",
       },

@@ -55,7 +55,6 @@ import {
   type GameState,
   type RaceEnv,
   type Season,
-  type TimeOfDay,
   type Weather,
 } from "./state.ts";
 import { freshCar, freshStats, healCar } from "./car-state.ts";
@@ -63,6 +62,10 @@ import { createTraffic, stepTraffic } from "./traffic.ts";
 import { status } from "../output.ts";
 
 const T = TUNING;
+
+/** The hour a run starts at when nobody says: noon, the arcade baseline
+ * every light in the game was authored against. */
+export const DEFAULT_HOUR = 12;
 
 export type CreateGameOptions = {
   seed: number;
@@ -87,13 +90,13 @@ export type CreateGameOptions = {
   /** Inject a pre-compiled track (tests and tooling); defaults to the
    * generated stage for `seed` at `length`. */
   track?: ReturnType<typeof compileTrack>;
-  /** Race conditions. Time of day is presentation-only; weather sets the
+  /** Race conditions. The start hour is presentation-only; weather sets the
    * wind band (TUNING.wind.speed); the season and the temperature are the
    * CLIMATE (climate.ts) — they reach the road, so a run handed a compiled
    * `track` takes them from it and one that compiles its own hands them to
-   * the compiler. Defaults: day, clear, the track's own climate (summer,
+   * the compiler. Defaults: noon, clear, the track's own climate (summer,
    * at the country's temperature). */
-  env?: { timeOfDay?: TimeOfDay; weather?: Weather; season?: Season; temperature?: number | null };
+  env?: { hour?: number; weather?: Weather; season?: Season; temperature?: number | null };
   /** The generator's dials (rules.ts) for the stage this run compiles.
    * Ignored when a pre-compiled `track` is handed in — that track carries
    * the dials it was built with. */
@@ -147,7 +150,7 @@ export type CreateGameOptions = {
  * from. The same seed and weather always blow the same wind. */
 function buildEnv(
   seed: number,
-  timeOfDay: TimeOfDay,
+  hour: number,
   weather: Weather,
   season: Season,
   temperature: number,
@@ -155,7 +158,7 @@ function buildEnv(
   const rng = createRng((seed ^ 0x51ab3d75) >>> 0);
   const [minSpeed, maxSpeed] = T.wind.speed[weather];
   return {
-    timeOfDay,
+    hour,
     weather,
     season,
     temperature,
@@ -221,7 +224,7 @@ export function createGame(options: CreateGameOptions): GameState {
   car.damageScale = clamp(options.damageScale ?? 1, 0, 1);
   const env = buildEnv(
     options.seed,
-    options.env?.timeOfDay ?? "day",
+    options.env?.hour ?? DEFAULT_HOUR,
     options.env?.weather ?? "clear",
     track.climate.season,
     track.climate.temperature,

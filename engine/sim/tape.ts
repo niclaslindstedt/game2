@@ -43,7 +43,7 @@
 import { NEUTRAL_INPUT, type CarInput, type GameState, type RunStats } from "../game/state.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { GearboxMode } from "../game/defs/cars.ts";
-import type { Season, TimeOfDay, Weather } from "../game/state.ts";
+import type { Season, Weather } from "../game/state.ts";
 import type { StageKnobs, StageLength, StageShape } from "../mapgen/index.ts";
 import type { GridSlot } from "./grid.ts";
 import type { Difficulty } from "./skill.ts";
@@ -70,13 +70,22 @@ export type TapeStage = {
   shape: StageShape;
   laps: number;
   knobs: StageKnobs;
-  timeOfDay: TimeOfDay;
+  /** The hour the stage started at (`RaceEnv.hour`). A tape written when a
+   * stage was set by a WORD rather than an hour carries `timeOfDay`
+   * instead; `parseTape` translates it (`HOUR_OF_WORD`). */
+  hour: number;
   weather: Weather;
   season: Season;
   /** The temperature at the datum, °C, or null (or absent, on a tape
    * written before there was one) for the season's own (climate.ts). */
   temperature?: number | null;
 };
+
+/** What the four words a stage used to be set by mean as an hour, for
+ * reading a tape written that way. The sun is presentation, so the numbers
+ * only have to put the replay under about the light the run was driven in;
+ * they are not the sky's own definition of the words. */
+export const HOUR_OF_WORD: Record<string, number> = { dawn: 6, day: 12, dusk: 19, night: 0 };
 
 /** Who was driving, in what. */
 export type TapeCar = { id: string; gearbox: GearboxMode };
@@ -343,6 +352,12 @@ export function parseTape(text: string): RunTape {
   }
   if (Math.abs(header.dt - TUNING.dt) > 1e-9) {
     throw new Error(`run tape: recorded at dt ${header.dt}, this build steps at ${TUNING.dt}`);
+  }
+  // A tape from before the sun had a clock names its light with a word.
+  const stage = header.stage as TapeStage & { timeOfDay?: string };
+  if (typeof stage.hour !== "number") {
+    stage.hour = HOUR_OF_WORD[stage.timeOfDay ?? ""] ?? HOUR_OF_WORD.day;
+    delete stage.timeOfDay;
   }
   inputs.sort((a, b) => a.step - b.step);
   samples.sort((a, b) => a.step - b.step);

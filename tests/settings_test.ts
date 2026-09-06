@@ -23,6 +23,7 @@ import {
   LAMP_BEAMS,
   loadSettings,
   MIN_FOG_FAR,
+  SKY_LOOK,
   type HudShow,
 } from "../pwa/src/game/settings.ts";
 
@@ -117,7 +118,13 @@ describe("the three picture rows", () => {
     // Most of HIGH's own levers given back to MEDIUM, which is what a
     // player stepping down the row and a half-migrated blob both look like.
     expect(
-      detailOf({ ...DETAIL_PRESETS.high, ground: "normal", dust: "player", glass: "player" }),
+      detailOf({
+        ...DETAIL_PRESETS.high,
+        ground: "normal",
+        dust: "player",
+        glass: "player",
+        sky: "layered",
+      }),
     ).toBe("medium");
     // A blob carrying one lever MEDIUM and HIGH agree on is a genuine tie,
     // and it goes to the picture that costs less to draw.
@@ -453,5 +460,39 @@ describe("what the car's lamps throw at each DETAIL stop", () => {
     }
     // The player's own lamps are always on the dust, whatever the row.
     expect(DUST_LAMP_CARS[stops[0]]).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// The SKY row is paid per sky pixel — every octave of cloud noise over a
+// third of the frame — so which stop draws which sky is worth holding: the
+// design point gets the layered sky a stop short of everything, the floor
+// keeps the arcade one, and the ladder only ever adds.
+describe("what sky each DETAIL stop draws", () => {
+  it("keeps the arcade sky on LOW and draws the shader on the two above", () => {
+    expect(SKY_LOOK[DETAIL_PRESETS.low.sky].shader).toBe(false);
+    expect(SKY_LOOK[DETAIL_PRESETS.medium.sky].shader).toBe(true);
+    expect(SKY_LOOK[DETAIL_PRESETS.high.sky].shader).toBe(true);
+  });
+
+  it("saves the cloud shadows and the sunlit edges for HIGH", () => {
+    expect(SKY_LOOK[DETAIL_PRESETS.medium.sky].cloudShadow).toBe(false);
+    expect(SKY_LOOK[DETAIL_PRESETS.medium.sky].sunlit).toBe(false);
+    expect(SKY_LOOK[DETAIL_PRESETS.high.sky].cloudShadow).toBe(true);
+    expect(SKY_LOOK[DETAIL_PRESETS.high.sky].sunlit).toBe(true);
+  });
+
+  it("walks the ladder monotonically, cheapest first", () => {
+    const stops = (["low", "medium", "high"] as const).map(
+      (id) => SKY_LOOK[DETAIL_PRESETS[id].sky],
+    );
+    for (let i = 1; i < stops.length; i++) {
+      expect(stops[i].octaves).toBeGreaterThanOrEqual(stops[i - 1].octaves);
+      expect(Number(stops[i].mist)).toBeGreaterThanOrEqual(Number(stops[i - 1].mist));
+      expect(Number(stops[i].mountainShadow)).toBeGreaterThanOrEqual(
+        Number(stops[i - 1].mountainShadow),
+      );
+    }
+    // A sky that is a shader at all reads its clouds at some octaves.
+    for (const look of Object.values(SKY_LOOK)) expect(look.shader).toBe(look.octaves > 0);
   });
 });

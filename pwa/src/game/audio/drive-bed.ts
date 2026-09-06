@@ -20,11 +20,13 @@ import {
   biomeRules,
   lineAt,
   startsIn,
+  sunHourAt,
   trainAt,
   type GameState,
   type RailCrossing,
 } from "@engine";
 
+import { daylightAt } from "../daylight.ts";
 import { squallOf, wetnessOf } from "../weather.ts";
 
 import type { Synth } from "../../lib/voice.ts";
@@ -409,7 +411,7 @@ export function createDriveBed(synth: Synth, random: () => number = Math.random)
       world.update(
         {
           biome,
-          timeOfDay: state.env.timeOfDay,
+          daylight: daylightAt(sunHourAt(state.env, state.t), state.env.season, biome),
           season: state.env.season,
           wet,
           gale,
