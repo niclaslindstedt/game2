@@ -82,26 +82,30 @@ function signLength(line: readonly PacePoint[]): number {
  * colour, and the head filled in the same. The stroke itself is CSS
  * (`.hud-pace-arrow path`) rather than an attribute here — see styles.css.
  *
- * THE CORNER FILLS AS IT IS DRIVEN. The same line is drawn a second time in
- * the HUD's own ink and clipped to how much of the bend is behind the car,
- * so the sign is written in from the approach to the head over exactly the
- * road the note covers. It is the one moving thing on the strip and it moves
- * the way the car does: a driver who glances at a half-inked hairpin knows
- * there is as much of it left as there is behind, without reading anything.
+ * THE CORNER FILLS AS IT IS DRIVEN, IN ITS OWN COLOUR. The road is laid down
+ * twice: once faint, which is the corner still to come, and once solid in the
+ * severity's own colour, clipped to how much of the bend is behind the car.
+ * So the sign COMES UP as it is driven — from the approach to the head, over
+ * exactly the road the note covers. It is the one moving thing on the strip
+ * and it moves the way the car does: a driver who glances at a half-lit
+ * hairpin knows there is as much of it left as there is behind, without
+ * reading anything.
  *
- * Ink rather than the severity's own colour, and drawn OVER the sign rather
- * than under it: the colour is the corner's difficulty and it has to be
- * whole from the moment the plate goes up, which is the two seconds of
- * braking where it is worth most. A fill in the same colour would leave the
- * approach saying nothing for those two seconds. */
+ * ONE COLOUR on the whole plate. The severity is not weakened by the ghost
+ * under it — the plate's point is cut and filled solid in that same colour
+ * from the moment the call goes up, and it is the point, not the drawn road,
+ * that a braking driver reads the difficulty and the direction off. What the
+ * road is left free to say is HOW FAR THROUGH. */
 export function PacenoteArrow({ sign, fill }: { sign: PaceSign; fill: number }) {
   const line = `M ${sign.line.map((p) => p.join(" ")).join(" L ")}`;
   const head = sign.head.map((p) => p.join(",")).join(" ");
   const span = signLength(sign.line);
   return (
     <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-      <path d={line} />
-      <polygon points={head} />
+      <g className="hud-pace-road">
+        <path d={line} />
+        <polygon points={head} />
+      </g>
       {fill > 0 && (
         <g className="hud-pace-fill">
           <path
