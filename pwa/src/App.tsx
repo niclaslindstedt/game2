@@ -2297,10 +2297,11 @@ export function App() {
   }, [inMenu, benchmarking]);
 
   // WHILE THE BOARD IS BEING TYPED INTO, THE KEYBOARD IS NOT THE CAR'S. The
-  // bindings are letters — `R` restarts the run, `M` walks out to the main
-  // menu — and both listeners sit on the same target, so the entry's own
-  // `preventDefault` cannot stop them. The input manager hands the keyboard
-  // over for as long as the three letters are outstanding.
+  // bindings are letters — `R` puts the car back at the last board, `B`
+  // restarts the run, `M` walks out to the main menu — and both listeners
+  // sit on the same target, so the entry's own `preventDefault` cannot stop
+  // them. The input manager hands the keyboard over for as long as the
+  // three letters are outstanding.
   const typingScore = scores?.pending != null;
   useEffect(() => {
     input.setTyping(typingScore);
@@ -3588,7 +3589,7 @@ export function App() {
   // ...and where it goes back to. A TIME TRIAL is one stage run again and
   // again against a board, so the card offers the same stage from the grid
   // — the same road, the same car, a clean clock and a fresh ghost. It is
-  // the restart the pause menu and `R` already do, put where a player who
+  // the restart the pause menu and `B` already do, put where a player who
   // has just read their time is looking.
   // …and a campaign run that missed the podium wants exactly the same
   // button: the stage is still there, and the field will run it again.
