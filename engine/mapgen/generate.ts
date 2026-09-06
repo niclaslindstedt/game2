@@ -21,9 +21,10 @@ import {
   type StageShape,
 } from "./rules.ts";
 import { challengeMul, followGradeOf, knobScale, resolveKnobs, roadWidthOf } from "./rules.ts";
+import type { Climate } from "../game/climate.ts";
 import { biomeRules } from "./biomes.ts";
 import { generateCircuit } from "./circuit.ts";
-import { createLandField, type LandField } from "./land.ts";
+import { buildableAt, createLandField, landUnder, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
 import { buildRolling } from "./rolling.ts";
 import { valleyUnder } from "./terrain.ts";
@@ -64,21 +65,29 @@ import {
  *
  * R22 — `shape` picks which search runs. A sprint runs from a start to a
  * finish somewhere else (the search below); a circuit closes back onto its
- * own start line so the stage can be raced over laps (circuit.ts). */
+ * own start line so the stage can be raced over laps (circuit.ts).
+ *
+ * R48 — `climate` is the cold the country is under, and it is the ONE
+ * thing besides the seed and the dials that can move a line. A stage in a
+ * summer is the stage it has always been; below `CLIMATE.ice` the lakes
+ * are frozen solid, and a frozen lake is ground the route may cross —
+ * so a winter seed and a summer seed are two different roads through the
+ * same country, which is the point of driving it in winter. */
 export function generateStage(
   seed: number,
   length: FiniteStageLength = "medium",
   knobs?: Partial<StageKnobs>,
   shape: StageShape = "sprint",
+  climate?: Climate,
 ): SegmentPlan[] {
   const dials = resolveKnobs(knobs);
-  if (shape === "circuit") return generateCircuit(seed, length, dials);
+  if (shape === "circuit") return generateCircuit(seed, length, dials, climate);
   // R35 — the country, and the water standing on it, BEFORE the first
   // segment is drawn. Built once from the stage's own seed rather than per
   // attempt: the landscape is not what a retry is retrying, and the pour
   // it caches is what makes asking "is this line in a lake" cheap enough
   // to ask of every probe point of every candidate.
-  const land = createLandField(seed, dials);
+  const land = createLandField(seed, dials, climate);
   // R17 — and THE TARMAC, before the first segment of rally is drawn. A
   // sealed road is not a stripe painted down the racing line: it is a
   // public road that was there first and goes somewhere, and the rally
@@ -158,11 +167,7 @@ function tryGenerateStage(
    * included, which is the same thing the compiler follows — and the roll
    * the compiler will lay on it is the same roll, from the same seed, so
    * the height the search judges is the road's own surface (R34). */
-  const groundAt = (x: number, z: number, roll: number): number => {
-    const ground = land.heightAt(x, z);
-    const water = land.water.shoreLevelAt(x, z);
-    return water === null ? ground : Math.max(ground, water + R.elevation.follow.freeboard - roll);
-  };
+  const groundAt = (x: number, z: number, roll: number): number => buildableAt(land, x, z, roll);
   const profile: Profile = { y: groundAt(0, 0, rolling(0)), slope: 0, rollS: 0 };
   /** R47 — the country's own say in the line: how steep its roads run,
    * how hard the search reads the land when it picks which way a corner
@@ -193,7 +198,7 @@ function tryGenerateStage(
   const offLand = (p: Cursor): number =>
     p.y === undefined || p.rollS === undefined
       ? 0
-      : p.y - rolling(p.rollS) - land.heightAt(p.x, p.z);
+      : p.y - rolling(p.rollS) - landUnder(land, p.x, p.z);
   /** R47 — how badly a candidate FITS the country: the furthest its base
    * stands off the land anywhere along it, plus a charge for climbing,
    * because a mountain stage is a road coming down off a mountain and a
@@ -386,7 +391,7 @@ function tryGenerateStage(
    * repaired. Repairing it is what the terrain used to do, and what a
    * terrain does when handed a road through a lake is build a causeway. */
   const keepsDry = (p: Cursor): boolean => {
-    if (land.nearWater(p.x, p.z, routeClear)) return false;
+    if (land.nearOpenWater(p.x, p.z, routeClear)) return false;
     // ...and its SURFACE stays over the water beside it. The road's height
     // follows the country through a lag, and the freeboard it keeps over a
     // lake is only asked for where the lake is already in view: a road
@@ -395,8 +400,28 @@ function tryGenerateStage(
     // A line the road can only take under the water is refused here, where
     // another can still be drawn.
     if (p.y === undefined) return true;
-    const level = land.water.shoreLevelAt(p.x, p.z);
-    return level === null || p.y >= level + R.water.underLake;
+    //
+    // R48 — none of which applies to a body that has frozen solid, which is
+    // why the reading is the OPEN water's: the sheet IS the road's ground,
+    // and a line held a metre above it is a line that can never get onto
+    // the lake at all.
+    const level = land.openShoreLevelAt(p.x, p.z);
+    if (level !== null && p.y < level + R.water.underLake) return false;
+    // ...and where it crosses ice it crosses it LOW. The follower brings
+    // the road down to the country through a lag longer than most lakes are
+    // wide, so a line that reaches a shore metres up is still up there at
+    // the far side — a causeway over a frozen lake, which is the one thing
+    // R35 exists to prevent. Refused here, where another line can still be
+    // drawn; what gets through goes on over a bank and lands on the sheet.
+    const ice = land.iceAt(p.x, p.z);
+    return ice === null || Math.abs(p.y - ice) <= R.ice.lift;
+  };
+  /** R48 — ...and a corner ON the ice is a gentle one. The lake carries
+   * the sweeper and the straight; everything tighter than
+   * `R.ice.minRadius` is refused there and drawn on the land instead. */
+  const holdsOnIce = (plan: SegmentPlan, points: Cursor[]): boolean => {
+    if (plan.kind !== "turn" || (plan.radius ?? Infinity) >= R.ice.minRadius) return true;
+    return !points.some((p) => land.nearIce(p.x, p.z, R.ice.cornerClear));
   };
   /** R34 — and it keeps within reach of the ground. A line the road can
    * only take by standing twenty-odd metres off the country is refused
@@ -638,7 +663,8 @@ function tryGenerateStage(
             // passage over a crossing included, which is exempt through its
             // own meeting point rather than through a flag.
             (!plan.paved && !clearOfTarmac(p)),
-        )
+        ) ||
+        !holdsOnIce(plan, points)
       ) {
         break;
       }
@@ -1140,7 +1166,8 @@ function tryGenerateStage(
             !clearOfTarmac(p),
         ) ||
         !crossingSits(cursor, plan, points) ||
-        !jumpLands(cursor, plan, points)
+        !jumpLands(cursor, plan, points) ||
+        !holdsOnIce(plan, points)
       ) {
         continue;
       }

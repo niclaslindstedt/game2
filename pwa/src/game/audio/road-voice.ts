@@ -197,6 +197,23 @@ export const SURFACES: Record<string, SurfaceVoice> = {
     body: { level: 0.018, hz: 380, climb: 0.28 },
     tear: { level: 0.006, hz: 820, climb: 0.3 },
   },
+  // R48 — ICE: a frozen lake, and the QUIETEST ground in the game. There is
+  // nothing under the tread to crush, throw or tear — the sheet is a
+  // polished floor — so what is left is a thin high hiss of rubber skating
+  // over it and, under that, the hollow boom of a body over a drum: a metre
+  // of ice with water beneath it rings in a way solid ground never does,
+  // and that low tone is the whole reason a lake sounds like a lake rather
+  // than like a very smooth road. It has the biggest CORNER factor of any
+  // row, because a car pointed straight on ice is nearly silent and a car
+  // sideways on it is the one thing that finally makes it speak.
+  ice: {
+    color: "white",
+    hz: 90,
+    level: 0.012,
+    corner: 4.2,
+    body: { level: 0.02, hz: 150, climb: 0.12 },
+    grain: { level: 0.0035, hz: 2600, climb: 0.7 },
+  },
 };
 
 /**

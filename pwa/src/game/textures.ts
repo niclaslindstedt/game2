@@ -171,6 +171,23 @@ export const waterTexture = once((): THREE.CanvasTexture => {
   return withMipmaps(toTexture(canvas, 2));
 });
 
+/** R48 — THE ICE a frozen lake is drawn with: an off-white sheet with the
+ * blue of the water beneath showing through it in patches, a scatter of
+ * paler wind-swept snow over the top and a few dark lines where it has
+ * cracked and refrozen. Cold and grey-blue rather than the snow's warm
+ * white, so a lake reads as a different surface from the country around it
+ * at a glance and at speed — which is the whole job, because on the map it
+ * is the flattest, emptiest thing on the stage. */
+export const iceTexture = once((): THREE.CanvasTexture => {
+  const { canvas, ctx } = makeCanvas(64);
+  speckle(ctx, 64, "#d9e6f0", [
+    { color: "#eaf3fa", count: 200, min: 2, max: 7 },
+    { color: "#bccfe0", count: 140, min: 1, max: 5 },
+    { color: "#8fa9c0", count: 30, min: 1, max: 2 },
+  ]);
+  return withMipmaps(toTexture(canvas, 2));
+});
+
 /** A rally gate banner: the word in chunky dark caps on a white ground,
  * framed by checkered-flag bands top and bottom. Nearest filtering keeps
  * the lettering as blocky as the rest of the world. */

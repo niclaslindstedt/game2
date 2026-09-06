@@ -92,8 +92,12 @@ export type WaterField = {
   /** The surface of the nearest standing water within a stone's throw of
    * this point, m, or null where there is none. What anything keeping a
    * FREEBOARD off the water has to clear: a road on the shore is not in
-   * the lake, but it is still the lake's level it must stand above. */
-  shoreLevelAt: (x: number, z: number) => number | null;
+   * the lake, but it is still the lake's level it must stand above.
+   *
+   * `accept` narrows what counts, exactly as on `nearestAt`: a body the
+   * cold has frozen solid (R48) owes nothing a freeboard, because there
+   * is nothing left to keep out of. */
+  shoreLevelAt: (x: number, z: number, accept?: (level: number) => boolean) => number | null;
   /** The body covering this point, or null on dry ground. */
   bodyAt: (x: number, z: number) => WaterBody | null;
   /** The nearest standing water to a point within `within` metres, or null
@@ -103,11 +107,19 @@ export type WaterField = {
    * watercourse leaving a hillside has somewhere to be. Groping downhill
    * step by step, a course meanders round the contours of its own noise
    * and runs out of length a couple of hundred metres from a lake it was
-   * never actually aimed at; given the lake, it runs to it. */
+   * never actually aimed at; given the lake, it runs to it.
+   *
+   * `accept` narrows what counts as water for one caller — a cell whose
+   * body's level it refuses is walked past rather than returned, so the
+   * search continues outward instead of stopping on it. R48's route asks
+   * for the nearest OPEN water this way: a frozen lake is a floor rather
+   * than an obstacle, and a rule that stopped at the first one would call
+   * the open water behind it invisible. */
   nearestAt: (
     x: number,
     z: number,
     within: number,
+    accept?: (level: number) => boolean,
   ) => { x: number; z: number; level: number } | null;
   /** The sea's own table, m. */
   table: number;
@@ -477,7 +489,11 @@ export function createWaterField(
     return level === null ? 0 : level - surfaceAt(x, z);
   };
 
-  const shoreLevelAt = (x: number, z: number): number | null => {
+  const shoreLevelAt = (
+    x: number,
+    z: number,
+    accept?: (level: number) => boolean,
+  ): number | null => {
     const block = blockFor(x, z);
     const i0 = Math.min(block.n - 1, Math.max(0, Math.round((x - block.originX) / CELL)));
     const j0 = Math.min(block.n - 1, Math.max(0, Math.round((z - block.originZ) / CELL)));
@@ -492,6 +508,7 @@ export function createWaterField(
         // The HIGHEST water near the point: a road on a shelf between a
         // tarn and the sea below it has to stand clear of the tarn.
         const level = block.level[idx];
+        if (accept && !accept(level)) continue;
         if (best === null || level > best) best = level;
       }
     }
@@ -506,6 +523,7 @@ export function createWaterField(
     x: number,
     z: number,
     within: number,
+    accept?: (level: number) => boolean,
   ): { x: number; z: number; level: number } | null => {
     const block = blockFor(x, z);
     const i0 = Math.round((x - block.originX) / CELL);
@@ -526,6 +544,7 @@ export function createWaterField(
           if (i < 0 || j < 0 || i >= block.n || j >= block.n) continue;
           const idx = j * block.n + i;
           if (block.body[idx] === -1) continue;
+          if (accept && !accept(block.level[idx])) continue;
           const cx = block.originX + i * CELL;
           const cz = block.originZ + j * CELL;
           const d = Math.hypot(cx - x, cz - z);

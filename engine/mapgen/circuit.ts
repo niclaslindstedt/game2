@@ -20,6 +20,7 @@
 
 import { angleDiff } from "../lib/math.ts";
 import { createRng } from "../lib/prng.ts";
+import type { Climate } from "../game/climate.ts";
 import { createLandField, type LandField } from "./land.ts";
 import { roadClearance } from "./road.ts";
 import {
@@ -191,6 +192,7 @@ function probeClosure(
   worldBound: number,
   cycle: number,
   keepsDry: (p: Cursor) => boolean,
+  holdsOnIce: (plan: SegmentPlan, points: Cursor[]) => boolean,
 ): Cursor[] | null {
   let at = cursor;
   const all: Cursor[] = [];
@@ -201,6 +203,7 @@ function probeClosure(
       if (field.blocked(p, cycle)) return null;
       if (!keepsDry(p)) return null;
     }
+    if (!holdsOnIce(plan, points)) return null;
     all.push(...points);
     at = end;
   }
@@ -215,11 +218,14 @@ export function generateCircuit(
   seed: number,
   length: FiniteStageLength,
   knobs: StageKnobs,
+  /** R48 — the cold, which decides which of the country's bodies the ring
+   * may be drawn ACROSS rather than around. */
+  climate?: Climate,
 ): SegmentPlan[] {
   // R35 — the country and its water, poured before the ring is drawn. One
   // field for every attempt: a retry is redrawing the road, not the
   // landscape.
-  const land = createLandField(seed, knobs);
+  const land = createLandField(seed, knobs, climate);
   const ladder = R.water.routeClearLadder;
   for (let attempt = 0; attempt < 400; attempt++) {
     // The same relaxing setback the sprint search walks down — a ring has
@@ -254,8 +260,16 @@ function tryCircuit(
   // the whole shape of a circuit, and the closure lies along the start's
   // apron rather than across it.
   const field = createPointField(roadClearance(roadWidthOf(knobs)));
-  /** R35 — a ring is drawn round the water like any other road. */
-  const keepsDry = (p: Cursor): boolean => !land.nearWater(p.x, p.z, routeClear);
+  /** R35 — a ring is drawn round the water like any other road, and R48 —
+   * across the bodies the cold has frozen solid, which are floors rather
+   * than obstacles. */
+  const keepsDry = (p: Cursor): boolean => !land.nearOpenWater(p.x, p.z, routeClear);
+  /** R48 — and a corner ON the ice is a gentle one: the lake carries the
+   * sweeper and the straight, and everything tighter is drawn on land. */
+  const holdsOnIce = (plan: SegmentPlan, points: Cursor[]): boolean => {
+    if (plan.kind !== "turn" || (plan.radius ?? Infinity) >= R.ice.minRadius) return true;
+    return !points.some((p) => land.nearIce(p.x, p.z, R.ice.cornerClear));
+  };
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   // Where the ROAD stands, walked the compiler's way — the pose the closure
   // has to solve from. `builtStack` carries one entry per committed segment
@@ -314,6 +328,7 @@ function tryCircuit(
           spec.worldBound,
           total + added,
           keepsDry,
+          holdsOnIce,
         );
         if (points && Math.abs(netTurn([...plans, ...segments])) > Math.PI) {
           plans.push(...segments);
@@ -368,6 +383,7 @@ function tryCircuit(
       if (Math.abs(angleDiff(end.heading, ring)) > COURSE_ERROR) continue;
       if (!points.every((p) => inBounds(p, spec.worldBound))) continue;
       if (points.some((p) => field.blocked(p) || !keepsDry(p))) continue;
+      if (!holdsOnIce(plan, points)) continue;
       commit(plan, points, end);
       placed = true;
     }

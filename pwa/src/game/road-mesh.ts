@@ -62,6 +62,12 @@ export const ROAD_PAINT = {
   // a snow vertex is lifted clear of the grit map's darkening (see
   // `buildRoad`) — unlike the rows above, which are read under it.
   snow: { loose: "#f1f3f6", worn: "#c4ccd6" },
+  // R48 — the road across a frozen lake: swept ice rather than packed
+  // snow, so it is darker and bluer than the row above it, and the wheel
+  // tracks are polished rather than worn — the tread burnishes the sheet
+  // instead of cutting into it. Lifted clear of the grit map for the same
+  // reason the snow is: there is no stone in a lake.
+  ice: { loose: "#dbe7f1", worn: "#adc2d4" },
   asphalt: { loose: "#3a3b40", worn: "#54555c" },
   water: { loose: "#8fa6c6", worn: "#8fa6c6" },
   deck: { loose: "#b7b3a8", worn: "#a4a096" },
@@ -373,7 +379,11 @@ export function buildRoad(
     // darkening — the same ratio the lip uses to meet the ground — and
     // come out the white they were authored as, with the grit's grain
     // showing through as the stone in the packed snow.
-    const snowy = kind === "snow";
+    // R47/R48 — a snow road and an ice road are both WHITE ROAD: neither
+    // has a shoulder of bare earth to hand over to (one is banked snow,
+    // the other is the sheet the road was swept out of), and neither is
+    // read under the grit map's darkening.
+    const snowy = kind === "snow" || kind === "ice";
     shoulder.copy(snowy ? snowBank : earth);
     // R47 — inside a BORE the country beside the road is the mountain,
     // twenty metres up. The ribbon must not hand its outer band over to it.

@@ -25,7 +25,7 @@
 import * as THREE from "three";
 
 import { shareOne } from "../lib/shared-gpu.ts";
-import { waterTexture } from "./textures.ts";
+import { iceTexture, waterTexture } from "./textures.ts";
 
 /** How much of what is under the water comes through it. Quake's
  * `r_wateralpha`, and the same judgement: far enough down that a ford reads
@@ -49,6 +49,31 @@ export const waterMaterial = shareOne(
       // when its winding is wrong is a bug that reads as the bed flickering
       // rather than as the water being gone.
       side: THREE.DoubleSide,
+    }),
+);
+
+/** R48 — ...and what a body of water looks like once the cold has taken
+ * it (climate.ts). The same flat sheet at the same level, and every
+ * decision above inverted, because ice is the OPPOSITE of water in the two
+ * ways that matter: it is OPAQUE, so the bed under it stops being part of
+ * the picture and the surface becomes the ground, and it is DULL, so the
+ * sun lies on it as a broad sheen rather than as a glare. A lake drawn as
+ * shiny white is drawn as water that has gone pale; drawn as a matte floor
+ * it reads as something to drive on, which is what it now is.
+ *
+ * One-sided, unlike the water: there is no under-side of an ice road to
+ * see, and the car is always on top of it.
+ *
+ * It is a second material and a second draw call rather than a shader
+ * switch on the first, because a stage can hold both at once — a tarn on a
+ * shoulder freezes while the lake in the valley is still open — and the
+ * two sheets are cut from the same tiles. */
+export const iceMaterial = shareOne(
+  (): THREE.MeshPhongMaterial =>
+    new THREE.MeshPhongMaterial({
+      map: iceTexture(),
+      specular: 0x9fb6cc,
+      shininess: 26,
     }),
 );
 

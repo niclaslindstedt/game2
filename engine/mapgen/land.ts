@@ -24,6 +24,8 @@
 // and everything that cares (what grows, what surfaces, what the ground is
 // painted) asks that.
 
+import { icyCountry, waterFrozen, type Climate } from "../game/climate.ts";
+import { biomeRules } from "./biomes.ts";
 import { createGeology, type GeologyField } from "./geology.ts";
 import { createWaterField, SEA, type WaterField } from "./water.ts";
 import { STAGE_RULES as R, type StageKnobs } from "./rules.ts";
@@ -67,6 +69,37 @@ export type LandField = {
    * Measuring the room the road actually needs, in the units it needs it
    * in, puts it back on the flat instead. */
   nearWater: (x: number, z: number, within: number) => boolean;
+  /** R48 — the same setback, counting only the water that is still WATER.
+   * A body the cold has frozen solid is a floor rather than an obstacle,
+   * so the rally's own route steers by this one and drives across what it
+   * skips. Everything laid on the country for good — a public road, a
+   * railway, a farm — keeps using `nearWater`: a tarmac road is built for
+   * every season, and a season is not a reason to put one on a lake. */
+  nearOpenWater: (x: number, z: number, within: number) => boolean;
+  /** R48 — whether the cold has frozen a body standing at this LEVEL solid
+   * (climate.ts). Asked of a level rather than a point because that is all
+   * it depends on, and because everything with a level in hand — a pour's
+   * body, a shore reading, a tile of drawn sheet — can then ask it. */
+  frozen: (level: number) => boolean;
+  /** R48 — the ICE standing over a point, m: the flat surface of a body
+   * the cold has frozen solid, or null on dry ground and on open water.
+   * What a rally road across a lake is laid ON. */
+  iceAt: (x: number, z: number) => number | null;
+  /** R48 — `water.shoreLevelAt` counting only the water that is still
+   * WATER: the level a road near here has to keep its freeboard over, or
+   * null where the only water in reach has frozen. It is what stops the
+   * freeboard putting a STEP at the waterline of a lake the route is about
+   * to drive onto — a road held metres over the sheet at the shore and
+   * laid flat on it a stride later. */
+  openShoreLevelAt: (x: number, z: number) => number | null;
+  /** R48 — and the mirror of `nearOpenWater`: is there ICE within `within`
+   * metres of this point. What the corner rule is measured with, because a
+   * corner is refused for being NEAR the sheet rather than only for
+   * standing on it — the search probes every six metres and its Euler walk
+   * diverges from the compiler's by a metre or two more, so a turn checked
+   * only at its own probe points can still put a dozen of the compiled
+   * road's samples over a shoreline it never sampled. */
+  nearIce: (x: number, z: number, within: number) => boolean;
   /** The standing water itself (R35) — levels, depths and bodies, poured
    * onto the bare ground before any road exists. */
   water: WaterField;
@@ -89,22 +122,56 @@ const memo: { key: string; land: LandField }[] = [];
  * because the pour inside it is the most expensive thing in the generator.
  * Everything it hands out is read-only, so sharing one field between the
  * search, the compiler and the terrain is sharing a value, not state. */
-export function createLandField(seed: number, knobs: StageKnobs): LandField {
-  const key = `${seed}|${knobs.biome}|${knobs.elevation}|${knobs.steepness}|${knobs.water}|${knobs.trees}|${knobs.asphalt}|${knobs.width}|${knobs.challenge}|${knobs.peaks}`;
+export function createLandField(
+  seed: number,
+  knobs: StageKnobs,
+  /** R48 — the cold the country is under, which decides which of its
+   * bodies are ice rather than water. Omitted, nothing is frozen: the
+   * water is the country's own and every road keeps off all of it, which
+   * is what a summer stage and every tool that only wants the LAND want. */
+  climate?: Climate,
+): LandField {
+  const cold = climate === undefined ? "" : `${climate.season}|${climate.temperature}`;
+  const key = `${seed}|${knobs.biome}|${knobs.elevation}|${knobs.steepness}|${knobs.water}|${knobs.trees}|${knobs.asphalt}|${knobs.width}|${knobs.challenge}|${knobs.peaks}|${cold}`;
   const had = memo.find((entry) => entry.key === key);
   if (had) return had.land;
-  const land = buildLandField(seed, knobs);
+  const land = buildLandField(seed, knobs, climate);
   memo.push({ key, land });
   if (memo.length > MEMO) memo.shift();
   return land;
 }
 
-function buildLandField(seed: number, knobs: StageKnobs): LandField {
+function buildLandField(seed: number, knobs: StageKnobs, climate?: Climate): LandField {
   const geology = createGeology(seed, knobs);
   const heightAt = geology.surfaceAt;
   const water = createWaterField(geology.groundAt, heightAt);
+  // R48 — CAN this country hold ice at all? Every ice reader below is the
+  // plain one when it cannot, predicate and all, because the search asks
+  // them of every probe point of every candidate segment: a summer that
+  // paid for a callback and a second block lookup per step measured a
+  // fifth again on the plan phase of `make analyze`, to answer "no" a
+  // million times.
+  const icy = climate !== undefined && icyCountry(climate, biomeRules(knobs.biome).land.zones);
+  const frozen = icy
+    ? (level: number) => waterFrozen(climate as Climate, level)
+    : (): boolean => false;
+  const iceAt = icy
+    ? (x: number, z: number): number | null => {
+        const level = water.levelAt(x, z);
+        return level !== null && frozen(level) ? level : null;
+      }
+    : (): number | null => null;
   return {
     heightAt,
+    frozen,
+    iceAt,
+    nearOpenWater: icy
+      ? (x, z, within) => water.nearestAt(x, z, within, (level) => !frozen(level)) !== null
+      : (x, z, within) => water.nearestAt(x, z, within) !== null,
+    openShoreLevelAt: icy
+      ? (x, z) => water.shoreLevelAt(x, z, (level) => !frozen(level))
+      : (x, z) => water.shoreLevelAt(x, z),
+    nearIce: icy ? (x, z, within) => water.nearestAt(x, z, within, frozen) !== null : () => false,
     surfaceAt: (x, z) => {
       const ground = heightAt(x, z);
       const level = water.shoreLevelAt(x, z);
@@ -122,4 +189,50 @@ function buildLandField(seed: number, knobs: StageKnobs): LandField {
     water,
     geology,
   };
+}
+
+/** THE GROUND A ROAD MAY BE BUILT ON at a point, m — the base the road's
+ * own roll (R34) then rides on top of, which is why the roll is subtracted
+ * out of every answer that is a CLEARANCE rather than the land itself.
+ *
+ * Three grounds, in the order they win:
+ *
+ *   THE ICE (R48). A body the cold has frozen solid is a floor, and the
+ *   floor is flat: the base is set so the road's surface lands exactly on
+ *   the sheet, neither filled up off the lake bed nor floating over it.
+ *
+ *   THE FREEBOARD. Open water beside or under the line — the road stands
+ *   clear of it by `elevation.follow.freeboard`, so a stage along a shore
+ *   is a stage on the bank and never a causeway in the shallows. R35: the
+ *   water it clears is the water actually HERE, at its own level. Against
+ *   one table for the whole world a road crossing a tarn two hundred
+ *   metres up reads the sea's level, decides it is comfortably clear, and
+ *   drives straight through the lake.
+ *
+ *   THE COUNTRY, everywhere else.
+ *
+ * Stated once because THREE walks read it: the search's, which judges the
+ * height of a road; the compiler's, which builds it; and the trial walk
+ * that sizes the country around it. Two copies of this rule that drift
+ * apart is a stage validated against a road nobody laid, or a landscape
+ * that does not fit its own stage.
+ *
+ * It keeps a road out of water it was ROUTED into; it is not what keeps it
+ * from being routed there. `keepsDry` in the searches does that, and this
+ * is the backstop under it — the START in particular is a point no search
+ * chooses at all. */
+export function buildableAt(land: LandField, x: number, z: number, roll: number): number {
+  const ice = land.iceAt(x, z);
+  if (ice !== null) return ice - roll;
+  const ground = land.heightAt(x, z);
+  const water = land.openShoreLevelAt(x, z);
+  return water === null ? ground : Math.max(ground, water + R.elevation.follow.freeboard - roll);
+}
+
+/** ...and the BARE ground under a point for the fill-and-cut caps (R34):
+ * the country, or the ice where a body is frozen. A road across a frozen
+ * lake stands on the lake — measured against the bed under it, every metre
+ * of it would read as an embankment nobody built. */
+export function landUnder(land: LandField, x: number, z: number): number {
+  return land.iceAt(x, z) ?? land.heightAt(x, z);
 }
