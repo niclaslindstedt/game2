@@ -25,6 +25,7 @@ import type { DamagePart } from "@engine";
 
 import { MeshBuilder, mergeGeometries, patchNormal } from "./car/builder.ts";
 import { buildFront, buildRear } from "./car/fascia.ts";
+import { buildGlassCracks, type GlassCracks } from "./car/glass-cracks.ts";
 import { buildGreenhouse, screenPanes, type GlassPanes } from "./car/greenhouse.ts";
 import { buildCockpit, cabinOpening, type CarCockpit } from "./car/cockpit.ts";
 import { bayOpening, buildEngineBay } from "./car/engine-bay.ts";
@@ -153,6 +154,10 @@ export type CarBodyParts = {
    * damage visual takes a shattered pane out of. Null alongside `glass`. */
   glassMesh: THREE.Mesh | null;
   panes: GlassPanes;
+  /** THE WEB IN THAT GLASS — the hairlines the engine's crazing ledger
+   * opens across each pane before it finally lets go (car/glass-cracks.ts).
+   * Null on a spec with no glass in it. */
+  cracks: GlassCracks | null;
   /** The door skins this body was built with (car/trim.ts): where each one
    * is, so the hole it leaves can be painted into the flank behind it. */
   doors: DoorSkin[];
@@ -327,6 +332,15 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     cabin.add(glassMesh);
   }
 
+  // The cracks live beside the glass rather than in it: the pane is one
+  // fading quad per window and a hairline is a strip across it, so putting
+  // them in the same buffer would mean re-tessellating every window around
+  // a web that is not there yet on most cars. They ride the same group, so
+  // they follow the cabin wherever it goes — the cockpit view included,
+  // which is the view they exist for.
+  const cracks = glassMesh ? buildGlassCracks(spec) : null;
+  if (cracks) cabin.add(cracks.mesh);
+
   const breakables: Partial<Record<DamagePart, THREE.Mesh>> = {};
   const partGeos: THREE.BufferGeometry[] = [];
   for (const [name, builder] of partBuilders) {
@@ -475,6 +489,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
 
   const dispose = (): void => {
     wipers.dispose();
+    cracks?.dispose();
     interior.dispose();
     cockpit?.dispose();
     screenRain?.dispose();
@@ -509,6 +524,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     glass: glassMat,
     glassMesh,
     panes,
+    cracks,
     doors: doorSkins(spec),
     wheelRadius: spec.wheelRadius,
     lens: lensMat,

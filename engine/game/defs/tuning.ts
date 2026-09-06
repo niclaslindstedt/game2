@@ -2776,6 +2776,10 @@ export const TUNING = {
       lamp: 0.05,
       bumper: 0.12,
       spoiler: 0.1,
+      /** The GLASS does not shear at a line — it crazes toward one. This
+       * is the crush that finishes a pane rather than the crush that first
+       * marks it: the whole of the way there is a screen the driver is
+       * looking through a crack in (`collision.glass`). */
       glass: 0.15,
       lid: 0.2,
       door: 0.3,
@@ -2794,6 +2798,48 @@ export const TUNING = {
        * roof can never fold far enough to reach is a lid that never comes
        * off a rolled car. */
       roofLid: 0.12,
+    },
+    /** THE GLASS, and the fact that it does not simply vanish. A pane
+     * CRAZES toward the crush that finishes it (`partAt.glass`, or
+     * `partAt.roofGlass` of roof fold): a brush against a branch leaves a
+     * mark in the corner of the screen, a proper thump leaves a web across
+     * it, and only the hit that carries the ledger to 1 takes the pane out
+     * of its frame — from which point it is a plate lying in the ditch
+     * rather than a hole that was never a window.
+     *
+     * Nothing here is a rate: the crack is READ off the crush the panels
+     * around the pane have already taken (`glassCrack`), so the number that
+     * says when a pane is gone is the one number in `partAt` that always
+     * said it, and a screen out at 0.15 m of nose is the same screen that
+     * was out at 0.15 m of nose before it could crack at all. */
+    glass: {
+      /** The share of a square hit that an OBLIQUE zone puts through a
+       * pane — a corner clipped is a screen cracked, a nose driven in
+       * square is a screen gone. Under 1 by construction: a windscreen
+       * lives behind the nose, and the two corners either side of it only
+       * reach it at an angle. */
+      oblique: 0.7,
+      /** How much faster TEMPERED glass crazes than the laminated screen
+       * in front of the driver. A door window and a backlight are not
+       * bonded to two sheets of plastic: they hold together for a moment
+       * and then they are gravel, so they spend far less of their life
+       * cracked than the screen does. */
+      tempered: 1.35,
+      /** How the crazing RUNS from the first mark to the last, as an
+       * exponent on the share of the finishing crush the panels have
+       * taken. Glass does not break by degrees the way sheet metal folds:
+       * a knock that dents a wing leaves a chip and two short legs in the
+       * corner of the screen, and the web only fills out as the pane comes
+       * up on the fold that finishes it. Above 1 is that shape; at 1 a
+       * brush against a branch would leave a screen the driver could not
+       * see through. */
+      crazeCurve: 2,
+      /** What a driver loses of their steering looking through a fully
+       * crazed SCREEN, 0..1 — the one pane the car is driven through.
+       * Unlike the blast through a screen that is no longer there
+       * (`aero.blast`), this does not fade with the speed: a crack in the
+       * glass hides the same corner at 40 km/h as at 140. */
+      viewLoss: 0.12,
     },
     /** THE END OF THE RUN, short of the line. A car whose engine has died
      * (`systems.engine` at 1) or that has fewer than three wheels left is
