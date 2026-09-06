@@ -21,17 +21,21 @@
 // was asked for, which is the frame the game shipped with for a year. A
 // screenshot is never lost over its instruments.
 //
-// THREE THINGS A LAYER CANNOT REPRODUCE, none of them worth the machinery
-// it would take to: `backdrop-filter` has nothing behind it inside an image,
-// so the results card comes out translucent rather than frosted; the
-// safe-area insets are zero in there, so a notched phone puts its
-// instruments a few pixels off where the screen had them; and a CSS
-// transition mid-sweep renders at its DESTINATION, so the tach needle in a
-// picture is where the revs actually are rather than where the dial had got
-// to. All three are fractions of a HUD that is otherwise the browser's own
-// layout of the game's own stylesheet.
+// TWO THINGS A LAYER CANNOT REPRODUCE, neither worth the machinery it would
+// take to: `backdrop-filter` has nothing behind it inside an image, so the
+// results card comes out translucent rather than frosted; and the safe-area
+// insets are zero in there, so a notched phone puts its instruments a few
+// pixels off where the screen had them. Both are fractions of a HUD that is
+// otherwise the browser's own layout of the game's own stylesheet.
+//
+// WHAT THE LAYER CARRIES is every piece of chrome the app-root stands over
+// the canvas — the HUD, and the cards that sit above it — because all of it
+// was on screen when the button went down. Two children are left out: the
+// canvas, which IS the picture, and the debug overlay, whose boxes the
+// stamp paints on natively (screenshots.ts) and which would otherwise be
+// drawn twice.
 
-import { hudLayerSvg, type HudCover } from "./shot-plan.ts";
+import { animatedProperties, hudLayerSvg, type HudCover } from "./shot-plan.ts";
 
 /** The HUD, serialized at the moment the shutter was pressed. The size is
  * the app-root's CSS box, which is the same rectangle the canvas fills. */
@@ -61,10 +65,21 @@ const INHERITED = [
  * keypress, not a place to walk a few thousand rules again. */
 let sheet: string | null = null;
 
+/** What the app-root holds that must NOT go into the layer: the canvas is
+ * the picture the layer is drawn over, and the debug overlay is painted on
+ * natively with the stamp (screenshots.ts) so that a shot of it stays
+ * legible at the picture's own resolution. */
+const NOT_IN_LAYER = "canvas, .debug-hud";
+
 /**
- * The HUD as it stands right now, or null when there is none to take: the
- * instruments are down (ALT is held, or a menu is up), or the window has no
- * size to speak of.
+ * The screen's chrome as it stands right now, or null when there is none to
+ * take: the instruments are down (ALT is held, or a menu is up), or the
+ * window has no size to speak of.
+ *
+ * ALT is the reason the HUD has to be there before anything is read. Holding
+ * it takes the game's chrome off so a frame can be judged on its pixels, and
+ * a layer that came back with the update toast in it would have missed the
+ * point of the press.
  */
 export function readHudLayer(): HudLayer | null {
   try {
@@ -78,10 +93,8 @@ export function readHudLayer(): HudLayer | null {
     if (box.width < 1 || box.height < 1) return null;
     const width = Math.round(box.width);
     const height = Math.round(box.height);
-    // XML rather than `outerHTML`: a `<foreignObject>` is parsed as XML, and
-    // one unclosed `<br>` off the HTML serializer is a layer that does not
-    // parse at all.
-    const markup = new XMLSerializer().serializeToString(hud);
+    const markup = chromeMarkup(host);
+    if (!markup) return null;
     const svg = hudLayerSvg({
       markup,
       css: pageCss(),
@@ -92,6 +105,93 @@ export function readHudLayer(): HudLayer | null {
     return { svg, width, height };
   } catch {
     return null;
+  }
+}
+
+/** Every child of the app-root that belongs in the picture, serialized in
+ * the order it is painted in, each one stilled at the moment it was read.
+ *
+ * XML rather than `outerHTML`: a `<foreignObject>` is parsed as XML, and one
+ * unclosed `<br>` off the HTML serializer is a layer that does not parse at
+ * all. */
+function chromeMarkup(host: Element): string {
+  const serializer = new XMLSerializer();
+  const parts: string[] = [];
+  for (const child of Array.from(host.children)) {
+    if (child.matches(NOT_IN_LAYER)) continue;
+    parts.push(serializer.serializeToString(still(child)));
+  }
+  return parts.join("");
+}
+
+/** A `KeyframeEffect` as what the freeze needs off it: which element it
+ * moves, whether that element is real, and which properties it moves. The
+ * DOM lib types `Animation.effect` as the abstract `AnimationEffect`, which
+ * has none of the three. */
+type FrozenEffect = {
+  target: Element | null;
+  pseudoElement: string | null;
+  getKeyframes: () => Record<string, unknown>[];
+};
+
+/**
+ * A deep copy of `live` with every animation and transition it is part-way
+ * through written down as plain declarations.
+ *
+ * The layer is painted at time zero (shot-plan.ts), so an entrance that has
+ * already played renders from its first keyframe: the news column, the split
+ * board and the touch controls all start at `opacity: 0`, and all three come
+ * back invisible. Animation is off across the whole layer, which by itself
+ * puts every one of them at its resting style — right for anything that has
+ * finished, wrong for anything mid-flight. So each property an animation is
+ * currently moving is read off the LIVE element, where the computed value is
+ * the animated one, and inlined on the copy.
+ *
+ * `!important`, because a stylesheet declaration that carries it would
+ * otherwise beat the inline one — and the value being written came off the
+ * computed style, which already lost to that rule if it was going to.
+ */
+function still(live: Element): Element {
+  const clone = live.cloneNode(true) as Element;
+  const animations = relevantAnimations(live);
+  if (animations.length === 0) return clone;
+  // Same tree, same order: `querySelectorAll` walks a clone exactly as it
+  // walks its original, so position is identity and no marker attribute has
+  // to be written onto the live page to find a node again.
+  const twins = new Map<Element, Element>();
+  const liveNodes = [live, ...Array.from(live.querySelectorAll("*"))];
+  const cloneNodes = [clone, ...Array.from(clone.querySelectorAll("*"))];
+  for (let i = 0; i < liveNodes.length; i++) {
+    const twin = cloneNodes[i];
+    if (twin) twins.set(liveNodes[i], twin);
+  }
+  for (const animation of animations) {
+    const effect = animation.effect as unknown as FrozenEffect | null;
+    const target = effect?.target ?? null;
+    // A pseudo-element has no node to write a style onto. It is left to the
+    // resting style the stilled layer gives it, which is the best a copy of
+    // the DOM can do for something that is not in the DOM.
+    if (!effect || !target || effect.pseudoElement) continue;
+    const twin = twins.get(target);
+    if (!(twin instanceof HTMLElement) && !(twin instanceof SVGElement)) continue;
+    const computed = getComputedStyle(target);
+    for (const property of animatedProperties(effect.getKeyframes())) {
+      const value = computed.getPropertyValue(property);
+      if (value !== "") twin.style.setProperty(property, value, "important");
+    }
+  }
+  return clone;
+}
+
+/** The animations and transitions running under an element, or none where
+ * the browser does not offer the subtree query. Never throws: a layer
+ * without its entrances is still a layer. */
+function relevantAnimations(live: Element): Animation[] {
+  try {
+    if (typeof live.getAnimations !== "function") return [];
+    return live.getAnimations({ subtree: true });
+  } catch {
+    return [];
   }
 }
 

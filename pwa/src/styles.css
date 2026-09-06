@@ -338,9 +338,10 @@ body {
   color: var(--hud-bad);
 }
 
-/* The row is aligned to its own top rather than stretched: the position
-   board is the tallest thing on it by a long way, and a camera button
-   stretched to match would be a button the size of a place. */
+/* The row is aligned to its own top rather than stretched: every item on it
+   is sized by its own job — the glyph buttons off the minimap, the position
+   board off the clock — and stretching any of them to the tallest would size
+   it by its neighbours instead. */
 .hud-actions {
   margin-left: auto;
   display: flex;
@@ -400,12 +401,20 @@ body {
   flex: none;
 }
 
-/* A glyph button is square around its icon rather than padded around text. */
+/* A glyph button is square around its icon rather than padded around text —
+   and it is sized off the MINIMAP rather than off its own glyph, at half the
+   map's edge. These are the two presses made while the car is moving (the
+   way back to the last board, and the camera), so they are targets before
+   they are labels: a thumb has to find one without leaving the road, and the
+   map beside them is the one thing on that corner of the screen whose size
+   the player already knows. */
 .hud-mini-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.2rem 0.3rem;
+  width: calc(var(--hud-map) * 0.5);
+  height: calc(var(--hud-map) * 0.5);
+  padding: 0;
 }
 
 .hud-glyph {
@@ -413,6 +422,30 @@ body {
   height: clamp(1rem, 3vmin, 1.4rem);
   fill: currentcolor;
   display: block;
+}
+
+/* The mark grows with the plate it stands on: a glyph left at its own clamp
+   inside a button this size is a small icon in a big empty box. */
+.hud-mini-icon .hud-glyph {
+  width: 58%;
+  height: 58%;
+}
+
+/* OFF THE ROAD, the way back says so. The button is up for the whole run
+   (hud-recover.tsx) — this is the state that makes it the obvious press
+   rather than one of two: the plate takes the warning colour the rest of
+   the HUD uses for a car in trouble, and it breathes so the eye finds it
+   without being sent there. It comes off the root's `data-off`, which is
+   the one place the HUD is told the car has left the surface. */
+.hud[data-off="1"] .hud-recover {
+  background: var(--hud-bad);
+  border-color: #fff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hud[data-off="1"] .hud-recover {
+    animation: hud-pop 0.9s infinite;
+  }
 }
 
 /* ── The rear-view mirror's box ─────────────────────────────────────────── */

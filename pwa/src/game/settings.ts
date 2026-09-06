@@ -1226,12 +1226,12 @@ export type Settings = {
    * card writes back to it, so the box a player drove last time is the box
    * the next car is offered with, and nobody has to answer twice. */
   gearbox: GearboxMode;
-  /** Whether the SCREENSHOT key and the HUD's shutter take pictures at
-   * all. On by default — the feature is the point of having it — and off
-   * is for a player who keeps hitting ENTER by accident, or who would
-   * rather their own device's screenshot key were the only camera in the
-   * room. Off leaves the gallery reachable: the pictures already in the
-   * roll are still theirs to look at, copy and share. */
+  /** Whether the SCREENSHOT bind takes pictures at all. On by default —
+   * the feature is the point of having it — and off is for a player who
+   * keeps hitting ENTER by accident, or who would rather their own device's
+   * screenshot key were the only camera in the room. Off leaves the gallery
+   * reachable: the pictures already in the roll are still theirs to look
+   * at, copy and share. */
   screenshots: boolean;
   /** Whether every picture also goes on the CLIPBOARD as it is filed in the
    * roll. On by default: a screenshot is nearly always taken to be shown to

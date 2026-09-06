@@ -317,7 +317,7 @@ export function notesFit(width: number, height: number): boolean {
  * whole HUD would come out in the browser's default black. */
 export const HUD_LAYER_ROOT = "shot-hud-root";
 
-/** Everything the HUD layer is built from. `markup` is the HUD subtree
+/** Everything the HUD layer is built from. `markup` is the screen's chrome
  * serialized as XML, `css` the page's own stylesheet, and `inherited` the
  * declarations the HUD gets from the ancestors that are NOT coming with it
  * (the font off `body`, most of all) — read from the live page rather than
@@ -332,6 +332,50 @@ export type HudLayerSource = {
   height: number;
   inherited: string;
 };
+
+/** A RASTERIZED DOCUMENT HAS NO CLOCK. An SVG image is painted at time
+ * zero, so every CSS animation in the layer starts over from its first
+ * keyframe rather than standing where the screen had it — and the HUD's
+ * entrances all begin at `opacity: 0`, which is a news column, a split
+ * board and a steering wheel that are on screen and not in the picture.
+ * Turning them off is half the fix; the other half is inlining where each
+ * animated property had actually got to (shot-hud.ts). Transitions go the
+ * same way and for the same reason: left running they render at their
+ * DESTINATION, so a needle sweeping to the revs arrives before the shutter
+ * does. */
+export const LAYER_STILL_CSS = `.${HUD_LAYER_ROOT},.${HUD_LAYER_ROOT} *{animation:none !important;transition:none !important}`;
+
+/** The keys a keyframe carries that are timing bookkeeping rather than
+ * properties — the Web Animations API puts them in beside the real ones. */
+const KEYFRAME_TIMING = new Set(["offset", "computedOffset", "easing", "composite"]);
+
+/** One keyframe key as the CSS property it names: the API hands them over
+ * in the IDL spelling (`backgroundColor`), and a custom property arrives as
+ * itself and must be left alone. */
+export function cssPropertyName(key: string): string {
+  if (key.startsWith("--")) return key;
+  return key.replace(/[A-Z]/g, (upper) => `-${upper.toLowerCase()}`);
+}
+
+/**
+ * Which CSS properties a set of keyframes moves, as CSS names, in the order
+ * they were first seen and with no repeats.
+ *
+ * A keyframe list is not a property list: the first and last frames of a
+ * `from`/`to` rule carry the same property, a stepped rule carries it four
+ * times, and every frame carries the timing keys above. What the freeze
+ * needs is the SET, because each one is read off the live element once.
+ */
+export function animatedProperties(frames: readonly Record<string, unknown>[]): string[] {
+  const seen = new Set<string>();
+  for (const frame of frames) {
+    for (const key of Object.keys(frame)) {
+      if (KEYFRAME_TIMING.has(key)) continue;
+      seen.add(cssPropertyName(key));
+    }
+  }
+  return [...seen];
+}
 
 /**
  * The HUD as a standalone SVG document, ready to be decoded as an image.
@@ -356,7 +400,7 @@ export function hudLayerSvg(source: HudLayerSource): string {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
     `<foreignObject x="0" y="0" width="${width}" height="${height}">`,
     `<div xmlns="http://www.w3.org/1999/xhtml" class="${HUD_LAYER_ROOT}" style="${escapeAttr(style)}">`,
-    `<style>${cdata(rootedCss(source.css))}</style>`,
+    `<style>${cdata(`${rootedCss(source.css)}\n${LAYER_STILL_CSS}`)}</style>`,
     source.markup,
     "</div></foreignObject></svg>",
   ].join("");
