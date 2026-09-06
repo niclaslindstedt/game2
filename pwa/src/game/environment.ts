@@ -32,7 +32,7 @@ import {
   type Preset,
 } from "./sky.ts";
 import { createSunShadows, type SunShadows } from "./car-shadow.ts";
-import { fogRangeFor } from "./settings.ts";
+import { fogRangeFor, LAMP_BEAMS, type VideoSettings } from "./settings.ts";
 import { squallOf, type Clap } from "./weather.ts";
 import { glowTexture } from "./textures.ts";
 import { clamp } from "../lib/util.ts";
@@ -130,6 +130,12 @@ export type Environment = {
   setLampsBroken: (front: number, rear: number) => void;
   /** How far off the centerline the car's lamps sit, m — front and rear. */
   setLampSpread: (front: number, rear: number) => void;
+  /** The video options' LIGHTING row: how many beams each end of the car
+   * throws (`LAMP_BEAMS`) and which shadow map the sun draws, if any. A
+   * beam is paid for on every lit pixel in the frame, so this is the one
+   * row that changes what the whole world costs rather than what is in it.
+   * Applies at once — the lights are standing in the scene already. */
+  setLighting: (level: VideoSettings["lighting"]) => void;
   /** Hang the PLAYER's lamps on the register the dust clouds are lit from
    * (dust-light.ts), at whatever strength the daylight and the grime on the
    * lenses leave them. The register is emptied by its one owner, the
@@ -452,7 +458,39 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   // the way out of a corner backwards. It comes on with the headlights,
   // because that is the switch it is wired to.
   const taillights = [beam(0xff2814, 18, 0.8), beam(0xff2814, 18, 0.8)];
-  const lamps = [...headlights, ...taillights];
+
+  /** How many of each pair are actually thrown — the LIGHTING row's say,
+   * over `LAMP_BEAMS`. A pair is the car's own two lamps, splayed; one
+   * beam stands on the centreline in their place; none leaves the lens to
+   * glow on its own (car-mesh.ts's bloom, which costs nothing per pixel). */
+  let beams = LAMP_BEAMS.full;
+  /** A single beam standing in for a pair is opened out and driven harder,
+   * so the one pool it lays covers about what the two splayed lobes did
+   * and the road under it is about as bright where they overlapped. The
+   * pool is rounder and it reads as one lamp on the roofline rather than
+   * two on the wings — which is the look this stop of the row trades for
+   * half its cost. */
+  const SINGLE_BEAM_ANGLE = { head: 0.52, tail: 0.95 };
+  const SINGLE_BEAM_GAIN = 1.5;
+  const PAIR_ANGLE = { head: 0.42, tail: 0.8 };
+  /** Which lamps stand in the scene: the switch (the sky's, on the preset)
+   * AND the count (the video options'). A hidden spotlight leaves the
+   * shader as well as the picture — three.js compiles the lit materials
+   * against however many lights are visible — so an unlit stage costs no
+   * beams at all, whatever the row says. */
+  const applyLamps = (): void => {
+    for (let i = 0; i < 2; i++) {
+      headlights[i].visible = preset.headlights && i < beams.head;
+      taillights[i].visible = preset.headlights && i < beams.tail;
+    }
+    headlights[0].angle = beams.head === 1 ? SINGLE_BEAM_ANGLE.head : PAIR_ANGLE.head;
+    taillights[0].angle = beams.tail === 1 ? SINGLE_BEAM_ANGLE.tail : PAIR_ANGLE.tail;
+  };
+  const setLighting = (level: VideoSettings["lighting"]): void => {
+    beams = LAMP_BEAMS[level];
+    shadows.setQuality(level);
+    applyLamps();
+  };
 
   /** How far off the centerline each lamp sits, m — pushed in by the renderer
    * when a car is built, because a car is as wide as it is and its beams
@@ -464,10 +502,12 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     tailSpread = rear;
   };
 
-  /** Point one pair. Each beam sits `spread` off the centerline `from` metres
-   * along the car's own axis (negative is behind it) and `up` above the
-   * contact patch, aiming `to` metres out and `down` below it — plus `splay`
-   * further out to the side, which is the whole reason there are two. */
+  /** Point one pair — or the one beam of it that is thrown. Each beam sits
+   * `spread` off the centerline `from` metres along the car's own axis
+   * (negative is behind it) and `up` above the contact patch, aiming `to`
+   * metres out and `down` below it — plus `splay` further out to the side,
+   * which is the whole reason there are two. A single beam sits on the
+   * centerline and aims straight down it. */
   type Aim = {
     intensity: number;
     spread: number;
@@ -479,15 +519,16 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   };
   const aimLamps = (
     pair: THREE.SpotLight[],
+    count: number,
     car: { x: number; y: number; z: number },
     fwd: { x: number; z: number },
     right: { x: number; z: number },
     aim: Aim,
   ): void => {
-    for (let i = 0; i < pair.length; i++) {
-      const side = i === 0 ? -1 : 1;
+    for (let i = 0; i < count; i++) {
+      const side = count === 1 ? 0 : i === 0 ? -1 : 1;
       const light = pair[i];
-      light.intensity = aim.intensity;
+      light.intensity = aim.intensity * (count === 1 ? SINGLE_BEAM_GAIN : 1);
       light.position.set(
         car.x + fwd.x * aim.from + right.x * side * aim.spread,
         car.y + aim.up,
@@ -640,7 +681,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     haloMat.color.set(preset.halo);
     haloMat.opacity = preset.haloOpacity;
     halo.visible = preset.haloOpacity > 0.01;
-    for (const lamp of lamps) lamp.visible = preset.headlights;
+    applyLamps();
   };
 
   const update = (state: GameState, camera: THREE.Camera, dt: number): void => {
@@ -667,7 +708,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       const car = state.car;
       const fwd = { x: Math.sin(car.heading), z: Math.cos(car.heading) };
       const right = { x: fwd.z, z: -fwd.x };
-      aimLamps(headlights, car, fwd, right, {
+      aimLamps(headlights, beams.head, car, fwd, right, {
         intensity: 150 * lampPower() * (1 - HEAD_GRIME * grime) * headLamps,
         spread: headSpread,
         from: 1.4,
@@ -676,7 +717,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
         down: -1.5,
         splay: 5,
       });
-      aimLamps(taillights, car, fwd, right, {
+      aimLamps(taillights, beams.tail, car, fwd, right, {
         intensity: 20 * lampPower() * (1 - TAIL_GRIME * grime) * tailLamps,
         spread: tailSpread,
         from: -1.6,
@@ -730,7 +771,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     clouds.dispose();
     storm.dispose();
     rain.dispose();
-    for (const lamp of lamps) lamp.dispose();
+    for (const lamp of [...headlights, ...taillights]) lamp.dispose();
     sunLight.dispose();
     hemi.dispose();
   };
@@ -768,6 +809,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     setGrime,
     setLampsBroken,
     setLampSpread,
+    setLighting,
     lightDust: (car) => {
       // The same two switches the beams are on — the lamps are lit or they
       // are not, and what daylight and a caked lens leave of them is the

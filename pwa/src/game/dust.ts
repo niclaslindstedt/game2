@@ -658,6 +658,7 @@ function graftDust(mat: THREE.PointsMaterial, puffy: boolean, near: number, cap:
         uniform vec4 uDustLampSpot[ ${DUST_LAMPS} ];
         uniform vec4 uDustLampFace[ ${DUST_LAMPS} ];
         uniform vec3 uDustLampGlow[ ${DUST_LAMPS} ];
+        uniform int uDustLampCount;
         varying vec3 vLamp;${
           puffy
             ? `
@@ -685,6 +686,10 @@ function graftDust(mat: THREE.PointsMaterial, puffy: boolean, near: number, cap:
         vLamp = vec3( 0.0 );
         vec3 dustAt = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
         for ( int i = 0; i < ${DUST_LAMPS}; i++ ) {
+          // The register is filled from the front, so past the count there
+          // is nothing but black — and a cone and a falloff per particle
+          // for each of those slots is a loop worth leaving.
+          if ( i >= uDustLampCount ) break;
           vec4 lamp = uDustLampSpot[ i ];
           vec3 away = dustAt - lamp.xyz;
           float gap = length( away );

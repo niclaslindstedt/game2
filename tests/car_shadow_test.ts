@@ -72,9 +72,9 @@ describe("snapping the map to its texels", () => {
 
   it("sizes a texel off the reach and the map", () => {
     expect(texel).toBeCloseTo((2 * SHADOW_REACH) / SHADOW_MAP_SIZE.full, 12);
-    expect(shadowTexel(SHADOW_MAP_SIZE.low)).toBeCloseTo(texel * 2, 12);
+    expect(shadowTexel(SHADOW_MAP_SIZE.normal)).toBeCloseTo(texel * 2, 12);
     // No map is not a division by zero.
-    expect(Number.isFinite(shadowTexel(SHADOW_MAP_SIZE.off))).toBe(true);
+    expect(Number.isFinite(shadowTexel(SHADOW_MAP_SIZE.lean))).toBe(true);
   });
 
   it.each(SUNS)("moves the focus by under a texel, only in the light's plane (%s)", (_n, dir) => {
@@ -142,14 +142,22 @@ describe("the shadows hung off the sun", () => {
     expect(light.shadow.intensity).toBeCloseTo(0.3, 9);
   });
 
-  it("cast nothing at all with the effects off", () => {
+  it("cast nothing at all on the lean lighting", () => {
     const { light, shadows } = rig();
     shadows.setHardness(1);
-    shadows.setQuality("off");
+    shadows.setQuality("lean");
     expect(light.castShadow).toBe(false);
-    shadows.setQuality("low");
+    shadows.setQuality("normal");
     expect(light.castShadow).toBe(true);
-    expect(light.shadow.mapSize.x).toBe(SHADOW_MAP_SIZE.low);
+    expect(light.shadow.mapSize.x).toBe(SHADOW_MAP_SIZE.normal);
+  });
+
+  // The shadow is the LIGHTING row's, and the row is walked cheapest
+  // first: a map may only grow up the ladder, and the floor has none.
+  it("walk the lighting ladder up from no map at all", () => {
+    expect(SHADOW_MAP_SIZE.lean).toBe(0);
+    expect(SHADOW_MAP_SIZE.normal).toBeGreaterThan(0);
+    expect(SHADOW_MAP_SIZE.full).toBeGreaterThan(SHADOW_MAP_SIZE.normal);
   });
 
   it("frame the map around the car, ahead of it, on the grid, without turning the light", () => {
