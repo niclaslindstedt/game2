@@ -41,13 +41,13 @@ through a soft curve.
 | `pwa/src/game/audio/bus.ts`          | One synth, two volume-scaled views so the options screen can mix effects and music independently.                                                                                                                                    |
 | `pwa/src/game/audio/bank.ts`         | Every discrete sound the CAR makes, as data — and `RUN_BANK`, the car and the stage served together.                                                                                                                                 |
 | `pwa/src/game/audio/bank-stage.ts`   | Every discrete sound the STAGE makes: the lights, the split boards, the line, the crowd, the blocks, the sky.                                                                                                                        |
-| `pwa/src/game/audio/bank-world.ts`   | The country's own sounds: birds, insects, choughs, a marmot, an owl, a coyote, cows and sheep, cowbells, meltwater, a diesel's horn, a crossing bell, a marshal's whistle.                                                           |
+| `pwa/src/game/audio/bank-world.ts`   | The country's own sounds: birds, insects, choughs, geese and swans on passage, a marmot, an owl, a coyote, cows and sheep, cowbells, meltwater, a diesel's horn, a crossing bell, a marshal's whistle.                               |
 | `pwa/src/game/audio/bank-ui.ts`      | The interface's own sounds — a separate bank because the menu is on the startup path.                                                                                                                                                |
 | `pwa/src/game/audio/route.ts`        | Which sound a `GameEvent` makes, how big, and how it is heard from the seat it is watched from.                                                                                                                                      |
 | `pwa/src/game/audio/listener.ts`     | What each camera on the ladder does to the mix — one row per `PlayCamera`.                                                                                                                                                           |
 | `pwa/src/game/audio/engine-voice.ts` | The engine, as six layers: where each should be for a set of revs, a load and a seat.                                                                                                                                                |
 | `pwa/src/game/audio/road-voice.ts`   | The tyres (one voice per surface, snow included), the wind, the weather, the gale and the drift's scrub, as fourteen layers.                                                                                                         |
-| `pwa/src/game/audio/ambience.ts`     | The world: four layers (the canopy, the wind over a pass, the crowd, a train) and the roster of calls a country makes at an hour and a height.                                                                                       |
+| `pwa/src/game/audio/ambience.ts`     | The world: four layers (the canopy, the wind over a pass, the crowd, a train) and the roster of calls a country makes at an hour, a height and a season.                                                                             |
 | `pwa/src/game/audio/rack.ts`         | The plumbing every bed shares: build a layer, rebuild one whose context died, steer it.                                                                                                                                              |
 | `pwa/src/game/audio/drive-bed.ts`    | The scheduler: the state, once a frame, into every layer's target — and the cues nothing reports (the lights, the lift's crackle, the wipers, the whistle).                                                                          |
 | `pwa/src/game/audio/music-pick.ts`   | Which score a stage gets, from its country, its sky and the shape of its road.                                                                                                                                                       |
@@ -315,7 +315,22 @@ coyote after dark; the alpine is choughs by day (a chattering chee-ah flock,
 deep in the echo of the faces), cowbells on the alm below the road, a
 marmot's whistle from the scree once in a long while, and meltwater wherever
 the road meets a stream — a ford, or a deck over one. Rain sends the birds to
-cover, and nothing flies in a storm or a gale. A paddock the road runs past
+cover, and nothing flies in a storm or a gale.
+
+**The north's two skies have birds crossing them, and the SEASON is what
+they are doing.** Over the taiga and the Alps, `passageCalls` puts geese and
+swans on the roster — the one call that comes from above rather than out of
+the trees, and the one the season decides. In SPRING and AUTUMN they are on
+passage: often enough that a stage should have a skein over it, and geese go
+over at night as well, which is when a person is most likely to have heard
+real ones. In SUMMER the same birds are between one lake and the next, so
+they are a quarter as often and they are day birds. The two are deliberately
+opposite sounds — the goose a reedy nasal AHNK through a hard vowel, four of
+them staggered and spread wide; the swan a longer, purer, almost brass
+bugle, answered from the far side of the skein and deep in the echo. Being
+high and already going somewhere, they are only thinned by rain where every
+other bird is grounded by it, and only a gale actually keeps them down.
+`skein.ts` draws what these are the sound of; the desert has neither bird. A paddock the road runs past
 adds a cow or a sheep on its own side of the car; a train on the line adds
 the diesel's horn once as it comes to the crossing, and the bell on the
 crossing while the car is at it. The marshal's whistle goes once in the intro.

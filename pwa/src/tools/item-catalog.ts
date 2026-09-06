@@ -50,6 +50,7 @@ import { type HousePlan } from "../game/house.ts";
 import { markerShape } from "../game/kerbs.ts";
 import { buildParkedCar, parkedCarSpec, PARKED_BODIES } from "../game/parked-car.ts";
 import { raptorModel } from "../game/raptor.ts";
+import { skeinBirdModel, skeinModel } from "../game/skein.ts";
 import { stoneGeometry, stoneMatrix } from "../game/wild.ts";
 
 /** Where a camera stands for one column of the sheet. */
@@ -378,6 +379,61 @@ const SKY_ITEMS: ItemDef[] = [
       };
     },
   },
+  ...(
+    [
+      { id: "skein-vee", kind: "geese", shape: "vee", birds: 13 },
+      { id: "skein-line", kind: "swans", shape: "line", birds: 7 },
+      { id: "skein-group", kind: "geese", shape: "group", birds: 6 },
+    ] as const
+  ).map((row) => ({
+    id: row.id,
+    group: "sky" as const,
+    note:
+      row.shape === "vee"
+        ? "the vee on passage — spring and autumn, and the leader is the near bird"
+        : row.shape === "line"
+          ? "the other half of a skein: one straight arm trailing off the leader"
+          : "a summer flight to the next lake — no rank at all, and it still holds together",
+    build: () => {
+      const flock = skeinModel(row.kind, row.shape, row.birds);
+      return {
+        object: flock.object,
+        // A formation is READ from below and from the plan: the two seats
+        // that say whether a vee is a vee. Level is what a stage gives you
+        // and is included for that reason alone.
+        views: [
+          { name: "from under", orbit: { az: 0.1, el: -1.2 } },
+          { name: "plan", orbit: { az: 0.1, el: 1.25 } },
+          { name: "from under, astern", orbit: { az: Math.PI, el: -0.7 } },
+          { name: "level", orbit: { az: Math.PI / 2 - 0.3, el: 0.05 } },
+        ],
+        dispose: flock.dispose,
+      };
+    },
+  })),
+  ...(["geese", "swans"] as const).map((kind) => ({
+    id: kind === "geese" ? "goose" : "swan",
+    group: "sky" as const,
+    note:
+      kind === "geese"
+        ? "one bird out of a skein — the neck ahead of the wings is the whole tell"
+        : "the same silhouette with half again the span and a neck twice as long, in white",
+    build: () => {
+      const bird = skeinBirdModel(kind);
+      return {
+        // A skein is seen from below and from behind as it goes over, and
+        // that is the entire set of seats a driver ever gets.
+        object: bird.object,
+        views: [
+          { name: "from under", orbit: { az: 0.1, el: -1.15 } },
+          { name: "from under, astern", orbit: { az: Math.PI, el: -0.8 } },
+          { name: "level", orbit: { az: Math.PI / 2 - 0.4, el: 0.06 } },
+          { name: "plan", orbit: { az: 0.1, el: 1.2 } },
+        ],
+        dispose: bird.dispose,
+      };
+    },
+  })),
 ];
 
 // ── What the stage is dressed with ────────────────────────────────────────
@@ -943,4 +999,6 @@ export const DEFAULT_ITEMS: readonly string[] = [
   "birch",
   "fern",
   "raptor",
+  "goose",
+  "skein-vee",
 ];

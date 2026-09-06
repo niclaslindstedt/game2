@@ -121,6 +121,163 @@ export const WORLD_BANK: SoundBank = {
     ],
   },
 
+  // The two on PASSAGE — the sound a skein makes going over, which is the
+  // one bird sound that arrives from the sky rather than from the trees
+  // (`skein.ts` draws them). Both are CROWDS: a single call is a car horn,
+  // and what a person on the ground actually hears is several birds
+  // answering each other across a hundred metres of air, which is why each
+  // of these is four staggered voices spread across the stereo field.
+  goose_honk: {
+    description:
+      "A skein of geese going over. Four nasal AHNKs, staggered over a " +
+      "second and a bit and spread wide: a driven sawtooth in the low " +
+      "hundreds falling a tone through a hard bandpass vowel around 1.1 " +
+      "kHz, each one cracking open in a few milliseconds and gone in a " +
+      "sixth of a second. Reedy and a little ugly, which is what a goose " +
+      "is; only a touch of echo, because there is nothing up there to come " +
+      "off.",
+    voices: [
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 640,
+        to: 520,
+        durationMs: 150,
+        volume: 0.012,
+        attackMs: 8,
+        holdMs: 45,
+        drive: 0.5,
+        detuneCents: 22,
+        pan: -0.35,
+        echo: 0.15,
+        filter: { type: "bandpass", frequency: 900, to: 1250, q: 3 },
+      },
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 560,
+        to: 460,
+        durationMs: 165,
+        volume: 0.011,
+        delayMs: 230,
+        attackMs: 8,
+        holdMs: 50,
+        drive: 0.5,
+        detuneCents: 22,
+        pan: 0.28,
+        echo: 0.15,
+        filter: { type: "bandpass", frequency: 840, to: 1150, q: 3 },
+      },
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 720,
+        to: 590,
+        durationMs: 130,
+        volume: 0.01,
+        delayMs: 480,
+        attackMs: 7,
+        holdMs: 40,
+        drive: 0.5,
+        detuneCents: 22,
+        pan: -0.12,
+        echo: 0.15,
+        filter: { type: "bandpass", frequency: 980, to: 1350, q: 3 },
+      },
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 600,
+        to: 500,
+        durationMs: 170,
+        volume: 0.01,
+        delayMs: 760,
+        attackMs: 8,
+        holdMs: 55,
+        drive: 0.5,
+        detuneCents: 22,
+        pan: 0.42,
+        echo: 0.15,
+        filter: { type: "bandpass", frequency: 880, to: 1200, q: 3 },
+      },
+    ],
+  },
+
+  swan_call: {
+    description:
+      "Whooper swans. The other half of the same sky and deliberately the " +
+      "opposite of the geese: BUGLING rather than honking — a longer, " +
+      "purer, almost brass note that swells UP a third and then settles, " +
+      "twice, and is answered from the far side of the skein a beat later. " +
+      "Lower, cleaner, and deep in the echo, because a swan is heard across " +
+      "a valley long before anything is visible.",
+    voices: [
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 470,
+        to: 620,
+        durationMs: 230,
+        volume: 0.013,
+        attackMs: 30,
+        holdMs: 90,
+        drive: 0.28,
+        detuneCents: 12,
+        pan: -0.22,
+        echo: 0.45,
+        filter: { type: "bandpass", frequency: 900, to: 1400, q: 2.4 },
+      },
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 620,
+        to: 540,
+        durationMs: 280,
+        volume: 0.012,
+        delayMs: 280,
+        attackMs: 26,
+        holdMs: 110,
+        drive: 0.28,
+        detuneCents: 12,
+        pan: -0.22,
+        echo: 0.45,
+        filter: { type: "bandpass", frequency: 860, to: 1250, q: 2.4 },
+      },
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 420,
+        to: 560,
+        durationMs: 250,
+        volume: 0.01,
+        delayMs: 660,
+        attackMs: 34,
+        holdMs: 95,
+        drive: 0.28,
+        detuneCents: 12,
+        pan: 0.34,
+        echo: 0.45,
+        filter: { type: "bandpass", frequency: 820, to: 1300, q: 2.4 },
+      },
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 560,
+        to: 490,
+        durationMs: 300,
+        volume: 0.009,
+        delayMs: 930,
+        attackMs: 30,
+        holdMs: 120,
+        drive: 0.28,
+        detuneCents: 12,
+        pan: 0.34,
+        echo: 0.45,
+        filter: { type: "bandpass", frequency: 780, to: 1150, q: 2.4 },
+      },
+    ],
+  },
+
   owl: {
     description:
       "An owl, at dusk and after. Two soft hoots on a filtered triangle — a " +

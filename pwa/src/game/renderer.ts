@@ -645,7 +645,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     }
     const biome = state.track.knobs.biome;
     environment.apply(state.env, biome);
-    life.setBiome(biome);
+    life.setCountry(biome, state.env.season);
     // Rain settles the stage. There is no cloud to tow once the surface is
     // soaked — what the wheels lift is clods — so the two swap over here,
     // once, rather than being decided per frame per particle. How hard it

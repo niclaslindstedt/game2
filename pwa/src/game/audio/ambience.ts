@@ -17,7 +17,11 @@
 // choughs, cowbells and a marmot on the mountain, meltwater beside an
 // alpine road, an owl at dusk, crickets and a coyote after dark, a cow or a
 // sheep behind a fence the road runs past, the diesel's horn as it comes to
-// the crossing and the bell on the crossing itself.
+// the crossing and the bell on the crossing itself — and, over the northern
+// countries, GEESE AND SWANS going over, which is the one call on the
+// roster that comes from the sky and the one the SEASON decides: a skein on
+// passage in spring and autumn is a different sound from the pair that
+// nests down the valley all summer. `skein.ts` draws them.
 //
 // TWO RULES KEEP THE WORLD A WORLD. It is QUIET — a bird that can be heard
 // over a drift is a bird inside the car — and it is THINNED BY SPEED: at
@@ -30,7 +34,7 @@
 // scheduler takes its clock and its dice as arguments so the tests can run
 // it by hand.
 
-import type { BiomeId, BiomeRules, TimeOfDay } from "@engine";
+import type { BiomeId, BiomeRules, Season, TimeOfDay } from "@engine";
 
 import type { LayerSpec, LayerTarget, Synth } from "../../lib/voice.ts";
 
@@ -43,6 +47,10 @@ import type { PlayShape } from "./types.ts";
 export type WorldVoice = {
   biome: BiomeId;
   timeOfDay: TimeOfDay;
+  /** Which season is being driven — read by the birds on passage, and by
+   * nothing else: everything else out there sounds the same in May as it
+   * does in September. */
+  season: Season;
   /** How wet the stage is, 0..1 — rain quiets the birds. */
   wet: number;
   /** How much wind is in the air, 0..1 of a gale. */
@@ -148,17 +156,56 @@ export type WorldCall = {
   gain: number;
 };
 
+/**
+ * THE BIRDS ON PASSAGE — geese and swans going over, in the two northern
+ * countries only. What the season buys is the whole point of them:
+ *
+ *   SPRING / AUTUMN  skeins on the move, so they are OFTEN — a stage should
+ *                    have one over it — and they go over at night too,
+ *                    which is when a person is most likely to have heard
+ *                    real ones and is free of every competing call.
+ *   SUMMER           the same birds between one lake and the next, so they
+ *                    are a quarter as often and they are day birds.
+ *
+ * A skein sounds high and far off, so unlike the trees and the choughs it
+ * is barely touched by rain — but nothing sets off in a gale, and the
+ * desert has neither bird.
+ */
+function passageCalls(voice: WorldVoice, dry: number): WorldCall[] {
+  if (voice.biome === "desert") return [];
+  const passage = voice.season !== "summer";
+  const night = voice.timeOfDay === "night";
+  if (!passage && night) return [];
+  // High and going somewhere: the weather thins them rather than grounding
+  // them, and only a gale actually keeps them down.
+  const flying = (0.35 + 0.65 * dry) * (1 - 0.7 * voice.gale);
+  if (passage) {
+    return night
+      ? [{ id: "goose_honk", gap: [20, 50], gain: 0.75 * flying }]
+      : [
+          { id: "goose_honk", gap: [14, 34], gain: flying },
+          { id: "swan_call", gap: [34, 80], gain: 0.9 * flying },
+        ];
+  }
+  return [
+    { id: "goose_honk", gap: [40, 95], gain: 0.7 * flying },
+    { id: "swan_call", gap: [50, 120], gain: 0.8 * flying },
+  ];
+}
+
 /** THE ROSTER — which calls a setting has in it, and how busy each is. The
  * decisions: the taiga is birds and nothing else by day; the desert is
  * insects; the mountain is choughs above the treeline and cowbells below
  * it, with a marmot from the scree once in a long while and meltwater
- * wherever the road meets a stream; dusk hands all of them over to an owl;
+ * wherever the road meets a stream; the north's two skies both have geese and
+ * swans crossing them (`passageCalls`); dusk hands all of them over to an owl;
  * night belongs to the crickets and, out on the flats, a coyote. Rain
  * sends the birds to cover, and nothing flies in a storm or a gale. */
 export function worldRoster(voice: WorldVoice): WorldCall[] {
   const { biome, timeOfDay, wet, gale, exposure } = voice;
   const dry = 1 - 0.85 * wet;
   const calls: WorldCall[] = [];
+  calls.push(...passageCalls(voice, dry));
   if (biome === "alpine") {
     // A flock stays down in weather: rain thins the choughs like every
     // bird, a storm grounds them outright, and a gale keeps them on the
