@@ -38,7 +38,7 @@ import { playerCrewLook, type CrewLook } from "../car-crew.ts";
 import { NO_DIRT } from "../car-dirt.ts";
 import { MeshBuilder, patchQuad, plate, slab, solid, tube, type V3 } from "./builder.ts";
 import { buildCrewMember, type CrewSeat } from "./crew.ts";
-import { cabinFrame, cabinPanels, panelMinus } from "./greenhouse.ts";
+import { cabinFrame, cabinPanels, glassRect, panelMinus } from "./greenhouse.ts";
 import type { CarBodySpec } from "./spec.ts";
 
 export type InteriorDetail = "off" | "low" | "high";
@@ -227,8 +227,16 @@ export function cabinOf(spec: CarBodySpec): Cabin {
  * passing its opposite is exactly "the same rectangle, facing the other way,
  * on the other side of the panel" — the whole of what an inner face is. */
 export function buildLining(b: MeshBuilder, cabin: Cabin, floor = true): void {
+  // Cut to the GLASS, not to the opening. The seal band between the two is
+  // drawn facing out (greenhouse.ts), so from inside it is a culled strip
+  // round every window — a clear gap between the edge of the grime film and
+  // the pillar, with the landscape showing through it. Lining over that
+  // band closes it: from the seat the dirt runs to the frame, and from
+  // outside the seal still covers the lining behind it.
+  const seal = cabin.spec.cabin.seal ?? 0;
   for (const panel of cabinPanels(cabin.spec)) {
-    for (const strip of panelMinus(panel.holes)) {
+    const panes = panel.holes.map((hole) => glassRect(hole, seal, panel.span));
+    for (const strip of panelMinus(panes)) {
       patchQuad(b, panel.patch, strip, TRIM.lining, LINING_LIFT, !panel.mirrored);
     }
   }
