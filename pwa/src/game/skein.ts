@@ -439,13 +439,19 @@ const aim = new THREE.Vector3();
  * planned once and hidden down to the count a given country wants, exactly
  * as the flocks and the birds of prey are.
  *
+ * `random` is injected, exactly as `createWorld`'s is: everything about a
+ * crossing is a roll, so a harness that wants to MEASURE what a stage sees
+ * of them — how often one is near, how close the closest gets — has to be
+ * able to pin the dice. Left alone it is the same `Math.random` every other
+ * renderer-side roll in the game uses.
+ *
  * ONE DRAW CALL PER PART PER SPECIES, whatever is in the sky: every bird is
  * an instance of the same wing and the same body, and a wingbeat is a
  * rotation composed into its matrix. Written as a group per bird it would
  * be three meshes each and sixty draw calls of ambient decoration; this is
  * four, and it does not grow with the count.
  */
-export function createSkeins(most: number): Skeins {
+export function createSkeins(most: number, random: () => number = Math.random): Skeins {
   const group = new THREE.Group();
   const wingGeo = wingShape();
   const kinds = Object.keys(KINDS) as SkeinKind[];
@@ -476,13 +482,13 @@ export function createSkeins(most: number): Skeins {
   let count = 0;
   let season: Season = "summer";
   const live: Live[] = Array.from({ length: most }, () => ({
-    plan: passageFor("summer", Math.random),
+    plan: passageFor("summer", random),
     x: 0,
     y: 0,
     z: 0,
     age: 0,
     flown: 0,
-    phase: Math.random() * Math.PI * 2,
+    phase: random() * Math.PI * 2,
     placed: false,
     warm: false,
   }));
@@ -508,22 +514,22 @@ export function createSkeins(most: number): Skeins {
    * its own bearing from that point so it flies in rather than appearing.
    */
   const rehome = (run: Live, camX: number, camY: number, camZ: number, camYaw: number): void => {
-    run.plan = passageFor(season, Math.random);
-    const bearing = camYaw + (Math.random() * 2 - 1) * PITCH.spread;
-    const reach = PITCH.outMin + Math.random() * PITCH.outVary;
+    run.plan = passageFor(season, random);
+    const bearing = camYaw + (random() * 2 - 1) * PITCH.spread;
+    const reach = PITCH.outMin + random() * PITCH.outVary;
     const overX = camX + Math.sin(bearing) * reach;
     const overZ = camZ + Math.cos(bearing) * reach;
     // A cold slot starts part-flown: on the grid one crossing may be a
     // minute out and another already overhead, which is a sky, where two
     // crossings both a minute out is an empty one.
-    run.flown = run.warm ? 0 : Math.random() * (PITCH.lead + PAST);
+    run.flown = run.warm ? 0 : random() * (PITCH.lead + PAST);
     run.warm = true;
     const back = PITCH.lead - run.flown;
     run.x = overX - Math.sin(run.plan.bearing) * back;
     run.z = overZ - Math.cos(run.plan.bearing) * back;
     run.y = camY + run.plan.height;
-    run.age = Math.random() * 40;
-    run.phase = Math.random() * Math.PI * 2;
+    run.age = random() * 40;
+    run.phase = random() * Math.PI * 2;
     run.placed = true;
   };
 
