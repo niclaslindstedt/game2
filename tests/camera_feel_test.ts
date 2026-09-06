@@ -21,6 +21,7 @@ import {
   gripReading,
   hoverFor,
   pitchWanted,
+  surgeWanted,
   tremorAmount,
   tremorAt,
 } from "../pwa/src/game/camera-feel.ts";
@@ -35,6 +36,10 @@ const DEG = Math.PI / 180;
  * could not catch the module changing them. */
 const CHASE_HEIGHT = 2.45;
 const CHASE_HOVER = 0.8;
+/** ...and its standoff at a standstill, m, with the metres it runs the boom
+ * out per m/s of pace. */
+const CHASE_DIST = 5.8;
+const CHASE_PER_SPEED = 0.03;
 
 function game(): GameState {
   const state = createGame({
@@ -68,6 +73,12 @@ function chase(state: GameState): ReturnType<typeof createGameCamera> {
 /** The lens's height over the car's own. */
 function over(cam: ReturnType<typeof createGameCamera>, state: GameState): number {
   return cam.camera.position.y - state.car.y;
+}
+
+/** How far the lens is standing behind the car on the flat, m. */
+function standoff(cam: ReturnType<typeof createGameCamera>, state: GameState): number {
+  const car = state.car;
+  return Math.hypot(cam.camera.position.x - car.x, cam.camera.position.z - car.z);
 }
 
 /** How far the lens's RIGHT axis dips below the horizontal, rad — positive
@@ -181,9 +192,11 @@ describe("attitude as tilt", () => {
     car.slip = -0.5;
     const drift = bankWanted(car);
     expect(drift).toBeGreaterThan(turn);
-    // A degree or two, never more.
+    // A fraction of a degree, never more: the slide is displayed by the yaw
+    // across the frame, and the bank is only the weight behind it.
     expect(drift).toBeLessThanOrEqual(CAMERA_FEEL.tilt.bankMax * DEG + 1e-9);
-    expect(drift).toBeGreaterThan(1 * DEG);
+    expect(drift).toBeGreaterThan(0.4 * DEG);
+    expect(drift).toBeLessThan(1 * DEG);
     // Mirrored to the left.
     car.yawRate = -0.16;
     car.slip = 0.5;
@@ -227,7 +240,7 @@ describe("attitude as tilt", () => {
     car.slide = 0.8;
     for (let f = 0; f < 120; f++) cam.update(state, FRAME);
     const bank = bankOf(cam);
-    expect(bank).toBeGreaterThan(1 * DEG);
+    expect(bank).toBeGreaterThan(0.5 * DEG);
     expect(bank).toBeLessThanOrEqual(CAMERA_FEEL.tilt.bankMax * DEG + 0.01 * DEG);
     // ...and comes back level once the car is straight.
     car.yawRate = 0;
@@ -275,6 +288,94 @@ describe("attitude as tilt", () => {
     const share = (on - off) / Math.atan(0.15);
     expect(share).toBeGreaterThan(CAMERA_FEEL.tilt.slope * 0.8);
     expect(share).toBeLessThan(CAMERA_FEEL.tilt.slope * 1.2);
+  });
+});
+
+describe("surge as standoff", () => {
+  /** A car driven along z at a constant longitudinal acceleration from a
+   * settled 24 m/s, and how far the boom ends up from where the SAME car
+   * holding the SAME speed would have it — so what comes back is the surge
+   * alone, with the rig's own pull-back with pace divided out. */
+  function surgeRun(accel: number, seconds: number): number {
+    const state = game();
+    state.car.heading = 0;
+    state.car.u = 24;
+    const cam = chase(state);
+    for (let f = 0; f < Math.round(seconds / FRAME); f++) {
+      state.car.u = Math.max(0, state.car.u + accel * FRAME);
+      state.car.z += state.car.u * FRAME;
+      cam.update(state, FRAME);
+    }
+    const held = game();
+    held.car.heading = 0;
+    held.car.u = state.car.u;
+    const settled = chase(held);
+    for (let f = 0; f < 120; f++) {
+      held.car.z += held.car.u * FRAME;
+      settled.update(held, FRAME);
+    }
+    return standoff(cam, state) - standoff(settled, held);
+  }
+
+  it("asks for metres of boom per m/s² either way, bounded", () => {
+    const S = CAMERA_FEEL.surge;
+    expect(surgeWanted(0)).toBe(0);
+    expect(surgeWanted(5)).toBeCloseTo(5 * S.gain, 9);
+    expect(surgeWanted(-5)).toBeCloseTo(-5 * S.gain, 9);
+    expect(surgeWanted(100)).toBeCloseTo(S.max, 9);
+    expect(surgeWanted(-100)).toBeCloseTo(-S.max, 9);
+  });
+
+  it("falls behind a car on the power and carries forward over one braking", () => {
+    const away = surgeRun(6, 1.5);
+    expect(away).toBeGreaterThan(0.25);
+    expect(away).toBeLessThanOrEqual(CAMERA_FEEL.surge.max + 1e-6);
+    const under = surgeRun(-6, 1.5);
+    expect(under).toBeLessThan(-0.25);
+    expect(under).toBeGreaterThanOrEqual(-CAMERA_FEEL.surge.max - 1e-6);
+  });
+
+  it("comes back to the rig's own standoff once the car stops", () => {
+    const state = game();
+    const car = state.car;
+    car.heading = 0;
+    car.u = 24;
+    const cam = chase(state);
+    // Braking to a halt, then sitting there: the boom swings forward under
+    // the car and settles back onto the rig's own length, which at a
+    // standstill is the whole of it.
+    let closest = Infinity;
+    for (let f = 0; f < 200; f++) {
+      car.u = Math.max(0, car.u - 8 * FRAME);
+      car.z += car.u * FRAME;
+      cam.update(state, FRAME);
+      closest = Math.min(closest, standoff(cam, state));
+    }
+    expect(car.u).toBe(0);
+    expect(closest).toBeLessThan(CHASE_DIST - 0.3);
+    for (let f = 0; f < 240; f++) cam.update(state, FRAME);
+    expect(standoff(cam, state)).toBeCloseTo(CHASE_DIST, 1);
+  });
+
+  it("stands further back at pace than at a crawl, subtly", () => {
+    /** The settled standoff of a car holding `speed` along a dead straight. */
+    const at = (speed: number): number => {
+      const state = game();
+      state.car.heading = 0;
+      state.car.u = speed;
+      const cam = chase(state);
+      for (let f = 0; f < 240; f++) {
+        state.car.z += speed * FRAME;
+        cam.update(state, FRAME);
+      }
+      return standoff(cam, state);
+    };
+    const crawl = at(5);
+    const flying = at(40);
+    expect(flying - crawl).toBeCloseTo(35 * CHASE_PER_SPEED, 1);
+    // Felt as pace, not seen as a change of framing: a fifth of the boom
+    // over the whole speed range, never half of it.
+    expect(flying - crawl).toBeLessThan(CHASE_DIST * 0.3);
   });
 });
 
