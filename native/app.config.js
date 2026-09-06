@@ -11,6 +11,7 @@ const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const { version } = require("../package.json");
+const withIosSigning = require("./plugins/with-ios-signing");
 
 // identity.ts is TypeScript, and Expo evaluates this file in plain Node, so the
 // three values the shell needs are read off the module's source. Each one is a
@@ -46,6 +47,16 @@ const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID;
 // rather than the author's. Kept identical on both stores so the app is one
 // product across platforms — and UNCHANGEABLE once an app record ships under it.
 const BUNDLE_ID = "se.agilator.scandinavianflick";
+
+// The Apple team that signs a LOCAL device build (`make native-iphone`).
+// Deliberately NOT committed: it identifies a specific developer account, and
+// this repo is public — every contributor signs with their OWN team. It comes
+// from the environment, which for a laptop means `native/.env` (gitignored;
+// see .env.example). Absent, the config is unchanged and only a device build
+// notices — see plugins/with-ios-signing.js, and scripts/ios-device.mjs, which
+// says so before it builds anything. EAS builds never read it: they use the
+// credentials configured on the Expo project.
+const APPLE_TEAM_ID = process.env.APPLE_TEAM_ID;
 
 module.exports = () => ({
   expo: {
@@ -108,6 +119,8 @@ module.exports = () => ({
       // The bundled static server (lighttpd, via @dr.pogodin/react-native-static-server)
       // needs Android minSdk 28.
       ["expo-build-properties", { android: { minSdkVersion: 28 } }],
+      // Keep the signing team across prebuilds so a device build can sign.
+      [withIosSigning, { teamId: APPLE_TEAM_ID }],
     ],
     extra: {
       // NO `gameUrl` HERE, deliberately. The shell serves the copy of the site

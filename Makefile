@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -55,6 +55,13 @@ native-typecheck:
 
 native-ios:
 	npm run native:ios
+
+# THE PHONE: build the store app and put it on a REAL iPhone over USB, then
+# launch it. Bundles the site, regenerates ios/, signs, installs — one command
+# from a clean checkout. `make native-iphone ARGS="--device 'my iPhone'"` picks
+# between several; ARGS="--skip-bundle" reuses the packed site.
+native-iphone:
+	npm run native:ios:device -- $(ARGS)
 
 native-android:
 	npm run native:android

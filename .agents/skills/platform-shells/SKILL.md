@@ -72,8 +72,17 @@ push. → `native/README.md`.
 make native-bundle    # pack the built site into native/assets/webroot.zip — before EVERY native build
 make native-install   # its own dependency tree
 make native-ios       # on an iOS simulator (native-android for Android)
+make native-iphone    # on a REAL iPhone over USB: bundle, sign, install, launch
 make native-typecheck # tsc over the shell — its own tree, so `make lint` does not reach it
 ```
+
+`native-iphone` drives `xcodebuild` rather than `expo run:ios --device`, which
+passes neither `-allowProvisioningUpdates` nor
+`-allowProvisioningDeviceRegistration` and so fails signing on a phone the team
+has never seen. The team comes from `APPLE_TEAM_ID` in the gitignored
+`native/.env` — never committed — and reaches the generated project through the
+`with-ios-signing` config plugin, because `expo prebuild` rewrites `ios/` on
+every build and drops anything set by hand in Xcode.
 
 **Anything the store app does that a browser can't** is a bridge module under
 `native/src/<service>.ts`, driven off the WebView message channel, with the
