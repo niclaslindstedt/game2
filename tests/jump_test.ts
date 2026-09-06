@@ -24,6 +24,8 @@ import {
   type GameEvent,
   type GameState,
   type SegmentPlan,
+  ROAD_CROSS,
+  STAGE_RULES,
 } from "@engine";
 
 const JUMP_STAGE: SegmentPlan[] = [
@@ -39,12 +41,38 @@ const JUMP_STAGE: SegmentPlan[] = [
 ];
 
 function game(): GameState {
-  return createGame({
+  const state = createGame({
     seed: 0,
     carId: "classic",
     skipCountdown: true,
     track: compileTrack(0, JUMP_STAGE),
   });
+  onEmbankment(state);
+  return state;
+}
+
+/** THE GROUND THE ACCIDENTS HAPPEN ON: the rig's own road, and past its
+ * lip a bank falling away at `verge.climb` — a road standing nine metres
+ * over the country, which is what the rig is (seed 0's land lies under
+ * it) and what every roll below was measured on. Stated here rather than
+ * inherited from the terrain, because the terrain's verge is R31's to
+ * shape: a fill's side now leaves the lip through a rounded crest, and a
+ * car thrown off the road lands forty metres of near-level shoulder before
+ * the bank, where a roll that used to be carried down the slope stops on
+ * its flank. How the roll spends its energy on a given slope is the
+ * model's claim; which slope is the test's. The bank lands on the country
+ * (`farHeightAt`), as a fill's side does. The rig runs straight up +z, so
+ * the lateral is x. */
+function onEmbankment(state: GameState): void {
+  const ground = state.terrain.groundAt;
+  const country = state.terrain.farHeightAt;
+  const lip = state.track.width / 2 + ROAD_CROSS.reach;
+  state.terrain.groundAt = (x: number, z: number): number => {
+    const out = Math.abs(x) - lip;
+    if (out <= 0) return ground(x, z);
+    const bank = ground(Math.sign(x) * lip, z) - out * STAGE_RULES.verge.climb;
+    return Math.max(country(x, z), bank);
+  };
 }
 
 function run(state: GameState, input: Partial<CarInput>, seconds: number): GameEvent[] {
