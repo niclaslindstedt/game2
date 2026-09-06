@@ -190,9 +190,16 @@ let freeFov = FREE_FOV;
  * vertically and how much sky is left over the horizon. */
 type ChaseRig = {
   /** Standoff behind the car at a standstill, m, and the metres added per
-   * m/s of pace — the "straining ahead" cue. */
+   * m/s of pace — the "straining ahead" cue, a fifth of the boom over the
+   * whole speed range: felt as pace before it is seen as framing. */
   dist: number;
   distPerSpeed: number;
+  /** Share of the SURGE this rig takes, 0..1 (camera-feel.ts) — the boom
+   * falling behind a car on the power and carrying forward over one under
+   * the brakes. The rigs just behind the car take all of it, since it is
+   * their standoff a metre is a fifth of; the flown pair take a fraction,
+   * where the same metre is a lens breathing. */
+  surge: number;
   /** Height over the car's own y, m. */
   height: number;
   /** How much of the drift's slip angle the framing carries, 0..1. At 1 the
@@ -313,7 +320,8 @@ type ChaseRig = {
 const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
   close: {
     dist: 4.4,
-    distPerSpeed: 0.014,
+    distPerSpeed: 0.022,
+    surge: 1,
     height: 2.55,
     driftWeight: 0.85,
     followRate: 5,
@@ -336,7 +344,8 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
   },
   chase: {
     dist: 5.8,
-    distPerSpeed: 0.02,
+    distPerSpeed: 0.03,
+    surge: 1,
     height: 2.45,
     driftWeight: 0.8,
     followRate: 5,
@@ -359,7 +368,8 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
   },
   far: {
     dist: 9.8,
-    distPerSpeed: 0.03,
+    distPerSpeed: 0.042,
+    surge: 0.9,
     height: 3.3,
     driftWeight: 0.75,
     followRate: 3.8,
@@ -387,6 +397,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
   heli: {
     dist: 18,
     distPerSpeed: 0.07,
+    surge: 0.6,
     height: 10,
     driftWeight: 0.9,
     followRate: 2.4,
@@ -417,6 +428,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
   top: {
     dist: 4,
     distPerSpeed: 0.05,
+    surge: 0.4,
     height: 20,
     driftWeight: 1,
     followRate: 2.8,
@@ -734,8 +746,25 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
 
-    const camX = car.x - Math.sin(yaw) * dist + rightX * swing;
-    const camZ = car.z - Math.cos(yaw) * dist + rightZ * swing;
+    // The road's gradient as the shot reads it (vy/u while grounded) — the
+    // eased one, since it is applied straight to the aim and the attitude,
+    // and read raw it was the pitch of the shot flickering with every
+    // ripple in the ground.
+    const climb = clamp(climbVy / Math.max(10, car.u), -0.4, 0.4);
+    // What the frame says about the car over its framing (camera-feel.ts):
+    // the hover the grip read stands the lens off its height by, the metres
+    // the surge puts on and off the boom, the tremor pace puts in it, and
+    // the attitude taken after the aim. Read BEFORE the camera is placed,
+    // because the standoff decides where the floor under it is sampled.
+    const felt = feel.step(state, climb, rig, orbit, dt);
+    // The boom's own length, plus what the car's acceleration is dragging it
+    // out to or shoving it in to. Added here rather than to `wantDist`: the
+    // surge is already eased on its own clock, and passing it through the
+    // rig's ease as well would make it a rumour of a lag rather than one.
+    const boom = Math.max(0.5, dist + felt.reach);
+
+    const camX = car.x - Math.sin(yaw) * boom + rightX * swing;
+    const camZ = car.z - Math.cos(yaw) * boom + rightZ * swing;
     // The floor is read where the CAMERA is: trailing a car down a hill
     // puts it inside the slope it just came over, and no amount of height
     // above the CAR fixes that. Water counts as ground here — a lake's
@@ -769,15 +798,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // CAR moving in the frame, which is the half of a bump the outside shot
     // is supposed to show.
     const rattle = rattleAt(orbit, shake * rig.shake, shakePhase);
-    // The road's gradient as the shot reads it (vy/u while grounded) — the
-    // eased one, since it is applied straight to the aim and the attitude,
-    // and read raw it was the pitch of the shot flickering with every
-    // ripple in the ground.
-    const climb = clamp(climbVy / Math.max(10, car.u), -0.4, 0.4);
-    // What the frame says about the car over its framing (camera-feel.ts):
-    // the hover the grip read stands the lens off its height by, the
-    // tremor pace puts in it, and the attitude taken after the aim.
-    const felt = feel.step(state, climb, rig.hover, rig.shake, orbit, dt);
     const sx = rattle.x + felt.x * rightX;
     const sz = felt.x * rightZ;
     const sy = rattle.y + felt.y;

@@ -27,6 +27,15 @@
 //   is a degree or two: the horizon must never read as the game rolling the
 //   world, only as the picture having weight.
 //
+//   SURGE AS STANDOFF. The boom is not a rigid rod: a lens with mass on the
+//   end of one FALLS BEHIND a car that is pulling away from it and SWINGS
+//   FORWARD over one that is stopping under it. So the standoff is given a
+//   share of the car's own longitudinal acceleration — out on the power, in
+//   under the brakes, back to the rig's own length the moment the car is
+//   neither, which includes a car sitting still. It is a reading of
+//   ACCELERATION, so a steady 200 km/h asks for nothing; pace itself is the
+//   rig's `distPerSpeed`, which runs the boom out with speed and stays out.
+//
 //   SPEED AS A TREMOR. Past the pace a car reaches on its own, the lens
 //   starts to tremble — a gentle buzz that grows with speed, so that a car
 //   pouring off a cliff and gaining on gravity to three hundred is FELT to
@@ -83,20 +92,49 @@ export const CAMERA_FEEL = {
     /** Share of the BODY's load pitch — the dive under the brakes, the
      * squat on the power (`CarState.pitchLoad`), a few degrees at most. */
     dive: 0.5,
-    /** Bank INTO a slide, deg per rad of slip angle: 3 puts a 30° drift at
-     * about 1.6°. Positive leans the frame into the turn — the horizon's
-     * right end rises through a right-hander, the way a rider leans; a
-     * negative value leans out of it, like a car body on its springs. */
-    drift: 3,
+    /** Bank INTO a slide, deg per rad of slip angle: 1.05 puts a 30° drift
+     * at about half a degree. Positive leans the frame into the turn — the
+     * horizon's right end rises through a right-hander, the way a rider
+     * leans; a negative value leans out of it, like a car body on its
+     * springs. A slide is where the temptation to lean HARD is strongest and
+     * where leaning hard costs the most: the drift is displayed by the yaw
+     * across the frame, and a horizon that rolls with it reads as the game
+     * tilting the world rather than as the car being sideways in it. */
+    drift: 1.05,
     /** Bank into a gripped turn, deg per g of lateral acceleration. Subtler
      * than the slide's: a turn is a thing the car is doing, a slide is a
      * thing being done to it. Same sign convention. */
-    turn: 0.6,
+    turn: 0.3,
     /** The most bank the shot ever takes, deg — a spin has yaw rates that
-     * would otherwise roll the horizon. */
-    bankMax: 2.5,
+     * would otherwise roll the horizon. Sized to the two above: a ceiling
+     * a corner cannot reach is only there for the spin. */
+    bankMax: 1.25,
     /** How briskly the tilts are followed, 1/s. */
     rate: 6,
+  },
+
+  /** SURGE AS STANDOFF. Metres on and off the rig's own boom length. */
+  surge: {
+    master: 1,
+    /** Metres of standoff per m/s² of longitudinal acceleration: 0.08 puts
+     * a hard launch about half a metre back and a threshold stop most of
+     * one forward, on a boom that is five or six long. Enough to be felt as
+     * the car leaning on the lens; far short of a zoom. */
+    gain: 0.08,
+    /** ...and its ceiling either way, m. */
+    max: 0.7,
+    /** The most acceleration that is read at all, m/s² — a bit over a g,
+     * which is everything the tires can actually do. It is a CLAMP rather
+     * than a filter, so the far larger figure a solid impact makes reads as
+     * one hard stop rather than as the boom being fired forward. */
+    accelMax: 12,
+    /** How briskly the reading is followed, 1/s. Slower than the tilts on
+     * purpose: this is a MASS being dragged about, and a standoff that
+     * answered the throttle frame for frame would be a zoom with the engine
+     * torque curve in it. It is also the whole of the return to neutral —
+     * lift off, or come to a stop, and the boom settles back over about a
+     * second. */
+    rate: 3.5,
   },
 
   /** SPEED AS A TREMOR. */
@@ -170,6 +208,15 @@ export function pitchWanted(grade: number, car: CarState): number {
   return (slope + car.pitchLoad * T.dive) * T.master;
 }
 
+/** How far an acceleration stands the lens off the rig's boom length, m —
+ * positive is BACK, which is a car pulling away from the camera; negative is
+ * the lens carrying forward over a car that is stopping under it. Zero for a
+ * car holding a speed, whatever that speed is, and for one standing still. */
+export function surgeWanted(accel: number): number {
+  const S = CAMERA_FEEL.surge;
+  return clamp(accel * S.gain, -S.max, S.max) * S.master;
+}
+
 /** How much of the tremor a speed is worth, 0..1. */
 export function tremorAmount(speed: number): number {
   const S = CAMERA_FEEL.speed;
@@ -203,14 +250,24 @@ export function tremorAt(
 }
 
 /** What one frame of feel comes to, for the rig to apply: metres of lift
- * over its height, radians of bank (positive into a right-hander) and pitch
- * (positive back), and the tremor's own offsets. */
+ * over its height, metres of reach on and off its standoff (positive back),
+ * radians of bank (positive into a right-hander) and pitch (positive back),
+ * and the tremor's own offsets. */
 export type FeelFrame = {
   lift: number;
+  reach: number;
   bank: number;
   pitch: number;
   x: number;
   y: number;
+};
+
+/** What the rig scales each reading by — its own height, standoff and mass
+ * doing their own damping. A row of CHASE_RIGS (camera.ts) satisfies it. */
+export type FeelScales = {
+  hover: number;
+  shake: number;
+  surge: number;
 };
 
 /** The eased readings an outside rig carries from frame to frame. */
@@ -218,29 +275,31 @@ export type CameraFeel = {
   /** Stand the readings on the car as it is now, with no time in it — for a
    * rig that has been picked up and put down somewhere else. */
   drop: (state: GameState) => void;
-  /** One frame. `grade` is the rig's eased rise-over-run of the hill,
-   * `hover` and `shake` the rig's own scales, `t` the camera's clock. */
-  step: (
-    state: GameState,
-    grade: number,
-    hover: number,
-    shake: number,
-    t: number,
-    dt: number,
-  ) => FeelFrame;
+  /** One frame. `grade` is the rig's eased rise-over-run of the hill, `rig`
+   * its own scales, `t` the camera's clock. */
+  step: (state: GameState, grade: number, rig: FeelScales, t: number, dt: number) => FeelFrame;
 };
 
 export function createCameraFeel(): CameraFeel {
   let grip = 1;
   let bank = 0;
   let pitch = 0;
+  /** The car's longitudinal acceleration as the boom reads it, m/s², and the
+   * speed it was read against last frame. NaN until a first frame has been
+   * seen, because one sample is not a rate — and a car that has been picked
+   * up and put down somewhere else has not been accelerating, it has been
+   * MOVED. */
+  let accel = 0;
+  let wasU = Number.NaN;
   return {
     drop: (state) => {
       grip = gripReading(state);
       bank = 0;
       pitch = 0;
+      accel = 0;
+      wasU = state.car.u;
     },
-    step: (state, grade, hover, shake, t, dt) => {
+    step: (state, grade, rig, t, dt) => {
       const car = state.car;
       const want = gripReading(state);
       const rate = want < grip ? CAMERA_FEEL.grip.rise : CAMERA_FEEL.grip.settle;
@@ -248,10 +307,15 @@ export function createCameraFeel(): CameraFeel {
       const ease = clamp(CAMERA_FEEL.tilt.rate * dt, 0, 1);
       bank += (bankWanted(car) - bank) * ease;
       pitch += (pitchWanted(grade, car) - pitch) * ease;
+      const S = CAMERA_FEEL.surge;
+      const raw = dt > 0 && !Number.isNaN(wasU) ? (car.u - wasU) / dt : 0;
+      wasU = car.u;
+      accel += (clamp(raw, -S.accelMax, S.accelMax) - accel) * clamp(S.rate * dt, 0, 1);
       const speed = Math.hypot(car.u, car.w, car.vy);
-      const tremor = tremorAt(t, tremorAmount(speed), shake);
+      const tremor = tremorAt(t, tremorAmount(speed), rig.shake);
       return {
-        lift: hoverFor(grip, hover),
+        lift: hoverFor(grip, rig.hover),
+        reach: surgeWanted(accel) * rig.surge,
         bank: bank + tremor.tilt,
         pitch: pitch + tremor.nod,
         x: tremor.x,
