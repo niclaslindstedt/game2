@@ -608,7 +608,11 @@ export function createAmbientLife(): AmbientLife {
     }
 
     if (!sky.visible) return;
-    sky.position.set(camX, 0, camZ);
+    // The sky rides the camera in all three axes: the lane is an altitude
+    // OVER THE EYE, not over the sea. Anchored to the ground plane it was
+    // at eye level from a road four hundred metres up a massif, with the
+    // contrails drawn across the near slopes.
+    sky.position.set(camX, camera.position.y, camZ);
 
     const arriving = traffic.step(dt);
     if (arriving) enter(arriving);

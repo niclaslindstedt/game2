@@ -33,9 +33,11 @@
  * mark on the sky.
  *
  * The ends run out past the ridge rings, and that is wanted rather than
- * tolerated: the rings are opaque and write depth at a radius of about 550,
- * so the far end of a trail goes behind the mountains the way a real one
- * does, and comes out of them again in the gaps. */
+ * tolerated: a trail that ends inside the sky is a mark on it, and one that
+ * runs to the horizon has come from somewhere.
+ *
+ * Over the EYE, not over the sea: the whole crossing is camera-relative,
+ * height included, so a road up a mountain still looks up at it. */
 export const LANE = { low: 300, high: 470 };
 const REACH = 820;
 const OFFSET = 340;
@@ -114,7 +116,9 @@ export type Crossing = {
   /** Unit heading across the ground. */
   dirX: number;
   dirZ: number;
-  /** Altitude, m. */
+  /** Altitude over the CAMERA, m — like `fromX`/`fromZ`, camera-relative,
+   * so a road up a mountain looks up at the traffic the way a road in a
+   * valley does. */
   y: number;
   /** Ground speed, m/s. */
   speed: number;

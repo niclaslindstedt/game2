@@ -24,6 +24,7 @@ import {
   resolveKnobs,
   step,
   traceRivers,
+  type RiverAnchor,
   type GameEvent,
   type StandingWater,
 } from "@engine";
@@ -207,6 +208,58 @@ describe("the river (R18)", () => {
         const mouth = river.points[river.points.length - 1];
         expect(mouth.halfWidth).toBeGreaterThan(spring.halfWidth);
       }
+    }
+  });
+
+  it("climbs to its spring up a GULLY, never along a spur's crest", () => {
+    // A hillside rising north with a gully along x = 100 and a spur crest
+    // either side of it, at x = 0 and x = 200. The ford is in the gully,
+    // where a road's dip is, and the road crosses it at a skew, so the
+    // crossing window (which leaves a ford straight across the road)
+    // walks the source out onto the flank. From there steepest ascent
+    // never comes back: every flank's gradient points at the crest above
+    // it, so the walk runs up the spur and the water it lays stands over
+    // both its banks — the analyzer's `water.float`, seven times over two
+    // alpine seeds. Water came DOWN the gully, so the source climbs back
+    // into it: past the crossing window every point stands under at least
+    // one bank, measured the way the analyzer measures it, and the spring
+    // is in the gully, not on the spur.
+    const ground = (x: number, z: number): number =>
+      0.12 * z + 4 * Math.cos((2 * Math.PI * x) / 200);
+    const head: RiverAnchor = {
+      x: 100,
+      z: 0,
+      waterY: ground(100, 0) - 0.2,
+      halfWidth: 3.5,
+      depth: 0.45,
+      bridged: false,
+      edge: 6,
+      s: 100,
+      heading: Math.PI / 2 + 0.7,
+    };
+    const dry: StandingWater = { levelAt: () => null, nearestAt: () => null };
+    const bounds = { minX: -300, maxX: 300, minZ: -200, maxZ: 600 };
+    for (const seed of SEEDS) {
+      const [river] = traceRivers(seed, [head], ground, dry, undefined, bounds);
+      const source = river.points.slice(
+        0,
+        river.points.findIndex((p) => p.x === head.x && p.z === head.z),
+      );
+      expect(source.length).toBeGreaterThan(5);
+      for (let i = 0; i < source.length; i++) {
+        const p = source[i];
+        if (Math.hypot(p.x, p.z) < 40) continue;
+        const next = source[Math.min(source.length - 1, i + 1)];
+        const prev = source[Math.max(0, i - 1)];
+        const len = Math.hypot(next.x - prev.x, next.z - prev.z) || 1;
+        const out = p.halfWidth + 15;
+        const nx = (-(next.z - prev.z) / len) * out;
+        const nz = ((next.x - prev.x) / len) * out;
+        const bank = Math.max(ground(p.x + nx, p.z + nz), ground(p.x - nx, p.z - nz));
+        expect(p.y).toBeLessThanOrEqual(bank + 0.75);
+      }
+      // ...and the spring itself is in the gully, not on the spur.
+      expect(Math.abs(source[0].x - head.x)).toBeLessThan(40);
     }
   });
 

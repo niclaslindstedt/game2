@@ -170,7 +170,19 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   });
   const dome = new THREE.Mesh(domeGeo, domeMat);
   dome.renderOrder = -3;
-  group.add(dome);
+  // THE EYE'S OWN SKY. Everything at infinity — the dome, the stars, the
+  // sun and its halo — is centred on the camera in all three axes, where
+  // the ridges and the clouds stand on the country's ground plane (the
+  // group at the camera's x and z only). Centred at ground height, the sky
+  // moves with the camera's HEIGHT: from a road four hundred metres up a
+  // massif the dome's horizon band is that far below the eye and the sun
+  // parked at `DOME_RADIUS` sits seven metres over it and 280 m out — on
+  // the eye's horizon, low and orange in the middle of a summer day, and
+  // shining through every slope further off than that. The taiga's roads
+  // run tens of metres over that plane and never showed it.
+  const eye = new THREE.Group();
+  scene.add(eye);
+  eye.add(dome);
 
   const paintDome = (p: Preset): void => {
     const pos = domeGeo.getAttribute("position");
@@ -211,34 +223,46 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   }
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+  // BACKDROP, all of it: the stars, the sun and its halo are painted in
+  // the OPAQUE pass before the world and never depth-tested against it,
+  // like the ridges below. Marked `transparent`, three.js would draw them
+  // after every opaque thing in the scene whatever their render order,
+  // depth-tested at their own distance — `DOME_RADIUS` and a bit, under
+  // 500 m — so a mountain further off than that had the sun shining
+  // through it. The taiga's fog ends at about that distance and hid the
+  // defect; the alpine sees half again as far, and its ridges stand in
+  // exactly that band. The blend modes are additive because a material
+  // that is not `transparent` gets NO blending under normal mode, and the
+  // stars and the halo fade by opacity.
   const starMat = new THREE.PointsMaterial({
     color: 0xdfe8ff,
     size: 1.6,
     sizeAttenuation: false,
-    transparent: true,
     opacity: 0,
     fog: false,
     depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
   });
   const stars = new THREE.Points(starGeo, starMat);
   stars.renderOrder = -2;
-  group.add(stars);
+  eye.add(stars);
 
   // ── Sun / moon: a hard disc inside a soft halo, billboarded ──────────────
   const glowMap = glowTexture();
   const haloMat = new THREE.MeshBasicMaterial({
     map: glowMap,
-    transparent: true,
     fog: false,
     depthWrite: false,
+    depthTest: false,
     blending: THREE.AdditiveBlending,
   });
   const halo = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), haloMat);
   halo.renderOrder = -2;
-  const discMat = new THREE.MeshBasicMaterial({ fog: false, depthWrite: false, transparent: true });
+  const discMat = new THREE.MeshBasicMaterial({ fog: false, depthWrite: false, depthTest: false });
   const disc = new THREE.Mesh(new THREE.CircleGeometry(1, 24), discMat);
   disc.renderOrder = -1;
-  group.add(halo, disc);
+  eye.add(halo, disc);
 
   // ── Distant mountains: silhouette rings riding the horizon, camera-locked
   // like the dome (infinitely far) and tinted per preset so they read
@@ -687,6 +711,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   const update = (state: GameState, camera: THREE.Camera, dt: number): void => {
     const cam = camera.position;
     group.position.set(cam.x, 0, cam.z);
+    eye.position.copy(cam);
     disc.lookAt(cam);
     halo.lookAt(cam);
 
