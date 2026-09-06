@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_KEYS,
   DEFAULT_SETTINGS,
   DEFAULT_VIDEO,
   DETAIL_PRESETS,
@@ -552,5 +553,32 @@ describe("what sky each DETAIL stop draws", () => {
     }
     // A sky that is a shader at all reads its clouds at some octaves.
     for (const look of Object.values(SKY_LOOK)) expect(look.shader).toBe(look.octaves > 0);
+  });
+});
+
+// THE TWO PRESSES THAT THROW ROAD AWAY, and which key each ships on. R is
+// the one a driver reaches for MID-STAGE — the car is in a ditch or on its
+// roof, and the run wants putting back on the road at the last board — so
+// it takes the letter under the hand that is already there. Restarting the
+// whole stage is the rarer press and the more expensive one to make by
+// accident, so it sits away from it on B. Held here because the pair is a
+// DEFAULT rather than a mechanism: nothing else in the game breaks if they
+// swap back, and the player who finds out has already lost the stage.
+describe("the two keys a run can be given up on", () => {
+  it("puts BACK TO TRACK on R and RESTART STAGE on B", () => {
+    expect(DEFAULT_KEYS.reset).toEqual(["KeyR"]);
+    expect(DEFAULT_KEYS.restart).toEqual(["KeyB"]);
+  });
+
+  it("gives neither key to anything else on the keyboard", () => {
+    const bound = new Map<string, string>();
+    for (const [action, codes] of Object.entries(DEFAULT_KEYS)) {
+      for (const code of codes) {
+        expect(bound.get(code)).toBeUndefined();
+        bound.set(code, action);
+      }
+    }
+    expect(bound.get("KeyR")).toBe("reset");
+    expect(bound.get("KeyB")).toBe("restart");
   });
 });
