@@ -26,6 +26,7 @@ import * as THREE from "three";
 import type { BiomeId } from "@engine";
 
 import { SOUTH } from "./daylight.ts";
+import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
 import { dayLight, type Preset } from "./sky.ts";
 
 /** One ring's profile: where each column's foot, snowline and summit sit,
@@ -158,24 +159,23 @@ export function createHorizon(): Horizon {
     fog: false,
     side: THREE.DoubleSide,
     vertexColors: true,
-    // BACKDROP, like every other thing in the sky group: painted before
-    // the world and never depth-tested against it, so the country is
-    // always in front of its own horizon.
-    //
-    // The rings stand at ~500 m, which is a good deal NEARER than the
-    // ground the camera can see — a stage draws its world for a kilometre
-    // and more. Left to write depth, a ring therefore occludes real terrain
-    // that is further away than it is, and the horizon comes out lying
-    // ACROSS the landscape instead of behind it. It is worst where the
-    // rings are short and the ground is high, which is the desert exactly
-    // (`RIDGE_HEIGHT` scales them to 0.38 and R40 stands the whole country
-    // on a floor 14 m over the water table): there the chain cut through
-    // the dunes halfway out.
-    depthWrite: false,
-    depthTest: false,
   });
+  // BACKDROP, like every other thing in the sky group (sky-depth.ts): drawn
+  // after the world and depth-tested at the FAR PLANE, so the country is
+  // always in front of its own horizon.
+  //
+  // The distance is the whole reason it cannot be depth-tested where it
+  // actually stands. The rings are at ~500 m, a good deal NEARER than the
+  // ground the camera can see — a stage draws its world for a kilometre and
+  // more — so at their own depth a ring occludes real terrain further away
+  // than it is, and the horizon comes out lying ACROSS the landscape
+  // instead of behind it. It is worst where the rings are short and the
+  // ground is high, which is the desert exactly (`RIDGE_HEIGHT` scales them
+  // to 0.38 and R40 stands the whole country on a floor 14 m over the water
+  // table): there the chain cut through the dunes halfway out.
+  drawAsBackdrop(mat);
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.renderOrder = -1;
+  mesh.renderOrder = SKY_ORDER - 1;
 
   let snowy = true;
   let scale = 1;

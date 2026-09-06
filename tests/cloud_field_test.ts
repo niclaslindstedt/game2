@@ -233,6 +233,63 @@ describe("dressing the sky", () => {
     expect(winter.layers.find((l) => l.deck)?.genus).toBe("nimbostratus");
   });
 
+  it("ranks the sheet the stage is driven under first, whatever its altitude", () => {
+    // The cap the SKY lever applies keeps the lowest ranks (sky-shader.ts),
+    // so rank 0 has to be the sheet the sky reads as. Under weather that is
+    // the DECK with the scud BELOW it, which is the case altitude order
+    // gets backwards — keep the lowest sheet there and a storm loses its
+    // ceiling and keeps the rags.
+    const storm = dressSky(conditions({ weather: "storm" }), "taiga", 0.5, 900).layers;
+    const primary = storm.reduce((a, b) => (a.rank <= b.rank ? a : b));
+    expect(primary.deck).toBe(true);
+    expect(primary.genus).toBe("cumulonimbus");
+    // …and the scud it keeps company is the one a thinner sky gives up,
+    // even though it hangs lower.
+    const scud = storm.find((l) => l.genus === "scud");
+    expect(scud).toBeDefined();
+    expect(scud!.rank).toBeGreaterThan(primary.rank);
+    expect(scud!.altitude).toBeLessThan(primary.altitude);
+  });
+
+  it("ranks a clear sky from the base up, and never leaves a cap with nothing", () => {
+    for (const biome of ["taiga", "desert", "alpine"] as const) {
+      for (let i = 0; i < 60; i++) {
+        const env = conditions({ windDir: i * 0.13, gustPhase: i * 0.29 });
+        const { layers } = dressSky(env, biome, 0.4, null);
+        if (layers.length === 0) continue;
+        // A cap of one always leaves exactly one sheet standing — the
+        // ranks need not be dense (a desert can roll cirrus alone), so the
+        // cap sorts by rank rather than testing against it.
+        const kept = [...layers].sort((a, b) => a.rank - b.rank).slice(0, 1);
+        expect(kept).toHaveLength(1);
+        // The lowest sheet is the primary on a clear day: heaps or a
+        // sheet at the condensation level, never the cirrus over it.
+        const lowest = layers.reduce((a, b) => (a.altitude <= b.altitude ? a : b));
+        expect(lowest.rank).toBe(Math.min(...layers.map((l) => l.rank)));
+      }
+    }
+  });
+
+  it("hands the dome its sheets in altitude order", () => {
+    // The dome walks the stack from the far side of the sky
+    // (`uLayers - 1 - k` going up), which is only far-to-near if the list
+    // climbs. The chart pushes in the order it thinks in, and a desert's
+    // winter altostratus is rolled AFTER the cirrus five kilometres over
+    // it.
+    for (const biome of ["taiga", "desert", "alpine"] as const) {
+      for (const weather of ["clear", "rain", "storm"] as const) {
+        for (const season of ["summer", "winter"] as const) {
+          for (let i = 0; i < 30; i++) {
+            const env = conditions({ weather, season, windDir: i * 0.17, gustPhase: i * 0.41 });
+            const { layers } = dressSky(env, biome, 0.5, weather === "clear" ? null : 900);
+            const climbs = layers.every((l, k) => k === 0 || layers[k - 1].altitude <= l.altitude);
+            expect(climbs).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
   it("sits the winter forest under a sheet and the summer one under heaps", () => {
     const winter = dressSky(conditions({ season: "winter" }), "taiga", 0, null).layers;
     const summer = dressSky(conditions({ season: "summer" }), "taiga", 0, null).layers;
@@ -255,6 +312,7 @@ describe("the cloud over the sun", () => {
     fibre: 0,
     seed: 11,
     deck: false,
+    rank: 0,
   };
 
   it("shades nothing when the sun is down or the sheet is below", () => {

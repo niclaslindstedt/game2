@@ -392,13 +392,26 @@ export type VideoSettings = {
  *
  * `octaves` and `layers` are the two that decide what the sky COSTS, and
  * they multiply: every sheet in the stack is a whole field read at that
- * depth, on every sky pixel. The chart `dressSky` rolls can stand four
- * sheets at once (`MAX_LAYERS`) — a cumulus base, an altostratus veil and
- * cirrus over the top of both — and the top of the stack is the cheapest
- * thing in the sky to give up: a cirrus sheet ten kilometres up is a pale
- * wash that hardly moves as the car does, where the cumulus a stage is
- * driven under is the weather. So `layered` keeps three and `full` takes
- * the chart as rolled. */
+ * depth, on every sky pixel.
+ *
+ * Nine skies in ten are TWO sheets — a cumulus base with cirrus over it, or
+ * a deck with its scud under it — and one in twenty-five is three. So a cap
+ * only buys anything at two or one, and at one it buys half the sky: what
+ * is left is the sheet the stage is actually driven under, which is the
+ * `rank` the chart names rather than whichever happens to be lowest
+ * (cloud-field.ts). A cirrus veil ten kilometres up hardly moves as the car
+ * does; the cumulus over the road is the weather.
+ *
+ * `layered` and `full` agree on the count, and that is not an oversight:
+ * two is the sky the chart draws anyway, so a cap above it never fires and
+ * a cap below it costs every sky its second sheet. What separates the two
+ * stops is how deep each sheet is READ (`octaves`) and whether its edges
+ * take a second sample toward the sun — quality per sheet, where this is
+ * how many there are.
+ *
+ * `simple` does not reach the dome at all — the arcade sky is a mesh ring
+ * of puffs — so its cap is what a shader sky at that stop WOULD stand, and
+ * costs nothing today. */
 export const SKY_LOOK: Record<
   VideoSettings["sky"],
   {
@@ -414,7 +427,7 @@ export const SKY_LOOK: Record<
   simple: {
     shader: false,
     octaves: 0,
-    layers: 0,
+    layers: 1,
     sunlit: false,
     mist: false,
     mountainShadow: false,
@@ -423,7 +436,7 @@ export const SKY_LOOK: Record<
   layered: {
     shader: true,
     octaves: 4,
-    layers: 3,
+    layers: 2,
     sunlit: false,
     mist: true,
     mountainShadow: true,
@@ -432,7 +445,7 @@ export const SKY_LOOK: Record<
   full: {
     shader: true,
     octaves: 6,
-    layers: 4,
+    layers: 2,
     sunlit: true,
     mist: true,
     mountainShadow: true,
