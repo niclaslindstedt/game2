@@ -25,6 +25,7 @@ import * as THREE from "three";
 
 import { MAX_LAYERS, type CloudLayer, type SkyDressing } from "./cloud-field.ts";
 import { fogUniforms, heightFogGlsl } from "./height-fog.ts";
+import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
 import { DOME_RADIUS, type Preset } from "./sky.ts";
 
 /** How high the deck's lit rim reaches, radians above the horizon — the
@@ -329,9 +330,12 @@ export function createSkyShell(): SkyShell {
     vertexShader: VERTEX,
     fragmentShader: fragmentFor(built),
     side: THREE.BackSide,
-    depthWrite: false,
     fog: false,
   });
+  // The dome is the reason sky-depth.ts exists: this shader is the dearest
+  // thing per pixel in the frame, and drawn as a backdrop it runs on the
+  // pixels that are actually sky instead of on all of them.
+  drawAsBackdrop(material);
 
   /** Recompile the dome, but only when the look or the stack has actually
    * moved: three rebuilds the program on `needsUpdate`, and a shader rebuilt
@@ -349,7 +353,7 @@ export function createSkyShell(): SkyShell {
     material.needsUpdate = true;
   };
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(DOME_RADIUS, 32, 18), material);
-  mesh.renderOrder = -3;
+  mesh.renderOrder = SKY_ORDER - 3;
   mesh.frustumCulled = false;
 
   let drawn: CloudLayer[] = [];
@@ -386,12 +390,16 @@ export function createSkyShell(): SkyShell {
       uniforms.uDeckRim.value.set(p.deck.rim);
       uniforms.uDeckRelief.value = p.deck.relief;
     }
-    // The stack the LOOK will pay for, thickest sheets first — `dressSky`
-    // builds the list from the ground up, so a cap taken off the end drops
-    // the highest, thinnest cirrus rather than the cumulus the stage is
-    // driven under. Every sheet is a whole field sampled on every sky pixel,
-    // which makes this the sky's steepest lever after the octaves.
-    drawn = dressing.layers.slice(0, Math.min(look.layers, MAX_LAYERS));
+    // THE STACK THE LOOK WILL PAY FOR. Every sheet is a whole field of
+    // noise sampled on every sky pixel, so this is the sky's steepest lever
+    // after the depth — and which sheets go is a question about the sky
+    // rather than about their altitudes, which is what `rank` answers
+    // (cloud-field.ts). Take the lowest ranks, then put them back in
+    // altitude order, because that is the order the loop below paints in.
+    drawn = [...dressing.layers]
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, Math.min(look.layers, MAX_LAYERS))
+      .sort((a, b) => a.altitude - b.altitude);
     rebuild({ octaves: look.octaves, sunlit: look.sunlit, layers: drawn.length });
     drawn.forEach((layer, i) => {
       // How much of the fair-weather ring a dry country flies thins the

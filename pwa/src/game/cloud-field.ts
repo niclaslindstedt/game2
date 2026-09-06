@@ -80,16 +80,34 @@ export type CloudLayer = {
   /** Whether the sheet is the DECK — the lid of an overcast sky, painted
    * from the preset's `Deck` rather than from the cloud tones. */
   deck: boolean;
+  /** WHICH SHEET THIS SKY IS, counted from the one that matters: 0 is the
+   * primary — the cloud the stage is actually driven under — and each step
+   * up is a sheet the sky can be read without.
+   *
+   * It exists because the quality ladder drops sheets off the top of the
+   * stack (`SkyLook.layers`), and altitude is the wrong order to drop them
+   * in from EITHER end. Under weather the primary is the DECK and the scud
+   * hangs below it, so the lowest sheet is the one to lose; on a clear day
+   * the primary is the cumulus at the bottom and the cirrus ten kilometres
+   * over it is the one to lose. Nothing about the two altitudes says that,
+   * so the chart says it here instead.
+   *
+   * Ranks are per sky and need not be dense: a desert that rolled no
+   * cumulus can be a rank 2 cirrus on its own, and a cap of one keeps it
+   * rather than emptying the sky. */
+  rank: number;
 };
 
-/** Everything over one stage. Ordered by altitude, lowest first. */
+/** Everything over one stage. Ordered by altitude, lowest first — which is
+ * the order the dome walks to paint them far-to-near. */
 export type SkyDressing = {
   layers: CloudLayer[];
 };
 
-/** How many layers the dome can draw at once — the uniform arrays are
- * sized to it. A sky rarely has more than three kinds of cloud in it, and
- * the fourth slot is the scud under a deck. */
+/** How many layers the dome can draw at once — the uniform arrays are sized
+ * to it. The chart below rolls at most three (a base, a mid sheet and
+ * cirrus; under weather it is a deck and its scud, which is two), and the
+ * fourth slot is headroom for a chart that grows one. */
 export const MAX_LAYERS = 4;
 
 /** Where a stage's cumulus base sits over each country, m over the sea. The
@@ -140,6 +158,16 @@ export function skySeed(env: Pick<RaceEnv, "gustPhase" | "windDir">): number {
  * wet country, blown sand in a dry one) with scud under it; a storm is the
  * same deck lower and blacker with the scud tearing.
  */
+/** The stack in the order the dome paints it: lowest sheet first, so the
+ * shader's walk from the far side of the sky comes out far-to-near whether
+ * the ray is going up or down. The chart pushes in the order it THINKS in
+ * — a base, then whatever is over it — and that is not always the order the
+ * altitudes are in (a desert's winter altostratus is rolled after the
+ * cirrus and sits five kilometres under it). */
+function byAltitude(layers: CloudLayer[]): CloudLayer[] {
+  return [...layers].sort((a, b) => a.altitude - b.altitude);
+}
+
 export function dressSky(
   env: RaceEnv,
   biome: BiomeId,
@@ -169,6 +197,7 @@ export function dressSky(
       fibre: 0,
       seed: 3,
       deck: true,
+      rank: 0,
     });
     // SCUD — the ragged fragments torn along under the base, darker than
     // the ceiling and moving visibly faster than anything else in the
@@ -186,8 +215,9 @@ export function dressSky(
       fibre: 0,
       seed: 5,
       deck: false,
+      rank: 1,
     });
-    return { layers };
+    return { layers: byAltitude(layers) };
   }
 
   // ── The clear sky ────────────────────────────────────────────────────
@@ -197,7 +227,7 @@ export function dressSky(
     if (season === "winter") {
       // A flat grey stratocumulus sheet with holes in it — the northern
       // winter sky — over a country that is white anyway.
-      layers.push(sheet("stratocumulus", 700 + roll() * 300, between(roll, 0.3, 0.75), roll));
+      layers.push(sheet("stratocumulus", 700 + roll() * 300, between(roll, 0.3, 0.75), roll, 0));
     } else {
       layers.push(
         heaps(
@@ -205,41 +235,46 @@ export function dressSky(
           between(roll, baseLo, baseHi),
           between(roll, 0.18, summerish ? 0.55 : 0.45),
           roll,
+          0,
         ),
       );
     }
     if (roll() < (season === "spring" ? 0.3 : 0.18)) {
-      layers.push(mackerel(between(roll, 3200, 4200), between(roll, 0.15, 0.4), roll));
+      layers.push(mackerel(between(roll, 3200, 4200), between(roll, 0.15, 0.4), roll, 1));
     }
     if (roll() < 0.65)
-      layers.push(wisps(between(roll, 7500, 9500), between(roll, 0.12, 0.5), roll));
+      layers.push(wisps(between(roll, 7500, 9500), between(roll, 0.12, 0.5), roll, 2));
   } else if (biome === "desert") {
     // A handful of cumulus in a great deal of blue, two kilometres up.
     if (roll() < 0.8) {
-      layers.push(heaps("cumulus", between(roll, baseLo, baseHi), between(roll, 0.04, 0.22), roll));
+      layers.push(
+        heaps("cumulus", between(roll, baseLo, baseHi), between(roll, 0.04, 0.22), roll, 0),
+      );
     }
     if (roll() < 0.7)
-      layers.push(wisps(between(roll, 8500, 11000), between(roll, 0.15, 0.55), roll));
+      layers.push(wisps(between(roll, 8500, 11000), between(roll, 0.15, 0.55), roll, 2));
     if (season === "winter" && roll() < 0.5) {
       // The wet season's sheet, thin and high.
-      layers.push(sheet("altostratus", between(roll, 3500, 4500), between(roll, 0.3, 0.6), roll));
+      layers.push(
+        sheet("altostratus", between(roll, 3500, 4500), between(roll, 0.3, 0.6), roll, 1),
+      );
     }
   } else {
     // R47 — the Alps: cumulus building over the peaks by afternoon,
     // altocumulus combed into lenticular streaks by the wind over the
     // range, and the airliners' cirrus.
-    layers.push(heaps("cumulus", between(roll, baseLo, baseHi), between(roll, 0.15, 0.5), roll));
+    layers.push(heaps("cumulus", between(roll, baseLo, baseHi), between(roll, 0.15, 0.5), roll, 0));
     if (roll() < 0.6) {
-      const lens = mackerel(between(roll, 3800, 5200), between(roll, 0.25, 0.5), roll);
+      const lens = mackerel(between(roll, 3800, 5200), between(roll, 0.25, 0.5), roll, 1);
       lens.streak = between(roll, 2, 3.2);
       lens.scale *= 1.6;
       layers.push(lens);
     }
     if (roll() < 0.7)
-      layers.push(wisps(between(roll, 8000, 10000), between(roll, 0.15, 0.5), roll));
+      layers.push(wisps(between(roll, 8000, 10000), between(roll, 0.15, 0.5), roll, 2));
   }
   layers.sort((a, b) => a.altitude - b.altitude);
-  return { layers: layers.slice(0, MAX_LAYERS) };
+  return { layers: byAltitude(layers.slice(0, MAX_LAYERS)) };
 }
 
 /** Fair-weather heaps: hard-edged, solid, shadowed underneath, riding the
@@ -249,6 +284,7 @@ function heaps(
   altitude: number,
   coverage: number,
   roll: () => number,
+  rank: number,
 ): CloudLayer {
   return {
     genus,
@@ -263,6 +299,7 @@ function heaps(
     fibre: 0,
     seed: 11,
     deck: false,
+    rank,
   };
 }
 
@@ -272,6 +309,7 @@ function sheet(
   altitude: number,
   coverage: number,
   roll: () => number,
+  rank: number,
 ): CloudLayer {
   return {
     genus,
@@ -286,13 +324,19 @@ function sheet(
     fibre: 0,
     seed: 17,
     deck: false,
+    rank,
   };
 }
 
 /** Altocumulus — the mackerel sky: cells a long way up, in a sheet that
  * is mostly cell. The cells are big for the genus — real ones are a
  * degree or two across, which at this resolution is noise on the dome. */
-function mackerel(altitude: number, coverage: number, roll: () => number): CloudLayer {
+function mackerel(
+  altitude: number,
+  coverage: number,
+  roll: () => number,
+  rank: number,
+): CloudLayer {
   return {
     genus: "altocumulus",
     altitude,
@@ -306,6 +350,7 @@ function mackerel(altitude: number, coverage: number, roll: () => number): Cloud
     fibre: 0,
     seed: 23,
     deck: false,
+    rank,
   };
 }
 
@@ -314,7 +359,7 @@ function mackerel(altitude: number, coverage: number, roll: () => number): Cloud
  * sheet says where the veil is; the fibres are what it is made of — the
  * hair-like filaments a cirrus reads by, drawn over the sheet rather than
  * as it, so a big soft sweep of it still has fine structure inside. */
-function wisps(altitude: number, coverage: number, roll: () => number): CloudLayer {
+function wisps(altitude: number, coverage: number, roll: () => number, rank: number): CloudLayer {
   return {
     genus: "cirrus",
     altitude,
@@ -328,6 +373,7 @@ function wisps(altitude: number, coverage: number, roll: () => number): CloudLay
     fibre: between(roll, 0.6, 0.85),
     seed: 29,
     deck: false,
+    rank,
   };
 }
 

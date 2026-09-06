@@ -60,6 +60,7 @@ import { createShadowMarch, type ShadowMarch } from "./mountain-shadow.ts";
 import { createRain } from "./rain.ts";
 import { createSnowfall } from "./snowfall.ts";
 import { createSkyShell, litLayers } from "./sky-shader.ts";
+import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
 import { createStorm } from "./storm.ts";
 import {
   beamShareOf,
@@ -264,10 +265,10 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     vertexColors: true,
     side: THREE.BackSide,
     fog: false,
-    depthWrite: false,
   });
+  drawAsBackdrop(domeMat);
   const dome = new THREE.Mesh(domeGeo, domeMat);
-  dome.renderOrder = -3;
+  dome.renderOrder = SKY_ORDER - 3;
   // THE EYE'S OWN SKY. Everything at infinity — the domes, the stars, the
   // sun and its halo — is centred on the camera in all three axes, where
   // the ridges and the clouds stand on the country's ground plane (the
@@ -324,27 +325,27 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   }
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
-  // BACKDROP, all of it: the stars, the sun and its halo are painted in
-  // the OPAQUE pass before the world and never depth-tested against it,
-  // like the ridges below. Marked `transparent`, three.js would draw them
-  // after every opaque thing in the scene whatever their render order,
-  // depth-tested at their own distance — `DOME_RADIUS` and a bit, under
-  // 500 m — so a mountain further off than that had the sun shining
-  // through it. The blend modes are additive because a material that is
-  // not `transparent` gets NO blending under normal mode, and the stars
-  // and the halo fade by opacity.
+  // BACKDROP, all of it: the stars, the sun and its halo ride the stack
+  // sky-depth.ts owns — last in the opaque pass, depth-tested at the far
+  // plane — so a mountain occludes the sun however far off it stands, and
+  // none of the three is shaded on a pixel the country already covers.
+  // They stay OUT of the transparent pass: marked `transparent` they would
+  // be depth-tested at their own distance instead, which is `DOME_RADIUS`
+  // and a bit, under 500 m — and a ridge further off than that would have
+  // the sun shining through it. The blend modes are additive because a
+  // material that is not `transparent` gets NO blending under normal mode,
+  // and the stars and the halo fade by opacity.
   const starMat = new THREE.PointsMaterial({
     color: 0xdfe8ff,
     size: 1.6,
     sizeAttenuation: false,
     opacity: 0,
     fog: false,
-    depthWrite: false,
-    depthTest: false,
     blending: THREE.AdditiveBlending,
   });
+  drawAsBackdrop(starMat);
   const stars = new THREE.Points(starGeo, starMat);
-  stars.renderOrder = -2;
+  stars.renderOrder = SKY_ORDER - 2;
   eye.add(stars);
 
   // ── Sun / moon: a hard disc inside a soft halo, billboarded ──────────────
@@ -352,15 +353,15 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   const haloMat = new THREE.MeshBasicMaterial({
     map: glowMap,
     fog: false,
-    depthWrite: false,
-    depthTest: false,
     blending: THREE.AdditiveBlending,
   });
+  drawAsBackdrop(haloMat);
   const halo = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), haloMat);
-  halo.renderOrder = -2;
-  const discMat = new THREE.MeshBasicMaterial({ fog: false, depthWrite: false, depthTest: false });
+  halo.renderOrder = SKY_ORDER - 2;
+  const discMat = new THREE.MeshBasicMaterial({ fog: false });
+  drawAsBackdrop(discMat);
   const disc = new THREE.Mesh(new THREE.CircleGeometry(1, 24), discMat);
-  disc.renderOrder = -1;
+  disc.renderOrder = SKY_ORDER - 1;
   eye.add(halo, disc);
 
   // ── The horizon, the clouds, the weather ────────────────────────────────

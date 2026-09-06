@@ -21,6 +21,7 @@
 
 import * as THREE from "three";
 
+import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
 import type { Preset } from "./sky.ts";
 
 /** How far out the deck reaches, m. Past every ridge ring (which top out
@@ -139,12 +140,12 @@ export function createClouds(): Clouds {
     vertexColors: true,
     side: THREE.DoubleSide,
     fog: false,
-    depthWrite: false,
   });
+  drawAsBackdrop(deckMat);
   const deck = new THREE.Mesh(deckGeo, deckMat);
   // Over the sky dome, under the mountains: the ridges stand in front of
   // the ceiling, which is what puts the weather BEHIND the landscape.
-  deck.renderOrder = -2;
+  deck.renderOrder = SKY_ORDER - 2;
   deck.frustumCulled = false;
   deck.visible = false;
   group.add(deck);
