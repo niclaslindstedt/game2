@@ -540,7 +540,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     storm.apply(preset);
     lamps.setLit(preset.headlights);
     if (look.shader) {
-      shell.apply(preset, dressing, { octaves: look.octaves, sunlit: look.sunlit });
+      shell.apply(preset, dressing, look);
       litLayers(shell, (layer) => (layer.deck ? 1 : litAt(layer.altitude, preset.sunUp)));
     } else {
       paintDome(preset);
@@ -670,7 +670,6 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     Object.assign(HEIGHT_FOG.cloudB, {
       x: layer.coverage,
       y: layer.sharpness,
-      z: 3,
       w: beamShareOf(preset) * beamNow() * Math.min(1, layer.body + 0.3),
     });
     Object.assign(HEIGHT_FOG.cloudC, {
