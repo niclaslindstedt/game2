@@ -7,8 +7,9 @@
 // IT CARRIES NO WORDS — not even a number of metres. A call is a SIGN: the
 // corner's own shape drawn off the stage, on a plate coloured by how much the
 // bend is going to ask and cut to a point on the side it turns toward, fading
-// up as the corner comes, with a bar under it closing from both ends as the
-// two seconds it was put up on run out. Every one of those is read out of the
+// up over the two seconds before the turn-in and then INKING ITSELF IN along
+// its own line as the corner is driven — solid at the exit, and gone the
+// instant the car is past it. Every one of those is read out of the
 // corner of an eye that never leaves the road, which is the only way a call
 // is ever read at rally pace — lettering it adds
 // nothing a glance already has and asks for the one thing there is no room
@@ -22,7 +23,7 @@
 
 import type { JumpSize, TurnSeverity } from "@engine";
 
-import type { PaceSign } from "./pace-shape.ts";
+import type { PacePoint, PaceSign } from "./pace-shape.ts";
 import { clamp } from "../lib/util.ts";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
@@ -38,6 +39,9 @@ export type HudPacenote =
        * while inside the turn) — the clock the strip is timed on, and what
        * the call's opacity is read off. */
       eta: number;
+      /** How much of the corner is behind the car: 0 on the approach, 1 at
+       * the exit. The sign inks itself in along this (snapshot.ts). */
+      fill: number;
       /** The corner's own shape, ready to draw in the sign's 100x100 box — the
        * stage's plan view of this turn, already in screen axes (pace-shape.ts). */
       sign: PaceSign;
@@ -52,24 +56,67 @@ export type HudPacenote =
       eta: number;
     };
 
+/** How much of the sign has to be inked in before the head starts to arrive.
+ * The head is a triangle rather than a length of road — there is nothing to
+ * sweep along — so it comes up over the last of the corner instead, and is
+ * solid at the exit. */
+const HEAD_FILL_FROM = 0.86;
+
+/** The length of a drawn corner, in the sign's own box: what the dash that
+ * hides the unfilled part of it is measured against. A hairpin and a 300 m
+ * sweeper are both fitted to the same 100x100 box, so this is the length of
+ * the PICTURE and not of the road. */
+function signLength(line: readonly PacePoint[]): number {
+  let total = 0;
+  for (let i = 1; i < line.length; i++) {
+    total += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
+  }
+  return total;
+}
+
 /** The pacenote sign: the corner's own shape, drawn like a rally note board.
  * The line is the road — the approach at the bottom, the bend the way the
  * bend goes — with a heavy head on the exit. pace-shape.ts has squared both
  * up and fitted them to this 100x100 box, so all that is left here is the
  * hand they are drawn in: one chunky rounded stroke in the severity's
- * colour, and the head filled in the same. */
-export function PacenoteArrow({ sign }: { sign: PaceSign }) {
+ * colour, and the head filled in the same. The stroke itself is CSS
+ * (`.hud-pace-arrow path`) rather than an attribute here — see styles.css.
+ *
+ * THE CORNER FILLS AS IT IS DRIVEN. The same line is drawn a second time in
+ * the HUD's own ink and clipped to how much of the bend is behind the car,
+ * so the sign is written in from the approach to the head over exactly the
+ * road the note covers. It is the one moving thing on the strip and it moves
+ * the way the car does: a driver who glances at a half-inked hairpin knows
+ * there is as much of it left as there is behind, without reading anything.
+ *
+ * Ink rather than the severity's own colour, and drawn OVER the sign rather
+ * than under it: the colour is the corner's difficulty and it has to be
+ * whole from the moment the plate goes up, which is the two seconds of
+ * braking where it is worth most. A fill in the same colour would leave the
+ * approach saying nothing for those two seconds. */
+export function PacenoteArrow({ sign, fill }: { sign: PaceSign; fill: number }) {
+  const line = `M ${sign.line.map((p) => p.join(" ")).join(" L ")}`;
+  const head = sign.head.map((p) => p.join(",")).join(" ");
+  const span = signLength(sign.line);
   return (
     <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-      <path
-        d={`M ${sign.line.map((p) => p.join(" ")).join(" L ")}`}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="13"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <polygon points={sign.head.map((p) => p.join(",")).join(" ")} fill="currentColor" />
+      <path d={line} />
+      <polygon points={head} />
+      {fill > 0 && (
+        <g className="hud-pace-fill">
+          <path
+            d={line}
+            style={{
+              strokeDasharray: `${span}`,
+              strokeDashoffset: `${span * (1 - fill)}`,
+            }}
+          />
+          <polygon
+            points={head}
+            style={{ opacity: clamp((fill - HEAD_FILL_FROM) / (1 - HEAD_FILL_FROM), 0, 1) }}
+          />
+        </g>
+      )}
     </svg>
   );
 }
@@ -111,19 +158,12 @@ function PacenoteIcon({ note }: { note: HudPacenote }) {
     const top = JUMP_LAUNCH[note.size];
     return (
       <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-        <path
-          d={`M 15 72 L 39 72 L 55 ${top} L 77 ${top}`}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="13"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <polygon points={`76,${top - 18} 96,${top} 76,${top + 18}`} fill="currentColor" />
+        <path d={`M 15 72 L 39 72 L 55 ${top} L 77 ${top}`} />
+        <polygon points={`76,${top - 18} 96,${top} 76,${top + 18}`} />
       </svg>
     );
   }
-  return <PacenoteArrow sign={note.sign} />;
+  return <PacenoteArrow sign={note.sign} fill={note.fill} />;
 }
 
 function pacenoteClass(note: HudPacenote): string {
@@ -143,15 +183,9 @@ export function WayHomeCall({ distance }: { distance: number }) {
             chunky rounded strokes, one color — so it reads as the same
             instrument as the corner calls it stands in for. */}
         <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-          <path
-            d="M 50 17 L 89 83 L 11 83 Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="11"
-            strokeLinejoin="round"
-          />
-          <path d="M 50 41 L 50 60" stroke="currentColor" strokeWidth="11" strokeLinecap="round" />
-          <circle cx="50" cy="72" r="6" fill="currentColor" />
+          <path d="M 50 17 L 89 83 L 11 83 Z" />
+          <path d="M 50 41 L 50 60" />
+          <circle cx="50" cy="72" r="6" />
         </svg>
         <span className="hud-pace-text">
           RETURN TO TRACK
@@ -180,15 +214,8 @@ export function TurnAroundCall() {
             own hand — one colour, chunky rounded strokes — so it reads as
             the same instrument as the corner calls it stands in for. */}
         <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-          <path
-            d="M 76 86 L 76 42 A 24 24 0 0 0 28 42 L 28 54"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="13"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <polygon points="6,52 50,52 28,90" fill="currentColor" />
+          <path d="M 76 86 L 76 42 A 24 24 0 0 0 28 42 L 28 54" />
+          <polygon points="6,52 50,52 28,90" />
         </svg>
         <span className="hud-pace-text">TURN AROUND</span>
       </div>
@@ -196,21 +223,16 @@ export function TurnAroundCall() {
   );
 }
 
-/** The co-driver's lead, seconds — CALL_LEAD in snapshot.ts, restated here
- * because it is also what the strip DRAWS. The snapshot decides WHEN a call
- * goes up; this file draws the span running out under it, and the two have
- * to be the same span or the countdown ends somewhere other than the corner.
- * Change one, change both. */
-const CALL_SPAN = 2;
-
 /** How far out a call is at its faintest, and how close it has to come to
  * be fully lit — SECONDS to the corner, the same clock the strip is timed
- * on. The far end is the moment the sign goes up; the near end is about
- * where the braking is already happening, so the call finishes arriving
- * before it matters. Seconds rather than metres because the fade IS the
- * imminence, and at 200 km/h a hundred metres is not imminent in the way it
- * is at fifty. */
-const CALL_FADE_FAR = CALL_SPAN;
+ * on. The far end is CALL_LEAD in snapshot.ts, restated here because it is
+ * also what the strip DRAWS: the snapshot decides when a sign goes up, and a
+ * fade that started anywhere else would have the plate arriving before or
+ * after it exists. Change one, change both. The near end is about where the
+ * braking is already happening, so the call finishes arriving before it
+ * matters. Seconds rather than metres because the fade IS the imminence, and
+ * at 200 km/h a hundred metres is not imminent in the way it is at fifty. */
+const CALL_FADE_FAR = 2;
 const CALL_FADE_NEAR = 0.6;
 
 /** The faintest the call being driven ever goes. Deliberately ABOVE the
@@ -222,31 +244,6 @@ const CALL_FADE_FLOOR = 0.62;
 function callFade(eta: number): number {
   const near = clamp((CALL_FADE_FAR - eta) / (CALL_FADE_FAR - CALL_FADE_NEAR), 0, 1);
   return CALL_FADE_FLOOR + (1 - CALL_FADE_FLOOR) * near;
-}
-
-/** THE COUNTDOWN under the sign: a bar running out as the corner comes —
- * full width at the moment the call goes up, half of it a second out, and
- * nothing left at the turn-in. The sign itself stays up through the corner,
- * so an empty bar under a plate is the corner being driven rather than one
- * still coming.
- *
- * NO FIGURES. What the driver wants off it is HOW CLOSE, and a bar that is
- * visibly running out answers that without being read — the same reason
- * nothing else on this strip is lettered. WHICH WAY it runs out is the
- * corner's own direction (`--pace-drain` in styles.css): a right-hander
- * empties left to right, into the side of the plate that is already cut to a
- * point, so the one moving thing on the sign moves the way the road does.
- *
- * It is the SECONDS that shrink it, so it stops dead with the car — stand
- * still fifty metres short of a corner and the bar holds exactly where it
- * is, because the corner is no closer than it was. */
-function CallTimer({ eta }: { eta: number }) {
-  return (
-    <div
-      className="hud-pace-timer"
-      style={{ transform: `scaleX(${clamp(eta / CALL_SPAN, 0, 1)})` }}
-    />
-  );
 }
 
 /** The co-driver strip: the current call big, and — only when the next
@@ -269,7 +266,12 @@ function CallTimer({ eta }: { eta: number }) {
  * two seconds away asks the same thing of a driver whatever speed those two
  * seconds were bought at. A distance printed on a sign has to be read and
  * then converted into a feeling of imminence; a sign that hardens as the
- * corner comes IS that feeling. */
+ * corner comes IS that feeling.
+ *
+ * ...and HOW FAR THROUGH it the car is, is the sign writing itself in as the
+ * bend goes by, for the same reason. There is no bar and no clock: the sign
+ * IS the instrument, it fills over exactly the road the note covers, and it
+ * comes down the moment there is none of that road left. */
 export function Pacenotes({ notes }: { notes: HudPacenote[] }) {
   const now = notes[0];
   const next = notes[1];
@@ -284,7 +286,6 @@ export function Pacenotes({ notes }: { notes: HudPacenote[] }) {
         aria-label={pacenoteText(now)}
       >
         <PacenoteIcon note={now} />
-        <CallTimer eta={now.eta} />
       </div>
       {next && (
         <div
@@ -295,7 +296,6 @@ export function Pacenotes({ notes }: { notes: HudPacenote[] }) {
           aria-label={pacenoteText(next)}
         >
           <PacenoteIcon note={next} />
-          <CallTimer eta={next.eta} />
         </div>
       )}
     </div>
