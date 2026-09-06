@@ -10,6 +10,11 @@
 // metal folded. The engine owns every number here; this module only draws
 // what it says.
 //
+// The re-derived colours go into the BASE layer of the mesh's colour stack
+// (car-paint.ts), never into the attribute: the dirt painter's coat sits
+// over the top of them, and a car has to come out of a knock bent AND as
+// filthy as it went in.
+//
 // Everything bolted to the shell bends WITH it, out of the same routine:
 // the lamp lenses (their own mesh only because a lamp is lit rather than
 // painted), the bolt-on panels (a bumper is the first thing to meet a
@@ -36,6 +41,7 @@ import { TUNING, WHEEL_PARTS, type DamagePart, type GameEvent, type GameState } 
 import type { CarBodyParts, GlassPane } from "./car-body.ts";
 import { lambert } from "./car/builder.ts";
 import { crumple, noise, rimOf, type CrumpleFrame } from "./car-crumple.ts";
+import { paintLayers, type PaintLayers } from "./car-paint.ts";
 import { looseWheel, stepLooseWheel, throwWheel, type LooseWheel } from "./loose-wheel.ts";
 import { stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
 
@@ -131,7 +137,11 @@ export type CarDamageVisual = {
  * from — every mesh on the car gets one, and `bend` walks them all. */
 type Crumpleable = {
   pos: THREE.BufferAttribute;
-  col: THREE.BufferAttribute;
+  /** The mesh's colour stack (car-paint.ts). The fold writes the BASE of
+   * it and nothing else: the dirt painter's coat is the layer over the top,
+   * and a knock mid-stage must bend a filthy car rather than hand back the
+   * one that rolled out of the service park. */
+  layers: PaintLayers;
   restPos: Float32Array;
   /** The colour each vertex was baked with, DIVIDED BACK OUT of the sun's
    * term for the face it sat in: the paint itself, to be lit again from
@@ -141,19 +151,21 @@ type Crumpleable = {
 
 function crumpleable(mesh: THREE.Mesh): Crumpleable {
   const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
-  const col = mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
+  const layers = paintLayers(mesh.geometry) as PaintLayers;
   const restPos = new Float32Array(pos.array as Float32Array);
   const paint = new Float32Array(pos.count * 3);
-  const stride = col.itemSize;
+  // Off the BASE layer rather than off the buffer: the buffer may already
+  // have a stage's dirt composed over it, and a livery recovered through a
+  // coat of mud is a car that gets muddier every time it is bent.
   for (let i = 0; i + 2 < pos.count; i += 3) {
     const k = faceLight(restPos, i);
     for (let v = i; v < i + 3; v++) {
-      paint[v * 3] = col.array[v * stride] / k;
-      paint[v * 3 + 1] = col.array[v * stride + 1] / k;
-      paint[v * 3 + 2] = col.array[v * stride + 2] / k;
+      paint[v * 3] = layers.base[v * 3] / k;
+      paint[v * 3 + 1] = layers.base[v * 3 + 1] / k;
+      paint[v * 3 + 2] = layers.base[v * 3 + 2] / k;
     }
   }
-  return { pos, col, restPos, paint };
+  return { pos, layers, restPos, paint };
 }
 
 /** The baked sun's term for the triangle starting at vertex `i` of a
@@ -195,7 +207,11 @@ function bendable(body: CarBodyParts): Map<THREE.Mesh, Crumpleable> {
       meshes.push(child);
     }
   }
-  return new Map(meshes.map((mesh) => [mesh, crumpleable(mesh)]));
+  return new Map(
+    meshes
+      .filter((mesh) => mesh.geometry.getAttribute("color"))
+      .map((mesh) => [mesh, crumpleable(mesh)]),
+  );
 }
 
 const IDENTITY = new THREE.Quaternion();
@@ -243,7 +259,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
 
   /** One mesh's worth of that: every triangle bent, lit again, scuffed. */
   const bendPanel = (
-    { pos, col, restPos, paint }: Crumpleable,
+    { pos, layers, restPos, paint }: Crumpleable,
     damage: GameState["car"]["damage"],
   ): void => {
     const holes = body.doors.filter((door) => damage.broken.includes(door.part));
@@ -296,11 +312,13 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
             cb = HOLE.b;
           }
         }
-        col.setXYZ(j, cr, cg, cb);
+        layers.base[j * 3] = cr;
+        layers.base[j * 3 + 1] = cg;
+        layers.base[j * 3 + 2] = cb;
       }
     }
     pos.needsUpdate = true;
-    col.needsUpdate = true;
+    layers.compose();
   };
 
   /** A wheel as its ledger says it is: round, flat and bent, or gone. The
@@ -466,6 +484,11 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     // the shape the ledger had already folded it into: from here on it is
     // the world's, and no longer re-derived from its pristine copy.
     panels.delete(mesh);
+    // Whatever is about to happen to this mesh, nothing on the car may keep
+    // painting it: `thrown` re-centres its vertices on themselves, and the
+    // dirt painter reads exactly those to decide where the filth goes.
+    const gone = paintLayers(mesh.geometry);
+    if (gone) gone.detached = true;
     if (!thrown) {
       mesh.removeFromParent();
       if (part === "doorL" || part === "doorR") bentVersion = -1;

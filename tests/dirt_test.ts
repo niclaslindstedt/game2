@@ -13,7 +13,18 @@ import { describe, expect, it } from "vitest";
 
 import { createGame, type GameState } from "@engine";
 
-import { createCarDirt, dirtRate, glassSpray, groundTravel } from "../pwa/src/game/car-dirt.ts";
+import { buildCarBody } from "../pwa/src/game/car-body.ts";
+import { createCarDamage } from "../pwa/src/game/car-damage.ts";
+import {
+  createCarDirt,
+  createDirtPainter,
+  dirtRate,
+  glassSpray,
+  groundTravel,
+  wheelSpray,
+} from "../pwa/src/game/car-dirt.ts";
+import { paintLayers, type PaintLayers } from "../pwa/src/game/car-paint.ts";
+import { CAR_BODIES } from "../pwa/src/game/car-styles.ts";
 
 /** A racing state parked on the first sample of the given surface.
  *
@@ -181,5 +192,115 @@ describe("the coat that accumulates over a run", () => {
     state.car.w = 0;
     state.phase = "countdown";
     expect(dirtFor(state, 60 * 10)).toBe(0);
+  });
+});
+
+// THE GRIME AND THE FOLD SHARE ONE COLOUR BUFFER, and both of them write it
+// by re-deriving every vertex from a pristine copy of their own. Left to
+// themselves they take turns undoing each other: a knock re-derives the
+// panels from the showroom livery and the stage's filth is gone, then the
+// next visible step of dust re-derives them from the clean bake and the
+// filth is back with the fold's shading gone with it. Since a knock is what
+// starts it, the grime looks like it disappears when you crash.
+//
+// car-paint.ts is the fix — a layer each, composed in a fixed order — and
+// these are the two directions it has to hold in.
+describe("the coat and the fold, on one car", () => {
+  const spec = CAR_BODIES[Object.keys(CAR_BODIES)[0]];
+
+  /** A body, its dirt painter and its damage visual, wired exactly as
+   * car-mesh.ts wires them. */
+  const wired = () => {
+    const body = buildCarBody(spec, {});
+    const group = new THREE.Group();
+    group.add(body.group);
+    const paint = createDirtPainter(group, wheelSpray(spec));
+    const damage = createCarDamage(body);
+    return { body, paint, damage };
+  };
+
+  /** A racing state whose ledger has folded the car's nose in. */
+  const knocked = (): GameState => {
+    const state = createGame({ seed: 3, length: "short" });
+    state.phase = "racing";
+    const d = state.car.damage;
+    d.zones = d.zones.map(() => 0.18);
+    d.roof = 0.05;
+    d.wear = 0.4;
+    d.version++;
+    return state;
+  };
+
+  /** The shell's colour buffer, as it stands. */
+  const shellColours = (body: ReturnType<typeof buildCarBody>): Float32Array =>
+    new Float32Array(
+      (body.body.geometry.getAttribute("color") as THREE.BufferAttribute).array as Float32Array,
+    );
+
+  /** How many of two buffers' floats disagree. */
+  const apart = (a: Float32Array, b: Float32Array): number => {
+    let n = 0;
+    for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 1e-4) n++;
+    return n;
+  };
+
+  it("keeps the stage's filth on the car through a crash", () => {
+    // The same knock, on the same car, with and without a stage's dirt on
+    // it. The fold is a function of the ledger alone, so the ONLY thing
+    // that can separate the two answers is the coat — and the bug was
+    // exactly that nothing did: the fold re-derived the panels from the
+    // showroom livery and handed back a freshly washed car.
+    const state = knocked();
+
+    const dirty = wired();
+    dirty.paint({ dust: 0.9, mud: 0.7 });
+    const beforeKnock = shellColours(dirty.body);
+    dirty.damage.update(state, 1);
+
+    const washed = wired();
+    washed.damage.update(state, 1);
+
+    const crashed = shellColours(dirty.body);
+    expect(apart(crashed, beforeKnock), "the crash is drawn on the car").toBeGreaterThan(0);
+    expect(
+      apart(crashed, shellColours(washed.body)),
+      "and the car comes out of it as filthy as it went in",
+    ).toBeGreaterThan(0);
+
+    dirty.body.dispose();
+    washed.body.dispose();
+  });
+
+  it("keeps the crash on the car through the next fleck of dust", () => {
+    const { body, paint, damage } = wired();
+    const layers = paintLayers(body.body.geometry) as PaintLayers;
+    const showroom = new Float32Array(layers.base);
+
+    damage.update(knocked(), 1);
+    const bent = new Float32Array(layers.base);
+    let folded = 0;
+    for (let i = 0; i < bent.length; i++) if (Math.abs(bent[i] - showroom[i]) > 1e-4) folded++;
+    expect(folded, "the fold repainted the shell, so there is something to lose").toBeGreaterThan(
+      0,
+    );
+
+    paint({ dust: 0.5, mud: 0.2 });
+    // The car UNDER the dirt is still the bent, re-lit, scuffed one. The old
+    // painter re-derived the buffer from the showroom bake instead, which
+    // took the whole crash off the car until the next knock put it back.
+    expect(Array.from(layers.base)).toEqual(Array.from(bent));
+
+    // And every vertex the coat left bare reads as that car, not as the one
+    // that rolled out of the service park.
+    const arr = (body.body.geometry.getAttribute("color") as THREE.BufferAttribute)
+      .array as Float32Array;
+    let bare = 0;
+    for (let j = 0; j < layers.count; j++) {
+      if (layers.coat[j * 4 + 3] > 0) continue;
+      bare++;
+      expect(arr[j * 3]).toBeCloseTo(bent[j * 3], 6);
+    }
+    expect(bare, "a light coat is specks, not a wash").toBeGreaterThan(0);
+    body.dispose();
   });
 });
