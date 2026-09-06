@@ -24,6 +24,7 @@ import type { FreeFlyMove, FreeFlyPose } from "./camera-free.ts";
 import {
   DRAW_DISTANCE_SCALE,
   DUST_LAMP_CARS,
+  LAMP_BEAMS,
   DUST_RAISED,
   EFFECTS_SCALE,
   EXHAUST_SEEN,
@@ -294,15 +295,19 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // lighting option (car-shadow.ts); the environment aims it.
   environment.shadows.bind(renderer, quality.lighting);
   /** The LIGHTING row, applied: the beams and the shadow are the
-   * environment's, the dust's register is its own. Both at once, because a
-   * cloud lit by more lamps than the car is throwing is a cloud lit by
-   * lamps that are not there. */
+   * environment's, the dust's register is its own, and whether a pedal is a
+   * light is every car's. All at once, because a cloud lit by more lamps
+   * than the car is throwing is a cloud lit by lamps that are not there —
+   * and a field braking in lights the player's own car does not have would
+   * read as a bug in the car. */
   const applyLighting = (): void => {
     environment.setLighting(quality.lighting);
     setDustLampCap(2 * DUST_LAMP_CARS[quality.lighting]);
     environment.setSkyLook(quality.sky);
+    const brakes = LAMP_BEAMS[quality.lighting].brakes;
+    car?.setBrakeLights(brakes);
+    ghostCar?.setBrakeLights(brakes);
   };
-  applyLighting();
 
   const chase = createGameCamera(canvas.clientWidth || 1, canvas.clientHeight || 1);
   const mirror = createMirror();
@@ -496,8 +501,15 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       screens: grime ? (whose === "player" ? "fine" : "coarse") : "off",
     };
   };
+  // The LIGHTING row, first applied — down here rather than beside its own
+  // function because it reaches the cars, and those are declared above.
+  applyLighting();
   const field = createFieldCars(scene);
-  field.setCarDetail({ ...carDetail("field"), looseWheels: LOOSE_WHEELS[quality.effects] });
+  field.setCarDetail({
+    ...carDetail("field"),
+    looseWheels: LOOSE_WHEELS[quality.effects],
+    brakeLights: LAMP_BEAMS[quality.lighting].brakes,
+  });
   /** Whether the cars that are not the player's are named. */
   let nameTags = true;
   /** The stage that is standing, as the state it was last shown with —
@@ -682,7 +694,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     quality = next;
     applyResolution();
     applyLighting();
-    field.setCarDetail({ ...carDetail("field"), looseWheels: LOOSE_WHEELS[quality.effects] });
+    field.setCarDetail({
+      ...carDetail("field"),
+      looseWheels: LOOSE_WHEELS[quality.effects],
+      brakeLights: LAMP_BEAMS[quality.lighting].brakes,
+    });
     car?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     ghostCar?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     // Unlike the rest of the DETAIL row, the dust and the exhaust are not
@@ -767,10 +783,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     });
     scene.add(car.group, car.debris);
     car.setLooseWheels(LOOSE_WHEELS[quality.effects]);
+    car.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
     const eyes = carEyes(state.spec);
     chase.setEyes(eyes);
     driverEyeY = eyes.hood.y;
-    environment.setLampSpread(car.lampSpread.front, car.lampSpread.rear);
+    environment.setLampPlan(car.lampPlan.head, car.lampPlan.tail);
   };
 
   const setGame = (state: GameState): void => {
@@ -865,6 +882,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     ghostTag = createNameTag("Ghost", null, GHOST_LOOK);
     scene.add(ghostCar.group, ghostCar.debris, ghostTag.sprite);
     ghostCar.setLooseWheels(LOOSE_WHEELS[quality.effects]);
+    ghostCar.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
     applyTint();
   };
 
@@ -1453,7 +1471,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // can never crowd their own tail lamps out of it.
     clearDustLamps();
     environment.lightDust(state.car);
-    field.lightDust(environment.lampPower());
+    // ...and the rivals' own, which the LIGHTING row can put away entirely:
+    // they are the only light anything but the driven car casts, so this is
+    // where "the field lights nothing" is decided rather than left to the
+    // register's cap to drop them by luck.
+    if (LAMP_BEAMS[quality.lighting].field) field.lightDust(environment.lampPower());
     if (fx > 0) {
       // The sky's light moves with the sun, so what the birds and the
       // contrails are lit by is read every frame: a trail at airliner

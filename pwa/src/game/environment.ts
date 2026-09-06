@@ -42,6 +42,7 @@ import {
 } from "@engine";
 
 import { createCarLamps } from "./car-lamps.ts";
+import type { LampSource } from "./car/lamps.ts";
 import { createClouds } from "./clouds.ts";
 import { dressSky, sunOcclusion, type SkyDressing } from "./cloud-field.ts";
 import { horizonCrossing, litAt, sunAt } from "./daylight.ts";
@@ -210,8 +211,13 @@ export type Environment = {
    * `REAR_LAMPS`, engine-side). One headlamp gone is half the light down
    * the road, which is a fact about every night corner after it. */
   setLampsBroken: (front: number, rear: number) => void;
-  /** How far off the centerline the car's lamps sit, m — front and rear. */
-  setLampSpread: (front: number, rear: number) => void;
+  /** WHICH LAMPS THIS CAR HAS, as the light sources its own body authored
+   * (`car/lamps.ts`) — where each one sits, how strong it is and what shape
+   * it throws. Pushed in when a car is built, because a beam belongs to a
+   * lens: a quad-headlight face throws four, a car with a pod bar throws the
+   * bar, and the LIGHTING row's cap is spent on the strongest of whatever it
+   * turns out to be. */
+  setLampPlan: (head: readonly LampSource[], tail: readonly LampSource[]) => void;
   /** The video options' LIGHTING row: how many beams each end of the car
    * throws (`LAMP_BEAMS`) and which shadow map the sun draws, if any. A
    * beam is paid for on every lit pixel in the frame, so this is the one
@@ -222,7 +228,7 @@ export type Environment = {
    * (dust-light.ts), at whatever strength the daylight and the grime on the
    * lenses leave them. The register is emptied by its one owner, the
    * renderer, so this only ever adds. */
-  lightDust: (car: { x: number; y: number; z: number; heading: number }) => void;
+  lightDust: (car: { x: number; y: number; z: number; heading: number; braking: boolean }) => void;
   update: (state: GameState, camera: THREE.Camera, dt: number) => void;
   dispose: () => void;
 };
@@ -828,15 +834,17 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     },
     setGrime: lamps.setGrime,
     setLampsBroken: lamps.setBroken,
-    setLampSpread: lamps.setSpread,
+    setLampPlan: lamps.setPlan,
     setLighting,
     lightDust: (car) => {
-      // The same two switches the beams are on — the lamps are lit or they
-      // are not, and what daylight and a caked lens leave of them is the
-      // same arithmetic the spotlights use. One pair rather than the four
-      // real beams: see dust-light.ts.
+      // The same switches the beams are on — the lamps are lit or they are
+      // not, and what daylight, a caked lens and the crash leave of them is
+      // the same arithmetic the spotlights use. One pair rather than every
+      // real beam: see dust-light.ts. The brakes count here too, and they
+      // are the reason a rival's cloud goes hard red the instant they lift
+      // for a corner ahead of you.
       if (!preset.headlights) return;
-      const { front, rear } = lamps.shares(lampPower());
+      const { front, rear } = lamps.shares(lampPower(), car.braking);
       hangDustLamps(car, front, rear);
     },
     update,

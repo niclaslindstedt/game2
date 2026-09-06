@@ -408,3 +408,162 @@ export function buildLampPods(s: LampSurfaces, pods: LampPods, trim: number): vo
     bowlRound(s.lens, x, pods.y, pods.z, pods.radius, pods.radius * 0.8, 1, chromeTone(lens), 10);
   }
 }
+
+// ── What the car actually lights the road with ────────────────────────────
+//
+// Everything above builds a lamp so it READS as one. This is the other half
+// of the same numbers: what each of those lamps THROWS, as a list of light
+// sources the renderer can hang real beams on (environment.ts) and the dust
+// register can be filled from (dust-light.ts).
+//
+// It is derived rather than authored because a lamp's optics are already
+// implied by the panel it is let into. A car with four round lamps has two
+// low beams and two driving beams; a car with one wide cluster each side has
+// two; a car carrying a pod bar has those as well, and a pod is a SPOT — the
+// same bulb behind a deeper reflector, so nearly all of it goes down a narrow
+// cone. Restating that per car in a table would be three chances to have a
+// face and its light disagree, which is the bug this module already exists
+// to stop for the bloom (`frontLampAnchors`).
+
+/** What a light source is FOR, which is the whole of what decides its shape.
+ * A `main` is a low beam: a wide pool a car length or two ahead. A `spot` is
+ * aimed down the road and reaches twice as far in a third of the width. A
+ * `flood` is the opposite trade — short, broad, and what fills in the ditch
+ * at the edge of a night stage. A `tail` is a marker: it exists to be seen,
+ * not to see by. */
+export type LampRole = "main" | "spot" | "flood" | "tail";
+
+/** One light source on one car, in car space. `power` is against a full-size
+ * lamp of its own role, so a machine that can afford four beams and one that
+ * can afford two both light the road with the STRONGEST lamps this car has
+ * rather than with an average of all of them. */
+export type LampSource = {
+  role: LampRole;
+  /** Signed offset from the centreline, m — the lens's own place. */
+  x: number;
+  /** Height above the contact patch, m. */
+  y: number;
+  /** Along the car, nose positive, m. */
+  z: number;
+  power: number;
+  /** Half-angle of the cone, rad. */
+  cone: number;
+  /** How far the light carries, m. */
+  reach: number;
+  /** How far below the horizontal it is aimed, rad. */
+  tilt: number;
+  /** How far OUTWARD it is aimed, rad per metre it sits off the centreline.
+   * Real headlamps are near enough parallel; splaying them is what turns one
+   * pool into the double-lobed one a car actually lays down, and it is the
+   * per-role figure because a pod aimed sideways is a pod aimed wrong. */
+  splay: number;
+};
+
+/** The aperture a lamp is measured against, m — a full-size sealed beam of
+ * the period, and about the widest thing any of the shipped faces carries.
+ * The light a reflector gathers goes with its AREA, which is why the ratio
+ * below is squared: the difference between a 160 mm lamp and a 200 mm one is
+ * a third of the light, not a fifth of it. */
+const FULL_APERTURE = 0.115;
+
+/** ...and the band that ratio is held inside. A lamp is never worth nothing —
+ * a spec is allowed to author a small one and it still has to light the road
+ * enough to be worth a beam — and never worth more than a shade over a full
+ * one, because a big cluster is big for the look of the car and not because
+ * somebody fitted an aircraft landing light to it. */
+const POWER_FLOOR = 0.4;
+const POWER_CEILING = 1.15;
+
+/** What each role does with the light it gathers, and the shape it throws. */
+const ROLE_OPTICS: Record<LampRole, Omit<LampSource, "role" | "x" | "y" | "z" | "power">> = {
+  main: { cone: 0.42, reach: 70, tilt: 0.072, splay: 0.26 },
+  spot: { cone: 0.25, reach: 105, tilt: 0.04, splay: 0.06 },
+  flood: { cone: 0.66, reach: 30, tilt: 0.14, splay: 0.45 },
+  tail: { cone: 0.8, reach: 18, tilt: 0.125, splay: 0.45 },
+};
+
+/** ...and the gain the same bulb gets from that optic on the axis of its own
+ * cone. A spot is the identical lamp with all of it pointed one way, so it is
+ * brighter where it is looking and dark everywhere else; a flood pays for its
+ * width out of the same bulb. */
+const ROLE_GAIN: Record<LampRole, number> = { main: 1, spot: 1.45, flood: 0.78, tail: 1 };
+
+/** How strong a lamp of this aperture in this role is. */
+function lampPower(role: LampRole, aperture: number): number {
+  const gathered = (aperture / FULL_APERTURE) ** 2 * ROLE_GAIN[role];
+  return Math.min(POWER_CEILING, Math.max(POWER_FLOOR, gathered));
+}
+
+/** A rectangular lens as the round one it gathers as much light as. */
+function equivalent(halfW: number, halfH: number): number {
+  return Math.sqrt(halfW * halfH);
+}
+
+function source(role: LampRole, x: number, y: number, z: number, aperture: number): LampSource {
+  return { role, x, y, z, power: lampPower(role, aperture), ...ROLE_OPTICS[role] };
+}
+
+/** Strongest first, and — between two of a kind — the outboard pair first,
+ * so a machine that can only afford two beams lights the road with the pair
+ * that is furthest apart and gets the widest pool out of them. Every source
+ * is authored as a symmetric pair, so an even budget always takes whole
+ * pairs and a car never drives round with one lamp lit. */
+function ranked(sources: LampSource[]): LampSource[] {
+  return sources.sort((a, b) => b.power - a.power || Math.abs(b.x) - Math.abs(a.x));
+}
+
+/** THE HEADLAMPS AND THE PODS, as light sources. The bigger lamp of a pair
+ * is the low beam and the smaller one beside it the driving beam — which is
+ * the way round a quad face of this era was actually wired, and the reason
+ * the inner lamps of one are the ones that reach. A pod row is a spot where
+ * it is the biggest on the car and a flood where it is not: a rally bar is
+ * two of each, and which is which is the size of the bowl.
+ *
+ * The CELLS of one opening are not two sources, for the reason the tail's
+ * are not: a low/high pair inside one housing is 18 cm apart, and two cones
+ * that close cast one pool at every distance a car is seen from. So a face
+ * throws as many beams as it has housings — which is what makes a quad car
+ * four and a wide-cluster car two, and the wide-cluster car's two the
+ * strongest on the roster, because that is what the bowls measure. */
+export function headLampSources(spec: CarBodySpec): LampSource[] {
+  const out: LampSource[] = [];
+  const l = spec.front?.lights;
+  const z = spec.profile[0].z;
+  if (l) {
+    const inner = l.kind === "round" ? l.size : equivalent(l.size, l.height ?? l.size * 0.55);
+    const outerSize = l.pairSize ?? l.size;
+    const outer =
+      l.kind === "round" ? outerSize : equivalent(outerSize, l.height ?? outerSize * 0.55);
+    // One lamp each side is the low beam whatever it measures. A pair gets
+    // the role off the bowls: the wider one gathers more and spreads it.
+    const paired = l.pairGap !== undefined;
+    const lamps: { x: number; aperture: number; role: LampRole }[] = paired
+      ? [
+          { x: l.x, aperture: inner, role: inner >= outer ? "main" : "spot" },
+          { x: l.x + l.pairGap!, aperture: outer, role: outer > inner ? "main" : "spot" },
+        ]
+      : [{ x: l.x, aperture: inner, role: "main" }];
+    for (const lamp of lamps) {
+      for (const side of [-1, 1]) out.push(source(lamp.role, side * lamp.x, l.y, z, lamp.aperture));
+    }
+  }
+  const pods = spec.front?.lampPods;
+  const rows = pods ? (Array.isArray(pods) ? pods : [pods]) : [];
+  const biggest = rows.reduce((r, row) => Math.max(r, row.radius), 0);
+  for (const row of rows) {
+    const role: LampRole = row.radius >= biggest ? "spot" : "flood";
+    for (const x of row.offsets) out.push(source(role, x, row.y, row.z, row.radius));
+  }
+  return ranked(out);
+}
+
+/** ...and the tail clusters. One source per cluster: the cells of a period
+ * cluster are centimetres apart, and at the reach a marker has there is no
+ * telling two of them from one. */
+export function tailLampSources(spec: CarBodySpec): LampSource[] {
+  const l = spec.rear?.lights;
+  if (!l) return [];
+  const z = spec.profile[spec.profile.length - 1].z;
+  const aperture = equivalent(l.width / 2, l.height / 2);
+  return ranked([-1, 1].map((side) => source("tail", side * l.x, l.y, z, aperture)));
+}

@@ -113,6 +113,17 @@ const CAR_LAMPS = {
   },
 };
 
+/** WHAT A BRAKE LIGHT IS WORTH TO THE CLOUD IT IS INSIDE, as a multiple of
+ * the marker under it. Far shorter than the flare the same pedal puts on the
+ * beams (`BRAKE_GAIN` in environment.ts), and for the reason the tail's gain
+ * above is bounded from both sides: the tail source is already driven near
+ * the top of what a puff a metre off the lens can take before every channel
+ * clips, and a brake light that clips is a flat patch of pure red, which
+ * reads as fire rather than as a car stopping. This is the lift at which the
+ * cloud behind a braking car goes visibly HARDER red and the puffs in it
+ * still have shading between them. */
+export const BRAKE_DUST = 1.6;
+
 let used = 0;
 
 /** Empty the register. Called once a frame, before anybody writes to it —

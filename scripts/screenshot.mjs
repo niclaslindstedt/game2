@@ -1779,6 +1779,103 @@ await capture(
   { tod: "night" },
 );
 
+// THE BRAKE LIGHTS, which are the one lamp on the car that is a SIGNAL: they
+// exist for the driver behind, so they have to be read at the couple of car
+// lengths a chase is fought over and in FULL DAYLIGHT, where every other lamp
+// on the car is switched off. Two shots because they are two different
+// pictures made by the same pedal: by day the whole read is the bloom over
+// the lens (car-mesh.ts), because a spotlight competing with the sun changes
+// no pixel; at night the marker is already burning and what the pedal adds is
+// the flare on top of it plus the pool it throws on the road behind
+// (environment.ts). The acceptance test in both is that the frame BEFORE the
+// pedal and the frame after are obviously different cars-in-front.
+//
+// Both are driven to a fixed stage clock rather than to a HUD reading, for
+// the reason `shot-mud` is: one software-rendered frame advances the sim past
+// any number the readout can be waited for.
+for (const [name, params] of [
+  ["shot-brakes", {}],
+  ["shot-night-brakes", { tod: "night" }],
+  // ...and from a rig standing far enough back to hold the ground BEHIND
+  // the car, which is the only place the brake beam's own pool can land: the
+  // default chase sits a car length off the bumper and looks along the road,
+  // so the wash is a sliver at the bottom of that frame however it is aimed.
+  ["shot-night-brakes-far", { tod: "night", camera: "far" }],
+]) {
+  await capture(
+    name,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await racing(page);
+      await page.keyboard.down("ArrowUp");
+      await atStageTime(page, 6);
+      await page.keyboard.up("ArrowUp");
+      // ...and the pedal stays DOWN through the shutter. `braking` is true
+      // for exactly as long as the brakes bite, so a scene that lifts before
+      // the frame is a scene of a car that has finished braking — which
+      // looks identical to one that never started.
+      await page.keyboard.down("ArrowDown");
+      const off = await stageTime(page);
+      await atStageTime(page, off + 0.6);
+    },
+    params,
+  );
+}
+
+// THE THREE FACES, LIT. Every beam on a car comes off a lens the body
+// authored (car/lamps.ts), so the pool three cars lay on the same piece of
+// road is three different pools — and that is the whole acceptance test
+// here, in one place, from the rig that can see the ground ahead:
+//
+//   the QUAD face lays a splayed pair of low beams with a narrow driving
+//   pair spearing up the middle of them;
+//   the WIDE-CLUSTER face lays two broad pools and nothing else, and is the
+//   brightest car on the roster for it, because its bowls are the biggest;
+//   the POD car throws its bar — two long spots from the bonnet's corners —
+//   with its own slim face lamps filling in underneath.
+//
+// If two of these three ever come back looking alike, a face has been
+// restyled and its light has not followed it.
+for (const car of ["compact", "classic", "coupe"]) {
+  await capture(
+    `shot-night-beams-${car}`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await racing(page);
+      await page.keyboard.down("ArrowUp");
+      await atStageTime(page, 6);
+    },
+    { tod: "night", camera: "far", car },
+  );
+}
+
+// THE THREE FACES, LIT. Every beam on a car comes off a lens the body
+// authored (car/lamps.ts), so the pool three cars lay on the same piece of
+// road is three different pools — and that is the whole acceptance test
+// here, in one place, from the rig that can see the ground ahead:
+//
+//   the QUAD face lays a splayed pair of low beams with a narrow driving
+//   pair spearing up the middle of them;
+//   the WIDE-CLUSTER face lays two broad pools and nothing else, and is the
+//   brightest car on the roster for it, because its bowls are the biggest;
+//   the POD car throws its bar — two long spots off the bonnet's corners —
+//   with its own slim face lamps filling in underneath.
+//
+// If two of these three ever come back looking alike, a face has been
+// restyled and its light has not followed it.
+for (const car of ["compact", "classic", "coupe"]) {
+  await capture(
+    `shot-night-beams-${car}`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await racing(page);
+      await page.keyboard.down("ArrowUp");
+      await atStageTime(page, 6);
+    },
+    { tod: "night", car },
+  );
+}
+
 // THE CLOUD IN THE DARK, which is a different picture from either of the
 // two it is made of. Dust is not in the lit scene — a point sprite has no
 // normals for the sun or the spotlights to reach — so it takes the sky as a

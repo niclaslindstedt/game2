@@ -429,16 +429,31 @@ describe("whose windows can be seen through at each DETAIL stop", () => {
 // throws is worth holding: the ladder has to come down from the tail lamp
 // first, and never leave a night stage with no light on the road at all.
 describe("what the car's lamps throw at each DETAIL stop", () => {
-  it("throws the car's own four beams on HIGH", () => {
-    expect(LAMP_BEAMS[DETAIL_PRESETS.high.lighting]).toEqual({ head: 2, tail: 2 });
+  it("throws the car's whole complement on HIGH, and lights the field", () => {
+    expect(LAMP_BEAMS[DETAIL_PRESETS.high.lighting]).toEqual({
+      head: 4,
+      tail: 2,
+      brakes: true,
+      field: true,
+    });
   });
 
-  it("throws one beam per end on MEDIUM", () => {
-    expect(LAMP_BEAMS[DETAIL_PRESETS.medium.lighting]).toEqual({ head: 1, tail: 1 });
+  it("throws one pair per end on MEDIUM, and nobody else's lamps", () => {
+    expect(LAMP_BEAMS[DETAIL_PRESETS.medium.lighting]).toEqual({
+      head: 2,
+      tail: 2,
+      brakes: true,
+      field: false,
+    });
   });
 
-  it("keeps one headlamp beam and no tail beam on LOW", () => {
-    expect(LAMP_BEAMS[DETAIL_PRESETS.low.lighting]).toEqual({ head: 1, tail: 0 });
+  it("keeps one headlamp beam and no tail beam at all on LOW", () => {
+    expect(LAMP_BEAMS[DETAIL_PRESETS.low.lighting]).toEqual({
+      head: 1,
+      tail: 0,
+      brakes: false,
+      field: false,
+    });
   });
 
   // A tail lamp is a marker; the headlamp is what a night stage is driven
@@ -450,16 +465,42 @@ describe("what the car's lamps throw at each DETAIL stop", () => {
     }
   });
 
+  // A brake light IS the tail lamps burning harder, so a stop with no tail
+  // beam has nothing to burn — and one that lights the tail has to let the
+  // pedal say so, or the car ahead never reads as stopping.
+  it("lights the brakes exactly where there is a tail lamp to light", () => {
+    for (const beams of Object.values(LAMP_BEAMS)) {
+      expect(beams.brakes).toBe(beams.tail > 0);
+    }
+  });
+
+  it("throws every head beam in PAIRS above the single-beam floor", () => {
+    for (const beams of Object.values(LAMP_BEAMS)) {
+      if (beams.head > 1) expect(beams.head % 2).toBe(0);
+      expect(beams.tail % 2).toBe(0);
+    }
+  });
+
   it("walks both ladders monotonically, cheapest first", () => {
     const stops = (["low", "medium", "high"] as const).map((id) => DETAIL_PRESETS[id].lighting);
     for (let i = 1; i < stops.length; i++) {
       const cheaper = LAMP_BEAMS[stops[i - 1]];
       const richer = LAMP_BEAMS[stops[i]];
       expect(richer.head + richer.tail).toBeGreaterThan(cheaper.head + cheaper.tail);
-      expect(DUST_LAMP_CARS[stops[i]]).toBeGreaterThan(DUST_LAMP_CARS[stops[i - 1]]);
+      expect(DUST_LAMP_CARS[stops[i]]).toBeGreaterThanOrEqual(DUST_LAMP_CARS[stops[i - 1]]);
     }
     // The player's own lamps are always on the dust, whatever the row.
     expect(DUST_LAMP_CARS[stops[0]]).toBeGreaterThanOrEqual(1);
+  });
+
+  // The rivals' lamps on the dust register are the only light anything but
+  // the driven car casts, so the two have to say the same thing: a stop that
+  // does not light the field has room for the player alone.
+  it("agrees with the dust register about whether the field lights anything", () => {
+    for (const stop of Object.keys(LAMP_BEAMS) as (keyof typeof LAMP_BEAMS)[]) {
+      if (LAMP_BEAMS[stop].field) expect(DUST_LAMP_CARS[stop]).toBeGreaterThan(1);
+      else expect(DUST_LAMP_CARS[stop]).toBe(1);
+    }
   });
 });
 
