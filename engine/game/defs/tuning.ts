@@ -1476,8 +1476,112 @@ export const TUNING = {
     yawAuthority: 0.35,
     /** Random turbulence torque while airborne, rad/s² — out of control. */
     turbulence: 1.4,
-    /** Air drag on forward speed, 1/s — flight carries. */
-    drag: 0.02,
+    /** THE AIR A CAR OFF THE GROUND IS PUSHING THROUGH, as CdA — drag
+     * coefficient times the area presented, m², one per FACE of the body.
+     * The same form `collision.aero` states its holes in, and for the same
+     * reason: it is the only form in which a number can be checked against
+     * anything real.
+     *
+     * Stated per face because a falling car is not a shape with ONE drag.
+     * The air meets whichever side of the box is turned into it, and the
+     * three sides differ by a factor of five — which is the whole of why a
+     * car that dives off a cliff nose-first goes on gathering speed and one
+     * that goes off it flat stops gathering at all. `game/aero.ts` blends
+     * them by the direction the air is actually coming from.
+     *
+     * The Cd here is a BLUFF one, not the 0.35 a car is quoted at. That
+     * figure is a shape sitting on a road with the flow attached over it;
+     * a car in free air, at an attitude nobody drew it for, has the flow
+     * off the back of it everywhere, and the coefficient is what a box of
+     * that proportion gets. What the pair buy, against a 1200 kg car under
+     * this world's gravity: about 515 km/h nose-on, 275 km/h on a flank and
+     * 225 km/h flat — and 234 km/h in the attitude a long plunge actually
+     * settles at, `attitude.pitchMax` of nose-down under a near-vertical
+     * drop. That last one is the number the game has: a fall off anything
+     * tall tops out half again past what the road will give, and takes a
+     * couple of hundred metres to do it.
+     *
+     * Checked against the world with the real 9.8: the flat figure becomes
+     * 180 km/h, which is what a car dropped from a helicopter does. */
+    aero: {
+      /** Nose- or tail-on, m² — the STREAMLINED case, and the one an
+       * ordinary jump flies in: the nose follows its arc, so the air stays
+       * end-on the whole way over and the flight carries. Cd ≈ 0.45 over the
+       * 1.9 m² of frontal area `collision.aero` quotes — a little above the
+       * 0.35 a car is quoted at on the road, because out of ground effect
+       * the air gets under the floor as well as over the roof.
+       *
+       * A lip taken at 170 km/h is the fastest anything flies end-on, and
+       * this costs it under a metre per second per second there. Anything
+       * much blunter and the biggest jumps on the stage stop throwing the
+       * car: `tests/jump_test.ts` holds the landing to nine tenths of the
+       * speed the lip was left at. */
+      nose: 0.85,
+      /** Floor- or roof-on, m² — Cd ≈ 1.2, a flat plate, over the box's
+       * own plan area less the corners it does not fill. The dirty case,
+       * and the one a car goes over a cliff in. */
+      plan: 7.8,
+      /** Flank-on, m² — Cd ≈ 1.1 over the side of the box. Only a car that
+       * has gone over ever falls this way. */
+      side: 5.3,
+
+      /** WHAT A REAR WING DOES WITH THE FLOW IT IS IN. Both are read
+       * against the blade's own plan area (`CarSpec.aero.wing`), and the
+       * pair are why one rule covers a jump and a fall at once — a wing is
+       * an aerofoil to the air running ALONG the car and a flat plate to
+       * the air coming UP through it.
+       *
+       * `down` is the downforce it makes end-on: it pushes the TAIL down,
+       * and a force at the tail is a nose-up moment. That is the effect a
+       * wing is bolted on for and the one that shows over a jump.
+       *
+       * `plate` is the same blade in a fall, where the car is travelling
+       * through its own floor and the flow comes at the blade from below.
+       * Now it is pushed UP, at the same lever, and the moment is the other
+       * way: the wing goes to the BACK of the fall and the nose leads it
+       * down, which is a shuttlecock and is why an arrow has feathers. */
+      wingDown: 0.9,
+      wingPlate: 1.2,
+
+      /** THE ARCADE DIAL ON ALL OF IT, as a multiplier on the drag — 1 is
+       * the air the world actually has, and everything above is quoted at
+       * it. This is the knob to reach for when a fall wants to be more fun
+       * rather than more correct, and the one to leave alone when the
+       * question is whether the model is right.
+       *
+       * Terminal velocity goes as `1/sqrt(bite)`, so the arithmetic is
+       * easy to hold: half the bite is a fifth again more speed at the
+       * bottom of a cliff and a fall that takes half as long to feel
+       * frightening; double it and the air catches the car early and the
+       * drop reads as heavy rather than fast. It scales the WHOLE area, so
+       * it moves the jumps with it — anything under about 0.8 starts to
+       * hand back the speed a big lip is meant to cost. */
+      bite: 1,
+
+      /** ...AND HOW FAR THAT MOMENT ACTUALLY POINTS THE NOSE, rad of pitch
+       * per unit of (the moment / the moment the car's own weight makes at
+       * half its length). The trim a body would settle at, in other words,
+       * written as a share rather than solved for — a flight has no
+       * restoring aerodynamic stiffness in this model to solve it against,
+       * and a pitch rate of its own belongs to a car that is going OVER
+       * (`roll.ts`), not to one flying an arc.
+       *
+       * What 2 buys, across the roster: over a jump taken at 110 km/h the
+       * winged car lifts its nose 2.6° and at 160 km/h 5.6°, where the two
+       * carrying only a lip manage a third of a degree and two thirds. In a
+       * long fall it works the other way and the order reverses — the blade
+       * holds the winged car flattest, at 20° of nose-down and 207 km/h,
+       * while the slippery four-door with nothing on its boot noses fully
+       * over and reaches 255.
+       *
+       * The trim on its own stays inside `attitude.pitchMax` on every car
+       * at every speed (`tests/aero_test.ts`), deliberately: a term that
+       * pegged there would stop telling the cars apart. What can still peg
+       * is the trim plus the ARC the nose is already following, and that is
+       * correct — a car falling nearly straight down is asking for an
+       * attitude no car in this game is drawn at. */
+      trim: 2,
+    },
     /** A car that leaves the ground crossed up trips over its outside
      * wheels. The roll it takes into the air is its sideways speed times
      * this... */

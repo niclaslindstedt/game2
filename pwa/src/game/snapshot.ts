@@ -10,6 +10,7 @@ import {
   TUNING,
   jumpSize,
   startsIn,
+  travelSpeed,
   wayHome,
   type GameState,
   type JumpSize,
@@ -290,10 +291,12 @@ export function takeSnapshot(
     lapTime: state.raceTime - state.lapStart,
     lapTimes: state.lapTimes,
     bestTime: book?.best ?? null,
-    // The speedo reads GROUND speed, not forward speed: a car crossed up
-    // at 140 km/h is doing 140 km/h, and a needle that dips every time the
-    // nose swings would tell the player the slide is costing them.
-    speedKmh: Math.max(0, Math.hypot(state.car.u, state.car.w) * 3.6),
+    // The speedo reads the car's speed THROUGH SPACE (`travelSpeed`), not
+    // its forward speed: a car crossed up at 140 km/h is doing 140 km/h and
+    // a needle that dipped every time the nose swung would tell the player
+    // the slide is costing them — and a car off a cliff is doing whatever
+    // the fall has got it up to, which is mostly straight down.
+    speedKmh: Math.max(0, travelSpeed(state.car) * 3.6),
     gear: state.car.gear,
     reversing: state.car.reversing,
     gearbox: state.car.gearbox,

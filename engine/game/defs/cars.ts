@@ -140,6 +140,33 @@ export type CarSpec = {
    * a layout's `depth` moves, this moves the other way to keep the line,
    * or the car simply stops getting round the corner. */
   driftYaw: number;
+  /** WHAT THE AIR MAKES OF THE SHAPE, once the wheels are off the ground
+   * (`game/aero.ts`). Nothing here is felt on the road — the surface owns
+   * the rolling drag and the gearing owns the top end — and everything
+   * here is felt in a flight, which is where the body stops being a thing
+   * that goes THROUGH the air and becomes a thing the air holds up.
+   *
+   * Measured off the drawn body (`pwa/src/game/car-styles.ts`), the way
+   * the collision box is; `tests/car_geometry_test.ts` holds both there. */
+  aero: {
+    /** How slippery the shape is, as a multiplier on the reference box's
+     * faces (`TUNING.air.aero`). An upright two-box pushes more air than a
+     * low four-door of the same frontal area, and neither is far off 1 —
+     * the BOX is most of what the air meets, and the panelwork is trim. */
+    slip: number;
+    /** THE REAR WING'S blade, m² of plan area — span times chord off the
+     * `spoiler` on the drawn body, and 0 for a car that has none. It is
+     * the one part of the car whose whole job is the air: it makes
+     * downforce out of the flow running along the car, and it is a flat
+     * plate to the flow coming up through it in a fall. */
+    wing: number;
+    /** ...and how far BEHIND THE WEIGHT that blade acts, m. The lever is
+     * the whole point of it: a force at the tail is a moment about the
+     * middle, and that moment is what points the nose. Measured from the
+     * wing's own station to where `balance` puts the weight along the
+     * wheelbase. */
+    wingArm: number;
+  };
   /** Body color for the renderer (hex) — palette lives with the car. */
   color: number;
   accent: number;
@@ -180,6 +207,11 @@ export const CARS: CarSpec[] = [
     gripLat: 8.6,
     driftLat: 2.6,
     driftYaw: 2.2,
+    // THE AIR: an upright two-box that pushes more of it than its frontal
+    // area suggests, and a roof lip at the top of the tailgate — 1.24 m
+    // across by 0.17 deep, so barely a wing at all. It trims the nose a
+    // fraction of a degree on a jump and nothing that can be felt.
+    aero: { slip: 1.05, wing: 0.21, wingArm: 1.64 },
     color: 0x1f6fde,
     accent: 0xffffff,
   },
@@ -215,6 +247,10 @@ export const CARS: CarSpec[] = [
     gripLat: 8.0,
     driftLat: 2.15,
     driftYaw: 2.45,
+    // THE AIR: the slipperiest shape in the roster — a low four-door drawn
+    // as one — carrying a flat lip on the boot edge and no wing to speak
+    // of. It flies the way it drives: level, and about its own business.
+    aero: { slip: 0.95, wing: 0.1, wingArm: 2.16 },
     color: 0xc8352b,
     accent: 0xf2efe6,
   },
@@ -250,6 +286,13 @@ export const CARS: CarSpec[] = [
     gripLat: 8.4,
     driftLat: 1.85,
     driftYaw: 2.85,
+    // THE AIR, AND THE WING. The one car in the roster with a real blade on
+    // it — 1.7 m across by half a metre deep, on posts over the tailgate,
+    // and nearly two metres behind where the weight sits. That lever is
+    // what makes it the only car whose ATTITUDE the air decides: it lifts
+    // its nose several degrees over a big jump, and in a long fall the
+    // same blade works the other way and pitches it over onto its nose.
+    aero: { slip: 1.0, wing: 0.85, wingArm: 1.87 },
     color: 0xd8342c,
     accent: 0xf4e9d0,
   },

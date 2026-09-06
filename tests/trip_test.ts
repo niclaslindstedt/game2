@@ -145,8 +145,16 @@ describe("the trip, and what the driver can do about it", () => {
     expect(settled).toBeGreaterThan(0); // both actually landed
     expect(slammed).toBeGreaterThan(settled);
     // ...and it stops at the slam the springs call a full one: past that the
-    // suspension is bottomed and there is no more load to find.
-    expect(tripped(landCrossed({}, { drop: 12 }))).toBeCloseTo(slammed, 5);
+    // suspension is bottomed and there is no more load to find. Measured as
+    // the PLATEAU against the climb up to it, because that is the claim —
+    // four times the arrival speed past the full slam has to be worth a
+    // rounding error next to the step from a settled landing to a slammed
+    // one. It is not perfectly flat and should not be asserted as though it
+    // were: a car arriving harder has spent a hair more of its sideways
+    // speed on the air on the way in (game/aero.ts), so the bite drifts
+    // very slightly DOWN across the plateau rather than sitting still.
+    const hammered = tripped(landCrossed({}, { drop: 24 }));
+    expect(Math.abs(hammered - slammed)).toBeLessThan((slammed - settled) / 20);
   });
 
   it("is the difference between driving on and going over", () => {

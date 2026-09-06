@@ -561,6 +561,24 @@ export function updateSlip(car: CarState): void {
   car.slip = Math.atan2(car.w, Math.max(1, Math.abs(car.u)));
 }
 
+/** THE SPEED THROUGH SPACE, m/s — everything the car is doing, vertical
+ * included, and the number every speedo in the game reads.
+ *
+ * On the ground it is the ground speed and nothing else: `vy` there is the
+ * road's own gradient under the wheels, centimetres per second, and a car
+ * crossed up at 140 km/h is still doing 140 km/h. Off the ground it is the
+ * only honest reading there is — a car that has left a cliff is travelling
+ * mostly DOWNWARDS, and a needle that only ever counted the horizontal part
+ * of that would fall toward zero through the fastest seconds of the run.
+ *
+ * Stated here so the cluster on the HUD and the dial on the dashboard can
+ * never disagree about what the car is doing (`pwa/src/game/snapshot.ts`,
+ * `pwa/src/game/car-instruments.ts`).
+ */
+export function travelSpeed(car: CarState): number {
+  return Math.hypot(car.u, car.w, car.vy);
+}
+
 /** How far off UPRIGHT the body is, rad in (-π, π], whatever whole turns
  * `roll` has accumulated. `CarState.roll` is never wrapped — a car that has
  * been over once carries 2π so the ground can settle it to the nearest

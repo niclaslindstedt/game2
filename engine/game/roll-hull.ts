@@ -121,6 +121,32 @@ function turned(
   };
 }
 
+/** ...AND THE OTHER WAY: a heading-frame vector resolved onto the BODY'S OWN
+ * axes — how much of it runs out through the nose, out through the side, and
+ * out through the roof. `turned` is orthonormal, so this is its transpose and
+ * nothing more; it is here rather than at the caller so the composition above
+ * is stated exactly once.
+ *
+ * What asks: the air (`game/aero.ts`), which has to know which FACE of the
+ * body it is meeting before it can say what the body's drag is.
+ */
+export function intoBody(
+  v: { readonly across: number; readonly up: number; readonly along: number },
+  tilt: number,
+  pitch: number,
+): { across: number; up: number; along: number } {
+  const cr = Math.cos(tilt);
+  const sr = Math.sin(tilt);
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  const lifted = v.up * cp - v.along * sp;
+  return {
+    across: v.across * cr + lifted * sr,
+    up: -v.across * sr + lifted * cr,
+    along: v.up * sp + v.along * cp,
+  };
+}
+
 /** WHERE THE WEIGHT IS, from the origin: the same three offsets `turned`
  * gives any point of the box, asked of the one point that is not on it.
  * `up` is the piece that turns the surface's height into `car.y` and back

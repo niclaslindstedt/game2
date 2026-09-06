@@ -6,7 +6,7 @@
 // DOM-free and three-free on purpose: the tests read it, and hud.tsx's
 // snapshot takes its tachometer from here for the same reason.
 
-import type { GameState } from "@engine";
+import { travelSpeed, type GameState } from "@engine";
 
 import { shiftLightOn } from "./shift-window.ts";
 
@@ -24,7 +24,9 @@ export function tachometer(state: GameState): number {
 export type Readings = {
   /** The rev counter, 0..1 of its dial. */
   rev: number;
-  /** Ground speed, m/s — a car crossed up at 140 km/h is doing 140 km/h. */
+  /** Speed through space, m/s — a car crossed up at 140 km/h is doing
+   * 140 km/h, and one falling off a cliff is doing whatever the fall has
+   * got it up to (`travelSpeed`). */
   speed: number;
   /** The gear figure: `1`..`6`, `n` while nothing is geared on the line,
    * `r` while the brake is backing the car out. */
@@ -58,7 +60,7 @@ export function instrumentReadings(state: GameState, beams: boolean): Readings {
   ON_THE_ROAD[0] = beams;
   return {
     rev: tachometer(state),
-    speed: Math.hypot(car.u, car.w),
+    speed: travelSpeed(car),
     gear: car.reversing ? "r" : onTheLine ? "n" : `${car.gear + 1}`,
     total: (state.stats.distance / 1000).toFixed(2),
     interval: (since / 1000).toFixed(2),
