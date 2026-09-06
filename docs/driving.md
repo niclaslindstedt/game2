@@ -329,39 +329,28 @@ rewards it, and no drift seconds are counted at the player.
 - **WHAT THE GROUND THROWS IS WHAT IT WAS GIVEN** (`landing.took` → `crashBurst`). The gravel and the dust off a contact are sized by the energy the ground had to swallow, J per kg, and never by how fast the corner was going. Two halves: the arriving corner's own `slam²/2`, which is the same quantity a car landing on its WHEELS reports so both kinds of arrival sit on one scale; and the crash ledger's own drop across the contact, which is the rotation the pivot exchange really took. The first is needed because most of a fast roll's contacts are glancing taps that keep nearly all their rotation, so the body's total barely moves while a corner ploughs into the ground at ten metres a second; the second is the half a speed cannot see, and it is what makes a contact that arrives gently but stops a whole rollover throw like the accident it is. Energy goes as the SQUARE of the arrival, so a contact twice as hard throws four times the stones — which is what makes a big one read as an event rather than as a slightly bigger scuff.
 - **A roll STRIPS the car.** Every contact of a roll is the ground meeting sheet metal with nothing sprung under it, so the landing's own tolerance does not apply: `air.roll.shellFree` is what a shell arrival gets for free, and it is a fraction of `collision.hardLandSpeed`. A car that has been over loses its glass and its mirrors, folds the faces it came down on, and past a certain roll loses the doors, the lids and eventually a pair of wheels. The roof folds by half what a panel does for the same arrival (`structure.roofCrush`) and stops at the cage (`structure.roofMax`) — the health schematic reads it against that stroke, not the ring's. See "Collision and damage" below for the faces that fold.
 - **THE GROUND UNDER A CRASH IS NOT STEEL** (`TUNING.surfaces.give` / `plough`, `groundOf` in `roll-contact.ts`). Gravel displaces, soil furrows and sand swallows a corner, and every bit of that is arrival that neither turns the body nor folds the shell — the ground took it. So a contact's reaction and the crush it books are both read net of the surface's GIVE (a quarter in open country, a third in sand, a twentieth on a graded road, nothing on tarmac), which is why the same fall onto sand turns the body less and marks it less than onto a sealed road, and why the rollover that strips a car is the one on the tarmac section. A sill dragging a furrow through loose ground costs friction a door skin on pavement does not, and that is the PLOUGH: added to the shell's own coefficient for whatever of the patch is shell rather than tyre, over the grind and never at the arrival — an arrival's budget is already `grip × descent`, and a coefficient added on top of it overspent the patch and read as energy made at the touchdown. Accident reconstruction has a rollover on soil stopping harder than one on pavement, and this is that difference. A bench with no surface is a rigid plane. A hard landing on the WHEELS reads the same give against the underside.
-- **AND THE OUTSIDE CAMERA GETS OFF ITS BOOM** (`pwa/src/game/camera-roll.ts`).
-  A rolling car is the one thing on a stage a boom cannot follow — it is off
-  its wheels, its heading and its travel have come apart, and it is in the air
-  between every pair of contacts — so a chase rig tracking a blend of nose and
-  travel whips through a full circle. The five outside rigs therefore stop
-  being rigs for the length of a roll: the lens coasts to a stop where it was
-  standing, steps back if it was sitting right behind the bumper, and watches
-  from the verge. It zooms to hold the car a readable size as it goes away,
-  caps how far off centre the pan may lag (against the lens it is actually
-  drawing at), and CLIMBS — up and forward, rate-limited — until its sight
-  line to the car clears whatever ground has got between them. It holds for
-  `roll.lieFor` afterwards and then flies home into the pose the driving rig
-  has been standing in underneath it all along, unless the car has been
-  respawned out from under it, which no pan can cross. **The hold is for a car
-  that is LYING there, and only that** — it is asked of `state.overturned`, the
-  engine's own answer to whether anybody is driving this car, rather than of
-  `rolling` going false. The crash hands a car back the moment its tyres are
-  down and the rotation is spent, however far over it is still holding, and
-  standing the verge lens through a wreck's beat left the shot watching the
-  player accelerate away up the road for a second and a half.
-  **...and once the driver has the car, the shot is finished with that
-  accident.** It hands the frame back on a short clock (`rescue`, half the
-  `handOver` a finished crash gets — halving it is felt, quartering it is
-  seen as a cut) and then LATCHES itself off: a car that has been fought back
-  from is very often not out of it, the body is still leaning and one more
-  edge puts it over again, and a shot that planted for each of those would
-  take the camera away from the player exactly as often as they were saving
-  the car with it. What clears the latch is `CarState.planted` — all four
-  tyres carrying and the body inside the lean its springs hold, which is the
-  handling model's own line for a car that has fully come back rather than a
-  threshold restated in the renderer. A respawn clears it by putting the car
-  down planted. So the verge shot is available once per accident, and the
-  next accident begins only when the last one has genuinely ended.
+- **AND THE OUTSIDE CAMERA STOPS READING THE CAR** (`holding` in
+  `pwa/src/game/camera.ts`). A rolling car is the one thing on a stage a chase
+  rig cannot READ — it is off its wheels, its heading and its travel have come
+  apart, and it is in the air between every pair of contacts — so a rig
+  tracking a blend of nose and travel whips through a full circle while the
+  framing flickers. The five outside rigs therefore stop reading it and HOLD
+  the framing the accident found them with: the yaw they were watching the
+  road along, the boom they were watching from, the lens they were watching
+  through. They go on tracking the car through the world at that same angle,
+  so the player watches their own crash from the view they were driving in —
+  the world turns over, the picture does not. The frame comes LEVEL with it:
+  the bank, the hover, the surge and the tremor an outside rig carries
+  (`camera-feel.ts`) are all readings of a car somebody is steering, and a car
+  going over is giving none of them, so the instrument eases out and the
+  horizon stays flat. **The hold ends at `CarState.planted` and not a frame
+  earlier** — all four tyres carrying and the body inside the lean its springs
+  hold. The crash hands a car back the moment its tyres are down and the
+  rotation is spent, however far over it is still leaning, and a car caught at
+  forty degrees and still sliding is not one anybody is steering: coming back
+  for it would swing the shot onto a heading the driver is about to lose
+  again. A respawn drops the hold outright, since there is no perspective on
+  that piece of road left to keep.
   **The three in-car views keep theirs**, and go over WITH the car: a lens
   bolted to the bumper, the scuttle or the driver's head is not failing when
   the car rolls, it is showing the roll from the one seat nobody can buy a

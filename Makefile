@@ -291,7 +291,8 @@ transit:
 # Photograph THE CAMERA WHILE THE CAR GOES OVER (previews/rollcam.png) —
 # consecutive frames of one roll from each end of the ladder, with how far
 # the lens moved, how far away the car is and how far off centre it drifted
-# under each. REQUIRED before/after any change to the roll shot. `make roll`
+# under each. REQUIRED before/after any change to what the camera does through
+# an accident (the HOLD in camera.ts, the bolt in camera-eye.ts). `make roll`
 # is the other half of the same event: that one draws the CAR going over,
 # this one shows the CAMERA watching it. Same Chromium requirements as
 # `screenshots`.

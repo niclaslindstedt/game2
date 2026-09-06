@@ -43,6 +43,20 @@
 //   own gears is the fov's job (`fovPerSpeed` in the rigs) and this is not
 //   allowed to fight it.
 //
+// ALL FOUR ARE READINGS OF A CAR SOMEBODY IS DRIVING, and that is a real
+// condition rather than a figure of speech: a car going over is a body being
+// thrown, and its slip, its yaw rate, its tyre loads and its speed stop
+// describing anything a driver did. So the caller says whether the car is
+// being driven (`driven`), and an accident splits the four in two. The ones
+// that are POSITIONS in the framing — the height the grip read stands the
+// lens at, the metres the surge has the boom out to — are HELD exactly where
+// the crash found them, with the standoff and the yaw the rig is holding
+// beside them. The ones that are the picture's own attitude and vibration —
+// the bank, the pitch, the tremor — ease OUT, because a horizon that cants
+// and a lens that buzzes over a car nobody is driving are the two readings a
+// crash makes into noise. What is left is the frame holding still and level
+// while the world turns over inside it.
+//
 // Plain arithmetic, no three.js and no DOM, so the tests read the numbers
 // without standing up a renderer. Every number lives in CAMERA_FEEL; the
 // rigs (CHASE_RIGS in camera.ts) only scale them.
@@ -276,8 +290,24 @@ export type CameraFeel = {
    * rig that has been picked up and put down somewhere else. */
   drop: (state: GameState) => void;
   /** One frame. `grade` is the rig's eased rise-over-run of the hill, `rig`
-   * its own scales, `t` the camera's clock. */
-  step: (state: GameState, grade: number, rig: FeelScales, t: number, dt: number) => FeelFrame;
+   * its own scales, `t` the camera's clock.
+   *
+   * `driven` is whether anybody is DRIVING the car this frame. Every reading
+   * here is a reading of a car being steered — the grip its tyres are
+   * finding, the lean of a corner it is being placed in, the surge of a
+   * pedal, the pace of a gear — and a car going over is giving none of them:
+   * its slip angle is a body being thrown, its yaw rate is a tumble, its
+   * speed is a fall. So an accident hands this `false`: the height and the
+   * standoff HOLD where they were, and the bank, the pitch and the tremor
+   * ease out to a level, still frame (see the head of this file). */
+  step: (
+    state: GameState,
+    grade: number,
+    rig: FeelScales,
+    t: number,
+    dt: number,
+    driven?: boolean,
+  ) => FeelFrame;
 };
 
 export function createCameraFeel(): CameraFeel {
@@ -299,19 +329,30 @@ export function createCameraFeel(): CameraFeel {
       accel = 0;
       wasU = state.car.u;
     },
-    step: (state, grade, rig, t, dt) => {
+    step: (state, grade, rig, t, dt, driven = true) => {
       const car = state.car;
-      const want = gripReading(state);
-      const rate = want < grip ? CAMERA_FEEL.grip.rise : CAMERA_FEEL.grip.settle;
-      grip += (want - grip) * clamp(rate * dt, 0, 1);
+      // HELD through an accident: the lens stays at the height the crash
+      // found it at rather than settling out of a hover it was standing in,
+      // which would be the picture sinking a metre over the one event
+      // nothing about the framing should move for.
+      if (driven) {
+        const want = gripReading(state);
+        const rate = want < grip ? CAMERA_FEEL.grip.rise : CAMERA_FEEL.grip.settle;
+        grip += (want - grip) * clamp(rate * dt, 0, 1);
+      }
+      // ...and EASED OUT: a level horizon and a still lens, at the same rate
+      // any other reading leaves the frame by.
       const ease = clamp(CAMERA_FEEL.tilt.rate * dt, 0, 1);
-      bank += (bankWanted(car) - bank) * ease;
-      pitch += (pitchWanted(grade, car) - pitch) * ease;
+      bank += ((driven ? bankWanted(car) : 0) - bank) * ease;
+      pitch += ((driven ? pitchWanted(grade, car) : 0) - pitch) * ease;
       const S = CAMERA_FEEL.surge;
+      // Held with the height, and for the same reason — but `wasU` is
+      // carried across regardless, so the frame the driver gets the car back
+      // on is not read as one enormous acceleration.
       const raw = dt > 0 && !Number.isNaN(wasU) ? (car.u - wasU) / dt : 0;
       wasU = car.u;
-      accel += (clamp(raw, -S.accelMax, S.accelMax) - accel) * clamp(S.rate * dt, 0, 1);
-      const speed = Math.hypot(car.u, car.w, car.vy);
+      if (driven) accel += (clamp(raw, -S.accelMax, S.accelMax) - accel) * clamp(S.rate * dt, 0, 1);
+      const speed = driven ? Math.hypot(car.u, car.w, car.vy) : 0;
       const tremor = tremorAt(t, tremorAmount(speed), rig.shake);
       return {
         lift: hoverFor(grip, rig.hover),

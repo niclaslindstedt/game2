@@ -360,10 +360,10 @@ export type CarState = {
    *
    * Read by anything that needs "the accident is genuinely over" rather than
    * "the body is not turning this instant" — the two are far apart, and a car
-   * caught at forty degrees is the second without being the first. The roll
-   * camera is the caller it exists for: it hands the frame back the moment
-   * the driver has the car, and will not take it again until this is true
-   * (`pwa/src/game/camera-roll.ts`). */
+   * caught at forty degrees is the second without being the first. The
+   * outside camera is the caller it exists for: it holds the framing an
+   * accident found it with and does not go back to following the car's own
+   * direction until this is true (`pwa/src/game/camera.ts`). */
   planted: boolean;
   /** How far the DRIVEN wheels are outrunning the road, m/s — 0 hooked up,
    * and never more than the headroom between the road and what the current
