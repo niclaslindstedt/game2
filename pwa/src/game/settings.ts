@@ -226,8 +226,8 @@ export type VideoSettings = {
    * (`DRAW_DISTANCE_SCALE`). Its own player-facing row (DISTANCE), and it
    * applies the moment it is set. */
   drawDistance: "near" | "normal" | "far";
-  /** Particles, rain and the ambient life — the transient FX budget. Part
-   * of DETAIL. */
+  /** Particles, rain, the ambient life and the water on the driver's own
+   * glass (`GLASS_RAIN`) — the transient FX budget. Part of DETAIL. */
   effects: "off" | "low" | "full";
   /** HOW MUCH OF A CAR IS BUILT for the sake of what is only visible up
    * close — the two things behind and on the glass, on one ladder because
@@ -246,7 +246,9 @@ export type VideoSettings = {
    * 3,456, which is what makes giving it to a whole grid affordable at all.
    * The RAIN on the player's own windscreen (car/screen-rain.ts) rides the
    * same row for the same reason: it is one more thing on the glass, and a
-   * player who has asked for clean screens is asking for clean screens.
+   * player who has asked for clean screens is asking for clean screens. It
+   * answers to the EFFECTS row as well (`GLASS_RAIN`), because drawing it
+   * is the dearest pass in the frame.
    *
    * WHICH cars this row reaches is the `glass` row under it: the car being
    * driven always, the rest of the road only when that row says so.
@@ -460,6 +462,20 @@ export const EFFECTS_SCALE: Record<VideoSettings["effects"], number> = {
  * and the picture that setting is cheapest on is the one that cannot
  * afford them. */
 export const LOOSE_WHEELS: Record<VideoSettings["effects"], boolean> = {
+  off: false,
+  low: false,
+  full: true,
+};
+
+/** Whether the RAIN ON THE DRIVER'S OWN WINDSCREEN (car/screen-rain.ts) is
+ * drawn at all. It is the one effect that costs a copy of the whole frame
+ * every frame it runs, and a shader solving five layers of beading per
+ * pixel over most of the picture on top — the dearest line in the FX
+ * budget, so the budget that is cut is the budget that goes without it.
+ * The INTERIOR row still decides whether there is water on the glass to
+ * draw (`SCREEN_GRIME`); this says whether the pass that draws it may run,
+ * and it applies the instant it is set. */
+export const GLASS_RAIN: Record<VideoSettings["effects"], boolean> = {
   off: false,
   low: false,
   full: true,

@@ -10,6 +10,7 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_VIDEO,
   DETAIL_PRESETS,
+  GLASS_RAIN,
   GLASS_SEEN_THROUGH,
   DRAW_DISTANCE_SCALE,
   DUST_LAMP_CARS,
@@ -258,6 +259,28 @@ describe("whose pipe smokes at each DETAIL stop", () => {
       expect(over.player || !under.player).toBe(true);
       expect(over.field || !under.field).toBe(true);
     }
+  });
+});
+
+describe("the rain on the driver's glass at each DETAIL stop", () => {
+  // The dearest pass in the frame — a copy of the whole picture and five
+  // layers of beading solved per pixel — so the stop that exists for a
+  // phone that stutters must never run it, whatever the glass is doing.
+  it("is not drawn on LOW", () => {
+    expect(GLASS_RAIN[DETAIL_PRESETS.low.effects]).toBe(false);
+  });
+
+  it("is drawn on the design point and above", () => {
+    expect(GLASS_RAIN[DETAIL_PRESETS.medium.effects]).toBe(true);
+    expect(GLASS_RAIN[DETAIL_PRESETS.high.effects]).toBe(true);
+  });
+
+  // The effects budget is one ladder: turning it down alone, on any
+  // preset, takes the pass with it.
+  it("goes with the effects budget, not only the preset", () => {
+    expect(GLASS_RAIN.off).toBe(false);
+    expect(GLASS_RAIN.low).toBe(false);
+    expect(GLASS_RAIN.full).toBe(true);
   });
 });
 

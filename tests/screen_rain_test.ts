@@ -263,12 +263,15 @@ describe("the water on the doors", () => {
     expect(water.sides.geometry.getAttribute("pane").count).toBe(sides * 7 * 6);
     expect((water.sides.material as THREE.ShaderMaterial).uniforms.uSide.value).toBe(1);
     expect((water.mesh.material as THREE.ShaderMaterial).uniforms.uSide.value).toBe(0);
-    // …with smaller drops on it. The door glass is a third of the distance
-    // from the eye that the screen is, so a bead sized for the screen is a
-    // puddle there.
+    // …with drops of nearly the same REAL size on it. The door glass is a
+    // third of the distance from the eye that the screen is, so the same
+    // millimetres are three times the pixels — and that is what a door
+    // window looks like from the seat beside it, so only a touch is given
+    // back. Shrinking them to the screen's pixel size would be a door
+    // beaded with drops smaller than any rain makes.
     const scale = (water.sides.material as THREE.ShaderMaterial).uniforms.uScale.value as number;
-    expect(scale).toBeGreaterThan(0.3);
-    expect(scale).toBeLessThan(0.8);
+    expect(scale).toBeGreaterThan(0.6);
+    expect(scale).toBeLessThan(1);
     expect((water.mesh.material as THREE.ShaderMaterial).uniforms.uScale.value).toBe(1);
     water.dispose();
   });
