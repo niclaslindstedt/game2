@@ -14,6 +14,13 @@
 // two crossings are too far apart to be the same watercourse does a stage
 // get a second river — a different valley, which is a thing that exists.
 //
+// And it is born in a GULLY, never on a spur: the walk up to the spring
+// climbs the valley line (`upGully` — the lowest point of the contour a
+// step ahead), because steepest ascent converges on a ridge and water is
+// in the ground, not along the top of it; where the contour falls away on
+// both sides the water has run out of gully, and the spring is there
+// (`onCrest`).
+//
 // The road's crossings are its ANCHORS: the generator decided where the
 // stage fords or bridges water (R7/R13), and the river is routed through
 // exactly those points at exactly the water level the road was built for.
@@ -350,6 +357,103 @@ function downhill(field: Field, x: number, z: number): { x: number; z: number } 
   return { x: -gx / len, z: -gz / len };
 }
 
+/** THE GULLY, NOT THE SPUR. Which way is UPSTREAM from a point, as a unit
+ * vector — the direction a source climbs.
+ *
+ * Steepest ascent is the wrong answer: every flank's gradient points at
+ * the crest above it, so a walk that follows it converges on a ridge and
+ * runs along the spur's crest, and a stream drawn there stands over BOTH
+ * its banks. The taiga's hills are too broad to catch it; a massif's spurs
+ * are sharp, and seven sources over two of the alpine's twelve seeds
+ * floated by up to three metres. Water
+ * comes DOWN a gully, so the walk goes up one: it reads a row of ground a
+ * step ahead and heads for the lowest point in it. On a plain hillside the
+ * row is level and the walk goes straight on; on a spur the row falls away
+ * on both sides and the walk slides off the crest; in a gully the row's
+ * floor is the gully's, and the walk stays in it.
+ *
+ * Two things about the row decide whether that works. It lies ALONG THE
+ * CONTOUR — across the ascent, not across the walk's own heading — so its
+ * lowest point is the cross-profile's floor and never a point that is
+ * merely further downhill along the heading. And it is centred a step
+ * along the walk's own last direction plus the ascent (`ux`, `uz`, any
+ * length), never the ascent alone: from a point just off a crest the
+ * ascent points back at the crest by about the shift the row buys, and a
+ * walk laying its row from there hops the crest from side to side forever.
+ *
+ * Among the row's points that still stand over the ground HERE, the
+ * lowest: a source only ever rises, and a point below this one is where
+ * the climb ends (the ceiling in the walk), so it is taken only when
+ * nothing in the row rises at all. `bias` is a tie-break toward straight
+ * on, so level ground does not zig-zag on the noise in the field. */
+const GULLY_ROW = { half: 2, spacing: 8, bias: 0.05 };
+function upGully(
+  field: Field,
+  x: number,
+  z: number,
+  ux: number,
+  uz: number,
+  grade: { x: number; z: number } | null,
+  stride: number,
+): { x: number; z: number } {
+  const ul = Math.hypot(ux, uz) || 1;
+  ux /= ul;
+  uz /= ul;
+  // The contour: across the fall line where there is one, across the
+  // heading where the ground is flat.
+  const tx = grade ? grade.z : -uz;
+  const tz = grade ? -grade.x : ux;
+  const ax = x + ux * stride;
+  const az = z + uz * stride;
+  const here = field(x, z);
+  let bestK = 0;
+  let best = Infinity;
+  let rises = false;
+  for (let k = -GULLY_ROW.half; k <= GULLY_ROW.half; k++) {
+    const ground = field(ax + tx * k * GULLY_ROW.spacing, az + tz * k * GULLY_ROW.spacing);
+    const up = ground > here;
+    if (rises && !up) continue;
+    const score = ground + Math.abs(k) * GULLY_ROW.bias;
+    if (up && !rises) {
+      rises = true;
+      best = Infinity;
+    }
+    if (score < best) {
+      best = score;
+      bestK = k;
+    }
+  }
+  const dx = ax + tx * bestK * GULLY_ROW.spacing - x;
+  const dz = az + tz * bestK * GULLY_ROW.spacing - z;
+  const len = Math.hypot(dx, dz) || 1;
+  return { x: dx / len, z: dz / len };
+}
+
+/** A SOURCE NEVER STANDS ON A CREST. True where the contour through a
+ * point falls away on both sides of it by more than `CREST_DROP` over the
+ * row's half-width — a spur, a knoll, a ridge — which is ground water runs
+ * OFF, not along. Read at the row's reach and not one spacing in, because
+ * a whaleback is a crest too: the analyzer measures the banks out past the
+ * channel's blend, and a walk along a spur that drops a quarter of a metre
+ * in eight and a whole one in sixteen floats there.
+ *
+ * The row rule keeps a walk in the gully it is in; this is what ends the
+ * walk that has run out of gully. A climb that starts deep under the land
+ * (a ford in a cutting, a culvert's water in its valley floor, metres under
+ * the road's own ground) has that much headroom before the ceiling binds,
+ * and with it the walk climbed out of its gully's head and up the knoll
+ * beside it, laying water along the top. The threshold is a real fold, not
+ * the noise in the field: a gentle rise still ends where the ground stops
+ * rising. */
+const CREST_DROP = 0.5;
+function onCrest(field: Field, x: number, z: number, grade: { x: number; z: number }): boolean {
+  const here = field(x, z);
+  const out = GULLY_ROW.half * GULLY_ROW.spacing;
+  const tx = grade.z * out;
+  const tz = -grade.x * out;
+  return field(x + tx, z + tz) < here - CREST_DROP && field(x - tx, z - tz) < here - CREST_DROP;
+}
+
 /** The way ACROSS the road at a crossing, as a unit vector: toward the side
  * the ground falls to (`down`), or the side it rises to.
  *
@@ -558,6 +662,8 @@ function traceCourse(
     let x = head.x;
     let z = head.z;
     let y = head.waterY;
+    let dirX = across.x;
+    let dirZ = across.z;
     // The first step is to the road's EDGE, straight across: the point the
     // water is first its own again, at the pool's level, so the sheet
     // between it and the anchor lies flat over the mat. A full step out
@@ -572,16 +678,32 @@ function traceCourse(
         d < CROSS_WINDOW
           ? null
           : awayFromRoad(roadClear, x, z, head.halfWidth + ROAD_KEEP + PUSH_AHEAD);
+      // Up the gully the water came down, not the spur beside it.
+      const up = upGully(
+        field,
+        x,
+        z,
+        dirX + (grade ? -grade.x : Math.sin(phase)),
+        dirZ + (grade ? -grade.z : Math.cos(phase)),
+        grade,
+        stride,
+      );
       const { x: dx, z: dz } = stepAcross(
-        (grade ? -grade.x : Math.sin(phase)) + (away ? away.x * ROAD_PUSH : 0),
-        (grade ? -grade.z : Math.cos(phase)) + (away ? away.z * ROAD_PUSH : 0),
+        up.x + (away ? away.x * ROAD_PUSH : 0),
+        up.z + (away ? away.z * ROAD_PUSH : 0),
         across,
         leaving(d),
       );
       x += dx * stride;
       z += dz * stride;
+      dirX = dx;
+      dirZ = dz;
       if (d >= CROSS_WINDOW && block.hit(roadClear(x, z), head.halfWidth + ROAD_KEEP)) break;
       if (retraces(climb, x, z)) break;
+      {
+        const there = downhill(field, x, z);
+        if (d > 0 && there && onCrest(field, x, z, there)) break;
+      }
       // Going upstream the surface only ever RISES, and never above the
       // ground it is cut into. Ground that fails to rise is not upstream of
       // anything: the spring is here, and the climb ends. Inside the
