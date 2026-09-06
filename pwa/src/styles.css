@@ -3218,15 +3218,39 @@ body {
   gap: 0.9rem;
 }
 
+/* THE MARK, THEN THE NAME. The badge is the launcher icon (`app-badge.tsx`)
+   — the same thing the game was installed by — so the menu opens on the mark
+   a player already knows it as. */
 .menu-brand {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  justify-content: center;
+  gap: clamp(0.5rem, 2vmin, 0.9rem);
+}
+
+.menu-brand-words {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.15rem;
 }
 
+/* The marks, laid once as the menu arrives and left standing beside the name.
+   `flex: none` so the wordmark's own wrapping never squeezes them. */
+.menu-brand-mark {
+  flex: none;
+  width: clamp(2.4rem, 9vmin, 3.2rem);
+}
+
 .menu-brand-name {
-  font-size: clamp(1.5rem, 6.4vmin, 2.4rem);
+  /* Sized to FIT, which it did not do before: the root card is 24rem wide and
+     "SCANDINAVIAN" is one word that cannot be wrapped, so at the old 2.4rem
+     ceiling the wordmark ran about a centimetre past the card on a desktop
+     landscape window — centred, so it overhung both edges evenly and read as
+     a bleed rather than as a bug. With the mark beside it that slack is gone
+     and it has to be honest. */
+  font-size: clamp(1.5rem, 6.4vmin, 1.9rem);
   letter-spacing: 0.04em;
   line-height: 0.94;
   text-align: center;
@@ -3441,11 +3465,16 @@ body {
     gap: clamp(0.6rem, 3vh, 1.1rem);
   }
 
-  .menu-brand {
+  /* Short and wide: the name and its billing sit on ONE line beside the mark,
+     which is the whole of what this breakpoint is buying back. */
+  .menu-brand-words {
     flex-direction: row;
     align-items: baseline;
-    justify-content: center;
     gap: 0.8rem;
+  }
+
+  .menu-brand-mark {
+    width: clamp(2.2rem, 4.8vw, 3.2rem);
   }
 
   .menu-brand-name {
@@ -6376,6 +6405,135 @@ a.menu-version:focus-visible {
    plays in two beats: the house's name while that is happening, then the
    title under its finish flags with the prompt blinking under both. */
 
+/* ── THE APP MARK'S SKID MARKS ─────────────────────────────────────────────
+   The two tracks off the icon, laid (`mark-tracks.tsx`). Sized by whoever
+   mounts one — a width, and the aspect comes off the viewBox. */
+.mark-tracks {
+  display: block;
+  height: auto;
+  overflow: visible;
+  fill: none;
+  stroke: var(--hud-good);
+  stroke-linecap: round;
+}
+
+/* The full shape, held under the one being laid. On a loop it is what keeps
+   the composition balanced — the bright stroke is drawn from the tail, so for
+   most of every cycle only the lower-left half is inked and the mark reads as
+   sitting left of whatever is beside it. On a one-shot it holds the space the
+   mark is about to fill, so nothing beside it shifts as it draws. Faint enough
+   to read as the road rather than as a second pair of tracks. */
+.mark-track-ghost {
+  opacity: 0.22;
+}
+
+/* Every track is declared 100 units long (`pathLength` in app-mark.ts), so the
+   dash pattern is written in percent and the long track and the short one draw
+   at one rate and finish together.
+
+   A dash as long as the path with a gap as long again is a window that slides
+   along it, and the offset runs against the path's own direction: at +100 the
+   gap covers everything and nothing shows, coming down to 0 the dash fills in
+   FROM THE TAIL, and going on to -100 it walks off the tail and leaves the
+   head last. So one property lays the mark the way the car laid it, and — on
+   the loop — dissolves it from the end the icon's own gradient fades out. */
+.mark-track {
+  stroke-dasharray: 100 100;
+}
+
+/* LAID ONCE, and left there: a flourish under a title that has just arrived.
+   `both` is what keeps it — the mark holds the finished state rather than
+   snapping back to nothing at the end of the run. */
+.mark-tracks-once .mark-track {
+  animation: mark-lay 900ms cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+
+/* ...and over and over, for a load in progress. */
+.mark-tracks-loop .mark-track {
+  animation: mark-lay-loop 1700ms cubic-bezier(0.4, 0, 0.25, 1) infinite;
+}
+
+@keyframes mark-lay {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes mark-lay-loop {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  /* Laid, and held long enough to be read as a shape rather than a sweep. */
+  55%,
+  70% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+/* ── THE LOADING CARD ──────────────────────────────────────────────────────
+   Over a race being stood up (`loading-screen.tsx`, `race-loader.ts`): the
+   road compiled, the world built, the shaders compiled and the whole field
+   driven through the stage, all of which used to be paid for with a frozen
+   page and then a stuttering first minute.
+
+   The same sky as the splash card, for the same reason: this is the app's own
+   cover coming down over the game, not a screen change. It sits UNDER the
+   splash's z-index — a boot that reaches a race still belongs to the splash —
+   and over everything else, the HUD and the menu included. */
+.loading {
+  position: fixed;
+  inset: 0;
+  z-index: 1900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: linear-gradient(#123069 0%, #1f7fe0 100%);
+  color: #ffffff;
+  opacity: 1;
+  transition: opacity 260ms ease-out;
+}
+
+/* Lifted. Unlike the splash card this one may stop taking presses the moment
+   it starts leaving: nothing dismisses it, so there is no press of its own to
+   keep hold of, and a run that has just been handed the road wants the wheel
+   from the first frame it is drawn. */
+.loading.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.7rem, 2.8vmin, 1.4rem);
+}
+
+.loading-mark {
+  width: clamp(7rem, 26vmin, 13rem);
+}
+
+.loading-word {
+  margin: 0;
+  font-weight: 800;
+  font-style: italic;
+  font-size: clamp(0.85rem, 3.4vmin, 1.35rem);
+  letter-spacing: 0.34em;
+  /* The tracking is applied to the RIGHT of every glyph, the last one
+     included, so without this the word sits visibly left of centre. */
+  text-indent: 0.34em;
+  text-shadow:
+    2px 2px 0 var(--hud-shadow),
+    -1px -1px 0 var(--hud-shadow);
+}
+
 .splash {
   position: fixed;
   inset: 0;
@@ -6411,6 +6569,17 @@ a.menu-version:focus-visible {
   align-items: center;
   gap: 0.35rem;
   animation: splash-in 460ms ease-out both;
+}
+
+.splash-mark {
+  display: block;
+  width: clamp(3.6rem, 15vmin, 7rem);
+  height: auto;
+  margin-bottom: clamp(0.3rem, 1.4vmin, 0.7rem);
+  border-radius: 22%;
+  /* Lifted off the sky it is painted on, or a blue badge on a blue card has
+     no edge at all. */
+  box-shadow: 0 0.35rem 1.1rem rgb(0 0 0 / 28%);
 }
 
 .splash-publisher {
@@ -6484,6 +6653,24 @@ a.menu-version:focus-visible {
 
 /* What the card is doing, and then what it wants. One slot, so the invitation
    lands exactly where the player was already looking. */
+/* The mark under the game's name. Sized against the wordmark rather than the
+   viewport so the two stay one lockup, and given a little air above it so it
+   reads as the road under the title rather than as an underline on it. */
+.splash-marks {
+  width: clamp(3rem, 10vmin, 6rem);
+  margin-top: clamp(0.2rem, 1.2vmin, 0.6rem);
+}
+
+/* A phone held sideways is the tightest surface the boot card has, and the
+   card is already a crest, a two-line wordmark and a prompt tall on it. The
+   marks are the one thing on it that is pure flourish, so they are what goes
+   rather than the press-to-start line going under the fold. */
+@media (max-height: 500px) {
+  .splash-marks {
+    display: none;
+  }
+}
+
 .splash-prompt {
   font-size: clamp(0.68rem, 2.5vmin, 1rem);
   font-style: normal;
@@ -6568,6 +6755,23 @@ a.menu-version:focus-visible {
    that waits for a press has to keep the invitation on screen. The tach stops
    buzzing and the red band says the same thing on its own. */
 @media (prefers-reduced-motion: reduce) {
+  /* The loading mark stops being laid and stands there COMPLETE. It is the
+     one piece of motion on that card, so parking it mid-sweep would leave a
+     half-drawn shape reading as a broken image; the word under it is what
+     says the load is still going. */
+  .mark-track {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  /* The mark is parked FULL, so the ghost under it would only darken the same
+     stroke twice. Parking it half-drawn instead would leave a broken-looking
+     shape; on the loading card the word under it is what says the load is
+     still going. */
+  .mark-track-ghost {
+    opacity: 0;
+  }
+
   .hud-tach-hot,
   .splash-card,
   .splash-title,

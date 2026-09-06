@@ -24,6 +24,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { APP_NAME, PUBLISHER } from "../identity.ts";
+import { AppBadge } from "./app-badge.tsx";
+import { MarkTracks } from "./mark-tracks.tsx";
 import { mountFinishFlags } from "./finish-flag.ts";
 import { SPLASH_MIN_MS, SPLASH_STUCK_MS, splashReady } from "./splash.ts";
 
@@ -151,6 +153,10 @@ export function SplashScreen({ warm, onDone }: { warm: boolean; onDone: () => vo
       role="presentation"
     >
       <div className="splash-card">
+        {/* The mark the game was installed by, over the house's name. Beat one
+            is the only part of the boot with nothing on it to look at, and
+            this is the one image that is the same one everywhere else. */}
+        <AppBadge className="splash-mark" />
         <span className="splash-publisher">{PUBLISHER.toUpperCase()}</span>
         <span className="splash-presents">PRESENTS</span>
       </div>
@@ -164,6 +170,11 @@ export function SplashScreen({ warm, onDone }: { warm: boolean; onDone: () => vo
         <div className="splash-title">
           <div className="splash-flags" ref={flagsRef} />
           <span className="splash-game">{APP_NAME.toUpperCase()}</span>
+          {/* ...and the mark laid under the name, once, and left there. It
+              arrives with beat two rather than under beat one, so it reads as
+              the car that has just gone through rather than as something
+              waiting. */}
+          <MarkTracks lay="once" className="splash-marks" />
         </div>
       )}
       <span className={`splash-prompt${revealed ? " ready" : ""}`}>

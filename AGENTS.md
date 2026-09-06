@@ -122,6 +122,8 @@ And the pieces that belong to no skill in particular:
 | Track geometry / compilation                      | `engine/mapgen/compile.ts`                                                                                                                     |
 | What a surface does to the car                    | `TUNING.surfaces`; a country's loose surface is `BiomeRules.loose`                                                                             |
 | Anything drawn, with no better home               | `pwa/src/game/` (`renderer.ts` and friends)                                                                                                    |
+| What a RACE COSTS TO STAND UP, and its card       | `pwa/src/game/race-loader.ts` (the steps and the frame budget, DOM-free) + `loading-screen.tsx`; the steps themselves are `App.tsx`'s `beginLoad` |
+| The APP MARK, wherever the app draws one          | `pwa/src/game/app-mark.ts` (geometry) → `app-badge.tsx` (the badge) / `mark-tracks.tsx` (the skid marks, laid); `tests/app_mark_test.ts` holds it to `icons/icon.svg` |
 | App identity (name, palette, URLs)                | `pwa/src/identity.ts` — the single source                                                                                                      |
 | How much GPU a phone or tablet has                | `pwa/src/game/device-gpu.ts` — published Geekbench scores, family fallbacks for a device it has never heard of, and bands; read by nothing yet |
 | A Node script needing an app module               | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table                                     |
@@ -173,7 +175,7 @@ The campaign menu's routes and biome banners are generator OUTPUT, so every rule
 
 Places where one idea is deliberately written in two files that cannot import each other. Each is a live trap: change one, change both.
 
-- `pwa/src/identity.ts` is the identity source of truth; `pwa/public/icons/icon.svg` and `scripts/generate-icons.mjs` encode the same mark geometry — then `make icons`.
+- `pwa/src/identity.ts` is the identity source of truth; `pwa/public/icons/icon.svg`, `scripts/generate-icons.mjs` and `pwa/src/game/app-mark.ts` encode the same mark geometry — the asset the stores read, the arc centres the raster icons are drawn from, and the same shape as data for the app to draw at runtime. None can import either of the others, so change one and change all three, then `make icons`. `tests/app_mark_test.ts` reads the SVG and holds the data module to it, which is what makes that a check rather than a hope.
 - The desktop app's names restate `identity.ts` and cannot import it (`tauri.conf.json`, `tauri/shell/src/config.rs`); `tests/tauri_test.ts` holds all four — see `platform-shells`.
 - `engine/version.ts` and the root and workspace `package.json` versions move together — only via `scripts/update-versions.sh` (the release workflow runs it).
 - The service worker contract (cache id, emitted files) is shared between `pwa/pwa-plugin.ts` and `pwa/src/app-pwa.ts` — keep them agreeing.

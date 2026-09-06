@@ -178,6 +178,11 @@ const FOG_PARS_VERTEX = /* glsl */ `
 #endif
 `;
 
+/** MESH MATERIALS ONLY. `transformed` is the local vertex position, declared
+ * by every mesh vertex shader three builds and by no sprite one — so a
+ * material that reaches this chunk without it fails to compile, silently,
+ * and whatever wore it is simply never drawn. Anything sprite-based turns
+ * fog off instead (`name-tag.ts`). */
 const FOG_VERTEX = /* glsl */ `
 #ifdef USE_FOG
 	vFogDepth = - mvPosition.z;

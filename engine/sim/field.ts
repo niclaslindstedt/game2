@@ -212,77 +212,140 @@ function traceCap(track: Track, laps: number): number {
  * player; GHOSTS (`plan.contact` off) get a shown state of their own and a
  * trace their sim is written into ahead of the clock — see the module note. */
 export function createField(track: Track, plan: FieldPlan, stage: FieldStage): RivalField {
+  const build = openField(track, plan, stage);
+  while (enterCrew(build));
+  return sealField(build);
+}
+
+/** A field with its entry list drawn up and nobody's game built yet. The
+ * crews go in one at a time through `enterCrew`, which is what lets a
+ * caller with a frame to keep — the app's loading screen — pay for the
+ * field a crew at a time instead of in one lump. `createField` is the same
+ * thing with nobody watching the clock. */
+export type FieldBuild = {
+  field: RivalField;
+  entries: RivalEntry[];
+  /** The next crew on the entry list to be built. */
+  next: number;
+  track: Track;
+  plan: FieldPlan;
+  stage: FieldStage;
+  grid: GridSlot[] | null;
+  cars: number;
+  cap: number;
+};
+
+/** Draw up the entry list and the field around it. Nobody is on the road
+ * until `enterCrew` has been run down the list and `sealField` has stood
+ * them where their clocks put them. */
+export function openField(track: Track, plan: FieldPlan, stage: FieldStage): FieldBuild {
   const cars = plan.massStart ? gridSize(plan.cars) : FIELD_SIZE;
   const grid = plan.massStart ? massStartGrid(cars) : null;
   const entries = plan.massStart
     ? headsUpField(plan.difficulty, cars)
     : rivalField(plan.difficulty);
-  const cap = traceCap(track, stage.laps);
-  const runs = entries.map((entry): RivalRun => {
-    // Where this crew is stood. A rally start is one slot beside the player,
-    // taken in turn; a grid is a row and a column of its own.
-    const slot = grid?.[entry.number - 1];
-    // Car 14 leaves as the establishing shot opens and owes nothing; every
-    // car ahead of them owes another interval. A grid owes nothing at all.
-    const owed = plan.massStart ? 0 : (cars - 1 - entry.number) * START_INTERVAL;
-    const sim = createGame({
-      seed: stage.seed,
-      carId: entry.crew.carId,
-      // The crews with the hands take their own gears (`gearboxFor`), which
-      // is where the head of a hard field finds its top end.
-      gearbox: entry.gearbox,
-      track,
-      laps: stage.laps,
-      // A rally rival's clock starts at their own green, which is why they
-      // skip the whole start control and carry the offset as `owed`. A grid
-      // shares ONE green, so its cars sit through the same shot and the same
-      // lights the player does and every clock starts together.
-      skipCountdown: !plan.massStart,
-      quiet: true,
-      // R44 — a crew on the stage never meets the public roads' traffic,
-      // and the player's own run already carries the one fleet there is.
-      traffic: false,
-      // Off to one side of the line, because the player is on it. Only the
-      // crew immediately in front is ever visible from a rally control, and
-      // this is the metre and a bit of road that has them pulling away
-      // ALONGSIDE the player instead of out from inside their bodywork. On a
-      // grid it is the column of their row.
-      gridOffset: slot ? slot.lateral : GRID_STAGGER,
-      gridBack: slot?.back ?? 0,
-      // …and the metres that row is giving away, as the drive to take them
-      // back with. Pole is owed nothing and gets nothing.
-      catchUp:
-        slot && slot.gain > 0 ? { gain: slot.gain, untilS: TUNING.massStart.catchUpS } : undefined,
-      env: { hour: stage.hour, weather: stage.weather, season: stage.season },
-    });
-    const ghost = !plan.contact;
-    return {
-      entry,
-      state: ghost ? shadowState(sim) : sim,
-      sim,
-      trace: ghost ? createTrace(sim, cap) : null,
-      play: createPlayback(),
-      offset: ghost ? Math.round(owed / TUNING.dt) : 0,
-      splits: [],
-      time: null,
-      done: false,
-      owed,
-    };
-  });
-  const field: RivalField = {
-    runs,
-    difficulty: plan.difficulty,
-    of: cars,
-    playerNumber: cars,
-    interval: plan.massStart ? 0 : START_INTERVAL,
-    massStart: plan.massStart,
-    contact: plan.contact,
-    clock: 0,
+  return {
+    field: {
+      runs: [],
+      difficulty: plan.difficulty,
+      of: cars,
+      playerNumber: cars,
+      interval: plan.massStart ? 0 : START_INTERVAL,
+      massStart: plan.massStart,
+      contact: plan.contact,
+      clock: 0,
+    },
+    entries,
+    next: 0,
+    track,
+    plan,
+    stage,
+    grid,
+    cars,
+    cap: traceCap(track, stage.laps),
   };
+}
+
+/** Build the next crew's game into the field. Returns true while there are
+ * more of them to enter — which is the loop condition for a caller paying
+ * for the field in slices. */
+export function enterCrew(build: FieldBuild): boolean {
+  const { track, plan, stage, grid, cars, cap } = build;
+  const entry = build.entries[build.next];
+  if (!entry) return false;
+  build.next += 1;
+  build.field.runs.push(buildRun(entry, track, plan, stage, grid, cars, cap));
+  return build.next < build.entries.length;
+}
+
+/** Stand every crew where its clock puts it, and hand over the field. */
+export function sealField(build: FieldBuild): RivalField {
+  const field = build.field;
   // A ghost is shown where its clock puts it from the first frame: car 14
   // on the line, everybody ahead of them still owed and off the road.
-  if (!plan.contact) for (const run of runs) syncGhost(run, 0, false);
+  if (!field.contact) for (const run of field.runs) syncGhost(run, 0, false);
   return field;
+}
+
+/** One crew's run, built. */
+function buildRun(
+  entry: RivalEntry,
+  track: Track,
+  plan: FieldPlan,
+  stage: FieldStage,
+  grid: GridSlot[] | null,
+  cars: number,
+  cap: number,
+): RivalRun {
+  // Where this crew is stood. A rally start is one slot beside the player,
+  // taken in turn; a grid is a row and a column of its own.
+  const slot = grid?.[entry.number - 1];
+  // Car 14 leaves as the establishing shot opens and owes nothing; every
+  // car ahead of them owes another interval. A grid owes nothing at all.
+  const owed = plan.massStart ? 0 : (cars - 1 - entry.number) * START_INTERVAL;
+  const sim = createGame({
+    seed: stage.seed,
+    carId: entry.crew.carId,
+    // The crews with the hands take their own gears (`gearboxFor`), which
+    // is where the head of a hard field finds its top end.
+    gearbox: entry.gearbox,
+    track,
+    laps: stage.laps,
+    // A rally rival's clock starts at their own green, which is why they
+    // skip the whole start control and carry the offset as `owed`. A grid
+    // shares ONE green, so its cars sit through the same shot and the same
+    // lights the player does and every clock starts together.
+    skipCountdown: !plan.massStart,
+    quiet: true,
+    // R44 — a crew on the stage never meets the public roads' traffic,
+    // and the player's own run already carries the one fleet there is.
+    traffic: false,
+    // Off to one side of the line, because the player is on it. Only the
+    // crew immediately in front is ever visible from a rally control, and
+    // this is the metre and a bit of road that has them pulling away
+    // ALONGSIDE the player instead of out from inside their bodywork. On a
+    // grid it is the column of their row.
+    gridOffset: slot ? slot.lateral : GRID_STAGGER,
+    gridBack: slot?.back ?? 0,
+    // …and the metres that row is giving away, as the drive to take them
+    // back with. Pole is owed nothing and gets nothing.
+    catchUp:
+      slot && slot.gain > 0 ? { gain: slot.gain, untilS: TUNING.massStart.catchUpS } : undefined,
+    env: { hour: stage.hour, weather: stage.weather, season: stage.season },
+  });
+  const ghost = !plan.contact;
+  return {
+    entry,
+    state: ghost ? shadowState(sim) : sim,
+    sim,
+    trace: ghost ? createTrace(sim, cap) : null,
+    play: createPlayback(),
+    offset: ghost ? Math.round(owed / TUNING.dt) : 0,
+    splits: [],
+    time: null,
+    done: false,
+    owed,
+  };
 }
 
 /** WHERE THE PLAYER STANDS on a grid of `cars` — the last slot, on the back

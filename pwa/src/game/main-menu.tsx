@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { APP_NAME, REPO_URL } from "../identity.ts";
+import { MarkTracks } from "./mark-tracks.tsx";
 import { ordinal } from "../lib/util.ts";
 import {
   LOCATIONS,
@@ -224,8 +225,11 @@ function RootPage({
   return (
     <div className="menu-card menu-card-root">
       <div className="menu-brand">
-        <span className="menu-brand-name">{APP_NAME.toUpperCase()}</span>
-        <span className="menu-brand-tag">arcade rally drifting</span>
+        <MarkTracks lay="once" className="menu-brand-mark" />
+        <div className="menu-brand-words">
+          <span className="menu-brand-name">{APP_NAME.toUpperCase()}</span>
+          <span className="menu-brand-tag">arcade rally drifting</span>
+        </div>
       </div>
       <div className="menu-tiles">
         {ROOT_ITEMS.map((item) => (
