@@ -34,9 +34,11 @@ import { DISSOLVE } from "./road-spill.ts";
 // Straight from the engine rather than through terrain.ts: the ground's
 // paint reads this module's palette for R16's dust wash, and the two must
 // not import each other.
-import { biomeRules, endApron } from "@engine";
-import { detailTexture, gravelTexture, sandTexture, textureMean } from "./textures.ts";
+import { endApron } from "@engine";
+import { biomeFor } from "./biome.ts";
+import { loosePaint } from "./ground-rules.ts";
 import { rightOf, type Ribbon } from "./ribbon.ts";
+import { detailTexture, looseTexture, textureMean } from "./textures.ts";
 import { waterMaterial } from "./water-look.ts";
 
 /** World up — the axis every scattered chipping spins about. */
@@ -55,6 +57,11 @@ export const ROAD_PAINT = {
   // everything it covers — so both are authored a shade lighter than the
   // sand they are meant to come out as.
   sand: { loose: "#f2e2b4", worn: "#d6bf8a" },
+  // R47 — packed snow over the road above the snowline: white, the wheel
+  // tracks worn to grey-blue ice. Authored as it should come OUT, because
+  // a snow vertex is lifted clear of the grit map's darkening (see
+  // `buildRoad`) — unlike the rows above, which are read under it.
+  snow: { loose: "#f1f3f6", worn: "#c4ccd6" },
   asphalt: { loose: "#3a3b40", worn: "#54555c" },
   water: { loose: "#8fa6c6", worn: "#8fa6c6" },
   deck: { loose: "#b7b3a8", worn: "#a4a096" },
@@ -284,7 +291,11 @@ export function buildRoad(
   const colors: number[] = [];
   const indices: number[] = [];
   const paint = new THREE.Color();
-  const shoulder = new THREE.Color(ROAD_PAINT.shoulder);
+  const earth = new THREE.Color(ROAD_PAINT.shoulder);
+  const snowBank = new THREE.Color(ROAD_PAINT.snow.worn);
+  /** The bare strip past the mat: the blade's earth, or on a snow road the
+   * plough's own bank — reset per sample. */
+  const shoulder = new THREE.Color();
   const verge = new THREE.Color(ROAD_PAINT.verge);
   const loose = new THREE.Color();
   const worn = new THREE.Color();
@@ -301,10 +312,16 @@ export function buildRoad(
   // canvases rather than declared, so re-speckling a texture keeps the seam
   // shut. Built here, once per ribbon, rather than at module scope: both
   // textures are painted lazily and neither exists until something asks.
-  // R40 — the grain the ribbon is drawn under is the country's: stone
-  // speckle over a gravel road, a pale hueless one over sand. One map per
-  // ribbon, because a stage is in one country.
-  const roadMap = biomeRules(track.knobs.biome).loose === "sand" ? sandTexture() : gravelTexture();
+  // R40 — the grain the ribbon is drawn under is the country's own grit:
+  // brown stone over the shield's gravel, a pale hueless one over sand,
+  // grey over a mountain's chippings. One map per ribbon, because a stage
+  // is in one country. The GRAVEL paint is derived from the same grit, so
+  // a grey road is grey and not the taiga's brown under a grey speckle;
+  // the sand row stays authored, because bleached sand's split between
+  // loose and worn is shallower than any rule for stone gives it.
+  const look = biomeFor(track.knobs.biome);
+  const roadMap = looseTexture(look.grit);
+  const gravelPaint = loosePaint(look.grit);
   const EDGE_FIX = ((): THREE.Color => {
     const road = textureMean(roadMap);
     const land = textureMean(detailTexture());
@@ -343,8 +360,25 @@ export function buildRoad(
         : s.surface === "asphalt"
           ? "asphalt"
           : s.surface;
-    loose.set(ROAD_PAINT[kind].loose);
-    worn.set(ROAD_PAINT[kind].worn);
+    if (kind === "gravel") {
+      loose.copy(gravelPaint.loose);
+      worn.copy(gravelPaint.worn);
+    } else {
+      loose.set(ROAD_PAINT[kind].loose);
+      worn.set(ROAD_PAINT[kind].worn);
+    }
+    // R47 — a SNOW road is drawn under the same grit map as the rest of the
+    // ribbon (one mesh, one material, no second draw call for a stage that
+    // crosses the snowline), so its vertices are lifted by the map's own
+    // darkening — the same ratio the lip uses to meet the ground — and
+    // come out the white they were authored as, with the grit's grain
+    // showing through as the stone in the packed snow.
+    const snowy = kind === "snow";
+    shoulder.copy(snowy ? snowBank : earth);
+    // R47 — inside a BORE the country beside the road is the mountain,
+    // twenty metres up. The ribbon must not hand its outer band over to it.
+    // `tunnel` rides the engine's sample rather than the ribbon's shape.
+    const bored = (s as Ribbon & { tunnel?: boolean }).tunnel === true;
     // R33 — the road's own width HERE. The station list is built once at the
     // nominal width and SCALED, rather than rebuilt per sample: the vertex
     // count and the index buffer have to stay identical down the whole
@@ -415,8 +449,16 @@ export function buildRoad(
         // the air over the other. Inside a junction it does not apply: a
         // junction is one graded plane out to its rim (R17), and the engine
         // has already warped both carriageways onto it.
-        const handing = ground !== undefined && out > 0 && (s.flat ?? 0) < 0.25;
+        //
+        // Nor inside a tunnel (R47): the lattice over a bore is the
+        // mountain's roof, and an outer band leaning onto it is a vertical
+        // skirt up the wall. The band is held flat at the shoulder's own
+        // level instead — the bore's floor is graded out to the lining, and
+        // the lining is drawn over it.
+        const handing = ground !== undefined && out > 0 && (s.flat ?? 0) < 0.25 && !bored;
         const hand = handing ? handoverAt(out) : 1;
+        const seat = bored ? Math.min(out, ROAD_CROSS.verge.bareTo) : out;
+        const seatLat = bored ? Math.sign(l) * (halfHere + seat) + shift : lat;
         // The lift that keeps the mat off the ground lattice is spent by the
         // hand-over along with everything else, so the ribbon's last vertex
         // is the ground's height EXACTLY. Carrying it out to the lip instead
@@ -424,7 +466,7 @@ export function buildRoad(
         // through as a dark hairline down the whole stage, which is the same
         // defect as the stripe it replaced, two orders of magnitude thinner
         // and just as visible against grass.
-        let y = s.elevation + corridorOffset(s, lat, here) + bias;
+        let y = s.elevation + corridorOffset(s, seatLat, here) + bias;
         if (ground !== undefined && hand < 1) {
           y = y * hand + ground.heightAt(px, pz) * (1 - hand);
         }
@@ -482,8 +524,9 @@ export function buildRoad(
           // than two halves of a step.
           // A sand road's shoulder IS sand — the blade pushed the same
           // stuff aside — so it keeps far more of the mat's colour than a
-          // gravel road's earth shoulder keeps of the stone.
-          const memory = kind === "sand" ? 0.88 : 0.28;
+          // gravel road's earth shoulder keeps of the stone; a ploughed
+          // snow bank the same.
+          const memory = kind === "sand" || snowy ? 0.88 : 0.28;
           paint.copy(shoulder).lerp(loose, memory * (1 - out / ROAD_CROSS.verge.bareTo));
         } else {
           // R16 — THE DISSOLVE. Past the bare shoulder the road runs out into
@@ -502,7 +545,10 @@ export function buildRoad(
           // ground, whatever the noise says, because that is the vertex the
           // tile mesh is standing next to.
           const t = 1 - handoverAt(out);
-          if (ground !== undefined) {
+          if (bored) {
+            // No country to run out into: the floor of the bore, to the wall.
+            paint.copy(shoulder);
+          } else if (ground !== undefined) {
             const g = valueNoise(px, pz, DISSOLVE.patch, DISSOLVE.seed);
             const mix = clamp01(t * (1 + DISSOLVE.spread) - g * DISSOLVE.spread);
             ground.paintAt(px, pz, country);
@@ -520,9 +566,11 @@ export function buildRoad(
             // By the lip the vertex is asking the gravel map for what the
             // detail map would have given it, so the two meshes render the
             // same colour at the seam and there is nothing left to see.
-            paint.r *= 1 + (EDGE_FIX.r - 1) * mix;
-            paint.g *= 1 + (EDGE_FIX.g - 1) * mix;
-            paint.b *= 1 + (EDGE_FIX.b - 1) * mix;
+            // A snow vertex is lifted whole below, so it takes none here.
+            const lift = snowy ? 0 : mix;
+            paint.r *= 1 + (EDGE_FIX.r - 1) * lift;
+            paint.g *= 1 + (EDGE_FIX.g - 1) * lift;
+            paint.b *= 1 + (EDGE_FIX.b - 1) * lift;
           } else {
             // No landscape to hand over to (the stage previews): the old flat
             // verge, which is all a picture of the road's plan needs.
@@ -555,6 +603,7 @@ export function buildRoad(
           const graded = paved ? 1 : junctionAt(track, px, pz);
           if (graded > 0) paint.lerp(shoulder, graded);
         }
+        if (snowy) paint.multiply(EDGE_FIX);
         colors.push(paint.r, paint.g, paint.b);
       }
     };

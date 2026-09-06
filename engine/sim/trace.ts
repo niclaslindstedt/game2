@@ -102,6 +102,7 @@ const SURFACE_INDEX: Record<GameState["surface"], number> = {
   asphalt: 2,
   water: 3,
   nature: 4,
+  snow: 5,
 };
 const SURFACES = Object.keys(SURFACE_INDEX) as GameState["surface"][];
 const PHASES: GamePhase[] = ["intro", "countdown", "racing", "rollout", "finished", "retired"];

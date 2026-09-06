@@ -141,6 +141,7 @@ export {
   type Building,
   type BuildingKind,
   type HousePlan,
+  type HouseStyle,
   type ParkedCar,
   type RoofKind,
   type WallPaint,
@@ -245,6 +246,10 @@ export {
   bridgeParapets,
   isWooden,
   standSolid,
+  TUNNEL_WALL_OUT,
+  tunnelTrench,
+  TUNNEL_WALL_STOREYS,
+  tunnelWalls,
   type SolidKind,
   type WildObstacle,
 } from "./solids.ts";

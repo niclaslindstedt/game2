@@ -251,8 +251,19 @@ export type HighwayNetwork = {
  * about 10% at 0.25, and past that the map runs out — there is only so far
  * a rally can drive down one public road inside a bounded world before R9
  * puts it outside. The dial asks; the country answers. */
+/** R47 — the grade past which a line in a mountain country turns away
+ * from the flank ahead, m per m, and how far ahead it reads it. A shade
+ * over a road's own follow grade at the alpine's multiplier. */
+const CONTOUR_GRADE = 0.1;
+const CONTOUR_LOOK = 110;
+
 export function highwayCount(knobs: StageKnobs, worldBound: number): number {
   if (knobs.asphalt < R.paving.floor) return 0;
+  // R47 — a mountain country's public road IS the pass the stage runs
+  // down, sealed by height in the compiler; a second road contouring the
+  // flank was an obstacle along the one line the route needed (a third of
+  // a slow seed's refusals) and was joined once in a hundred tries.
+  if (biomeRules(knobs.biome).land.massif !== null) return 0;
   return worldBound >= 1800 ? 2 : 1;
 }
 
@@ -270,6 +281,8 @@ export function layHighways(
 ): Highway[] {
   const roads: Highway[] = [];
   const count = highwayCount(knobs, worldBound);
+  // R47 — a road in a mountain country contours.
+  const contour = biomeRules(knobs.biome).land.massif !== null;
   for (let i = 0; i < count; i++) {
     // Several entries tried per road, because where a road can be laid is
     // the country's decision: a rim point out in a sea basin, or a line
@@ -285,6 +298,8 @@ export function layHighways(
         roads,
         HIGHWAY,
         "road",
+        undefined,
+        contour,
       );
       if (road) {
         roads.push(road);
@@ -339,6 +354,8 @@ export function layRailways(
       RAILWAY,
       "rail",
       aim,
+      // R47 — a railway in a mountain country runs up the valley.
+      biomeRules(knobs.biome).land.massif !== null,
     );
     if (line) {
       rails.push(line);
@@ -363,6 +380,10 @@ function layOne(
   /** Where on the rim to enter, radians, and how far either side of it the
    * dice may put the entry. Unset, anywhere on the rim. */
   aim?: { entry: number; spread: number },
+  /** R47 — whether the line CONTOURS: in a mountain country a railway
+   * turns away from a flank it cannot climb as it turns away from water,
+   * and runs up the valley instead of over the crest. */
+  contour = false,
 ): Highway | null {
   const rng = createRng(seed);
   const reach = worldBound + HIGHWAY.overrun;
@@ -409,6 +430,17 @@ function layOne(
     return worst;
   };
 
+  /** R47 — how steeply the country climbs or falls along a bearing over
+   * the next `CONTOUR_LOOK` metres, m per m. */
+  const climbAhead = (bearing: number): number => {
+    const here = land.heightAt(x, z);
+    const there = land.heightAt(
+      x + Math.sin(bearing) * CONTOUR_LOOK,
+      z + Math.cos(bearing) * CONTOUR_LOOK,
+    );
+    return Math.abs(there - here) / CONTOUR_LOOK;
+  };
+
   let entered = false;
   for (let i = 0; i < limit; i++) {
     points.push({ x, z, heading, s: i * HIGHWAY.step });
@@ -441,6 +473,31 @@ function layOne(
       x += Math.sin(heading) * HIGHWAY.step;
       z += Math.cos(heading) * HIGHWAY.step;
       continue;
+    }
+    // R47 — THE FLANK. In a mountain country the line goes round a
+    // hillside it could not be built up, the way it goes round a lake:
+    // where the country ahead climbs or falls faster than a line can
+    // follow it, swing toward the bearing that climbs least. A railway in
+    // the Alps runs up the valley floor; one that ran at its aim over the
+    // crest was a wall forty metres tall through the mountain.
+    if (contour && climbAhead(heading) > CONTOUR_GRADE) {
+      let best = 0;
+      let bestClimb = climbAhead(heading);
+      for (const swing of [0.3, -0.3, 0.6, -0.6, 1.0, -1.0, 1.5, -1.5]) {
+        const climb = climbAhead(heading + swing);
+        if (climb >= bestClimb) continue;
+        bestClimb = climb;
+        best = swing;
+        if (climb <= CONTOUR_GRADE) break;
+      }
+      if (best !== 0) {
+        heading += Math.sign(best) * Math.min(Math.abs(best), HIGHWAY.step / HIGHWAY.avoidRadius);
+        curvature = 0;
+        wander = 0;
+        x += Math.sin(heading) * HIGHWAY.step;
+        z += Math.cos(heading) * HIGHWAY.step;
+        continue;
+      }
     }
     if (i > 0 && i % Math.round(HIGHWAY.bend / HIGHWAY.step) === 0) {
       const W = HIGHWAY.wander;
@@ -509,9 +566,20 @@ function layOne(
   // medium put one within 25 m of the start line and the search then failed
   // every sub-seed it had. The tarmac is what moves, because it is the
   // thing with somewhere else to go.
+  //
+  // R41 — and a RAILWAY keeps off the road the route needs to GET AWAY
+  // from the opening as well. A road laid just past the straight's end is
+  // a road the route can turn onto (R17); a railway there is a line it can
+  // neither borrow nor turn away from at any radius in the vocabulary, and
+  // cannot square up to cross either (R36) — the alpine's seed 30 put its
+  // railway three metres past the opening's end, and the search failed
+  // every sub-seed it had. So a railway keeps off the opening and two
+  // clearances of room beyond it. Roads keep the run they always kept,
+  // because widening theirs re-rolls the campaign's desert opener.
   const startClear = roadClearance(width);
+  const startRun = START_RUN + (kind === "rail" ? 2 * startClear : 0);
   for (const p of points) {
-    const along = Math.min(START_RUN, Math.max(-R.startZone.apron, p.z));
+    const along = Math.min(startRun, Math.max(-R.startZone.apron, p.z));
     if (Math.hypot(p.x, p.z - along) < startClear) return null;
   }
   // R23 — and two public roads do not run into each other out in the

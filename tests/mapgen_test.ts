@@ -84,13 +84,9 @@ describe("stage generator", () => {
         let worst = 0;
         for (const plan of plans) {
           // The run breaks at a corner and carries on through anything too
-          // wide to be one — a straight, or a borrowed road's own lean.
-          const part =
-            plan.kind === "straight"
-              ? plan.length
-              : (plan.radius ?? 0) > R.straightRun.bend
-                ? plan.length
-                : 0;
+          // wide to be one — a straight, or a borrowed road's own lean —
+          // by the engine's own measure, which leaves a bore out (R47).
+          const part = straightPart(plan);
           run = part === 0 ? 0 : run + part;
           // The closing straight carries R25's run-out on its back, and the
           // run-out is road the clock never sees (R11) — so what is measured

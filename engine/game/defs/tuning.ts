@@ -1947,8 +1947,18 @@ export const TUNING = {
      * slower in a straight line and sideways sooner in every corner, and a
      * slide that runs further and settles later than gravel's does. The
      * car's own loose-surface rubber is what it stands on there, exactly as
-     * on gravel (`surfaceGripFor`). */
-    drag: { gravel: 0.028, sand: 0.042, asphalt: 0.022, water: 0.5, nature: 0.03 },
+     * on gravel (`surfaceGripFor`).
+     *
+     * SNOW (R47, the alpine road above its snowline) is packed snow over
+     * whatever was laid under it: it holds barely half what graded stone
+     * does, lets go a long way out and then keeps sliding — the slide on
+     * snow runs further and comes back slower than any other — and it
+     * drags a little more than gravel and swallows a share of the throttle
+     * where a spinning tyre polishes it. Its ONE gift is that it is soft:
+     * a car that comes down on it or goes over on it is taken by the snow
+     * before the shell is. A winter rally in every way but the grip of a
+     * studded tyre, which the catalog's loose rubber is not. */
+    drag: { gravel: 0.028, sand: 0.042, asphalt: 0.022, water: 0.5, nature: 0.03, snow: 0.034 },
     /** Lateral grip multiplier per surface. Asphalt is the outlier the
      * stage's paved sections are FOR: the tires hold a third again as
      * much, so the corner that needed a slide on gravel can be driven
@@ -1956,7 +1966,7 @@ export const TUNING = {
      * committed entry, handbrake, or plain too much speed. It is still a
      * rally car on a country road: ask hard enough and it goes sideways,
      * just on smoking rubber instead of flying gravel. */
-    grip: { gravel: 1.0, sand: 0.8, asphalt: 1.35, water: 0.55, nature: 0.7 },
+    grip: { gravel: 1.0, sand: 0.8, asphalt: 1.35, water: 0.55, nature: 0.7, snow: 0.58 },
     /** WHERE the tires let go, as a multiple of the slide's slip angles
      * (`TUNING.drift.angleSpan` and its fade band). A surface is not one
      * number: the peak force above says how HARD it holds, this says how
@@ -1981,13 +1991,13 @@ export const TUNING = {
      * altogether and spin. Tarmac now asks for a real, small drift — a
      * provoked one clears the readout and the wheel alone still will not,
      * which is the point of a paved section. */
-    breakaway: { gravel: 1.0, sand: 1.2, asphalt: 0.62, water: 1.2, nature: 1.1 },
+    breakaway: { gravel: 1.0, sand: 1.2, asphalt: 0.62, water: 1.2, nature: 1.1, snow: 1.35 },
     /** Throttle effectiveness per surface. `nature` is level with graded
      * stone, and deliberately: what the open country costs is `natureDig`
      * below, which is charged on the way UP to speed and released once the
      * car is there. A cut taken here instead would still be charged at the
      * top of every gear, where the box has almost nothing to spare. */
-    power: { gravel: 1.0, sand: 0.88, asphalt: 1.08, water: 0.7, nature: 1.0 },
+    power: { gravel: 1.0, sand: 0.88, asphalt: 1.08, water: 0.7, nature: 1.0, snow: 0.82 },
     /** THE GROUND GIVES. What a crashing car comes down on is not a plane
      * of steel: gravel displaces, soil furrows, sand swallows a corner, and
      * every bit of that is arrival that neither folds the shell nor turns
@@ -2000,7 +2010,7 @@ export const TUNING = {
      * GRADED road gives little: a rally road is compacted stone under a
      * loose skin, and a sill scrapes the skin off and meets the base. The
      * open country and the desert are where a corner sinks in. */
-    give: { gravel: 0.06, sand: 0.35, asphalt: 0, water: 0.5, nature: 0.25 },
+    give: { gravel: 0.06, sand: 0.35, asphalt: 0, water: 0.5, nature: 0.25, snow: 0.4 },
     /** ...AND WHAT IT COSTS TO PLOUGH IT. A sill or a roof rail digging into
      * loose ground is dragging a furrow, and that is friction over and above
      * the shell's own coefficient (`air.roll.faceGrip`): added to the
@@ -2009,7 +2019,7 @@ export const TUNING = {
      * reconstruction has a rollover on soil stopping harder than one on
      * pavement, and this is that difference. Small against the face's
      * own 0.4–0.6, because it is a furrow and not an anchor. */
-    plough: { gravel: 0.03, sand: 0.14, asphalt: 0, water: 0, nature: 0.07 },
+    plough: { gravel: 0.03, sand: 0.14, asphalt: 0, water: 0, nature: 0.07, snow: 0.12 },
     /** WHAT THE OPEN COUNTRY TAKES OUT OF THE PULL FROM A STANDSTILL, 0..1
      * — and it takes it out of the ACCELERATION, never out of the top end.
      * Unconsolidated ground is something a driven wheel DIGS rather than

@@ -41,13 +41,13 @@ through a soft curve.
 | `pwa/src/game/audio/bus.ts`          | One synth, two volume-scaled views so the options screen can mix effects and music independently.                                                                                                                                    |
 | `pwa/src/game/audio/bank.ts`         | Every discrete sound the CAR makes, as data — and `RUN_BANK`, the car and the stage served together.                                                                                                                                 |
 | `pwa/src/game/audio/bank-stage.ts`   | Every discrete sound the STAGE makes: the lights, the split boards, the line, the crowd, the blocks, the sky.                                                                                                                        |
-| `pwa/src/game/audio/bank-world.ts`   | The country's own sounds: birds, insects, an owl, a coyote, cows and sheep, a diesel's horn, a crossing bell, a marshal's whistle.                                                                                                   |
+| `pwa/src/game/audio/bank-world.ts`   | The country's own sounds: birds, insects, choughs, a marmot, an owl, a coyote, cows and sheep, cowbells, meltwater, a diesel's horn, a crossing bell, a marshal's whistle.                                                           |
 | `pwa/src/game/audio/bank-ui.ts`      | The interface's own sounds — a separate bank because the menu is on the startup path.                                                                                                                                                |
 | `pwa/src/game/audio/route.ts`        | Which sound a `GameEvent` makes, how big, and how it is heard from the seat it is watched from.                                                                                                                                      |
 | `pwa/src/game/audio/listener.ts`     | What each camera on the ladder does to the mix — one row per `PlayCamera`.                                                                                                                                                           |
 | `pwa/src/game/audio/engine-voice.ts` | The engine, as six layers: where each should be for a set of revs, a load and a seat.                                                                                                                                                |
-| `pwa/src/game/audio/road-voice.ts`   | The tyres, the wind, the weather, the gale and the drift's scrub, as fourteen layers.                                                                                                                                                |
-| `pwa/src/game/audio/ambience.ts`     | The world: three layers (the canopy, the crowd, a train) and the roster of calls a country makes at an hour.                                                                                                                         |
+| `pwa/src/game/audio/road-voice.ts`   | The tyres (one voice per surface, snow included), the wind, the weather, the gale and the drift's scrub, as fourteen layers.                                                                                                         |
+| `pwa/src/game/audio/ambience.ts`     | The world: four layers (the canopy, the wind over a pass, the crowd, a train) and the roster of calls a country makes at an hour and a height.                                                                                       |
 | `pwa/src/game/audio/rack.ts`         | The plumbing every bed shares: build a layer, rebuild one whose context died, steer it.                                                                                                                                              |
 | `pwa/src/game/audio/drive-bed.ts`    | The scheduler: the state, once a frame, into every layer's target — and the cues nothing reports (the lights, the lift's crackle, the wipers, the whistle).                                                                          |
 | `pwa/src/game/audio/music-pick.ts`   | Which score a stage gets, from its country, its sky and the shape of its road.                                                                                                                                                       |
@@ -230,9 +230,13 @@ gravel is a broad low rush with the stones over it; sand is gravel with the
 stones taken out; water is a hiss with weight; turf is broad, low, and fills
 its MIDDLE (a resonant bottom with a bright hiss over it and a hole between
 reads as sheet metal being scoured, so `nature` carries a wide soft `body` and
-a banded `tear` rather than an open crunch). The wind is pink noise rising with
-the SQUARE of speed, and it is the only bed that keeps going in the air — the
-silence where the tyres were is what a jump sounds like.
+a banded `tear` rather than an open crunch); **snow** (R47, the alpine road
+above its snowline) is packed and throws nothing — a soft hiss the cold keeps
+low with the granular crunch of the crust penned into a band under it, no
+open grain and no top end, and quieter than gravel whichever way the car is
+pointing. The wind is pink noise rising with the SQUARE of speed, and it is
+the only bed that keeps going in the air — the silence where the tyres were is
+what a jump sounds like.
 
 **A tyre rolling straight ahead barely makes a noise.** What makes the noise
 is a tyre being asked to turn the car, so every surface is written as a quiet
@@ -252,7 +256,12 @@ starts protesting **while it is still winning**: a resonant band with a driven
 note in it, driven by the cornering load past `SING_FLOOR`. **Wheelspin is the
 same tyre going the other way**: a launch with the axle lit (`launchSpin`, or
 `wheelspin` in a gear with more than the road will take) digs on gravel and
-sings on tarmac exactly as a slide does, from a standstill.
+sings on tarmac exactly as a slide does, from a standstill. **On snow a tyre
+squeaks**: the dig is softer and more muffled than gravel's, the plume is
+powder rather than a spray of stones, and over it — on the SQUARE of the
+slide, so a twitch says nothing and a full slide sings — a narrow band up
+around 2 kHz, dry rubber skating over a cold crust. Slush does not squeak,
+for the same reason a wet tyre does not sing.
 
 ### What the rain does to it
 
@@ -264,7 +273,8 @@ somewhere between the two (`surfaceUnder`, mixed by `RoadVoice.wet` — 0 clear,
 rain is MUD — while the `level` goes UP, because the loudest thing about a wet
 road is the water being squeezed out from under the tread; the `corner`
 multipliers come down to pay for it. Wet tarmac is the one surface the rain
-makes brighter, and a wet tyre stops SINGING.
+makes brighter, and a wet tyre stops SINGING. Wet snow is slush: the crunch
+goes, the whole voice drops and thickens, and it is louder pointed straight.
 
 The rain itself is a bed like any other, and the only one with nothing to do
 with the car: it plays over a stationary car and over one in mid-air. Two
@@ -293,16 +303,29 @@ inside the glass.
 
 ## The world
 
-The country was making noise before the car arrived (`ambience.ts`). Three
-layers — the canopy (a pink hush that rises with the gale), the crowd (a
-murmur near the start control and the finish), and a train (a brown rumble by
-how far off the consist is) — and a ROSTER of calls raised on a loose clock:
-the taiga is birds by day (a chirp, a trill, a raven), an owl at dusk, mostly
-quiet at night; the desert is cicadas by day, crickets and a coyote after
-dark; rain sends the birds to cover. A paddock the road runs past adds a cow
-or a sheep on its own side of the car; a train on the line adds the diesel's
-horn once as it comes to the crossing, and the bell on the crossing while the
-car is at it. The marshal's whistle goes once in the intro.
+The country was making noise before the car arrived (`ambience.ts`). Four
+layers — the canopy (a pink hush that rises with the gale), the PASS (a thin,
+cold, banded wind that is only there above the treeline, louder the higher
+the road climbs and gusting with the same wind the car is shoved by), the
+crowd (a murmur near the start control and the finish), and a train (a brown
+rumble by how far off the consist is) — and a ROSTER of calls raised on a
+loose clock: the taiga is birds by day (a chirp, a trill, a raven), an owl at
+dusk, mostly quiet at night; the desert is cicadas by day, crickets and a
+coyote after dark; the alpine is choughs by day (a chattering chee-ah flock,
+deep in the echo of the faces), cowbells on the alm below the road, a
+marmot's whistle from the scree once in a long while, and meltwater wherever
+the road meets a stream — a ford, or a deck over one. Rain sends the birds to
+cover, and nothing flies in a storm or a gale. A paddock the road runs past
+adds a cow or a sheep on its own side of the car; a train on the line adds
+the diesel's horn once as it comes to the crossing, and the bell on the
+crossing while the car is at it. The marshal's whistle goes once in the intro.
+
+**The mountain's roster moves with the height of the road.** `exposureOf`
+reads the car's height against the country's own zones
+(`BiomeRules.land.zones`): nothing at the treeline and below, everything at
+the snowline, and no pass at all in a country whose tops carry no snow. As
+the road climbs, the canopy goes out of the hush with the trees, the herd is
+left behind on the alm, and the marmots come closer.
 
 Two rules keep the world a world. It is QUIET — the world bank's ceiling is a
 third of the car's. And it is THINNED BY SPEED: every call fades with `air`
@@ -312,10 +335,11 @@ hears at the start line, in a hairpin, and in the moment after a crash.
 
 ## The scores
 
-Seven tracker arrangements, all looping, and a stage's is picked by
+Eight tracker arrangements, all looping, and a stage's is picked by
 `music-pick.ts` from its country, its sky and the shape of its road — the
 shape first (a circuit and an endless stage each have their own), then the
-country, then the taiga's sky:
+country (the desert and the alpine each keep one score whatever the sky
+does), then the taiga's sky:
 
 | Id        | Title           | Where                            | Loop            |
 | --------- | --------------- | -------------------------------- | --------------- |
@@ -324,8 +348,16 @@ country, then the taiga's sky:
 | `spruce`  | BLACK SPRUCE    | The taiga in rain or a storm     | 140 bpm, ~96 s  |
 | `polar`   | MIDNIGHT SUN    | The taiga at dawn, dusk or night | 118 bpm, ~114 s |
 | `desert`  | SALT PAN        | The desert, whatever the sky     | 126 bpm, ~107 s |
+| `alpine`  | SNOWLINE        | The alpine, whatever the sky     | 120 bpm, ~96 s  |
 | `circuit` | SHORT CIRCUIT   | Any circuit stage                | 160 bpm, ~84 s  |
 | `endless` | LONG HAUL       | Any endless stage                | 132 bpm, ~131 s |
+
+SNOWLINE is the cold one: E dorian, three sawtooth pads voiced an octave over
+every other score's in fifths and ninths with no third in the low pair, a
+glass bell dripping in three over four under them, a plucked bass that is
+absent for half the loop (the low end is the engine's), and a pulse that
+climbs from a heartbeat kick on the grid to four to the floor in the chorus
+and falls back to nothing in the break.
 
 A score is instruments (named patches), patterns (sections of note tokens on a
 sixteenth-note grid) and an order (the arrangement, which loops), built over
@@ -381,8 +413,9 @@ sequencer with a per-voice mute, the continuous beds under sliders for revs,
 load, speed, how hard it is cornering, how sideways it has gone, the
 wheelspin, the weather and the surface, a row of SEATS so the mix can be heard
 from every camera, the world under its own sliders (the country, the hour, a
-paddock, a train), and every sound in the three banks on a button beside the
-description it was written against. It is the only honest way to judge a
+paddock, a train, how far above the treeline, how near water), and every
+sound in the three banks on a button beside the description it was written
+against. It is the only honest way to judge a
 continuous sound, and the only way a reviewer can hear a change at all.
 
 `tests/audio_test.ts` holds the rest: every event routes to a sound the bank
@@ -391,9 +424,11 @@ stay quieter than the car, every score flattens with every token a real note
 and comes in inside its length bounds with no two sections the same density,
 every pick is a score that exists, the engine works harder under load and goes
 dark in the cabin, the tyre bed stays quiet on a straight and quietest of all
-on tarmac, sings there from the cornering load alone and digs on gravel only
-on a slide or a lit axle, the world has a roster per country and hour that is
-thinned to nothing by speed, the bed builds its layers once and steers them
+on tarmac, sings there from the cornering load alone, digs on gravel only
+on a slide or a lit axle and squeaks on snow only on a real one, the world
+has a roster per country, hour and height that is thinned to nothing by
+speed and a pass wind that only blows above the treeline, the bed builds its
+layers once and steers them
 every frame, books nothing ahead, rebuilds them on a replaced context, counts
 the lights once each, crackles once per lift and works the wipers only from
 inside the car — and every cutoff, authored or steered, stays under the

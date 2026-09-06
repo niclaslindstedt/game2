@@ -16,10 +16,17 @@ import type {
   StageShape,
   TurnSeverity,
 } from "./rules.ts";
-import { SAMPLE_STEP, STAGE_RULES as R, resolveKnobs, roadWidthOf } from "./rules.ts";
+import {
+  SAMPLE_STEP,
+  STAGE_RULES as R,
+  followGradeOf,
+  knobScale,
+  resolveKnobs,
+  roadWidthOf,
+} from "./rules.ts";
 import { generateStage, layStageHighways } from "./generate.ts";
 import { createStageStream, type StageStream } from "./endless.ts";
-import { straightPart } from "./search.ts";
+import { boredAt, straightPart, type Bore } from "./search.ts";
 import type { ArenaPlan } from "./arena.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
@@ -66,12 +73,13 @@ import { drawSchedule, joinRailLine, type RailCrossing } from "./railway.ts";
  * naming one of them. Which loose surface a country's roads are is the
  * biome's (`BiomeRules.loose`); the physics tells them apart in
  * `TUNING.surfaces`. */
-export type Surface = "gravel" | "sand" | "asphalt" | "water";
+export type Surface = "gravel" | "sand" | "asphalt" | "water" | "snow";
 
-/** A road that was BLADED rather than laid: graded stone or graded sand,
- * as against tarmac, a deck or a ford. */
+/** A road that was BLADED rather than laid: graded stone or graded sand —
+ * or the packed snow lying over either above the snowline (R47) — as
+ * against tarmac, a deck or a ford. */
 export function isLoose(surface: Surface): boolean {
-  return surface === "gravel" || surface === "sand";
+  return surface === "gravel" || surface === "sand" || surface === "snow";
 }
 
 /** What carries a bridge over its water — everything except wading it. */
@@ -152,6 +160,10 @@ export type TrackSample = {
    * a channel of water under it instead of ground, and the kind says what
    * carries it — trunks and planks, or concrete piers (R13). */
   deck: BridgeDeck | null;
+  /** R47 — true where the road is BORED: the country stands over it
+   * untouched, the terrain shapes nothing off this sample, its walls are
+   * solid and the renderer lines it. Never together with a deck. */
+  tunnel: boolean;
   /** How proud of the surrounding ground the road mat stands here, m —
    * zero on gravel, up to `ROAD_CROSS.asphaltLift` on a paved run, ramped
    * through the joint between the two. The verge beside the road, and the
@@ -884,6 +896,10 @@ function createCompiler(
    * the clamp is a property of the ROAD and the lag a property of the
    * builder — two rules, not one number doing both jobs badly. */
   const F = R.elevation.follow;
+  /** R47 — the steepest the road runs in this country. */
+  const grade = followGradeOf(track.knobs);
+  /** R47 — the country's zones, for the snowline the road goes under. */
+  const zones = biome.land.zones;
   const buildable = (x: number, z: number, roll: number): number => buildableAt(land, x, z, roll);
   if (followsLand) cursor.baseY = buildable(0, 0, rolling(0));
 
@@ -894,9 +910,13 @@ function createCompiler(
     z: number,
     step: number,
     roll: number,
+    /** R47 — inside a bore: the road follows nothing but its own line,
+     * and eases to level at the crest rule's rate. */
+    bored = false,
   ): { base: number; slope: number } => {
     if (!followsLand) return { base, slope: 0 };
-    const ground = buildable(x, z, roll);
+    const ground = bored ? base : buildable(x, z, roll);
+    const cap = bored ? R.tunnel.level : grade;
     const want = base + (ground - base) * (1 - Math.exp(-step / F.lag));
     // The gradient the road would like to be on here, then the two clamps:
     // how steep it may be, and how fast that may CHANGE. The second is what
@@ -906,8 +926,8 @@ function createCompiler(
     const swing = F.crest * step;
     if (next > slope + swing) next = slope + swing;
     else if (next < slope - swing) next = slope - swing;
-    if (next > F.grade) next = F.grade;
-    else if (next < -F.grade) next = -F.grade;
+    if (next > cap) next = cap;
+    else if (next < -cap) next = -cap;
     return { base: base + next * step, slope: next };
   };
   let openNote: Pacenote | null = null;
@@ -927,12 +947,28 @@ function createCompiler(
   // gravel and meets its first junction where the field asks for one — and
   // a BORROWED stage always starts on gravel, because the route has to go
   // and find a road before it can be driving on one.
-  let pavedNow = borrowed ? false : paving.pavedAt(0);
+  /** R47 — a mountain road is sealed BY HEIGHT: the pass is tarmac from
+   * the valley up to a line the `asphalt` dial raises, and the rally's own
+   * gravel above it. Null in every other country, where the paving field
+   * (or the search's borrows) says what is sealed. */
+  const sealBelow =
+    biome.land.massif !== null && track.knobs.asphalt >= R.paving.floor
+      ? knobScale(track.knobs.asphalt, {
+          min: zones.rock.from,
+          max: (zones.snow ?? zones.rock.to) + R.paving.sealAbove,
+        })
+      : null;
+  /** Whether the road WANTS to be sealed at an arc position, standing at a
+   * crown height — the paving field's word, or the mountain's line. */
+  const wantsSeal = (s: number, crown: number): boolean =>
+    sealBelow !== null ? crown < sealBelow : paving.pavedAt(s);
+  let pavedNow = borrowed ? false : wantsSeal(0, cursor.baseY + rolling(0));
   /** R20 — is there gravel on this stage at all? At the top of the
    * `asphalt` dial the whole route is a public road, which is a different
    * kind of event and not a borrow, so the rule that keeps hairpins off
-   * borrowed tarmac has nothing to say about it. */
-  const mixedSurface = track.knobs.asphalt <= 1 - R.paving.floor;
+   * borrowed tarmac has nothing to say about it. Nor does it in a mountain
+   * country (R47): a pass road is the rally's own, hairpins and all. */
+  const mixedSurface = track.knobs.asphalt <= 1 - R.paving.floor && sealBelow === null;
   let flipWanted = false;
 
   /** The road's PRISTINE heights and widths, before any junction warped or
@@ -2217,7 +2253,9 @@ function createCompiler(
           flipAt = Math.min(plan.length, onMainRun(plan.radius ?? 1));
         }
       } else {
-        if (paving.pavedAt(cursor.s) !== pavedNow) flipWanted = true;
+        if (wantsSeal(cursor.s, cursor.baseY + rolling(cursor.rollS)) !== pavedNow) {
+          flipWanted = true;
+        }
         if (flipWanted && isJunctionTurn(plan, cursor, !pavedNow)) {
           flipWanted = false;
           const onMain = Math.min(plan.length, onMainRun(plan.radius ?? 1));
@@ -2284,7 +2322,7 @@ function createCompiler(
         (plan.radius ?? Infinity) < R.paving.minRadius
       ) {
         pavedNow = false;
-        flipWanted = paving.pavedAt(cursor.s);
+        flipWanted = wantsSeal(cursor.s, cursor.baseY + rolling(cursor.rollS));
       }
       // R20 — a tarmac section is a public road the rally borrows, and
       // nobody builds a launch ramp into one. A lip that would have landed
@@ -2420,6 +2458,18 @@ function createCompiler(
         base: number;
         slope: number;
       }[] = [];
+      // R47 — the bore the search found on this straight, walked as the
+      // search walked it: from the plan's own portal to its own portal.
+      const bore: Bore | null =
+        built.feature === "tunnel" &&
+        built.featureStart !== undefined &&
+        built.featureEnd !== undefined
+          ? {
+              from: cursor.s + built.featureStart,
+              to: cursor.s + built.featureEnd,
+              land: land.heightAt,
+            }
+          : null;
       {
         let h = cursor.heading;
         let px = cursor.x;
@@ -2434,7 +2484,8 @@ function createCompiler(
           pz += Math.cos(h) * step;
           ps += step;
           pr += step * straightness(curvature);
-          const next = followLand(baseY, baseSlope, px, pz, step, rolling(pr));
+          const bored = bore !== null && boredAt(bore, ps, px, pz, baseY);
+          const next = followLand(baseY, baseSlope, px, pz, step, rolling(pr), bored);
           baseY = next.base;
           baseSlope = next.slope;
           path.push({ x: px, z: pz, heading: h, s: ps, base: baseY, slope: baseSlope });
@@ -2523,16 +2574,37 @@ function createCompiler(
         // R36 — and the road width the route spends on a public road it is
         // crossing is sealed, because it is on one.
         const paved = !ford && (pavedNow || onCrossingSeal(cursor.x, cursor.z));
+        // R47 — inside the bore the sample is a tunnel's, as long as the
+        // country stands a brow's depth over the road there: the search
+        // found the portals on a coarser profile, and where the compiled
+        // road comes out from under the shoulder a few metres before that
+        // profile said, the mouth moves back to the rock.
+        const tunnel =
+          bore !== null &&
+          built.featureStart !== undefined &&
+          built.featureEnd !== undefined &&
+          u >= built.featureStart &&
+          u <= built.featureEnd &&
+          land.heightAt(cursor.x, cursor.z) - at.base >= R.tunnel.brow;
+        const crown =
+          dip ??
+          deckY ??
+          at.base +
+            rolling(cursor.rollS) +
+            (jump ? (built.lipHeight ?? 2) : segmentElevation(built, u));
+        // R47 — ABOVE THE SNOWLINE THE ROAD IS SNOW, whatever it was laid
+        // as: a packed snow road, loose to everything about its shape and
+        // a surface of its own to the physics. Not in a bore, and not on
+        // the water or a deck over it.
+        const snowy =
+          zones.snow !== null && !tunnel && !ford && !bridge && followsLand && crown > zones.snow;
+        const surface: Surface = ford ? "water" : snowy ? "snow" : paved ? "asphalt" : loose;
         const sample: TrackSample = {
           x: cursor.x,
           z: cursor.z,
           heading: cursor.heading,
           elevation:
-            (dip ??
-              deckY ??
-              at.base +
-                rolling(cursor.rollS) +
-                (jump ? (built.lipHeight ?? 2) : segmentElevation(built, u))) +
+            crown +
             // R33 — the grain, last: a ford's flat water and a bridge's deck
             // get none (the builder returns 0 for both), so the only thing
             // it ever roughens is road.
@@ -2541,13 +2613,11 @@ function createCompiler(
             // to flat water over tens of metres (R12), and a road that dips
             // a few centimetres below the water it is easing into is water
             // standing on a rise.
-            bumps(
-              cursor.s,
-              ford ? "water" : paved ? "asphalt" : loose,
-              bridge || dip !== null || deckY !== null,
-            ),
-          surface: ford ? "water" : paved ? "asphalt" : loose,
+            // R47 — a bore is driven smooth: no grain inside it.
+            bumps(cursor.s, surface, bridge || dip !== null || deckY !== null || tunnel),
+          surface,
           deck: bridge ? ((built.crossing ?? "timber") as BridgeDeck) : null,
+          tunnel,
           lift: 0,
           jump,
           s: cursor.s,
@@ -2556,12 +2626,7 @@ function createCompiler(
           flat: 0,
           width:
             track.width *
-            widthAt(
-              cursor.s,
-              ford ? "water" : paved ? "asphalt" : loose,
-              bridge || dip !== null || deckY !== null,
-              curvature,
-            ),
+            widthAt(cursor.s, surface, bridge || dip !== null || deckY !== null, curvature),
         };
         sample.bank = bankRate(curvature, sample);
         track.samples.push(sample);
@@ -2569,7 +2634,9 @@ function createCompiler(
         rawWidth.push(sample.width);
         bareWidth.push(sample.width);
         bareBank.push(sample.bank);
-        if (checkpointDue >= 0 && cursor.s >= checkpointDue) {
+        // R47 — a board stands beside the road, and in a bore there is no
+        // beside: a split due inside one waits for the far portal.
+        if (checkpointDue >= 0 && cursor.s >= checkpointDue && !tunnel) {
           track.checkpoints.push({ s: cursor.s, index: track.samples.length - 1 });
           checkpointS = cursor.s;
           checkpointDue = -1;
@@ -2688,6 +2755,7 @@ function createCompiler(
     const branches = branchClearance([...track.spurs, ...track.publicRoads]);
     const placed = placeTowns({
       seed: track.seed,
+      houses: biome.houses,
       width: track.width,
       samples: track.samples,
       from: townFrom,
@@ -2744,6 +2812,7 @@ function createCompiler(
       width: track.width,
       loose,
       farms: biome.farms,
+      houses: biome.houses,
       samples: track.samples,
       from: homesteadFrom,
       to,
@@ -3097,6 +3166,8 @@ function planCountry(
   plans: SegmentPlan[],
   width: number,
   rolling: (s: number) => number,
+  /** R47 — the dials, for the grade this country's roads follow at. */
+  knobs: StageKnobs,
   /** R34 — the ground the road will be laid ALONG. Without it the trial
    * walks a road at its roll alone, which on any stage with relief in it is
    * tens of metres from where the real one ends up: `shelfHolds` then
@@ -3117,12 +3188,18 @@ function planCountry(
   // grade and crest clamps the compiler walks with, so the trial's heights
   // track the real road's rather than the bare hillside's.
   const F = R.elevation.follow;
+  const grade = followGradeOf(knobs);
   let base = buildableAt(land, 0, 0, rolling(0));
   let slope = 0;
   for (const plan of plans) {
     const curvature = plan.kind === "turn" && plan.radius ? (plan.dir ?? 1) / plan.radius : 0;
     const steps = Math.max(1, Math.ceil(plan.length / PLAN_STEP));
     const step = plan.length / steps;
+    // R47 — a bored straight is walked level through its bore here too.
+    const bore: Bore | null =
+      plan.feature === "tunnel" && plan.featureStart !== undefined && plan.featureEnd !== undefined
+        ? { from: s + plan.featureStart, to: s + plan.featureEnd, land: land.heightAt }
+        : null;
     for (let i = 0; i < steps; i++) {
       heading += curvature * step;
       x += Math.sin(heading) * step;
@@ -3134,14 +3211,16 @@ function planCountry(
       if (z < box.minZ) box.minZ = z;
       if (z > box.maxZ) box.maxZ = z;
       const roll = rolling(rollS);
-      const ground = buildableAt(land, x, z, roll);
+      const bored = bore !== null && boredAt(bore, s, x, z, base);
+      const ground = bored ? base : buildableAt(land, x, z, roll);
+      const cap = bored ? R.tunnel.level : grade;
       const want = base + (ground - base) * (1 - Math.exp(-step / F.lag));
       let next = (want - base) / step;
       const swing = F.crest * step;
       if (next > slope + swing) next = slope + swing;
       else if (next < slope - swing) next = slope - swing;
-      if (next > F.grade) next = F.grade;
-      else if (next < -F.grade) next = -F.grade;
+      if (next > cap) next = cap;
+      else if (next < -cap) next = -cap;
       base += next * step;
       slope = next;
       const point = { x, z, y: base + roll, s };
@@ -3396,10 +3475,11 @@ export function compileStage(
       paving,
       bumps,
       widthAt,
-      planCountry(plans, track.width, rolling, createLandField(seed, dials)),
+      planCountry(plans, track.width, rolling, dials, createLandField(seed, dials)),
       true,
-      // R17 — a sprint is routed onto the tarmac; a circuit is not, yet.
-      !circuit,
+      // R17 — a sprint is routed onto the tarmac; a circuit is not, yet —
+      // and neither is a mountain stage (R47), whose seal is a height.
+      !circuit && biomeRules(dials.biome).land.massif === null,
     ).append(plans);
     return track;
   }

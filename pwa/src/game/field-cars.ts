@@ -64,7 +64,7 @@ import { plumeGround } from "./ground-tint.ts";
 import { createNameTag, type NameTag } from "./name-tag.ts";
 import { createPlume } from "./plume.ts";
 import { onRoad, type RivalRun } from "./standings.ts";
-import { rockAt } from "./terrain.ts";
+import { rockAt, snowAt } from "./terrain.ts";
 
 /** How near a crew has to come before their car is generated, m. Wider than
  * the range they are drawn at, so the build lands while they are still out
@@ -432,8 +432,12 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           state,
           dt,
           towedFx,
-          plumeGround(state.track.knobs.biome, state.surface, wetGround, () =>
-            rockAt(state.terrain.groundAt, state.car.x, state.car.z),
+          plumeGround(
+            state.track.knobs.biome,
+            state.surface,
+            wetGround,
+            () => rockAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome),
+            () => snowAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome),
           ),
         );
       }

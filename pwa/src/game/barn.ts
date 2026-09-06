@@ -24,6 +24,7 @@
 import * as THREE from "three";
 import { BARN_STOREY, type HousePlan } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
+import { CHALET_PAINT } from "./chalet.ts";
 import { box, gableRoof, HOUSE, houseMaterial, PAINT, ROOF, windowOn } from "./house.ts";
 
 const TINT = {
@@ -128,9 +129,16 @@ export function barnGeometry(plan: HousePlan, rand: () => number): THREE.BufferG
   const w = plan.width;
   const d = plan.depth;
   const S = BARN.storey;
-  const loft = plan.walls === "grey" ? TINT.tar : PAINT[plan.walls];
-  const trim = plan.walls === "white" ? PAINT.trimOnWhite : PAINT.trim;
-  const stoneByre = plan.detail < 0.45;
+  // R40 — an alpine barn is a STADEL: the loft in the chalet's own dark
+  // larch over a stone byre, whatever paint the plan rolled.
+  const stadel = plan.style === "chalet";
+  const loft = stadel ? CHALET_PAINT.timber : plan.walls === "grey" ? TINT.tar : PAINT[plan.walls];
+  const trim = stadel
+    ? CHALET_PAINT.logEnd
+    : plan.walls === "white"
+      ? PAINT.trimOnWhite
+      : PAINT.trim;
+  const stoneByre = stadel || plan.detail < 0.45;
   const byre = stoneByre ? TINT.stone : TINT.render;
 
   // The plinth, the byre and the loft: three boxes, the byre a hand

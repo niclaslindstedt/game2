@@ -209,8 +209,9 @@ npm run sim -- --shape circuit --laps 5
 npm run sim -- --weather storm        # race in rain/storm wind
 npm run sim -- --gearbox manual       # drive the bot with a manual box
 npm run sim -- --biome desert         # the other country (R40): sand roads, dunes, no water
+npm run sim -- --biome alpine         # the mountains (R47): hairpins, tunnels, snow above the snowline
 npm run sim -- --asphalt 0.8          # the generator's dials, each 0..1:
-                                      # --elevation --water --trees --asphalt
+                                      # --elevation --water --trees --asphalt --peaks (alpine only)
 npm run sim -- --sweep                # the ROSTER BALANCE table (see below)
 npm run sim -- --field                # the CAMPAIGN FIELD table (see below)
 make heat                             # the HEAT table: the whole grid at once (see below)

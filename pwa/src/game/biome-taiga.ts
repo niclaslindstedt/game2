@@ -354,4 +354,6 @@ export const TAIGA: Biome = {
   // difference between rock that has been there and rock that was PUT
   // there is most of what makes a hillside read as old.
   mossyStone: 0.45,
+  // Graded stone off the shield: a warm brown.
+  grit: 0xb29268,
 };

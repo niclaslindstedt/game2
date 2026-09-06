@@ -11,7 +11,8 @@
 //   WIND     how fast the air is going past, which is what sells speed
 //   SCRUB    the drift: a tyre asked to go somewhere it is not pointing —
 //            and the wheelspin, which is the same tyre asked to go faster
-//            than the road under it
+//            than the road under it. It digs on a loose road, sings on a
+//            sealed one and squeaks on snow.
 //   RAIN     the weather, which is heard whatever the wheels are doing
 //   GALE     the wind that is not the car's — the only layer here a PARKED
 //            car in a storm can still hear
@@ -146,6 +147,21 @@ export const SURFACES: Record<string, SurfaceVoice> = {
     corner: 3.6,
     body: { level: 0.006, hz: 700, climb: 0.5 },
   },
+  // SNOW (R47, the alpine road above its snowline): packed and polished by
+  // every car that came through before this one. Nothing is thrown — the
+  // crust takes the tread and gives it back — so there is no open grain and
+  // no top end at all: a soft hiss the cold keeps low, with the granular
+  // CRUNCH of the crust giving way penned into a band under it. Quieter
+  // than gravel whichever way the car is pointing, because nothing loose is
+  // rattling; what a snow road has is the SQUEAK, which lives in the scrub.
+  snow: {
+    color: "pink",
+    hz: 300,
+    level: 0.0045,
+    corner: 4.4,
+    body: { level: 0.0028, hz: 520, climb: 0.35 },
+    tear: { level: 0.002, hz: 950, climb: 0.4 },
+  },
   // Water: a hiss with weight behind it and no crunch at all. Barely cares
   // which way the car is pointing — a ford is loud because it is being
   // ploughed through, not because it is being cornered on.
@@ -167,7 +183,7 @@ export const SURFACES: Record<string, SurfaceVoice> = {
 };
 
 /**
- * THE SAME FOUR SURFACES WITH WATER STANDING ON THEM.
+ * THE SAME SURFACES WITH WATER STANDING ON THEM.
  *
  * Not a filter over the dry voice — a different surface, because that is
  * what rain makes of one. Two things move on every row and they move
@@ -197,6 +213,17 @@ export const WET_SURFACES: Record<string, SurfaceVoice> = {
     level: 0.009,
     corner: 2.2,
     body: { level: 0.002, hz: 600, climb: 0.3 },
+  },
+  // SLUSH: rain on a snow road. The crust stops crunching and starts
+  // slopping, the whole voice drops and thickens, and it is louder pointed
+  // straight because a tyre is now pushing water out of the snow all the
+  // time — so, like every wet row, it has less left to say in the corner.
+  snow: {
+    color: "brown",
+    hz: 220,
+    level: 0.0075,
+    corner: 2.6,
+    body: { level: 0.004, hz: 430, climb: 0.3 },
   },
   // Wet tarmac: the one surface the rain makes BRIGHTER. A sealed road
   // holds a film of water the tread has to cut through, and that hiss is
@@ -511,6 +538,26 @@ export function roadTargets(voice: RoadVoice, mix: RoadMix): Record<RoadLayer, L
   // more sideways the car is, with the stones spraying off the top of it.
   const scrub = slip * Math.max(roll, spin);
   if (scrub <= 0) return out;
+  if (surface === "snow") {
+    // ON SNOW A TYRE SQUEAKS. A slide on packed snow is a soft, muffled
+    // version of the gravel dig — the crust being shoved rather than stones
+    // being thrown, with a plume of powder instead of a spray — and over it,
+    // once the car is well sideways, the squeak: dry rubber skating over a
+    // cold crust, a narrow band up around 2 kHz that comes in on the square
+    // of the slide so a twitch says nothing and a full slide sings. SLUSH
+    // DOES NOT SQUEAK, for the same reason a wet tyre does not sing.
+    out.dig = { level: 0.05 * scrub * mix.scrub, cutoff: 420 + 700 * scrub };
+    out.spray = {
+      level: 0.012 * scrub * mix.scrub,
+      cutoff: 1300 + 700 * scrub,
+      pan: Math.max(-0.6, Math.min(0.6, -sideways / 12)),
+    };
+    out.sing = {
+      level: 0.03 * scrub * scrub * (1 - 0.7 * wet) * mix.scrub,
+      cutoff: 1700 + 600 * scrub,
+    };
+    return out;
+  }
   out.dig = { level: 0.08 * scrub * mix.scrub, cutoff: 700 + 1300 * scrub };
   out.spray = {
     level: 0.03 * scrub * mix.scrub,

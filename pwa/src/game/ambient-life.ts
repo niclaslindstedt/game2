@@ -125,6 +125,24 @@ const LIFE: Record<BiomeId, Life> = {
     traffic: false,
     lizards: true,
   },
+  // R47 — ALPINE CHOUGHS: a big flock of them, black, acrobatic, wheeling
+  // fast and close round the rock with quick deep beats and long tumbling
+  // glides, and a golden eagle far above them. Airliners cross the Alps
+  // all day.
+  alpine: {
+    birds: 11,
+    span: 1.4,
+    beatHz: 5,
+    stroke: 0.9,
+    beating: 0.55,
+    height: 45,
+    radius: 38,
+    turn: 0.32,
+    raptors: 2,
+    raptorsOver: 90,
+    traffic: true,
+    lizards: false,
+  },
 };
 
 export type AmbientLife = {

@@ -399,7 +399,41 @@ const DESERT_LOOKS: Looks = {
   },
 };
 
-const LOOKS: Record<BiomeId, Looks> = { taiga: TAIGA_LOOKS, desert: DESERT_LOOKS };
+/** R47 — THE MOUNTAIN'S WEATHER. Its `rain` is a cloud base come down onto
+ * the flanks: a low grey lid, the far peaks gone, the road running into
+ * mist a few hundred metres ahead — the same wet as the taiga's but with
+ * the ceiling on the mountain rather than over it, because a mountain road
+ * is IN the weather the valley only sees from below. Its `storm` is a
+ * summer thunderstorm on the pass: black, close, thunder rolling round the
+ * cirque, and rain hard enough to run across the road. */
+const ALPINE_LOOKS: Looks = {
+  rain: {
+    ...TAIGA_LOOKS.rain,
+    grey: 0xb9c1c8,
+    mix: 0.5,
+    fogNear: [0.55, 0.3],
+    fogFar: [0.6, 0.32],
+    fogDeck: 0.85,
+    base: [240, 120],
+    relief: [0.25, 0.5],
+    through: [0.3, 0.1],
+  },
+  storm: {
+    ...TAIGA_LOOKS.storm,
+    grey: 0x4a5058,
+    fogNear: [0.42, 0.22],
+    fogFar: [0.46, 0.24],
+    base: [180, 95],
+    relief: [0.4, 0.65],
+    thunder: [0.7, 1],
+  },
+};
+
+const LOOKS: Record<BiomeId, Looks> = {
+  taiga: TAIGA_LOOKS,
+  desert: DESERT_LOOKS,
+  alpine: ALPINE_LOOKS,
+};
 
 /** R40 — what a COUNTRY does to the clear sky over it, before any weather
  * is put on top. The presets were authored for the taiga; the desert's air
@@ -438,6 +472,23 @@ const CASTS: Record<BiomeId, Cast | null> = {
     // clouds over the whole ring only read as a rendering fault.
     cloudCover: 0.92,
     cloudShare: 0.3,
+  },
+  // R47 — THE MOUNTAIN AIR: thin, dry and clear, so the sky is a deeper
+  // blue overhead and the horizon reads further; the light is cooler and
+  // harder than the forest's, and what bounces back up off the ground is
+  // pale rock and snow as much as grass. Fewer clouds than the taiga and
+  // more than the desert, each one sharp-edged: fair-weather cumulus
+  // building over the peaks.
+  alpine: {
+    horizon: [0xd6e4f2, 0.22],
+    zenith: [0x1e56b8, 0.3],
+    fog: [0xd0dceb, 0.25],
+    fogReach: 1.45,
+    sun: [0xfff6e6, 0.25],
+    sunStrength: 1.08,
+    hemiGround: [0xb9bcb4, 0.35],
+    cloudCover: 1,
+    cloudShare: 0.6,
   },
 };
 

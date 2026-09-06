@@ -344,7 +344,106 @@ const DESERT: CampaignLocation = {
   ],
 };
 
-export const LOCATIONS: CampaignLocation[] = [TAIGA, DESERT];
+/** The Alpine ladder — the third country (R47), opened by winning the
+ * desert's table. The same six rungs in the same order. Its seeds were
+ * picked from a sweep of 1..40 per band at the knobs every level here
+ * carries (`elevation` and `steepness` at 0.6, `asphalt` at 0.5: a high
+ * massif, a pass sealed to halfway up the rock band), scored on how far the
+ * stage comes DOWN, its hairpins and its tunnels, then confirmed with the
+ * bot sim — every car finishes every one, no respawns, at about 90 km/h:
+ *
+ *   seed 17 short    1.87 km   drop  55 m  1 hairpin   1 tunnel    57% snow
+ *   seed 27 medium   5.40 km   drop 218 m  4 hairpins  2 tunnels   36% tarmac
+ *   seed 30 long     7.69 km   drop 240 m  4 hairpins  2 tunnels   80% tarmac
+ *   seed 27 xlong   10.70 km   drop 362 m  7 hairpins  3 tunnels   the valley floor
+ *
+ * The circuits close on themselves and so stay up on the shoulder they
+ * start on — which makes the first of them an ICE RING, three laps on snow:
+ *
+ *   seed 34 medium circuit  1.69 km × 3  3 hairpins  99% snow
+ *   seed 35 long   circuit  2.77 km × 3  3 hairpins  38% snow, a tunnel-less pass
+ *
+ * The conditions come down the mountain with the road: clear on the pass,
+ * the cloud on the flanks by the long stage, a storm on the finale. */
+const ALPINE_KNOBS = { elevation: 0.6, steepness: 0.6, asphalt: 0.5 };
+const ALPINE: CampaignLocation = {
+  id: "alpine",
+  name: "Alps",
+  blurb: "Snow, rock and a road that comes down",
+  biome: "alpine",
+  levels: [
+    {
+      id: "alpine-1",
+      name: "The Col",
+      seed: 17,
+      length: "short",
+      knobs: ALPINE_KNOBS,
+      timeOfDay: "day",
+      weather: "clear",
+      season: "summer",
+      blurb: "Snow on the road, a tunnel through the shoulder",
+    },
+    {
+      id: "alpine-2",
+      name: "Switchbacks",
+      seed: 27,
+      length: "medium",
+      knobs: ALPINE_KNOBS,
+      timeOfDay: "dawn",
+      weather: "clear",
+      season: "spring",
+      blurb: "Four hairpins down a face, then the tarmac",
+    },
+    {
+      id: "alpine-3",
+      name: "Cloud Line",
+      seed: 30,
+      length: "long",
+      knobs: ALPINE_KNOBS,
+      timeOfDay: "dusk",
+      weather: "rain",
+      season: "autumn",
+      blurb: "The pass in the cloud, the lake somewhere below",
+    },
+    {
+      id: "alpine-4",
+      name: "Summit to Valley",
+      seed: 27,
+      length: "xlong",
+      knobs: ALPINE_KNOBS,
+      timeOfDay: "dusk",
+      weather: "storm",
+      season: "summer",
+      blurb: "Three hundred and sixty metres down, in a storm",
+    },
+    {
+      id: "alpine-5",
+      name: "Ice Ring",
+      seed: 34,
+      length: "medium",
+      shape: "circuit",
+      knobs: ALPINE_KNOBS,
+      timeOfDay: "day",
+      weather: "clear",
+      season: "spring",
+      blurb: "Three laps on packed snow",
+    },
+    {
+      id: "alpine-6",
+      name: "Alp Circuit",
+      seed: 35,
+      length: "long",
+      shape: "circuit",
+      knobs: ALPINE_KNOBS,
+      timeOfDay: "dusk",
+      weather: "clear",
+      season: "autumn",
+      blurb: "Three laps off the snow and back up to it",
+    },
+  ],
+};
+
+export const LOCATIONS: CampaignLocation[] = [TAIGA, DESERT, ALPINE];
 
 export function locationById(id: string): CampaignLocation {
   return LOCATIONS.find((l) => l.id === id) ?? LOCATIONS[0];

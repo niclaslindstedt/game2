@@ -87,4 +87,34 @@ export const STAGE_ROUTES: Record<string, StageRoute> = {
     aspect: 1.0495,
     spec: { seed: 23, length: "long", shape: "circuit" },
   },
+  "alpine-1": {
+    d: "AP4AzgPGCcETvC+0OLBTjVeLXYpsi3aPeJN2l3ebgqKHp4erhbGGtIq3lLyZwJjElMh/znfTddZ12nfdfOGH5ZXn6uj55f3i/9/+3PzZ7tHozObG6b3muNy0w668q7int6O7m7qXtpOrjKiHrGaoYJ5ahFR5TwwA",
+    aspect: 0.3867,
+    spec: { seed: 17, length: "short", shape: "sprint" },
+  },
+  "alpine-2": {
+    d: "/zT/Ef0M9gH0APAB5wjjCN0G2AnWENod3SHkJecp6i/pNOc33zzSVMtZxlvAWrtXtlKyUKRTn1adXaF2qHuqf6aQopWdl5mWlI6Rjo6PjJOLoYmjhKKAnH2beZt1nnSrda95sn+yg7OIu4i+edZ43Xvneux372X7Y/tg+l7vW+xX6lHrS+5H8kH9PP80/Sr2H/Yc9BrwGuwc6SLkKd1B1UjQTs5Ry1LIUcVLwEm8VKFSmVKQT4tIiUCOOo41iy+AK38ofwCo",
+    aspect: 1.0347,
+    spec: { seed: 27, length: "medium", shape: "sprint" },
+  },
+  "alpine-3": {
+    d: "OrA6lUeFRYM8fTx7QHhBdTlrOWc6YzlfJ1IiUR1SA2MAZwJsBm4ObhJyFoMUhRGIEIoTkBWVGJchmyWiKaUrpyqrLK8rsiW3JbsjvRu/GMEWxBfLEc4Q0Rv9Hf8h/yb8LfUt8yftJusp5zDkMt452z/VTdVR01PQVMxTxVa/VrpStUqySa5Lqk+oYqpop2qkaaFmnl2bXJhdlmOUa5V0kneTfZiFmZGXlZOVkJSOiYmEgnh6dnd1cG9sa2dlY2NRZU5rS3lLfk2BUX1XfluEYIdmjGiQbJNtoGqrbbFstmq8YsdeylvLWMlVwU/CR7pBtDaxNqs5pTmhN50xlS+SLJEpkSCMGo4XkxSVEZQNkAiRA5YBnQCjAaoFrgWzBbgBuwHNDM4PwyDJJc0t1zPaPeBF5EfqRu5E/x0=",
+    aspect: 0.7273,
+    spec: { seed: 30, length: "long", shape: "sprint" },
+  },
+  "alpine-4": {
+    d: "1RzUCc4BygHDBLsDtwW2CLkPwxbFGcQcvSCyLa4wpTCbK40tizGOP5NBlESRTo1QilGHT4VMgUt+Tn1VfFd4V3VTclJuU2xVbFttXXBfd197ZG9yb3Zxe3B+YIZchFyAWn5UfUx/RoZDhz2HNoQygx+IHIocjxOVEZoVnh2dIZ8lrCSuIrAashK4DrgJtgW1AbcAugXICMkQyBjLH8wgziDSItUr2C/bMN0u4S7jMOU05jnkQeRF4ULYRtFGz0TMP8k+xz/DRL9FvEK5PLg7tUCpQ6hHqE+tWa5hsmuzc7p0vXO/cMFmv2HBYcVm0mzTd9F614TaiN+N4o/hkN+T3Z3fzv7T/9b92Pnc9Nvy1+/W683oy+PI4cXhv+O74rnguNuuz6bMocaXxJG5krSPsI+tkauWqJihnKGjpKmjrKG1lbmUvJe8ncGexKDHrs21zbjKu8q+z8DXvei+6sLwxv/h",
+    aspect: 0.7297,
+    spec: { seed: 27, length: "xlong", shape: "sprint" },
+  },
+  "alpine-5": {
+    d: "/8L/ef1y+GryZeph42DbYHx4dHlsdmZwZWxlaIZAiTWIK4AfdBRqD0wCRQA7ADMDLAkoECcXKB4sJDUsODE7OTo/N0UzSyxPH1UZXBhgGGUigiGIH4wbkA6VBpsBogCpDe8P8xT3Hfoo+S/1ZsF0u4O5k7yhwtn74//w/vr5/fb/8f/D",
+    aspect: 0.7078,
+    spec: { seed: 34, length: "medium", shape: "circuit" },
+  },
+  "alpine-6": {
+    d: "mauZiJ2ApXrjXOZY5VbfU9BOwUypS5tIkUGPPo86kjaXM9Yb3hbiEeEM3AfUBMoCvgGmBZgFjQR9AXAAHg0YDxYRFhQjHSUgJyctLTsyYDhlOmY9YkFVRE5ITEtKU0RZBXcBegB9A4EMhT2FRYdJikuNS5BGlT+YKp4ioh2mGa0XvRjDG8ggzCjRMtVH2GXZct114Hbjbfdu+nT9hf+c+6n7xv/V/+f77vfx8/Lx8e7k5OLg4t3k2ejW+c/9zP/I/MP0v+m9wLu2vajGncaZw5mr",
+    aspect: 0.4114,
+    spec: { seed: 35, length: "long", shape: "circuit" },
+  },
 };

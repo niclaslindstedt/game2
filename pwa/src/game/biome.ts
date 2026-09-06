@@ -26,6 +26,7 @@
 import { biomeRules, type BiomeId } from "@engine";
 import type { Season } from "@engine";
 
+import { ALPINE } from "./biome-alpine.ts";
 import { DESERT } from "./biome-desert.ts";
 import { TAIGA } from "./biome-taiga.ts";
 
@@ -135,10 +136,16 @@ export type Biome = {
   /** The share of the wild's loose stone that has gone over to moss. Most
    * of a boreal hillside; none of a desert's. */
   mossyStone: number;
+  /** R40 — the colour of the LOOSE ROAD's own stone, hex: what a bladed
+   * road in this country is made of and what a wheel throws off it. The
+   * shield's brown gravel, a desert's bleached sand, a mountain's grey
+   * chippings. The road's grain texture and the dust are both built from
+   * it. */
+  grit: number;
 };
 
 /** Every biome the renderer can dress, by the engine's id. */
-export const BIOMES: Record<BiomeId, Biome> = { taiga: TAIGA, desert: DESERT };
+export const BIOMES: Record<BiomeId, Biome> = { taiga: TAIGA, desert: DESERT, alpine: ALPINE };
 
 /** The biome a stage is set in — the one its dials name (`knobs.biome`).
  * An id this build does not know is the taiga, exactly as the engine

@@ -62,29 +62,92 @@ export type Profile = {
 };
 
 /** The road's base after one probe step of `step` m toward `ground`, with
- * the roll's arc advanced for a segment of `curvature`. */
-export function stepProfile(profile: Profile, ground: number, step: number, curvature = 0): number {
+ * the roll's arc advanced for a segment of `curvature`. `grade` is the
+ * steepest the road may run here (`followGradeOf` for the country's own;
+ * `tunnel.level` inside a bore). */
+export function stepProfile(
+  profile: Profile,
+  ground: number,
+  step: number,
+  curvature = 0,
+  grade: number = R.elevation.follow.grade,
+): number {
   const F = R.elevation.follow;
   const want = profile.y + (ground - profile.y) * (1 - Math.exp(-step / F.lag));
   let next = (want - profile.y) / step;
   const swing = F.crest * step;
   if (next > profile.slope + swing) next = profile.slope + swing;
   else if (next < profile.slope - swing) next = profile.slope - swing;
-  if (next > F.grade) next = F.grade;
-  else if (next < -F.grade) next = -F.grade;
+  if (next > grade) next = grade;
+  else if (next < -grade) next = -grade;
   profile.slope = next;
   profile.y += next * step;
   profile.rollS += step * straightness(curvature);
   return profile.y;
 }
 
+/** R47 — A BORE, as the height walk sees it: from `from` metres of arc the
+ * road stops following the country and holds its line near level, and it
+ * comes out again where the bare land has dropped back to within
+ * `tunnel.depth` of the road — or at `tunnel.maxLength`, whatever the land
+ * is doing, after which the straight is a deep cut again and the rules
+ * refuse it. `to` is FOUND by the walk when it is null and recorded on it,
+ * so the search can write the exit into the plan the compiler builds from;
+ * given, it is held to, which is how the compiler walks the same bore the
+ * search found. The land is the BARE country (`land.heightAt`), because a
+ * bore is measured against the rock over it and not against the water's
+ * freeboard. */
+export type Bore = {
+  from: number;
+  to: number | null;
+  land: (x: number, z: number) => number;
+};
+
+/** One step of the walk inside, or into, a bore: whether the point at `arc`
+ * is bored, deciding the exit as it goes. Stated once for the two walks
+ * that read it — the search's and the compiler's — because a tunnel the
+ * search ended at one portal and the compiler at another is a road that
+ * comes out of the hillside a sample early. */
+export function boredAt(bore: Bore, arc: number, x: number, z: number, base: number): boolean {
+  if (arc < bore.from) return false;
+  if (bore.to !== null) return arc <= bore.to;
+  const T = R.tunnel;
+  if (arc - bore.from > T.maxLength || bore.land(x, z) - base < T.depth) {
+    bore.to = arc;
+    return false;
+  }
+  return true;
+}
+
+/** R47 — where a straight's first walk went DEEP: the local arc of the
+ * first probe point whose base stands more than `tunnel.depth` under the
+ * bare land, or null where the straight never does. The portal may stand
+ * at the very start of the straight — the corner before it is then the
+ * open cutting the road arrives through, held to the cut cap like any
+ * other road. `offLand` is the search's own measure of the base against
+ * the land, positive on fill. */
+export function boreFor(
+  from: Cursor,
+  points: Cursor[],
+  offLand: (p: Cursor) => number,
+): number | null {
+  for (const p of points) {
+    if (-offLand(p) > R.tunnel.depth) return p.arc - from.arc;
+  }
+  return null;
+}
+
 /** What the search walks the road's height WITH: the ground the road may
  * be built on at a point given the roll there (the compiler's `buildable`,
- * water's freeboard included), and the roll itself. */
+ * water's freeboard included), the roll itself, the steepest grade the
+ * country's roads run at (`followGradeOf`), and the bore the walk is in,
+ * if any (R47). */
 export type HeightWalk = {
   profile: Profile;
   groundAt: (x: number, z: number, roll: number) => number;
   rolling: (s: number) => number;
+  grade: number;
+  bore?: Bore | null;
 };
 
 /** Where a road is and which way it points — a cursor without the arc. */
@@ -433,7 +496,11 @@ export function probePoints(
       // known before the base is stepped toward that ground.
       const rollS = height.profile.rollS + step * straightness(curvature);
       const roll = height.rolling(rollS);
-      stepProfile(height.profile, height.groundAt(x, z, roll), step, curvature);
+      // R47 — inside a bore the road follows nothing: its target is its
+      // own base, so the grade decays to level at the crest rule's rate.
+      const bored = height.bore != null && boredAt(height.bore, arc, x, z, height.profile.y);
+      if (bored) stepProfile(height.profile, height.profile.y, step, curvature, R.tunnel.level);
+      else stepProfile(height.profile, height.groundAt(x, z, roll), step, curvature, height.grade);
     }
     points.push({ x, z, heading, arc, y: surface(), rollS: height?.profile.rollS });
   }
@@ -514,7 +581,20 @@ export function straightLength(rng: Rng): number {
  * the search drawing a straight, the borrow deciding how far it may follow
  * a public road, and the retreat rebuilding the run after a backtrack. */
 export function straightPart(plan: SegmentPlan): number {
-  if (plan.kind === "straight") return plan.length;
+  if (plan.kind === "straight") {
+    // R47 — a BORE is not straight run: nothing inside it is road you can
+    // see the end of, and a tunnel is the one straight a rally road is
+    // allowed to run longer than a driver would be asked to hold flat.
+    // Its approach and its run out of the far portal still count.
+    if (
+      plan.feature === "tunnel" &&
+      plan.featureStart !== undefined &&
+      plan.featureEnd !== undefined
+    ) {
+      return plan.length - (plan.featureEnd - plan.featureStart);
+    }
+    return plan.length;
+  }
   return (plan.radius ?? 0) > R.straightRun.bend ? plan.length : 0;
 }
 

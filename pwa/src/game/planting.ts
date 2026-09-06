@@ -7,11 +7,11 @@
 // road chunk carries (world.ts) and the open country beyond it (wild.ts) —
 // so both answer "what grows here" the same way.
 
-import { biomeRules, type WildObstacle } from "@engine";
+import { LAKE_Y, biomeRules, type WildObstacle } from "@engine";
 
 import type { Biome, Community, FloraMix } from "./biome.ts";
 import type { FloraPlacement } from "./flora.ts";
-import { LAKE_Y } from "./terrain.ts";
+import { plantZone } from "./ground-rules.ts";
 
 /** The community a grove-quilt index names — the quilt itself lives in the
  * ENGINE's prop field (terrain.field.groveAt), because the trunks it
@@ -55,6 +55,16 @@ const SOFT_FLORA = new Set([
   "deadBrush",
   "tumbleweed",
   "bunchGrass",
+  // The alpine's krummholz and its alp: a mountain pine is a mat of stems
+  // lying on the rock, an alpenrose is knee-high, a cairn is a heap of
+  // stones, and the flower clumps are grass. The stone pines, the flagged
+  // larch and the silver snag are the trunks.
+  "mountainPine",
+  "alpenrose",
+  "cairn",
+  "alpineGrass",
+  "gentianPatch",
+  "alpineFlowers",
 ]);
 
 /** ...and what a solid TRUNK may never be dressed as: the brush above plus
@@ -66,10 +76,13 @@ const NOT_A_TRUNK = new Set([...SOFT_FLORA, "stump", "fallenLog", "rootLog", "lo
  * stream crossing a spruce wood does not turn the wood into willows. */
 export const RIPARIAN_BAND = 14;
 
-/** Terrain altitude above which only the tough survive, m. Mirrors the
- * terrain paint's own rock line, so the flora and the ground always tell
- * the same story about how high up this is. */
-const HIGHLAND_Y = 26;
+/** Whether a mix has anything in it to plant. Above a country's snowline
+ * `mixAt` answers with nothing at all, and `pickFlora` of nothing is an id
+ * no roster builds — so everything that plants off a mix asks this first. */
+export function plantsNothing(mix: FloraMix): boolean {
+  for (const id in mix) if (mix[id] > 0) return false;
+  return true;
+}
 
 /** Where a plant stands, as much of it as decides WHAT it is. */
 export type Ground = {
@@ -81,18 +94,25 @@ export type Ground = {
   grove: number;
 };
 
-/** The mix that owns a patch of ground. Context beats community: the water
- * decides the shoreline and the stream banks, the altitude decides the
- * highland, and only the ground that is none of those grows whatever the
- * quilt says it grows. */
+/** Nothing grows here — the mix above a country's snowline. */
+const BARE: FloraMix = {};
+
+/** The mix that owns a patch of ground — the country's context for it
+ * (`plantZone`: the shore, the snow, a stream bank, the highland, or the
+ * quilt's own community), as the biome's mix for that context. */
 export function mixAt(biome: Biome, ground: Ground): FloraMix {
-  // R40 — a country with no water has no shoreline, however low its pans
-  // lie: the height test is only a shoreline where there is water to
-  // stand at.
-  if (biomeRules(biome.id).water && ground.y < LAKE_Y + 4) return biome.lakeshoreTrees;
-  if (ground.riparian) return biome.riparianTrees;
-  if (ground.y > HIGHLAND_Y) return biome.highlandTrees;
-  return communityByGrove(biome, ground.grove).trees;
+  switch (plantZone(biome.id, ground.y, ground.riparian)) {
+    case "shore":
+      return biome.lakeshoreTrees;
+    case "snow":
+      return BARE;
+    case "riparian":
+      return biome.riparianTrees;
+    case "highland":
+      return biome.highlandTrees;
+    default:
+      return communityByGrove(biome, ground.grove).trees;
+  }
 }
 
 /** A mix stripped to the species that read as solid trees (falls back to
@@ -115,8 +135,12 @@ export function softMix(mix: FloraMix): FloraMix | null {
  * it IS stays the biome's call. */
 export function treePlacement(tree: WildObstacle, biome: Biome, riparian = false): FloraPlacement {
   const mix = mixAt(biome, { y: tree.y, riparian, grove: tree.grove ?? 0 });
+  // A trunk the engine has stood above the snowline is standing there
+  // whatever the mix says; it is dressed as the highland's, which is the
+  // last thing that grew on the way up.
+  const grown = plantsNothing(mix) ? biome.highlandTrees : mix;
   return {
-    id: pickFlora(solidMix(mix), tree.roll ?? 0),
+    id: pickFlora(solidMix(grown), tree.roll ?? 0),
     x: tree.x,
     y: tree.y,
     z: tree.z,
@@ -193,7 +217,11 @@ export function understoryAround(
   const out: FloraPlacement[] = [];
   if (rng() > UNDERSTORY_SHARE) return out;
   const grove = tree.grove ?? 0;
-  const soft = softMix(mixAt(biome, { y: tree.y, riparian, grove }));
+  const mix = mixAt(biome, { y: tree.y, riparian, grove });
+  // Over the snowline there is no skirt: nothing grows there, whatever the
+  // trunk itself is doing.
+  if (plantsNothing(mix)) return out;
+  const soft = softMix(mix);
   const cover = communityByGrove(biome, grove).undergrowth ?? biome.undergrowth;
   const count = 1 + Math.floor(rng() * UNDERSTORY_MAX);
   for (let i = 0; i < count; i++) {

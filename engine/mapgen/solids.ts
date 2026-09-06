@@ -24,6 +24,9 @@
 // every other number the contact model spends does. What lives HERE is the
 // world's own material properties, beside the sizes they are computed from.
 
+import { ROAD_CROSS } from "./road.ts";
+import { STAGE_RULES as R } from "./rules.ts";
+
 /** A solid thing standing in the wild: the physics collides with it and the
  * renderer draws it — the SAME seeded placement on both sides. */
 export type WildObstacle = {
@@ -405,7 +408,83 @@ type DeckSample = {
   elevation: number;
   s: number;
   deck: unknown;
+  tunnel?: boolean;
 };
+
+/** R47 — how far past the road's edge a bore's WALL stands, m, and how
+ * many storeys of `wall` it is: two, so a car going over inside meets
+ * lining and not sky. Read by the renderer that draws the lining too, so
+ * the wall the player sees is the wall the car stops at. */
+export const TUNNEL_WALL_OUT = 0.9;
+export const TUNNEL_WALL_STOREYS = 2;
+
+/** R47 — how far past the corridor's LIP the trench under a bore runs at
+ * road level before the lattice is let go to the mountain, m: R31's bench,
+ * a lattice cell diagonal. The lattice is sampled on fixed corners, so
+ * the cell that straddles the trench's edge is a RAMP from wherever its
+ * inner corner fell up to the mountain over the bore — thirty metres in
+ * fourteen — and with the trench ending at the lip that corner could fall
+ * inside the vault's walls, where the ramp came up through the lining as
+ * a pale wedge at the road's edge. A bench past the lip keeps every
+ * inner corner outside the walls. Read by the terrain (the trench and the
+ * lid's field) and by the renderer that lays the lid, so both agree. */
+export function tunnelTrench(width: number): number {
+  return Math.max(width / 2 + ROAD_CROSS.reach, R.verge.bench);
+}
+
+/** R47 — THE WALLS OF A BORE, as solids: one bay every `PARAPET_BAY`
+ * metres down both sides of every run of tunnel samples in
+ * `samples[from..to)`, stood `TUNNEL_WALL_OUT` past the road's edge. The
+ * same walk as a parapet's, for the same reason — by arc, so no nose ever
+ * finds a gap — and made of `wall`, which is what a lining is to the
+ * contact model: immovable, and taller than a car can fly inside a
+ * tunnel. */
+export function tunnelWalls(
+  samples: DeckSample[],
+  width: number,
+  from = 0,
+  to = samples.length,
+): WildObstacle[] {
+  const out: WildObstacle[] = [];
+  const lat = width / 2 + TUNNEL_WALL_OUT + WALL_RADIUS;
+  let i = Math.max(0, from);
+  while (i < to) {
+    if (!samples[i].tunnel) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < samples.length && samples[j].tunnel) j++;
+    const startS = samples[i].s;
+    const endS = samples[j - 1].s;
+    let k = i;
+    for (let s = startS; s <= endS; s += PARAPET_BAY) {
+      while (k + 1 < j && samples[k + 1].s <= s) k++;
+      const a = samples[k];
+      const b = samples[Math.min(k + 1, j - 1)];
+      const run = b.s - a.s;
+      const t = run > 1e-6 ? (s - a.s) / run : 0;
+      const x = a.x + (b.x - a.x) * t;
+      const z = a.z + (b.z - a.z) * t;
+      const y = a.elevation + (b.elevation - a.elevation) * t;
+      const right = { x: Math.cos(a.heading), z: -Math.sin(a.heading) };
+      for (const side of [-1, 1]) {
+        out.push(
+          standSolid({
+            x: x + right.x * lat * side,
+            z: z + right.z * lat * side,
+            y,
+            kind: "wall",
+            size: TUNNEL_WALL_STOREYS,
+            spin: side < 0 ? a.heading + Math.PI : a.heading,
+          }),
+        );
+      }
+    }
+    i = j;
+  }
+  return out;
+}
 
 /** R13 — the PARAPET a concrete deck carries, as solids: one bay every
  * `PARAPET_BAY` metres down both edges of every concrete deck in

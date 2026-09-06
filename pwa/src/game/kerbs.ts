@@ -40,6 +40,7 @@ import {
 } from "@engine";
 
 import { shareOne } from "../lib/shared-gpu.ts";
+import { GeoBuilder } from "./flora-build.ts";
 import type { Ribbon } from "./ribbon.ts";
 import { rightOf } from "./ribbon.ts";
 import { drivingThrough, outOfBody, stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
@@ -81,6 +82,53 @@ const whiteMaterial = shareOne(() => new THREE.MeshLambertMaterial({ color: WHIT
 const postGeometry = shareOne(
   () => new THREE.BoxGeometry(POST.width, POST.height, POST.width) as THREE.BufferGeometry,
 );
+
+/** R40 — the SNOW POLE the alpine's gravel is marked with instead of a
+ * stake: the tall thin pole a plough driver reads the edge by once the
+ * verge is under a metre of snow, banded red and white, with a reflector
+ * on top. Twice a stake's height, because that is what it is for. */
+const SNOW_POLE = { height: 2.2, radius: 0.045, bands: 5, reflector: 0.11 };
+const SNOW_RED = new THREE.Color(0xd2302a);
+const SNOW_WHITE = new THREE.Color(0xf6f3ea);
+const REFLECTOR = new THREE.Color(0xfff4b8);
+
+/** What kind of post a country stands: a stake, or the alpine's snow pole. */
+export type PostStyle = "stake" | "snowpole";
+
+export function postStyleFor(biome: Track["knobs"]["biome"]): PostStyle {
+  return biome === "alpine" ? "snowpole" : "stake";
+}
+
+/** The pole as one vertex-coloured geometry: a stack of banded cylinders
+ * and the reflector cap. Built once with no facet jitter — a striped pole
+ * wants its bands clean. */
+const snowPoleGeometry = shareOne((): THREE.BufferGeometry => {
+  const b = new GeoBuilder(() => 0.5);
+  const P = SNOW_POLE;
+  const band = P.height / P.bands;
+  for (let k = 0; k < P.bands; k++) {
+    b.cyl(
+      k % 2 === 0 ? SNOW_RED : SNOW_WHITE,
+      P.radius,
+      P.radius,
+      band,
+      -P.height / 2 + k * band,
+      {},
+      6,
+    );
+  }
+  b.cyl(
+    REFLECTOR,
+    P.reflector,
+    P.reflector * 0.8,
+    P.reflector * 1.6,
+    P.height / 2 - P.reflector,
+    {},
+    6,
+  );
+  return b.build();
+});
+const poleMaterial = shareOne(() => new THREE.MeshLambertMaterial({ vertexColors: true }));
 const blockGeometry = shareOne(
   () => new THREE.BoxGeometry(BLOCK.width, BLOCK.height, BLOCK.depth) as THREE.BufferGeometry,
 );
@@ -100,33 +148,60 @@ function blockMaterials(): THREE.Material[] {
   return [warn, warn, white, white, white, white];
 }
 
-/** What one kind of marker IS: the shape, the paint on its faces, and how
- * far its own origin sits over its foot. Every marker on every stage comes
+/** What one kind of marker IS: the shape, the paint on its faces, how far
+ * its own origin sits over its foot, how tall it stands, and where its
+ * origin rests once it is knocked flat. Every marker on every stage comes
  * out of here, so a shape is stated once — and the item sheet stands one up
- * on its own from the same three answers. */
-export function markerShape(kind: KerbMarker["kind"]): {
+ * on its own from the same answers. */
+export function markerShape(
+  kind: KerbMarker["kind"],
+  style: PostStyle = "stake",
+): {
   geometry: THREE.BufferGeometry;
-  materials: THREE.Material[];
+  materials: THREE.Material | THREE.Material[];
   lift: number;
+  height: number;
+  rest: number;
 } {
-  return kind === "post"
-    ? { geometry: postGeometry(), materials: postMaterials(), lift: POST.height / 2 }
-    : // The slab is BEDDED IN: only `proud` of its thickness stands above
-      // the verge, so its centre sits below the ground it is laid in.
-      {
-        geometry: blockGeometry(),
-        materials: blockMaterials(),
-        lift: BLOCK.proud - BLOCK.height / 2,
-      };
+  if (kind === "post") {
+    return style === "snowpole"
+      ? {
+          geometry: snowPoleGeometry(),
+          materials: poleMaterial(),
+          lift: SNOW_POLE.height / 2,
+          height: SNOW_POLE.height,
+          rest: SNOW_POLE.radius,
+        }
+      : {
+          geometry: postGeometry(),
+          materials: postMaterials(),
+          lift: POST.height / 2,
+          height: POST.height,
+          rest: POST.width / 2,
+        };
+  }
+  // The slab is BEDDED IN: only `proud` of its thickness stands above the
+  // verge, so its centre sits below the ground it is laid in.
+  return {
+    geometry: blockGeometry(),
+    materials: blockMaterials(),
+    lift: BLOCK.proud - BLOCK.height / 2,
+    height: BLOCK.proud,
+    rest: BLOCK.height / 2,
+  };
 }
 
 /** Stand a batch of markers of one kind up as a single instanced mesh, at
  * the poses the engine placed them at — each raised off its foot to
  * wherever its own origin sits (the middle of a stake, the middle of a
  * slab). */
-function instance(kind: KerbMarker["kind"], markers: KerbMarker[]): THREE.InstancedMesh | null {
+function instance(
+  kind: KerbMarker["kind"],
+  markers: KerbMarker[],
+  style: PostStyle = "stake",
+): THREE.InstancedMesh | null {
   if (markers.length === 0) return null;
-  const { geometry, materials, lift } = markerShape(kind);
+  const { geometry, materials, lift } = markerShape(kind, style);
   const mesh = new THREE.InstancedMesh(geometry, materials, markers.length);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -163,13 +238,13 @@ const KICK_MAX = 15;
  * that the thing standing upright ends up FLAT, and it wants to see it go
  * over rather than find it lying there. */
 const SPIN = 1.5;
-/** Where a post's own origin sits over the ground once it is down, m — it
- * comes to rest on its side, so half a stake's width. */
-const LYING = POST.width / 2;
-
 type Post = {
   batch: THREE.InstancedMesh;
   index: number;
+  /** How tall it stands, m, and where its origin rests once it is down —
+   * on its side, so half a stake's width or a pole's radius. */
+  height: number;
+  rest: number;
   /** Arc position on the stage, m — what the endless prune reads. */
   s: number;
   /** Where it stands, its own origin: the middle of the stake. */
@@ -186,7 +261,7 @@ export type PostField = {
   /** Stand a chunk's posts up as one instanced batch and take them under
    * management, so the car can flatten them later. The mesh is the
    * caller's to add to its chunk group; null where a chunk has no posts. */
-  plant: (markers: KerbMarker[]) => THREE.InstancedMesh | null;
+  plant: (markers: KerbMarker[], style?: PostStyle) => THREE.InstancedMesh | null;
   /** Forget every post up to `s` — the chunk that drew them has gone. */
   retireBefore: (s: number) => void;
   /** Flatten whatever the car is driving through, and step what is
@@ -203,16 +278,19 @@ export function createPostField(): PostField {
    * is falling and this stays empty. */
   const touched = new Set<THREE.InstancedMesh>();
 
-  const plant = (markers: KerbMarker[]): THREE.InstancedMesh | null => {
-    const batch = instance("post", markers);
+  const plant = (markers: KerbMarker[], style: PostStyle = "stake"): THREE.InstancedMesh | null => {
+    const batch = instance("post", markers, style);
     if (batch === null) return null;
+    const { height, rest } = markerShape("post", style);
     markers.forEach((marker, index) => {
       posts.push({
         batch,
         index,
+        height,
+        rest,
         s: marker.s,
         x: marker.x,
-        y: marker.y + POST.height / 2,
+        y: marker.y + height / 2,
         z: marker.z,
         body: null,
       });
@@ -246,7 +324,7 @@ export function createPostField(): PostField {
         (Math.random() - 0.5) * SPIN * 0.4,
         -dirX * SPIN + (Math.random() - 0.5) * SPIN,
       ),
-      LYING,
+      post.rest,
       // A stake is a LONG thing, so the tumbler lays it flat as it settles
       // rather than letting it sleep at whatever angle its energy ran out
       // at — one resting at twenty degrees reads as a post still standing,
@@ -266,7 +344,7 @@ export function createPostField(): PostField {
     for (const post of posts) {
       if (post.body === null) {
         if (!driving) continue;
-        const hit = drivingThrough(car, post.x, post.y, post.z, REACH, POST.height);
+        const hit = drivingThrough(car, post.x, post.y, post.z, REACH, post.height);
         if (hit === null) continue;
         const out = outOfBody(car, hit, REACH);
         // The post goes over whether or not anybody is listening: an
@@ -317,7 +395,12 @@ export function buildKerbing(
   const group = new THREE.Group();
   const strip = buildStrip(track, samples, width);
   if (strip) group.add(strip);
-  const posts = field.plant(markers.filter((m) => m.kind === "post"));
+  // R40 — the country decides what a post looks like; the engine's list
+  // decides where it stands.
+  const posts = field.plant(
+    markers.filter((m) => m.kind === "post"),
+    postStyleFor(track.knobs.biome),
+  );
   if (posts) group.add(posts);
   const blocks = instance(
     "block",

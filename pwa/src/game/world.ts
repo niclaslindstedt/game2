@@ -48,12 +48,16 @@ import {
   treePlacement,
   understoryAround,
 } from "./planting.ts";
+import { plantZone } from "./ground-rules.ts";
 import { buildRoadSpill } from "./road-spill.ts";
 import { buildWild } from "./wild.ts";
 import { createArena } from "./arena.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
 import { buildCulverts } from "./culvert.ts";
+import { detailTexture } from "./textures.ts";
+import { buildTunnelLining } from "./tunnel.ts";
+import type { LidGround } from "./tunnel-lid.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
 import { buildCarPark } from "./carpark.ts";
 import { buildHomestead } from "./homestead.ts";
@@ -284,6 +288,8 @@ function buildScenery(
       // because standing in the shallows is what a reed does.
       const shore = onShore(y);
       if (!shore && y < LAKE_Y + 1.2) continue;
+      // R47 — nothing grows under the snow.
+      if (plantZone(biome.id, y, false) === "snow") continue;
       flora.push({
         id: pickFlora(
           shore ? biome.shoreCover : (community.undergrowth ?? biome.undergrowth),
@@ -788,6 +794,15 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   // ground's height so the two meshes meet at the corridor's lip, and its
   // colour so they meet in the same green as well as at the same height.
   const beside: GroundBeside = { heightAt: terrain.latticeAt, paintAt: terrain.paintAt };
+  /** R47 — what a tunnel's lid is laid on: the ground with the trench
+   * filled back in, the drawn lattice it has to meet, and the tiles' paint. */
+  const overBore: LidGround = {
+    lidAt: terrain.field.lidAt,
+    farHeightAt: terrain.field.farHeightAt,
+    latticeAt: terrain.latticeAt,
+    paintLand: terrain.paintLand,
+    grain: detailTexture,
+  };
   // A finite stage's road is known in full before the first tree is planted,
   // so every slice keeps its scenery off ALL of it. An endless one cannot:
   // the road ahead is unwritten when the props beside it go in, and
@@ -919,6 +934,10 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     chunkGroup.add(buildBridges(track, from, to, terrain.latticeAt));
     // R12 — and the pipes the road carries its streams under.
     chunkGroup.add(buildCulverts(track, from, to));
+    // R47 — the lining of any bore on this stretch, the portal where one
+    // begins or ends here, and the mountain drawn back over it.
+    const lining = buildTunnelLining(track, from, to, overBore);
+    if (lining) chunkGroup.add(lining);
     // The branches this stretch of road forks off at its paving junctions.
     for (; spurScan < track.spurs.length; spurScan++) {
       const spur = track.spurs[spurScan];

@@ -47,6 +47,9 @@ const HYPSO = [
 const ROAD = {
   gravel: [208, 178, 124],
   asphalt: [58, 58, 64],
+  /** R47 — packed snow above the snowline, and the lining of a bore. */
+  snow: [238, 241, 246],
+  tunnel: [80, 76, 72],
   deck: [190, 186, 176],
   ford: [104, 172, 238],
   edge: [96, 76, 50],
@@ -78,6 +81,8 @@ export const ARM = 20;
 const MARK = {
   jump: [232, 28, 28],
   crest: [250, 200, 40],
+  /** R47 — a bore's two portals. */
+  tunnel: [40, 36, 34],
   checkpoint: [24, 66, 160],
   start: [30, 168, 72],
   finish: INK,
@@ -450,11 +455,15 @@ export function renderLevelMap({
   const surfaceColor = (s) =>
     s.deck != null
       ? ROAD.deck
-      : s.surface === "water"
-        ? ROAD.ford
-        : s.surface === "asphalt"
-          ? ROAD.asphalt
-          : ROAD.gravel;
+      : s.tunnel
+        ? ROAD.tunnel
+        : s.surface === "water"
+          ? ROAD.ford
+          : s.surface === "asphalt"
+            ? ROAD.asphalt
+            : s.surface === "snow"
+              ? ROAD.snow
+              : ROAD.gravel;
   const minHalf = 1.6 / scale;
   for (let pass = 0; pass < 2; pass++) {
     for (let i = 0; i + 1 < samples.length; i++) {
@@ -667,6 +676,17 @@ export function renderLevelMap({
         canvas.disk(sx, sy, roadR + 3, INK);
         canvas.disk(sx, sy, roadR + 1.5, MARK.crest);
         break;
+      case "tunnel": {
+        // A portal at each end: the road between them is already drawn in
+        // the lining's colour (`surfaceColor`).
+        canvas.disk(sx, sy, roadR + 3, MARK.tunnel);
+        canvas.disk(sx, sy, roadR + 1, PAPER);
+        if (f.exitX != null) {
+          canvas.disk(px(f.exitX), pz(f.exitZ), roadR + 3, MARK.tunnel);
+          canvas.disk(px(f.exitX), pz(f.exitZ), roadR + 1, PAPER);
+        }
+        break;
+      }
       case "ford":
       case "bridge":
         canvas.disk(sx, sy, roadR + 3, MARK[f.kind]);
@@ -887,6 +907,7 @@ function drawLegend(canvas, x, y, { lines, lo, hi, interval }) {
   row("MARKS", null);
   row("JN  JUMP LIP", MARK.jump);
   row("CRN BLIND CREST", MARK.crest);
+  row("TUN TUNNEL", MARK.tunnel);
   row("FN / BN  FORD / BRIDGE", MARK.ford);
   row("CPN SPLIT BOARD", MARK.checkpoint);
   row("START", MARK.start);
@@ -968,11 +989,15 @@ function drawProfile(canvas, { track, features, top, width, lo, range, focus }) 
     const surface =
       s.deck != null
         ? ROAD.deck
-        : s.surface === "water"
-          ? ROAD.ford
-          : s.surface === "asphalt"
-            ? ROAD.asphalt
-            : ROAD.gravel;
+        : s.tunnel
+          ? ROAD.tunnel
+          : s.surface === "water"
+            ? ROAD.ford
+            : s.surface === "asphalt"
+              ? ROAD.asphalt
+              : s.surface === "snow"
+                ? ROAD.snow
+                : ROAD.gravel;
     canvas.line(x, plotBottom + 2, x, plotBottom + 5, surface);
   }
   // The calls, as a second band, and the marks over the line.
@@ -1005,6 +1030,15 @@ function drawProfile(canvas, { track, features, top, width, lo, range, focus }) 
         canvas.disk(x, sy(e) - 6, 3, MARK.crest);
         label(canvas, x - 4 * f.id.length, sy(e) - 22, f.id, INK, 2);
         break;
+      case "tunnel": {
+        // The bore as a bar over the profile, portal to portal.
+        const x1 = sx(f.endS);
+        canvas.line(x, sy(e) - 8, x1, sy(e) - 8, MARK.tunnel);
+        canvas.line(x, sy(e) - 8, x, sy(e) - 3, MARK.tunnel);
+        canvas.line(x1, sy(e) - 8, x1, sy(e) - 3, MARK.tunnel);
+        label(canvas, (x + x1) / 2 - 4 * f.id.length, sy(e) - 22, f.id, INK, 2);
+        break;
+      }
       case "ford":
       case "bridge":
         for (let px = Math.round(x); px <= sx(Math.min(f.endS, toS)); px++)

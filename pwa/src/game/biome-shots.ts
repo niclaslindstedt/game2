@@ -42,4 +42,13 @@ export const BIOME_SHOTS: Record<string, BiomeShot> = {
     weather: "clear",
     season: "summer",
   },
+  alpine: {
+    level: "alpine-1",
+    seed: 17,
+    length: "short",
+    shape: "sprint",
+    timeOfDay: "day",
+    weather: "clear",
+    season: "summer",
+  },
 };

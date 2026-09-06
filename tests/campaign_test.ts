@@ -449,6 +449,40 @@ describe("the stage's classification", () => {
   });
 });
 
+describe("the alps (R47)", () => {
+  const ALPINE = LOCATIONS[2];
+
+  it("is the third country, with the same six rungs as the first", () => {
+    expect(ALPINE.biome).toBe("alpine");
+    expect(ALPINE.levels).toHaveLength(TAIGA.levels.length);
+    expect(ALPINE.levels.map((l) => l.length)).toEqual(TAIGA.levels.map((l) => l.length));
+    expect(ALPINE.levels.map((l) => l.shape ?? "sprint")).toEqual(
+      TAIGA.levels.map((l) => l.shape ?? "sprint"),
+    );
+  });
+
+  it("is built high, in its own country and its own sky, and its sprints come down", () => {
+    const offered = biomeRules("alpine").weathers;
+    const snow = biomeRules("alpine").land.zones.snow as number;
+    for (const level of ALPINE.levels) {
+      const knobs = campaignKnobs(level);
+      expect(knobs.biome).toBe("alpine");
+      expect(offered).toContain(level.weather);
+      const track = compileStage(level.seed, level.length, knobs, level.shape ?? "sprint");
+      // Every stage starts beside the snow...
+      expect(track.samples[0].elevation).toBeGreaterThan(snow - 90);
+      // ...and every sprint ends well under where it started.
+      if ((level.shape ?? "sprint") === "sprint") {
+        const last = track.samples[track.samples.length - 1].elevation;
+        expect(track.samples[0].elevation - last).toBeGreaterThan(40);
+      }
+      // Snow on the road somewhere on every stage but the one that comes
+      // right down: the country's own surface.
+      expect(track.samples.some((s) => s.surface === "snow")).toBe(true);
+    }
+  });
+});
+
 describe("the desert (R40)", () => {
   const DESERT = LOCATIONS[1];
 

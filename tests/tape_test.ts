@@ -28,6 +28,7 @@ const STAGE: TapeStage = {
   laps: 1,
   knobs: {
     biome: "taiga",
+    peaks: 0.5,
     elevation: 0.5,
     steepness: 0.5,
     water: 0.5,

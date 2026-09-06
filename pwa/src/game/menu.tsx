@@ -259,6 +259,8 @@ export const STAGE_DIALS: {
   key: NumericKnob;
   label: string;
   stops: DialStop[];
+  /** R47 — a dial only one country reads is only offered there. */
+  biome?: BiomeId;
 }[] = [
   {
     key: "elevation",
@@ -308,6 +310,19 @@ export const STAGE_DIALS: {
       { id: "low", label: "NONE", value: 0 },
       { id: "mid", label: "SOME", value: 0.25 },
       { id: "high", label: "HALF", value: 0.5 },
+    ],
+  },
+  {
+    // R47 — how many mountains the alpine has: one standing alone in a
+    // plain, with nothing but the drop off the road's edge; a valley with
+    // a flank up each side; or a whole range of them.
+    key: "peaks",
+    label: "PEAKS",
+    biome: "alpine",
+    stops: [
+      { id: "low", label: "ONE", value: 0 },
+      { id: "mid", label: "VALLEY", value: 0.5 },
+      { id: "high", label: "RANGE", value: 1 },
     ],
   },
 ];

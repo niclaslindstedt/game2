@@ -686,6 +686,12 @@ export const ANALYSIS = {
         /** The slope past which soil has no business lying, m per m — the
          * `soil` check's `steep`. Till is washed off anything steeper. */
         soilSteep: 0.45,
+        /** Share where the bedrock is at or near the surface — rock, scree
+         * and thin moss rather than soil. This is the number that separates
+         * a glaciated Swedish landscape from a Norwegian one. */
+        rock: { min: 0.02, max: 0.55 },
+        /** Share of the country steep enough that a car could not climb it. */
+        cliff: { max: 0.3 },
       },
       desert: {
         /** None. A drop of standing water on a desert stage is a defect. */
@@ -703,6 +709,31 @@ export const ANALYSIS = {
          * repose — about 34°, which is 0.67 m per m — on the slip face of
          * every dune. Till's rule would report every dune on the map. */
         soilSteep: 0.7,
+        rock: { min: 0.02, max: 0.55 },
+        cliff: { max: 0.3 },
+      },
+      alpine: {
+        /** Tarns on the shoulders and a lake in the valley — never a
+         * seascape: the country is mostly mountain. */
+        water: { min: 0.003, max: 0.2 },
+        /** A mountain forest below a treeline: closed on the flanks under
+         * it, nothing above it, so the share runs lower than the taiga's
+         * and may run to nearly nothing on a stage set high. */
+        forest: { min: 0.02, max: 0.6 },
+        /** R47 — the massif: hundreds of metres between the valley floor
+         * and the crests inside one stage's box, and the whole point. */
+        relief: { min: 120, max: 1100 },
+        /** A fen on an alp, not the taiga's mires: too rare to hold to a
+         * band. */
+        swamps: false,
+        /** A mountain forest stands on slopes till would slide off — the
+         * flank's scour line (`massif.flankRef`) is what strips it. */
+        soilSteep: 0.6,
+        /** Most of a massif above its treeline is rock. */
+        rock: { min: 0.05, max: 0.9 },
+        /** ...and much of a flank is steeper than a car can climb: the
+         * road is the way down, not the hillside. */
+        cliff: { max: 0.65 },
       },
     },
     /** ...and the share past which it is not a wet stage but a SEASCAPE: the
@@ -710,12 +741,6 @@ export const ANALYSIS = {
      * cone. An error rather than a warning, because no dial position should
      * be able to produce it. */
     drowned: 0.5,
-    /** Share where the bedrock is at or near the surface — rock, scree and
-     * thin moss rather than soil. This is the number that separates a
-     * glaciated Swedish landscape from a Norwegian one. */
-    rock: { min: 0.02, max: 0.55 },
-    /** Share of the country steep enough that a car could not climb it. */
-    cliff: { max: 0.3 },
     /** SOIL PLAUSIBILITY: soil is till and washed sediment, so it collects
      * in hollows and is scoured off steep ground. Deep soil standing on a
      * cliff is the layering not being obeyed. The slope past which ground

@@ -338,12 +338,12 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   // is actually in.
   /** How tall the rings stand in each country, as a scale on the boreal
    * skyline they were cut for. */
-  const RIDGE_HEIGHT: Record<BiomeId, number> = { taiga: 1, desert: 0.38 };
+  const RIDGE_HEIGHT: Record<BiomeId, number> = { taiga: 1, desert: 0.38, alpine: 1.7 };
   /** …and whether its peaks hold snow at all. The snowline is baked into
    * the profile at the height the rings were CUT at, so scaling them down
    * only lowers the white caps rather than losing them: a country with no
    * snow in it has to say so. */
-  const RIDGE_SNOW: Record<BiomeId, boolean> = { taiga: true, desert: false };
+  const RIDGE_SNOW: Record<BiomeId, boolean> = { taiga: true, desert: false, alpine: true };
   addRidge({ haze: 0.24, tone: 1 }, 552, 87, 118, 130);
   addRidge({ haze: 0.4, tone: 0.94 }, 536, 64, 99, 103);
   addRidge({ haze: 0.58, tone: 0.82 }, 518, 41, 75, null);

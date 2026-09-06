@@ -14,20 +14,27 @@
 // whoever owns the effect.
 
 import * as THREE from "three";
-import type { BiomeId } from "@engine";
+import { biomeRules, type BiomeId } from "@engine";
 
 import { biomeFor } from "./biome.ts";
 import { type DustTint } from "./dust.ts";
 
-/** Dry grit: the loose stuff lying on top of a graded road. */
-export const GRIT = 0xb29268;
-
-/** R40 — and the sand a desert road is bladed out of: paler, and it hangs
- * in the air as a haze rather than a spray of stones. */
-export const SAND_GRIT = 0xd8bd86;
+/** R40 — DRY GRIT: the loose stuff lying on top of a graded road, which is
+ * the country's own (`Biome.grit`): the shield's brown gravel, the sand a
+ * desert road is bladed out of — paler, and it hangs in the air as a haze
+ * rather than a spray of stones — a mountain's grey chippings. */
+export function grit(biome: BiomeId | string): number {
+  return biomeFor(biome).grit;
+}
 
 /** Water, thrown as a blue sheet. */
 export const SPRAY = 0x4fa0f0;
+
+/** SNOW. Above the snowline the road is packed snow and the ground beside
+ * it is a snowfield, and what a wheel throws off either is powder: white,
+ * with the blue-grey of shaded snow through it, and it hangs — a plume off
+ * a snow road is the one cloud in the game that is not dust. */
+export const SNOW_POWDER: DustTint = { base: 0xf2f5f8, fleck: 0xc7d3e2, fleckMix: 0.3 };
 
 /** WET GROUND. Rain does not merely dampen a gravel road, it changes what
  * the road IS: the dust is gone, and what a wheel picks up is clods of the
@@ -63,12 +70,14 @@ const tintsByBiome = new Map<BiomeId, GroundTints>();
 export function groundTints(biome: BiomeId): GroundTints {
   const kept = tintsByBiome.get(biome);
   if (kept) return kept;
-  const ground = biomeFor(biome).ground;
+  const look = biomeFor(biome);
+  const ground = look.ground;
   const built: GroundTints = {
     wild: {
-      // A boreal verge is earth with turf through it; a desert's is sand
-      // with no earth under it at all, so there the base is the sand.
-      base: biome === "desert" ? SAND_GRIT : 0x4a3520,
+      // A boreal verge is earth with turf through it; a country that
+      // blades its roads out of SAND has no earth under its verges at all,
+      // so there the base is the sand — the same grit the road throws.
+      base: biomeRules(biome).loose === "sand" ? look.grit : 0x4a3520,
       fleck: new THREE.Color(ground.base).multiplyScalar(0.86).getHex(),
       fleckMix: 0.3,
     },
@@ -131,18 +140,25 @@ export function sootySmoke(heat: number): DustTint {
  * `wet` is the weather's own answer, and it comes FIRST: a soaked meadow
  * and a soaked gravel road throw the same dark clods, because the dry
  * difference between them is a difference between two kinds of DUST and
- * that is exactly what the rain has taken away.
+ * that is exactly what the rain has taken away. Snow comes before even
+ * that — rain on a snowfield is still a snowfield.
+ *
+ * `rock` and `snow` are the ground's own readings under the wheels, 0..1,
+ * by the same rules the terrain is painted with (`rockAt`, `snowAt`); they
+ * are closures because each is a few lattice reads the road never needs.
  */
 export function groundTint(
   biome: BiomeId,
   surface: string,
   wet: boolean,
   rock: () => number,
+  snow: () => number = () => 0,
 ): number | DustTint {
   if (surface === "water") return SPRAY;
+  if (surface === "snow") return SNOW_POWDER;
   if (wet && surface !== "asphalt") return MUD_CLODS;
-  if (surface === "sand") return SAND_GRIT;
-  if (surface !== "nature") return GRIT;
+  if (surface !== "nature") return grit(biome);
+  if (Math.random() < snow()) return SNOW_POWDER;
   const tints = groundTints(biome);
   return Math.random() < rock() ? tints.stone : tints.wild;
 }
@@ -180,14 +196,19 @@ export function plumeGround(
   surface: string,
   wet: boolean,
   rock: () => number,
+  snow: () => number = () => 0,
 ): PlumeGround {
+  if (surface === "snow") return { tint: SNOW_POWDER, amount: 1 };
   if (surface === "water" || surface === "asphalt" || wet) return null;
-  if (surface === "sand") return { tint: SAND_GRIT, amount: 1 };
-  if (surface !== "nature") return { tint: GRIT, amount: 1 };
-  // R40 — off a desert road the ground is loose sand with nothing binding
-  // it, which is the one case where the WILD lifts a cloud: the turf rule
-  // above is a rule about turf, and there is none.
-  if (biome === "desert") return { tint: SAND_GRIT, amount: 0.7 + 0.3 * rock() };
+  if (surface !== "nature") return { tint: grit(biome), amount: 1 };
+  // ...and a snowfield is powder with nothing binding it either: the
+  // share of the ground under snow is the share of the cloud that is snow.
+  const white = snow();
+  if (white > 0 && Math.random() < white) return { tint: SNOW_POWDER, amount: 0.6 + 0.4 * white };
+  // R40 — off a road bladed out of SAND the ground is loose sand with
+  // nothing binding it, which is the one case where the WILD lifts a
+  // cloud: the turf rule above is a rule about turf, and there is none.
+  if (biomeRules(biome).loose === "sand") return { tint: grit(biome), amount: 0.7 + 0.3 * rock() };
   const bare = rock();
   return bare > 0 ? { tint: groundTints(biome).stone, amount: bare } : null;
 }

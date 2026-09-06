@@ -31,6 +31,7 @@ import {
   parkedSolids,
   type Building,
   type BuildingKind,
+  type HouseStyle,
   type ParkedCar,
 } from "./buildings.ts";
 import type { HomesteadSample } from "./homesteads.ts";
@@ -170,6 +171,8 @@ export type TownContext = {
   seed: number;
   /** The stage's nominal full width, m. */
   width: number;
+  /** R40 — what kind of house the country builds. */
+  houses: HouseStyle;
   /** The route's samples, in stage order. */
   samples: readonly HomesteadSample[];
   /** Half-open range of sample indices settled since the last call:
@@ -726,7 +729,7 @@ function walkStreet(
       // that ran out of street at twelve lots stood second from its end.
       const progress = Math.max(lots.length / n, (cursor[side] - fromS) / Math.max(1, toS - fromS));
       const due = pending.length > 0 && progress >= pending[0].at ? pending.shift() : null;
-      held = drawTownPlan(rng, due ? due.kind : "house");
+      held = drawTownPlan(rng, due ? due.kind : "house", ctx.houses);
     }
     const built = held;
     const centreS = cursor[side] + built.width / 2;

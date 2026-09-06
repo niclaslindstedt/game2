@@ -52,7 +52,7 @@ import {
 } from "./spurs.ts";
 import { biomeRules } from "./biomes.ts";
 import { createPropField } from "./props.ts";
-import { bridgeParapets, type WildObstacle } from "./solids.ts";
+import { bridgeParapets, tunnelTrench, tunnelWalls, type WildObstacle } from "./solids.ts";
 import { farmClearings, rectDistance, type FarmRect } from "./farms.ts";
 import { homesteadSolids } from "./homesteads.ts";
 import { townSolids, type TownPlatform } from "./towns.ts";
@@ -429,6 +429,13 @@ export type TerrainField = {
   /** The landscape far from any road (mountains and sea included) — what
    * streams read to find their downhill side, and tooling can preview. */
   farHeightAt: (x: number, z: number) => number;
+  /** R47 — the ground over a BORE as if the bore were not there: the
+   * lattice with its trench filled back in. Inside the trench (a tunnel
+   * sample nearest, within the corridor's lip) it is the bare mountain;
+   * everywhere else it is `heightAt`, so where another arm of the stage
+   * cuts past within a cell of the bore the lid meets THAT arm's cutting
+   * rather than floating over it. The lining draws it (tunnel.ts). */
+  lidAt: (x: number, z: number) => number;
   /** R32 — what the ground is MADE of: the rock, the soil on it and the
    * groundwater in it. The road shapes the SURFACE and nothing under it,
    * so this is the bare country's own layering wherever it is asked —
@@ -600,6 +607,15 @@ export function createTerrain(track: Track): TerrainField {
     top: number[];
     px: number[];
     pz: number[];
+    /** The plane's two halves on their own — the sample's forward axis
+     * (sin h, cos h), its grade along it and its bank across it — for the
+     * one reader that has to take a neighbour's plane apart and put it
+     * back together in road coordinates: the nearby cone's walk in
+     * `nearestSample`. */
+    fx: number[];
+    fz: number[];
+    slope: number[];
+    bank: number[];
     floor: number[];
     /** R34 — the grade this sample's cone opens at past the bench, m per m.
      * `verge.climb` where the ground is till and the road was scraped in;
@@ -609,6 +625,15 @@ export function createTerrain(track: Track): TerrainField {
      * change along a stage. Never BELOW `VERGE_CLIMB`, which is what keeps
      * `cellFloor`'s rejection bound valid. */
     climb: number[];
+    /** R47 — a PORTAL sample's gate: the along-road unit vector pointing
+     * into the bore (zero on every other sample) and the mouth it stands
+     * before. Its cone is a disc, and a disc a bench wide reaches twenty
+     * metres into the mountain the road has gone under; past the mouth it
+     * says nothing, and the country stands. */
+    gx: number[];
+    gz: number[];
+    mx: number[];
+    mz: number[];
     /** The box the cell's samples actually occupy, and the lowest `floor`
      * among them. Together they let a query REJECT a whole cell without
      * touching a sample — see `nearestSample`, where they are most of the
@@ -633,8 +658,16 @@ export function createTerrain(track: Track): TerrainField {
     top: [],
     px: [],
     pz: [],
+    fx: [],
+    fz: [],
+    slope: [],
+    bank: [],
     floor: [],
     climb: [],
+    gx: [],
+    gz: [],
+    mx: [],
+    mz: [],
     minX: Infinity,
     maxX: -Infinity,
     minZ: Infinity,
@@ -676,7 +709,11 @@ export function createTerrain(track: Track): TerrainField {
     const depth = land.heightAt(s.x, s.z) - s.elevation;
     const into = clamp01((depth - C.depth.from) / (C.depth.full - C.depth.from));
     if (into <= 0) return VERGE_CLIMB;
-    const worth = s.surface === "asphalt" ? C.sealed : C.loose;
+    // R47 — a mountain road is blasted whatever it is surfaced with: the
+    // gravel above the pass's seal line was cut out of the same rock as
+    // the tarmac below it, and a face battered back to a grader's grade
+    // cannot be built into a flank at all.
+    const worth = s.surface === "asphalt" || biome.land.massif !== null ? C.sealed : C.loose;
     // R32 — the cover, read out on the FLANKS rather than under the
     // centerline. A cutting is not on the road, it is up the side of it,
     // and those are different ground: the road lies along the valley where
@@ -728,8 +765,39 @@ export function createTerrain(track: Track): TerrainField {
       cell.top.push(top);
       cell.px.push(px);
       cell.pz.push(pz);
+      cell.fx.push(sinH);
+      cell.fz.push(cosH);
+      cell.slope.push(slope);
+      cell.bank.push(bank);
       cell.floor.push(floor);
       cell.climb.push(cutClimb(s));
+      // R47 — a sample within a bench of a bore's mouth gates its cone at
+      // the mouth. Searched both ways along the road, nearest mouth wins.
+      let gx = 0;
+      let gz = 0;
+      let mx = 0;
+      let mz = 0;
+      if (!s.tunnel) {
+        const reach = Math.ceil((BENCH + GROUND_CELL) / track.step);
+        for (let k = 1; k <= reach; k++) {
+          const ahead = samples[i + k];
+          const behind = samples[i - k];
+          const mouth = ahead?.tunnel ? ahead : behind?.tunnel ? behind : null;
+          if (!mouth) continue;
+          const dx = mouth.x - s.x;
+          const dz = mouth.z - s.z;
+          const d = Math.hypot(dx, dz) || 1;
+          gx = dx / d;
+          gz = dz / d;
+          mx = mouth.x;
+          mz = mouth.z;
+          break;
+        }
+      }
+      cell.gx.push(gx);
+      cell.gz.push(gz);
+      cell.mx.push(mx);
+      cell.mz.push(mz);
       if (s.x < cell.minX) cell.minX = s.x;
       if (s.x > cell.maxX) cell.maxX = s.x;
       if (s.z < cell.minZ) cell.minZ = s.z;
@@ -956,6 +1024,13 @@ export function createTerrain(track: Track): TerrainField {
         // said — which is most of them, and what keeps the square root and
         // the dot product off the hot loop.
         if (cell.floor[k] >= ceiling) continue;
+        // R47 — a portal sample's cone stops at the mouth.
+        if (
+          (cell.gx[k] !== 0 || cell.gz[k] !== 0) &&
+          (x - cell.mx[k]) * cell.gx[k] + (z - cell.mz[k]) * cell.gz[k] > 0
+        ) {
+          continue;
+        }
         if (d2 <= BENCH2) {
           const flat = cell.top[k] + ddx * cell.px[k] + ddz * cell.pz[k];
           if (flat < ceiling) ceiling = flat;
@@ -1055,11 +1130,34 @@ export function createTerrain(track: Track): TerrainField {
     // as a floor, so that a road sixty metres off and twenty metres down
     // cannot take the hillside out from under this one.
     //
-    // A min and not the nearest SAMPLE's plane alone: samples are 2 m apart
-    // and the point at a corner's outer lip is nearest to a neighbour whose
-    // plane extrapolates a few centimetres over the verge here. Smoothing
-    // that is half of what the full min was doing, and a floor that undid
-    // it would put a lip back along the outside of every corner.
+    // A min and not the nearest SAMPLE's plane alone, because the tiles
+    // have to stay under EVERY strip of ribbon drawn over them: inside a
+    // tight bend the strips fan and cross, and at a jump's lip the ribbon
+    // drops two metres in one sample — a lattice corner held to the lip's
+    // own plane is a tile through the landing's mat two cells on. What
+    // keeps it under is the neighbours' planes carrying the road's GRADE
+    // along to this point.
+    //
+    // ...carried in ROAD coordinates, never in the neighbour's own frame.
+    // A sample's plane models the road where its strip is — within a
+    // sample step along it. Read at a point eight or fifteen metres along
+    // it stands a metre under the corridor's own verge at the outer lip,
+    // three ways at once: its bank is the bank where IT is, and the bank
+    // winds on and off over a corner's runoff; its tilt is applied to the
+    // point's lateral in its own frame, which the bend has foreshortened;
+    // and its grade is run out along a chord that, on the outside of a
+    // bend, is longer than the arc. A min that took those planes dug a
+    // trench under the ribbon's outer band and left a ridge just past the
+    // lip where the fill fell out of it — on every banked corner of every
+    // stage, always at the lip's own offset (`rollers.bump`,
+    // `rollers.edge`). So a neighbour of the same stretch that does not
+    // cover the point is read as the road's underside AT THE NEAREST
+    // SAMPLE'S STATION — its top run along the arc at its grade — under
+    // the cross-section tilt of the road here (this bank, this lateral),
+    // faded from its own exact plane over the step past its strip so
+    // nothing steps where a strip stops covering. Another arm's sample is
+    // read as it stands, as before: road coordinates mean nothing across
+    // the country between two arms.
     //
     // Only computed where a distant cone is actually cutting below the
     // nearest road's own plane, which is rare: everywhere else the answer is
@@ -1078,6 +1176,9 @@ export function createTerrain(track: Track): TerrainField {
             (tilt * BENCH) / rawD +
             coneRise(rawD, bestCell.climb[bestSlot]);
       if (ceiling < own) {
+        const bankHere = bestCell.bank[bestSlot];
+        const sNear = samples[best].s;
+        const latHere = ddx * bestCell.fz[bestSlot] - ddz * bestCell.fx[bestSlot];
         const window = rawD + LOCAL_CONE;
         const window2 = window * window;
         for (let c = 0; c < nearCells.length; c++) {
@@ -1093,7 +1194,16 @@ export function createTerrain(track: Track): TerrainField {
             const ddz2 = z - cell.z[k];
             const d2 = ddx2 * ddx2 + ddz2 * ddz2;
             if (d2 > window2) continue;
-            const t = ddx2 * cell.px[k] + ddz2 * cell.pz[k];
+            let t = ddx2 * cell.px[k] + ddz2 * cell.pz[k];
+            if (Math.abs(cell.index[k] - best) <= ARM_WINDOW) {
+              const along = ddx2 * cell.fx[k] + ddz2 * cell.fz[k];
+              const strip = clamp01(2 - Math.abs(along) / track.step);
+              if (strip < 1) {
+                const road =
+                  cell.slope[k] * (sNear - samples[cell.index[k]].s) - bankHere * latHere;
+                t += (road - t) * (1 - strip);
+              }
+            }
             let here: number;
             if (d2 <= BENCH2) here = cell.top[k] + t;
             else {
@@ -1308,6 +1418,8 @@ export function createTerrain(track: Track): TerrainField {
   // a grade the wheels can take.
   /** Radius of the flat bench, m, measured from a road's centerline. */
   const BENCH = Math.max(shelfEnd, R.verge.bench);
+  /** R47 — how far past the lip the trench under a bore stays level. */
+  const TRENCH = tunnelTrench(track.width);
   const BENCH2 = BENCH * BENCH;
   const VERGE_CLIMB: number = R.verge.climb;
   const CLIMBABLE: number = R.verge.climbable;
@@ -1440,8 +1552,9 @@ export function createTerrain(track: Track): TerrainField {
    * height as a flat ceiling instead would cut a metre of trench along the
    * high side of every banked corner. A bridge DECK stands over a ravine on
    * purpose and pins nothing. */
+  // R47 — a bored sample cuts nothing: the country stands over it.
   const ceilingOf = (shape: RibbonSample): number =>
-    shape.deck != null
+    shape.deck != null || shape.tunnel
       ? Infinity
       : shape.elevation + vergeOffset(ROAD_CROSS.reach, shape.lift, 0) - TILE_SINK;
 
@@ -1736,7 +1849,7 @@ export function createTerrain(track: Track): TerrainField {
 
   /** Anything with a road's cross-section: a stage sample or a branch's
    * (the branch has no bridges, so its deck is simply absent). */
-  type RibbonSample = RoadShape & { elevation: number };
+  type RibbonSample = RoadShape & { elevation: number; tunnel?: boolean };
 
   /** The corridor's own cross-section at a SIGNED lateral offset from a
    * road's center: the mat's crown and wheel tracks inside the edge, its
@@ -1917,6 +2030,27 @@ export function createTerrain(track: Track): TerrainField {
     // relief render shows up as a hairline running across the country.
     if (!near || near.d > CORRIDOR_RANGE) {
       base = far;
+    } else if (samples[near.index].tunnel) {
+      // R47 — under a bore the lattice is a TRENCH: the corridor shelf at
+      // road level out to the lip, held level for a bench past it
+      // (`tunnelTrench` — so the ramp the straddling cell draws up to the
+      // mountain starts outside the vault's walls, not through them), and
+      // the bare mountain beyond, with no run-out between. The first cut
+      // left the country over the bore untouched, and the lattice cell
+      // that straddled a mouth then had one corner on the cutting and the
+      // next on the mountain — a steep tile drawn ACROSS the road, which
+      // read as a snow bank the car drove into. A shelf carried the whole
+      // length of the bore keeps every tile along the road flat; the
+      // mountain is drawn back over the trench by the lining as a lid
+      // (tunnel.ts), and the whole trench is rock (`cutAt`).
+      const s = samples[near.index];
+      const lip = lipAt(near.index);
+      if (near.d < lip + TRENCH) {
+        base = ribbonY(s, sideOf(near.lateral) * Math.min(near.d, lip), s.width) - TILE_SINK;
+        onMat = near.d < lip;
+      } else {
+        base = far;
+      }
     } else {
       const s = samples[near.index];
       // R16 — the ribbon's own outer edge HERE, not the stage's nominal
@@ -2225,7 +2359,9 @@ export function createTerrain(track: Track): TerrainField {
     const near = nearestRoad(x, z);
     if (!near) return carved;
     const s = samples[near.index];
-    if (s.deck != null) return carved;
+    // A deck stands over its channel, and a bore under whatever runs over
+    // it (R47): neither pins the carve.
+    if (s.deck != null || s.tunnel) return carved;
     const lip = lipAt(near.index);
     const floor =
       ribbonY(s, sideOf(near.lateral) * Math.min(near.d, lip), s.width) -
@@ -2265,6 +2401,10 @@ export function createTerrain(track: Track): TerrainField {
       const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
       if (!spur || spur.d > SPUR_CONE_REACH) return 0;
     }
+    // R47 — the trench under a bore is blasted rock the whole way: the
+    // shelf's floor, the step at the lip and the face at either mouth.
+    // Nothing roots in it, and no reader calls the step a slope.
+    if (near && samples[near.index].tunnel) return 1;
     shapeAt(x, z);
     // The join counts as rock from the RUNOFF's grade up, not from
     // `climbable`: the band the fade stands at a hair under climbable in
@@ -2481,6 +2621,14 @@ export function createTerrain(track: Track): TerrainField {
     const lake = land.water.shoreLevelAt(x, z);
     const surface = lake !== null && ground < lake ? lake : streamWaterAt(streams, x, z);
     if (surface === null || ground >= surface - 0.02) return null;
+    // R47 — water over a BORE is on the mountain, not on the road under
+    // it: a stream crossing the ground over a tunnel is twenty metres
+    // above the car driving through, and a car asked for the water at its
+    // own position must not be told it is in a river.
+    const bored = nearestRoad(x, z);
+    if (bored && samples[bored.index].tunnel && bored.d <= samples[bored.index].width / 2 + 3) {
+      return null;
+    }
     // ...and a road over it is another layer again: an embankment across a
     // lake, or a shelf cut above a stream, is dry road with water below,
     // not water. Only a ford — whose ribbon lies AT the water it wades —
@@ -2619,6 +2767,9 @@ export function createTerrain(track: Track): TerrainField {
   };
   const indexParapets = (): void => {
     for (const bay of bridgeParapets(samples, track.width, parapetScan, samples.length)) fix(bay);
+    // R47 — and a bore's walls, which are the same kind of thing: the one
+    // other wall a stage builds on purpose.
+    for (const bay of tunnelWalls(samples, track.width, parapetScan, samples.length)) fix(bay);
     parapetScan = samples.length;
   };
 
@@ -2888,6 +3039,17 @@ export function createTerrain(track: Track): TerrainField {
   sync(0);
 
   const roadDistanceAt = (x: number, z: number): number => nearestRoad(x, z)?.d ?? Infinity;
+  const lidAt = (x: number, z: number): number => {
+    const near = nearestRoad(x, z);
+    if (
+      near &&
+      near.d <= CORRIDOR_RANGE &&
+      samples[near.index].tunnel &&
+      near.d < lipAt(near.index) + TRENCH
+    )
+      return farField(x, z);
+    return heightAt(x, z);
+  };
   const ceilingAt = (x: number, z: number): number => nearestSample(x, z)?.ceiling ?? Infinity;
   const coneAt = (x: number, z: number): number => {
     shapeAt(x, z);
@@ -2899,6 +3061,7 @@ export function createTerrain(track: Track): TerrainField {
     groundAt,
     latticeAt,
     farHeightAt: farField,
+    lidAt,
     geology: land.geology,
     waterAt,
     water: land.water,
