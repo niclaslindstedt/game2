@@ -33,6 +33,18 @@ The desktop app (`tauri/`, see [platforms.md](platforms.md)) reads three variabl
 
 Packaging reads one more: `APPLE_SIGNING_IDENTITY`, the Developer ID a macOS build is signed with. Absent, the app is signed ad hoc — enough to run on Apple Silicon, at the cost of one Gatekeeper prompt the release notes explain.
 
+On a runner nobody sets it by hand: `.github/actions/apple-signing` imports a certificate into a throwaway keychain and reads the identity back out of it, so a renewed certificate is one secret to replace rather than two to keep agreeing. Five repository secrets, all optional and all sharing their names with the sibling `game` repo:
+
+| Secret                        | Meaning                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `MAC_CSC_LINK`                | The Developer ID Application certificate as a base64-encoded `.p12` (`base64 -i cert.p12`). |
+| `MAC_CSC_KEY_PASSWORD`        | The password that `.p12` was exported with.                                                 |
+| `APPLE_ID`                    | The Apple ID the notarization request is made as.                                           |
+| `APPLE_APP_SPECIFIC_PASSWORD` | An app-specific password for it, from appleid.apple.com.                                    |
+| `APPLE_TEAM_ID`               | The ten-character Developer Team ID the certificate belongs to.                             |
+
+The first two sign; the last three notarize, and the bundler acts on them only once the app carries a real signature — so half a set signs without notarizing rather than failing. `MAC_SIGN_IDENTITY` overrides the identity read out of the certificate, and is needed only where the keychain holds more than one.
+
 Every launch is written to `launch.log` in the app's own user-data directory — `%APPDATA%\scanflick` on Windows, `~/Library/Application Support/scanflick` on macOS, `~/.local/share/scanflick` on Linux — with the previous launch kept beside it as `launch.log.prev`. The window's remembered geometry (`window-state.json`) is there too. The player's settings and scores are NOT: those are the webview's own origin-keyed storage, exactly as in a browser.
 
 ## The native shell's build environment
@@ -57,7 +69,7 @@ Each slot's manifest gets a distinct `id`/`scope`/`start_url` and install name, 
 
 ## Releases
 
-`release.yml` (manual dispatch; `version-bump.yml` is a thin dispatcher onto it) derives the bump from `.changes/unreleased/` fragments, rewrites every version string via `scripts/update-versions.sh`, collates the CHANGELOG, commits `chore(release): vX.Y.Z`, tags, creates the GitHub Release, and chains into `pages.yml` so `/` serves the new tag immediately. Preview locally with `make bump` and `make changelog VERSION=X.Y.Z`.
+`release.yml` (manual dispatch, and the only entry point) derives the bump from `.changes/unreleased/` fragments, rewrites every version string via `scripts/update-versions.sh`, collates the CHANGELOG, commits `chore(release): vX.Y.Z`, tags, creates the GitHub Release, and chains into `pages.yml` so `/` serves the new tag immediately. Between the tag and the publish, a runner per platform packages the desktop downloads onto the release while it is still a draft — macOS builds both slices, cross-compiling the Intel one, so an Intel Mac is not left with an `aarch64` `.dmg` it cannot open. Preview locally with `make bump` and `make changelog VERSION=X.Y.Z`.
 
 ## Identity
 

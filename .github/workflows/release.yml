@@ -118,7 +118,14 @@ jobs:
       - name: Collate changelog
         run: node scripts/release/collate-changelog.mjs "${{ steps.bump.outputs.version }}"
 
+      # The macOS paragraph is not decoration: without notarization
+      # Gatekeeper refuses the first launch, and a player with no answer to
+      # that prompt has no game. So the notes say which of the two it is,
+      # decided by whether the Apple secrets are actually configured — the
+      # same condition the `desktop` job's signing turns on.
       - name: Extract release-notes body
+        env:
+          NOTARIZED: ${{ secrets.MAC_CSC_LINK != '' && secrets.APPLE_ID != '' }}
         run: |
           node scripts/release/extract-section.mjs "${{ steps.bump.outputs.version }}" > .release-notes.md
           cat >> .release-notes.md <<'NOTES'
@@ -134,12 +141,23 @@ jobs:
           The same game as a desktop app, below: an installer for Windows,
           a `.dmg` for macOS (`aarch64` for Apple Silicon, `x64` for an
           Intel Mac), and a `.deb` or `.AppImage` for Linux.
+          NOTES
+
+          if [ "$NOTARIZED" = "true" ]; then
+            cat >> .release-notes.md <<'NOTES'
+
+          **macOS:** signed and notarized by Apple — it opens like any other
+          app.
+          NOTES
+          else
+            cat >> .release-notes.md <<'NOTES'
 
           **macOS:** the app is signed but not notarized, so the first
           launch is refused. Open **System Settings → Privacy & Security**,
           scroll to the message about Scandinavian Flick and choose
           **Open Anyway**. macOS remembers after that.
           NOTES
+          fi
 
       - name: make build
         run: make build
@@ -214,12 +232,15 @@ jobs:
       # The release commit is on the tag, so the build is made from exactly
       # what was tagged rather than from whatever main looks like by now.
       TAG: ${{ needs.release.outputs.tag }}
-      # NEVER UNSIGNED on macOS: Apple Silicon refuses to execute unsigned
-      # arm64 code and reports it to the player as "the app is damaged". An
-      # absent secret means the ad-hoc signature `package.mjs` falls back to
-      # — the app runs, and the player answers one Gatekeeper prompt (the
-      # release notes say how). A Developer ID identity here signs for real.
-      APPLE_SIGNING_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+      # NOTARIZATION. The bundler acts on these three only once the app is
+      # signed with a real Developer ID (the `Apple signing` step below), and
+      # ignores them otherwise — so an unconfigured repo still packages, it
+      # just packages the ad-hoc build. `APPLE_PASSWORD` is the bundler's
+      # name for an app-specific password; the secret keeps the longer name
+      # it has in the sibling repo.
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -241,9 +262,33 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
             libayatana-appindicator3-dev librsvg2-dev patchelf
 
+      # Turns `package.mjs`'s ad-hoc fallback into a real signature, and
+      # with it unlocks the notarization the env above configures. A no-op
+      # with a warning when the certificate secret is empty.
+      - name: Apple signing
+        if: matrix.target == 'macos'
+        uses: ./.github/actions/apple-signing
+        with:
+          certificate: ${{ secrets.MAC_CSC_LINK }}
+          certificate-password: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          identity: ${{ secrets.MAC_SIGN_IDENTITY }}
+
+      # An Intel Mac cannot run the arm64 bundle, and `macos-latest` is
+      # Apple Silicon, so its slice is a cross-compile — cheap, because the
+      # web build and the icons are already made by then (`--skip-web`), and
+      # `--keep` is what stops the second pass wiping the first one's `.dmg`.
+      - name: An Intel Mac target
+        if: matrix.target == 'macos'
+        run: rustup target add x86_64-apple-darwin
+
       - name: Package
         shell: bash
         run: npm run tauri:package
+
+      - name: Package (macOS, Intel)
+        if: matrix.target == 'macos'
+        shell: bash
+        run: npm run tauri:package -- --target x86_64-apple-darwin --skip-web --keep
 
       # Whatever this platform's packager produced — a job that listed
       # filenames would silently upload nothing the day a target changed

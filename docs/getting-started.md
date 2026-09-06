@@ -110,7 +110,7 @@ The game is a PWA. iOS Safari: Share → **Add to Home Screen**. Android Chrome:
 
 ### Installing on your computer
 
-Every [release](https://github.com/niclaslindstedt/game2/releases) carries the same game as a desktop app: a `-setup.exe` for Windows, a `.dmg` for macOS (`aarch64` for Apple Silicon, `x64` for an Intel Mac), a `.deb` or `.AppImage` for Linux. It is the website in a window of its own — offline, remembering its size and place, with F11 or Alt+Enter for fullscreen — and it updates when you install the next release. On macOS the first launch is refused, because the app is signed but not notarized: open System Settings → Privacy & Security, find the message about Scandinavian Flick and choose **Open Anyway**.
+Every [release](https://github.com/niclaslindstedt/game2/releases) carries the same game as a desktop app: a `-setup.exe` for Windows, a `.dmg` for macOS (`aarch64` for Apple Silicon, `x64` for an Intel Mac), a `.deb` or `.AppImage` for Linux. It is the website in a window of its own — offline, remembering its size and place, with F11 or Alt+Enter for fullscreen — and it updates when you install the next release. The macOS build is signed and notarized by Apple, so it opens like any other app; should a first launch still be refused, open System Settings → Privacy & Security, find the message about Scandinavian Flick and choose **Open Anyway**.
 
 ### How a run works
 

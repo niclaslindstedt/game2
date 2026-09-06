@@ -22,6 +22,11 @@
 //   node scripts/package.mjs                     # this platform's downloads
 //   node scripts/package.mjs --target <triple>   # cross/explicit target
 //   node scripts/package.mjs --skip-web          # reuse an existing webroot
+//   node scripts/package.mjs --keep              # add to release/, don't clear it
+//
+// `--keep` is what lets one macOS runner produce BOTH slices: the second
+// pass cross-compiles `--target x86_64-apple-darwin` and would otherwise
+// wipe the Apple Silicon `.dmg` the first pass just wrote.
 
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -104,7 +109,7 @@ const DOWNLOADS = /\.(dmg|deb|AppImage|exe|msi)$/;
 const bundles = join(profileDir(), "bundle");
 if (!existsSync(bundles)) fail(`the bundler wrote nothing under ${bundles}`);
 
-rmSync(RELEASE_DIR, { recursive: true, force: true });
+if (!flag("keep")) rmSync(RELEASE_DIR, { recursive: true, force: true });
 mkdirSync(RELEASE_DIR, { recursive: true });
 let collected = 0;
 for (const file of walk(bundles)) {
