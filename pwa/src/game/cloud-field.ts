@@ -71,6 +71,10 @@ export type CloudLayer = {
    * in the jet stream is fast too, but ten kilometres up it barely seems
    * to move. */
   drift: number;
+  /** How much the sheet is combed into FIBRES, 0..1 — the fine filaments
+   * along the wind that make a cirrus a cirrus (`cloudFibres`). Nothing on
+   * a cumulus, which is a heap and not hair. */
+  fibre: number;
   /** A seed offset into the noise, so no two layers share a pattern. */
   seed: number;
   /** Whether the sheet is the DECK — the lid of an overcast sky, painted
@@ -162,6 +166,7 @@ export function dressSky(
       streak: 1.3,
       body: 1,
       drift: 1,
+      fibre: 0,
       seed: 3,
       deck: true,
     });
@@ -178,6 +183,7 @@ export function dressSky(
       streak: 1.35 + 0.6 * cover,
       body: 0.6,
       drift: 2.6,
+      fibre: 0,
       seed: 5,
       deck: false,
     });
@@ -254,6 +260,7 @@ function heaps(
     streak: 1.15,
     body: 1,
     drift: 1,
+    fibre: 0,
     seed: 11,
     deck: false,
   };
@@ -276,6 +283,7 @@ function sheet(
     streak: 1.6,
     body: 0.6,
     drift: 1,
+    fibre: 0,
     seed: 17,
     deck: false,
   };
@@ -295,13 +303,17 @@ function mackerel(altitude: number, coverage: number, roll: () => number): Cloud
     streak: 1.5,
     body: 0.7,
     drift: 1.3,
+    fibre: 0,
     seed: 23,
     deck: false,
   };
 }
 
 /** Cirrus — ice ten kilometres up, combed into long streaks along the
- * wind, with no body to shade: what burns after the sun has gone. */
+ * wind, with no body to shade: what burns after the sun has gone. The
+ * sheet says where the veil is; the fibres are what it is made of — the
+ * hair-like filaments a cirrus reads by, drawn over the sheet rather than
+ * as it, so a big soft sweep of it still has fine structure inside. */
 function wisps(altitude: number, coverage: number, roll: () => number): CloudLayer {
   return {
     genus: "cirrus",
@@ -309,10 +321,11 @@ function wisps(altitude: number, coverage: number, roll: () => number): CloudLay
     thickness: 120,
     coverage,
     scale: between(roll, 2600, 3600),
-    sharpness: 0.12,
-    streak: between(roll, 3, 4.5),
+    sharpness: 0.18,
+    streak: between(roll, 3.5, 5),
     body: 0.1,
     drift: 1.8,
+    fibre: between(roll, 0.6, 0.85),
     seed: 29,
     deck: false,
   };
@@ -368,6 +381,18 @@ float cloudField( vec2 uv, int octaves ) {
   float detail = cloudFbm( uv * 2.6 + vec2( 7.1, 3.3 ), max( octaves - 2, 1 ) );
   return 0.76 * mass + 0.24 * detail;
 }
+// THE FIBRES a cirrus is combed into: the field read again at a pitch
+// that is fine ACROSS the wind and long along it (the uv is already
+// stretched along the wind by the streak, so the squeeze is across), and
+// used to modulate the sheet where it already is rather than to cut it —
+// a filament is a place the veil is denser, not a cloud of its own.
+// Two octaves only, whatever the sheet is read at: the fibres are already
+// the finest thing in the sky, and a third octave of them is shimmer.
+float cloudFibres( vec2 uv, float n, float fibre, int octaves ) {
+  if ( fibre <= 0.0 ) return n;
+  float f = cloudFbm( vec2( uv.x * 1.7, uv.y * 9.0 ) + vec2( 3.7, 11.9 ), min( octaves, 2 ) );
+  return mix( n, n * ( 0.5 + 1.0 * f ), fibre );
+}
 `;
 
 function fract(v: number): number {
@@ -408,6 +433,31 @@ export function cloudField(x: number, y: number, octaves: number): number {
   const mass = cloudFbm(x, y, Math.min(octaves, 2));
   const detail = cloudFbm(x * 2.6 + 7.1, y * 2.6 + 3.3, Math.max(octaves - 2, 1));
   return 0.76 * mass + 0.24 * detail;
+}
+
+/** The same fibres as `cloudFibres` in the GLSL, on the CPU. */
+export function cloudFibres(
+  u: number,
+  v: number,
+  n: number,
+  fibre: number,
+  octaves: number,
+): number {
+  if (fibre <= 0) return n;
+  const f = cloudFbm(u * 1.7 + 3.7, v * 9.0 + 11.9, Math.min(octaves, 2));
+  return n + (n * (0.5 + 1.0 * f) - n) * fibre;
+}
+
+/** How much of a sheet's fibres are drawn on a ray at this elevation
+ * (`up`, the ray's or the sun's y), 0..1. Toward the horizon a sheet ten
+ * kilometres up is seen a hundred kilometres away, where the fibres are
+ * under a pixel and only sparkle: they are faded out over the lowest
+ * fifteen degrees, and the veil is left to the haze. Stated once for the
+ * dome and the CPU's cloud-over-the-sun. */
+export function fibreAt(up: number): number {
+  const t = Math.abs(up) / 0.25;
+  const c = t < 0 ? 0 : t > 1 ? 1 : t;
+  return c * c * (3 - 2 * c);
 }
 
 export function cloudFbm(x: number, y: number, octaves: number): number {
@@ -500,5 +550,6 @@ export function sunOcclusion(
   const px = x + sunDir.x * dist;
   const pz = z + sunDir.z * dist;
   const [u, v] = cloudUv(layer, px, pz, offsetX, offsetZ, windX, windZ);
-  return cloudDensity(layer, cloudField(u, v, octaves)) * Math.min(1, layer.body + 0.3);
+  const n = cloudFibres(u, v, cloudField(u, v, octaves), layer.fibre * fibreAt(sunDir.y), octaves);
+  return cloudDensity(layer, n) * Math.min(1, layer.body + 0.3);
 }

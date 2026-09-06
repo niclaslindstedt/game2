@@ -16,8 +16,11 @@ import { describe, expect, it } from "vitest";
 import {
   createSkyTraffic,
   puffFade,
+  puffLump,
   puffWidth,
   tipFade,
+  trailLump,
+  trailRead,
   LANE,
   PUFF,
 } from "../pwa/src/game/sky-traffic.ts";
@@ -132,20 +135,45 @@ describe("high traffic", () => {
 
   it("holds a contrail in the sky for minutes, then lets it go", () => {
     expect(puffFade(0)).toBe(0); // nothing pops in behind the tail
-    expect(puffFade(PUFF.rise)).toBeCloseTo(1, 6);
-    // The LINGER: a full minute after it was laid a trail is still at full
-    // strength, which is the whole reason a stage accumulates a sky.
-    expect(puffFade(60)).toBeCloseTo(1, 6);
+    // Judged on what the BAND reads as, all its puffs composited, because
+    // one puff's alpha is a fraction of that on purpose (`PUFF.spread`).
+    // At the tail it is white...
+    expect(trailRead(PUFF.rise)).toBeGreaterThan(0.85);
+    // ...the LINGER: a full minute after it was laid a trail is still a
+    // plain band on the sky — broad and faint, and unmistakably there —
+    // which is the whole reason a stage accumulates a sky...
+    expect(trailRead(60)).toBeGreaterThan(0.2);
+    expect(trailRead(60)).toBeLessThan(0.6);
     expect(puffFade(PUFF.life)).toBe(0);
     expect(puffFade(PUFF.life + 10)).toBe(0);
-    // …and it goes out gradually rather than in one frame.
+    // …and it goes out gradually rather than in one frame, only ever
+    // dimmer as it spreads and never brighter: an old band that outshines
+    // the fresh line beside it is the one thing that reads as wrong.
     let last = 1;
-    for (let age = PUFF.life - PUFF.fall; age <= PUFF.life; age += 2) {
-      const fade = puffFade(age);
-      expect(fade).toBeLessThanOrEqual(last + 1e-9);
-      last = fade;
+    for (let age = PUFF.rise; age <= PUFF.life; age += 2) {
+      const read = trailRead(age);
+      expect(read).toBeLessThanOrEqual(last + 1e-9);
+      last = read;
     }
     expect(PUFF.life).toBeGreaterThan(RACE);
+  });
+
+  it("breaks an old trail up along its length without bending it", () => {
+    // The lumps grow with age from nothing, and never take the whole
+    // trail — a band with holes in it is coming apart, a dotted line is a
+    // rendering fault.
+    expect(puffLump(0)).toBe(0);
+    expect(puffLump(PUFF.widen)).toBeGreaterThan(0.2);
+    expect(puffLump(PUFF.life)).toBeLessThan(0.7);
+    // The pattern along the chord is smooth and 0..1, and another trail's
+    // pattern is another pattern.
+    for (let along = 0; along < 2000; along += 5) {
+      const here = trailLump(along, 1);
+      expect(here).toBeGreaterThanOrEqual(0);
+      expect(here).toBeLessThanOrEqual(1);
+      expect(Math.abs(trailLump(along + 5, 1) - here)).toBeLessThan(0.15);
+    }
+    expect(trailLump(300, 1)).not.toBeCloseTo(trailLump(300, 3), 2);
   });
 
   it("thins a trail out at both ends instead of cutting it off", () => {

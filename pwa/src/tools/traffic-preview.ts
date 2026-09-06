@@ -105,6 +105,9 @@ async function main(): Promise<void> {
 
   const environment = createEnvironment(scene);
   environment.setEffects(1);
+  // There is no car in this scene, so there are no lamps: the pools they
+  // would throw on the road are the one thing here that is not sky.
+  environment.setLampsBroken(0, 0);
 
   /** The slice of `GameState` the atmosphere actually reads. The clock is
    * held at zero, so a row's sky is the hour it names. */

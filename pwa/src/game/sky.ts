@@ -389,8 +389,10 @@ const MORNING: Rung = {
   cloudOpacity: 1,
 };
 
+// The zenith is a DEEP blue, the blue a photograph of a clear noon comes
+// back with over a contrail, and the horizon the pale band under it.
 const DAY: Rung = {
-  zenith: 0x1f7fe0,
+  zenith: 0x1f6fd8,
   horizon: 0xbfe3ff,
   glow: 0xfff3c8,
   glowStrength: 0.35,
