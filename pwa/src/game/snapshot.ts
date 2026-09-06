@@ -21,6 +21,7 @@ import {
 } from "@engine";
 
 import { buildMinimap } from "./minimap-view.ts";
+import { clamp } from "../lib/util.ts";
 import { carHealth } from "./car-health.ts";
 import { tachometer } from "./car-instruments.ts";
 import { cornerSign, type PaceSign } from "./pace-shape.ts";
@@ -207,6 +208,24 @@ function paceEvents(state: GameState, mem: PaceMemory): PaceEvent[] {
   return events;
 }
 
+/** HOW FAR THROUGH THE CORNER the car is, 0 at the turn-in and 1 at the exit
+ * — what the sign inks itself in with while it is being driven.
+ *
+ * ARC POSITION, not time: the corner has a start and an end written on the
+ * stage, and the honest reading of "how much of this bend is behind me" is
+ * how much of that road is behind me. Timing it instead would fill the sign
+ * at whatever speed the car happened to carry in, and finish it early on a
+ * corner that was slower than the entry promised.
+ *
+ * It only ever grows because `progressS` only ever grows through a note; a
+ * car that goes backwards out of a corner is a car that has left it, and the
+ * strip drops the call rather than unwinding the fill. */
+function throughCorner(state: GameState, note: Pacenote): number {
+  const span = note.endS - note.s;
+  if (span <= 0) return 0;
+  return clamp((state.progressS - note.s) / span, 0, 1);
+}
+
 /** Turn angle past which a call earns the LONG modifier, radians (~100°). */
 const LONG_NOTE_ANGLE = 1.75;
 
@@ -278,6 +297,7 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
       severity: note.severity,
       long: note.angle > LONG_NOTE_ANGLE,
       eta,
+      fill: throughCorner(state, note),
       sign: drawing.sign,
     });
     if (out.length >= 2) break;

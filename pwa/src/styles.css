@@ -625,7 +625,6 @@ body {
    keeps its shape at every plate size. */
 .hud-pace-to-left {
   --pace-lead: var(--pace-point);
-  --pace-drain: left;
   clip-path: polygon(
     0 50%,
     calc(var(--pace-point) * 0.72) 14%,
@@ -644,7 +643,6 @@ body {
 
 .hud-pace-to-right {
   --pace-trail: var(--pace-point);
-  --pace-drain: right;
   clip-path: polygon(
     0 0,
     calc(100% - var(--pace-point) * 1.4) 0,
@@ -662,42 +660,64 @@ body {
 }
 
 .hud-pace-arrow {
+  --pace-stroke: 13;
   width: var(--pace-sign);
   height: var(--pace-sign);
   filter: drop-shadow(2px 2px 0 var(--hud-shadow));
 }
 
-/* THE COUNTDOWN along the foot of the plate: how close the corner is, drawn
-   rather than printed. An inline transform scales it (hud-pace.tsx) — full
-   width at the moment the call goes up, nothing left at the turn-in.
+/* THE HAND EVERY SIGN IN THE STRIP IS DRAWN IN, and it lives here rather
+   than on the shapes because an SVG element is painted off HYPHENATED names
+   (`stroke-width`) — the camelCase spelling a JSX attribute carries is set
+   verbatim on an element in the SVG namespace, where nothing reads it, and
+   the sign comes out as a hairline. One rule for the roads, one for the
+   heads, and the weight as a variable so a glyph that wants a lighter line
+   says so once. */
+.hud-pace-arrow path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--pace-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
-   IT DRAINS THE WAY THE ROAD GOES. The origin it collapses toward is the
-   side the corner turns to, so a right-hander's bar runs off to the right
-   and empties into the plate's own point, and a left-hander's to the left:
-   the countdown and the direction are the same movement, and the direction
-   gets said once more in the one part of the sign that is moving. A jump has
-   no side to go to and keeps the centre.
+.hud-pace-arrow polygon,
+.hud-pace-arrow circle {
+  fill: currentColor;
+}
 
-   ONE COLOUR for every severity, and not the plate's own `currentColor`:
-   the bar answers WHEN, the plate answers HOW MUCH, and a bar that changed
-   colour with the corner would be the severity said a fourth time instead of
-   the one thing on the strip that is not. Yellow because that is the arcade
-   register the rest of this HUD counts in.
+/* THE CORNER BEING DRIVEN, WRITTEN IN. The same road drawn a second time in
+   the HUD's own ink and clipped by a dash to how much of the bend is behind
+   the car — so the sign fills from the approach to the head over exactly the
+   road the note covers, and is solid as the car straightens up.
 
-   It rides INSIDE the plate's own inset, clear of the wedge either side, and
-   moves on the same 0.12s the plate's opacity does — the snapshot ticks at
-   about 12 Hz, and a bar that stepped would read as a bar that stuttered. */
-.hud-pace-timer {
-  position: absolute;
-  bottom: 0.16rem;
-  left: calc(var(--pace-lead) + 0.45rem);
-  right: calc(var(--pace-trail) + 0.45rem);
-  height: 3px;
-  border-radius: 2px;
-  background-color: #ffd23e;
-  box-shadow: 1px 1px 0 var(--hud-shadow);
-  transform-origin: var(--pace-drain, center);
-  transition: transform 0.12s linear;
+   ONE COLOUR for every severity, and not the plate's own `currentColor`: the
+   fill answers HOW FAR THROUGH, the plate answers HOW MUCH, and a fill in the
+   corner's own colour would be the severity said a fourth time instead of the
+   one thing on the strip that is not. It is drawn OVER the sign rather than
+   under it for the same reason the plate is whole from the moment it goes up
+   — the two seconds of braking before the turn-in are where the colour is
+   worth most, and an outline waiting to be filled says nothing through them.
+
+   It moves on the same 0.12s the plate's opacity does: the snapshot ticks at
+   about 12 Hz, and a fill that stepped would read as a fill that stuttered. */
+.hud-pace-fill {
+  color: var(--hud-ink);
+}
+
+.hud-pace-fill path {
+  transition: stroke-dashoffset 0.12s linear;
+}
+
+.hud-pace-fill polygon {
+  transition: opacity 0.12s linear;
+}
+
+/* The way home is lettered rather than drawn, and its triangle stands beside
+   a sentence instead of being the whole call: a lighter line, so it sits at
+   the weight of the words next to it. */
+.hud-pace-home .hud-pace-arrow {
+  --pace-stroke: 11;
 }
 
 .hud-pace-text {
