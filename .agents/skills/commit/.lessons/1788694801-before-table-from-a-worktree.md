@@ -1,7 +1,6 @@
 ---
 title: Get the BEFORE half of a sim/analyze table from a `git worktree`, never from `git stash`
 date: 2026-09-06
-scope: (global)
 concepts: [sim, analyze, verification, git, worktree, stash]
 ---
 
