@@ -12,7 +12,10 @@
 //     call on the strip points into the corner the driver is not taking;
 //   * the whole sign, head included, fits its box whatever the corner does
 //     inside it, or the plate it is drawn on clips it;
-//   * the road arrives from the BOTTOM, whichever way the stage points.
+//   * the road arrives from the BOTTOM, whichever way the stage points;
+//   * and what of the sign is LIT as the corner is driven ends up covering
+//     the whole of it — the road AND the whole head, point included, which a
+//     head that merely brightened never quite managed.
 //
 // It also covers the one case that has no samples to walk: a note at an
 // endless stage's streaming frontier, which still has to draw something.
@@ -20,7 +23,7 @@
 import { describe, expect, it } from "vitest";
 import { compileTrack, type Pacenote, type SegmentPlan } from "@engine";
 
-import { cornerSign, type PacePoint, type PaceSign } from "../pwa/src/game/pace-shape.ts";
+import { cornerSign, fillSign, type PacePoint, type PaceSign } from "../pwa/src/game/pace-shape.ts";
 
 /** A rig with one corner in it, plus the road either side so the note has a
  * clean entry and exit. `dir` +1 grows the heading — a LEFT call on screen. */
@@ -145,5 +148,84 @@ describe("the corner the sign draws", () => {
     const sign = cornerSign(track.samples, ahead);
     expect(sign.line.length).toBeGreaterThan(2);
     expect(swept(sign.line)).toBeLessThan(-1.5);
+  });
+});
+
+describe("the sign filling as the corner is driven", () => {
+  const { sign } = only(rig(1, 60, 120));
+
+  /** The head's own depth, base to point — the part of the fill it owns. */
+  const headDepth = (s: PaceSign): number => {
+    const [tip, left, right] = s.head;
+    return Math.hypot(tip[0] - (left[0] + right[0]) / 2, tip[1] - (left[1] + right[1]) / 2);
+  };
+
+  it("lights nothing at the turn-in", () => {
+    const lit = fillSign(sign, 0);
+    expect(lit.lit).toBe(0);
+    expect(lit.head).toBeNull();
+  });
+
+  it("lights the road before it reaches the head", () => {
+    const lit = fillSign(sign, 0.3);
+    expect(lit.lit).toBeGreaterThan(0);
+    expect(lit.lit).toBeLessThan(lit.span);
+    expect(lit.head).toBeNull();
+  });
+
+  // The one this exists for. The head is a third of the box across and the
+  // lit road runs into the MIDDLE of it — so a sign that is "full" with a
+  // part-lit head is a sign with two dim wings on the only part of it that
+  // says which way the corner goes.
+  it("fills the WHOLE head by the exit, point included", () => {
+    const lit = fillSign(sign, 1);
+    expect(lit.head).not.toBeNull();
+    const filled = lit.head as PacePoint[];
+    const [tip, left, right] = sign.head;
+    // Every corner of the head is in the lit shape: both base corners, and
+    // the point twice over, which is what the two long edges close onto.
+    for (const corner of [tip, left, right]) {
+      const nearest = Math.min(
+        ...filled.map((p) => Math.hypot(p[0] - corner[0], p[1] - corner[1])),
+      );
+      expect(nearest).toBeLessThan(1e-6);
+    }
+  });
+
+  it("sweeps the head from its base to its point, never backwards", () => {
+    // How far the lit shape still is from the point — Infinity while the road
+    // has not reached the head at all, and closing on 0 as it sweeps.
+    const toGo = (through: number): number => {
+      const lit = fillSign(sign, through);
+      if (!lit.head) return Infinity;
+      const [tip] = sign.head;
+      return Math.min(...lit.head.map((p) => Math.hypot(p[0] - tip[0], p[1] - tip[1])));
+    };
+    let last = Infinity;
+    for (let i = 0; i <= 20; i++) {
+      const now = toGo(i / 20);
+      expect(now).toBeLessThanOrEqual(last);
+      last = now;
+    }
+    expect(last).toBeCloseTo(0, 6);
+  });
+
+  it("gives the head the share of the fill its own depth is worth", () => {
+    const span = fillSign(sign, 1).span;
+    const depth = headDepth(sign);
+    // The road runs to the head's base, so the whole mark is that road plus
+    // the head's depth — and the head owns the last of it in that proportion.
+    const road = fillSign(sign, 1).lit;
+    const share = depth / (road + depth);
+    expect(fillSign(sign, 1 - share * 1.02).head).toBeNull();
+    expect(fillSign(sign, 1 - share * 0.5).head).not.toBeNull();
+    expect(road).toBeGreaterThan(0);
+    expect(road).toBeLessThan(span);
+  });
+
+  it("clamps either side of the corner", () => {
+    expect(fillSign(sign, -1).head).toBeNull();
+    expect(fillSign(sign, -1).lit).toBe(0);
+    expect(fillSign(sign, 2).head).not.toBeNull();
   });
 });
