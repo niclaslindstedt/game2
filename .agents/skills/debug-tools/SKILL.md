@@ -249,6 +249,10 @@ who can see the problem presses one button, and what reaches you is a frame
 that already says which seed it is, what is painted on it, where the lens was
 standing, and the link that puts you there.
 
+A DEVELOPER switch itself (god, the overlay, collecting race data) is a field
+on `DevSettings` in `pwa/src/game/settings.ts` plus a row in `menu-dev.tsx`;
+`devFromUrl` in `App.tsx` pins it so tooling can turn it on without a click.
+
 ## Reading a screenshot you were handed
 
 The overlay's boxes, and what each is for:

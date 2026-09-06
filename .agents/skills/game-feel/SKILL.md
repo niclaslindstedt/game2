@@ -95,6 +95,31 @@ What each contributes:
   dust (dark mud is invisible on dark paint), low-heavy, speckled per face,
   never past ~0.7 so the livery survives.
 
+## The camera modules, and what each decides
+
+The camera is this skill's own subsystem. One row per question:
+
+| Question                                               | Where                                                                                                                                   |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Where the camera stands OUTSIDE the car                | `CHASE_RIGS` in `pwa/src/game/camera.ts` — one row per angle                                                                            |
+| What the outside camera CONVEYS (grip, attitude, pace) | `CAMERA_FEEL` in `camera-feel.ts` — DOM-free: grip as height (`hover` per rig), a degree or two of tilt, a tremor past the gears        |
+| What an outside rig may STAND on (floor, play, cliff)  | `camera-ground.ts` — read over a footprint, sunk at a bounded rate; the menu's backdrop is `camera-drone.ts`                            |
+| How an IN-CAR camera sits, moves and takes a hit       | `camera-eye.ts` (`EYE_RIGS`)                                                                                                            |
+| What the DRIVER'S head does while the car goes over    | `bolted` in `camera-eye.ts` — the neck hands over to a bolt and the gaze takes the body's own basis one for one                         |
+| Going from one VIEW to the next on the ladder          | `camera-change.ts` — a FLOWN move, never a cut; `tests/camera_test.ts` measures it                                                      |
+| Going from one CAR to another                          | `camera-sweep.ts` (`make transit` photographs it); the shot a stage closes on is `camera-finish.ts`                                     |
+| What the outside camera does while the car ROLLS       | `camera-roll.ts` — the lens planted at the verge, zooming and climbing to keep the car in sight; the in-car rigs go over WITH it        |
+| WHEN the verge lens may take the frame                 | the latch in `camera-roll.ts` — once the driver has the car back it hands over and stays off until `car.planted`. ONE shot per accident |
+| How much a BLOW shakes the picture, and which do       | `camera-shake.ts` — DOM-free; a contact shakes the CAR, never an outside rig                                                            |
+
+Three contact sheets, all needing `make build` first:
+
+```sh
+make views     # THE CAMERA KEY: every step of the ladder, six consecutive frames each
+make transit   # the camera going from the finish line to a crew still out, frame by frame
+make rollcam   # the camera WHILE THE CAR GOES OVER — one roll, frame by frame, from two seats
+```
+
 ## The workflow
 
 1. **State the feeling** being tuned in one sentence ("the exit of a hairpin

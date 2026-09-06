@@ -124,11 +124,37 @@ Read the whole-run summary above it for damage and where it came to rest.
   metres of clear run-out with distance boards, and a debris field at the end.
   Arrive at a rail properly sideways and it puts you over. `make level`
   draws it; `tests/arena_test.ts` names it and says what is there.
+- **`make verge`** — THE VERGE LAB: a car LEAVING THE ROAD, drawn from
+  behind, with the ground under each frame shown from BOTH readers. Required
+  before and after any change to the ground under the car
+  (`engine/game/ground.ts` — one rule for the road and the country — plus
+  `TUNING.air`'s edges and `TUNING.suspension`'s bumps). A trip that starts
+  with the car reading the wrong ground is not a roll bug.
 - **`make sim` is BLIND to all of this.** Bots do not roll — the table's
   `roll` column is 0 across every seed — so it is a no-regression signal and
   never a confirmation. Run it anyway (a roll change is a `TUNING` change and
   those reach three directories away), but never cite it as evidence the
   crash got better.
+
+## The car in the air, and what it may do
+
+Three things the roll model reads and must never restate:
+
+- **What the AIR does to a car off the ground** — `engine/game/aero.ts`: the
+  drag area its attitude turns into the flow, the terminal velocity a fall
+  settles at, and the moment that points the nose. Numbers in
+  `TUNING.air.aero` + `CarSpec.aero`. Only two of them are arcade dials:
+  `bite` (how fast a fall is allowed to get) and `trim` (how far it points the
+  nose). **Every other number in that group is a MEASUREMENT the world can be
+  checked against** — change one and you are claiming physics is wrong.
+- **What the car CAN do** — `engine/game/limits.ts`, stated once and read by
+  `car.ts` AND `sim/bot.ts`. Never restate a ceiling; ask.
+- **Whether the car has FULLY come back** — `CarState.planted`, written at
+  `car.ts`'s `air.leanFree` branch: the springs-or-two-wheels line, stated
+  once and read by the roll camera to decide when the accident is over.
+- **What the DRIVER can still do while it is going over** — `driveRolling` in
+  `roll.ts` + `TUNING.air.roll.driver`; how much is left is `tyreShare`
+  (`roll-hull.ts`).
 
 ## The rules
 

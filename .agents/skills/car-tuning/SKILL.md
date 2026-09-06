@@ -156,3 +156,14 @@ three cars. Both move with the catalog.
 Record traps and heuristics as lesson fragments under
 `.agents/skills/car-tuning/.lessons/` via the **`skill-reflection`** skill; it
 owns pruning, merging and promoting them into this file.
+
+## Two per-car groups that are easy to miss
+
+- **Where a car CARRIES its weight, once it is off its wheels** — `balance` +
+  `centreHeight` on the row in `cars.ts`, read into `MassSpread.weight` by
+  `massSpread`. The hull asks every question of it, so these two numbers
+  decide how a car rolls as much as how it turns; the `crash` skill owns the
+  consequences.
+- **What a standing start costs, and what waiting pays** — `TUNING.engine`'s
+  launch group plus `clutchDump` in `engine/game/car.ts`; `CarState.launchSpin`
+  carries it.
