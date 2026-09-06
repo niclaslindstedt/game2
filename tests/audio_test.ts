@@ -919,6 +919,7 @@ describe("the world", () => {
   const STILL: WorldVoice = {
     biome: "taiga",
     timeOfDay: "day",
+    season: "summer",
     wet: 0,
     gale: 0,
     exposure: 0,
@@ -953,8 +954,10 @@ describe("the world", () => {
     // Every id on every roster is a sound the world bank has.
     for (const biome of ["taiga", "desert", "alpine"] as const) {
       for (const timeOfDay of ["dawn", "day", "dusk", "night"] as const) {
-        for (const id of ids({ biome, timeOfDay, water: 1 }))
-          expect(WORLD_BANK[id], id).toBeDefined();
+        for (const season of ["spring", "summer", "autumn"] as const) {
+          for (const id of ids({ biome, timeOfDay, season, water: 1 }))
+            expect(WORLD_BANK[id], id).toBeDefined();
+        }
       }
     }
   });
@@ -1000,6 +1003,44 @@ describe("the world", () => {
     expect(
       worldTargets({ ...STILL, biome: "alpine", exposure: 1, air: 1 }).pass.level,
     ).toBeLessThan(col.pass.level * 0.5);
+  });
+
+  it("puts geese and swans over the north, and puts the season in what they do", () => {
+    // Passage is a spring and an autumn event: both countries hear it,
+    // often, and geese go over at night as well — which is the one call on
+    // the roster that survives the dark.
+    for (const biome of ["taiga", "alpine"] as const) {
+      for (const season of ["spring", "autumn"] as const) {
+        expect(ids({ biome, season }), `${biome} ${season}`).toContain("goose_honk");
+        expect(ids({ biome, season }), `${biome} ${season}`).toContain("swan_call");
+        expect(ids({ biome, season, timeOfDay: "night" })).toContain("goose_honk");
+      }
+      // Summer keeps both birds — they live here — but they are between one
+      // lake and the next rather than on their way somewhere, so they are
+      // far rarer and they are day birds.
+      expect(ids({ biome })).toContain("goose_honk");
+      expect(ids({ biome })).toContain("swan_call");
+      expect(ids({ biome, timeOfDay: "night" })).not.toContain("goose_honk");
+      const gapOf = (voice: Partial<WorldVoice>, id: string): number =>
+        worldRoster({ ...STILL, ...voice }).find((c) => c.id === id)?.gap[0] ?? 0;
+      expect(gapOf({ biome }, "goose_honk")).toBeGreaterThan(
+        gapOf({ biome, season: "autumn" }, "goose_honk") * 2,
+      );
+    }
+    // Nothing crosses the desert's sky, in any season.
+    for (const season of ["spring", "summer", "autumn"] as const) {
+      expect(ids({ biome: "desert", season }), season).not.toContain("goose_honk");
+      expect(ids({ biome: "desert", season }), season).not.toContain("swan_call");
+    }
+    // A gale keeps them down; rain only thins them, because a skein is high
+    // and already going somewhere.
+    const passage = { biome: "taiga" as const, season: "autumn" as const };
+    expect(gainOf({ ...passage, gale: 1 }, "goose_honk")).toBeLessThan(
+      gainOf(passage, "goose_honk") * 0.4,
+    );
+    expect(gainOf({ ...passage, wet: 1 }, "goose_honk")).toBeGreaterThan(
+      gainOf(passage, "goose_honk") * 0.3,
+    );
   });
 
   it("sends the birds to cover in the rain and puts the stock on the roster", () => {

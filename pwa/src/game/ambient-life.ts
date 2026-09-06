@@ -16,15 +16,21 @@
 //   BOTH    BIRDS OF PREY, one at a time and higher than either kettle
 //           flies — a buzzard over the forest, a vulture over the sand,
 //           the same bird in different light. raptor.ts owns them.
+//   NORTH   SKEINS: geese and swans CROSSING, in vees on passage in spring
+//           and autumn and in lines and loose groups between the lakes all
+//           summer. The taiga and the Alps have them and the desert does
+//           not. skein.ts owns them, and the season is the whole of what it
+//           reads.
 //
 // Pure presentation; all randomness here is renderer-side and can never
 // touch the simulation.
 //
 // The sky's THREE parts are anchored differently, and that is the design.
 // Flocks are a few dozen metres up and belong to a PLACE — parked near the
-// stage start, and the car drives past them. The birds of prey belong to
-// the DRIVE: pitched ahead of where the camera looks and re-pitched once
-// left behind, so a long stage always has one growing in. Everything in
+// stage start, and the car drives past them. The birds of prey and the
+// skeins belong to the DRIVE: pitched ahead of where the camera looks and
+// re-pitched once left behind, so a long stage always has one growing in.
+// Everything in
 // sky-traffic.ts is hundreds of metres up and belongs to the SKY, so it
 // rides the camera in x/z with no parallax, exactly as the clouds do: at
 // that height a stage is not long enough for parallax to be visible, and
@@ -32,9 +38,10 @@
 // where they would be drawn over the mountains.
 
 import * as THREE from "three";
-import type { BiomeId } from "@engine";
+import type { BiomeId, Season } from "@engine";
 
 import { createRaptors } from "./raptor.ts";
+import { createSkeins } from "./skein.ts";
 import {
   createSkyTraffic,
   puffFade,
@@ -91,6 +98,11 @@ type Life = {
    * soaring bird belongs, and a forest has its buzzards. */
   raptors: number;
   raptorsOver: number;
+  /** How many SKEINS of big birds cross this country's sky at once — geese
+   * and swans on their way somewhere else. The desert has none: what flies
+   * over sand is what lives there. skein.ts decides what is in one and
+   * which way it is pointed, off the season. */
+  skeins: number;
   /** Whether anything crosses this sky at altitude. */
   traffic: boolean;
   lizards: boolean;
@@ -108,6 +120,7 @@ const LIFE: Record<BiomeId, Life> = {
     turn: 0.28,
     raptors: 3,
     raptorsOver: 50,
+    skeins: 2,
     traffic: true,
     lizards: false,
   },
@@ -122,6 +135,7 @@ const LIFE: Record<BiomeId, Life> = {
     turn: 0.1,
     raptors: 3,
     raptorsOver: 60,
+    skeins: 0,
     traffic: false,
     lizards: true,
   },
@@ -140,6 +154,7 @@ const LIFE: Record<BiomeId, Life> = {
     turn: 0.32,
     raptors: 2,
     raptorsOver: 90,
+    skeins: 2,
     traffic: true,
     lizards: false,
   },
@@ -152,9 +167,10 @@ export type AmbientLife = {
    * sky. High traffic is above the weather, so an overcast stage sees none
    * of it, and drawing it anyway paints aeroplanes over the ceiling. */
   setSky: (tint: THREE.Color, ceiling: number) => void;
-  /** Which country's life this is — what flies, and whether anything
-   * crawls. Idempotent, and cheap to call on every re-light. */
-  setBiome: (biome: BiomeId) => void;
+  /** Which country's life this is and which season it is living — what
+   * flies, which way the skeins are pointed, and whether anything crawls.
+   * Idempotent, and cheap to call on every re-light. */
+  setCountry: (biome: BiomeId, season: Season) => void;
   /** The CAMERA rather than a point, because the birds of prey are pitched
    * ahead of where it is LOOKING, so the player drives up to them.
    *
@@ -366,6 +382,18 @@ export function createAmbientLife(): AmbientLife {
   const raptorsAs = (): void => raptors.setCountry(life.raptors, life.height + life.raptorsOver);
   raptorsAs();
 
+  // ── The skeins ───────────────────────────────────────────────────────────
+  //
+  // Built for the country that flies the most and hidden down to this one's
+  // count, like everything else here; unlike everything else here, it also
+  // reads the SEASON, because a crossing in spring and the same crossing in
+  // autumn are the same birds pointed opposite ways.
+  const skeins = createSkeins(Math.max(...Object.values(LIFE).map((l) => l.skeins)));
+  group.add(skeins.group);
+  let season: Season = "summer";
+  const skeinsAs = (): void => skeins.setSeason(life.skeins, season);
+  skeinsAs();
+
   // ── The high traffic and its contrails ───────────────────────────────────
   //
   // Everything below hangs off `sky`, which follows the camera over the
@@ -509,17 +537,24 @@ export function createAmbientLife(): AmbientLife {
     // night without ever turning grey.
     birdMat.color.set(0x2a2d33).multiply(tint);
     raptors.setTint(tint);
+    skeins.setTint(tint);
     planeMat.color.set(0xd8dde4).multiply(tint);
     ceilingNow = ceiling;
     showSky();
   };
 
-  const setBiome = (next: BiomeId): void => {
+  const setCountry = (next: BiomeId, nextSeason: Season): void => {
+    // The season is checked first and on its own: a country that has not
+    // changed can still have changed season (Roam picks one over a compiled
+    // stage), and the skeins are the one thing here that reads it.
+    season = nextSeason;
+    skeinsAs();
     if (next === biome) return;
     biome = next;
     life = LIFE[next];
     flockAs();
     raptorsAs();
+    skeinsAs();
     showSky();
     lizards.visible = life.lizards;
     for (const lizard of herd) lizard.placed = false;
@@ -537,6 +572,7 @@ export function createAmbientLife(): AmbientLife {
     const camX = camera.position.x;
     const camZ = camera.position.z;
     raptors.update(camera, windX, windZ, dt);
+    skeins.update(camera, windX, windZ, dt);
 
     for (const flock of flocks) {
       flock.angle += flock.speed * dt;
@@ -687,6 +723,7 @@ export function createAmbientLife(): AmbientLife {
     wingGeo.dispose();
     birdMat.dispose();
     raptors.dispose();
+    skeins.dispose();
     for (const plane of planes)
       for (const part of plane.children) (part as THREE.Mesh).geometry.dispose();
     planeMat.dispose();
@@ -697,5 +734,5 @@ export function createAmbientLife(): AmbientLife {
     lizards.dispose();
   };
 
-  return { group, setSky, setBiome, update, dispose };
+  return { group, setSky, setCountry, update, dispose };
 }

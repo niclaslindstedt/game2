@@ -410,6 +410,7 @@ export function createDriveBed(synth: Synth, random: () => number = Math.random)
         {
           biome,
           timeOfDay: state.env.timeOfDay,
+          season: state.env.season,
           wet,
           gale,
           // Where the car stands against the country's own zones: the pass
