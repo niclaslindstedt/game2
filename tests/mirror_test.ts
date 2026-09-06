@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE MIRROR'S PACE LADDER — the one piece of the renderer that decides, on
-// its own, to draw less than it was asked for.
+// THE REAR-VIEW MIRROR, in the three claims a screenshot cannot make: where
+// the lens sits on the body, how wide the car lets it look, and the pace
+// ladder behind the glass.
+//
+// THE LENS is bolted inside the cabin and opened no wider than the back
+// window, which makes its agreement with the drawn body load-bearing rather
+// than cosmetic: a lens that took the springs but not the loft would drift
+// against the lining around it, and the lining would be in shot. That is a
+// claim about a transform, so it is asked of the transform.
+//
+// THE PACE LADDER is the one piece of the renderer that decides, on its
+// own, to draw less than it was asked for.
 //
 // It is verified here rather than by looking, because what it does is not
 // visible in a frame: the whole point of dropping the mirror's rate first is
@@ -18,10 +28,13 @@
 //     repeat, or a machine that cannot hold sixty stutters every few
 //     seconds for the whole stage.
 
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
+import type { GameState } from "@engine";
 
 import { createMirrorPace, MIRROR_TIERS, refillGap } from "../pwa/src/game/mirror-pace.ts";
 import type { MirrorPace } from "../pwa/src/game/mirror-pace.ts";
+import { GLASS, MIRROR_ASPECT, createMirror } from "../pwa/src/game/mirror.ts";
 
 /** Drive `seconds` of frames at a steady rate through the pace. */
 function run(pace: MirrorPace, fps: number, seconds: number): void {
@@ -184,5 +197,122 @@ describe("the mirror's pace ladder", () => {
     // stage: what the machine can draw has not changed, so neither has this.
     pace.settle();
     expect(pace.tier()).toBe(dropped);
+  });
+});
+
+/** A stand-in for the car the mirror is bolted inside, hung the way
+ * car-mesh.ts hangs the real one: the whole car, the body's attitude on it,
+ * and the sprung chassis under that. The mount's metres are chassis-local,
+ * which is what makes `chassis` the frame the mirror pass is handed. */
+function bodyRig(): {
+  car: THREE.Group;
+  body: THREE.Group;
+  chassis: THREE.Group;
+} {
+  const car = new THREE.Group();
+  const body = new THREE.Group();
+  const chassis = new THREE.Group();
+  car.add(body);
+  body.add(chassis);
+  return { car, body, chassis };
+}
+
+const MOUNT = {
+  at: { x: 0.16, y: 1.32, z: 0.42 },
+  look: { x: 0.16, y: 1.24, z: -1.4 },
+  fov: 26,
+};
+
+describe("the mirror's lens", () => {
+  it("holds station on the body it is bolted to, however the car is thrown about", () => {
+    const mirror = createMirror();
+    const { car, body, chassis } = bodyRig();
+    const state = { car: { x: 0, y: 0, z: 0, heading: 0 } } as unknown as GameState;
+
+    /** Where the lens ends up in the CHASSIS's own metres. It is bolted
+     * there, so this is the one answer that must never move — a lens that
+     * drifted against the cabin around it is a picture that jumps every
+     * time the road goes light, and the lining in shot the moment the lens
+     * is opened no wider than the back window. */
+    const localLens = (): THREE.Vector3 => {
+      mirror.aim(state, MOUNT, chassis, 400);
+      chassis.updateWorldMatrix(true, false);
+      return chassis.worldToLocal(mirror.camera.position.clone());
+    };
+
+    const parked = localLens();
+    expect(parked.x).toBeCloseTo(MOUNT.at.x, 6);
+    expect(parked.y).toBeCloseTo(MOUNT.at.y, 6);
+    expect(parked.z).toBeCloseTo(MOUNT.at.z, 6);
+    const wasWorld = mirror.camera.position.clone();
+
+    // Every term car-mesh.ts poses the car with, at once: the car itself
+    // moved and turned, the whole body up off its wheels over a brow, the
+    // ground's attitude under it, and the springs squatting and rocking
+    // beneath all of that.
+    car.position.set(120, 4.5, -80);
+    car.rotation.y = 1.1;
+    body.rotation.set(-0.14, 0, 0.22);
+    chassis.position.y = 0.31;
+    chassis.rotation.set(-0.09, 0, 0.01);
+
+    const thrown = localLens();
+    expect(thrown.x).toBeCloseTo(MOUNT.at.x, 6);
+    expect(thrown.y).toBeCloseTo(MOUNT.at.y, 6);
+    expect(thrown.z).toBeCloseTo(MOUNT.at.z, 6);
+    // ...and it really did go somewhere, so none of that could have passed
+    // by the lens simply never moving.
+    expect(mirror.camera.position.distanceTo(wasWorld)).toBeGreaterThan(50);
+    mirror.dispose();
+  });
+
+  it("goes over with the car — the glass shows an upside-down picture upside down", () => {
+    const mirror = createMirror();
+    const { body, chassis } = bodyRig();
+    const state = { car: { x: 0, y: 0, z: 0, heading: 0 } } as unknown as GameState;
+
+    mirror.aim(state, MOUNT, chassis, 400);
+    expect(mirror.camera.up.y).toBeCloseTo(1, 6);
+
+    body.rotation.z = Math.PI;
+    mirror.aim(state, MOUNT, chassis, 400);
+    expect(mirror.camera.up.y).toBeCloseTo(-1, 6);
+    mirror.dispose();
+  });
+
+  it("opens to the field the CAR states, as three's vertical one", () => {
+    const mirror = createMirror();
+    const { chassis } = bodyRig();
+    const state = { car: { x: 0, y: 0, z: 0, heading: 0 } } as unknown as GameState;
+    for (const fov of [20, 26, 34]) {
+      mirror.aim(state, { ...MOUNT, fov }, chassis, 400);
+      // Horizontal in, vertical out, over the glass's own shape.
+      const across = Math.tan((fov * Math.PI) / 360);
+      expect(Math.tan((mirror.camera.fov * Math.PI) / 360)).toBeCloseTo(across / MIRROR_ASPECT, 9);
+    }
+    mirror.dispose();
+  });
+});
+
+describe("the curve in the glass", () => {
+  it("only ever reaches INWARD, so the warp can never sample past the window", () => {
+    // The lens is opened exactly as far as the backlight and no further
+    // (car/mirror-fit.ts), so every texel outside the rendered frame is
+    // cabin lining. The curve is what decides whether any is fetched: both
+    // terms are pinned at the left and right edges of the glass and drawn
+    // in everywhere else, which is only true while neither is negative.
+    expect(GLASS.bulge).toBeGreaterThanOrEqual(0);
+    expect(GLASS.bow).toBeGreaterThanOrEqual(0);
+    for (const k of [GLASS.bulge, GLASS.bow]) {
+      for (let i = 0; i <= 20; i++) {
+        const p = -1 + i / 10;
+        const source = (p * (1 + k * p * p)) / (1 + k);
+        expect(Math.abs(source)).toBeLessThanOrEqual(1 + 1e-12);
+      }
+    }
+    // ...and the edges are PINNED, not merely inside: a curve that pulled
+    // the sides in as well would throw away the road the fit went to the
+    // trouble of framing.
+    expect((1 * (1 + GLASS.bulge)) / (1 + GLASS.bulge)).toBeCloseTo(1, 12);
   });
 });

@@ -44,10 +44,10 @@ import {
   textBars,
 } from "../pwa/src/game/car/segment-display.ts";
 import { screenPanes } from "../pwa/src/game/car/greenhouse.ts";
-import { patchAt, rectAt } from "../pwa/src/game/car/builder.ts";
+import { patchAt, rectAt, type Patch, type UVRect } from "../pwa/src/game/car/builder.ts";
 import { instrumentReadings, tachometer } from "../pwa/src/game/car-instruments.ts";
 import { CAR_BODIES } from "../pwa/src/game/car-styles.ts";
-import { fallbackMount } from "../pwa/src/game/mirror.ts";
+import { MIRROR_ASPECT, fallbackMount } from "../pwa/src/game/mirror.ts";
 
 const bodies = Object.entries(CAR_BODIES);
 
@@ -214,8 +214,41 @@ describe("what the dashboard reads", () => {
   });
 });
 
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** Does a ray out of `eye` land on a pane's glass? The pane is a bilinear
+ * patch with a leaning rect cut in it, so it is walked as a grid of
+ * triangles and the ray is put through each — an intersection test that
+ * shares nothing with the 2-D fit the answer is being checked against
+ * (car/mirror-fit.ts), which is the point of asking it this way. */
+function onGlass(
+  pane: { patch: Patch; rect: UVRect },
+  eye: THREE.Vector3,
+  direction: THREE.Vector3,
+): boolean {
+  const ray = new THREE.Ray(eye, direction);
+  const hit = new THREE.Vector3();
+  const corner = (s: number, t: number): THREE.Vector3 => {
+    const [u, v] = rectAt(pane.rect, s, t);
+    const p = patchAt(pane.patch, u, v);
+    return new THREE.Vector3(p[0], p[1], p[2]);
+  };
+  const cells = 16;
+  for (let i = 0; i < cells; i++) {
+    for (let j = 0; j < cells; j++) {
+      const a = corner(i / cells, j / cells);
+      const b = corner((i + 1) / cells, j / cells);
+      const c = corner((i + 1) / cells, (j + 1) / cells);
+      const d = corner(i / cells, (j + 1) / cells);
+      if (ray.intersectTriangle(a, b, c, false, hit)) return true;
+      if (ray.intersectTriangle(a, c, d, false, hit)) return true;
+    }
+  }
+  return false;
+}
+
 describe("the mirror's lens", () => {
-  it("stands inside the cabin on every body, looking back at the middle of the backlight", () => {
+  it("stands inside the cabin on every body, looking back through the backlight", () => {
     for (const [id, spec] of bodies) {
       const cabin = cabinOf(spec);
       const { at, look } = cockpitMirrorFor(spec);
@@ -228,14 +261,54 @@ describe("the mirror's lens", () => {
       expect(at.z, id).toBeGreaterThan(eye.z);
       expect(at.z, id).toBeLessThan(cabin.cowlZ + 0.05);
       expect(Math.abs(at.x), id).toBeLessThan(cabin.inner);
-      // Aimed at the backlight's own centre, which is behind the lens.
+      // Aimed back through the backlight, TILTED UP off its middle — the
+      // adjustment a driver makes, so the glass opens on the horizon rather
+      // than on the ground right behind the car (car/mirror-fit.ts). Asked
+      // as an ANGLE, because `look` is a marker down the aim rather than a
+      // point on the glass: above the line to the middle of the window and
+      // below the line to its top edge, or the tilt is aimed at the lining.
       const rear = screenPanes(spec).rear;
+      const pitchTo = (p: readonly number[]): number => Math.atan2(p[1] - at.y, at.z - p[2]);
       const [u, v] = rectAt(rear.rect, 0.5, 0.5);
-      const centre = patchAt(rear.patch, u, v);
-      expect(look.x, id).toBeCloseTo(centre[0], 9);
-      expect(look.y, id).toBeCloseTo(centre[1], 9);
-      expect(look.z, id).toBeCloseTo(centre[2], 9);
+      const middle = pitchTo(patchAt(rear.patch, u, v));
+      // The rect's v runs from the window's top edge down, so v = 0 is the
+      // header end of the glass.
+      const [topU, topV] = rectAt(rear.rect, 0.5, 0);
+      const aim = pitchTo([look.x, look.y, look.z]);
+      expect(aim, id).toBeGreaterThan(middle);
+      expect(aim, id).toBeLessThan(pitchTo(patchAt(rear.patch, topU, topV)));
       expect(look.z, id).toBeLessThan(at.z - 0.5);
+    }
+  });
+
+  it("opens no wider than the back window — the frame's own corners are on glass", () => {
+    for (const [id, spec] of bodies) {
+      const { at, look, fov } = cockpitMirrorFor(spec);
+      const rear = screenPanes(spec).rear;
+      // The frame, as a solid angle: `fov` across and `fov / MIRROR_ASPECT`
+      // up, about the aim. Every one of its corners has to land on the
+      // glass, because a corner that misses is a corner of cabin in the
+      // strip — which is the whole point of fitting the lens to the body.
+      const eye = new THREE.Vector3(at.x, at.y, at.z);
+      const ahead = new THREE.Vector3(look.x, look.y, look.z).sub(eye).normalize();
+      const across = new THREE.Vector3().crossVectors(ahead, UP).normalize();
+      const up = new THREE.Vector3().crossVectors(across, ahead);
+      const t = Math.tan((fov * Math.PI) / 360);
+      // The pane as a plane through its own middle: a ray is on glass if it
+      // crosses that plane inside the rect the greenhouse cut in it.
+      for (const [sx, sy] of [
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ]) {
+        const ray = ahead
+          .clone()
+          .addScaledVector(across, sx * t)
+          .addScaledVector(up, (sy * t) / MIRROR_ASPECT)
+          .normalize();
+        expect(onGlass(rear, eye, ray), `${id} corner ${sx},${sy}`).toBe(true);
+      }
     }
   });
 
@@ -244,6 +317,10 @@ describe("the mirror's lens", () => {
     expect(mount.at.y).toBeGreaterThan(1.5);
     expect(mount.look.z).toBeLessThan(mount.at.z);
     expect(mount.look.y).toBeLessThan(mount.at.y);
+    // ...at a field in the same band a fitted one comes out at, so the
+    // picture does not change scale on a car with no cabin to fit to.
+    expect(mount.fov).toBeGreaterThan(18);
+    expect(mount.fov).toBeLessThan(46);
   });
 
   it("puts the car's left on the driver's left of the glass — the picture is REVERSED", () => {

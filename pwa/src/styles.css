@@ -220,9 +220,15 @@ body {
   opacity: 0.9;
 }
 
-/* Which stage: under the minimap, right-aligned to hang off its edge. It is
-   read once at the start of a run, so it sits where a label is looked FOR
-   rather than in the corner the clock has earned. */
+/* Which stage: under the minimap. It is read once at the start of a run, so
+   it sits where a label is looked FOR rather than in the corner the clock
+   has earned.
+
+   Flush RIGHT is the PORTRAIT rule, for the reason `.hud-health` below is
+   flush right there: on a phone held upright the map is only 18vw wide and
+   the column is pinched between the screen edge and the mirror across the
+   top, so a label centred under a map narrower than the label itself would
+   push out over both. Landscape centres it under the map instead. */
 .hud-stage {
   position: absolute;
   top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + 0.3rem);
@@ -2371,6 +2377,17 @@ body {
 
   .hud-health-marks {
     justify-content: center;
+  }
+
+  /* The run's label hangs on the same axis, between the two: given the map's
+     own width to be centred in, it reads as the caption under the map rather
+     than as a line that drifted off the corner of it. A stage number wider
+     than the map simply overhangs both sides evenly, which is still centred
+     — the chip never wraps (`.hud-chip`). */
+  .hud-stage {
+    width: var(--hud-map);
+    align-items: center;
+    text-align: center;
   }
 }
 

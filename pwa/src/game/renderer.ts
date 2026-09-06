@@ -32,6 +32,7 @@ import {
   GLASS_SEEN_THROUGH,
   INTERIOR_DETAIL,
   LOOSE_WHEELS,
+  MIRROR_GLASS,
   SCREEN_GRIME,
   FLORA_SCALE,
   GROUND_SCALE,
@@ -314,6 +315,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
 
   const chase = createGameCamera(canvas.clientWidth || 1, canvas.clientHeight || 1);
   const mirror = createMirror();
+  mirror.setGlass(MIRROR_GLASS[quality.effects]);
   /** What the machine can afford to spend on the mirror — how often it is
    * refilled and how far it sees, both of which move while a stage is
    * driven (mirror-pace.ts). It outlives the world, because what a machine
@@ -704,6 +706,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     });
     car?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     ghostCar?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
+    mirror.setGlass(MIRROR_GLASS[quality.effects]);
     // Unlike the rest of the DETAIL row, the dust and the exhaust are not
     // geometry and do not wait for the next stage: the pools are standing in
     // the scene already, so switching either row is switching them, mid-run
@@ -1604,7 +1607,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // nothing is about to render through is arithmetic for nobody.
     if (mirrorFill) {
       const mount = car?.mirrorMount ?? fallbackMount(driverEyeY);
-      mirror.aim(state, mount, environment.fogFar() * mirrorRange);
+      mirror.aim(state, mount, car?.mirrorFrame ?? null, environment.fogFar() * mirrorRange);
     }
     // The road and its scenery are built for the WHOLE stage; the frame
     // only pays for the part the air is still clear enough to show. Last,
