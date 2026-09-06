@@ -312,13 +312,12 @@ type HudProps = {
    * down, and what is left on screen is the pause chip, the start lights,
    * the results and the calls that get a lost car home. */
   show: HudShow;
-  /** The frame rate, for the readout under the minimap — or null for the
-   * players who have never let the developer menu out, which is everybody
-   * but whoever is working on the game. It hangs off the map rather than
-   * living in the debug overlay because the number worth having is the one
-   * the game is running at while it is being PLAYED, and the overlay is a
-   * wall of boxes across the road. */
-  fps: number | null;
+  /** The frame rate, for the readout under the minimap — drawn only when
+   * `show.fps` says the player asked for it. It hangs off the map rather
+   * than living in the debug overlay because the number worth having is the
+   * one the game is running at while it is being PLAYED, and the overlay is
+   * a wall of boxes across the road. */
+  fps: number;
   /** Which thumb steers, and what each drag off the pedal anchor does. */
   touchLayout: TouchSettings;
   /** Whether a controller has the car. The thumb zones come off when one
@@ -667,8 +666,8 @@ export function Hud({
         <div className="hud-chip hud-stage">
           {snap.training ? "TRAINING" : `STAGE ${snap.seed}`}
           {/* The frame rate, under the map with the rest of the run's
-              label — developers only. */}
-          {fps !== null && <span className="hud-chip-sub hud-fps">{fps} FPS</span>}
+              label — OPTIONS ▸ HUD ▸ FPS, off unless it was asked for. */}
+          {show.fps && <span className="hud-chip-sub hud-fps">{fps} FPS</span>}
         </div>
       )}
 

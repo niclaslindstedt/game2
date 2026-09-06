@@ -138,12 +138,13 @@ function snapToStop(
   return stops.find((stop) => stop.id === id)?.value ?? fallback;
 }
 
-/** THE HUD, AS THE PLAYER SETS IT: on or off, and whether the car has a
- * rear-view mirror. Two switches rather than one per instrument, because a
- * rally HUD is one instrument panel — nobody wants the clock without the
- * map — and the one part of it that is not an instrument is the glass. The
- * mirror is the CAR's, drawn by the renderer, and it stays up with the HUD
- * off for anyone who drives by the road behind them. */
+/** THE HUD, AS THE PLAYER SETS IT: on or off, whether the car has a
+ * rear-view mirror, and whether the frame rate is on show. One switch for
+ * the panel rather than one per instrument, because a rally HUD is one
+ * instrument panel — nobody wants the clock without the map. The other two
+ * are the parts that are not instruments: the glass, which is the CAR's and
+ * stays up with the HUD off for anyone who drives by the road behind them,
+ * and a number about the machine rather than about the race. */
 export type HudSettings = {
   /** The instrument panel: clock, map, cluster, calls, tags and the buttons
    * on the top bar. Off is a clean frame with the pause chip left on it —
@@ -151,11 +152,15 @@ export type HudSettings = {
   on: boolean;
   /** The rear-view glass at the top of the screen, in every view. */
   mirror: boolean;
+  /** The frame rate, under the map. Off by default: it is a number about
+   * the machine, and a player who has not asked what their machine is doing
+   * should not have it counted at them all the way down a stage. */
+  fps: boolean;
 };
 
 /** Every part of the HUD that can be switched, one flag each — the HUD's
  * own contract (hud.tsx reads it), kept per instrument so a build can still
- * take one part down on its own. The player's two switches map onto it
+ * take one part down on its own. The player's switches map onto it
  * through `hudShow`. Speed, gear and the countdown are not on it: the
  * countdown is the start line itself, and the cluster comes and goes with
  * the panel as a whole. */
@@ -170,11 +175,12 @@ export type HudInstrument =
   | "timer"
   | "stage"
   | "cluster"
-  | "position";
+  | "position"
+  | "fps";
 
 export type HudShow = Record<HudInstrument, boolean>;
 
-/** The two switches, spread over the panel. */
+/** The player's switches, spread over the panel. */
 export function hudShow(hud: HudSettings): HudShow {
   const on = hud.on;
   return {
@@ -189,6 +195,9 @@ export function hudShow(hud: HudSettings): HudShow {
     stage: on,
     cluster: on,
     position: on,
+    // Panel furniture, so it goes down with the panel: the readout hangs off
+    // the stage label, and a clean frame is a clean frame.
+    fps: on && hud.fps,
   };
 }
 
@@ -1178,7 +1187,7 @@ export type DevSettings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  hud: { on: true, mirror: true },
+  hud: { on: true, mirror: true, fps: false },
   // The shortest boom outside the car: the car is big in the frame, a drift
   // swings it right across, and standing that close is what makes it
   // the calmest read at pace — the nearer the camera, the fewer metres of
@@ -1313,6 +1322,7 @@ export function loadSettings(): Settings {
     const hud = parsed.hud as Partial<Record<string, unknown>> | undefined;
     if (typeof hud?.on === "boolean") settings.hud.on = hud.on;
     if (typeof hud?.mirror === "boolean") settings.hud.mirror = hud.mirror;
+    if (typeof hud?.fps === "boolean") settings.hud.fps = hud.fps;
     // Checked against the list rather than merged: a build that renames or
     // drops an angle must not leave the player pointed at one that no
     // longer exists, which would be a run with no camera at all.
