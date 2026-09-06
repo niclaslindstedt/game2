@@ -2074,8 +2074,22 @@ export const TUNING = {
      * then some (`CLIMATE.dig`), and holds the tyres about as well as wet
      * turf — the snow packs against the sidewalls, so a car in it is slow
      * rather than loose — and it is the softest thing in the game to come
-     * down on. Leaving a snow road costs; getting back is always
-     * possible. */
+     * down on. Leaving a snow road costs; getting back is always possible.
+     *
+     * ICE (R48) is a lake the cold has frozen solid — the surface the
+     * route crosses one on, and the LEAST GRIP IN THE GAME. It holds
+     * around two thirds of gravel and well under the snow road's own
+     * three quarters, which is the whole reason a crossing is a moment
+     * rather than a shortcut: there is nothing on it to cut down into,
+     * so the tread is riding a polished floor. Everything else about it
+     * follows from that one fact. It rolls the FREEST of any surface —
+     * the least drag in the table, so a car that has stopped steering is
+     * still going exactly as fast as it was — it breaks away furthest out
+     * and comes back slowest, which is what makes a long slide on a lake
+     * a thing to be steered rather than caught, and it spins the throttle
+     * away worse than sand. And it GIVES almost nothing: ice is a floor,
+     * so a car that goes over on a lake is a car meeting something very
+     * near as hard as tarmac. */
     drag: {
       gravel: 0.028,
       sand: 0.042,
@@ -2084,6 +2098,7 @@ export const TUNING = {
       nature: 0.03,
       snow: 0.031,
       snowfield: 0.09,
+      ice: 0.019,
     },
     /** Lateral grip multiplier per surface. Asphalt is the outlier the
      * stage's paved sections are FOR: the tires hold a third again as
@@ -2100,6 +2115,7 @@ export const TUNING = {
       nature: 0.7,
       snow: 0.78,
       snowfield: 0.72,
+      ice: 0.55,
     },
     /** WHERE the tires let go, as a multiple of the slide's slip angles
      * (`TUNING.drift.angleSpan` and its fade band). A surface is not one
@@ -2133,6 +2149,7 @@ export const TUNING = {
       nature: 1.1,
       snow: 1.15,
       snowfield: 1.25,
+      ice: 1.45,
     },
     /** Throttle effectiveness per surface. `nature` is level with graded
      * stone, and deliberately: what the open country costs is `natureDig`
@@ -2147,6 +2164,7 @@ export const TUNING = {
       nature: 1.0,
       snow: 0.88,
       snowfield: 0.72,
+      ice: 0.62,
     },
     /** THE GROUND GIVES. What a crashing car comes down on is not a plane
      * of steel: gravel displaces, soil furrows, sand swallows a corner, and
@@ -2168,6 +2186,7 @@ export const TUNING = {
       nature: 0.25,
       snow: 0.4,
       snowfield: 0.6,
+      ice: 0.05,
     },
     /** ...AND WHAT IT COSTS TO PLOUGH IT. A sill or a roof rail digging into
      * loose ground is dragging a furrow, and that is friction over and above
@@ -2185,6 +2204,7 @@ export const TUNING = {
       nature: 0.07,
       snow: 0.12,
       snowfield: 0.2,
+      ice: 0.01,
     },
     /** WHAT THE OPEN COUNTRY TAKES OUT OF THE PULL FROM A STANDSTILL, 0..1
      * — and it takes it out of the ACCELERATION, never out of the top end.

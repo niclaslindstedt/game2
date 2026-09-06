@@ -36,7 +36,7 @@ import { ROCK_SLOPE, SNOW, rockAt, snowAt, snowLie, zonesUnder } from "./ground-
 import { ROAD_PAINT } from "./road-mesh.ts";
 import { DISSOLVE } from "./road-spill.ts";
 import { detailTexture } from "./textures.ts";
-import { driftWater, waterMaterial } from "./water-look.ts";
+import { driftWater, iceMaterial, waterMaterial } from "./water-look.ts";
 import { buildPuddles } from "./puddles.ts";
 
 export { APRON, LAKE_Y };
@@ -193,6 +193,10 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // The app's one water look, shared with the fords and the streams — never
   // disposed here, because it is not this module's to free.
   const waterMat = waterMaterial();
+  // R48 — and its frozen half. A stage can hold both at once, so the two
+  // are two meshes cut from the same tiles rather than one mesh with a
+  // switch on it.
+  const iceMat = iceMaterial();
 
   // The year moves the living half of the palette and leaves the rock and
   // the water where they are.
@@ -269,9 +273,11 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // therefore ENDS exactly where the ground rises through it — every
   // headland, every inlet — and it is flat, because a body's level is.
   //
-  // It stays ONE mesh: the tiles' triangles are concatenated into a single
-  // buffer in `flushLakes`, so a stage with nine lakes on it still costs
-  // one draw call, exactly as the instanced panes did.
+  // It stays ONE mesh PER LOOK: the tiles' triangles are concatenated into
+  // a single buffer in `flushLakes`, so a stage with nine lakes on it still
+  // costs one draw call, exactly as the instanced panes did — and R48's
+  // frozen bodies a second, because a stage can hold open water and ice at
+  // once and they are two materials (water-look.ts).
   //
   // The grain is anchored to the WORLD rather than to a tile — the geometry
   // is no longer a repeated unit square, so there is nothing to repeat
@@ -292,11 +298,17 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
    * the waterline still knows which surface it is being cut against. */
   const lakeLevelAt = field.water.shoreLevelAt;
   let lakes: THREE.Mesh | null = null;
+  let ice: THREE.Mesh | null = null;
   const lakeGeo = new THREE.BufferGeometry();
+  const iceGeo = new THREE.BufferGeometry();
 
-  /** One tile's water: triangles in world space, flat at their body's
-   * level, or null where the tile has no standing water on it. */
-  type TileWater = { positions: number[]; uvs: number[] };
+  /** One sheet's worth of triangles in world space, flat at their body's
+   * level. */
+  type Sheet = { positions: number[]; uvs: number[] };
+  /** One tile's standing water, split by what the cold has made of it
+   * (R48): the bodies still running as water, and the ones that have gone
+   * over. Either half is null where the tile has none of it. */
+  type TileWater = { open: Sheet | null; frozen: Sheet | null };
   type Tile = { ground: THREE.Mesh; water: TileWater | null; puddles: THREE.Mesh | null };
   const tiles = new Map<string, Tile>();
 
@@ -440,31 +452,43 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     out.multiplyScalar(speck);
   };
 
-  /** Rewrite the water from every tile standing: one buffer holding every
-   * standing tile's clipped triangles, so the whole of a stage's water is
-   * a single draw however many separate lakes it is. */
-  const flushLakes = (): void => {
+  /** Rewrite ONE of the two sheets from every tile standing: a single
+   * buffer holding every standing tile's clipped triangles, so the whole
+   * of a stage's water is one draw however many separate lakes it is —
+   * and its ice another.
+   *
+   * Returns the mesh, built on first use: a stage with no hollow in it
+   * never makes the water mesh at all, and a summer never makes the ice
+   * one, because a mesh with an empty buffer is still a draw call. */
+  const flushSheet = (
+    pick: (water: TileWater) => Sheet | null,
+    geo: THREE.BufferGeometry,
+    material: THREE.Material,
+    mesh: THREE.Mesh | null,
+  ): THREE.Mesh | null => {
     let count = 0;
-    for (const tile of tiles.values()) if (tile.water) count += tile.water.positions.length;
-    // A ground with no hollow in it draws no water at all: a mesh with an
-    // empty buffer is still a draw call.
+    for (const tile of tiles.values()) {
+      const sheet = tile.water && pick(tile.water);
+      if (sheet) count += sheet.positions.length;
+    }
     if (count === 0) {
-      if (lakes) lakes.visible = false;
-      return;
+      if (mesh) mesh.visible = false;
+      return mesh;
     }
     const positions = new Float32Array(count);
     const uvs = new Float32Array((count / 3) * 2);
     let p = 0;
     let u = 0;
     for (const tile of tiles.values()) {
-      if (!tile.water) continue;
-      positions.set(tile.water.positions, p);
-      uvs.set(tile.water.uvs, u);
-      p += tile.water.positions.length;
-      u += tile.water.uvs.length;
+      const sheet = tile.water && pick(tile.water);
+      if (!sheet) continue;
+      positions.set(sheet.positions, p);
+      uvs.set(sheet.uvs, u);
+      p += sheet.positions.length;
+      u += sheet.uvs.length;
     }
-    lakeGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    lakeGeo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
     // The sheet is flat and lit from above wherever it is, so the normal is
     // straight up at every vertex — written out rather than derived from the
     // triangles. Deriving it is not just slower: on the SHORE it is wrong.
@@ -473,19 +497,28 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     // takes that on is lit by nothing at all.
     const normals = new Float32Array(count);
     for (let i = 1; i < count; i += 3) normals[i] = 1;
-    lakeGeo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
-    lakeGeo.computeBoundingSphere();
-    if (!lakes) {
-      lakes = new THREE.Mesh(lakeGeo, waterMat);
-      // A car standing in a lake still throws its shadow onto it
-      // (car-shadow.ts).
-      lakes.receiveShadow = true;
-      // The water never moves and the camera is always outside it; culling
-      // it per tile is what the single mesh gave up, and the bounding
-      // sphere below is what it gets back.
-      group.add(lakes);
-    }
-    lakes.visible = true;
+    geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+    geo.computeBoundingSphere();
+    const out =
+      mesh ??
+      (() => {
+        const made = new THREE.Mesh(geo, material);
+        // A car standing in a lake still throws its shadow onto it
+        // (car-shadow.ts).
+        made.receiveShadow = true;
+        // The sheet never moves and the camera is always outside it;
+        // culling it per tile is what the single mesh gave up, and the
+        // bounding sphere above is what it gets back.
+        group.add(made);
+        return made;
+      })();
+    out.visible = true;
+    return out;
+  };
+
+  const flushLakes = (): void => {
+    lakes = flushSheet((w) => w.open, lakeGeo, waterMat, lakes);
+    ice = flushSheet((w) => w.frozen, iceGeo, iceMat, ice);
   };
 
   /** Does this tile reach the training ground? Measured against the arena's
@@ -628,8 +661,10 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     // be is its BED — ground painted lake-bottom blue, which is exactly
     // enough like water to be reported as water that flickers rather than as
     // water that is missing. The ground tiles above wind the same way.
-    let positions: number[] | null = null;
-    let uvs: number[] | null = null;
+    // The two sheets, filled lazily: most tiles touch neither, and a tile
+    // that touches one rarely touches both.
+    let open: Sheet | null = null;
+    let frozen: Sheet | null = null;
     // Corner scratch, reused per cell: x, z, ground, level, depth.
     const cx = [0, 0, 0, 0];
     const cz = [0, 0, 0, 0];
@@ -670,23 +705,27 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
           }
         }
         if (poly.length < 6) continue;
-        if (!positions) {
-          positions = [];
-          uvs = [];
-        }
+        // R48 — which sheet the cell belongs to is the BODY's question, not
+        // the tile's: the level is all the freeze depends on, so a cell
+        // over a frozen tarn goes to the ice and a cell over the open lake
+        // below it goes to the water, out of the same tile.
+        const icy = field.frozenWater(level);
+        const sheet = icy
+          ? (frozen ??= { positions: [], uvs: [] })
+          : (open ??= { positions: [], uvs: [] });
         // Fan from the first vertex: the polygon is convex (it is a square
         // cut by one line) so a fan is a correct triangulation.
         for (let v = 1; v + 1 < poly.length / 2; v++) {
           for (const at of [0, v, v + 1]) {
             const px = poly[at * 2];
             const pz = poly[at * 2 + 1];
-            positions.push(px, level, pz);
-            (uvs as number[]).push(px / WATER_GRAIN, pz / WATER_GRAIN);
+            sheet.positions.push(px, level, pz);
+            sheet.uvs.push(px / WATER_GRAIN, pz / WATER_GRAIN);
           }
         }
       }
     }
-    return positions && uvs ? { positions, uvs } : null;
+    return open || frozen ? { open, frozen } : null;
   };
 
   const dropTile = (key: string): void => {
@@ -812,6 +851,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   const dispose = (): void => {
     for (const key of [...tiles.keys()]) dropTile(key);
     lakeGeo.dispose();
+    iceGeo.dispose();
     groundMat.dispose();
   };
 

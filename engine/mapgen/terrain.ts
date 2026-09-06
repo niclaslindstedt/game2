@@ -51,7 +51,14 @@ import {
   type SpurLine,
 } from "./spurs.ts";
 import { biomeRules } from "./biomes.ts";
-import { CLIMATE, blanketDepth, snowlineOf, snowyCountry, temperatureAt } from "../game/climate.ts";
+import {
+  CLIMATE,
+  blanketDepth,
+  icyCountry,
+  snowlineOf,
+  snowyCountry,
+  temperatureAt,
+} from "../game/climate.ts";
 import { createPropField } from "./props.ts";
 import { bridgeParapets, tunnelTrench, tunnelWalls, type WildObstacle } from "./solids.ts";
 import { farmClearings, rectDistance, type FarmRect } from "./farms.ts";
@@ -494,6 +501,18 @@ export type TerrainField = {
    * into it (`groundAt`), and the physics calls what it is standing on
    * there a `snowfield`. */
   blanketAt: (x: number, z: number) => number;
+  /** R48 — THE ICE over a point, m: the flat surface of a body the cold
+   * has frozen solid, or null on dry ground and on open water. Where
+   * `waterAt` says "there is water here to drown in", this says "there is
+   * a floor here to drive on" — the two are never both an answer. The
+   * physics stands the car on it and calls it an `ice` surface; the
+   * renderer draws the sheet as ice rather than as water. */
+  iceAt: (x: number, z: number) => number | null;
+  /** R48 — whether a body standing at this LEVEL is frozen under the
+   * stage's climate. What anything holding a level rather than a point
+   * asks: the drawn sheet is cut per tile against the pour's own level,
+   * and that is the reading that decides which of two materials it takes. */
+  frozenWater: (level: number) => boolean;
   /** Distance from a point to the nearest BUILT road that is not the stage
    * — an abandoned branch's mat edge (R17), a homestead's drive or the rim
    * of its yard (R37) — or Infinity when there is none near. Negative on
@@ -1267,7 +1286,7 @@ export function createTerrain(track: Track): TerrainField {
   // The bare landscape the road was laid across (land.ts) — the same
   // country the branch builder steered by, so nothing here can disagree
   // with where the water is.
-  const land = createLandField(track.seed, track.knobs);
+  const land = createLandField(track.seed, track.knobs, track.climate);
   const farField = land.heightAt;
   // R40 — the country: its quilt, its loose surface, what its woods shed.
   const biome = biomeRules(track.knobs.biome);
@@ -2677,7 +2696,12 @@ export function createTerrain(track: Track): TerrainField {
   };
 
   const groundAt = (x: number, z: number): number => {
-    const lattice = latticeAt(x, z);
+    // R48 — over a body the cold has frozen SOLID the ground is the sheet.
+    // It is a floor and it is flat, and it stands over the bed the lattice
+    // draws: a car crossing a frozen lake drives on the ice, and there is
+    // no lake under it as far as the wheels are concerned.
+    const ice = iceAt(x, z);
+    const lattice = ice ?? latticeAt(x, z);
     // Beside a road the DRAWN surface is the ribbon, not the tile under it
     // — its crown, its wheel tracks, its shoulder (R16). The lattice is 14 m
     // between corners and could not hold any of that, so out to the shoulder
@@ -2709,6 +2733,27 @@ export function createTerrain(track: Track): TerrainField {
     return near && near.d <= samples[near.index].width / 2 + 0.1 && corridor ? corridor.y : null;
   };
 
+  /** R48 — the ICE standing over a point, m: the surface of a body the
+   * cold has frozen solid, or null where the point is dry, where the water
+   * covering it is still open, or where the drawn ground stands over it.
+   *
+   * Asked of the same ground `waterAt` is asked of — the LATTICE the world
+   * actually shows, not the analytic field between its corners — so the
+   * ice ends exactly where the water it replaced would have, and there is
+   * no step at the shore for a car to fall down or climb. */
+  const iceAt = (x: number, z: number): number | null => {
+    if (!freezes) return null;
+    // The body covering THIS point, at its own level — the same reading the
+    // compiler classified the road's samples with, so the ground the car
+    // stands on and the surface it is told it is on are the same number.
+    const level = land.iceAt(x, z);
+    if (level === null) return null;
+    // ...but only where the world SHOWS the lake. The road builds its own
+    // shoulder out over the first stride of a crossing, and on that
+    // shoulder the car is on the road's fill, not on the sheet under it.
+    return latticeAt(x, z) < level ? level : null;
+  };
+
   const waterAt = (x: number, z: number): number | null => {
     // The ground the question is asked of is the one the world SHOWS: the
     // lattice the tiles are drawn on, not the analytic field between its
@@ -2721,6 +2766,11 @@ export function createTerrain(track: Track): TerrainField {
     // The level is asked of the bare country and the waterline is settled
     // against the drawn lattice, which is what keeps an embankment across
     // a lake dry on top and wet either side of it.
+    // R48 — a body the cold has frozen solid is not water at all: it is
+    // the ground the car is standing on. Nothing drowns in it and nothing
+    // splashes. A STREAM still runs — the freeze is the STANDING water's,
+    // and a ford is moving water that never gets the chance.
+    if (iceAt(x, z) !== null) return null;
     const lake = land.water.shoreLevelAt(x, z);
     const surface = lake !== null && ground < lake ? lake : streamWaterAt(streams, x, z);
     if (surface === null || ground >= surface - 0.02) return null;
@@ -2740,6 +2790,13 @@ export function createTerrain(track: Track): TerrainField {
     if (road !== null && road > surface + WADE_LIP) return null;
     return surface;
   };
+
+  /** R48 — standing water HERE, open or frozen: what nothing may be stood
+   * on. `waterAt` stops answering for a body once the cold has turned it
+   * into ground, and a crowd on a lake is a crowd on a lake whether or not
+   * the lake would hold them. */
+  const overWater = (x: number, z: number): boolean =>
+    waterAt(x, z) !== null || iceAt(x, z) !== null;
 
   /** Distance from a point to the nearest ABANDONED BRANCH's mat edge, or
    * Infinity when there is none near — nothing is planted on a road, and a
@@ -2777,6 +2834,12 @@ export function createTerrain(track: Track): TerrainField {
   const zones = biome.land.zones;
   const snowy = track.arena === null && snowyCountry(climate, zones);
   const snowline = snowlineOf(climate, zones);
+  /** R48 — whether any body on this country CAN be frozen: its ground has
+   * to reach the height the air drops to `CLIMATE.ice` at. A fast no for
+   * every warm stage, so the ice costs a summer nothing at all — and a
+   * loose yes, because it asks about the country's ceiling rather than
+   * about the lakes, which lie well under it. */
+  const freezes = track.arena === null && icyCountry(climate, zones);
   const blanketOver = (x: number, z: number, bare: number): number => {
     if (!snowy) return 0;
     const cover = clamp01((bare - snowline) / CLIMATE.fade);
@@ -3121,7 +3184,7 @@ export function createTerrain(track: Track): TerrainField {
         committedS,
         roadAt,
         (x, z) =>
-          waterAt(x, z) !== null ||
+          overWater(x, z) ||
           inStream(streams, x, z, 4) ||
           spurClearance(x, z) < R.guard.groveClear ||
           guards.riseAt(x, z) > 0.5,
@@ -3143,7 +3206,7 @@ export function createTerrain(track: Track): TerrainField {
         builtClearance,
         ceilingAt: (x, z) => nearestSample(x, z)?.ceiling ?? Infinity,
         blocked: (x, z) =>
-          waterAt(x, z) !== null || inStream(streams, x, z, 3) || guards.riseAt(x, z) > 0.5,
+          overWater(x, z) || inStream(streams, x, z, 3) || guards.riseAt(x, z) > 0.5,
         heightAt,
         commit: (park) => {
           spurs.add(park.road);
@@ -3221,6 +3284,8 @@ export function createTerrain(track: Track): TerrainField {
     coneAt,
     spurSurfaceAt,
     blanketAt,
+    iceAt,
+    frozenWater: land.frozen,
     streams,
     rivers,
     guards: guards.guards,

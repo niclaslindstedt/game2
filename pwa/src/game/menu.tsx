@@ -425,29 +425,33 @@ export const SEASONS: { id: Season; label: string }[] = [
   { id: "winter", label: "WINTER" },
 ];
 
-/** THE TEMPERATURE ROW's stops: the season's own (AUTO), then the air at
- * the datum in five-degree steps. A stop is a string because the row is a
- * `StepRow`; `temperatureOf` and `temperatureStop` translate. */
-export const TEMPERATURES: { id: string; label: string }[] = [
-  { id: "auto", label: "AUTO" },
-  ...Array.from({ length: 12 }, (_, i) => -20 + i * 5).map((t) => ({
-    id: String(t),
-    label: `${t > 0 ? "+" : ""}${t}°C`,
-  })),
-];
+/** THE TEMPERATURE ROW's span, °C at the datum: an arctic night at one end
+ * and a desert afternoon at the other, which between them cover every air
+ * this game has anything to say about — the freeze at 0, the ice at -5
+ * (climate.ts) and the deep cold the snow bites in are all inside it.
+ *
+ * It is a FADER rather than a ladder of stops because a temperature is a
+ * quantity and not a set of answers: the interesting part of the range is
+ * the couple of degrees either side of freezing, where the road glazes and
+ * the lakes go over, and a five-degree rung steps straight past it. */
+export const TEMPERATURE_RANGE = { min: -40, max: 40 } as const;
 
-/** The row's stop for a stored temperature (null is AUTO; anything off the
- * ladder lands on the nearest rung). */
-export function temperatureStop(temperature: number | null): string {
-  if (temperature === null || !Number.isFinite(temperature)) return "auto";
-  const rung = Math.max(-20, Math.min(35, Math.round(temperature / 5) * 5));
-  return String(rung);
+/** Where the fader's thumb stands, °C: the temperature this stage names, or
+ * the season's own in this country (climate.ts) until somebody moves it.
+ * There is no AUTO stop to land on — a fader has nowhere to put one, and
+ * moving the SEASON hands the row back to the season anyway (see the Roam
+ * page). Clamped to the travel, so a temperature dialled in from a link
+ * still lands on a stop the row can draw the thumb on. */
+export function temperatureAir(temperature: number | null, biome: BiomeId, season: Season): number {
+  const air = temperature ?? defaultTemperature(biome, season);
+  const { min, max } = TEMPERATURE_RANGE;
+  return Math.min(max, Math.max(min, Math.round(air)));
 }
 
-/** ...and back. */
-export function temperatureOf(stop: string): number | null {
-  const n = Number(stop);
-  return stop === "auto" || !Number.isFinite(n) ? null : n;
+/** What the fader READS as: the air, signed, so a glance says which side of
+ * freezing the stage is on. */
+export function temperatureLabel(air: number): string {
+  return `${air > 0 ? "+" : ""}${air}°C`;
 }
 
 export const WEATHERS: { id: Weather; label: string }[] = [

@@ -31,7 +31,7 @@ import type { ArenaPlan } from "./arena.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
-import { createLandField } from "./land.ts";
+import { buildableAt, createLandField } from "./land.ts";
 import { biomeRules } from "./biomes.ts";
 import {
   resolveClimate,
@@ -81,7 +81,7 @@ import { drawSchedule, joinRailLine, type RailCrossing } from "./railway.ts";
  * naming one of them. Which loose surface a country's roads are is the
  * biome's (`BiomeRules.loose`); the physics tells them apart in
  * `TUNING.surfaces`. */
-export type Surface = "gravel" | "sand" | "asphalt" | "water" | "snow";
+export type Surface = "gravel" | "sand" | "asphalt" | "water" | "snow" | "ice";
 /** What a car can be STANDING ON, which is more than what a road can be
  * made of: the road's own surfaces, the open country (`nature`), and the
  * open country under a winter's blanket (`snowfield`, climate.ts) — deep
@@ -614,41 +614,6 @@ function smoothstep(t: number): number {
   return c * c * (3 - 2 * c);
 }
 
-/** The height the road is willing to follow the country to at a point: the
- * ground, or the local water's own freeboard where the ground is under it.
- * A road goes OVER a lake on an embankment, never along the bed of one.
- *
- * R35 — the water it clears is the water that is actually HERE, at its own
- * level. Against one table for the whole world a road crossing a tarn two
- * hundred metres up reads the sea's level, decides it is comfortably
- * clear, and drives straight through the lake.
- *
- * `roll` is the road's own undulation at this point, and it is subtracted
- * because the freeboard is owed by the SURFACE a car drives on, not by the
- * base underneath it. The roll swings several metres either way; a
- * freeboard measured against the base alone lets the trough of it put the
- * road back under the water it was lifted out of.
- *
- * Stated ONCE, because two walks read it: the compiler's, which builds the
- * road, and the trial walk that sizes the country around it. A country
- * measured against a different rule than the road was built to is a
- * landscape that does not fit its own stage.
- *
- * It is what keeps a road out of water it was routed into — not what keeps
- * it from being routed there. The search does that (R35's `keepsDry`), and
- * this is the backstop under it: the START in particular is a point no
- * search chooses at all. */
-function buildableAt(
-  land: ReturnType<typeof createLandField>,
-  x: number,
-  z: number,
-  roll: number,
-): number {
-  const ground = land.heightAt(x, z);
-  const water = land.water.shoreLevelAt(x, z);
-  return water === null ? ground : Math.max(ground, water + R.elevation.follow.freeboard - roll);
-}
-
 /** R12 — the dip a ford sits in. Water lies FLAT at `bedDepth` below the
  * lowest grade around it (so it reads as collected, never perched), and the
  * road eases down to it and back out over the aprons. Fords sit on
@@ -962,7 +927,7 @@ function createCompiler(
   /** The bare country the stage is laid across — the branches steer by it
    * so none of them drives out into a lake (R17), and (R34) the road's own
    * height follows it. */
-  const land = createLandField(track.seed, track.knobs);
+  const land = createLandField(track.seed, track.knobs, track.climate);
   // R40 — what an unsealed sample of this country is made of, and whether
   // anybody lives in it.
   const biome = biomeRules(track.knobs.biome);
@@ -2703,8 +2668,28 @@ function createCompiler(
         // a winter brings the whole stage under it, and the snow is as
         // hard as the air at THIS height makes it.
         const snowy = !tunnel && !ford && !bridge && followsLand && crown > snowline;
-        const surface: Surface = ford ? "water" : snowy ? "snow" : paved ? "asphalt" : loose;
-        const bite = snowy ? snowBite(temperatureAt(track.climate, crown)) : 1;
+        // R48 — ...AND WHERE THE ROAD IS ON A FROZEN LAKE IT IS ICE, which
+        // outranks the snow: the sheet is swept by the wind and by whoever
+        // opened the crossing, and it is bare. Asked of the same land field
+        // the route was planned against, so the samples that come out ice
+        // are exactly the ones the search was allowed to draw over water.
+        const iceLevel =
+          !tunnel && !ford && !bridge && followsLand ? land.iceAt(cursor.x, cursor.z) : null;
+        // ...ON the sheet, and not merely over it: a road standing metres
+        // off a frozen body is an embankment across it, and an embankment
+        // is made of whatever the rest of the road is made of (R48's
+        // `lift`, which the search refuses a line over).
+        const onIce = iceLevel !== null && Math.abs(crown - iceLevel) <= R.ice.onSheet;
+        const surface: Surface = onIce
+          ? "ice"
+          : ford
+            ? "water"
+            : snowy
+              ? "snow"
+              : paved
+                ? "asphalt"
+                : loose;
+        const bite = surface === "snow" ? snowBite(temperatureAt(track.climate, crown)) : 1;
         const sample: TrackSample = {
           x: cursor.x,
           z: cursor.z,
@@ -3598,12 +3583,12 @@ export function compileStage(
   if (length !== "endless") {
     const circuit = shape === "circuit";
     const track = emptyTrack(seed, false, dials, weather, circuit, startApron);
-    const plans = generateStage(seed, length, dials, shape);
+    const plans = generateStage(seed, length, dials, shape, weather);
     // R17 — THE TARMAC, laid on the bare country from the seed alone and
     // rebuilt here identically to the copy the search planned against. It
     // is not handed over: both sides derive it, which is what keeps a track
     // a pure function of its seed however it was built.
-    track.highways = layStageHighways(seed, dials, createLandField(seed, dials), length);
+    track.highways = layStageHighways(seed, dials, createLandField(seed, dials, weather), length);
     // R17 — the country the stage will occupy, walked before it is
     // compiled. A junction may only be built where the arm it abandons can
     // leave the map, and which way is out is a question about the whole box
@@ -3619,7 +3604,7 @@ export function compileStage(
         track.width,
         rolling,
         dials,
-        createLandField(seed, dials),
+        createLandField(seed, dials, weather),
         track.startApron,
       ),
       true,
@@ -3630,7 +3615,7 @@ export function compileStage(
     return track;
   }
   const track = emptyTrack(seed, true, dials, weather, false, startApron);
-  const stream = createStageStream(seed, dials);
+  const stream = createStageStream(seed, dials, weather);
   const compiler = createCompiler(
     track,
     rolling,

@@ -17,6 +17,7 @@ import {
   defaultTemperature,
   fallsAsSnow,
   frostLine,
+  icyCountry,
   isLoose,
   rainsIn,
   resolveClimate,
@@ -37,6 +38,18 @@ const OLD_ICE = 0.58;
 
 const WINTER = { season: "winter" as const };
 
+/** A winter cold enough to whiten the taiga and NOT cold enough to freeze
+ * its water (R48): the ice line stands clear over the country's own
+ * ceiling, so every body on it is still open and the route is the summer's.
+ * Derived from the country rather than named, because the claim the tests
+ * below make — "the same road, made of snow" — is only true on this side of
+ * `CLIMATE.ice`, and a hard-coded degree would quietly stop meaning it.
+ * The ice itself is `tests/ice_test.ts`. */
+const MILD = {
+  season: "winter" as const,
+  temperature: CLIMATE.ice + CLIMATE.lapse * (BIOMES.taiga.land.zones.rock.to + 20),
+};
+
 /** A point beside the road, `out` metres to the driver's right of sample
  * `i`, on dry land — searched for rather than named, because a seed's
  * verge may be a lake. */
@@ -46,7 +59,7 @@ function beside(track: Track, out: number): { x: number; z: number; i: number } 
     const s = track.samples[i];
     const x = s.x + Math.cos(s.heading) * out;
     const z = s.z - Math.sin(s.heading) * out;
-    if (terrain.waterAt(x, z) !== null) continue;
+    if (terrain.waterAt(x, z) !== null || terrain.iceAt(x, z) !== null) continue;
     if (terrain.spurClearance(x, z) < CLIMATE.blanket.verge + 2) continue;
     if (terrain.roadDistanceAt(x, z) < out - 1) continue;
     return { x, z, i };
@@ -160,15 +173,17 @@ describe("the climate", () => {
 describe("a stage in winter", () => {
   const SEED = 11;
   const summer = () => stageTrack(SEED, "short", { biome: "taiga" });
-  const winter = () => stageTrack(SEED, "short", { biome: "taiga" }, "sprint", WINTER);
+  const winter = () => stageTrack(SEED, "short", { biome: "taiga" }, "sprint", MILD);
 
   it("is the same road, made of snow wherever it was loose", () => {
     const a = summer();
     const b = winter();
-    expect(b.climate).toEqual({
-      season: "winter",
-      temperature: defaultTemperature("taiga", "winter"),
-    });
+    expect(b.climate).toEqual(MILD);
+    // The claim below is a claim about a country with no ice on it: a cold
+    // that freezes the lakes moves the ROUTE (R48), which is the whole
+    // point of `tests/ice_test.ts` and the reason this fixture is mild.
+    expect(icyCountry(b.climate, BIOMES.taiga.land.zones)).toBe(false);
+    expect(defaultTemperature("taiga", "winter")).toBeLessThan(CLIMATE.ice);
     expect(b.samples.length).toBe(a.samples.length);
     let snow = 0;
     for (let i = 0; i < a.samples.length; i++) {

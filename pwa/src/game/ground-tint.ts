@@ -155,7 +155,11 @@ export function groundTint(
   snow: () => number = () => 0,
 ): number | DustTint {
   if (surface === "water") return SPRAY;
-  if (surface === "snow" || surface === "snowfield") return SNOW_POWDER;
+  // R48 — a sliding tyre scrapes powder off a frozen lake too. It is the
+  // same white, and it is the only thing a lake gives up: nothing HANGS
+  // over one (`plumeGround` below), because there is no loose material on
+  // a swept sheet for the air to take.
+  if (surface === "snow" || surface === "snowfield" || surface === "ice") return SNOW_POWDER;
   if (wet && surface !== "asphalt") return MUD_CLODS;
   if (surface !== "nature") return grit(biome);
   if (Math.random() < snow()) return SNOW_POWDER;
@@ -201,6 +205,10 @@ export function plumeGround(
   if (surface === "snow") return { tint: SNOW_POWDER, amount: 1 };
   // Deep snow is all powder, and a car ploughing it throws the most.
   if (surface === "snowfield") return { tint: SNOW_POWDER, amount: 1 };
+  // R48 — and a frozen lake lifts nothing at all. There is no loose
+  // material on a swept sheet to hang in the air behind the car: what a
+  // sliding tyre scrapes off it is thrown, not lifted (`groundTint`).
+  if (surface === "ice") return null;
   if (surface === "water" || surface === "asphalt" || wet) return null;
   if (surface !== "nature") return { tint: grit(biome), amount: 1 };
   // ...and a snowfield is powder with nothing binding it either: the

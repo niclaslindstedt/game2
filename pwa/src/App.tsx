@@ -1650,9 +1650,17 @@ export function App() {
    * An ENDLESS stage keeps none. Its boards are laid as the road streams, so
    * how far in a given board number stands depends on how far the run got —
    * there is no fixed piece of road for a record to be a record OF. Nor does
-   * the training ground, which is not a stage and has no boards on it. */
-  const armSplitRecords = (spec: StageSpec): void => {
-    const id = !spec.arena && spec.length !== "endless" ? splitStageId(spec) : "";
+   * the training ground, which is not a stage and has no boards on it.
+   *
+   * ROAM keeps none either, and for a different reason: it is the page where
+   * the stage itself is being tried on. A seed, a length, a country and six
+   * dials are all a press away, so the road under a board is never the road
+   * a driver is settling into — and NEW RECORD! beside a split nobody was
+   * chasing reads as noise rather than as the reward it is on a stage that
+   * is driven again and again. */
+  const armSplitRecords = (spec: StageSpec, mode: PlayMode): void => {
+    const kept = !spec.arena && spec.length !== "endless" && mode !== "roam";
+    const id = kept ? splitStageId(spec) : "";
     recordsRef.current = { id, best: id === "" ? [] : loadSplitRecords(id), lastBoard: 0 };
   };
 
@@ -1661,7 +1669,7 @@ export function App() {
     recorderRef.current = null;
     ghostRef.current = null;
     splitsRef.current = { times: [], against: "" };
-    armSplitRecords(spec);
+    armSplitRecords(spec, mode);
     setSplit(null);
     // The news column goes with it. A line stands for fifteen seconds now,
     // which is long enough to outlive the run it was about: a restart whose
@@ -1881,6 +1889,12 @@ export function App() {
         hour: r.hour,
         weather: r.weather,
         season: r.season,
+        // ...and the COLD, which is part of the road: under freezing the
+        // loose surface is snow, and under `CLIMATE.ice` the lakes are ice
+        // the route may be drawn across (R48). A Roam stage driven without
+        // it is a different stage from the one the map behind the page has
+        // been drawing.
+        temperature: r.temperature,
         skipCountdown: false,
         // The back row of the grid, whenever the opponents slider has put
         // one there; the line on its own at zero, which is where it stands.

@@ -17,6 +17,7 @@ import { angleDiff } from "../lib/math.ts";
 import { createRng } from "../lib/prng.ts";
 import { STAGE_RULES as R, type SegmentPlan, type StageKnobs } from "./rules.ts";
 import { challengeMul, knobScale, resolveKnobs, roadWidthOf } from "./rules.ts";
+import type { Climate } from "../game/climate.ts";
 import { createLandField } from "./land.ts";
 import { roadClearance } from "./road.ts";
 import {
@@ -68,7 +69,14 @@ export type StageStream = {
  * R10 holds against the trailing `R.endless.tailWindow` meters — older road
  * is far behind the car, out of sight, and dropped from the working set,
  * which is what keeps memory and search time flat forever. */
-export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): StageStream {
+export function createStageStream(
+  seed: number,
+  knobs?: Partial<StageKnobs>,
+  /** R48 — the cold. A frozen lake is ground the stream may run across
+   * instead of a wall it has to squeeze past, which on a country full of
+   * water is the difference between a journey and a shore road. */
+  climate?: Climate,
+): StageStream {
   const dials = resolveKnobs(knobs);
   const rng = createRng(seed);
   const clear = roadClearance(roadWidthOf(dials));
@@ -77,7 +85,7 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
   // meets more of the country than any stage does, so it meets more of the
   // country's lakes; the pour's block cache is what keeps asking about
   // them flat as the road runs on.
-  const land = createLandField(seed, dials);
+  const land = createLandField(seed, dials, climate);
   /** ...and how much of it the DIAL leaves: a lakeland road runs the shore
    * because there is nowhere else to run. */
   const setback = knobScale(dials.water, R.wet.routeSetback);
@@ -104,7 +112,13 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
     // forever. A finite stage in the same spot throws the attempt away and
     // re-rolls, which is why only the endless search needs this.
     if (rung >= ladder.length) return true;
-    return !land.nearWater(p.x, p.z, R.water.routeClear * ladder[rung] * setback);
+    return !land.nearOpenWater(p.x, p.z, R.water.routeClear * ladder[rung] * setback);
+  };
+  /** R48 — and a corner ON the ice is a gentle one, exactly as on a finite
+   * stage: the sheet carries the sweeper and the straight. */
+  const holdsOnIce = (plan: SegmentPlan, points: Cursor[]): boolean => {
+    if (plan.kind !== "turn" || (plan.radius ?? Infinity) >= R.ice.minRadius) return true;
+    return !points.some((p) => land.nearIce(p.x, p.z, R.ice.cornerClear));
   };
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;
@@ -197,7 +211,10 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
       // the exit covers the whole arc).
       if (Math.abs(angleDiff(end.heading, course)) > R.endless.maxCourseError) continue;
       if (
-        points.some((p) => field.blocked(p) || claimed(p) || entersStart(p, clear) || !keepsDry(p))
+        points.some(
+          (p) => field.blocked(p) || claimed(p) || entersStart(p, clear) || !keepsDry(p),
+        ) ||
+        !holdsOnIce(plan, points)
       ) {
         continue;
       }

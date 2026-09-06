@@ -53,6 +53,23 @@ export const CLIMATE = {
   /** The temperature at and under which water is snow: what falls, and
    * what the ground holds. */
   freeze: 0,
+  /** R48 — THE ICE. The air at a body's OWN SURFACE at and under which
+   * standing water freezes SOLID, °C: not a skin over a lake but a floor
+   * a rally car crosses at speed.
+   *
+   * It is five degrees under freezing rather than at it because a lake is
+   * not a puddle. Water at 0° has a lid on it; what carries a car is the
+   * sheet a run of hard nights builds, and -5 at the surface is the
+   * shorthand for "it has been properly cold here" — the same shorthand
+   * the Nordic ice roads use before they open one. Between 0 and -5 the
+   * water is still water: the road glazes, the country whitens, and the
+   * lakes are exactly the hazard they were in summer.
+   *
+   * It is asked of the air at the BODY'S level, not at the datum, because
+   * the temperature is a field (see the header): a tarn on a shoulder
+   * goes over while the lake in the valley below it is still open, which
+   * is the order a real thaw runs in, backwards. */
+  ice: -5,
   /** Metres of height over the freezing line the cover takes to reach full
    * depth — a ragged margin rather than a contour drawn round the hill.
    * The paint's own fade (`SNOW.fade`, ground-rules.ts) is this number. */
@@ -182,6 +199,30 @@ export function blanketDepth(temperature: number): number {
 /** Whether what falls at this temperature is snow. */
 export function fallsAsSnow(temperature: number): boolean {
   return temperature <= CLIMATE.freeze;
+}
+
+/** R48 — whether standing water whose surface stands at `level` has frozen
+ * SOLID under this climate: the air at that height, against `CLIMATE.ice`.
+ *
+ * A body is frozen or it is not — there is no half-frozen lake here. What
+ * that buys is worth the simplification: once the answer is one boolean per
+ * LEVEL, the pour's own bodies carry it, the route may ask "may I drive
+ * across this" of a point, and the physics, the terrain and the renderer
+ * all reach the same answer from the same two numbers. */
+export function waterFrozen(climate: Climate, level: number): boolean {
+  return temperatureAt(climate, level) <= CLIMATE.ice;
+}
+
+/** R48 — whether a country under this climate can hold ANY frozen water:
+ * its ground has to reach the height the air drops to `CLIMATE.ice` at.
+ *
+ * A cheap NO for every warm stage, and a loose YES, because it asks about
+ * the country's ceiling rather than about where the lakes actually lie —
+ * and lakes lie in the hollows, well under it. Callers use it to skip the
+ * ice entirely, never to conclude that a particular body is frozen; that
+ * is `waterFrozen`'s answer and it needs the body's own level. */
+export function icyCountry(climate: Climate, zones: BiomeLand["zones"]): boolean {
+  return (climate.temperature - CLIMATE.ice) / CLIMATE.lapse < zones.rock.to;
 }
 
 /** Whether this country's rain is WET in this season: its row's own word,

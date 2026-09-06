@@ -513,6 +513,9 @@ const GRAIN = {
     // Deep snow is the softest ride in the game — the blanket takes the
     // lattice out of it — and what is left is the plough, felt as a sway.
     snowfield: 0.9,
+    // R48 — a frozen lake is the smoothest floor in the game: it is a
+    // liquid that stopped, so there is nothing under the wheels at all.
+    ice: 0.25,
   },
   /** How fast the grain follows the wheels leaving and finding the ground,
    * 1/s. In the air the road stops arriving, and the silence is most of what

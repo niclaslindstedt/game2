@@ -1673,6 +1673,69 @@ export const STAGE_RULES = {
     underLake: 1,
   },
 
+  /** R48 — THE ICE ROAD: a rally route across a lake the cold has frozen
+   * solid (climate.ts's `waterFrozen`).
+   *
+   * It is the one place a stage is allowed inside R35's setback, and it is
+   * allowed because the reason for the setback has gone: a frozen body is
+   * a floor, and it is the flattest, widest, most obviously drivable
+   * ground in the country. Real winter rallies use them for exactly that
+   * reason, and so does this one — the ice is not a hazard the route
+   * dodges, it is a section the route is pleased to find. */
+  ice: {
+    /** The tightest corner the route may draw with ANY of it on the ice, m
+     * of radius.
+     *
+     * A lake gives no camber, no crown and no loose skin to cut down
+     * through, and the surfaces table gives ice less hold than it gives
+     * even snow: everything a rally car changes direction hard WITH is
+     * missing, so a hairpin on ice is not a corner, it is a spin with a
+     * start line. Set inside R3's SOFT band and above the whole of its
+     * medium one, so what the crossing carries is the long open sweeper
+     * and the straight — flat-out road, which is what an ice section is
+     * for — and every corner that asks for a lift or a lever stays on the
+     * land either side of it. Over the soft band's own ceiling it would
+     * ban curves on the ice outright, and a crossing with no shape in it
+     * is a bridge. */
+    minRadius: 80,
+    /** ...and how far off the sheet that rule reaches, m. A corner is
+     * refused for coming NEAR the ice, not only for standing on it, and
+     * the margin is a road's width rather than a rounding: the search
+     * probes every `PROBE_STEP` metres and its Euler walk parts company
+     * with the compiler's finer one by metres over a stage, so a turn
+     * judged only where it was sampled still laid tens of the built road's
+     * samples across shorelines it never saw. Measured over a twelve-seed
+     * winter sweep — at 15 m the tightest corner reaching the ice was a
+     * 27 m hairpin, and at this it is exactly `minRadius`. Higher costs
+     * crossings for nothing: 60 m halved the ice a sweep produced and
+     * bought no corner the rule had not already refused. */
+    cornerClear: 30,
+    /** THE HIGHEST A LINE MAY CROSS A FROZEN BODY, m over the sheet —
+     * a floor under the route in `keepsDry`, and the difference between a
+     * bank running out onto a lake and a viaduct over one.
+     *
+     * It is needed because the road follows the country through a 140 m
+     * lag (`elevation.follow.lag`) and a lake is a couple of hundred
+     * metres across: a line arriving at a shore still up on a hillside
+     * crosses the whole body before the follower has brought it down.
+     * Unbounded, a twelve-seed winter sweep flew six metres and more over
+     * open ice, which is exactly the causeway R35 exists to prevent.
+     * At four the same sweep never stands over three and a third, and
+     * three quarters of the road over frozen water is down ON it — the
+     * rest being the short bank at either end, which is what an approach
+     * to a real ice crossing is. Tighter and the feature evaporates: at
+     * 1.5 m the sweep produced 300 m of ice road in twelve stages,
+     * because the country almost never offers a flat run at a shore. */
+    lift: 4,
+    /** ...and the band inside which the road actually IS the sheet, m —
+     * what the compiler calls a sample `ice` in. Separate from the lift
+     * above, and much tighter, because the two are different claims: one
+     * is how much bank a crossing may be approached over, and this is
+     * where the bank stops and the ice road starts. A sheet's thickness
+     * and a road's crown, not a tolerance. */
+    onSheet: 1.5,
+  },
+
   /** R13 — the crossings a car cannot wade. A ford is water the wheels go
    * THROUGH; past `fordMax` the water is a river, and a river gets a deck
    * over it. The span decides the architecture: a timber deck is two

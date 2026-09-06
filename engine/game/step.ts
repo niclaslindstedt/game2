@@ -296,6 +296,11 @@ export function createGame(options: CreateGameOptions): GameState {
  * speed cap, and a rooster tail of torn grass. */
 function offRoadSurface(state: GameState, x: number, z: number): Underfoot {
   if (state.terrain.waterAt(x, z) !== null) return "water";
+  // R48 — a body the cold has frozen solid is a floor, and the floor has
+  // less to hold with than anything else the car can be on (climate.ts).
+  // Asked before the spur and before the blanket: a lake is not a road,
+  // and the snow does not lie on it.
+  if (state.terrain.iceAt(x, z) !== null) return "ice";
   const spur = state.terrain.spurSurfaceAt(x, z);
   if (spur !== null) return spur;
   // The open country under a winter's blanket is deep snow, not turf

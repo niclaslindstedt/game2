@@ -52,13 +52,13 @@ import {
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
   SEASONS,
-  TEMPERATURES,
+  TEMPERATURE_RANGE,
   challengeGlyph,
   challengeWord,
   dialStop,
   opponentsWord,
-  temperatureOf,
-  temperatureStop,
+  temperatureAir,
+  temperatureLabel,
   weathersOf,
   type RaceSettings,
 } from "./menu.tsx";
@@ -342,7 +342,10 @@ export function RoamPage({
                 {/* The season reaches the ground (a winter is snow on the
                     road and a blanket beside it), and the season decides
                     what weathers the country has — the desert rains in its
-                    winter — so moving it can take the row above with it. */}
+                    winter — so moving it can take the row above with it.
+                    It also hands the TEMPERATURE fader back to the season's
+                    own air, which is the only way back to AUTO once the
+                    fader has been moved. */}
                 <StepRow
                   label="SEASON"
                   glyph="leaf"
@@ -352,6 +355,7 @@ export function RoamPage({
                     onRace({
                       ...race,
                       season,
+                      temperature: null,
                       weather: weathersOf(race.knobs.biome, season).some(
                         (w) => w.id === race.weather,
                       )
@@ -361,16 +365,26 @@ export function RoamPage({
                   }
                 />
                 {/* THE COLD, at the valley floor — the air gets colder with
-                    height from here (climate.ts). AUTO is the season's own
-                    in this country; under freezing the loose road is snow,
-                    the country lies under it, and the rain above turns to
-                    flakes. Around zero the road glazes; deep cold bites. */}
-                <StepRow
+                    height from here (climate.ts). It stands at the season's
+                    own in this country until it is moved: under freezing the
+                    loose road is snow, the country lies under it, and the
+                    rain above turns to flakes. Around zero the road glazes;
+                    at -5 the lakes go over and the route may cross them;
+                    deep cold bites. Settled, because every degree either
+                    side of those lines rebuilds the stage. */}
+                <FadeRow
                   label="TEMPERATURE"
                   glyph="thermometer"
-                  stops={TEMPERATURES}
-                  value={temperatureStop(race.temperature)}
-                  onPick={(stop) => onRace({ ...race, temperature: temperatureOf(stop) })}
+                  value={temperatureAir(race.temperature, race.knobs.biome, race.season)}
+                  min={TEMPERATURE_RANGE.min}
+                  max={TEMPERATURE_RANGE.max}
+                  step={1}
+                  nudge={5}
+                  read={temperatureLabel}
+                  less="colder"
+                  more="warmer"
+                  settle
+                  onChange={(air) => onRace({ ...race, temperature: air })}
                 />
               </KnobGroup>
             </div>
