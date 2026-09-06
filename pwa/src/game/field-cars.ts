@@ -58,7 +58,7 @@ import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { crewLookFor } from "./car-crew.ts";
 import { liveryForCrew } from "./car-livery.ts";
-import { lightDust } from "./dust-light.ts";
+import { BRAKE_DUST, lightDust } from "./dust-light.ts";
 import { createFumes, PIPE, pipeBursts, pipeWork } from "./fumes.ts";
 import { plumeGround } from "./ground-tint.ts";
 import { createNameTag, type NameTag } from "./name-tag.ts";
@@ -231,13 +231,16 @@ export type FieldCars = {
    * land on the next stage rather than mid-run, which is the same contract
    * the undergrowth setting keeps; one call because they are one setting.
    * `looseWheels` is the third question on the same row — whether a wheel
-   * a rival loses is thrown as a rolling body — and unlike the two above it
-   * lands on the cars already built, because a wheel is thrown by an event
-   * rather than baked into a geometry. */
+   * a rival loses is thrown as a rolling body — and `brakeLights` whether a
+   * rival standing on the pedal lights its tail. Unlike the two above, both
+   * land on the cars already built: neither is baked into a geometry, and a
+   * field whose brake lights came in one stage late would be a field of
+   * cars that look like they are not braking. */
   setCarDetail: (detail: {
     interior: InteriorDetail;
     screens: FilmDetail;
     looseWheels: boolean;
+    brakeLights: boolean;
   }) => void;
   /** How many rival cars are being drawn right now (the debug overlay). */
   drawn: () => number;
@@ -269,6 +272,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let interior: InteriorDetail = fieldInterior("high");
   let screens: FilmDetail = "coarse";
   let wheelsRoll = true;
+  let braked = true;
   let tint = new THREE.Color(1, 1, 1);
   let lampsLit = false;
   let rain = 0;
@@ -406,6 +410,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           const fresh = { visual, tag, fumeClock: 0 };
           built.set(run, fresh);
           visual.setLooseWheels(wheelsRoll);
+          visual.setBrakeLights(braked);
           tintCar(visual, tint, lampsLit, rain);
           visual.update(run.state, 0, camera.position);
           show(fresh, false);
@@ -504,14 +509,21 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       // the difference between two frames.
       for (let i = 0; i < near.length && i < LAMP_CARS; i++) {
         const rival = near[i]?.run.state.car;
-        if (rival) lightDust(rival, power, power);
+        // A rival's tail flares on the pedal like the player's own — a crew
+        // braking into a corner a hundred metres ahead is a red pulse inside
+        // their own dust, which is the first thing you get to read about it.
+        if (rival) lightDust(rival, power, power * (rival.braking ? BRAKE_DUST : 1));
       }
     },
     setCarDetail: (detail) => {
       interior = fieldInterior(detail.interior);
       screens = detail.screens;
       wheelsRoll = detail.looseWheels;
-      for (const { visual } of built.values()) visual.setLooseWheels(detail.looseWheels);
+      braked = detail.brakeLights;
+      for (const { visual } of built.values()) {
+        visual.setLooseWheels(detail.looseWheels);
+        visual.setBrakeLights(detail.brakeLights);
+      }
     },
     setNames: (on) => {
       named = on;

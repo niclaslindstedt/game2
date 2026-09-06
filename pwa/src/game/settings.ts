@@ -627,25 +627,52 @@ export const EXHAUST_SEEN: Record<VideoSettings["exhaust"], { player: boolean; f
   all: { player: true, field: true },
 };
 
-/** How many BEAMS each end of the car throws at each stop of the LIGHTING
- * row: the spotlights environment.ts hangs off the lamps. Two is the pair
- * a car has, splayed off its own lenses; one is a single beam on the
- * centreline; none is a lamp that glows and lights nothing. The ladder is
- * walked down from the tail first, because a tail lamp is a marker, not a
- * driving light — the road ahead at night is the one pool a driver needs. */
-export const LAMP_BEAMS: Record<VideoSettings["lighting"], { head: number; tail: number }> = {
-  lean: { head: 1, tail: 0 },
-  normal: { head: 1, tail: 1 },
-  full: { head: 2, tail: 2 },
+/** HOW MANY OF THE CAR'S OWN LAMPS ARE ACTUALLY THROWN at each stop of the
+ * LIGHTING row: a CAP on the light sources the body authored (`car/lamps.ts`
+ * derives them), spent strongest first. A beam is paid for on every lit
+ * pixel in the frame, which makes this the one detail lever whose cost does
+ * not go with how much of the world is on screen — so the ladder is a count
+ * and not a quality.
+ *
+ * FULL is the car's whole complement, which is a different number per car
+ * and the point of the row's top stop: a quad-headlight face throws its two
+ * low beams AND its two driving beams, a car with a pod bar throws the bar,
+ * and a car with one wide cluster each side throws the two it has. NORMAL is
+ * the pair every car has, whichever pair of its own is strongest. LEAN is a
+ * single beam on the centreline, opened out to stand in for the pair.
+ *
+ * The tail goes first as the row comes down, because a tail lamp is a
+ * marker and not a driving light — the road AHEAD at night is the one pool a
+ * driver actually needs, and the lamp still glows either way (car-mesh.ts's
+ * bloom, which costs nothing per pixel).
+ *
+ * `brakes` is whether standing on the pedal is a LIGHT rather than only a
+ * lens: the tail beams flare and the bloom over them goes with it. It rides
+ * the same stop as the tail beams, because there is nothing to flare at the
+ * bottom of the ladder. `field` is whether anybody but the car being driven
+ * lights the world at all — the rivals' own lamps on the register the dust
+ * clouds are lit from, which is what a rival ahead of you in the dark is
+ * before it is a car. */
+export const LAMP_BEAMS: Record<
+  VideoSettings["lighting"],
+  { head: number; tail: number; brakes: boolean; field: boolean }
+> = {
+  lean: { head: 1, tail: 0, brakes: false, field: false },
+  normal: { head: 2, tail: 2, brakes: true, field: false },
+  full: { head: 4, tail: 2, brakes: true, field: true },
 };
 
 /** How many CARS the dust is lit by at each stop — the player first, then
  * the nearest of the field (dust-light.ts hangs a head and a tail source
  * per car). Every particle in the frame runs the register in its vertex
- * shader, so a lamp fewer is a loop shorter for the whole cloud. */
+ * shader, so a lamp fewer is a loop shorter for the whole cloud.
+ *
+ * The two stops that do not light the FIELD (`LAMP_BEAMS.field`) are the
+ * driven car alone: the rivals' lamps are the only light anybody but the
+ * player casts, so this ladder and that flag are one decision read twice. */
 export const DUST_LAMP_CARS: Record<VideoSettings["lighting"], number> = {
   lean: 1,
-  normal: 2,
+  normal: 1,
   full: 4,
 };
 

@@ -26,14 +26,17 @@ import {
   cockpitWheelTurn,
   dialAngle,
   frontLampAnchors,
+  headLampSources,
   rearLampAnchors,
   steeringTurn,
+  tailLampSources,
   DIAL_TOP_SPEED,
   GLASS_OPACITY,
   INSTRUMENT_MATERIAL,
   LENS_MATERIAL,
   type FilmDetail,
   type InteriorDetail,
+  type LampSource,
   type MirrorMount,
 } from "./car-body.ts";
 import { instrumentReadings } from "./car-instruments.ts";
@@ -69,12 +72,37 @@ export const LAMP_MATERIAL = "car-lamp";
 /** How far the bloom spreads past the lens, as a multiple of the lens size. */
 const LAMP_SPREAD = 3.4;
 const HEAD_SPREAD = 2.6;
-/** Bloom strength with the lights off (daylight) and on (dusk, night). A
- * tail lamp is a marker, not a headlight pointed at the player: at the few
- * car lengths a chase is fought over, a bloom that reads as a lamp from a
- * hundred metres is a red smear over the whole tail up close. */
-const LAMP_DAY = 0.11;
-const LAMP_NIGHT = 0.55;
+/** WHAT THE TAIL CLUSTER IS WORTH WITH THE PEDAL DOWN, with the lights off
+ * (daylight) and on (dusk, night) — the FULL figure, because a brake light
+ * is what the back of a car is for. It is the one lamp on the whole car that
+ * has to be read in DAYLIGHT, where every other one is switched off: it is
+ * the entire signal a driver behind gets, and at the couple of car lengths a
+ * chase is fought over it is the difference between following a car and
+ * hitting one.
+ *
+ * Which is also what holds the night figure down where it is rather than at
+ * the top of the scale. The lamp has to read as its COLOUR first: a bloom
+ * driven hard enough to look hot from a hundred metres is a red smear over
+ * the whole tail of the car at the range the chase is actually fought at,
+ * and the pool on the road behind (environment.ts) is what carries the
+ * distance instead. */
+const BRAKE_DAY = 0.45;
+const BRAKE_NIGHT = 0.55;
+/** ...and the MARKER under it, at half of the night figure and at NOTHING at
+ * all by day. Half, because a tail lamp that is not a brake light says only
+ * that there is a car there, which does not need much light — and holding it
+ * to half is what makes the pedal a change you can see instead of a lamp
+ * getting slightly brighter.
+ *
+ * Nothing by day, for the reason `HEAD_DAY` is nothing: a lamp that is not
+ * SWITCHED ON has no light escaping it, and a bloom over one in sunlight is
+ * a car driving round with its brake lights permanently on — which is worse
+ * than no signal at all, because it makes the real one unreadable. The lens
+ * itself is still drawn under it (`LENS_DARK`), so an unlit cluster is what
+ * it should be: red plastic. */
+const MARKER_SHARE = 0.5;
+const LAMP_DAY = 0;
+const LAMP_NIGHT = BRAKE_NIGHT * MARKER_SHARE;
 /** The headlamps' pair. Nothing in daylight — a switched-off headlight is
  * glass, and a lit one competing with the sun is a car with its dipped
  * beams on, which nobody can see from behind either. */
@@ -121,11 +149,6 @@ const GLASS_INSIDE = 0.25;
  * the same way a lamp is), so the darker the stage the more they are the
  * only thing there is to see. */
 const CABIN_LIGHT = { day: 0.78, night: 0.16 };
-
-/** Where a car with no authored lamps at one end throws its beam from, m
- * from the centerline — a spec is allowed to have a bare face, and a beam
- * still has to come from somewhere sensible. */
-const LAMP_FALLBACK = 0.6;
 
 /** Front-wheel visual steer: radians of wheel angle at full lock... */
 const WHEEL_STEER_LOCK = 0.55;
@@ -196,9 +219,15 @@ export type CarVisual = {
   /** How filthy the car has got, 0..1 — the environment dims its beams by
    * it, because the dirt is on the glass too. */
   grime: () => number;
-  /** How far off the centerline this car's lamps sit, m. The environment
-   * hangs a beam on each one, so a wide car lights a wide road. */
-  lampSpread: { front: number; rear: number };
+  /** WHICH LAMPS THIS CAR HAS, as light sources — the ones its own body
+   * authored (`car/lamps.ts`), strongest first. The environment hangs a beam
+   * on as many of them as the LIGHTING row will pay for, so a quad face lays
+   * a different pool from a pod bar and both come off their own lenses. */
+  lampPlan: { head: readonly LampSource[]; tail: readonly LampSource[] };
+  /** Whether standing on the pedal is a LIGHT on this car — the LIGHTING
+   * row's say (`LAMP_BEAMS.brakes`). Off, the tail is a marker that never
+   * changes, which is what the bottom of the row promises. */
+  setBrakeLights: (on: boolean) => void;
   dispose: () => void;
 };
 
@@ -231,16 +260,6 @@ export type CarOptions = {
    * (car/wipers.ts) — see `CarBodyOptions.screens`. Defaults to `fine`. */
   screens?: FilmDetail;
 };
-
-/** How far off the centerline this car's beams hang, front and rear. */
-function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
-  front: number;
-  rear: number;
-} {
-  const off = (anchors: { x: number }[]): number =>
-    anchors.length > 0 ? Math.abs(anchors[0].x) : LAMP_FALLBACK;
-  return { front: off(frontLampAnchors(bodySpec)), rear: off(rearLampAnchors(bodySpec)) };
-}
 
 /** Push the environment onto one body: its light, the shadow that light
  * throws, and how hard it is raining on it. Everything on a car carries
@@ -411,6 +430,12 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     lit = on;
     if (tint) worldLight.copy(tint);
   };
+  /** Whether the pedal lights this car's tail at all — the LIGHTING row's,
+   * pushed in by the renderer (`LAMP_BEAMS.brakes`). */
+  let brakeLights = true;
+  const setBrakeLights = (on: boolean): void => {
+    brakeLights = on;
+  };
   let wet = 0;
   const setWet = (rain: number): void => {
     wet = clamp(rain, 0, 1);
@@ -440,7 +465,15 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       snuffed.add(part);
       snuffRear(i);
     }
-    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * clean * fade;
+    // The tail: a dim marker, or the brake light the same lenses become the
+    // moment the pedal goes down. It is the bloom rather than the beam that
+    // carries it by day — a spotlight competing with the sun changes no
+    // pixel and costs every one of them — which is why this reads at noon
+    // while the red pool on the road behind (environment.ts's own brake
+    // beam) only exists once the light has gone.
+    const braked = brakeLights && car.braking;
+    const tail = braked ? (lit ? BRAKE_NIGHT : BRAKE_DAY) : lit ? LAMP_NIGHT : LAMP_DAY;
+    lampMat.opacity = tail * clean * fade;
     headMat.opacity = (lit ? HEAD_NIGHT : HEAD_DAY) * clean * fade;
     if (lensMat) {
       if (lit) lensMat.color.setRGB(1, 1, 1);
@@ -685,11 +718,12 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     setRearView,
     onEvents: damage.onEvents,
     setLooseWheels: damage.setLooseWheels,
+    setBrakeLights,
     setLights,
     setWet,
     setSnow,
     grime: dirt.level,
-    lampSpread: lampSpread(bodySpec),
+    lampPlan: { head: headLampSources(bodySpec), tail: tailLampSources(bodySpec) },
     dispose,
   };
 }

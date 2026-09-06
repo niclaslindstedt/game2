@@ -52,7 +52,15 @@ export type {
   WheelStyle,
 } from "./car/spec.ts";
 export { bodyHalfLength, bodyHalfWidth } from "./car/shell.ts";
-export { LENS_MATERIAL, frontLampAnchors, rearLampAnchors, type LampAnchor } from "./car/lamps.ts";
+export {
+  LENS_MATERIAL,
+  frontLampAnchors,
+  headLampSources,
+  rearLampAnchors,
+  tailLampSources,
+  type LampAnchor,
+  type LampSource,
+} from "./car/lamps.ts";
 export type { GlassPane, GlassPanes } from "./car/greenhouse.ts";
 export type { DoorSkin } from "./car/trim.ts";
 export { crewSeats, steeringTurn, type InteriorDetail } from "./car/interior.ts";
