@@ -44,6 +44,7 @@ Read by the Expo app's own build (`native/`, see [platforms.md](platforms.md)), 
 | `EXPO_PUBLIC_GAME_URL` | Points the WebView at a deployed slot instead of the copy of the game bundled inside the app, and skips the local server. Debugging only — a store build that streams the website is the shape App Store guideline 4.2 rejects. |
 | `EAS_PROJECT_ID`       | The Expo project the app builds under, until it is pinned in `native/app.config.js`; the `native` workflow reads it from a repository variable of the same name.                                                                |
 | `EXPO_TOKEN`           | An Expo access token for non-interactive EAS builds; the `native` workflow reads it from a repository secret of the same name. A laptop uses `eas login` instead.                                                               |
+| `APPLE_TEAM_ID`        | The Apple team a LOCAL iPhone build (`make native-iphone`) signs with, overriding the publisher's team pinned in `native/app.config.js`. EAS builds ignore it and use the credentials on the Expo project.                      |
 
 ## The deploy slots
 

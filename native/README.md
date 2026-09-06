@@ -53,6 +53,8 @@ of the npm workspace; it manages its own dependencies.
 ## Prerequisites
 
 - Node 24 (repo `.nvmrc`).
+- For a build on a real iPhone: Xcode, and your Apple Developer team id in
+  `native/.env` as `APPLE_TEAM_ID` (gitignored — see `.env.example`).
 - An [Expo account](https://expo.dev). `npm install --global eas-cli`, then
   `eas login`.
 - **One-time:** link the project. Run `eas init` from this directory, then pin
@@ -129,29 +131,49 @@ Three routes, cheapest first:
    Expo Go on the phone (same Wi-Fi). You get the real touch/perf feel of the
    game, but **not** the native shell: no local server, no audio session —
    those are native modules Expo Go doesn't carry.
-2. **A local build over USB** — the whole app:
+2. **A local build over USB** — the whole app, in one command:
 
    ```sh
-   npm run bundle
-   npm run ios:device        # expo run:ios --device --configuration Release — pick your iPhone
+   make native-iphone        # from the repo root; npm run ios:device from here
    ```
 
-   The device build is a **Release** build on purpose: it **embeds the JS
-   bundle** in the app binary, so the app launches standalone and never needs
-   the Metro packager. A Debug device build instead fetches its JS from Metro
-   over the network at launch — which a USB-tethered phone usually can't reach,
-   and then it dies on the red `No script URL provided` screen. Since this
-   shell is self-contained anyway (the game is served locally from
-   `webroot.zip`), there's nothing to live-reload on the device, so Release is
-   the right build. (To iterate on the shell's own React Native code with fast
-   refresh, use the simulator — `npm run ios` — or Expo Go, route 1.)
+   It packs the site, regenerates `ios/` from `app.config.js`, builds, signs,
+   installs and launches — picking the connected iPhone on its own, or naming
+   them all if several are plugged in (`ARGS="--device 'my iPhone'"`).
+   `ARGS="--skip-bundle"` reuses the packed site when only the shell changed.
 
-   The phone must be plugged in, unlocked, and trusted; Xcode signs the build
-   with your Apple ID (a free account works — the app then expires after 7 days
-   and needs a re-install). First run also asks you to trust the developer
-   certificate on the device under **Settings → General → VPN & Device
-   Management**. Android is the same via `npm run android` with USB debugging on
-   (add `--variant release` for the same embedded-bundle, no-packager behaviour).
+   It drives `xcodebuild` rather than `expo run:ios --device` because that
+   command passes neither `-allowProvisioningUpdates` nor
+   `-allowProvisioningDeviceRegistration`, so a first build on a new phone
+   fails on signing twice over — once because no development profile exists,
+   then again because the device is not registered with the team. The signing
+   team is applied by `plugins/with-ios-signing.js` — a config plugin rather
+   than a hand edit, because `expo prebuild` rewrites `ios/` on every build and
+   would drop anything set directly in Xcode. It reads `APPLE_TEAM_ID`, which
+   is **not committed**: put your own in `native/.env` (see `.env.example`).
+   The command says so before it builds anything if it is missing.
+
+   The build is **Release** on purpose: it **embeds the JS bundle**, so the app
+   launches standalone and never needs the Metro packager. A Debug device build
+   instead fetches its JS from Metro over the network at launch — which a
+   USB-tethered phone usually can't reach, and then it dies on the red
+   `No script URL provided` screen. Since this shell is self-contained anyway
+   (the game is served locally from `webroot.zip`), there's nothing to
+   live-reload on the device. To iterate on the shell's own React Native code
+   with fast refresh, use the simulator (`make native-ios`) or Expo Go, route 1.
+
+   The phone must be plugged in, unlocked, and trusted, with **Developer Mode**
+   on (Settings → Privacy & Security). First run also asks you to trust the
+   developer certificate under **Settings → General → VPN & Device
+   Management**. A free Apple account works, but the app then expires after 7
+   days and needs a re-install; a paid team's builds do not. Android is `npm run android` with USB debugging on (add
+   `--variant release` for the same embedded-bundle, no-packager behaviour).
+
+   **If the build fails on signing**, it is almost always Xcode's Apple ID
+   session rather than anything in this repo: `Unable to log in with account
+'…' … were rejected`. Sign in again under **Xcode → Settings (⌘,) →
+   Accounts** — password plus 2FA — and run the command again. The script
+   recognises this failure and says so.
 
 3. **An EAS build, installed over the air** — for testing on a phone that isn't
    plugged into this Mac:
