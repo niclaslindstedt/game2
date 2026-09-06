@@ -54,6 +54,7 @@ import {
 import { clearDustLamps, setDustLampCap } from "./dust-light.ts";
 import { SOOT, groundTints, sootySmoke, type PlumeGround } from "./ground-tint.ts";
 import { createCarFx } from "./car-fx.ts";
+import { createSnowMarks, drawnGround } from "./snow-marks.ts";
 import { CRASH_THROW, crashContact, crashBurst as burstCount, crashGrind } from "./crash-throw.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFieldCars, type FieldCars } from "./field-cars.ts";
@@ -342,6 +343,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // in the scene together (car-fx.ts). The renderer keeps the decisions —
   // what is thrown, when, and how much of it — and none of the plumbing.
   const carFx = createCarFx(scene);
+  // The marks the player's car leaves in snow (snow-marks.ts); the field's
+  // are the field's own. Whose are drawn is the DUST row's call.
+  const marks = createSnowMarks();
+  scene.add(marks.group);
   const { dust, crash, mud, smoke, plume, gravel, spray, foam, fumes, life, celebration } = carFx;
   const { showCrash } = carFx;
 
@@ -536,8 +541,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     const tint = environment.carTint();
     const lit = environment.lampsLit();
     const rain = environment.rainfall();
-    if (car) tintCar(car, tint, lit, rain);
-    if (ghostCar) tintCar(ghostCar, tint, lit, rain);
+    const snowing = environment.snowing();
+    if (car) tintCar(car, tint, lit, rain, snowing);
+    if (ghostCar) tintCar(ghostCar, tint, lit, rain, snowing);
     field.paint(tint, lit, rain);
     carFx.setTint(tint, environment.dustTint(), environment.ceiling());
   };
@@ -781,6 +787,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       GROUND_SCALE[quality.ground],
     );
     scene.add(world.group);
+    marks.reset();
     route = buildMapRoute(state.track);
     route.group.visible = mapView;
     scene.add(route.group);
@@ -1072,6 +1079,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // that keeps `fx` is made of the car — the tyre smoke, the shards, the
     // spray, the grit a crash ploughs up.
     const groundFx = dustFx();
+    if (DUST_RAISED[quality.dust].player) marks.lay(state, drawnGround(state));
+    else marks.forget(state);
     // The engine tracks the driven surface — road fords AND the wild's
     // lakes and streams throw the blue spray, and the stage's sealed
     // sections throw nothing at all until the tires start smoking.
@@ -1098,7 +1107,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       state,
       dt,
       groundFx,
-      sealed ? 0 : (state.surface === "nature" ? WILD_THROW : 1) * (wetGround ? WET_THROW : 1),
+      sealed
+        ? 0
+        : (state.surface === "nature" || state.surface === "snowfield" ? WILD_THROW : 1) *
+            (wetGround ? WET_THROW : 1),
       () => groundDust(state),
     );
 
@@ -1155,7 +1167,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       const pace = sealed ? 1 : Math.max(paceScale(c.u), launch);
       const thrown = sealed
         ? 1
-        : pace * (state.surface === "nature" ? WILD_THROW : 1) * (wetGround ? WET_THROW : 1);
+        : pace *
+          (state.surface === "nature" || state.surface === "snowfield" ? WILD_THROW : 1) *
+          (wetGround ? WET_THROW : 1);
       const grains = (count: number): number => {
         grainDebt += count * wheelFx * thrown;
         const whole = Math.floor(grainDebt);
@@ -1491,8 +1505,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         inside &&
         !mapView &&
         GLASS_RAIN[quality.effects] &&
-        (car.screenRain?.active() ?? false);
-      if (glassRain) car.screenRain?.setSky(environment.carTint(), environment.flash());
+        ((car.screenRain?.active() ?? false) || (car.screenSnow?.active() ?? false));
+      if (glassRain) {
+        car.screenRain?.setSky(environment.carTint(), environment.flash());
+        car.screenSnow?.setSky(environment.carTint(), environment.flash());
+      }
       // From the seat the road behind is read off the mirror hanging in the
       // windscreen, so the strip at the top of the frame stands down and the
       // pane lights up instead. One rear view, in whichever of the two homes
@@ -1624,7 +1641,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // now in the buffer, and lays the water over it with the same depth
       // the scene pass left, so the wiper still passes in front of the
       // drops it is clearing (car/screen-rain.ts).
-      if (glassRain) car?.screenRain?.draw(renderer, chase.camera);
+      if (glassRain) {
+        car?.screenSnow?.draw(renderer, chase.camera);
+        car?.screenRain?.draw(renderer, chase.camera);
+      }
       if (mirrorStrip) mirror.composite(renderer, w, h);
       return;
     }
@@ -1646,6 +1666,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   };
 
   const dispose = (): void => {
+    marks.dispose();
     world?.dispose();
     route?.dispose();
     layers?.dispose();

@@ -33,7 +33,7 @@
 import { TUNING } from "./defs/tuning.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import type { Rng } from "../lib/prng.ts";
-import type { Surface } from "../mapgen/index.ts";
+import type { Underfoot } from "../mapgen/index.ts";
 import {
   type Ground,
   RIGID,
@@ -96,7 +96,7 @@ export type RollGround = {
   /** What the ground is MADE of — how much of a contact it swallows and
    * what it costs to plough (`TUNING.surfaces.give` / `plough`). Absent is
    * a rigid plane, which is what the bench tests stand on. */
-  surface?: Surface | "nature";
+  surface?: Underfoot;
   /** The run's own seeded RNG — the crash's flights draw the same turbulence
    * every other flight does, and from the same source, so a stage driven
    * twice crashes twice the same way. */

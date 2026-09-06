@@ -19,7 +19,7 @@
 
 import { TUNING } from "./defs/tuning.ts";
 import type { CarSpec } from "./defs/cars.ts";
-import type { Surface } from "../mapgen/index.ts";
+import type { Underfoot } from "../mapgen/index.ts";
 import { landingDamage } from "./collision.ts";
 import { crashEnergy } from "./roll-ledger.ts";
 import { foldSpeed, landingFace } from "./structure.ts";
@@ -59,7 +59,7 @@ export type Ground = { readonly give: number; readonly plough: number };
 export const RIGID: Ground = { give: 0, plough: 0 };
 
 /** ...and what a stage's surface is worth, read off `TUNING.surfaces`. */
-export function groundOf(surface?: Surface | "nature"): Ground {
+export function groundOf(surface?: Underfoot): Ground {
   if (!surface) return RIGID;
   return { give: T.surfaces.give[surface], plough: T.surfaces.plough[surface] };
 }

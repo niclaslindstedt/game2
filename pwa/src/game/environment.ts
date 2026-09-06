@@ -13,11 +13,12 @@
 // is presentation: it reads GameState (env, wind, car) and never writes it.
 
 import * as THREE from "three";
-import type { BiomeId, GameState, RaceEnv } from "@engine";
+import { fallsAsSnow, temperatureAt, type BiomeId, type GameState, type RaceEnv } from "@engine";
 
 import { createClouds } from "./clouds.ts";
 import { lightDust as hangDustLamps } from "./dust-light.ts";
 import { createRain } from "./rain.ts";
+import { createSnowfall } from "./snowfall.ts";
 import { createStorm } from "./storm.ts";
 import {
   carTintFor,
@@ -25,6 +26,7 @@ import {
   dustTintFor,
   DOME_RADIUS,
   rainTone,
+  snowTone,
   skyFor,
   SUN_AZIMUTH,
   sunDir,
@@ -105,8 +107,12 @@ export type Environment = {
    * reads it here rather than keeping a second answer. */
   lampPower: () => number;
   /** How hard this stage is raining, 0..1 — what anything the weather LANDS
-   * on reads, the wipers on the car's glass first among them. */
+   * on reads, the wipers on the car's glass first among them. Whatever
+   * form it takes: see `snowing` for how much of it is flakes. */
   rainfall: () => number;
+  /** How much of what is falling at the camera is SNOW rather than rain,
+   * 0..1 (climate.ts) — what puts flakes on the glass instead of water. */
+  snowing: () => number;
   /** How bright the sky is with lightning this instant, 0..1. */
   flash: () => number;
   /** …and which way the strike lighting it is coming from. */
@@ -444,6 +450,14 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   // hundreds, and the sheet is drawn at the velocity the camera SEES it at.
   const rain = createRain();
   scene.add(rain.lines);
+  // ...and the same precipitation as FLAKES, where the air at the camera's
+  // height is under freezing (climate.ts). The two boxes are cross-faded
+  // rather than switched: a stage that starts beside the snow rains in
+  // the valley it comes down into, and the change-over is a hundred metres
+  // of sleet, not a frame.
+  const snow = createSnowfall();
+  scene.add(snow.points);
+  let flakes = 0;
   let effects = 1;
 
   let playThunder: (clap: Clap) => void = () => {};
@@ -594,6 +608,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     timeOfDay: "day",
     weather: "clear",
     season: "summer",
+    temperature: 18,
     windDir: 0,
     windSpeed: 0,
     gustPhase: 0,
@@ -691,6 +706,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     shadows.setHardness(sunHardness(preset));
     starMat.opacity = preset.stars;
     rain.setTone(rainTone(preset));
+    snow.setTone(snowTone(preset));
     paintRidges(preset);
     clouds.apply(preset);
     storm.apply(preset);
@@ -760,9 +776,14 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     clouds.setFlash(surge);
     // The sheet rides the squall, and a strike lights it before it lights
     // anything else — the rain is the nearest thing to the lens there is.
-    rain.setIntensity(effects > 0 ? rainNow : 0);
+    const freezing = fallsAsSnow(temperatureAt(state.track.climate, cam.y)) ? 1 : 0;
+    flakes += (freezing - flakes) * Math.min(1, dt * 1.5);
+    rain.setIntensity(effects > 0 ? rainNow * (1 - flakes) : 0);
     rain.setFlash(surge);
     rain.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
+    snow.setIntensity(effects > 0 ? rainNow * flakes : 0);
+    snow.setFlash(surge);
+    snow.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
     if (surge > 0) {
       // A strike is a light SOMEWHERE, not a lift of the one that is
       // already there: the key swings round to the bolt for as long as it
@@ -796,6 +817,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     clouds.dispose();
     storm.dispose();
     rain.dispose();
+    snow.dispose();
     for (const lamp of [...headlights, ...taillights]) lamp.dispose();
     sunLight.dispose();
     hemi.dispose();
@@ -805,6 +827,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     timeOfDay: "day",
     weather: "clear",
     season: "summer",
+    temperature: 18,
     windDir: 0,
     windSpeed: 0,
     gustPhase: 0,
@@ -823,6 +846,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     lampsLit: () => preset.headlights,
     lampPower,
     rainfall: () => preset.rain,
+    snowing: () => flakes,
     flash: () => storm.surge(),
     flashFrom: () => storm.from(),
     setEffects: (scale) => {

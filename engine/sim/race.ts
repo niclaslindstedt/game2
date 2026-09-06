@@ -164,7 +164,7 @@ export function placeAmongField(options: {
   carId?: string;
 }): { rows: ClassRow[]; place: number; of: number; splits: Record<string, number[]> } {
   const { stage } = options;
-  const track = compileStage(stage.seed, stage.length, stage.knobs, stage.shape);
+  const track = compileStage(stage.seed, stage.length, stage.knobs, stage.shape, stage);
   const field = createField(track, options.field, {
     seed: stage.seed,
     laps: stage.laps,
@@ -187,7 +187,7 @@ export function placeAmongField(options: {
 /** Drive one whole race and classify it. */
 export function race(options: RaceOptions): RaceOutcome {
   const { stage, car, start } = options;
-  const track = compileStage(stage.seed, stage.length, stage.knobs, stage.shape);
+  const track = compileStage(stage.seed, stage.length, stage.knobs, stage.shape, stage);
   const state = createGame({
     seed: stage.seed,
     carId: car.id,

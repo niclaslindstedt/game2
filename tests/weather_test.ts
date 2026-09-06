@@ -29,6 +29,7 @@ function conditions(over: Partial<RaceEnv>): RaceEnv {
     timeOfDay: "day",
     weather: "clear",
     season: "summer",
+    temperature: 18,
     windDir: 0,
     windSpeed: 0,
     gustPhase: 0,

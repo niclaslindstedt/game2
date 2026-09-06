@@ -51,6 +51,8 @@ export type RunTapeStart = {
   timeOfDay: TimeOfDay;
   weather: Weather;
   season: Season;
+  /** The air at the datum, °C, or null for the season's own (climate.ts). */
+  temperature?: number | null;
   skipCountdown: boolean;
   grid: GridSlot | null;
   /** What kind of run it is — the app's own word for it. */

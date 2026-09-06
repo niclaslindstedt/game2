@@ -264,6 +264,7 @@ export {
   type Track,
   type TrackSample,
   type Surface,
+  type Underfoot,
   type BridgeDeck,
   type Culvert,
   type RoadJunction,

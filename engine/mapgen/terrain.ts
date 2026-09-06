@@ -51,6 +51,7 @@ import {
   type SpurLine,
 } from "./spurs.ts";
 import { biomeRules } from "./biomes.ts";
+import { CLIMATE, blanketDepth, snowlineOf, snowyCountry, temperatureAt } from "../game/climate.ts";
 import { createPropField } from "./props.ts";
 import { bridgeParapets, tunnelTrench, tunnelWalls, type WildObstacle } from "./solids.ts";
 import { farmClearings, rectDistance, type FarmRect } from "./farms.ts";
@@ -483,6 +484,14 @@ export type TerrainField = {
    * own surface comes from the track samples — this is what tells the
    * physics that a car exploring a spur is on tarmac, not in a field. */
   spurSurfaceAt: (x: number, z: number) => Surface | null;
+  /** THE WINTER'S BLANKET at a point, m (climate.ts): how deep the snow
+   * the open country lies under is here — zero on and beside a road, on
+   * the water, and everywhere the climate leaves the ground bare. The
+   * lattice and everything drawn on it stand on TOP of it (`heightAt`
+   * carries it); the car rides `CLIMATE.blanket.ride` of the way down
+   * into it (`groundAt`), and the physics calls what it is standing on
+   * there a `snowfield`. */
+  blanketAt: (x: number, z: number) => number;
   /** Distance from a point to the nearest BUILT road that is not the stage
    * — an abandoned branch's mat edge (R17), a homestead's drive or the rim
    * of its yard (R37) — or Infinity when there is none near. Negative on
@@ -2341,7 +2350,7 @@ export function createTerrain(track: Track): TerrainField {
    * ones the band's triangles are interpolated from, and a corner in the
    * channel pulled the band down with it. A DECK stands over a ravine on
    * purpose and pins nothing (R13). */
-  const heightAt = (x: number, z: number): number => {
+  const bareHeightAt = (x: number, z: number): number => {
     const raw = rawHeight(x, z);
     let carved = carveGround(streams, x, z, raw);
     if (carved >= raw) return raw;
@@ -2549,14 +2558,32 @@ export function createTerrain(track: Track): TerrainField {
   // are cached; the cache clears whenever the field itself changes shape
   // (new streams carved, the endless prune re-anchoring the corridor).
   let cornerCache = new Map<number, number>();
+  let blanketCache = new Map<number, number>();
   const cornerHeight = (i: number, j: number): number => {
     const key = cellKey(i, j);
     const hit = cornerCache.get(key);
     if (hit !== undefined) return hit;
-    if (cornerCache.size > 8192) cornerCache = new Map();
-    const y = heightAt(i * GROUND_CELL, j * GROUND_CELL);
-    cornerCache.set(key, y);
-    return y;
+    if (cornerCache.size > 8192) {
+      cornerCache = new Map();
+      blanketCache = new Map();
+    }
+    // The snow on the corner is cached beside its height — the lattice
+    // the car rides is sunk into the blanket by `groundAt`, and it asks
+    // how deep the blanket is at every step.
+    const bare = bareHeightAt(i * GROUND_CELL, j * GROUND_CELL);
+    const snow = blanketOver(i * GROUND_CELL, j * GROUND_CELL, bare);
+    cornerCache.set(key, bare + snow);
+    blanketCache.set(key, snow);
+    return bare + snow;
+  };
+  const cornerBlanket = (i: number, j: number): number => {
+    const key = cellKey(i, j);
+    let hit = blanketCache.get(key);
+    if (hit === undefined) {
+      cornerHeight(i, j);
+      hit = blanketCache.get(key) ?? 0;
+    }
+    return hit;
   };
 
   // Each lattice cell splits into two triangles along the same diagonal the
@@ -2579,6 +2606,28 @@ export function createTerrain(track: Track): TerrainField {
     );
   };
 
+  /** The winter's blanket under a point, m, interpolated across the same
+   * triangles the lattice is (climate.ts) — zero everywhere the country is
+   * not under snow, on the road and its verge, on the water, and in a
+   * country that has no winter. */
+  const blanketAt = (x: number, z: number): number => {
+    if (!snowy) return 0;
+    const gx = x / GROUND_CELL;
+    const gz = z / GROUND_CELL;
+    const i = Math.floor(gx);
+    const j = Math.floor(gz);
+    const fx = gx - i;
+    const fz = gz - j;
+    if (fx + fz <= 1) {
+      const b00 = cornerBlanket(i, j);
+      return b00 + fx * (cornerBlanket(i + 1, j) - b00) + fz * (cornerBlanket(i, j + 1) - b00);
+    }
+    const b11 = cornerBlanket(i + 1, j + 1);
+    return (
+      b11 + (1 - fx) * (cornerBlanket(i, j + 1) - b11) + (1 - fz) * (cornerBlanket(i + 1, j) - b11)
+    );
+  };
+
   const groundAt = (x: number, z: number): number => {
     const lattice = latticeAt(x, z);
     // Beside a road the DRAWN surface is the ribbon, not the tile under it
@@ -2586,9 +2635,15 @@ export function createTerrain(track: Track): TerrainField {
     // between corners and could not hold any of that, so out to the shoulder
     // the physics rides the ribbon; past it R16's hand-over leans onto the
     // tiles, and by the corridor's lip they have it.
+    //
+    // ...and under a winter's blanket the car rides INSIDE the drawn
+    // surface, not on it: the lattice carries the snow at its full depth,
+    // and the wheels stand on what they have packed of it
+    // (`CLIMATE.blanket.ride`) — the rest is the sills ploughing through.
+    const sink = snowy ? blanketAt(x, z) * (1 - CLIMATE.blanket.ride) : 0;
     const corridor = corridorGround(x, z);
-    if (!corridor) return lattice;
-    return corridor.y * corridor.hand + lattice * (1 - corridor.hand);
+    if (!corridor) return lattice - sink;
+    return corridor.y * corridor.hand + (lattice - sink) * (1 - corridor.hand);
   };
 
   /** The ROAD standing over a point: the height of the ribbon the car
@@ -2654,6 +2709,53 @@ export function createTerrain(track: Track): TerrainField {
     const built = builtClearance(x, z);
     if (carParks.carParks.length === 0) return built;
     return Math.min(built, carParks.trailClearance(x, z));
+  };
+
+  // ── THE WINTER'S BLANKET (climate.ts) ────────────────────────────────
+  // Where the country is frozen the untouched ground lies under half a
+  // metre and more of snow, and the ground the world SHOWS is the top of
+  // it: the analytic field below is the bare country plus the blanket, so
+  // every tile corner, every tree foot and every stone stands on the snow.
+  // It is cleared wherever something has driven or bladed it — the stage's
+  // own corridor out to its lip, an abandoned arm, a drive, a yard, a car
+  // park's trails — and it ramps back to full depth over `blanket.verge`
+  // metres, which is the bank a ploughed road stands between. It keeps off
+  // the water and a stream's channel, and it is not laid at all in a
+  // country the climate leaves green, nor on the training ground, which
+  // was never a country. How deep it lies is the cold's at THIS height
+  // (`blanketDepth`), read off the bare ground so the roads and the nature
+  // are drawn onto a temperature that already exists.
+  const climate = track.climate;
+  const zones = biome.land.zones;
+  const snowy = track.arena === null && snowyCountry(climate, zones);
+  const snowline = snowlineOf(climate, zones);
+  const blanketOver = (x: number, z: number, bare: number): number => {
+    if (!snowy) return 0;
+    const cover = clamp01((bare - snowline) / CLIMATE.fade);
+    if (cover <= 0) return 0;
+    const V = CLIMATE.blanket.verge;
+    let clear = 1;
+    const near = nearestRoad(x, z);
+    if (near && near.d < CORRIDOR_RANGE) {
+      clear = clamp01((near.d - lipAt(near.index)) / V);
+      if (clear <= 0) return 0;
+    }
+    const spur = spurClearance(x, z);
+    if (spur < V) {
+      clear = Math.min(clear, clamp01(spur / V));
+      if (clear <= 0) return 0;
+    }
+    const lake = land.water.shoreLevelAt(x, z);
+    if (lake !== null && bare < lake + 1.5) {
+      clear = Math.min(clear, clamp01((bare - lake - 0.3) / 1.2));
+      if (clear <= 0) return 0;
+    }
+    if (inStream(streams, x, z, 1)) return 0;
+    return blanketDepth(temperatureAt(climate, bare)) * cover * smooth(clear);
+  };
+  const heightAt = (x: number, z: number): number => {
+    const bare = bareHeightAt(x, z);
+    return snowy ? bare + blanketOver(x, z, bare) : bare;
   };
 
   /** Distance from a point to the nearest road's outer EDGE — stage or
@@ -3070,6 +3172,7 @@ export function createTerrain(track: Track): TerrainField {
     ceilingAt,
     coneAt,
     spurSurfaceAt,
+    blanketAt,
     streams,
     rivers,
     guards: guards.guards,

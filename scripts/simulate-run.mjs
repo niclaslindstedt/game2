@@ -13,6 +13,8 @@
 //   npm run sim -- --shape circuit       # race a closed lap circuit (R22)
 //   npm run sim -- --shape circuit --laps 5
 //   npm run sim -- --weather storm       # race in rain/storm wind
+//   npm run sim -- --season winter       # the climate (climate.ts): a frozen
+//   npm run sim -- --temperature -15     # country is snow roads and a blanket
 //   npm run sim -- --asphalt 0.8         # generator dials, each 0..1:
 //                                        # --elevation --water --trees --asphalt --width
 //                                        # --steepness
@@ -59,6 +61,8 @@ const seeds = flag("seeds")
   : Array.from({ length: Number(flag("count") ?? 8) }, (_, i) => i + 1);
 const cars = flag("car") ? [flag("car")] : CARS.map((c) => c.id);
 const weather = flag("weather") ?? "clear";
+const season = flag("season") ?? "summer";
+const temperature = flag("temperature") !== undefined ? Number(flag("temperature")) : null;
 // The generator's dials — anything not passed keeps its default position.
 const knobs = {};
 for (const dial of NUMERIC_KNOBS) {
@@ -116,7 +120,19 @@ console.log(
 );
 for (const seed of seeds) {
   for (const carId of cars) {
-    const r = simulateStage({ seed, carId, gearbox, length, shape, laps, maxTime, weather, knobs });
+    const r = simulateStage({
+      seed,
+      carId,
+      gearbox,
+      length,
+      shape,
+      laps,
+      maxTime,
+      weather,
+      season,
+      temperature,
+      knobs,
+    });
     rows.push(r);
     console.log(
       [

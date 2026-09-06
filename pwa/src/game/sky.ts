@@ -18,7 +18,9 @@
 
 import * as THREE from "three";
 import {
+  CLIMATE,
   biomeRules,
+  rainsIn,
   type BiomeId,
   type RaceEnv,
   type Season,
@@ -508,6 +510,10 @@ function countried(p: Preset, biome: BiomeId): Preset {
   return p;
 }
 
+function clamp01(t: number): number {
+  return t < 0 ? 0 : t > 1 ? 1 : t;
+}
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -519,10 +525,19 @@ function mixHex(a: number, b: number, t: number): number {
 
 /** Weather sits on top of the time of day. Clear leaves it alone; anything
  * else puts a lid on the sky, closes the air, and takes the sun away. */
-function weathered(time: TimeOfDay, weather: Weather, cover: number, biome: BiomeId): Preset {
+/** `wet` says the weather RAINS here (`rainsIn`, climate.ts): a desert in
+ * its wet season is under the taiga's own deck, a real one that comes down,
+ * rather than under its dry haze and its wall of sand. */
+function weathered(
+  time: TimeOfDay,
+  weather: Weather,
+  cover: number,
+  biome: BiomeId,
+  wet: boolean,
+): Preset {
   const p = countried({ ...PRESETS[time] }, biome);
   if (weather === "clear") return p;
-  const look = LOOKS[biome][weather];
+  const look = (wet && !biomeRules(biome).rain ? TAIGA_LOOKS : LOOKS[biome])[weather];
   const toward = (c: number): number => mixHex(c, look.grey, look.mix);
   p.zenith = toward(p.zenith);
   p.horizon = toward(p.horizon);
@@ -597,7 +612,12 @@ function weathered(time: TimeOfDay, weather: Weather, cover: number, biome: Biom
  * same three moments of the year; where it is on the earth is the
  * country's (`biomeRules().latitude`, R40), and at 33°N the same
  * September sun stands fifty degrees up instead of twenty-six. */
-const DECLINATION: Record<Season, number> = { spring: 17.5, summer: 23.4, autumn: -1.8 };
+const DECLINATION: Record<Season, number> = {
+  spring: 17.5,
+  summer: 23.4,
+  autumn: -1.8,
+  winter: -23.4,
+};
 
 /** The sine of the noon solar elevation — which is both how high the sun
  * gets and, because irradiance on flat ground goes as the cosine of the
@@ -621,7 +641,7 @@ const RAYLEIGH = { r: 0.049, g: 0.097, b: 0.221 };
  * lower beam has to come through is charged once, at the season's own noon,
  * rather than compounded onto a dawn that is already the length of the
  * atmosphere. */
-function seasoned(p: Preset, season: Season, biome: BiomeId): Preset {
+function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number): Preset {
   if (season === "summer") return p;
   const latitude = biomeRules(biome).latitude;
   const here = noonSun(season, latitude);
@@ -640,6 +660,33 @@ function seasoned(p: Preset, season: Season, biome: BiomeId): Preset {
   // multiply says both.
   const sun = new THREE.Color(p.sun);
   p.sun = sun.setRGB(sun.r * tr, sun.g * tg, sun.b * tb).getHex();
+  // WINTER is the one cast every country shares, because it is not a
+  // colour of the ground so much as of the AIR: cold air holds almost no
+  // water, so a clear winter sky is the deepest blue of the year and the
+  // view runs furthest — and under it the ground is white wherever the
+  // climate froze it, so what comes back up is the sky's own blue rather
+  // than any green (`hemiGround`). The colder it is the more of both:
+  // ice haze closes the far distance in again below `CLIMATE.bite.at`,
+  // the way a real cold snap greys the horizon.
+  if (season === "winter") {
+    const cold = clamp01((CLIMATE.freeze - temperature) / 20);
+    const frozen = temperature <= CLIMATE.freeze;
+    p.zenith = mixHex(p.zenith, 0x0d4f9e, 0.18 + 0.14 * cold);
+    p.horizon = mixHex(p.horizon, 0xd8e6f4, 0.22);
+    p.fog = mixHex(p.fog, 0xdfe8f0, 0.28);
+    p.fogFar *= frozen ? 1.1 - 0.25 * cold : 1.04;
+    p.hemiIntensity *= 0.92;
+    if (frozen && biomeRules(biome).land.zones.snow !== null) {
+      p.hemiGround = mixHex(p.hemiGround, 0xb8c8dc, 0.7);
+    } else if (frozen) {
+      p.hemiGround = mixHex(p.hemiGround, 0xb8c8dc, 0.6);
+    } else {
+      // A wet-season desert, or a thaw: a damp ground bounces less.
+      p.hemiGround = mixHex(p.hemiGround, 0x8a8478, 0.35);
+    }
+    p.cloud = mixHex(p.cloud, 0xe8eef6, 0.2);
+    return p;
+  }
   // The colour casts below are the TAIGA's year — pollen haze in May, the
   // straw-and-bilberry bounce in September. The desert's year is the
   // astronomy above and very little else: a wet spring puts a little more
@@ -676,7 +723,13 @@ function seasoned(p: Preset, season: Season, biome: BiomeId): Preset {
 
 /** The whole sky for one run's conditions, over one country (R40). */
 export function skyFor(env: RaceEnv, biome: BiomeId = "taiga"): Preset {
-  return seasoned(weathered(env.timeOfDay, env.weather, coverOf(env), biome), env.season, biome);
+  const wet = rainsIn(biome, env.season);
+  return seasoned(
+    weathered(env.timeOfDay, env.weather, coverOf(env), biome, wet),
+    env.season,
+    biome,
+    env.temperature,
+  );
 }
 
 /** How dark the car is ever allowed to get, as a fraction of its daylight
@@ -820,6 +873,16 @@ export function rainTone(p: Preset): THREE.Color {
   // streak. Below it the sheet is lit; above it the sheet is a shadow.
   if (lum < 0.28) return new THREE.Color(0xd6e4f2);
   return sky.multiplyScalar(0.45);
+}
+
+/** What colour a FLAKE reads as. A flake is not a lens: it is a white body
+ * lit by whatever light there is, so it takes the sky's own light and goes
+ * grey under a storm and blue at night rather than flipping sign the way
+ * a drop does. Held off pure white so a daylight blizzard is a sheet of
+ * grey-white against a white sky rather than a screen of blown-out dots. */
+export function snowTone(p: Preset): THREE.Color {
+  const light = new THREE.Color(p.hemiSky).multiplyScalar(Math.max(0.35, p.hemiIntensity));
+  return light.lerp(new THREE.Color(0xffffff), 0.45).multiplyScalar(0.92);
 }
 
 /** Direction from the origin toward the sun for elevation `el`. */

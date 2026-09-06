@@ -207,6 +207,8 @@ npm run sim -- --length long          # stage length band (default medium)
 npm run sim -- --shape circuit        # race a closed lap circuit (R22)
 npm run sim -- --shape circuit --laps 5
 npm run sim -- --weather storm        # race in rain/storm wind
+npm run sim -- --season winter        # the climate (climate.ts): a frozen country is snow roads
+npm run sim -- --temperature -15      # ...and the cold at the datum, which decides how the snow bites
 npm run sim -- --gearbox manual       # drive the bot with a manual box
 npm run sim -- --biome desert         # the other country (R40): sand roads, dunes, no water
 npm run sim -- --biome alpine         # the mountains (R47): hairpins, tunnels, snow above the snowline

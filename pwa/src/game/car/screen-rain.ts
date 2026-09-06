@@ -84,7 +84,7 @@ const RAIN_LIFT = GLASS_LIFT + 0.006;
  * the glass's own warp closely enough that the metric coordinates handed to
  * the shader do not shear across a cell. A dozen across is more than that
  * costs to be sure of; the flanks are flatter and get by on half. */
-const GRID = { front: { cols: 12, rows: 9 }, side: { cols: 6, rows: 5 } };
+export const GRID = { front: { cols: 12, rows: 9 }, side: { cols: 6, rows: 5 } };
 
 /** HOW THE WATER TRAVELS OVER THE WINDSCREEN, m/s along the pane's own up
  * axis, and it is ONE SIGNED NUMBER on purpose.
@@ -727,11 +727,12 @@ void main() {
  * of the car — the left flank's frame points the other way (car/pane-frame.ts
  * keeps every frame right-handed against its own outward normal) — so the
  * shader has one answer to "which way is back" on both doors. */
-function paneMesh(
+export function paneMesh(
   panes: ScreenPane[],
   grid: { cols: number; rows: number },
   side: boolean,
   material: THREE.Material,
+  lift = RAIN_LIFT,
 ): THREE.Mesh {
   const position: number[] = [];
   const local: number[] = [];
@@ -748,7 +749,7 @@ function paneMesh(
       for (let i = 0; i <= grid.cols; i++) {
         const [u, v] = rectAt(pane.rect, i / grid.cols, j / grid.rows);
         const q: V3 = patchAt(pane.patch, u, v);
-        at.set(q[0], q[1], q[2]).addScaledVector(frame.normal, RAIN_LIFT);
+        at.set(q[0], q[1], q[2]).addScaledVector(frame.normal, lift);
         position.push(at.x, at.y, at.z);
         at.sub(frame.origin);
         local.push(at.dot(frame.right) * tail, at.dot(frame.up));

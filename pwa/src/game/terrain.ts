@@ -19,6 +19,7 @@ import {
   createRng,
   createTerrain,
   inStream,
+  rainsIn,
   type Season,
   type TerrainField,
   type Track,
@@ -28,7 +29,7 @@ import { hash2, valueNoise } from "../lib/noise.ts";
 import type { Biome, RegionGround } from "./biome.ts";
 // The rock line, the snowline and the slope rule are stated once, DOM-free,
 // so the dust and the tests read the same rule the tiles are painted with.
-import { ROCK_SLOPE, SNOW, rockAt, snowAt, snowLie } from "./ground-rules.ts";
+import { ROCK_SLOPE, SNOW, rockAt, snowAt, snowLie, zonesUnder } from "./ground-rules.ts";
 // R16 — the ground beside a road takes the ROAD's own edge tone and the
 // SPILL's own noise field, so the ribbon's dissolve, the scattered stones
 // and this wash all hand over along one boundary.
@@ -36,6 +37,7 @@ import { ROAD_PAINT } from "./road-mesh.ts";
 import { DISSOLVE } from "./road-spill.ts";
 import { detailTexture } from "./textures.ts";
 import { driftWater, waterMaterial } from "./water-look.ts";
+import { buildPuddles } from "./puddles.ts";
 
 export { APRON, LAKE_Y };
 export { rockAt, snowAt };
@@ -215,7 +217,14 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // R40 — the country's own rules: which regions quilt it, what its
   // unsealed road is made of, and the heights its zones stand at.
   const rules = biomeRules(track.knobs.biome);
-  const zones = rules.land.zones;
+  // ...under the stage's own climate: a winter brings the snowline down
+  // the whole flank, and the paint goes white wherever the wheels find
+  // snow (climate.ts).
+  const zones = zonesUnder(track.climate, rules.land.zones);
+  // A WET SEASON on a country with no water table (climate.ts, `rainsIn`
+  // where the row itself is dry): the rain stands in every flat as
+  // puddles (puddles.ts), because there is nowhere for it to go.
+  const puddled = rainsIn(rules.id, track.climate.season) && !rules.rain;
   // R16 — what the road leaves on the country beside it. The road's own
   // shoulder colour rather than a brown of its own: the wash has to arrive
   // at exactly the tone the ribbon's outer band is already dissolving into,
@@ -288,7 +297,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   /** One tile's water: triangles in world space, flat at their body's
    * level, or null where the tile has no standing water on it. */
   type TileWater = { positions: number[]; uvs: number[] };
-  type Tile = { ground: THREE.Mesh; water: TileWater | null };
+  type Tile = { ground: THREE.Mesh; water: TileWater | null; puddles: THREE.Mesh | null };
   const tiles = new Map<string, Tile>();
 
   /** THE GROUND'S OWN COLOUR at a point, into `out`: the altitude band, the
@@ -415,7 +424,11 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     if (zones.snow !== null && y >= level + 0.6) {
       const lie = snowLie(y, normalY, zones);
       if (lie > 0) {
-        const closed = clamp01((y - zones.snow + SNOW.lead) / SNOW.patchFade);
+        // Past 1 the windows have shut for good: a country whose line the
+        // climate has brought down under it (a winter) is white all over,
+        // not white with the ragged margin of a snowline that is nowhere
+        // near it.
+        const closed = Math.min(1.4, (y - zones.snow + SNOW.lead) / SNOW.patchFade);
         const window = valueNoise(x, z, SNOW.patch, noiseSeed + 67);
         const cover = lie * clamp01((window - 0.55 + 0.55 * closed) / 0.22);
         if (cover > 0) {
@@ -564,7 +577,26 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     ground.receiveShadow = true;
     group.add(ground);
 
-    return { ground, water: cutWater(originX, originZ, H, n, cell, cells) };
+    const puddles = puddled
+      ? buildPuddles(
+          originX,
+          originZ,
+          TILE,
+          track.seed,
+          {
+            heightAt: field.groundAt,
+            roadDistanceAt: field.roadDistanceAt,
+            spurClearance: field.spurClearance,
+            // Off the mat, on the shoulder: the graded verge is the flattest
+            // ground there is, and where a wet season's water stands first.
+            keepOff: track.width / 2 + 2.5,
+          },
+          waterMat,
+        )
+      : null;
+    if (puddles) group.add(puddles);
+
+    return { ground, water: cutWater(originX, originZ, H, n, cell, cells), puddles };
   };
 
   /** Cut this tile's standing water against the ground it just drew.
@@ -663,6 +695,10 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     tiles.delete(key);
     group.remove(tile.ground);
     tile.ground.geometry.dispose();
+    if (tile.puddles) {
+      group.remove(tile.puddles);
+      tile.puddles.geometry.dispose();
+    }
   };
 
   /** Tiles the window of road [fromS, end) needs on screen right now. */

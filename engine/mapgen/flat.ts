@@ -61,6 +61,9 @@ export type FlatTrack = {
   cosHeading: Float64Array;
   /** Index into `SURFACES`. */
   surface: Uint8Array;
+  /** The sample's own `bite` — how hard its surface holds against the
+   * table row; 1 everywhere but on snow. */
+  bite: Float32Array;
   /** How many samples ahead the next one that actually BENDS is; 0 at a
    * sample that bends itself. Two fifths of a stage is dead straight and a
    * corner plan skips every one of those, so it skips them in one jump
@@ -120,6 +123,7 @@ export function flatTrack(track: Track): FlatTrack {
     sinHeading: new Float64Array(n),
     cosHeading: new Float64Array(n),
     surface: new Uint8Array(n),
+    bite: new Float32Array(n),
     toNextCurve: new Int32Array(n),
     groupX: new Float64Array(Math.ceil(n / GROUP)),
     groupZ: new Float64Array(Math.ceil(n / GROUP)),
@@ -139,6 +143,7 @@ export function flatTrack(track: Track): FlatTrack {
     flat.sinHeading.set(cached.sinHeading);
     flat.cosHeading.set(cached.cosHeading);
     flat.surface.set(cached.surface);
+    flat.bite.set(cached.bite);
     // ...and the circles over them. The rebuilds below start at the group
     // and the block the extension lands IN, because those are the only ones
     // whose samples changed — which means every circle BEHIND the frontier
@@ -164,6 +169,7 @@ export function flatTrack(track: Track): FlatTrack {
     flat.sinHeading[i] = Math.sin(s.heading);
     flat.cosHeading[i] = Math.cos(s.heading);
     flat.surface[i] = CODE_OF[s.surface];
+    flat.bite[i] = s.bite;
   }
   // The group circles, over the samples this build added. A group is only
   // ever finished once, but the last one of a growing endless road is not,

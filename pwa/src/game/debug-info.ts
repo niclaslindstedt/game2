@@ -32,6 +32,11 @@ export type DebugStage = {
   carId: string;
   timeOfDay: string;
   weather: string;
+  /** The climate (climate.ts): the season, and the air at the datum or
+   * null for the season's own. Part of what the generator BUILT — a winter
+   * road is made of snow — so the repro line carries both. */
+  season: string;
+  temperature?: number | null;
 };
 
 /** One line of the overlay. `k` doubles as the row's `data-k` in the DOM, so
@@ -109,7 +114,12 @@ function stageBox(ctx: DebugContext, state: GameState): DebugBox {
       { k: "shape", v: `${ctx.stage.shape} ${ctx.stage.length} · ${ctx.stage.laps} lap` },
       { k: "dials", v: dials },
       { k: "road", v: `${m(t.length)} m · ${m(t.width)} m wide · ${t.samples.length} samples` },
-      { k: "cond", v: `${ctx.stage.timeOfDay} ${ctx.stage.weather}` },
+      {
+        k: "cond",
+        v:
+          `${ctx.stage.timeOfDay} ${ctx.stage.weather} · ${ctx.stage.season}` +
+          `${ctx.stage.temperature == null ? "" : ` ${ctx.stage.temperature}°C`}`,
+      },
       { k: "car", v: `${ctx.stage.carId} (${state.spec.name})` },
       { k: "build", v: ctx.build },
     ],
@@ -254,6 +264,8 @@ export function stageParams(stage: DebugStage): URLSearchParams {
   });
   for (const key of NUMERIC_KNOBS) params.set(key, stage.knobs[key].toFixed(3));
   params.set("biome", stage.knobs.biome);
+  params.set("season", stage.season);
+  if (stage.temperature != null) params.set("temp", String(stage.temperature));
   params.set("start", "1");
   params.set("debug", "1");
   return params;

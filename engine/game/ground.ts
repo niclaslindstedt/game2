@@ -21,7 +21,7 @@ import { TUNING } from "./defs/tuning.ts";
 import { climbGrade } from "./limits.ts";
 import type { CarState, GameEvent, RunStats } from "./state.ts";
 import type { Rng } from "../lib/prng.ts";
-import type { Surface } from "../mapgen/index.ts";
+import type { Underfoot } from "../mapgen/index.ts";
 
 const T = TUNING;
 
@@ -61,7 +61,12 @@ export type GroundUnder = {
  * (`GroundUnder`, ground.ts), plus the grade and shape already read under
  * the car and the weather over it. */
 export type GroundContext = GroundUnder & {
-  surface: Surface | "nature";
+  surface: Underfoot;
+  /** How hard THIS patch of the surface holds against its table row
+   * (`TUNING.surfaces.grip`), 1 everywhere but on snow, where the cold
+   * decides it: the sample's own `bite` on the road, the climate's at the
+   * car's height off it (climate.ts). */
+  hold: number;
   /** Road slope dy/ds under the car... */
   slope: number;
   /** Ground slope ACROSS the heading, positive when the ground rises to

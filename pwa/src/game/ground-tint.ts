@@ -155,7 +155,7 @@ export function groundTint(
   snow: () => number = () => 0,
 ): number | DustTint {
   if (surface === "water") return SPRAY;
-  if (surface === "snow") return SNOW_POWDER;
+  if (surface === "snow" || surface === "snowfield") return SNOW_POWDER;
   if (wet && surface !== "asphalt") return MUD_CLODS;
   if (surface !== "nature") return grit(biome);
   if (Math.random() < snow()) return SNOW_POWDER;
@@ -199,6 +199,8 @@ export function plumeGround(
   snow: () => number = () => 0,
 ): PlumeGround {
   if (surface === "snow") return { tint: SNOW_POWDER, amount: 1 };
+  // Deep snow is all powder, and a car ploughing it throws the most.
+  if (surface === "snowfield") return { tint: SNOW_POWDER, amount: 1 };
   if (surface === "water" || surface === "asphalt" || wet) return null;
   if (surface !== "nature") return { tint: grit(biome), amount: 1 };
   // ...and a snowfield is powder with nothing binding it either: the

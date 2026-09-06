@@ -27,7 +27,7 @@ import {
   treePlacement,
   understoryAround,
 } from "./planting.ts";
-import { plantZone } from "./ground-rules.ts";
+import { frozenAt, plantZone } from "./ground-rules.ts";
 import { LAKE_Y, type Terrain } from "./terrain.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -319,8 +319,10 @@ export function buildWild(
       if (inStream(field.streams, x, z, 0.5)) continue;
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
-      // R47 — nothing grows under the snow.
-      if (plantZone(biome.id, y, false) === "snow") continue;
+      // R47 — nothing grows under the snow, the winter's included.
+      if (plantZone(biome.id, y, false) === "snow" || frozenAt(biome.id, track.climate, y)) {
+        continue;
+      }
       placements.push({
         id: pickFlora(community.undergrowth ?? biome.undergrowth, roll),
         x,

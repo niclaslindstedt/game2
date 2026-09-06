@@ -144,6 +144,7 @@ async function main(): Promise<void> {
         timeOfDay,
         weather: row.weather,
         season: "summer",
+        temperature: 18,
         windDir: 0.7,
         windSpeed: row.windSpeed,
         gustPhase: 0,

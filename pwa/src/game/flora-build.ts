@@ -169,74 +169,87 @@ export const SILVER_WOOD_DARK = new THREE.Color(0x8f8b82);
 //                  ferns rust, sedges and dwarf birch on the bogs go
 //                  copper, and heather is still in purple flower.
 //
+//   WINTER (Jan)   The broadleaves are BARE — a birch crown from the road
+//                  is a grey-brown haze of twigs, and that is what its
+//                  leaf colour becomes — the larch has dropped, and the
+//                  ground layer is dead straw and bleached sedge under the
+//                  snow the terrain lays over it. The rowan hangs its
+//                  berries into the cold. The conifers hold their
+//                  silhouette still, exactly as in autumn, and only the
+//                  light greens on their tips go a shade greyer under the
+//                  frost. The desert's winter runs the other way: it is the
+//                  rainy season, and the creosote, the brittlebush and the
+//                  bunch grass go GREENER — the ocotillo puts out leaves
+//                  within days of rain — a little, not a lot.
+//
 // A colour not on this table does not change: every bark, every conifer
 // green, all the dead wood, the driftwood, the stone.
 
 /** One authored colour and where the year takes it. */
-type SeasonalColor = { summer: THREE.Color; spring: number; autumn: number };
+type SeasonalColor = { summer: THREE.Color; spring: number; autumn: number; winter: number };
 
 const SEASONAL: SeasonalColor[] = [
   // Broadleaves. The birch is the one that matters — half the accent trees
   // in the biome are birch, and its yellow IS a Nordic autumn.
-  { summer: BIRCH_LEAF, spring: 0xb8d977, autumn: 0xf0c22e },
-  { summer: ASPEN_LEAF, spring: 0xc2d98a, autumn: 0xe8a02c },
-  { summer: OAK_LEAF, spring: 0x86a855, autumn: 0x9c6a2c },
-  { summer: MAPLE_LEAF, spring: 0xa2c065, autumn: 0xe0921f },
-  { summer: ROWAN_LEAF, spring: 0x97c467, autumn: 0xd4552b },
+  { summer: BIRCH_LEAF, spring: 0xb8d977, autumn: 0xf0c22e, winter: 0x7a6f66 },
+  { summer: ASPEN_LEAF, spring: 0xc2d98a, autumn: 0xe8a02c, winter: 0x7d746a },
+  { summer: OAK_LEAF, spring: 0x86a855, autumn: 0x9c6a2c, winter: 0x6e5f4c },
+  { summer: MAPLE_LEAF, spring: 0xa2c065, autumn: 0xe0921f, winter: 0x75695f },
+  { summer: ROWAN_LEAF, spring: 0x97c467, autumn: 0xd4552b, winter: 0x7a6d62 },
   // Rowan's accent is a white flower head in May and a scarlet berry
   // cluster in September — the same blobs, doing opposite jobs.
-  { summer: ROWAN_BERRY, spring: 0xe8e4d2, autumn: 0xd41f22 },
-  { summer: WILLOW, spring: 0x93b96a, autumn: 0xb8a24e },
+  { summer: ROWAN_BERRY, spring: 0xe8e4d2, autumn: 0xd41f22, winter: 0xb8302a },
+  { summer: WILLOW, spring: 0x93b96a, autumn: 0xb8a24e, winter: 0x8a7d66 },
   // The larch: deciduous needles, so it is the only conifer on this table.
-  { summer: LARCH, spring: 0xa8c94a, autumn: 0xd9b13a },
+  { summer: LARCH, spring: 0xa8c94a, autumn: 0xd9b13a, winter: 0x8a7860 },
   // The spruces' and pines' NEW shoots in May are visibly paler than the
   // old needles behind them. Only the light greens move; the dark ones,
   // which carry the silhouette, do not.
-  { summer: SPRUCE_LIGHT, spring: 0x529b4e, autumn: 0x3d7d45 },
-  { summer: PINE_CROWN, spring: 0x5aa757, autumn: 0x4a9450 },
+  { summer: SPRUCE_LIGHT, spring: 0x529b4e, autumn: 0x3d7d45, winter: 0x4d6e5c },
+  { summer: PINE_CROWN, spring: 0x5aa757, autumn: 0x4a9450, winter: 0x557863 },
   // The ground layer.
-  { summer: GRASS_BASE, spring: 0x63822f, autumn: 0x8a7a35 },
-  { summer: GRASS_TIP, spring: 0xb4d165, autumn: 0xcbb45c },
-  { summer: FERN, spring: 0x4a8138, autumn: 0x8a5a24 },
-  { summer: FERN_TIP, spring: 0x76a84e, autumn: 0xb07a2e },
-  { summer: HEATH, spring: 0x5f7a38, autumn: 0x7d5c2c },
+  { summer: GRASS_BASE, spring: 0x63822f, autumn: 0x8a7a35, winter: 0x8f8a70 },
+  { summer: GRASS_TIP, spring: 0xb4d165, autumn: 0xcbb45c, winter: 0xc9c4ae },
+  { summer: FERN, spring: 0x4a8138, autumn: 0x8a5a24, winter: 0x8a7a5a },
+  { summer: FERN_TIP, spring: 0x76a84e, autumn: 0xb07a2e, winter: 0xa89a78 },
+  { summer: HEATH, spring: 0x5f7a38, autumn: 0x7d5c2c, winter: 0x5c5a48 },
   // Calluna flowers August into September — the purple is an AUTUMN thing,
   // not a summer one.
-  { summer: HEATH_BLOOM, spring: 0x6b6046, autumn: 0x8a4a5c },
+  { summer: HEATH_BLOOM, spring: 0x6b6046, autumn: 0x8a4a5c, winter: 0x5c5a48 },
   // Bilberry: the loudest red on an autumn forest floor, and pale green
   // bells in spring where the berries will be.
-  { summer: BERRY_LEAF, spring: 0x62914a, autumn: 0xb0342a },
-  { summer: BERRY, spring: 0xd8dfc8, autumn: 0xb01f26 },
+  { summer: BERRY_LEAF, spring: 0x62914a, autumn: 0xb0342a, winter: 0x6b5a4c },
+  { summer: BERRY, spring: 0xd8dfc8, autumn: 0xb01f26, winter: 0x6b5a4c },
   // Moss is evergreen and barely moves — a token shift, so it does not sit
   // dead still while everything around it turns.
-  { summer: MOSS, spring: 0x93ad52, autumn: 0x8a9448 },
-  { summer: GROUND_MOSS, spring: 0x82a54e, autumn: 0x7c9247 },
+  { summer: MOSS, spring: 0x93ad52, autumn: 0x8a9448, winter: 0x7d8a6a },
+  { summer: GROUND_MOSS, spring: 0x82a54e, autumn: 0x7c9247, winter: 0x738064 },
   // The wet ground. Sedge and dwarf birch turn a bog copper in September,
   // which is the single most distinctive thing the biome does all year.
-  { summer: SEDGE, spring: 0x8fa04a, autumn: 0xb07b34 },
-  { summer: SEDGE_TIP, spring: 0xb8b167, autumn: 0xd2a355 },
-  { summer: REED, spring: 0x7d9448, autumn: 0xa8934a },
-  { summer: REED_TIP, spring: 0xafa863, autumn: 0xc9b06a },
-  { summer: BOG_SHRUB, spring: 0x5a7040, autumn: 0xa04a2c },
+  { summer: SEDGE, spring: 0x8fa04a, autumn: 0xb07b34, winter: 0xb0a27a },
+  { summer: SEDGE_TIP, spring: 0xb8b167, autumn: 0xd2a355, winter: 0xd2c8a0 },
+  { summer: REED, spring: 0x7d9448, autumn: 0xa8934a, winter: 0xb5a878 },
+  { summer: REED_TIP, spring: 0xafa863, autumn: 0xc9b06a, winter: 0xd6ccaa },
+  { summer: BOG_SHRUB, spring: 0x5a7040, autumn: 0xa04a2c, winter: 0x6a5a48 },
   // Bog cotton heads are a June thing; by September they have blown.
-  { summer: COTTON, spring: 0xf7f4ea, autumn: 0xe8e2d0 },
+  { summer: COTTON, spring: 0xf7f4ea, autumn: 0xe8e2d0, winter: 0xe8e2d0 },
 
   // THE DESERT. Its year is the opposite shape: spring is the loud one —
   // a wet winter puts a yellow hillside of brittlebush, white saguaro
   // crowns and red ocotillo tips on a country that is grey-green the rest
   // of the time — and autumn is a small drying and reddening. Every cactus
   // body, every bark and the dead wood hold still, as the conifers do.
-  { summer: SAGUARO_TIP, spring: 0xf4efdc, autumn: 0xc23a2e },
-  { summer: PEAR_FRUIT, spring: 0xd9c85a, autumn: 0x8e2f52 },
-  { summer: OCOTILLO_TIP, spring: 0xd23c2c, autumn: 0x8a6a4e },
-  { summer: BRITTLEBUSH, spring: 0xe6c93a, autumn: 0x9a9268 },
-  { summer: CREOSOTE, spring: 0x7d8f43, autumn: 0x6b7038 },
-  { summer: PALO_VERDE, spring: 0xd9c848, autumn: 0x8fb06a },
-  { summer: MESQUITE_LEAF, spring: 0x86a04e, autumn: 0x9a9048 },
-  { summer: SAGEBRUSH, spring: 0x98a27e, autumn: 0x8a8a6c },
-  { summer: YUCCA_STALK, spring: 0xf3eedd, autumn: 0xa8916a },
-  { summer: BUNCH_BASE, spring: 0x9aa858, autumn: 0xc0a24e },
-  { summer: BUNCH_TIP, spring: 0xcfcf7e, autumn: 0xe8d08c },
+  { summer: SAGUARO_TIP, spring: 0xf4efdc, autumn: 0xc23a2e, winter: 0x6f9a55 },
+  { summer: PEAR_FRUIT, spring: 0xd9c85a, autumn: 0x8e2f52, winter: 0x7d9c60 },
+  { summer: OCOTILLO_TIP, spring: 0xd23c2c, autumn: 0x8a6a4e, winter: 0x5f8a4a },
+  { summer: BRITTLEBUSH, spring: 0xe6c93a, autumn: 0x9a9268, winter: 0x86a468 },
+  { summer: CREOSOTE, spring: 0x7d8f43, autumn: 0x6b7038, winter: 0x5f7f3e },
+  { summer: PALO_VERDE, spring: 0xd9c848, autumn: 0x8fb06a, winter: 0x86b862 },
+  { summer: MESQUITE_LEAF, spring: 0x86a04e, autumn: 0x9a9048, winter: 0x6f8f48 },
+  { summer: SAGEBRUSH, spring: 0x98a27e, autumn: 0x8a8a6c, winter: 0x8aa088 },
+  { summer: YUCCA_STALK, spring: 0xf3eedd, autumn: 0xa8916a, winter: 0xa8916a },
+  { summer: BUNCH_BASE, spring: 0x9aa858, autumn: 0xc0a24e, winter: 0x8ea852 },
+  { summer: BUNCH_TIP, spring: 0xcfcf7e, autumn: 0xe8d08c, winter: 0xc8cf7c },
 
   // THE ALPINE. The larch's gold is the taiga row's, shared. What is this
   // country's own is the ALP: in June it is flowers over fresh green, in
@@ -244,12 +257,12 @@ const SEASONAL: SeasonalColor[] = [
   // and the yellow go to straw, the white to a dry grey — while the
   // alpenrose, which flowers early summer, goes back to its own leaf. The
   // arolla, the mountain pine and the stone hold still.
-  { summer: ALPENROSE_BLOOM, spring: 0xd4607c, autumn: 0x3b5e31 },
-  { summer: GENTIAN, spring: 0x3a62d2, autumn: 0x9a9060 },
-  { summer: ARNICA, spring: 0xecc247, autumn: 0xb8a25c },
-  { summer: FLOWER_WHITE, spring: 0xf6f4ea, autumn: 0xb8b09a },
-  { summer: ALP_GRASS_BASE, spring: 0x66a534, autumn: 0x9a8d3c },
-  { summer: ALP_GRASS_TIP, spring: 0xb4dc62, autumn: 0xd2bc5e },
+  { summer: ALPENROSE_BLOOM, spring: 0xd4607c, autumn: 0x3b5e31, winter: 0x3b5e31 },
+  { summer: GENTIAN, spring: 0x3a62d2, autumn: 0x9a9060, winter: 0x9a9060 },
+  { summer: ARNICA, spring: 0xecc247, autumn: 0xb8a25c, winter: 0xb8a25c },
+  { summer: FLOWER_WHITE, spring: 0xf6f4ea, autumn: 0xb8b09a, winter: 0xb8b09a },
+  { summer: ALP_GRASS_BASE, spring: 0x66a534, autumn: 0x9a8d3c, winter: 0x9a9684 },
+  { summer: ALP_GRASS_TIP, spring: 0xb4dc62, autumn: 0xd2bc5e, winter: 0xcac4ae },
 ];
 
 /** What one season does to the paint box: authored colour → this season's.

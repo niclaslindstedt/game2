@@ -49,10 +49,13 @@ import {
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
   SEASONS,
+  TEMPERATURES,
   TIMES_OF_DAY,
   challengeGlyph,
   challengeWord,
   dialStop,
+  temperatureOf,
+  temperatureStop,
   weathersOf,
   type RaceSettings,
 } from "./menu.tsx";
@@ -281,16 +284,42 @@ export function RoamPage({
                 <StepRow
                   label="WEATHER"
                   glyph="cloud"
-                  stops={weathersOf(race.knobs.biome)}
+                  stops={weathersOf(race.knobs.biome, race.season, race.temperature)}
                   value={race.weather}
                   onPick={(weather) => onRace({ ...race, weather })}
                 />
+                {/* The season reaches the ground (a winter is snow on the
+                    road and a blanket beside it), and the season decides
+                    what weathers the country has — the desert rains in its
+                    winter — so moving it can take the row above with it. */}
                 <StepRow
                   label="SEASON"
                   glyph="leaf"
                   stops={SEASONS}
                   value={race.season}
-                  onPick={(season) => onRace({ ...race, season })}
+                  onPick={(season) =>
+                    onRace({
+                      ...race,
+                      season,
+                      weather: weathersOf(race.knobs.biome, season).some(
+                        (w) => w.id === race.weather,
+                      )
+                        ? race.weather
+                        : "clear",
+                    })
+                  }
+                />
+                {/* THE COLD, at the valley floor — the air gets colder with
+                    height from here (climate.ts). AUTO is the season's own
+                    in this country; under freezing the loose road is snow,
+                    the country lies under it, and the rain above turns to
+                    flakes. Around zero the road glazes; deep cold bites. */}
+                <StepRow
+                  label="TEMPERATURE"
+                  glyph="thermometer"
+                  stops={TEMPERATURES}
+                  value={temperatureStop(race.temperature)}
+                  onPick={(stop) => onRace({ ...race, temperature: temperatureOf(stop) })}
                 />
               </KnobGroup>
             </div>
@@ -312,7 +341,7 @@ export function RoamPage({
                     onRace({
                       ...race,
                       knobs: { ...race.knobs, biome },
-                      weather: weathersOf(biome).some((w) => w.id === race.weather)
+                      weather: weathersOf(biome, race.season).some((w) => w.id === race.weather)
                         ? race.weather
                         : "clear",
                     })

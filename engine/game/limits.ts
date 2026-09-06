@@ -18,7 +18,7 @@
 // limit rather than of a number that only resembles one.)
 
 import { clamp } from "../lib/math.ts";
-import type { Surface } from "../mapgen/index.ts";
+import type { Underfoot } from "../mapgen/index.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 
@@ -33,7 +33,7 @@ const D = TUNING.drift;
  * much torque the driven axle can put down and every corner the bot reads
  * ahead of itself are all quoted against this, which is exactly why it is
  * stated here: two of them computing the product separately is two cars. */
-export function surfaceGripFor(spec: CarSpec, surface: Surface | "nature"): number {
+export function surfaceGripFor(spec: CarSpec, surface: Underfoot): number {
   const tyre = surface === "asphalt" ? spec.tyres.sealed : spec.tyres.loose;
   return T.surfaces.grip[surface] * tyre;
 }

@@ -36,6 +36,7 @@ import {
   resolveKnobs,
   type CarInput,
   type FiniteStageLength,
+  type Season,
   type StageKnobs,
   type TimeOfDay,
   type Weather,
@@ -93,6 +94,12 @@ export type GhostStage = {
   knobs: StageKnobs;
   timeOfDay: TimeOfDay;
   weather: Weather;
+  /** The climate (climate.ts) — part of the road since a winter is snow on
+   * it, so a run set on the summer's gravel is not a ghost for the winter's
+   * snow. Absent on a record written before there was a winter, which is a
+   * summer at the season's own temperature. */
+  season?: Season;
+  temperature?: number | null;
 };
 
 export type GhostRun = GhostStage & {
@@ -294,6 +301,8 @@ export function ghostMatches(run: GhostRun, stage: GhostStage): boolean {
     run.length === stage.length &&
     run.timeOfDay === stage.timeOfDay &&
     run.weather === stage.weather &&
+    (run.season ?? "summer") === (stage.season ?? "summer") &&
+    (run.temperature ?? null) === (stage.temperature ?? null) &&
     (Object.keys(ours) as (keyof StageKnobs)[]).every((key) => theirs[key] === ours[key])
   );
 }

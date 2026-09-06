@@ -32,6 +32,7 @@ import { buildInterior, type InteriorDetail } from "./car/interior.ts";
 import type { CrewLook } from "./car-crew.ts";
 import { LENS_MATERIAL } from "./car/lamps.ts";
 import { buildScreenRain, type ScreenRain } from "./car/screen-rain.ts";
+import { buildScreenSnow, type ScreenSnow } from "./car/screen-snow.ts";
 import { buildShell, buildStations } from "./car/shell.ts";
 import { buildTrim, doorSkins, type DoorSkin } from "./car/trim.ts";
 import { buildWheel } from "./car/wheels.ts";
@@ -181,6 +182,8 @@ export type CarBodyParts = {
    * built without a cockpit, and on every car when the screens are set to
    * stay clean. */
   screenRain: ScreenRain | null;
+  /** ...and THE SNOW on it (car/screen-snow.ts), on the same terms. */
+  screenSnow: ScreenSnow | null;
   dispose: () => void;
 };
 
@@ -439,6 +442,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     options.cockpit && (options.screens ?? "fine") !== "off"
       ? buildScreenRain(spec, chassis)
       : null;
+  const screenSnow = screenRain ? buildScreenSnow(spec, chassis) : null;
 
   const wheelGroups: THREE.Group[] = [];
   const wheelSpin: THREE.Object3D[] = [];
@@ -466,6 +470,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     interior.dispose();
     cockpit?.dispose();
     screenRain?.dispose();
+    screenSnow?.dispose();
     bodyGeo.dispose();
     for (const geo of partGeos) geo.dispose();
     boltOnGeo?.dispose();
@@ -505,6 +510,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     steering: interior.steering,
     cockpit,
     screenRain,
+    screenSnow,
     dispose,
   };
 }
