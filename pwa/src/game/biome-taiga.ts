@@ -51,6 +51,21 @@ export const TAIGA: Biome = {
       straw: 0xcbb257,
       soil: 0x8f6738,
     },
+    // January. What the palette paints is the ground the SNOW is laid over
+    // (terrain.ts whitens it wherever the climate freezes it), and what
+    // shows through the cover and in a thaw: dead straw gone grey, bare
+    // black earth, the bog's sedge bleached, every green drained to a
+    // cold grey-olive. Nothing here is bright — the brightness is the
+    // snow's.
+    winter: {
+      base: 0x8f8a70,
+      baseDark: 0x6f6d58,
+      damp: 0x6e7560,
+      scrub: 0x5c5644,
+      litter: 0x4a4a3a,
+      straw: 0xb8b09a,
+      soil: 0x6a5a48,
+    },
   },
   regions: {
     // Deep shade, wet needles, moss over everything that stops moving.

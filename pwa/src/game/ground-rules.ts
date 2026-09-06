@@ -13,7 +13,15 @@
 //     of, and so what colour its mat, its wheel tracks and its speckle are.
 
 import * as THREE from "three";
-import { LAKE_Y, biomeRules, type BiomeLand } from "@engine";
+import {
+  CLIMATE,
+  LAKE_Y,
+  biomeRules,
+  snowCoverAt,
+  snowlineOf,
+  type BiomeLand,
+  type Climate,
+} from "@engine";
 
 function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
@@ -47,13 +55,30 @@ export const ROCK_SLOPE = { from: 0.88, band: 0.18 };
  * about the line where the rock still breaks through the cover, and
  * `patchFade` how far above the line those windows have closed. */
 export const SNOW = {
-  fade: 30,
+  fade: CLIMATE.fade,
   lead: 10,
   climb: 120,
   slope: { from: 0.84, band: 0.24 },
   patch: 22,
   patchFade: 70,
 };
+
+/** THE ZONES UNDER A CLIMATE: the country's own, with its snowline brought
+ * down to wherever the cold freezes the ground (`snowlineOf`, climate.ts)
+ * — the zones the PAINT and the powder read, so a winter taiga is white to
+ * the eye exactly where it is snow to the wheels. Not the zones the trees
+ * are planted by: a forest stands through its winter, and `plantZone`
+ * keeps the country's own line for that. */
+export function zonesUnder(climate: Climate, zones: Zones): Zones {
+  const snow = snowlineOf(climate, zones);
+  return snow === zones.snow ? zones : { ...zones, snow: Number.isFinite(snow) ? snow : null };
+}
+
+/** Whether the ground at a height is under a winter's snow — where the
+ * ground cover is not planted, because it is under the blanket. */
+export function frozenAt(biome: string | undefined, climate: Climate, y: number): boolean {
+  return snowCoverAt(climate, zonesOf(biome), y) > 0.5;
+}
 
 /** How much bare rock the ground shows, 0..1: steep flanks first (mountain
  * sides, the cut walls beside the road), then sheer altitude. The tile paint
@@ -102,8 +127,10 @@ export function snowAt(
   x: number,
   z: number,
   biome?: string,
+  climate?: Climate,
 ): number {
-  return snowLie(groundAt(x, z), normalAt(groundAt, x, z), zonesOf(biome));
+  const zones = climate ? zonesUnder(climate, zonesOf(biome)) : zonesOf(biome);
+  return snowLie(groundAt(x, z), normalAt(groundAt, x, z), zones);
 }
 
 // ── What grows where ────────────────────────────────────────────────────

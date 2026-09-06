@@ -60,6 +60,20 @@ export const DESERT: Biome = {
       straw: 0xf0d59b,
       soil: 0xb56d40,
     },
+    // January: the wet season. The rain darkens the sand and stands in the
+    // pans (`puddles.ts`), the pavement carries a haze of new green and the
+    // scrub patches are properly green — the annuals that will be spring's
+    // flowers are up. Not much: a desert in the rain is a damp desert, not
+    // a meadow, and the base sand is the same sand a shade darker.
+    winter: {
+      base: 0xcdb078,
+      baseDark: 0xb49362,
+      damp: 0x98a072,
+      scrub: 0x7f9450,
+      litter: 0x94885a,
+      straw: 0xe0d09a,
+      soil: 0xa86c46,
+    },
   },
   regions: {
     // The gravel fan: stone-coloured, littered, a little red where the

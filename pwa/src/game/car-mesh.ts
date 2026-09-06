@@ -10,6 +10,7 @@
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
 import {
+  temperatureAt,
   FRONT_LAMPS,
   REAR_LAMPS,
   TUNING,
@@ -42,6 +43,7 @@ import { createCarDirt, glassSpray, groundTravel, wheelSpray } from "./car-dirt.
 import type { Livery } from "./car-livery.ts";
 import { revTremble, trembleAt } from "./car-shake.ts";
 import type { ScreenRain } from "./car/screen-rain.ts";
+import type { ScreenSnow } from "./car/screen-snow.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
 import { glowTexture } from "./textures.ts";
@@ -155,6 +157,9 @@ export type CarVisual = {
    * on every car but the player's, and on that one when the video options
    * have asked for clean screens. */
   screenRain: ScreenRain | null;
+  /** ...and THE SNOW on it (car/screen-snow.ts): drawn in the same pass,
+   * just before the water it melts into. */
+  screenSnow: ScreenSnow | null;
   /** World-anchored debris (torn-off parts) — scene sibling of the car. */
   debris: THREE.Group;
   /** `eye` is where the camera is standing, in world metres — what decides
@@ -184,6 +189,10 @@ export type CarVisual = {
    * sets its wipers going. Pushed from the environment for the same reason
    * the light is: the weather is the stage's, not the car's. */
   setWet: (rain: number) => void;
+  /** How hard it is SNOWING on this car, 0..1 — the flakes that land on
+   * its glass (car/screen-snow.ts). Its own number rather than a share of
+   * `setWet`, because snow is not wet until the glass has melted it. */
+  setSnow: (flakes: number) => void;
   /** How filthy the car has got, 0..1 — the environment dims its beams by
    * it, because the dirt is on the glass too. */
   grime: () => number;
@@ -246,6 +255,7 @@ export function tintCar(
   tint: THREE.Color,
   lampsLit: boolean,
   rain: number,
+  snow = 0,
 ): void {
   visual.group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh) && !(obj instanceof THREE.Points)) return;
@@ -264,7 +274,11 @@ export function tintCar(
     }
   });
   visual.setLights(lampsLit, tint);
-  visual.setWet(rain);
+  // What is falling is rain until the air says it is snow (climate.ts):
+  // the two are handed over apart, because a flake wets nothing until the
+  // glass has melted it.
+  visual.setWet(rain * (1 - snow));
+  visual.setSnow(rain * snow);
 }
 
 export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
@@ -400,6 +414,10 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   let wet = 0;
   const setWet = (rain: number): void => {
     wet = clamp(rain, 0, 1);
+  };
+  let snow = 0;
+  const setSnow = (flakes: number): void => {
+    snow = clamp(flakes, 0, 1);
   };
   /** The blooms, dimmed by whatever the run has thrown at the lenses — and
    * the lenses themselves, which are switched between the world's light and
@@ -599,7 +617,23 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // the wheels is throwing up at it right now — nothing, on tarmac and on
     // grass — and, because road spray is thrown by the wheels rather than
     // settling out of the air, how far the car drove while it was thrown.
-    body.wipers.update(wet, glassSpray(state), groundTravel(car, dt), dt);
+    // THE SNOW first, because what it melts is water the rest of the glass
+    // has to answer to: the flakes land on a screen the heater is warming
+    // (the run's own clock) in air as cold as the climate makes it at this
+    // height, and what they melt into is handed on as wetness.
+    const screenGone = car.damage.broken.includes("glassF");
+    body.screenSnow?.update(
+      {
+        flakes: screenGone ? 0 : snow,
+        speed: Math.abs(car.u),
+        time: state.t,
+        temperature: temperatureAt(state.track.climate, car.y),
+        wipe: body.wipers.front,
+      },
+      dt,
+    );
+    const onGlass = Math.max(wet, body.screenSnow?.water() ?? 0);
+    body.wipers.update(onGlass, glassSpray(state), groundTravel(car, dt), dt);
     // …and the WATER on the windscreen, which answers to the same weather
     // and to the arm that has just been moved. It also needs what the car
     // is doing, and only the car is in a position to say: how fast the air
@@ -608,10 +642,9 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // — positive is a left turn, which throws the water to the right.
     // A windscreen that has SHATTERED (car-damage.ts) has no glass for the
     // rain to land on: what is on it drains and nothing more arrives.
-    const screenGone = car.damage.broken.includes("glassF");
     body.screenRain?.update(
       {
-        wet: screenGone ? 0 : wet,
+        wet: screenGone ? 0 : onGlass,
         speed: Math.abs(car.u),
         lateral: car.u * car.yawRate,
         wipe: body.wipers.front,
@@ -645,6 +678,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     mirrorMount: body.cockpit?.mirror ?? null,
     mirrorPass,
     screenRain: body.screenRain,
+    screenSnow: body.screenSnow,
     debris: damage.debris,
     update,
     setInside,
@@ -653,6 +687,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     setLooseWheels: damage.setLooseWheels,
     setLights,
     setWet,
+    setSnow,
     grime: dirt.level,
     lampSpread: lampSpread(bodySpec),
     dispose,

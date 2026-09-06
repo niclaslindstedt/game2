@@ -41,6 +41,7 @@ export const GLYPH_NAMES = [
   "ruler",
   "globe",
   "sun",
+  "thermometer",
   "cloud",
   "leaf",
   "mountain",
@@ -233,6 +234,16 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
       <circle cx="12" cy="12" r="8.6" />
       <path d="M3.4 12h17.2" />
       <path d="M12 3.4c3.5 3.6 3.5 13.6 0 17.2-3.5-3.6-3.5-13.6 0-17.2Z" />
+    </>
+  ),
+  // A thermometer: the bulb, the stem, and the column part way up it —
+  // how COLD the stage is, which is what decides whether the country is
+  // white and whether the rain is snow.
+  thermometer: (
+    <>
+      <path d="M10 4.2a2 2 0 0 1 4 0v9.3a3.8 3.8 0 1 1-4 0Z" />
+      <path d="M12 9.5v6.3" />
+      <circle cx="12" cy="16.9" r="1.4" />
     </>
   ),
   // The sun and its rays: what HOUR the stage is driven at.

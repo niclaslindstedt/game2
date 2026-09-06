@@ -23,6 +23,7 @@ import {
   compileStage,
   createTerrain,
   generateStage,
+  type ClimateChoice,
   type FiniteStageLength,
   type SegmentPlan,
   type StageKnobs,
@@ -35,10 +36,12 @@ type Build = {
   length: FiniteStageLength;
   knobs: Partial<StageKnobs>;
   shape: StageShape;
+  climate?: ClimateChoice;
 };
 
 const key = (seed: number, b: Build): string =>
-  `${seed}|${b.length}|${b.shape}|${JSON.stringify(b.knobs, Object.keys(b.knobs).sort())}`;
+  `${seed}|${b.length}|${b.shape}|${JSON.stringify(b.knobs, Object.keys(b.knobs).sort())}` +
+  `|${b.climate?.season ?? ""}|${b.climate?.temperature ?? ""}`;
 
 const plans = new Map<string, SegmentPlan[]>();
 const tracks = new Map<string, Track>();
@@ -48,8 +51,9 @@ function build(
   length: FiniteStageLength,
   knobs: Partial<StageKnobs>,
   shape: StageShape,
+  climate?: ClimateChoice,
 ): { k: string; b: Build } {
-  const b = { length, knobs, shape };
+  const b = { length, knobs, shape, climate };
   return { k: key(seed, b), b };
 }
 
@@ -79,11 +83,12 @@ export function stageTrack(
   length: FiniteStageLength = "medium",
   knobs: Partial<StageKnobs> = {},
   shape: StageShape = "sprint",
+  climate?: ClimateChoice,
 ): Track {
-  const { k } = build(seed, length, knobs, shape);
+  const { k } = build(seed, length, knobs, shape, climate);
   let hit = tracks.get(k);
   if (hit === undefined) {
-    hit = compileStage(seed, length, knobs, shape);
+    hit = compileStage(seed, length, knobs, shape, climate);
     tracks.set(k, hit);
   }
   return hit;

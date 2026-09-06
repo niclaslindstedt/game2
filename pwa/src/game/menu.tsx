@@ -13,11 +13,13 @@
 // button in the way of the driving.
 
 import {
+  defaultTemperature,
+  fallsAsSnow,
+  weathersIn,
   BIOMES,
   BIOME_IDS,
   DEFAULT_KNOBS,
   DIFFICULTIES,
-  biomeRules,
   type BiomeId,
   DIFFICULTY_IDS,
   GRID_DEFAULT,
@@ -58,6 +60,9 @@ export type RaceSettings = {
   timeOfDay: TimeOfDay;
   weather: Weather;
   season: Season;
+  /** The air at the datum, °C, or null for the season's own in the
+   * country (climate.ts) — what the TEMPERATURE row stores as AUTO. */
+  temperature: number | null;
   carId: string;
   length: StageLength;
   /** R22 — a sprint from a start to a finish, or a circuit raced over laps. */
@@ -386,13 +391,39 @@ export const TIMES_OF_DAY: { id: TimeOfDay; label: string }[] = [
   { id: "night", label: "NIGHT" },
 ];
 
-/** The taiga's three. The boreal forest under snow is the arctic biome,
- * not a fourth season of this one. */
+/** The four. Winter is the one that reaches the wheels: a frozen country
+ * is snow on the road and a blanket beside it (climate.ts). */
 export const SEASONS: { id: Season; label: string }[] = [
   { id: "spring", label: "SPRING" },
   { id: "summer", label: "SUMMER" },
   { id: "autumn", label: "AUTUMN" },
+  { id: "winter", label: "WINTER" },
 ];
+
+/** THE TEMPERATURE ROW's stops: the season's own (AUTO), then the air at
+ * the datum in five-degree steps. A stop is a string because the row is a
+ * `StepRow`; `temperatureOf` and `temperatureStop` translate. */
+export const TEMPERATURES: { id: string; label: string }[] = [
+  { id: "auto", label: "AUTO" },
+  ...Array.from({ length: 12 }, (_, i) => -20 + i * 5).map((t) => ({
+    id: String(t),
+    label: `${t > 0 ? "+" : ""}${t}°C`,
+  })),
+];
+
+/** The row's stop for a stored temperature (null is AUTO; anything off the
+ * ladder lands on the nearest rung). */
+export function temperatureStop(temperature: number | null): string {
+  if (temperature === null || !Number.isFinite(temperature)) return "auto";
+  const rung = Math.max(-20, Math.min(35, Math.round(temperature / 5) * 5));
+  return String(rung);
+}
+
+/** ...and back. */
+export function temperatureOf(stop: string): number | null {
+  const n = Number(stop);
+  return stop === "auto" || !Number.isFinite(n) ? null : n;
+}
 
 export const WEATHERS: { id: Weather; label: string }[] = [
   { id: "clear", label: "CLEAR" },
@@ -400,12 +431,27 @@ export const WEATHERS: { id: Weather; label: string }[] = [
   { id: "storm", label: "STORM" },
 ];
 
-/** ...of which a COUNTRY offers some (R40): the desert has no rain, and its
- * storm is sand. The row a page shows is the country's, so the sky can
- * never be set to a weather the place does not have. */
-export function weathersOf(biome: BiomeId): { id: Weather; label: string }[] {
-  const offered = biomeRules(biome).weathers;
-  return WEATHERS.filter((w) => offered.includes(w.id));
+/** ...of which a COUNTRY offers some (R40) in a SEASON (climate.ts): the
+ * desert has no rain but in its winter, and its storm is sand. The row a
+ * page shows is the country's, so the sky can never be set to a weather
+ * the place does not have. Under freezing the same two weathers are named
+ * for what they are there — SNOW and a BLIZZARD — because what falls is
+ * the temperature's call (`fallsAsSnow`), not the row's. */
+export function weathersOf(
+  biome: BiomeId,
+  season: Season = "summer",
+  temperature: number | null = null,
+): { id: Weather; label: string }[] {
+  const offered = weathersIn(biome, season);
+  const air = temperature ?? defaultTemperature(biome, season);
+  const snow = fallsAsSnow(air);
+  return WEATHERS.filter((w) => offered.includes(w.id)).map((w) =>
+    snow && w.id === "rain"
+      ? { id: w.id, label: "SNOW" }
+      : snow && w.id === "storm"
+        ? { id: w.id, label: "BLIZZARD" }
+        : w,
+  );
 }
 
 /** R40 — the countries, as the menus name them. First is the default. */

@@ -17,13 +17,14 @@ import {
   type StageKnobs,
   type StageLength,
   type StageShape,
-  type Surface,
   type Track,
+  type Underfoot,
 } from "../mapgen/index.ts";
 import { carById, gearedSpec, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { clipKerbs, clipSolids, collideCar } from "./collision.ts";
+import { snowBite, temperatureAt } from "./climate.ts";
 import { stepCooling } from "./cooling.ts";
 import { beyondDriving } from "./damage.ts";
 import { plant, seatOn } from "./ground.ts";
@@ -86,10 +87,13 @@ export type CreateGameOptions = {
   /** Inject a pre-compiled track (tests and tooling); defaults to the
    * generated stage for `seed` at `length`. */
   track?: ReturnType<typeof compileTrack>;
-  /** Race conditions. Time of day and season are presentation-only;
-   * weather sets the wind band (TUNING.wind.speed). Defaults: day, clear,
-   * summer. */
-  env?: { timeOfDay?: TimeOfDay; weather?: Weather; season?: Season };
+  /** Race conditions. Time of day is presentation-only; weather sets the
+   * wind band (TUNING.wind.speed); the season and the temperature are the
+   * CLIMATE (climate.ts) — they reach the road, so a run handed a compiled
+   * `track` takes them from it and one that compiles its own hands them to
+   * the compiler. Defaults: day, clear, the track's own climate (summer,
+   * at the country's temperature). */
+  env?: { timeOfDay?: TimeOfDay; weather?: Weather; season?: Season; temperature?: number | null };
   /** The generator's dials (rules.ts) for the stage this run compiles.
    * Ignored when a pre-compiled `track` is handed in — that track carries
    * the dials it was built with. */
@@ -141,13 +145,20 @@ export type CreateGameOptions = {
 /** Wind direction, mean speed, and gust phase are seeded on their own
  * stream so adding weather never shifts the in-run RNG the physics draws
  * from. The same seed and weather always blow the same wind. */
-function buildEnv(seed: number, timeOfDay: TimeOfDay, weather: Weather, season: Season): RaceEnv {
+function buildEnv(
+  seed: number,
+  timeOfDay: TimeOfDay,
+  weather: Weather,
+  season: Season,
+  temperature: number,
+): RaceEnv {
   const rng = createRng((seed ^ 0x51ab3d75) >>> 0);
   const [minSpeed, maxSpeed] = T.wind.speed[weather];
   return {
     timeOfDay,
     weather,
     season,
+    temperature,
     windDir: rng.range(0, Math.PI * 2),
     windSpeed: rng.range(minSpeed, maxSpeed),
     gustPhase: rng.range(0, Math.PI * 2),
@@ -179,7 +190,10 @@ export function createGame(options: CreateGameOptions): GameState {
   const spec = gearedSpec(carById(options.carId ?? "compact"), gearbox);
   const track =
     options.track ??
-    compileStage(options.seed, options.length ?? "medium", options.knobs, options.shape);
+    compileStage(options.seed, options.length ?? "medium", options.knobs, options.shape, {
+      season: options.env?.season,
+      temperature: options.env?.temperature,
+    });
   // R22 — only a road that comes back to its own start line can be lapped.
   const laps = track.circuit
     ? Math.max(1, Math.round(options.laps ?? STAGE_RULES.circuit.laps))
@@ -209,7 +223,8 @@ export function createGame(options: CreateGameOptions): GameState {
     options.seed,
     options.env?.timeOfDay ?? "day",
     options.env?.weather ?? "clear",
-    options.env?.season ?? "summer",
+    track.climate.season,
+    track.climate.temperature,
   );
   // The grid already stands in the wind — its flags and fumes drift before
   // the lights go green, so the vector starts at its t = 0 value.
@@ -276,9 +291,13 @@ export function createGame(options: CreateGameOptions): GameState {
  * keeps its own surface here: collapsing a gravel branch into `nature`
  * gives a car driving down a drawn gravel road a field's grip, a field's
  * speed cap, and a rooster tail of torn grass. */
-function offRoadSurface(state: GameState, x: number, z: number): Surface | "nature" {
+function offRoadSurface(state: GameState, x: number, z: number): Underfoot {
   if (state.terrain.waterAt(x, z) !== null) return "water";
-  return state.terrain.spurSurfaceAt(x, z) ?? "nature";
+  const spur = state.terrain.spurSurfaceAt(x, z);
+  if (spur !== null) return spur;
+  // The open country under a winter's blanket is deep snow, not turf
+  // (climate.ts) — from where the blanket is more than a dusting.
+  return state.terrain.blanketAt(x, z) > 0.1 ? "snowfield" : "nature";
 }
 
 /** Put the car back on the road at `home`, and wind progress back with it:
@@ -724,6 +743,7 @@ function countryShare(track: Track, fix: TrackPoint): number {
  * step must not leave its terrain probe behind for the next road step. */
 const GROUND: GroundContext = {
   surface: "gravel",
+  hold: 1,
   groundY: 0,
   slope: 0,
   slopeLat: 0,
@@ -946,6 +966,8 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     // route abandons at its junctions (R17) are real tarmac, and a car
     // exploring one gets tarmac grip on it.
     ctx.surface = offRoadSurface(state, car.x, car.z);
+    // Deep snow holds as the air at the car's own height makes it hold.
+    ctx.hold = ctx.surface === "snowfield" ? snowBite(temperatureAt(track.climate, car.y)) : 1;
     ctx.groundY = groundY;
     ctx.slope = (ahead - behind) / (2 * grade);
     ctx.slopeLat = (right - left) / (2 * grade);
@@ -1002,6 +1024,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     const turnSin = sinH * fwdZ - cosH * fwdX;
     ctx = GROUND;
     ctx.surface = preFix.surface;
+    ctx.hold = track.samples[preFix.index].bite;
     ctx.groundY = groundY;
     ctx.slope = preFix.slope * turnCos + preFix.slopeLat * turnSin;
     ctx.slopeLat = preFix.slopeLat * turnCos - preFix.slope * turnSin;

@@ -59,6 +59,20 @@ export const ALPINE: Biome = {
       litter: 0x8a5a2f,
       straw: 0xd0b85a,
     },
+    // January on the alp: no grass at all — the pasture is under the snow
+    // (terrain.ts lays it wherever the climate freezes the ground, which
+    // in a winter is the whole flank), and what the paint carries is the
+    // dead straw and the dark earth the wind scours bare on a crest, in
+    // the cold grey of a mountain with no sun on it.
+    winter: {
+      base: 0x9a9684,
+      baseDark: 0x76746a,
+      damp: 0x7a7e72,
+      scrub: 0x5a5a4c,
+      litter: 0x4e4e40,
+      straw: 0xc2bca8,
+      soil: 0x6e6658,
+    },
   },
   regions: {
     // Rock, scree and snow: nearly all of the paint is the bedrock's.

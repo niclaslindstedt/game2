@@ -159,7 +159,13 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   const bareRock = (state: GameState): number =>
     rockAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome);
   const underSnow = (state: GameState): number =>
-    snowAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome);
+    snowAt(
+      state.terrain.groundAt,
+      state.car.x,
+      state.car.z,
+      state.track.knobs.biome,
+      state.track.climate,
+    );
 
   const groundDust = (state: GameState, wet: boolean): number | DustTint =>
     groundTint(

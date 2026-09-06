@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
 import {
+  weathersIn,
   CARS,
   NUMERIC_KNOBS,
   TUNING,
@@ -53,7 +54,6 @@ import {
   type TimeOfDay,
   type Track,
   type Weather,
-  biomeRules,
   isBiomeId,
 } from "@engine";
 
@@ -394,6 +394,7 @@ function initialRace(): RaceSettings {
     timeOfDay: "day",
     weather: "clear",
     season: "summer",
+    temperature: null,
     carId: "compact",
     length: "medium",
     shape: "sprint",
@@ -425,6 +426,14 @@ function initialRace(): RaceSettings {
   if (WEATHERS.some((w) => w.id === weather)) race.weather = weather as Weather;
   const season = params.get("season");
   if (SEASONS.some((x) => x.id === season)) race.season = season as Season;
+  // ?temp= — the air at the datum, °C (climate.ts); a record from a build
+  // with no temperature in it, or anything that is not a number, is AUTO.
+  if (race.temperature !== null && !Number.isFinite(race.temperature)) race.temperature = null;
+  race.temperature ??= null;
+  const temp = params.get("temp");
+  if (temp !== null && temp !== "auto" && Number.isFinite(Number(temp))) {
+    race.temperature = Number(temp);
+  }
   const car = params.get("car");
   // Checked against the catalog rather than against a pair of literals: a
   // roster this named by hand silently shoots the DEFAULT car for every id
@@ -456,7 +465,7 @@ function initialRace(): RaceSettings {
   race.knobs = resolveKnobs(race.knobs);
   // A weather the country does not have (a desert save left on RAIN by a
   // build that offered it) is cleared rather than drawn as something else.
-  if (!biomeRules(race.knobs.biome).weathers.includes(race.weather)) race.weather = "clear";
+  if (!weathersIn(race.knobs.biome, race.season).includes(race.weather)) race.weather = "clear";
   return race;
 }
 
@@ -583,6 +592,11 @@ type StageSpec = {
   timeOfDay: TimeOfDay;
   weather: Weather;
   season: Season;
+  /** The air at the datum, °C, or null (or absent — the campaign's levels
+   * never name one) for the season's own in the country (climate.ts).
+   * Part of the ROAD, with the season: the two decide what the compiled
+   * track is made of, so the cached track is keyed on both. */
+  temperature?: number | null;
   /** The menu's demo has no grid to sit on — nobody is waiting for it. */
   skipCountdown: boolean;
   /** Where the player is stood when the whole field leaves together: the
@@ -641,6 +655,7 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a.timeOfDay === b.timeOfDay &&
     a.weather === b.weather &&
     a.season === b.season &&
+    (a.temperature ?? null) === (b.temperature ?? null) &&
     a.skipCountdown === b.skipCountdown &&
     a.grid?.number === b.grid?.number &&
     a.grid?.back === b.grid?.back
@@ -661,6 +676,7 @@ function demoStage(race: RaceSettings, seed: number): StageSpec {
     timeOfDay: race.timeOfDay,
     weather: race.weather,
     season: race.season,
+    temperature: race.temperature,
     skipCountdown: true,
     grid: null,
   };
@@ -681,6 +697,7 @@ function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed:
         timeOfDay: race.timeOfDay,
         weather: race.weather,
         season: race.season,
+        temperature: race.temperature,
         skipCountdown: true,
         grid: null,
       } satisfies StageSpec,
@@ -1363,13 +1380,20 @@ export function App() {
     // renderer has long since dropped the world around the start).
     const key = spec.arena
       ? `arena/${spec.seed}`
-      : `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/${NUMERIC_KNOBS.map((knob) => spec.knobs[knob]).join(",")}`;
+      : `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/${NUMERIC_KNOBS.map((knob) => spec.knobs[knob]).join(",")}` +
+        // The climate is part of the ROAD (climate.ts): the same seed in
+        // winter is the same route made of snow, and that is a different
+        // compiled track.
+        `/${spec.season}/${spec.temperature ?? "auto"}`;
     if (trackRef.current?.key !== key || spec.length === "endless") {
       trackRef.current = {
         key,
         track: spec.arena
           ? compileArena(spec.seed)
-          : compileStage(spec.seed, spec.length, spec.knobs, spec.shape),
+          : compileStage(spec.seed, spec.length, spec.knobs, spec.shape, {
+              season: spec.season,
+              temperature: spec.temperature,
+            }),
       };
     }
     finishTimeRef.current = null;
@@ -1565,6 +1589,8 @@ export function App() {
       knobs: spec.knobs,
       timeOfDay: spec.timeOfDay,
       weather: spec.weather,
+      season: spec.season,
+      temperature: spec.temperature ?? null,
     };
     const saved = loadGhost(levelId);
     if (!saved || !ghostMatches(saved, stage)) return;
@@ -1617,6 +1643,7 @@ export function App() {
       timeOfDay: spec.timeOfDay,
       weather: spec.weather,
       season: spec.season,
+      temperature: spec.temperature ?? null,
       // What `applyStage` actually handed the engine, god mode included:
       // a tape has to say what the run WAS, not what the menu asked for.
       skipCountdown: spec.skipCountdown || godRef.current,

@@ -16,7 +16,7 @@ import type { DamageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { CarInput, CarState, GameEvent } from "./state.ts";
-import type { Surface } from "../mapgen/index.ts";
+import type { Underfoot } from "../mapgen/index.ts";
 
 const T = TUNING;
 
@@ -90,7 +90,7 @@ function pedalSpin(spec: CarSpec, car: CarState, surfaceGrip: number, throttle: 
  * the start control: on the grid nothing is geared and the free revs are the
  * only thing the player has been doing, so they arrive at the tyres whole.
  * A driver who waited with the pedal up hands them nothing at all. */
-export function clutchDump(spec: CarSpec, car: CarState, surface: Surface | "nature"): number {
+export function clutchDump(spec: CarSpec, car: CarState, surface: Underfoot): number {
   const held = clamp((car.rev - T.engine.dumpFrom) / (1 - T.engine.dumpFrom), 0, 1);
   // Nothing stored, nothing to hand over: the axle is left to the pedal and
   // the settle below, which is what an idling engine and a raised foot come

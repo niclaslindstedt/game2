@@ -48,7 +48,7 @@ import {
   treePlacement,
   understoryAround,
 } from "./planting.ts";
-import { plantZone } from "./ground-rules.ts";
+import { frozenAt, plantZone } from "./ground-rules.ts";
 import { buildRoadSpill } from "./road-spill.ts";
 import { buildWild } from "./wild.ts";
 import { createArena } from "./arena.ts";
@@ -288,8 +288,10 @@ function buildScenery(
       // because standing in the shallows is what a reed does.
       const shore = onShore(y);
       if (!shore && y < LAKE_Y + 1.2) continue;
-      // R47 — nothing grows under the snow.
-      if (plantZone(biome.id, y, false) === "snow") continue;
+      // R47 — nothing grows under the snow, the winter's included.
+      if (plantZone(biome.id, y, false) === "snow" || frozenAt(biome.id, track.climate, y)) {
+        continue;
+      }
       flora.push({
         id: pickFlora(
           shore ? biome.shoreCover : (community.undergrowth ?? biome.undergrowth),

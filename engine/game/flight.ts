@@ -41,7 +41,7 @@ import {
   rollBed,
   rollStand,
 } from "./roll.ts";
-import type { Surface } from "../mapgen/index.ts";
+import type { Underfoot } from "../mapgen/index.ts";
 
 const T = TUNING;
 const D = TUNING.drift;
@@ -620,7 +620,7 @@ function tripOnLanding(
   spec: CarSpec,
   car: CarState,
   input: CarInput,
-  surface: Surface | "nature",
+  surface: Underfoot,
   slam: number,
   events: GameEvent[],
   stats: RunStats,

@@ -7,7 +7,7 @@
 // seed, car, and profile always produce the same digest.
 
 import { createGame, step } from "../game/step.ts";
-import type { GameEvent, GameState, Weather } from "../game/state.ts";
+import type { GameEvent, GameState, Season, Weather } from "../game/state.ts";
 import {
   finishAt,
   type FiniteStageLength,
@@ -36,6 +36,12 @@ export type SimOptions = {
   maxTime?: number;
   /** Weather to race in (sets the wind band). Defaults to clear. */
   weather?: Weather;
+  /** The climate the stage is compiled in (climate.ts): the season, and
+   * the temperature at the datum or null for the season's own. Defaults
+   * to summer — a snow road is a different road, and a sweep that wants
+   * one has to ask for it. */
+  season?: Season;
+  temperature?: number | null;
   /** The generator's dials for the stage (rules.ts). Defaults to the
    * middle of every one. */
   knobs?: Partial<StageKnobs>;
@@ -91,7 +97,11 @@ export function simulateStage(options: SimOptions): SimResult {
     shape: options.shape,
     laps: options.laps,
     skipCountdown: true,
-    env: { weather: options.weather ?? "clear" },
+    env: {
+      weather: options.weather ?? "clear",
+      season: options.season,
+      temperature: options.temperature,
+    },
     knobs: options.knobs,
   });
 

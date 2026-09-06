@@ -64,6 +64,7 @@ import { plumeGround } from "./ground-tint.ts";
 import { createNameTag, type NameTag } from "./name-tag.ts";
 import { createPlume } from "./plume.ts";
 import { onRoad, type RivalRun } from "./standings.ts";
+import { createSnowMarks, drawnGround } from "./snow-marks.ts";
 import { rockAt, snowAt } from "./terrain.ts";
 
 /** How near a crew has to come before their car is generated, m. Wider than
@@ -280,6 +281,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let smokedFx = 1;
   /** One cloud for the whole entry list — see the module note. Off until
    * somebody is entered (`showCloud`). */
+  // The marks the field leaves in snow (snow-marks.ts) — on the DUST row's
+  // say, with the plume: a car that raises no ground leaves none either.
+  const marks = createSnowMarks();
+  scene.add(marks.group);
   const plume = createPlume(FIELD_PLUME);
   plume.points.visible = false;
   scene.add(plume.points);
@@ -319,6 +324,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   const clear = (): void => {
     for (const car of built.values()) drop(car);
     built.clear();
+    marks.reset();
     runs = [];
     drawn = 0;
   };
@@ -410,6 +416,8 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         if (!seen) continue;
         drawn += 1;
         existing.visual.update(run.state, dt, camera.position);
+        if (towedFx > 0) marks.lay(run.state, drawnGround(run.state));
+        else marks.forget(run.state);
         if (named && run !== watched) existing.tag.place(car.x, car.y, car.z, camera);
         else existing.tag.hide();
       }
@@ -437,7 +445,14 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
             state.surface,
             wetGround,
             () => rockAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome),
-            () => snowAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome),
+            () =>
+              snowAt(
+                state.terrain.groundAt,
+                state.car.x,
+                state.car.z,
+                state.track.knobs.biome,
+                state.track.climate,
+              ),
           ),
         );
       }

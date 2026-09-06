@@ -17,6 +17,7 @@ import { askedSlide, latCeiling, slideFloor, surfaceGripFor } from "./limits.ts"
 import { damageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
+import { CLIMATE } from "./climate.ts";
 import {
   rollTilt,
   rotateFrame,
@@ -61,21 +62,19 @@ const D = TUNING.drift;
 /** HOW MUCH OF THE THROTTLE THE OPEN COUNTRY PUTS DOWN at a ground speed,
  * 0..1 — everywhere else, all of it. A driven wheel on unconsolidated
  * ground DIGS instead of driving, so the wild takes `surfaces.natureDig`
- * out of the pull at a standstill and has given every bit of it back by
+ * out of the pull at a standstill — and deep snow `CLIMATE.dig`, more,
+ * because the sump is in it — and has given every bit back by
  * `natureDigSpeed`, where the car is skimming the ground rather than
- * trenching it.
- *
- * The shape is the whole point, and it is why there is no longer a speed
- * cap out there. What the wild costs is TIME — the field is slow to get
- * out of and a hairpin in it is slower still — and what it does not cost
- * is a ceiling: past the dig speed nothing is holding the car back but the
- * gearbox it brought with it, so a long enough run through open country
- * ends wherever the top gear ends, and a jump off the back of one is taken
- * at whatever that run was worth. */
+ * trenching it. The shape is the point: what the wild costs is TIME, never
+ * a ceiling — past the dig speed nothing holds the car back but the
+ * gearbox it brought, so a long run through open country ends wherever
+ * the top gear ends. */
 function wildPull(surface: GroundContext["surface"], speed: number): number {
-  if (surface !== "nature") return 1;
+  const dig =
+    surface === "nature" ? T.surfaces.natureDig : surface === "snowfield" ? CLIMATE.dig : 0;
+  if (dig === 0) return 1;
   const dug = 1 - clamp(Math.abs(speed) / T.surfaces.natureDigSpeed, 0, 1);
-  return 1 - T.surfaces.natureDig * dug;
+  return 1 - dig * dug;
 }
 
 /** One grounded physics step. Returns events emitted this step. */
@@ -120,7 +119,7 @@ export function stepGrounded(
   // this one line the slide threshold, the redirect rate, the traction
   // ceiling and the driven axle's bite all go light together, which is why
   // a landing unsticks the car instead of playing an animation at it.
-  const surfaceGrip = surfaceGripFor(spec, ctx.surface) * tyreLoad(car);
+  const surfaceGrip = surfaceGripFor(spec, ctx.surface) * ctx.hold * tyreLoad(car);
   const surfaceDrag = T.surfaces.drag[ctx.surface];
   const surfacePower = T.surfaces.power[ctx.surface] * wildPull(ctx.surface, car.u);
   // Everything the crashes have done, as the multipliers the rest of this

@@ -180,6 +180,23 @@ export const SURFACES: Record<string, SurfaceVoice> = {
     body: { level: 0.02, hz: 560, climb: 0.22 },
     tear: { level: 0.01, hz: 1150, climb: 0.18 },
   },
+  // DEEP SNOW — the open country under a winter's blanket (climate.ts),
+  // which the car PLOUGHS. The loudest thing about it is the mass of snow
+  // being shoved aside by the sump and the sills: a heavy, muffled rush
+  // with the bottom of the wild's roar and none of its rattle, sitting
+  // lower still because snow damps everything — and, under it, the dull
+  // squeak-crunch of the crust giving way under the whole car rather than
+  // under a tread. It barely cares about the corner: a car in deep snow is
+  // slow whichever way it is pointed, and being in it should sound like
+  // wading rather than like driving.
+  snowfield: {
+    color: "brown",
+    hz: 120,
+    level: 0.034,
+    corner: 1.25,
+    body: { level: 0.018, hz: 380, climb: 0.28 },
+    tear: { level: 0.006, hz: 820, climb: 0.3 },
+  },
 };
 
 /**

@@ -26,7 +26,7 @@ import {
   updateSlip,
   type GameState,
   type SegmentPlan,
-  type Surface,
+  type Underfoot,
 } from "@engine";
 
 const STAGE: SegmentPlan[] = [{ kind: "straight", length: 900, feature: "none" }];
@@ -41,7 +41,7 @@ function drop({
   height = 9,
   u = 0,
 }: {
-  surface: Surface | "nature";
+  surface: Underfoot;
   roll?: number;
   pitch?: number;
   rollRate?: number;
@@ -66,7 +66,8 @@ function drop({
   car.z -= sinH * 45;
   const level = state.terrain.groundAt(car.x, car.z);
   state.terrain.groundAt = () => level;
-  state.terrain.spurSurfaceAt = () => (surface === "nature" ? null : surface);
+  state.terrain.spurSurfaceAt = () =>
+    surface === "nature" || surface === "snowfield" ? null : surface;
   car.rolling = true;
   car.airborne = true;
   car.planted = false;
@@ -117,7 +118,7 @@ describe("the ground under a crash", () => {
 
   it("stops a car sliding on its roof shorter in sand than on tarmac", () => {
     // A roof dragging a furrow is more brake than a roof on pavement.
-    const slide = (surface: Surface | "nature"): number => {
+    const slide = (surface: Underfoot): number => {
       const state = drop({ surface, roll: Math.PI, height: 0.01, u: 15 });
       state.car.airborne = false;
       const x0 = state.car.x;

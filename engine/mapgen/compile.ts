@@ -34,6 +34,14 @@ import { hash2 } from "../lib/noise.ts";
 import { createLandField } from "./land.ts";
 import { biomeRules } from "./biomes.ts";
 import {
+  resolveClimate,
+  snowBite,
+  snowlineOf,
+  temperatureAt,
+  type Climate,
+  type ClimateChoice,
+} from "../game/climate.ts";
+import {
   buildRolling,
   NOISE_LATTICE,
   straightness,
@@ -74,6 +82,11 @@ import { drawSchedule, joinRailLine, type RailCrossing } from "./railway.ts";
  * biome's (`BiomeRules.loose`); the physics tells them apart in
  * `TUNING.surfaces`. */
 export type Surface = "gravel" | "sand" | "asphalt" | "water" | "snow";
+/** What a car can be STANDING ON, which is more than what a road can be
+ * made of: the road's own surfaces, the open country (`nature`), and the
+ * open country under a winter's blanket (`snowfield`, climate.ts) — deep
+ * snow the car ploughs rather than a road it drives. */
+export type Underfoot = Surface | "nature" | "snowfield";
 
 /** A road that was BLADED rather than laid: graded stone or graded sand —
  * or the packed snow lying over either above the snowline (R47) — as
@@ -156,6 +169,13 @@ export type TrackSample = {
    * rest of the width around it). */
   elevation: number;
   surface: Surface;
+  /** How hard THIS sample's surface holds against its own table row
+   * (`TUNING.surfaces.grip`), as a multiplier: 1 everywhere but on snow,
+   * where the temperature at the road's own height decides whether it is
+   * glazed, slush or cold and sharp (`snowBite`, climate.ts). The physics
+   * and the bot's plan both read it, so the corner on the pass is braked
+   * for as the corner it is. */
+  bite: number;
   /** Set where the road is a bridge DECK: the surface is road, but there is
    * a channel of water under it instead of ground, and the kind says what
    * carries it — trunks and planks, or concrete piers (R13). */
@@ -293,6 +313,14 @@ export type Track = {
    * terrain field, the renderer and the tooling all shape themselves from
    * the same set without being handed it separately. */
   knobs: StageKnobs;
+  /** The season and the cold the stage is driven in (`climate.ts`) — on
+   * the track rather than only on the run, because they reach the ROAD:
+   * which samples are snow and how deep the country beside them lies
+   * under it are compiled from this, and the terrain, the renderer and
+   * every rival's game read the same answer off the same track. It never
+   * moves a plan: the same seed builds the same road in every season, and
+   * only what the road is made of changes. */
+  climate: Climate;
   /** R17 — THE TARMAC this country carries, laid before the rally was
    * routed across it (`highway.ts`): whole public roads, edge of the map to
    * edge of the map, that the route may meet at a junction and borrow but
@@ -898,8 +926,10 @@ function createCompiler(
   const F = R.elevation.follow;
   /** R47 — the steepest the road runs in this country. */
   const grade = followGradeOf(track.knobs);
-  /** R47 — the country's zones, for the snowline the road goes under. */
+  /** R47 — the country's zones, for the snowline the road goes under —
+   * and the line itself, which the climate may bring down (climate.ts). */
   const zones = biome.land.zones;
+  const snowline = snowlineOf(track.climate, zones);
   const buildable = (x: number, z: number, roll: number): number => buildableAt(land, x, z, roll);
   if (followsLand) cursor.baseY = buildable(0, 0, rolling(0));
 
@@ -2595,10 +2625,13 @@ function createCompiler(
         // R47 — ABOVE THE SNOWLINE THE ROAD IS SNOW, whatever it was laid
         // as: a packed snow road, loose to everything about its shape and
         // a surface of its own to the physics. Not in a bore, and not on
-        // the water or a deck over it.
-        const snowy =
-          zones.snow !== null && !tunnel && !ford && !bridge && followsLand && crown > zones.snow;
+        // the water or a deck over it. The line is the country's own or
+        // the climate's frost line, whichever stands lower (climate.ts):
+        // a winter brings the whole stage under it, and the snow is as
+        // hard as the air at THIS height makes it.
+        const snowy = !tunnel && !ford && !bridge && followsLand && crown > snowline;
         const surface: Surface = ford ? "water" : snowy ? "snow" : paved ? "asphalt" : loose;
+        const bite = snowy ? snowBite(temperatureAt(track.climate, crown)) : 1;
         const sample: TrackSample = {
           x: cursor.x,
           z: cursor.z,
@@ -2616,6 +2649,7 @@ function createCompiler(
             // R47 — a bore is driven smooth: no grain inside it.
             bumps(cursor.s, surface, bridge || dip !== null || deckY !== null || tunnel),
           surface,
+          bite,
           deck: bridge ? ((built.crossing ?? "timber") as BridgeDeck) : null,
           tunnel,
           lift: 0,
@@ -3355,7 +3389,13 @@ function planCountry(
   return { bounds: box, roadDistance, shelfHolds, shelfBand };
 }
 
-function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit = false): Track {
+function emptyTrack(
+  seed: number,
+  endless: boolean,
+  knobs: StageKnobs,
+  climate: Climate,
+  circuit = false,
+): Track {
   return {
     seed,
     segments: [],
@@ -3371,6 +3411,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     circuit,
     finishS: null,
     knobs,
+    climate,
     highways: [],
     spurs: [],
     publicRoads: [],
@@ -3444,21 +3485,26 @@ function closeCircuitHeight(track: Track, pending: { elevation: number; s: numbe
  * back a track that extends itself (track.extend) as the run progresses.
  * `knobs` are the generator's dials (rules.ts) — omitted, a stage comes out
  * at the default positions. `shape` (R22) picks between a sprint and a
- * circuit; an endless stage has no shape to pick — it never closes. */
+ * circuit; an endless stage has no shape to pick — it never closes.
+ * `climate` is the season and the cold the stage is driven in (climate.ts)
+ * — omitted, a summer at the country's own temperature; it changes what the
+ * road is MADE OF where the ground is frozen, never where the road goes. */
 export function compileStage(
   seed: number,
   length: StageLength = "medium",
   knobs?: Partial<StageKnobs>,
   shape: StageShape = "sprint",
+  climate?: ClimateChoice,
 ): Track {
   const dials = resolveKnobs(knobs);
+  const weather = resolveClimate(climate, dials.biome);
   const rolling = buildRolling(seed, dials);
   const paving = buildPaving(seed, dials.asphalt);
   const bumps = buildBumps(seed);
   const widthAt = buildWidth(seed);
   if (length !== "endless") {
     const circuit = shape === "circuit";
-    const track = emptyTrack(seed, false, dials, circuit);
+    const track = emptyTrack(seed, false, dials, weather, circuit);
     const plans = generateStage(seed, length, dials, shape);
     // R17 — THE TARMAC, laid on the bare country from the seed alone and
     // rebuilt here identically to the copy the search planned against. It
@@ -3483,7 +3529,7 @@ export function compileStage(
     ).append(plans);
     return track;
   }
-  const track = emptyTrack(seed, true, dials);
+  const track = emptyTrack(seed, true, dials, weather);
   const stream = createStageStream(seed, dials);
   const compiler = createCompiler(
     track,
@@ -3515,10 +3561,11 @@ export function compileTrack(
   seed: number,
   segments?: SegmentPlan[],
   knobs?: Partial<StageKnobs>,
+  climate?: ClimateChoice,
 ): Track {
-  if (segments === undefined) return compileStage(seed, "medium", knobs);
+  if (segments === undefined) return compileStage(seed, "medium", knobs, "sprint", climate);
   const dials = resolveKnobs({ asphalt: 0, ...knobs });
-  const track = emptyTrack(seed, false, dials);
+  const track = emptyTrack(seed, false, dials, resolveClimate(climate, dials.biome));
   // A synthetic rig is a measuring device: flat, smooth, straight-edged and
   // repeatable, so a physics test measures the car rather than the road
   // under it.

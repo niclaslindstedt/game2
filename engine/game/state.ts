@@ -7,7 +7,7 @@
 // slides out to the left of its nose — a drift out of a clockwise turn.
 
 import type { CarSpec, GearboxMode } from "./defs/cars.ts";
-import type { KerbField, Surface, TerrainField, Track, WildObstacle } from "../mapgen/index.ts";
+import type { KerbField, TerrainField, Track, Underfoot, WildObstacle } from "../mapgen/index.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { TrafficFleet } from "./traffic.ts";
 
@@ -576,16 +576,22 @@ export function rollTilt(roll: number): number {
  * engine itself only cares about weather (which sets the wind). */
 export type TimeOfDay = "dawn" | "day" | "dusk" | "night";
 export type Weather = "clear" | "rain" | "storm";
-/** Which season a stage is driven in. The taiga has three: the boreal
- * forest under snow is a different biome (arctic), not a fourth season of
- * this one, so winter is not on this list and the presentation would have
- * nothing truthful to draw for it. */
-export type Season = "spring" | "summer" | "autumn";
+/** Which season a stage is driven in. Winter is the one that reaches the
+ * WHEELS: under it a frozen country is snow on the road and a blanket off
+ * it (`climate.ts`), where the other three only change what the year has
+ * done to the colours and the light. */
+export type Season = "spring" | "summer" | "autumn" | "winter";
 
 export type RaceEnv = {
   timeOfDay: TimeOfDay;
   weather: Weather;
   season: Season;
+  /** Air temperature at the datum (y = 0), °C — the track's own
+   * (`Track.climate`), restated here so everything that reads the run's
+   * conditions has the whole of them in one place. What falls out of a
+   * wet sky is decided against it (`fallsAsSnow`), at the height it falls
+   * at. */
+  temperature: number;
   /** Mean bearing the air moves TOWARD, radians (heading convention). */
   windDir: number;
   /** Mean wind speed, m/s — gusts breathe around it (TUNING.wind.gust). */
@@ -919,7 +925,7 @@ export type GameState = {
   stuck: { x: number; z: number; since: number };
   /** The surface driven this step — road samples on the road, the
    * terrain's call in the wild (readout for FX and the splash edge). */
-  surface: Surface | "nature";
+  surface: Underfoot;
   /** The stage's conditions (fixed for the run). */
   env: RaceEnv;
   /** Current gusting wind velocity, world space m/s — updated every step;

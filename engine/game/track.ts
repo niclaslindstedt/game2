@@ -8,7 +8,7 @@
 // car at a checkpoint (R28) and hands it the road since that board to drive
 // again.
 
-import { STAGE_RULES, finishIndex, type Surface, type Track } from "../mapgen/index.ts";
+import { STAGE_RULES, finishIndex, type Track, type Underfoot } from "../mapgen/index.ts";
 import { BLOCK, flatTrack, GROUP, GROUP_SHIFT, type FlatTrack } from "../mapgen/flat.ts";
 import { corridorOffset, crossOffset, ROAD_CROSS } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
@@ -162,7 +162,7 @@ export type TrackPoint = {
   lateral: number;
   /** True when the car is beyond the road edge plus the verge. */
   offRoad: boolean;
-  surface: Surface | "nature";
+  surface: Underfoot;
 };
 
 export type TrackFix = TrackPoint & {

@@ -13,7 +13,7 @@
 // DOM-free and three-free on purpose: `sky.ts` is a renderer module and
 // `drive-bed.ts` is an audio one, and they need the same two numbers.
 
-import { TUNING, biomeRules, type BiomeId, type RaceEnv, type Weather } from "@engine";
+import { TUNING, rainsIn, type BiomeId, type RaceEnv, type Weather } from "@engine";
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
@@ -32,10 +32,11 @@ const WETNESS: Record<Weather, number> = { clear: 0, rain: 0.6, storm: 1 };
  * desert is wind and sand and puts nothing on the road at all. Everything
  * that swaps a dry thing for a wet one (the road's voice, the plume for the
  * clods, the film on the glass) asks this rather than the weather, so no
- * desert stage is ever a wet one however the sky is set.
+ * desert stage is ever a wet one however the sky is set — except in its WET
+ * SEASON (`rainsIn`, climate.ts), when the same storm is a downpour there too.
  */
-export function wetnessOf(env: Pick<RaceEnv, "weather">, biome: BiomeId): number {
-  return biomeRules(biome).rain ? WETNESS[env.weather] : 0;
+export function wetnessOf(env: Pick<RaceEnv, "weather" | "season">, biome: BiomeId): number {
+  return rainsIn(biome, env.season) ? WETNESS[env.weather] : 0;
 }
 
 /**

@@ -73,6 +73,9 @@ export type TapeStage = {
   timeOfDay: TimeOfDay;
   weather: Weather;
   season: Season;
+  /** The temperature at the datum, °C, or null (or absent, on a tape
+   * written before there was one) for the season's own (climate.ts). */
+  temperature?: number | null;
 };
 
 /** Who was driving, in what. */

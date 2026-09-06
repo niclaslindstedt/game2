@@ -1,0 +1,257 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// THE WINTER, and the cold under every season (engine/game/climate.ts): the
+// temperature as a field over the country, the snow it brings down onto the
+// road and lays beside it, what that snow is like to drive on, and what
+// falls out of a wet sky under it.
+
+import { describe, expect, it } from "vitest";
+
+import {
+  BIOMES,
+  CLIMATE,
+  NEUTRAL_INPUT,
+  SEASONS,
+  TUNING,
+  blanketDepth,
+  createGame,
+  defaultTemperature,
+  fallsAsSnow,
+  frostLine,
+  isLoose,
+  rainsIn,
+  resolveClimate,
+  simulateStage,
+  snowBite,
+  snowlineOf,
+  step,
+  temperatureAt,
+  weathersIn,
+  type Track,
+} from "@engine";
+
+import { stageTerrain, stageTrack } from "./support/stages.ts";
+
+/** The grip the old alpine ice had — the floor the brief puts under every
+ * snow: a winter road slides MORE than gravel and LESS than that. */
+const OLD_ICE = 0.58;
+
+const WINTER = { season: "winter" as const };
+
+/** A point beside the road, `out` metres to the driver's right of sample
+ * `i`, on dry land — searched for rather than named, because a seed's
+ * verge may be a lake. */
+function beside(track: Track, out: number): { x: number; z: number; i: number } {
+  const terrain = stageTerrain(track);
+  for (let i = 40; i < track.samples.length - 40; i += 7) {
+    const s = track.samples[i];
+    const x = s.x + Math.cos(s.heading) * out;
+    const z = s.z - Math.sin(s.heading) * out;
+    if (terrain.waterAt(x, z) !== null) continue;
+    if (terrain.spurClearance(x, z) < CLIMATE.blanket.verge + 2) continue;
+    if (terrain.roadDistanceAt(x, z) < out - 1) continue;
+    return { x, z, i };
+  }
+  throw new Error("no dry ground beside the road");
+}
+
+describe("the climate", () => {
+  it("has a winter, and every season has its own temperature in every country", () => {
+    expect(SEASONS).toContain("winter");
+    for (const biome of Object.keys(BIOMES)) {
+      for (const season of SEASONS) {
+        expect(Number.isFinite(defaultTemperature(biome, season))).toBe(true);
+      }
+      expect(defaultTemperature(biome, "winter")).toBeLessThan(defaultTemperature(biome, "summer"));
+    }
+    expect(defaultTemperature("taiga", "winter")).toBeLessThan(CLIMATE.freeze);
+    expect(defaultTemperature("desert", "winter")).toBeGreaterThan(CLIMATE.freeze);
+  });
+
+  it("resolves what was chosen, and fills the rest in from the country's year", () => {
+    expect(resolveClimate(undefined, "taiga")).toEqual({ season: "summer", temperature: 18 });
+    expect(resolveClimate({ season: "winter" }, "alpine").temperature).toBe(
+      defaultTemperature("alpine", "winter"),
+    );
+    expect(resolveClimate({ season: "winter", temperature: null }, "taiga").temperature).toBe(
+      defaultTemperature("taiga", "winter"),
+    );
+    expect(resolveClimate({ season: "summer", temperature: -12 }, "desert")).toEqual({
+      season: "summer",
+      temperature: -12,
+    });
+  });
+
+  it("gets colder with height, and freezes the ground from the frost line up", () => {
+    const climate = { season: "summer" as const, temperature: 6 };
+    expect(temperatureAt(climate, 0)).toBe(6);
+    expect(temperatureAt(climate, 300)).toBeLessThan(temperatureAt(climate, 100));
+    expect(temperatureAt(climate, frostLine(climate))).toBeCloseTo(CLIMATE.freeze, 9);
+    // A frozen datum puts the line under the whole country.
+    expect(frostLine({ season: "winter", temperature: -8 })).toBeLessThan(0);
+  });
+
+  it("brings the snowline down with the cold, and never lifts the country's own", () => {
+    const taiga = BIOMES.taiga.land.zones;
+    const alpine = BIOMES.alpine.land.zones;
+    // A summer taiga's line stands over the whole country: no snow anywhere.
+    expect(snowlineOf(resolveClimate(undefined, "taiga"), taiga)).toBeGreaterThan(taiga.rock.to);
+    // A winter one is white from the valley floor.
+    expect(snowlineOf(resolveClimate(WINTER, "taiga"), taiga)).toBeLessThan(0);
+    // The alpine's permanent snow stands where it always stood in every
+    // season that is not winter — the campaign's stages are unchanged...
+    for (const season of ["spring", "summer", "autumn"] as const) {
+      expect(snowlineOf(resolveClimate({ season }, "alpine"), alpine)).toBe(alpine.snow);
+    }
+    // ...and a cold snap brings it down the flank.
+    expect(snowlineOf({ season: "autumn", temperature: 2 }, alpine)).toBeLessThan(
+      alpine.snow as number,
+    );
+    expect(snowlineOf(resolveClimate(WINTER, "alpine"), alpine)).toBeLessThan(0);
+  });
+
+  it("keeps every snow between gravel and the old ice, glazed near freezing and sharp in the cold", () => {
+    const S = TUNING.surfaces;
+    expect(S.grip.snow).toBeGreaterThan(OLD_ICE);
+    expect(S.grip.snow).toBeLessThan(S.grip.gravel);
+    expect(S.breakaway.snow).toBeGreaterThan(S.breakaway.gravel);
+    for (let t = -30; t <= 30; t += 1) {
+      const grip = S.grip.snow * snowBite(t);
+      expect(grip).toBeGreaterThan(OLD_ICE);
+      expect(grip).toBeLessThan(S.grip.gravel);
+    }
+    // The glaze is the worst of it, and the cold the best.
+    expect(snowBite(CLIMATE.bite.glazeAt)).toBeLessThan(snowBite(4));
+    expect(snowBite(CLIMATE.bite.glazeAt)).toBeLessThan(snowBite(CLIMATE.bite.at));
+    expect(snowBite(-20)).toBeGreaterThan(snowBite(CLIMATE.bite.at));
+    expect(snowBite(-40)).toBe(snowBite(CLIMATE.bite.coldAt));
+    // The row itself is the cold winter's snow.
+    expect(snowBite(CLIMATE.bite.at)).toBe(1);
+    // Deep snow is a place to be slow rather than loose.
+    expect(S.drag.snowfield).toBeGreaterThan(S.drag.nature);
+    expect(S.grip.snowfield).toBeGreaterThan(S.grip.water);
+    expect(S.give.snowfield).toBeGreaterThan(S.give.snow);
+  });
+
+  it("lays half a metre of snow at freezing and a metre in the deep cold", () => {
+    expect(blanketDepth(5)).toBe(CLIMATE.blanket.shallow);
+    expect(blanketDepth(0)).toBe(CLIMATE.blanket.shallow);
+    expect(blanketDepth(-7.5)).toBeGreaterThan(CLIMATE.blanket.shallow);
+    expect(blanketDepth(-7.5)).toBeLessThan(CLIMATE.blanket.deep);
+    expect(blanketDepth(-15)).toBe(CLIMATE.blanket.deep);
+    expect(blanketDepth(-40)).toBe(CLIMATE.blanket.deep);
+    expect(CLIMATE.blanket.shallow).toBeGreaterThanOrEqual(0.5);
+    expect(CLIMATE.blanket.deep).toBeLessThanOrEqual(1);
+  });
+
+  it("turns the rain to snow under freezing, and gives the desert a wet season", () => {
+    expect(fallsAsSnow(2)).toBe(false);
+    expect(fallsAsSnow(0)).toBe(true);
+    expect(fallsAsSnow(-5)).toBe(true);
+    expect(rainsIn("desert", "summer")).toBe(false);
+    expect(rainsIn("desert", "winter")).toBe(true);
+    expect(rainsIn("taiga", "summer")).toBe(true);
+    expect(weathersIn("desert", "summer")).not.toContain("rain");
+    expect(weathersIn("desert", "winter")).toContain("rain");
+    expect(weathersIn("desert", "winter")).toContain("storm");
+    expect(weathersIn("taiga", "winter")).toEqual(BIOMES.taiga.weathers);
+  });
+});
+
+describe("a stage in winter", () => {
+  const SEED = 11;
+  const summer = () => stageTrack(SEED, "short", { biome: "taiga" });
+  const winter = () => stageTrack(SEED, "short", { biome: "taiga" }, "sprint", WINTER);
+
+  it("is the same road, made of snow wherever it was loose", () => {
+    const a = summer();
+    const b = winter();
+    expect(b.climate).toEqual({
+      season: "winter",
+      temperature: defaultTemperature("taiga", "winter"),
+    });
+    expect(b.samples.length).toBe(a.samples.length);
+    let snow = 0;
+    for (let i = 0; i < a.samples.length; i++) {
+      const s = a.samples[i];
+      const w = b.samples[i];
+      expect(w.x).toBe(s.x);
+      expect(w.z).toBe(s.z);
+      expect(w.elevation).toBe(s.elevation);
+      if (s.surface === "water" || s.deck !== null || s.tunnel) {
+        expect(w.surface).toBe(s.surface);
+      } else if (s.surface === "asphalt") {
+        // A sealed road is ploughed and salted: tarmac in every season.
+        expect(w.surface).toBe("asphalt");
+        expect(w.bite).toBe(1);
+      } else {
+        expect(isLoose(s.surface)).toBe(true);
+        expect(w.surface).toBe("snow");
+        expect(w.bite).toBeGreaterThan(CLIMATE.bite.glaze - 1e-9);
+        expect(w.bite).toBeLessThan(CLIMATE.bite.cold + 1e-9);
+        snow++;
+      }
+      expect(s.bite).toBe(1);
+    }
+    expect(snow).toBeGreaterThan(a.samples.length / 2);
+  });
+
+  it("lies deep beside the road and not on it, and the car rides sunk into it", () => {
+    const track = winter();
+    const terrain = stageTerrain(track);
+    const dry = stageTerrain(summer());
+    const out = track.width / 2 + 40;
+    const { x, z, i } = beside(track, out);
+    const depth = terrain.blanketAt(x, z);
+    expect(depth).toBeGreaterThanOrEqual(CLIMATE.blanket.shallow - 1e-6);
+    expect(depth).toBeLessThanOrEqual(CLIMATE.blanket.deep + 1e-6);
+    // The drawn ground is the top of the snow; the wheels stand `ride` of
+    // the way down into it.
+    const drawn = terrain.latticeAt(x, z);
+    const ridden = terrain.groundAt(x, z);
+    expect(drawn - ridden).toBeCloseTo(depth * (1 - CLIMATE.blanket.ride), 6);
+    // ...and the bare country under both is the summer's.
+    expect(drawn - depth).toBeCloseTo(dry.latticeAt(x, z), 6);
+    // On the road there is no blanket: the ribbon is the ground.
+    const s = track.samples[i];
+    expect(terrain.blanketAt(s.x, s.z)).toBe(0);
+    expect(terrain.groundAt(s.x, s.z)).toBeCloseTo(dry.groundAt(s.x, s.z), 6);
+    // A summer country has none anywhere.
+    expect(dry.blanketAt(x, z)).toBe(0);
+  });
+
+  it("is a snowfield to the car once it leaves the road", () => {
+    const track = winter();
+    const state = createGame({ seed: SEED, track, skipCountdown: true });
+    const { x, z } = beside(track, track.width / 2 + 30);
+    state.car.x = x;
+    state.car.z = z;
+    state.car.y = state.terrain.groundAt(x, z);
+    state.car.vy = 0;
+    for (let k = 0; k < 30; k++) step(state, NEUTRAL_INPUT);
+    expect(state.offRoad).toBe(true);
+    expect(state.surface).toBe("snowfield");
+    // Stood on the packed snow, under the drawn surface.
+    expect(state.car.y).toBeLessThan(state.terrain.latticeAt(state.car.x, state.car.z));
+  });
+
+  it("leaves the desert green, and wet", () => {
+    const track = stageTrack(SEED, "short", { biome: "desert" }, "sprint", WINTER);
+    const terrain = stageTerrain(track);
+    expect(track.samples.some((s) => s.surface === "snow")).toBe(false);
+    const { x, z } = beside(track, track.width / 2 + 40);
+    expect(terrain.blanketAt(x, z)).toBe(0);
+    expect(terrain.groundAt(x, z)).toBeCloseTo(terrain.latticeAt(x, z), 6);
+  });
+
+  it("is still a stage the bot finishes", () => {
+    const r = simulateStage({
+      seed: SEED,
+      length: "short",
+      knobs: { biome: "taiga" },
+      season: "winter",
+      maxTime: 400,
+    });
+    expect(r.finished).toBe(true);
+    expect(r.time).toBeGreaterThan(30);
+  });
+});

@@ -74,6 +74,24 @@ export {
   type TimeOfDay,
   type Weather,
 } from "./game/state.ts";
+export {
+  CLIMATE,
+  SEASONS,
+  blanketDepth,
+  defaultTemperature,
+  fallsAsSnow,
+  frostLine,
+  rainsIn,
+  resolveClimate,
+  snowBite,
+  snowCoverAt,
+  snowlineOf,
+  snowyCountry,
+  temperatureAt,
+  weathersIn,
+  type Climate,
+  type ClimateChoice,
+} from "./game/climate.ts";
 export { jumpFlight, jumpSize, type JumpSize } from "./game/jump.ts";
 export {
   boardHalfWidth,
@@ -286,6 +304,7 @@ export {
   type StageShape,
   type StageStream,
   type Surface,
+  type Underfoot,
   type BridgeDeck,
   type RoadJunction,
   type Spur,
