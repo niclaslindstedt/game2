@@ -32,6 +32,31 @@ both ends of the session, and **`write-code`** beside this one.
    8. when several seeds hold   make sim, make track, then commit
 ```
 
+The other three commands in the loop:
+
+```sh
+make track                 # LOOK at what the rules engine builds
+make level LEVEL=1         # …or REASON about ONE stage without driving it (FOCUS=J1 to close up)
+make previews              # REQUIRED after any generator change — see below
+```
+
+`make level` draws the map with every call (`T3`, in its severity's colour and
+the driver's left/right), jump (`J1`), crest, ford, bridge, split board
+(`CP2`), junction, start and finish LABELLED, the ground tinted by height with
+the road's elevation profile under it, and the trees and rocks within reach of
+the road dotted in — plus a table saying what each id is (lip height, ramp
+grade, which call it lands before, what stands beside it). A claim about "the
+first jump on level 1" is a claim about `J1` there. Engine only: no build, no
+browser, a couple of seconds. Both halves live under `scripts/level-map.mjs`: the ids are
+`scripts/lib/stage-features.mjs`, the picture `scripts/lib/level-map-render.mjs`.
+
+**The campaign's committed previews are generator OUTPUT, and every rule change
+re-rolls them.** `make previews` regenerates both halves — `make routes` (`scripts/stage-routes.mjs`) writes
+every campaign stage's road into `pwa/src/game/stage-routes.ts` (pure Node,
+~13 s), `make biomes` re-renders each country over its FIRST stage's start
+line (needs a build + Chromium). Skipping it leaves the menu drawing stages
+that no longer exist.
+
 **Step 5 is the one that is easy to skip and the one that makes the rest worth
 doing.** An analyzer is only as honest as its checks, and the fastest route to
 a hundred out of a hundred is to measure things that were never going to fail.
@@ -192,7 +217,7 @@ hold water" rather than "did my change cost anything".
 | `biomes.ts`     | **The countries (R40).** The quilt, the water, the loose surface, the relief, the dunes and the sky per biome, as rows. `knobs.biome` picks one; nothing else in `mapgen/` names a country.                                             |
 | `generate.ts`   | **The search.** Draws candidates, validates against the rules, retries bounded, backtracks, rejects a whole attempt rather than ever shipping a violation.                                                                              |
 | `compile.ts`    | **The geometry.** Turns the plan into evenly spaced samples — the single geometric truth read by physics, renderer and bots alike.                                                                                                      |
-| `geology.ts`    | **The GROUND, in layers (R32).** Bedrock with its glacial smoothness, the groundwater table in it, the soil on top. Everything about the country that is not the road.                                                                  |
+| `geology.ts`    | **The GROUND, in layers (R32)**, its numbers in `STAGE_RULES.geology`. Bedrock with its glacial smoothness, the groundwater table in it, the soil on top. Everything about the country that is not the road.                            |
 | `land.ts`       | The road builder's view of that ground: how high is it, can I build here.                                                                                                                                                               |
 | `road.ts`       | **The cross-section.** What a road is ACROSS its width. Read by renderer, terrain AND physics — change it once, all three move.                                                                                                         |
 | `spurs.ts`      | **The other roads.** The branch each junction abandons: real road that runs off the map.                                                                                                                                                |
@@ -200,6 +225,28 @@ hold water" rather than "did my change cost anything".
 | `guards.ts`     | **The corner guards (R14).**                                                                                                                                                                                                            |
 | `river.ts`      | **The water (R18).** One watercourse per valley, traced by the rules of nature.                                                                                                                                                         |
 | `terrain.ts`    | The field that shapes all of it around the road, and answers every query the game makes about the world.                                                                                                                                |
+
+| `crossing.ts` | How the rally gets PAST a public road (R36, square and free); how high the tarmac stands there is `STAGE_RULES.crossing` — `stand` is the step, `ramp` the gravel it happens over, and the jump is the two together |
+| `borrow.ts` | …or ONTO it (R17): a detour the `asphalt` dial pays for |
+| `search.ts` | The shared search the three modes run over — `generate.ts` (sprint), `endless.ts` and `circuit.ts` (R22); also where a TUNNEL is bored (R47) |
+| `arena.ts` + `arena-course.ts` | **THE TRAINING GROUND — the one level nobody generated.** `arena.ts` is the ground's shape, `arena-course.ts` what is laid out on it (including R1, the roll lane). A training exercise IS its numbers — a radius, a spacing, a lip — and `tests/arena_test.ts` names each place and says what is there. Drawn by `pwa/src/game/arena.ts`, offered by `training.ts` |
+| `kerbs.ts` | Every marker beside the road (one of them is solid) — the `built-world` skill draws them |
+| `buildings.ts` | What a BUILDING is: the plans both placers draw, and the footprint-to-solids walk — the `built-world` skill owns the rest of what people put beside the road (R37, R39, R41–R45) |
+
+Two rules that live outside `mapgen/` but decide what it may build:
+
+- **The road's EDGE running out into the grass (R16)** — `handoverAt` in
+  `road.ts` is the shape, `road-mesh.ts` the paint, `pwa/src/game/road-spill.ts`
+  the stones.
+- **Ice.** WHEN standing water freezes is `CLIMATE.ice` + `waterFrozen` /
+  `icyCountry` in `engine/game/climate.ts`, and the floor it becomes is
+  `iceAt` on the `LandField`. Whether the rally may be ROUTED across a frozen
+  lake is R48 in `STAGE_RULES.ice`, over `nearOpenWater` / `nearIce` /
+  `buildableAt` in `land.ts` — the searches read them through `keepsDry` and
+  `holdsOnIce`.
+- **Where the split boards stand (R28)** — `STAGE_RULES.checkpoint` plus the
+  placement in `compile.ts`. What a split is MEASURED against is
+  `engine/game/track.ts` (`lastCheckpoint`).
 
 And the scoreboard, which is NOT in `mapgen/` on purpose:
 

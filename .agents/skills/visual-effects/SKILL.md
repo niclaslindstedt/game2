@@ -42,6 +42,15 @@ task touches. Load **`skill-reflection`** at both ends of the session.
    driven from the sim clock so pause and slow motion carry the effects with
    them.
 
+## The modules
+
+| Effect                                                     | Where                                                                                                                                             |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A particle pool the car throws off, and how it is tinted   | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts`                                                                                |
+| The ROOSTER TAIL a slide throws sideways                   | `DRIFT_SPRAY` + `wheelThrow` in `pwa/src/game/drift-throw.ts` — DOM-free: the angle, the fan, the amount, which wheels; `drift-spray.ts` draws it |
+| Things the car knocks loose (cones, posts, torn-off parts) | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them                          |
+| A WHEEL off the car                                        | `pwa/src/game/loose-wheel.ts` — a rigid body, not an effect; the `collision` skill owns it (`make wheel`)                                         |
+
 ## The art direction — effects must sit inside it
 
 The whole world is **fullbright, vertex-colored, low-poly, with procedural
