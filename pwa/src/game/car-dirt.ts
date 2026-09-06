@@ -20,19 +20,23 @@
 // sills and the panels behind each arch, and the roof barely at all.
 //
 // The whole car is baked vertex colors on fullbright material, so the coat
-// is applied the same way: each mesh's colors are re-lerped toward a dirt
-// tone, per FACE, from a pristine copy.
+// is applied the same way: per FACE, a dirt tone and how much of it. It is
+// written as a LAYER (car-paint.ts) rather than into the colour buffer,
+// because the damage model re-derives the same buffer from its own copy of
+// the livery whenever the ledger moves — two writers on one attribute wipe
+// each other, which is a stage's grime vanishing at the first knock.
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
+import { paintLayers, type PaintLayers } from "./car-paint.ts";
 import { isLoose, type CarState, type GameState } from "@engine";
 
 /** `userData` flag for a mesh the painter must not write. Two kinds carry
- * it. The screens' grime film (car/wipers.ts) paints its own vertex colours
- * frame to frame, and the painter bakes from a pristine copy of the whole
- * buffer — two writers on one attribute is a flicker, not a coat. The CABIN
- * (car/interior.ts) simply is not out in the weather: gravel does not reach
- * a headliner, and a brown-flecked seat reads as a modelling mistake. */
+ * it. The screens' grime film (car/wipers.ts) is already a coat, painted
+ * straight onto its own colours frame by frame — a second one over the top
+ * is a film of dirt on a film of dirt. The CABIN (car/interior.ts) simply
+ * is not out in the weather: gravel does not reach a headliner, and a
+ * brown-flecked seat reads as a modelling mistake. */
 export const NO_DIRT = "noDirt";
 
 /** A point in car space that throws dirt — one per wheel. */
@@ -40,12 +44,9 @@ export type SprayPoint = { x: number; y: number; z: number };
 
 type DirtTarget = {
   geo: THREE.BufferGeometry;
-  /** Pristine copy of the mesh's baked colors. */
-  orig: Float32Array;
-  /** Floats per vertex in that buffer. The glass carries alpha and the paint
-   * does not, and a coat written at the wrong stride walks the fourth
-   * channel — a window that turns solid as the car gets dirty, in bands. */
-  stride: number;
+  /** The mesh's colour stack — the coat is this module's layer of it, and
+   * the damage model's fold is the layer underneath. */
+  layers: PaintLayers;
   /** Mesh origin in car space, m. Wheel geometry is authored about its own
    * axle, so without this the tires would be tested for dirt as though
    * they sat on the car's centerline. */
@@ -130,16 +131,11 @@ export function createDirtPainter(
   root.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh) || obj.userData[NO_DIRT]) return;
     const geo = obj.geometry as THREE.BufferGeometry;
-    const color = geo.getAttribute("color");
-    if (!color) return;
+    const layers = paintLayers(geo);
+    if (!layers) return;
     const base = new THREE.Vector3();
     obj.getWorldPosition(base);
-    byGeo.set(geo, {
-      geo,
-      orig: byGeo.get(geo)?.orig ?? new Float32Array(color.array as Float32Array),
-      stride: color.itemSize,
-      base: base.sub(origin),
-    });
+    byGeo.set(geo, { geo, layers, base: base.sub(origin) });
   });
   const targets: DirtTarget[] = [...byGeo.values()];
 
@@ -149,8 +145,12 @@ export function createDirtPainter(
     // The wetter the run, the further down the palette a fleck lands.
     const wet = clamp(mud * 1.15, 0, 1);
     for (const t of targets) {
-      const color = t.geo.getAttribute("color") as THREE.BufferAttribute;
-      const arr = color.array as Float32Array;
+      // A piece that has torn off the car is no longer anywhere on it: its
+      // vertices have been re-centred on themselves, so every question this
+      // asks about where a face sits would be answered about the middle of
+      // the car. It keeps the coat it left with.
+      if (t.layers.detached) continue;
+      const coat = t.layers.coat;
       const p = t.geo.getAttribute("position") as THREE.BufferAttribute;
       // Per FACE: the geometry is de-indexed, so every three vertices are
       // one flat triangle and share a centroid, a normal and a fleck.
@@ -198,7 +198,13 @@ export function createDirtPainter(
         const draw = hash(Math.round(cx * 41), Math.round(cy * 41), Math.round(cz * 41));
 
         const hit = level * exposure * patch * (0.3 + 1.35 * draw) - FLECK_FLOOR;
-        if (hit <= 0) continue;
+        if (hit <= 0) {
+          // Written, not skipped: the coat is the whole answer for this
+          // face every time it is baked, and a preview asking for a clean
+          // car after a filthy one has to get one.
+          for (let v = 0; v < 3; v++) coat[(f + v) * 4 + 3] = 0;
+          continue;
+        }
         const amount = Math.min(FLECK_MAX, hit);
 
         // Which shade of brown this fleck is. Wet runs bias dark, and a
@@ -211,13 +217,14 @@ export function createDirtPainter(
         tone.copy(TONES[Math.floor(shade * TONES.length)]);
 
         for (let v = 0; v < 3; v++) {
-          const i = (f + v) * t.stride;
-          arr[i] = t.orig[i] + (tone.r - t.orig[i]) * amount;
-          arr[i + 1] = t.orig[i + 1] + (tone.g - t.orig[i + 1]) * amount;
-          arr[i + 2] = t.orig[i + 2] + (tone.b - t.orig[i + 2]) * amount;
+          const i = (f + v) * 4;
+          coat[i] = tone.r;
+          coat[i + 1] = tone.g;
+          coat[i + 2] = tone.b;
+          coat[i + 3] = amount;
         }
       }
-      color.needsUpdate = true;
+      t.layers.compose();
     }
   };
 }

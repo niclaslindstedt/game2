@@ -133,13 +133,27 @@ const CREW_VIEWS: View[] = [
 
 /** The wreck sheet's columns: the chase camera first, because that is the
  * only view of the damage a player ever holds — then the turntable, at the
- * angles that show a nose, a flank, a tail and a roof. */
+ * angles that show a nose, a flank, a tail and a roof.
+ *
+ * The last one is the car as it is ACTUALLY seen. Nothing on a rally stage
+ * is bent and clean: a car that has hit something has been driving for two
+ * minutes first, and the fold and the filth are two writers on one colour
+ * buffer (car-paint.ts) that have already once wiped each other. A sheet of
+ * showroom-white wrecks cannot show that, which is exactly why it goes on
+ * the end of this one — and on the END because the coat stays on the car
+ * from the column that lays it. */
 const WRECK_VIEWS: View[] = [
   { name: "game", fov: 64, game: { carYaw: 0 } },
   { name: "front 3/4", fov: 35, orbit: { az: 0.62, el: 0.26, dist: 1.55 } },
   { name: "side", fov: 35, orbit: { az: Math.PI / 2, el: 0.1, dist: 1.45 } },
   { name: "rear 3/4", fov: 35, orbit: { az: Math.PI - 0.62, el: 0.28, dist: 1.55 } },
   { name: "top", fov: 35, orbit: { az: 0.4, el: 1.15, dist: 2.1 } },
+  {
+    name: "dirty",
+    fov: 35,
+    orbit: { az: 0.62, el: 0.26, dist: 1.55 },
+    dirt: { dust: 0.85, mud: 0.5 },
+  },
 ];
 
 /** How long a staged wreck's torn-off pieces are given to land, s, at the
