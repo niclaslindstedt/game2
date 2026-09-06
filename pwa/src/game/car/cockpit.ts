@@ -159,10 +159,13 @@ const RIG = {
     side: SEAT_SIDE,
   },
   dash: {
-    /** Top of the fascia, under the sill, m. A real dash top sits BELOW the
-     * base of the windscreen, and now that there is room for one it can:
-     * what that buys is the sliver of the car's own bonnet under the wipers,
-     * which is most of what says this is a view from inside something. */
+    /** Top of the fascia at its rear edge, under the sill, m. Its FRONT
+     * edge is not a knob: it runs up to the base of the windscreen's glass,
+     * the way a real dash top does, and it has to — the panel between the
+     * cowl and the glass is the screen's sill strip, whose inner lining
+     * lies under the dash, so a fascia stopping at the cowl leaves the
+     * driver looking over its edge at the bonnet through a band nothing
+     * covers. */
     top: -0.03,
     /** How far back from the cowl the fascia's rear edge stands, m. */
     back: 0.34,
@@ -355,13 +358,18 @@ function buildFascia(b: MeshBuilder, room: Room): void {
   const backZ = cabin.cowlZ - RIG.dash.back;
   const topY = cabin.sillY + RIG.dash.top;
   const wide = half * 0.99;
-  // Down to the base of the screen: the front edge lands ON the cowl, so
-  // there is no gap between the dash and the glass for the landscape to
-  // show through.
-  const frontY = cabin.cowlY + 0.006;
+  // Up to the BASE OF THE GLASS, a hair inside it, so there is no band
+  // between the dash and the film for the bonnet to show through (see
+  // `RIG.dash.top`). The screen's base is the pane's own bottom edge, which
+  // stands above and behind the cowl by the sill strip and the seal.
+  const front = screenPanes(cabin.spec).front;
+  const [baseU, baseV] = rectAt(front.rect, 0.5, 0);
+  const base = patchAt(front.patch, baseU, baseV);
+  const frontY = base[1] - 0.004;
+  const frontZ = base[2] - 0.006;
   b.quad(
-    [-wide, frontY, cabin.cowlZ],
-    [wide, frontY, cabin.cowlZ],
+    [-wide, frontY, frontZ],
+    [wide, frontY, frontZ],
     [wide, topY, backZ],
     [-wide, topY, backZ],
     HUE.fascia,
