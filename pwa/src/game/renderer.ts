@@ -286,7 +286,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   renderer.localClippingEnabled = true;
   let quality = video;
   const applyResolution = (): void => {
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, RESOLUTION_SCALE[quality.resolution]));
+    // A SHARE of the device's own pixels, not a ceiling on them: HIGH is the
+    // screen the machine actually has, and each stop down halves it.
+    renderer.setPixelRatio(window.devicePixelRatio * RESOLUTION_SCALE[quality.resolution]);
   };
   applyResolution();
 

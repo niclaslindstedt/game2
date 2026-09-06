@@ -14,6 +14,7 @@ import {
   GLASS_RAIN,
   GLASS_SEEN_THROUGH,
   DRAW_DISTANCE_SCALE,
+  RESOLUTION_SCALE,
   DUST_LAMP_CARS,
   DUST_RAISED,
   EXHAUST_SEEN,
@@ -91,6 +92,16 @@ describe("the HUD's three switches", () => {
     expect(hudShow(DEFAULT_SETTINGS.hud).fps).toBe(false);
   });
 
+  // The glass is a SECOND render of the world, which makes it the dearest
+  // thing on the panel and the only instrument that ships off. The panel
+  // itself still comes up, so what a fresh player gets is the whole HUD
+  // without the one part of it that costs them frames.
+  it("leave the rear-view glass off until somebody asks for it", () => {
+    expect(DEFAULT_SETTINGS.hud.mirror).toBe(false);
+    expect(hudShow(DEFAULT_SETTINGS.hud).mirror).toBe(false);
+    expect(hudShow(DEFAULT_SETTINGS.hud).minimap).toBe(true);
+  });
+
   it("gate everything the HUD draws that a clean frame must lose", () => {
     const keys: (keyof HudShow)[] = [
       "minimap",
@@ -113,18 +124,30 @@ describe("the three picture rows", () => {
     }
   });
 
-  it("ship the design point on all three rows", () => {
+  // The three rows do NOT ship on the same stop, and that is the point of
+  // splitting them: the picture is bought sharp and near rather than soft
+  // and far, with DETAIL left on the number the game was tuned on.
+  it("ship the picture sharp, tuned and near", () => {
     expect(DEFAULT_SETTINGS.video).toEqual(DEFAULT_VIDEO);
+    expect(DEFAULT_SETTINGS.video.resolution).toBe("high");
     expect(detailOf(DEFAULT_SETTINGS.video)).toBe("medium");
-    expect(DEFAULT_SETTINGS.video.resolution).toBe("medium");
-    expect(DEFAULT_SETTINGS.video.drawDistance).toBe("normal");
+    expect(DEFAULT_SETTINGS.video.drawDistance).toBe("near");
+  });
+
+  // HIGH is the device's own screen and every stop under it is a HALVING of
+  // the canvas in each axis, so the row means the same thing on a laptop and
+  // on a phone that hands the page three device pixels per CSS pixel.
+  it("read RESOLUTION as a share of the device's own pixels", () => {
+    expect(RESOLUTION_SCALE.high).toBe(1);
+    expect(RESOLUTION_SCALE.medium).toBe(RESOLUTION_SCALE.high / 2);
+    expect(RESOLUTION_SCALE.low).toBe(RESOLUTION_SCALE.high / 4);
   });
 
   // The whole point of the split: RESOLUTION and DISTANCE are separate
   // costs, so neither one may decide what DETAIL reads as.
   it("read DETAIL off its own four levers and nothing else", () => {
-    const sharp = { ...DEFAULT_VIDEO, resolution: "high", drawDistance: "near" } as const;
-    expect(detailOf(sharp)).toBe("medium");
+    const soft = { ...DEFAULT_VIDEO, resolution: "low", drawDistance: "far" } as const;
+    expect(detailOf(soft)).toBe("medium");
     expect(detailOf({ ...DETAIL_PRESETS.low, resolution: "high" })).toBe("low");
   });
 
@@ -390,7 +413,7 @@ describe("the defaults", () => {
     mine.video.resolution = "low";
     expect(DEFAULT_SETTINGS.hud.on).toBe(true);
     expect(DEFAULT_SETTINGS.keys.camera).toEqual(["KeyC", "KeyV"]);
-    expect(DEFAULT_SETTINGS.video.resolution).toBe("medium");
+    expect(DEFAULT_SETTINGS.video.resolution).toBe("high");
   });
 });
 

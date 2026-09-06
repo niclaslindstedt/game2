@@ -150,7 +150,11 @@ export type HudSettings = {
    * on the top bar. Off is a clean frame with the pause chip left on it —
    * the one door back that a phone with no keys cannot do without. */
   on: boolean;
-  /** The rear-view glass at the top of the screen, in every view. */
+  /** The rear-view glass at the top of the screen, in every view. Off by
+   * default: it is a SECOND RENDER of the world every time it is redrawn —
+   * the dearest thing on the HUD by a distance, and the first thing to cost
+   * a phone its frames — and a rally is a road nobody behind you is sharing.
+   * The player who wants to watch the car behind turns it on once. */
   mirror: boolean;
   /** The frame rate, under the map. Off by default: it is a number about
    * the machine, and a player who has not asked what their machine is doing
@@ -485,13 +489,27 @@ export function frameFloorMs(): number {
   return media(FRAME_CAP_QUERY).matches ? 1000 / FRAME_HZ - 2 : 0;
 }
 
-/** Pixel-ratio ceilings. Below 1 the canvas renders smaller than the screen
- * and is scaled up — blurry, and the difference between a phone that holds
- * 60 fps and one that does not. */
+/** What share of the DEVICE'S OWN pixels each stop draws — a multiplier on
+ * `devicePixelRatio`, not a ceiling over it.
+ *
+ * A ceiling asks the wrong question. `1` there meant one canvas pixel per
+ * CSS pixel, which is the whole screen on a laptop and a NINTH of it on a
+ * phone handing the page three device pixels per CSS pixel: the same row
+ * bought a native picture on the machine with headroom and a soft one on
+ * the machine that paid for a dense screen. Read as a share instead, every
+ * stop means the same thing on every machine — HIGH is the screen the
+ * device actually has, and each stop down halves the canvas in each axis:
+ * a quarter of the pixels, then a sixteenth.
+ *
+ * Halving rather than some gentler step because this is the one row with
+ * whole frames in it, and a stop that does not visibly buy anything is a
+ * stop nobody would move to. Below HIGH the canvas is drawn smaller than
+ * the screen and scaled up — blurry, and the difference between a phone
+ * that holds 60 fps and one that does not. */
 export const RESOLUTION_SCALE: Record<VideoSettings["resolution"], number> = {
-  low: 0.65,
-  medium: 1,
-  high: 2,
+  low: 0.25,
+  medium: 0.5,
+  high: 1,
 };
 
 /** The pixel ratio at or above which the frame is SUPERSAMPLED enough that
@@ -842,13 +860,30 @@ export const DISTANCE_STOPS: { id: VideoSettings["drawDistance"]; label: string 
   { id: "far", label: "FAR" },
 ];
 
-/** Where the three rows stand on a first launch: the design point on each.
- * MEDIUM resolution is one pixel per screen pixel rather than the retina
- * canvas, which is the honest default for a machine the game has never
- * seen — HIGH is a choice somebody makes after finding out they can. */
+/** Where the three rows stand on a first launch — and the three answers are
+ * not the same answer, because the three costs are not the same cost.
+ *
+ * RESOLUTION ships HIGH, which is now the device's own screen rather than a
+ * cap over it. Sharpness is the one thing a player cannot get back by
+ * looking harder: a soft picture reads as a cheap game on the first frame,
+ * before anything has been driven. It is also the row that is cheapest to
+ * MOVE — it applies the moment it is set, mid-stage, with nothing rebuilt —
+ * so a machine that cannot hold it says so within a corner and the fix is
+ * one press away.
+ *
+ * DETAIL ships MEDIUM: the design point, every lever at the number the game
+ * was tuned on, with the per-car spending on the one car it is worth most
+ * on. HIGH there is a choice somebody makes after finding out they can.
+ *
+ * DISTANCE ships NEAR, which is the row that pays for the other two. What it
+ * buys back is the far half of the world — ridges read through fog at the
+ * horizon, submitted every frame and looked at by nobody at rally pace,
+ * where the picture that matters is the next four seconds of road. Giving up
+ * the ridges to keep the pixels is the trade a phone should be born making;
+ * a player who wants the view has one row to move and sees it immediately. */
 export const DEFAULT_VIDEO: VideoSettings = {
-  resolution: "medium",
-  drawDistance: "normal",
+  resolution: "high",
+  drawDistance: "near",
   ...DETAIL_PRESETS.medium,
 };
 
@@ -1239,7 +1274,7 @@ export type DevSettings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  hud: { on: true, mirror: true, fps: false },
+  hud: { on: true, mirror: false, fps: false },
   // The shortest boom outside the car: the car is big in the frame, a drift
   // swings it right across, and standing that close is what makes it
   // the calmest read at pace — the nearer the camera, the fewer metres of

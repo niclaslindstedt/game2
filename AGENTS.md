@@ -115,16 +115,17 @@ By area first. Each row's skill owns the file-by-file map inside that area — g
 
 And the pieces that belong to no skill in particular:
 
-| Kind of change                                    | Where it goes                                                                                              |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Run orchestration (phases, laps, respawn, events) | `engine/game/step.ts`                                                                                      |
-| Track geometry / compilation                      | `engine/mapgen/compile.ts`                                                                                 |
-| What a surface does to the car                    | `TUNING.surfaces`; a country's loose surface is `BiomeRules.loose`                                         |
-| Anything drawn, with no better home               | `pwa/src/game/` (`renderer.ts` and friends)                                                                |
-| App identity (name, palette, URLs)                | `pwa/src/identity.ts` — the single source                                                                  |
-| A Node script needing an app module               | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table |
-| New CLI tooling                                   | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                      |
-| Engine tests                                      | `tests/<topic>_test.ts`                                                                                    |
+| Kind of change                                    | Where it goes                                                                                                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Run orchestration (phases, laps, respawn, events) | `engine/game/step.ts`                                                                                                                          |
+| Track geometry / compilation                      | `engine/mapgen/compile.ts`                                                                                                                     |
+| What a surface does to the car                    | `TUNING.surfaces`; a country's loose surface is `BiomeRules.loose`                                                                             |
+| Anything drawn, with no better home               | `pwa/src/game/` (`renderer.ts` and friends)                                                                                                    |
+| App identity (name, palette, URLs)                | `pwa/src/identity.ts` — the single source                                                                                                      |
+| How much GPU a phone or tablet has                | `pwa/src/game/device-gpu.ts` — published Geekbench scores, family fallbacks for a device it has never heard of, and bands; read by nothing yet |
+| A Node script needing an app module               | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table                                     |
+| New CLI tooling                                   | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                                          |
+| Engine tests                                      | `tests/<topic>_test.ts`                                                                                                                        |
 
 ### Stated once — never restate these
 
