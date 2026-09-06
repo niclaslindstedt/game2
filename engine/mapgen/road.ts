@@ -161,9 +161,9 @@ export function roadClearance(width: number): number {
 }
 
 /** R24 / R25 — the road at a stage's two ENDS that is in no sample array:
- * `startZone.apron` metres of plain dirt extrapolated straight back from
- * the start gate for the grid to stand on, and the same forward past a
- * sprint's flying finish for the car to run off onto. Each is the end
+ * `Track.startApron` metres of plain dirt extrapolated straight back from
+ * the start gate for the grid to stand on, and `startZone.apron` forward
+ * past a sprint's flying finish for the car to run off onto. Each is the end
  * sample carried on along its own heading, level, as gravel — as
  * samples, in stage order, so the renderer welds them onto the ribbon and
  * a test can read exactly what gets drawn.
@@ -179,7 +179,11 @@ export function roadClearance(width: number): number {
 export function endApron(track: Track, end: "start" | "finish"): TrackSample[] {
   if (track.circuit) return [];
   if (end === "finish" && track.endless) return [];
-  const n = Math.round(R.startZone.apron / track.step);
+  // The run-up is as long as the stage was BUILT for (`Track.startApron`) —
+  // a mass start too deep for the rule book's own apron is stood on more of
+  // it. The run-off past a finish is the rule book's, always: nothing lines
+  // up out there.
+  const n = Math.round((end === "start" ? track.startApron : R.startZone.apron) / track.step);
   const at = end === "start" ? track.samples[0] : track.samples[track.samples.length - 1];
   const sign = end === "start" ? -1 : 1;
   const out: TrackSample[] = [];

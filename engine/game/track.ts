@@ -282,7 +282,8 @@ export function locatePoint(track: Track, x: number, z: number, hint: number): T
   // always did, and the search behind it costs a handful of circle tests.
   const nearX = x - flat.x[near];
   const nearZ = z - flat.z[near];
-  const best = whole(flat, x, z, near, nearX * nearX + nearZ * nearZ);
+  const near2 = nearX * nearX + nearZ * nearZ;
+  const best = nearerEnd(track, flat, x, z, whole(flat, x, z, near, near2));
   const s = samples[best];
   // Project the offset onto the sample's right axis for a signed lateral.
   const dx = x - s.x;
@@ -585,6 +586,59 @@ export function pathCurvature(track: Track, fix: TrackPoint, dirX: number, dirZ:
   );
 }
 
+/** R24 — THE APRONS ARE ROAD, and they are in no sample array. A car stood
+ * on the run-up behind the start gate is on the first sample's own line
+ * however far back it stands, but the nearest SAMPLE to it can easily be a
+ * piece of the route that comes back past the start — and then the fix
+ * reports a car sitting on the grid as a hundred metres out in the country,
+ * on grass, at the wrong height. So each end is also measured by its SPINE
+ * — the end sample's line, out to the length of the apron on it — exactly
+ * as the terrain measures the same ground (`nearerApron` in
+ * mapgen/terrain.ts), and the nearer of the two answers wins.
+ *
+ * It matters most where the run-up is longest: a mass start deep enough to
+ * need `Track.startApron` metres of it stands its back row further from the
+ * gate than half the route is from the start line. A circuit has no end to
+ * stand past (R22) and an endless stage has only the one. */
+function nearerEnd(track: Track, flat: FlatTrack, x: number, z: number, best: number): number {
+  if (track.circuit) return best;
+  const last = track.samples.length - 1;
+  const bx = x - flat.x[best];
+  const bz = z - flat.z[best];
+  let bestD2 = bx * bx + bz * bz;
+  let winner = best;
+  for (let end = 0; end < 2; end++) {
+    const i = end === 0 ? 0 : last;
+    if (end === 1 && (track.endless || last === 0)) continue;
+    const dx = x - flat.x[i];
+    const dz = z - flat.z[i];
+    const lon = dx * flat.sinHeading[i] + dz * flat.cosHeading[i];
+    const out = end === 0 ? -lon : lon;
+    // In front of the gate or past the finish is the road itself, which the
+    // sample search has already answered for.
+    if (out <= 0) continue;
+    const lateral = dx * flat.cosHeading[i] - dz * flat.sinHeading[i];
+    // Past the apron's own end the point is off the spine by however far
+    // past it is, which keeps this monotone and lets `pastApron` — asked
+    // below, once the end sample has won — say the car has left the stage.
+    const reach = apronOf(track, end === 0);
+    const over = out > reach ? out - reach : 0;
+    const d2 = lateral * lateral + over * over;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      winner = i;
+    }
+  }
+  return winner;
+}
+
+/** How far the apron off one end of the stage reaches, m. The run-up carries
+ * whatever grid is standing on it; the run-off past a finish is the rule
+ * book's, always — nothing lines up out there. */
+function apronOf(track: Track, start: boolean): number {
+  return start ? track.startApron : STAGE_RULES.startZone.apron;
+}
+
 /** True when the car has run off one of the stage's ENDS — past the apron
  * of dirt the generator lays before the start gate and after the flying
  * finish (R24). Only the two end samples can report it: anywhere else the
@@ -608,7 +662,9 @@ function pastApron(
   if (!first && !last) return false;
   const along = dx * flat.sinHeading[at] + dz * flat.cosHeading[at];
   const past = first ? -along : along;
-  return past > STAGE_RULES.startZone.apron;
+  // The run-up is as long as the stage was built for — a deep grid stands
+  // on more apron than the rule book lays, and its back row is ON the stage.
+  return past > apronOf(track, first);
 }
 
 function clampIndex(samples: { length: number }, index: number): number {

@@ -146,11 +146,19 @@ export function StepRow<T extends string>({
  * A fader whose value is EXPENSIVE to apply takes `settle`, and then the
  * drag is a draft: the thumb and the reading move under the finger the
  * whole way, and the setting is only handed on when the thumb is let go.
- * See the prop. */
+ * See the prop.
+ *
+ * The travel is 0–1 unless a row says otherwise, which is what a volume and
+ * a difficulty are. A COUNT gives its own `min`, `max` and a `step` of one:
+ * same row, same thumb, and every value on it reachable. */
 export function FadeRow({
   label,
   glyph,
   value,
+  min = 0,
+  max = 1,
+  step = 0.05,
+  nudge: nudgeBy = 0.1,
   read = levelLabel,
   less = "quieter",
   more = "louder",
@@ -161,8 +169,19 @@ export function FadeRow({
 }: {
   label: string;
   glyph?: GlyphName;
-  /** 0–1. */
+  /** Where the thumb stands, in the row's own units. */
   value: number;
+  /** The travel, in those units. A fraction (a volume, how hard a road is)
+   * is the default 0–1; a COUNT — how many cars are on the road with you —
+   * is its own range with a step of one, because a slider that cannot land
+   * on every value it offers is a slider that will not give you the one you
+   * want. */
+  min?: number;
+  max?: number;
+  step?: number;
+  /** What one press of an arrow moves it. A tenth of the travel on a fader,
+   * one step on a count. */
+  nudge?: number;
   /** What the value READS as beside the track. */
   read?: (value: number) => string;
   /** What the two arrows do, for the screen reader: a volume goes quieter
@@ -193,7 +212,12 @@ export function FadeRow({
   const dragRef = useRef<number | null>(null);
   const shown = drag ?? value;
   const describe = (): void => onHint?.(hint ?? null);
-  const clamp = (next: number): number => Math.min(1, Math.max(0, Math.round(next * 100) / 100));
+  // Onto the row's own grid, and inside its travel: an arrow pressed off a
+  // dragged position, or a value dialled in from a link, still lands on a
+  // stop the row can draw the thumb on.
+  const clamp = (next: number): number =>
+    Math.min(max, Math.max(min, min + Math.round((next - min) / step) * step));
+  const fill = max > min ? (shown - min) / (max - min) : 0;
   const hold = (next: number): void => {
     dragRef.current = next;
     setDrag(next);
@@ -212,7 +236,7 @@ export function FadeRow({
     // effects level is heard at the level being set. Capped inside playUi,
     // so a drag is a run of ticks rather than a buzz.
     playUi("move");
-    set(shown + by);
+    set(shown + by * nudgeBy);
   };
   return (
     <div className="knob" data-nav-steps onPointerEnter={describe} onFocusCapture={describe}>
@@ -223,7 +247,7 @@ export function FadeRow({
           className="knob-arrow"
           data-nav-step="left"
           aria-label={`${label}: ${less}`}
-          onClick={() => nudge(-0.1)}
+          onClick={() => nudge(-1)}
         >
           ‹
         </button>
@@ -231,12 +255,12 @@ export function FadeRow({
           <input
             className="knob-range"
             type="range"
-            min={0}
-            max={1}
-            step={0.05}
+            min={min}
+            max={max}
+            step={step}
             value={shown}
             aria-label={label}
-            style={`--fill: ${Math.round(shown * 100)}%`}
+            style={`--fill: ${Math.round(fill * 100)}%`}
             onInput={(e) => {
               playUi("move");
               const next = clamp(Number((e.target as HTMLInputElement).value));
@@ -266,7 +290,7 @@ export function FadeRow({
           className="knob-arrow"
           data-nav-step="right"
           aria-label={`${label}: ${more}`}
-          onClick={() => nudge(0.1)}
+          onClick={() => nudge(1)}
         >
           ›
         </button>

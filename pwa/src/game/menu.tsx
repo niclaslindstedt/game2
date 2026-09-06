@@ -22,6 +22,7 @@ import {
   DIFFICULTIES,
   type BiomeId,
   DIFFICULTY_IDS,
+  GRID_CEILING,
   GRID_DEFAULT,
   GRID_MAX,
   GRID_MIN,
@@ -78,7 +79,37 @@ export type RaceSettings = {
    * knockabout race must not find their championship quietly turned down
    * with it. */
   headsUp: HeadsUpSettings;
+  /** ROAM's own — how many cars it puts on the road with you. How GOOD they
+   * are is the campaign's `difficulty` above, because Roam already reads it
+   * for what a crash costs and one page does not ask the same question
+   * twice. */
+  roam: RoamSettings;
 };
+
+/** ROAM'S OWN: how many cars are out there with you. Kept apart from the
+ * heads-up race's `cars` for the reason that setting is kept apart from the
+ * campaign's difficulty — the two are different races, and a number dialled
+ * in for one must not turn up in the other. It counts OPPONENTS rather than
+ * cars because that is the question being asked on a page where the player
+ * is the one certainty: zero is the road to yourself, which is what Roam has
+ * always been and still defaults to. */
+export type RoamSettings = {
+  opponents: number;
+};
+
+/** The most opponents Roam will put on the road: a full grid of
+ * `GRID_CEILING` less the player. It is a long way past what the game is
+ * balanced for and that is the point — the slider is the player choosing
+ * how much of their own frame rate to spend on traffic. */
+export const ROAM_OPPONENTS_MAX = GRID_CEILING - 1;
+
+export const DEFAULT_ROAM: RoamSettings = { opponents: 0 };
+
+/** What the opponents row reads as. NONE rather than 0 for the reason a
+ * fader reads OFF: an empty road is a state, not a quantity. */
+export function opponentsWord(count: number): string {
+  return count <= 0 ? "NONE" : String(Math.round(count));
+}
 
 /** What a heads-up race is set up with: how good the field is, and how many
  * cars are on it. There is no start-type setting — a heads-up race is a mass

@@ -39,6 +39,11 @@ export type DebugStage = {
    * road is made of snow — so the repro line carries both. */
   season: string;
   temperature?: number | null;
+  /** How many cars the stage was BUILT for, the player included (R24): a
+   * mass start stands a row per car behind the gate, so the run-up the
+   * generator laid is as long as the field is deep. Part of the repro for
+   * the same reason the season is — it changes the ground. */
+  cars?: number;
 };
 
 /** One line of the overlay. `k` doubles as the row's `data-k` in the DOM, so
@@ -268,6 +273,9 @@ export function stageParams(stage: DebugStage): URLSearchParams {
   params.set("biome", stage.knobs.biome);
   params.set("season", stage.season);
   if (stage.temperature != null) params.set("temp", String(stage.temperature));
+  // Only where somebody is actually out there: a stage driven alone is the
+  // rule book's own apron, and a parameter saying so on every line is noise.
+  if ((stage.cars ?? 1) > 1) params.set("rivals", String((stage.cars ?? 1) - 1));
   params.set("start", "1");
   params.set("debug", "1");
   return params;

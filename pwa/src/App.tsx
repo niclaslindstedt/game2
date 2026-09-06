@@ -30,6 +30,9 @@ import {
   carById,
   ARENA_KNOBS,
   DEFAULT_KNOBS,
+  GRID_MAX,
+  GRID_MIN,
+  apronForGrid,
   compileArena,
   compileStage,
   createGame,
@@ -150,9 +153,11 @@ import {
 import { createTrip, type Trip } from "./game/odometer.ts";
 import {
   DEFAULT_HEADS_UP,
+  DEFAULT_ROAM,
   DEFAULT_STAGE_KNOBS,
   DIFFICULTY_OPTIONS,
   PauseMenu,
+  ROAM_OPPONENTS_MAX,
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
   SEASONS,
@@ -386,6 +391,14 @@ function wantsOff(input: CarInput): boolean {
   return input.throttle > 0.5 || input.brake > 0.5 || input.handbrake || input.shiftUp;
 }
 
+/** How many opponents Roam will actually put out — a whole number of them,
+ * inside the travel the slider offers. A stored record from a build that
+ * offered a different ceiling, or a `?rivals=` off a link, both come through
+ * here. */
+function clampOpponents(count: number): number {
+  return Math.min(ROAM_OPPONENTS_MAX, Math.max(0, Math.round(count)));
+}
+
 /** Initial race settings: URL params (tooling) beat the stored choice beats
  * the defaults. Storage can be unavailable (private mode) — defaults are
  * fine. */
@@ -401,6 +414,7 @@ function initialRace(): RaceSettings {
     knobs: { ...DEFAULT_STAGE_KNOBS },
     difficulty: "medium",
     headsUp: { ...DEFAULT_HEADS_UP },
+    roam: { ...DEFAULT_ROAM },
   };
   try {
     const stored = localStorage.getItem(RACE_KEY);
@@ -421,10 +435,15 @@ function initialRace(): RaceSettings {
   // written by a build with fewer settings in it has half a group: both are
   // the defaults with whatever was actually stored laid over them.
   race.headsUp = { ...DEFAULT_HEADS_UP, ...race.headsUp };
-  race.headsUp.cars = gridSize(race.headsUp.cars);
+  // The heads-up grid is held to what the AUTHORED roster and the rule
+  // book's own apron stand (`GRID_MAX`), not to the ceiling `gridSize`
+  // allows: the deeper grids are Roam's, and they are built for.
+  race.headsUp.cars = gridSize(Math.min(race.headsUp.cars, GRID_MAX));
   if (!DIFFICULTY_OPTIONS.some((d) => d.id === race.headsUp.difficulty)) {
     race.headsUp.difficulty = DEFAULT_HEADS_UP.difficulty;
   }
+  race.roam = { ...DEFAULT_ROAM, ...race.roam };
+  race.roam.opponents = clampOpponents(race.roam.opponents);
   if (!STAGE_LENGTH_OPTIONS.some((l) => l.id === race.length)) race.length = "medium";
   if (!STAGE_SHAPES.some((s) => s.id === race.shape)) race.shape = "sprint";
   if (!DIFFICULTY_OPTIONS.some((d) => d.id === race.difficulty)) race.difficulty = "medium";
@@ -463,6 +482,12 @@ function initialRace(): RaceSettings {
   const difficulty = params.get("difficulty");
   if (DIFFICULTY_OPTIONS.some((d) => d.id === difficulty)) {
     race.difficulty = difficulty as Difficulty;
+  }
+  // ?rivals= — how many cars Roam puts on the road with the player, so a
+  // screenshot or a repro of a busy stage can be stood in again.
+  const rivals = params.get("rivals");
+  if (rivals !== null && Number.isFinite(Number(rivals))) {
+    race.roam.opponents = clampOpponents(Number(rivals));
   }
   // The generator's dials, each 0..1 — the tooling pins a stage's character
   // the same way it pins its seed. Read off the ENGINE's list rather than
@@ -623,6 +648,16 @@ type StageSpec = {
    * time trial, Roam — where the player is on the line on their own and owes
    * nobody anything. */
   grid: GridSlot | null;
+  /** How many cars the stage is BUILT FOR, the player included; one — or
+   * absent — on every start that is one car on the line.
+   *
+   * It is part of the STAGE rather than of the field because it moves the
+   * ground: a mass start stands one row per car behind the start gate, and
+   * the run-up has to be long enough to hold the back one (`apronForGrid`).
+   * The route never moves for it — the same seed is the same road whoever is
+   * standing on it — but the apron and the shelf under it do, which makes
+   * this part of what the compiled track is keyed on. */
+  cars?: number;
   /** THE TRAINING GROUND instead of a generated stage: the hand-built
    * arena (`mapgen/arena.ts`) and the approach road it stands on. It is a
    * flag rather than a length or a shape because it is neither — nothing
@@ -675,7 +710,11 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     (a.temperature ?? null) === (b.temperature ?? null) &&
     a.skipCountdown === b.skipCountdown &&
     a.grid?.number === b.grid?.number &&
-    a.grid?.back === b.grid?.back
+    a.grid?.back === b.grid?.back &&
+    // The field's depth is the apron's length, and the apron is compiled
+    // into the track — so a stage asked for with more cars on it is not the
+    // stage already standing, even where everything else about it matches.
+    (a.cars ?? 1) === (b.cars ?? 1)
   );
 }
 
@@ -733,21 +772,50 @@ const MODE_NAME: Record<PlayMode, string> = {
   training: "Training",
 };
 
-/** HOW THE FIELD IS ENTERED for a run: the campaign runs the whole roster
- * a rally interval apart at the campaign's own difficulty (R29) as GHOSTS
- * — every crew's stage written down before the green, and nothing on the
- * road solid — and a heads-up race stands its own two settings on ONE grid
- * with every car solid: that is the discipline where a rival can be leaned
- * on or put in the trees, and a mass start is what makes it one. Nothing
- * else enters anybody, so nothing else asks. */
-function fieldPlan(race: RaceSettings, mode: PlayMode): FieldPlan {
-  if (mode !== "headsup") return { ...RALLY_FIELD, difficulty: runDifficulty(race, mode) };
-  return {
-    difficulty: runDifficulty(race, mode),
-    cars: gridSize(race.headsUp.cars),
-    massStart: true,
-    contact: true,
-  };
+/** HOW MANY CARS a run puts on the road, the player included. One on
+ * everything that races alone — a time trial, the training ground, the menu
+ * behind a card — which is what makes this the one question the grid, the
+ * apron and the entry list are all asked.
+ *
+ * HEADS UP is held to `GRID_MAX`: the authored roster on the apron the rule
+ * book lays. ROAM is not — its slider goes to a full `GRID_CEILING` grid,
+ * the stage is compiled with the run-up to stand it (`apronForGrid`) and
+ * the roster is dressed out with club entries. */
+function fieldCars(race: RaceSettings, mode: PlayMode): number {
+  if (mode === "headsup") return gridSize(Math.min(race.headsUp.cars, GRID_MAX));
+  if (mode === "roam" && race.roam.opponents > 0) return gridSize(race.roam.opponents + 1);
+  return 1;
+}
+
+/** HOW THE FIELD IS ENTERED for a run, or null where nobody is entered at
+ * all: the campaign runs the whole roster a rally interval apart at the
+ * campaign's own difficulty (R29) as GHOSTS — every crew's stage written
+ * down before the green, and nothing on the road solid — and every other
+ * field in the game is a MASS START with every car solid: that is the
+ * discipline where a rival can be leaned on or put in the trees, and one
+ * grid and one green is what makes it one. A heads-up race is always that;
+ * Roam is that whenever its opponents slider is off zero.
+ *
+ * An ENDLESS stage takes a mass start but never the campaign's ghosts: a
+ * trace is a whole run written down before the green, and a road that never
+ * finishes has no such thing to write. */
+function fieldPlan(race: RaceSettings, mode: PlayMode, spec: StageSpec): FieldPlan | null {
+  if (mode === "campaign") {
+    if (spec.length === "endless") return null;
+    return { ...RALLY_FIELD, difficulty: runDifficulty(race, mode) };
+  }
+  const cars = fieldCars(race, mode);
+  if (cars < GRID_MIN) return null;
+  return { difficulty: runDifficulty(race, mode), cars, massStart: true, contact: true };
+}
+
+/** WHERE THE PLAYER STANDS at the green: the back row of the grid on a mass
+ * start, and nothing — the line itself, alone — everywhere else. Stated once
+ * because three ways into a run ask it, and the apron the stage is built
+ * with has to agree with it (`apronForGrid`, off the same `fieldCars`). */
+function gridSlotFor(race: RaceSettings, mode: PlayMode): GridSlot | null {
+  const cars = fieldCars(race, mode);
+  return cars < GRID_MIN ? null : playerSlot(cars);
 }
 
 /** WHICH DIFFICULTY THIS RUN IS DRIVEN AT. The same word the field is
@@ -1395,22 +1463,31 @@ export function App() {
     // An endless track is never reused: a restart must begin from a fresh
     // opening window, not from however far the last run streamed (the
     // renderer has long since dropped the world around the start).
+    // R24 — how much run-up this stage is built with: enough to stand the
+    // whole grid behind the gate. It is part of the compiled track, so it
+    // is part of the key: the same seed asked for with a deeper field is a
+    // stage with more road behind its start line.
+    const apron = apronForGrid(spec.cars ?? 1);
     const key = spec.arena
       ? `arena/${spec.seed}`
       : `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/${NUMERIC_KNOBS.map((knob) => spec.knobs[knob]).join(",")}` +
         // The climate is part of the ROAD (climate.ts): the same seed in
         // winter is the same route made of snow, and that is a different
         // compiled track.
-        `/${spec.season}/${spec.temperature ?? "auto"}`;
+        `/${spec.season}/${spec.temperature ?? "auto"}/${apron}`;
     if (trackRef.current?.key !== key || spec.length === "endless") {
       trackRef.current = {
         key,
         track: spec.arena
           ? compileArena(spec.seed)
-          : compileStage(spec.seed, spec.length, spec.knobs, spec.shape, {
-              season: spec.season,
-              temperature: spec.temperature,
-            }),
+          : compileStage(
+              spec.seed,
+              spec.length,
+              spec.knobs,
+              spec.shape,
+              { season: spec.season, temperature: spec.temperature },
+              apron,
+            ),
       };
     }
     finishTimeRef.current = null;
@@ -1507,11 +1584,12 @@ export function App() {
   /** R29 — enter the field for a run with rivals in it: real crews on the
    * same compiled track, at the difficulty the player chose. The CAMPAIGN
    * enters the whole roster one at a time; HEADS UP enters its own grid, its
-   * own size and its own start type. Nobody is entered on Roam, in a time
-   * trial or behind the menu, and an endless stage has no finish to place at,
-   * so all of those race alone. Called on every start AND every restart — a
-   * field carried over from the last attempt would be a dozen cars already
-   * halfway down the road. */
+   * own size and its own start type; ROAM enters whatever its opponents
+   * slider asks for, on one grid, and nothing at all where it is at zero —
+   * which is where it stands until a player moves it. Nobody is entered in
+   * a time trial, on the training ground or behind the menu. Called on every
+   * start AND every restart — a field carried over from the last attempt
+   * would be a dozen cars already halfway down the road. */
   const armField = (spec: StageSpec, mode: PlayMode, plan?: FieldPlan): void => {
     fieldRef.current = null;
     standingRef.current = null;
@@ -1526,12 +1604,13 @@ export function App() {
     rendererRef.current?.setStanding(null);
     rendererRef.current?.field.clear();
     if (!trackRef.current || menuRef.current) return;
-    if ((mode !== "campaign" && mode !== "headsup") || spec.length === "endless") return;
     const race = raceRef.current;
     // …unless the caller states the entry list itself. Only the benchmark
     // does: a measurement cannot be entered off settings the player is free
     // to move, or two runs of it are two different races.
-    const field = createField(trackRef.current.track, plan ?? fieldPlan(race, mode), {
+    const entry = plan ?? fieldPlan(race, mode, spec);
+    if (!entry) return;
+    const field = createField(trackRef.current.track, entry, {
       seed: spec.seed,
       laps: spec.laps,
       hour: spec.hour,
@@ -1667,7 +1746,7 @@ export function App() {
       grid: spec.grid,
       mode,
       ...(levelId ? { levelId } : {}),
-      field: entered && spec.length !== "endless" ? fieldPlan(raceRef.current, mode) : null,
+      field: entered ? fieldPlan(raceRef.current, mode, spec) : null,
     });
   };
   const armTapeRef = useRef(armTape);
@@ -1770,7 +1849,8 @@ export function App() {
         skipCountdown: false,
         // The back row, on a mass start. Everything else puts the player on
         // the line on their own.
-        grid: mode === "headsup" ? playerSlot(race.headsUp.cars) : null,
+        grid: gridSlotFor(race, mode),
+        cars: fieldCars(race, mode),
       },
       mode,
       level.id,
@@ -1802,7 +1882,10 @@ export function App() {
         weather: r.weather,
         season: r.season,
         skipCountdown: false,
-        grid: null,
+        // The back row of the grid, whenever the opponents slider has put
+        // one there; the line on its own at zero, which is where it stands.
+        grid: gridSlotFor(r, "roam"),
+        cars: fieldCars(r, "roam"),
       },
       "roam",
     );
@@ -1839,6 +1922,7 @@ export function App() {
       // The back row of the grid the field is stood on, exactly as a
       // heads-up race stands it.
       grid: playerSlot(BENCHMARK.field.cars),
+      cars: BENCHMARK.field.cars,
     };
   };
 
@@ -2293,7 +2377,8 @@ export function App() {
                   weather: level.weather,
                   season: level.season,
                   skipCountdown: false,
-                  grid: mode === "headsup" ? playerSlot(r.headsUp.cars) : null,
+                  grid: gridSlotFor(r, mode),
+                  cars: fieldCars(r, mode),
                 }
               : {
                   seed: seedRef.current,
@@ -2306,9 +2391,10 @@ export function App() {
                   weather: r.weather,
                   season: r.season,
                   skipCountdown: false,
-                  // The back row, on a `?mode=headsup` grid; alone on the line
-                  // otherwise, which is every other way into here.
-                  grid: mode === "headsup" ? playerSlot(r.headsUp.cars) : null,
+                  // The back row, on a `?mode=headsup` grid or a Roam stage
+                  // with opponents on it; alone on the line otherwise.
+                  grid: gridSlotFor(r, mode),
+                  cars: fieldCars(r, mode),
                 };
         // The time to beat, on a stage that keeps one — read before the run
         // starts, as `startStage` reads it, or a placed finish could never

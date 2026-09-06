@@ -21,11 +21,12 @@
 // recognised, and they are why no row here carries a sentence: the map
 // answers what a dial does, the moment it is moved.
 //
-// Two rows are deliberately NOT that silhouette, because what they hold is
-// not a place on a three-stop ladder: DIFFICULTY (R46) is a scale, so it is
-// a slider, and the SEED is a number, so it can be walked, typed or rolled.
-// Both are still the same row — a name, a mark, and a value between two
-// arrows — which is the whole point of the shape.
+// Three rows are deliberately NOT that silhouette, because what they hold is
+// not a place on a three-stop ladder: DIFFICULTY (R46) is a scale and
+// OPPONENTS is a count, so both are sliders, and the SEED is a number, so it
+// can be walked, typed or rolled. All three are still the same row — a name,
+// a mark, and a value between two arrows — which is the whole point of the
+// shape.
 //
 // The stage does not have to be a bare seed: the LEVEL row loads one of the
 // CAMPAIGN's own roads through the campaign's OWN stage boxes
@@ -46,6 +47,7 @@ import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
 import { FadeRow, KnobGroup, NumberRow, StepRow } from "./menu-knobs.tsx";
 import {
   BIOME_OPTIONS,
+  ROAM_OPPONENTS_MAX,
   STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
@@ -54,6 +56,7 @@ import {
   challengeGlyph,
   challengeWord,
   dialStop,
+  opponentsWord,
   temperatureOf,
   temperatureStop,
   weathersOf,
@@ -208,7 +211,7 @@ export function RoamPage({
               to see, on the frames the thumb needed to move — the word
               says where the thumb is the whole way, and the map answers
               the moment it is let go. */}
-          <div className="roam-diff">
+          <div className="roam-slider">
             <FadeRow
               label="DIFFICULTY"
               glyph={challengeGlyph(race.knobs.challenge)}
@@ -218,6 +221,44 @@ export function RoamPage({
               more="harder"
               settle
               onChange={(challenge) => onRace({ ...race, knobs: { ...race.knobs, challenge } })}
+            />
+          </div>
+
+          {/* WHO ELSE IS OUT THERE. The second slider on the page, and it
+              sits under the first because the two are the same kind of
+              question — how much is this run going to ask of you — and
+              because neither belongs in a column of three-stop dials.
+              Zero is where it stands: Roam is the road to yourself, and a
+              field is something a player goes and asks for.
+
+              It is a COUNT, so it steps in ones and every one of the
+              thirty-two positions is landable (`FadeRow`'s range). The top
+              of the travel is a long way past what the game is balanced
+              for — thirty-two cars is thirty-two games stepped every frame
+              and thirty-two bodies drawn, and it will cost frames on any
+              machine — which is the whole reason it is offered as a
+              TRAVEL rather than as three named stops: the position where
+              a given machine gives up is the player's to find.
+
+              Nothing here settles the way DIFFICULTY does, because nothing
+              here rebuilds the stage: the same seed draws the same road
+              whoever is standing on it, and all the field costs the map is
+              the extra apron the grid stands on. */}
+          <div className="roam-slider">
+            <FadeRow
+              label="OPPONENTS"
+              glyph="headsup"
+              value={race.roam.opponents}
+              min={0}
+              max={ROAM_OPPONENTS_MAX}
+              step={1}
+              nudge={1}
+              read={opponentsWord}
+              less="fewer"
+              more="more"
+              onChange={(opponents) =>
+                onRace({ ...race, roam: { ...race.roam, opponents: Math.round(opponents) } })
+              }
             />
           </div>
 
