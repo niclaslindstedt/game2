@@ -72,22 +72,40 @@ export function readLive(live: LiveRun, state: GameState, hold = false): void {
   live.hold = hold;
 }
 
-/** How long before a corner the co-driver calls it, seconds. Short on
- * purpose: a sign hung out four seconds early spends most of its life
- * describing a corner the driver cannot see yet, and on anything but a
- * straight it means a SECOND corner is always in the window too — which is
- * what turns the strip into a thing that shuffles rather than a thing that
- * is read. Two seconds is the sign going up as the braking point arrives. */
+/** How long before a corner the co-driver calls it, seconds. The strip is
+ * timed rather than measured: what is left to the turn-in is metres, but
+ * what a driver has to spend on the call is the SECONDS those metres are
+ * worth at the speed the car is doing — the same eighty metres is a long
+ * look at 80 km/h and no warning at all at 200. Two seconds is the sign
+ * going up as the braking point arrives.
+ *
+ * Short on purpose: a sign hung out four seconds early spends most of its
+ * life describing a corner the driver cannot see yet. */
 const CALL_LEAD = 2;
 
-/** The same lead in metres, floor and ceiling. Seconds alone call a hairpin
- * taken at walking pace from inside it, and a flat-out straight from the far
- * end of the county. */
-const CALL_LEAD_MIN = 40;
-const CALL_LEAD_MAX = 180;
+/** ...and how far ahead the SECOND call may be, seconds. A corner inside
+ * four seconds of the car is one the driver is already committing to on the
+ * way into the first — a genuine combination, and what the strip draws faint
+ * underneath ("hard left INTO easy right"). Past that it is a corner with
+ * real road in front of it, and it gets its own sign when the car reaches
+ * it, which is the difference between a strip that is read and one that is a
+ * queue. */
+const COMBO_LEAD = 4;
 
-function callDistance(u: number): number {
-  return Math.min(CALL_LEAD_MAX, Math.max(CALL_LEAD_MIN, u * CALL_LEAD));
+/** The slowest the clock is ever read at, m/s (~54 km/h). Time to a corner
+ * is metres over speed, so a stopped car is an infinite number of seconds
+ * from every corner on the stage: the strip would be blank on the start
+ * line, and would blank again every time a hairpin was crawled out of.
+ * Under this the calls are timed at this speed instead — roughly the pace
+ * the car is about to be doing anyway. */
+const CALL_MIN_SPEED = 15;
+
+/** Seconds from the car to a point up the road, at the speed the car is
+ * closing on it: what the dial reads (`car.u`, the pace along the road), not
+ * the sideways component of a slide, which closes nothing. */
+function callSeconds(state: GameState, s: number): number {
+  const speed = Math.max(CALL_MIN_SPEED, state.car.u);
+  return Math.max(0, s - state.progressS) / speed;
 }
 
 /** The co-driver's memory between HUD ticks: how far up the road the calls
@@ -113,6 +131,9 @@ export type PaceMemory = {
    * beside the shape: on an endless stage the note at the streaming frontier
    * grows as its combination is built, and a grown note is a new picture. */
   shapes: Map<number, { endS: number; sign: PaceSign }>;
+  /** The closest each call currently on the strip has ever been, seconds,
+   * keyed by its arc position — the countdown's ratchet. */
+  ticked: Map<number, number>;
   /** Every corner and every jump lip on the stage, in arc order — the list
    * the strip walks. Built once per track and held here rather than rebuilt
    * per frame: the corners and the lips are the STAGE, and the stage does not
@@ -143,6 +164,7 @@ export function createPaceMemory(): PaceMemory {
     calledJumpS: -Infinity,
     lastS: 0,
     shapes: new Map(),
+    ticked: new Map(),
     events: [],
     builtFor: null,
     builtSamples: -1,
@@ -187,13 +209,11 @@ function paceEvents(state: GameState, mem: PaceMemory): PaceEvent[] {
 /** Turn angle past which a call earns the LONG modifier, radians (~100°). */
 const LONG_NOTE_ANGLE = 1.75;
 
-/** The corner calls on the strip: the one being driven or about to be, plus
- * the one after it ONLY when it follows CLOSE — within the same lead of the
- * first corner's exit, which is a genuine combination and what the HUD draws
- * faint underneath ("hard left INTO easy right"). A corner with real road in
- * front of it is not on the strip at all; it gets its own sign when the car
- * reaches it, which is the difference between a strip that is read and one
- * that is a queue.
+/** The corner calls on the strip, on the co-driver's clock: the one being
+ * driven or within CALL_LEAD seconds of being, plus the one after it ONLY
+ * when it too lands inside COMBO_LEAD seconds. Both windows are read from
+ * the CAR — metres left to the turn-in over the speed the car is doing —
+ * because that is the quantity the driver is actually spending.
  *
  * The engine's positive dir grows the heading, which the mirrored screen
  * shows as a LEFT turn — the same one-flip rule input.ts applies to
@@ -202,36 +222,49 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
   if (state.progressS < mem.lastS) {
     mem.calledS = -Infinity;
     mem.calledJumpS = -Infinity;
+    mem.ticked.clear();
   }
   mem.lastS = state.progressS;
-  const lead = callDistance(state.car.u);
   const out: HudPacenote[] = [];
-  /** What the lead is measured FROM: the car, and then the exit of each
-   * corner already on the strip — a combination is close to the corner it
-   * follows, not to the car that has yet to reach either. */
-  let from = state.progressS;
   const drawn: number[] = [];
+  /** Every call put on the strip this tick, by arc position — what the two
+   * caches below are pruned against. */
+  const live: number[] = [];
   for (const event of paceEvents(state, mem)) {
+    // The sign stands until the corner is BEHIND the car, not until the
+    // turn-in: the countdown under it runs out at the entry, and what is
+    // left after that is a plate saying which way the road the car is on
+    // this instant goes. It is the car's POSITION that takes it down and
+    // never the clock, so a car stopped short of a corner keeps its call
+    // however long it sits there.
     if ("note" in event && event.note.endS <= state.progressS) continue;
     if ("jump" in event && event.jump.s < state.progressS) continue;
     const eventS = event.s;
     const called = "note" in event ? event.note.s <= mem.calledS : eventS <= mem.calledJumpS;
-    // Close enough to call, or called already and not yet driven through.
-    if (eventS - from > lead && !called) break;
+    // THE COUNTDOWN ONLY EVER RUNS DOWN. Seconds to a corner is metres over
+    // speed, so shedding speed genuinely puts the corner further away in
+    // seconds than it was a moment ago — true, and useless as an
+    // instrument: a bar that grows back while the driver is on the brakes
+    // is a bar that pumps in the corner of an eye that is meant to be
+    // reading it. What is kept is the closest the corner has ever been,
+    // which is the number the driver is actually working to.
+    const eta = Math.min(callSeconds(state, eventS), mem.ticked.get(eventS) ?? Infinity);
+    // The first call gets the plain lead; anything behind it has to be part
+    // of the same combination to be on the strip at all. Called already and
+    // not yet driven through keeps its slot either way — the latch is what
+    // stops a sign coming down under braking, at the moment it is read.
+    const reach = out.length === 0 ? CALL_LEAD : COMBO_LEAD;
+    if (eta > reach && !called) break;
+    mem.ticked.set(eventS, eta);
+    live.push(eventS);
     if ("jump" in event) {
       mem.calledJumpS = Math.max(mem.calledJumpS, eventS);
-      from = Math.max(from, eventS);
-      out.push({
-        kind: "jump",
-        size: event.size,
-        distance: Math.max(0, eventS - state.progressS),
-      });
+      out.push({ kind: "jump", size: event.size, eta });
       if (out.length >= 2) break;
       continue;
     }
     const note = event.note;
     mem.calledS = Math.max(mem.calledS, note.s);
-    from = Math.max(from, note.endS);
     let drawing = mem.shapes.get(note.s);
     if (!drawing || drawing.endS !== note.endS) {
       drawing = { endS: note.endS, sign: cornerSign(state.track.samples, note) };
@@ -243,13 +276,16 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
       dir: note.dir > 0 ? "left" : "right",
       severity: note.severity,
       long: note.angle > LONG_NOTE_ANGLE,
-      distance: Math.max(0, note.s - state.progressS),
+      eta,
       sign: drawing.sign,
     });
     if (out.length >= 2) break;
   }
   for (const key of mem.shapes.keys()) {
     if (!drawn.includes(key)) mem.shapes.delete(key);
+  }
+  for (const key of mem.ticked.keys()) {
+    if (!live.includes(key)) mem.ticked.delete(key);
   }
   return out;
 }
