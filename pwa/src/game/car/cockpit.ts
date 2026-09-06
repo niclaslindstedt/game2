@@ -358,15 +358,20 @@ function buildFascia(b: MeshBuilder, room: Room): void {
   const backZ = cabin.cowlZ - RIG.dash.back;
   const topY = cabin.sillY + RIG.dash.top;
   const wide = half * 0.99;
-  // Up to the BASE OF THE GLASS, a hair inside it, so there is no band
-  // between the dash and the film for the bonnet to show through (see
-  // `RIG.dash.top`). The screen's base is the pane's own bottom edge, which
-  // stands above and behind the cowl by the sill strip and the seal.
+  // Up to the BASE OF THE GLASS and a hair up the inside of it, so there
+  // is no band between the dash and the film for the bonnet to show through
+  // (see `RIG.dash.top`). The screen's base is the pane's own bottom edge,
+  // which stands above and behind the cowl by the sill strip and the seal —
+  // and the edge has to land ABOVE that base, not under it: the eye is well
+  // over the dash, so a ray grazing an edge a few millimetres below the
+  // glass passes under the pane and out through the sill strip, which is a
+  // bright line of bonnet along the whole width. Overlapping the bottom
+  // few millimetres of the glass from inside costs nothing anyone can see.
   const front = screenPanes(cabin.spec).front;
   const [baseU, baseV] = rectAt(front.rect, 0.5, 0);
   const base = patchAt(front.patch, baseU, baseV);
-  const frontY = base[1] - 0.004;
-  const frontZ = base[2] - 0.006;
+  const frontY = base[1] + 0.006;
+  const frontZ = base[2] - 0.004;
   b.quad(
     [-wide, frontY, frontZ],
     [wide, frontY, frontZ],
