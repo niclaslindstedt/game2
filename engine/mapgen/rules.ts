@@ -3001,6 +3001,28 @@ export const STAGE_RULES = {
      * `climb` above is the gentler grade the RUNOFF is battered to, and
      * this is the most any built slope past it may steepen to. */
     climbable: 0.62,
+    /** THE CREST OF A FILL — how far past the lip an embankment's side is
+     * rounded over before it falls at its own grade, m. The lip is level
+     * and the side falls at `climb` or steeper, and a KINK between the two
+     * is a shape the ground lattice cannot draw: a tile triangle from a
+     * corner on the verge to one down the face chords under the crest by
+     * up to half a cell's fall — one to four metres on a tall fill — and
+     * along the road that chord comes and goes once a cell, a step in the
+     * verge on every country that the analysis reports as a face
+     * (`rollers.grade`) and the picture shows as the ribbon's edge standing
+     * over a trench. So the side leaves the lip LEVEL and steepens evenly
+     * over this run until it is falling at the fill's grade, and is straight
+     * at that grade from there; the fill's top is half this run wider and
+     * its face no different. Three lattice cells: a chord `c` long sags
+     * under the arc by `grade · c² / (8 · crest)`, the cell diagonal by a
+     * metre and a quarter on a face at a grade of one, which the lattice
+     * takes up inside the verge's own tolerance. A RUN and not a bend,
+     * because a fill on a steep hillside stands at its hillside's grade
+     * plus a little, and a crest rounded to a fixed bend held such a fill
+     * out over the falling country for a hundred metres — landing it on a
+     * face at `climbable` at the end of its reach. (`rules_test` holds the
+     * run to the lattice.) */
+    crest: 42,
     /** ...and where the cone LETS GO: how much of the END of its reach it
      * blends back onto the country over, m. A cone is a min, and a min that
      * simply stops being asked past its reach ends in a WALL — the country

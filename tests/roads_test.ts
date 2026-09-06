@@ -322,6 +322,47 @@ describe("junctions (R17)", () => {
   const branchesOf = (track: ReturnType<typeof compileStage>) =>
     track.spurs.filter((s) => !s.crossing);
 
+  it("never forks two branches down one face closer than the country can climb (R23 + R31)", () => {
+    // Two branches are two roads, and the ground between them is whatever
+    // joins their shelves: where one stands more over the other than
+    // `verge.climb` past the bench allows across the gap, that ground is a
+    // face. The route is held off its own stacked legs by this rule in the
+    // search; a fork is refused at trial by the same rule against the arms
+    // already taken (`armsKeepHeight`). The alpine at the campaign dials is
+    // where it bit — seed 6 forked two arms off stacked hairpin legs, 36 m
+    // apart in height and 75 m on the map — so those dials are swept here
+    // beside the taiga's. The floor is the analysis's own (`roads.step`
+    // reports nothing under 1.2 m of excess): the real arm is built from
+    // the compiled samples and lands metres from where the trial walked.
+    const alpine = { biome: "alpine" as const, asphalt: 0.5, elevation: 0.6, steepness: 0.6 };
+    const stages = [
+      ...seeds.map((seed) => stageTrack(seed, "medium", { asphalt: 0.4 })),
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((seed) => stageTrack(seed, "medium", alpine)),
+    ];
+    let pairs = 0;
+    for (const track of stages) {
+      const bench = Math.max(track.width / 2 + ROAD_CROSS.reach, R.verge.bench);
+      const arms = branchesOf(track);
+      for (let a = 0; a < arms.length; a++) {
+        for (let b = a + 1; b < arms.length; b++) {
+          pairs++;
+          for (let i = 0; i < arms[a].samples.length; i += 4) {
+            const p = arms[a].samples[i];
+            for (let k = 0; k < arms[b].samples.length; k += 4) {
+              const q = arms[b].samples[k];
+              const d = Math.hypot(p.x - q.x, p.z - q.z);
+              if (d > 150) continue;
+              const excess =
+                Math.abs(p.elevation - q.elevation) - Math.max(0, d - bench) * R.verge.climb;
+              expect(excess).toBeLessThanOrEqual(1.2);
+            }
+          }
+        }
+      }
+    }
+    expect(pairs).toBeGreaterThan(0);
+  });
+
   it("changes surface only at a corner, and puts a junction there", () => {
     for (const seed of seeds) {
       const track = stageTrack(seed, "medium", { asphalt: 0.4 });

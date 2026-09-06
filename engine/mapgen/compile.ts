@@ -849,6 +849,55 @@ function branchClearance(
   };
 }
 
+/** R23 + R31 — does a trial arm keep its distance from the other arms IN
+ * HEIGHT? Two branches down one hillside are two roads like any other pair,
+ * and the ground between them is whatever joins their two shelves: where
+ * the higher one stands more over the lower than the country may climb
+ * across the gap (`verge.climb` past the bench), that ground is a face. The
+ * route is held off its own stacked legs by exactly this rule
+ * (`search.ts`'s `armSeparation`); the branches forked off two of those
+ * legs were not, and ran down the same face 36 m apart in height and 75 m
+ * on the map (alpine seed 6 at the campaign dials). Nothing downstream can
+ * mend it — a branch is pinned to its junction's platform, so folding the
+ * other arms into its band clamps a step into the arm and moves the face
+ * nowhere — so the second fork is refused HERE, and the search draws
+ * another corner.
+ *
+ * Nobody is exempt: two arms share no meeting point. And it is stricter
+ * than the analysis's `roads.step`, which forgives `stepFloor` of excess:
+ * this forgives none, and takes the branch's own stride slack off the
+ * distance, because the real arm is built from the compiled samples and
+ * lands metres from where this trial walked. The distance half of R23 is
+ * `branchClearance`'s; at no height difference this asks for less than it
+ * and adds nothing. */
+function armsKeepHeight(arm: Spur, others: readonly Spur[], bench: number): boolean {
+  const STRIDE = 8;
+  const climb = R.verge.climb;
+  const slack = BRANCH_DISTANCE_SLACK;
+  for (const other of others) {
+    const b = other.bounds;
+    if (
+      arm.bounds.maxX < b.minX - ROAD_DISTANCE_REACH ||
+      arm.bounds.minX > b.maxX + ROAD_DISTANCE_REACH ||
+      arm.bounds.maxZ < b.minZ - ROAD_DISTANCE_REACH ||
+      arm.bounds.minZ > b.maxZ + ROAD_DISTANCE_REACH
+    ) {
+      continue;
+    }
+    for (let i = 0; i < arm.samples.length; i += STRIDE) {
+      const a = arm.samples[i];
+      for (let k = 0; k < other.samples.length; k += STRIDE) {
+        const o = other.samples[k];
+        const need = bench + Math.abs(a.elevation - o.elevation) / climb + slack;
+        const dx = a.x - o.x;
+        const dz = a.z - o.z;
+        if (dx * dx + dz * dz < need * need) return false;
+      }
+    }
+  }
+  return true;
+}
+
 /** The incremental heart: walks plans into samples, bounds, and pacenotes,
  * carrying the cursor (and the open pacenote, so a turn combination split
  * across two endless sections still merges into one call). */
@@ -1077,6 +1126,9 @@ function createCompiler(
    * public road lying alongside the stage inside its own junction window,
    * where nothing measures it. */
   const trialArms: Spur[] = [];
+  /** R31's bench, read the way the analysis reads it between two roads:
+   * the route's own corridor, or the verge's, whichever is wider. */
+  const trialBench = Math.max(track.width / 2 + ROAD_CROSS.reach, R.verge.bench);
   const armCanLeave = (
     pose: { x: number; z: number; heading: number; elevation: number; slope: number },
     atS: number,
@@ -1103,6 +1155,7 @@ function createCompiler(
     const b = country.bounds;
     const out = Math.max(b.minX - last.x, last.x - b.maxX, b.minZ - last.z, last.z - b.maxZ);
     if (out < R.junction.armReach * SPUR.escape) return false;
+    if (!armsKeepHeight(trial, trialArms, trialBench)) return false;
     // A true answer here is always taken — the caller flips the surface on
     // it — so this arm is part of the country the next trial is measured
     // against.

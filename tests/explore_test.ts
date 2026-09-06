@@ -30,6 +30,7 @@ import {
   type GameEvent,
   type GameState,
   type SegmentPlan,
+  createLandField,
 } from "@engine";
 
 const LONG_STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 9000, feature: "none" }];
@@ -689,6 +690,48 @@ describe("the terrain field", () => {
         // The exemption is narrow: almost every probe still gets asked.
         expect(probes, `seed ${seed}`).toBeGreaterThan(track.samples.length * 10);
       }
+    });
+
+    it("rounds a fill's crest so the tiles draw it, not a trench under the lip", () => {
+      // The fill's side leaves the lip level and steepens over `verge.crest`
+      // metres before it falls at the fill's own grade. What that buys is
+      // measured a metre past the lip, on the fill side, as the gap
+      // between the analytic field and the lattice drawn from its corners:
+      // under a kinked crest the tiles sagged a mean 0.75 m below the field
+      // there over twelve seeds, a third of the points by over a metre and
+      // the worst by four — a rank rolled along the verge met that sag as
+      // a step once a cell, and the ribbon's edge stood over a trench.
+      // Rounded, the mean is a tenth of a metre and under one point in a
+      // hundred is over a metre. Points beside another road are left out:
+      // that road's own cone cuts the crest, which is the plan's business.
+      let points = 0;
+      let over = 0;
+      let sag = 0;
+      for (const seed of seeds) {
+        const track = compileStage(seed, "medium");
+        const terrain = createTerrain(track);
+        const land = createLandField(seed, track.knobs);
+        for (let i = 0; i < track.samples.length; i += 3) {
+          const s = track.samples[i];
+          if (s.deck || s.jump || s.tunnel) continue;
+          if (s.elevation - land.heightAt(s.x, s.z) < 4) continue;
+          const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
+          for (const side of [-1, 1]) {
+            const lat = side * (s.width / 2 + ROAD_CROSS.reach + 1);
+            const px = s.x + right.x * lat;
+            const pz = s.z + right.z * lat;
+            if (terrain.farHeightAt(px, pz) > s.elevation - 3) continue;
+            if (terrain.spurClearance(px, pz) < 80) continue;
+            const gap = terrain.heightAt(px, pz) - terrain.latticeAt(px, pz);
+            points++;
+            sag += Math.max(0, gap);
+            if (gap > 1) over++;
+          }
+        }
+      }
+      expect(points).toBeGreaterThan(300);
+      expect(sag / points).toBeLessThan(0.25);
+      expect(over / points).toBeLessThan(0.02);
     });
 
     it("leaves almost nothing beside the road the car cannot climb back over", () => {

@@ -984,7 +984,18 @@ export function createTerrain(track: Track): TerrainField {
         best = cell.index[k];
       }
     }
-    if (best < 0) return null;
+    // R24 — the END APRONS reach further than the block does. A point on
+    // an apron's spine, `CORRIDOR_RANGE` out along it, is that plus the
+    // apron's own length from the end sample, and whether the 7x7 block
+    // holds that sample is a matter of where it sits in its cell. So a
+    // point the block holds no road for is asked of the aprons before it
+    // is called open country — without which the run-out past every
+    // finish ended in a wall somewhere between 144 and 192 m out, the
+    // country standing up the whole of what the fill still had to let go.
+    if (best < 0) {
+      if (!nearerApron(x, z, CORRIDOR_RANGE)) return null;
+      return { d: apron.d, index: apron.index, lateral: apron.lateral };
+    }
     const d = Math.sqrt(bestD2);
     if (nearerApron(x, z, d)) return { d: apron.d, index: apron.index, lateral: apron.lateral };
     const s = samples[best];
@@ -1061,7 +1072,14 @@ export function createTerrain(track: Track): TerrainField {
         }
       }
     }
-    if (best < 0) return null;
+    // R24 — and the aprons, where the block holds no sample at all: see
+    // `nearestRoad`. The end sample stands in for the winner; its own cone
+    // is opened at its own distance, as it is when the spine is nearer.
+    if (best < 0) {
+      if (!nearerApron(x, z, CORRIDOR_RANGE)) return null;
+      best = apron.index;
+      bestD2 = apron.d * apron.d;
+    }
     /** The distance to the nearest SAMPLE, which is what its own cone is
      * opened at whether or not the apron's spine stands nearer. */
     const rawD = Math.sqrt(bestD2);
@@ -1385,9 +1403,29 @@ export function createTerrain(track: Track): TerrainField {
     const s = samples[index];
     const g0 = groundUnderAt(index);
     const hill = Math.max(0, (g0 - far) / Math.max(d, R.verge.bench));
-    const land = (s.elevation - g0 + hill * LAND_BY) / (LAND_BY - lip);
-    return Math.max(VERGE_CLIMB, land);
+    const land = landingGrade(s.elevation - g0 + hill * LAND_BY, LAND_BY - lip);
+    // ...and no steeper than a car can climb over and above the hillside's
+    // own fall: a fill too tall to land by the reach at that is landed by
+    // `letGo`'s bound, which is the same grade, rather than by a face.
+    return Math.max(VERGE_CLIMB, Math.min(hill + CLIMBABLE, land));
   };
+  /** THE CREST: how far a fill's side has fallen `past` metres off the lip
+   * on its way to falling at `grade`. Level at the lip and steepening evenly
+   * over `verge.crest` metres until it has reached the grade, straight at
+   * the grade from there — the kink the lattice cannot draw, rounded
+   * (rules.ts). The one shape every fill has, whichever road's it is and
+   * whichever side it is read from. */
+  const CREST: number = R.verge.crest;
+  const fillDrop = (past: number, grade: number): number => {
+    if (past <= 0) return 0;
+    return past < CREST ? (grade * past * past) / (2 * CREST) : grade * (past - CREST / 2);
+  };
+  /** ...and the grade a fill has to fall at to have dropped `drop` metres
+   * by `run` metres off the lip THROUGH that crest — `fillDrop` solved for
+   * the grade. The crest spends its run getting up to speed, so the grade
+   * is steeper than `drop / run` by the half of it. */
+  const landingGrade = (drop: number, run: number): number =>
+    run > CREST ? drop / (run - CREST / 2) : (2 * drop * CREST) / (run * run);
   /** A branch's own corridor edge, m off its centerline — the ribbon and
    * the verge. A branch is never banked, so its cross-section is symmetric
    * and the unsigned distance is the whole story. */
@@ -1949,11 +1987,12 @@ export function createTerrain(track: Track): TerrainField {
     // apart, as the dice changed sign along the road. The land says which
     // side is the cut; the dice only say how steep.
     if (far < s.elevation) {
-      // The fill: its side falls at its own grade (`fillGrade`) until it
-      // lands, and the toe is the crease where it does — let go only at
-      // the reach's end (`letGo`), never eased from the lip.
-      grade = Math.min(grade, -fillGrade(index, d, lip, far));
-      const embankment = s.elevation + (d - lip) * grade;
+      // The fill: its side leaves the lip through the crest (`fillDrop`)
+      // and falls at its own grade (`fillGrade`) until it lands, and the
+      // toe is the crease where it does — let go only at the reach's end
+      // (`letGo`), never eased toward the country from the lip.
+      const fall = Math.max(-grade, fillGrade(index, d, lip, far));
+      const embankment = s.elevation - fillDrop(d - lip, fall);
       return letGo(Math.max(embankment, far), far, d, CORRIDOR_RANGE);
     }
     // The cut: its bench climbs at the dice's grade until it meets the
@@ -1980,7 +2019,7 @@ export function createTerrain(track: Track): TerrainField {
     const s = samples[index];
     if (far >= s.elevation) return far;
     const grade = fillGrade(index, d, lip, far);
-    const embankment = Math.max(far, s.elevation - Math.max(0, d - lip) * grade);
+    const embankment = Math.max(far, s.elevation - fillDrop(d - lip, grade));
     return letGo(embankment, far, d, CORRIDOR_RANGE);
   };
 
@@ -2119,7 +2158,8 @@ export function createTerrain(track: Track): TerrainField {
         if (fillOther > 0 || cutOther > 0) {
           const fill = Math.max(base - far, fillOther, 0);
           const cut = Math.max(far - base, cutOther, 0);
-          const runout = corridorY - (near.d - lip) * fillGrade(near.index, near.d, lip, far);
+          const runout =
+            corridorY - fillDrop(near.d - lip, fillGrade(near.index, near.d, lip, far));
           base = Math.max(far + fill - cut, Math.min(runout, base));
         }
       }
@@ -2162,8 +2202,11 @@ export function createTerrain(track: Track): TerrainField {
         if (shelf > base && past < SPUR_BLEND) {
           const g0 = farField(tall.sample.x, tall.sample.z);
           const hill = Math.max(0, (g0 - far) / Math.max(tall.d, BENCH));
-          const grade = Math.max(VERGE_CLIMB, (shelf - g0 + hill * SPUR_BLEND) / SPUR_BLEND);
-          const fill = letGo(shelf - Math.max(0, past) * grade, far, past, SPUR_BLEND);
+          const grade = Math.max(
+            VERGE_CLIMB,
+            Math.min(hill + CLIMBABLE, landingGrade(shelf - g0 + hill * SPUR_BLEND, SPUR_BLEND)),
+          );
+          const fill = letGo(shelf - fillDrop(past, grade), far, past, SPUR_BLEND);
           if (fill > base) base = fill;
         }
       }
