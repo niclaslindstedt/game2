@@ -620,16 +620,19 @@ describe("the jump", () => {
     // and the car that stops rolling has lost its glass and is folded on
     // whichever faces it came down on.
     //
-    // THE ENTRY HAS TO BE A HALF-TURN ONE, and that is the whole reason it
-    // is not the -16 the trip test uses: -16 is a car that goes over its
+    // THE ENTRY HAS TO PUT THE ROOF DOWN, and that is the whole reason it is
+    // not the -16 the trip test uses: -16 is a car that goes over its
     // outside wheels and stops there, on one flank, having put one door and
     // one mirror into the ground. That is a rolled car and it is not a
-    // STRIPPED one — its roof was never down. If a change to the roll moves
-    // this, re-pick it the same way rather than softening the bar below:
-    // sweep the entries and take one that finishes ON ITS ROOF, which is
-    // `Math.abs(rollTilt(roll))` near a half turn. A rollover is chaotic
-    // enough that the entries either side of it finish anywhere at all.
-    const { state } = landSideways(30, -25);
+    // STRIPPED one — its roof was never down. If a change to the roll or to
+    // the air moves this, re-pick it the same way rather than softening the
+    // bar below: sweep the entries and take one that loses ALL FOUR PANES
+    // and carries roof crush, which is the pair no car gets without having
+    // been upside down at some point in the roll. Where it comes to REST is
+    // not the test — a body that went over its roof and settled back onto a
+    // flank has still been stripped — and a rollover is chaotic enough that
+    // the entries either side finish anywhere at all.
+    const { state } = landSideways(30, -29);
     expect(onItsWheels(state.car.roll, state.car.pitch)).toBe(false);
     const damage = state.car.damage;
     for (const pane of ["glassF", "glassB", "glassR", "glassL"]) {
@@ -668,11 +671,11 @@ describe("the jump", () => {
     // rule for the FIELD — every rival is stepped through the same code.
     // A COMMITTED ENTRY, re-picked the way the stripping test above says to:
     // sweep the entries and take one that finishes off its wheels, from a run
-    // of neighbours that all do. -16 was that once; with the roll's ledger
-    // settled it carries further and comes back down on its tyres, which is a
-    // fine thing for a car to do and no use for testing what happens to one
-    // that does not.
-    const { state } = landSideways(30, -18);
+    // of neighbours that all do (-26 through -29 are one such run). -16 was
+    // that once; with the roll's ledger settled it carries further and comes
+    // back down on its tyres, which is a fine thing for a car to do and no
+    // use for testing what happens to one that does not.
+    const { state } = landSideways(30, -27);
     expect(state.overturned).not.toBeNull();
     const respawns = state.stats.respawns;
     // Nothing moves while it lies there...

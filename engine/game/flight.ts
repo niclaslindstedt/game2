@@ -15,6 +15,7 @@
 // Past that line the car belongs to `roll.ts`.
 
 import { clamp } from "../lib/math.ts";
+import { aeroTrim, airDrag } from "./aero.ts";
 import { surfaceGripFor } from "./limits.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
@@ -371,7 +372,13 @@ export function stepAirborne(
   const delta = car.yawRate * dt;
   car.heading += delta;
   rotateFrame(car, delta);
-  car.u -= T.air.drag * car.u * dt;
+  // THE AIR, on all three axes at once (game/aero.ts). An ordinary jump
+  // flies nose-on and barely feels it — which is the "flight carries" this
+  // has always been tuned for — but a car that has gone off something tall
+  // is travelling mostly straight DOWN through its own floor, and that is
+  // the attitude where the air is worth something: the fall stops gathering
+  // speed at the terminal velocity the car's own shape and weight set.
+  airDrag(spec, car, dt);
   updateSlip(car);
 
   // Nothing is holding the driven wheels back off the ground, so they answer
@@ -405,7 +412,11 @@ export function stepAirborne(
   // flying over.
   const path = Math.max(6, Math.hypot(car.u, car.w));
   const lead = car.u / path;
-  settlePitch(car, Math.atan2(car.vy * lead, path));
+  // ...and the AIR's own say on top of the arc (game/aero.ts): the wing's
+  // downforce lifting the nose over a jump, the same blade and the body's
+  // own plan area pitching it down into a fall. Nothing on a car with no
+  // wing and no flow flies any differently than it always has.
+  settlePitch(car, Math.atan2(car.vy * lead, path) + aeroTrim(spec, car));
 
   // The ground under where the car has just moved TO — the road's profile
   // or the terrain, whichever the step is over, read there and not carried

@@ -99,6 +99,30 @@ describe("the catalog and the body specs", () => {
     for (const car of CARS) expect(CAR_BODIES[car.id]).toBeDefined();
   });
 
+  it("the aero wing is the blade that is actually DRAWN on the car", () => {
+    // `CarSpec.aero.wing` is a plan area in m² and `wingArm` how far behind
+    // the weight it acts, and both are measurements OFF THE DRAWN BODY —
+    // the same contract the collision box has. A wing restyled without the
+    // catalog following it is a car whose nose lifts over a jump for a blade
+    // that is no longer there.
+    for (const car of CARS) {
+      const spoiler = CAR_BODIES[car.id].spoiler;
+      if (!spoiler || spoiler.kind === "none") {
+        expect(car.aero.wing, car.name).toBe(0);
+        continue;
+      }
+      // A plain lip has no chord of its own to speak of; everything else is
+      // span times chord. The blade is what the air gets to work on, so the
+      // tolerance is generous — this catches a restyle, not a millimetre.
+      const chord = "chord" in spoiler ? spoiler.chord : 0.08;
+      expect(car.aero.wing, car.name).toBeCloseTo(spoiler.span * chord, 1);
+      // ...and the arm is that blade's station plus how far ahead of the
+      // wheelbase's middle `balance` puts the weight.
+      const ahead = (car.balance - 0.5) * 2 * TUNING.collision.halfBase;
+      expect(car.aero.wingArm, car.name).toBeCloseTo(-spoiler.z + ahead, 1);
+    }
+  });
+
   it("an unknown car still gets a body, recolored in its own livery", () => {
     const body = bodySpecFor({ ...CARS[0], id: "nope", color: 0x123456, accent: 0x654321 });
     expect(body.colors.paint).toBe(0x123456);

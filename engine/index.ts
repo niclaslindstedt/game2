@@ -54,6 +54,7 @@ export {
   REAR_LAMPS,
   WHEEL_PARTS,
   rollTilt,
+  travelSpeed,
   updateSlip,
   type RetireReason,
   type CarDamage,
@@ -151,6 +152,10 @@ export {
   type MassSpread,
   type Weight,
 } from "./game/roll.ts";
+// ...and THE AIR the same body is falling through: the drag area its
+// attitude turns into the airflow, and the speed that area holds a fall to
+// (aero.ts).
+export { aeroTrim, airDrag, dragArea, terminalSpeed } from "./game/aero.ts";
 // ...and how much of what is on the ground is still RUBBER, which is the
 // whole of what a driver has left while the car is going over — beside the
 // PATCH the whole crash is read off, so the tests can hold its arm to being
