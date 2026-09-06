@@ -139,7 +139,7 @@ describe("a field on a stage that has caught somebody out", () => {
         {
           seed: trap.seed,
           laps: 1,
-          timeOfDay: "day",
+          hour: 12,
           weather: "clear",
           season: "summer",
         },

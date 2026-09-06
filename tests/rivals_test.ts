@@ -153,7 +153,7 @@ describe("the three difficulties", () => {
     const field = createField(
       compileStage(44, "short"),
       { ...RALLY_FIELD, difficulty: "easy" },
-      { seed: 44, laps: 1, timeOfDay: "day", weather: "clear", season: "summer" },
+      { seed: 44, laps: 1, hour: 12, weather: "clear", season: "summer" },
     );
     for (const run of field.runs) expect(run.state.car.damageScale).toBe(1);
   });
@@ -303,7 +303,7 @@ describe("the field on the road", () => {
   const stage = {
     seed: 44,
     laps: 1,
-    timeOfDay: "day",
+    hour: 12,
     weather: "clear",
     season: "summer",
   } as const;

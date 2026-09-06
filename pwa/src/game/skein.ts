@@ -18,9 +18,8 @@
 // autumn mean to anything with wings; in SUMMER the same birds are still
 // here, but they are flying between one lake and the next, so they are
 // lower, in smaller groups, in lines rather than vees, and on no particular
-// bearing. The compass is anchored to the sun, which is the only thing in
-// this world that has ever claimed a direction (`SUN_AZIMUTH` stands in the
-// south, as it does at these latitudes).
+// bearing. The compass is anchored to the noon sun, which is the only thing
+// in this world that has ever claimed a direction (daylight.ts's `SOUTH`).
 //
 // Pure presentation, like everything beside it: all randomness here is
 // renderer-side and can never touch the simulation. The plan half —
@@ -30,7 +29,7 @@
 import * as THREE from "three";
 import type { Season } from "@engine";
 
-import { SUN_AZIMUTH } from "./sky.ts";
+import { SOUTH } from "./daylight.ts";
 
 /** What is flying. Two birds, and they are not the same bird in different
  * paint: a swan is half again the span, beats half as fast, holds its neck
@@ -109,10 +108,10 @@ const KINDS: Record<
  * and not a plank. */
 const BEAT = { down: 0.85, up: 0.45, dihedral: 0.06 };
 
-/** THE COMPASS. The sun stands in the south all day in this world, which
- * makes `SUN_AZIMUTH` the one bearing anything can be stated against. */
-const SOUTH = SUN_AZIMUTH;
-const NORTH = SUN_AZIMUTH + Math.PI;
+/** THE COMPASS. The noon sun stands in the south in this world, which
+ * makes daylight.ts's `SOUTH` the one bearing anything can be stated
+ * against. */
+const NORTH = SOUTH + Math.PI;
 
 /** How far apart they stand, in SPANS: across the track and back along it.
  * A real skein flies about a wingspan apart; this is a fifth wider, because

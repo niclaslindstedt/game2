@@ -300,6 +300,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const applyLighting = (): void => {
     environment.setLighting(quality.lighting);
     setDustLampCap(2 * DUST_LAMP_CARS[quality.lighting]);
+    environment.setSkyLook(quality.sky);
   };
   applyLighting();
 
@@ -545,7 +546,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (car) tintCar(car, tint, lit, rain, snowing);
     if (ghostCar) tintCar(ghostCar, tint, lit, rain, snowing);
     field.paint(tint, lit, rain);
-    carFx.setTint(tint, environment.dustTint(), environment.ceiling());
+    carFx.setTint(tint, environment.dustTint(), environment.ceiling(), environment.highTint());
   };
 
   /** How thick the transient FX are right now: the effects budget, and
@@ -651,6 +652,18 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     }
     const biome = state.track.knobs.biome;
     environment.apply(state.env, biome);
+    // The ground the sky stands over: where the road goes lowest (the mist
+    // pools there, the deck hangs over it) and highest, and the country's
+    // own heightfield for the shadow a low sun leaves behind a ridge.
+    let floor = Infinity;
+    let peak = -Infinity;
+    for (const sample of state.track.samples) {
+      if (sample.elevation < floor) floor = sample.elevation;
+      if (sample.elevation > peak) peak = sample.elevation;
+    }
+    environment.setGround(
+      Number.isFinite(floor) ? { floor, peak, heightAt: state.terrain.heightAt } : null,
+    );
     life.setCountry(biome, state.env.season);
     // Rain settles the stage. There is no cloud to tow once the surface is
     // soaked — what the wheels lift is clods — so the two swap over here,
@@ -1442,6 +1455,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     environment.lightDust(state.car);
     field.lightDust(environment.lampPower());
     if (fx > 0) {
+      // The sky's light moves with the sun, so what the birds and the
+      // contrails are lit by is read every frame: a trail at airliner
+      // height burns the sunset's orange after the valley has gone grey.
+      life.setSky(environment.carTint(), environment.ceiling(), environment.highTint());
       life.update(chase.camera, state.wind.x, state.wind.z, dt, state.terrain.groundAt, state.car);
     }
     life.group.visible = fx > 0;

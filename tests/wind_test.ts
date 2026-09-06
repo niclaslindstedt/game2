@@ -80,11 +80,11 @@ describe("the wind", () => {
 
   it("defaults to a clear day and carries the chosen conditions", () => {
     const plain = createGame({ seed: 1 });
-    expect(plain.env.timeOfDay).toBe("day");
+    expect(plain.env.hour).toBe(12);
     expect(plain.env.weather).toBe("clear");
 
-    const night = createGame({ seed: 1, env: { timeOfDay: "night", weather: "storm" } });
-    expect(night.env.timeOfDay).toBe("night");
+    const night = createGame({ seed: 1, env: { hour: 0, weather: "storm" } });
+    expect(night.env.hour).toBe(0);
     expect(night.env.weather).toBe("storm");
   });
 

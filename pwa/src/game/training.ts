@@ -13,7 +13,7 @@
 // menu's own row. That separation is the whole design — a place to learn a
 // car in stops being one the moment it starts keeping score.
 
-import { ARENA_SEED } from "@engine";
+import { ARENA_SEED, DEFAULT_HOUR } from "@engine";
 
 import type { CampaignLevel, CampaignLocation } from "./campaign.ts";
 
@@ -31,7 +31,7 @@ export const TRAINING_LEVEL: CampaignLevel = {
   // Fixed conditions, on purpose: a car is judged against the last car you
   // drove here, and a low sun or a wet surface would make that judgement
   // about the weather instead.
-  timeOfDay: "day",
+  hour: DEFAULT_HOUR,
   weather: "clear",
   season: "summer",
   blurb: "Tarmac, gravel, a jump and a yard full of cones",

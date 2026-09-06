@@ -39,6 +39,7 @@
 // not served by a row of layer buttons across the country.
 
 import { levelForRoad, type CampaignLevel, type CampaignProgress } from "./campaign.ts";
+import { HOURS, daylightAt, hourOfStop, hourStop } from "./daylight.ts";
 import { MapPane, type MapRect, type MapView } from "./map-pane.tsx";
 import { StagePicker } from "./menu-levels.tsx";
 import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
@@ -50,7 +51,6 @@ import {
   STAGE_SHAPES,
   SEASONS,
   TEMPERATURES,
-  TIMES_OF_DAY,
   challengeGlyph,
   challengeWord,
   dialStop,
@@ -274,12 +274,22 @@ export function RoamPage({
                   actually gets are offered (R40), which is why moving that
                   dial can take this one with it. */}
               <KnobGroup title="SKY" glyph="sun">
+                {/* THE HOUR the stage starts at, on a clock — and the sun
+                    moves from there at an hour a minute, so a stage set at
+                    sunset is driven into the dark. What 16:00 LOOKS like is
+                    the season's and the country's to say (daylight.ts): a
+                    taiga winter afternoon is night by then, and the mark on
+                    the row says which before the map does. */}
                 <StepRow
-                  label="TIME"
-                  glyph="sun"
-                  stops={TIMES_OF_DAY}
-                  value={race.timeOfDay}
-                  onPick={(timeOfDay) => onRace({ ...race, timeOfDay })}
+                  label="HOUR"
+                  glyph={
+                    daylightAt(race.hour, race.season, race.knobs.biome) === "night"
+                      ? "moon"
+                      : "sun"
+                  }
+                  stops={HOURS}
+                  value={hourStop(race.hour)}
+                  onPick={(stop) => onRace({ ...race, hour: hourOfStop(stop) })}
                 />
                 <StepRow
                   label="WEATHER"

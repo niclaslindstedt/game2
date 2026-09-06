@@ -17,7 +17,7 @@
 // Sets window.__done so the screenshot tool knows the sheet is on screen.
 
 import * as THREE from "three";
-import type { GameState, RaceEnv, TimeOfDay, Weather } from "@engine";
+import type { GameState, RaceEnv, Weather } from "@engine";
 
 import { createAmbientLife } from "../game/ambient-life.ts";
 import { createEnvironment } from "../game/environment.ts";
@@ -28,14 +28,18 @@ declare global {
   }
 }
 
-type Row = { name: string; timeOfDay: TimeOfDay; weather: Weather; windSpeed: number };
+/** One row: the hour the sky is set to (the clock is held there — the
+ * sheet is about the traffic, not the sunset), the weather and the wind. */
+type Row = { name: string; hour: number; weather: Weather; windSpeed: number };
 
 const ROWS: Row[] = [
-  { name: "day", timeOfDay: "day", weather: "clear", windSpeed: 2 },
-  { name: "day — hard wind aloft", timeOfDay: "day", weather: "clear", windSpeed: 9 },
-  { name: "dusk", timeOfDay: "dusk", weather: "clear", windSpeed: 2 },
-  { name: "night", timeOfDay: "night", weather: "clear", windSpeed: 2 },
-  { name: "rain — under the deck", timeOfDay: "day", weather: "rain", windSpeed: 5 },
+  { name: "day", hour: 12, weather: "clear", windSpeed: 2 },
+  { name: "day — hard wind aloft", hour: 12, weather: "clear", windSpeed: 9 },
+  // The sun on the horizon of a June evening at 62°N: the trails burn
+  // while the ground is grey.
+  { name: "dusk — 21:30", hour: 21.5, weather: "clear", windSpeed: 2 },
+  { name: "night — 01:00", hour: 1, weather: "clear", windSpeed: 2 },
+  { name: "rain — under the deck", hour: 12, weather: "rain", windSpeed: 5 },
 ];
 
 /** Where in a race each column stands, s. The last is a two-minute stage's
@@ -102,15 +106,19 @@ async function main(): Promise<void> {
   const environment = createEnvironment(scene);
   environment.setEffects(1);
 
-  /** The slice of `GameState` the atmosphere actually reads. */
+  /** The slice of `GameState` the atmosphere actually reads. The clock is
+   * held at zero, so a row's sky is the hour it names. */
   const state = {
+    t: 0,
+    env: null as unknown as RaceEnv,
     wind: { x: 0, z: 0 },
     car: { x: 0, y: 0, z: 0, heading: 0 },
+    track: { climate: { season: "summer", temperature: 18 } },
   } as unknown as GameState;
 
   ROWS.forEach((row, r) => {
     const env: RaceEnv = {
-      timeOfDay: row.timeOfDay,
+      hour: row.hour,
       weather: row.weather,
       season: "summer",
       temperature: 18,
@@ -118,6 +126,7 @@ async function main(): Promise<void> {
       windSpeed: row.windSpeed,
       gustPhase: 0,
     };
+    state.env = env;
     environment.apply(env);
     state.wind.x = Math.sin(env.windDir) * env.windSpeed;
     state.wind.z = Math.cos(env.windDir) * env.windSpeed;
@@ -127,14 +136,16 @@ async function main(): Promise<void> {
     // only way the sheet can show a sky FILLING UP.
     const life = createAmbientLife();
     scene.add(life.group);
-    life.setSky(environment.carTint(), environment.ceiling());
+    life.setSky(environment.carTint(), environment.ceiling(), environment.highTint());
 
     let z = 0;
     // One frame before the first shot, because the sky it opens on is laid
     // by the first update rather than by the constructor — so this IS the
     // grid, and photographing an untouched instance would only show that a
-    // pool starts empty.
+    // pool starts empty. The environment gets the same frame: the dome is
+    // placed on the eye by its update, as it is in the game.
     camera.position.set(0, 2.2, 0);
+    environment.update(state, camera, STEP);
     life.update(camera, state.wind.x, state.wind.z, STEP);
     let clock = STEP;
     MOMENTS.forEach((moment, c) => {

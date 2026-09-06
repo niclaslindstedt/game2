@@ -147,7 +147,7 @@ describe("biome banners", () => {
         seed: level.seed,
         length: level.length,
         shape: level.shape ?? "sprint",
-        timeOfDay: level.timeOfDay,
+        hour: level.hour,
         weather: level.weather,
         season: level.season,
       });

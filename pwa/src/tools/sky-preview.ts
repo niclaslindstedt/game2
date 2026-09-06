@@ -1,19 +1,24 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Sky preview harness — the page scripts/sky-preview.mjs drives. Renders a
 // contact sheet of the REAL atmosphere module (environment.ts, over sky.ts,
-// clouds.ts, storm.ts and rain.ts): one row per weather, one column per
-// time of day, plus a row that catches a lightning strike at its peak.
+// the shader sky, clouds.ts, storm.ts and rain.ts): one row per weather,
+// one column per HOUR of a September day at 62°N, plus a row that catches
+// a lightning strike at its peak, and the same clear day drawn by the
+// simple sky for the LOW setting.
 //
 // It exists because the sky is the one part of this game a screenshot of a
 // RUN cannot review. Weather is chosen per stage, a flash lasts a fifth of
 // a second, and the difference between the skies is a comparison — you have
-// to see the white one beside the black one to know either is right. Sets
-// window.__done so the screenshot tool knows the sheet is on screen.
+// to see the white one beside the black one to know either is right, and
+// the sunset beside the twilight beside the dark to know the ladder holds.
+// Sets window.__done so the screenshot tool knows the sheet is on screen.
 
 import * as THREE from "three";
-import type { GameState, RaceEnv, TimeOfDay, Weather } from "@engine";
+import type { GameState, RaceEnv, Weather } from "@engine";
 
 import { createEnvironment } from "../game/environment.ts";
+import { hourLabel } from "../game/daylight.ts";
+import type { VideoSettings } from "../game/settings.ts";
 
 declare global {
   interface Window {
@@ -28,26 +33,38 @@ type Row = {
   name: string;
   weather: Weather;
   windSpeed: number;
+  /** Which sky draws it. */
+  sky: VideoSettings["sky"];
+  /** The seeded gust phase — what the clouds are dressed from. */
+  gust?: number;
   /** Hold the frame until a strike is at its brightest. */
   catchStrike?: boolean;
 };
 
 const ROWS: Row[] = [
-  { name: "clear", weather: "clear", windSpeed: 1.5 },
-  { name: "rain — thin, high deck", weather: "rain", windSpeed: 3.5 },
-  { name: "rain — low and leaden", weather: "rain", windSpeed: 6.5 },
-  { name: "storm — squall", weather: "storm", windSpeed: 7 },
-  { name: "storm — black anvil", weather: "storm", windSpeed: 11 },
-  { name: "storm — the strike", weather: "storm", windSpeed: 11, catchStrike: true },
+  { name: "clear — the full sky", weather: "clear", windSpeed: 1.5, sky: "full" },
+  { name: "clear — another seed's sky", weather: "clear", windSpeed: 2.5, sky: "full", gust: 2.2 },
+  { name: "clear — the simple sky (LOW)", weather: "clear", windSpeed: 1.5, sky: "simple" },
+  { name: "rain — thin, high deck", weather: "rain", windSpeed: 3.5, sky: "full" },
+  { name: "rain — low and leaden", weather: "rain", windSpeed: 6.5, sky: "full" },
+  { name: "storm — squall", weather: "storm", windSpeed: 7, sky: "full" },
+  { name: "storm — black anvil", weather: "storm", windSpeed: 11, sky: "full" },
+  { name: "storm — the strike", weather: "storm", windSpeed: 11, sky: "full", catchStrike: true },
 ];
 
-const TIMES: TimeOfDay[] = ["dawn", "day", "dusk", "night"];
+/** The hours photographed — a late-September day over the taiga, which
+ * has a sunrise at 06:14 and a sunset at 17:46 (daylight.ts): the dark
+ * before dawn, the dawn twilight, the sun just up, mid-morning, noon, the
+ * golden hour, the sun on the horizon, dusk twilight, and night. */
+const HOURS = [5, 6, 6.75, 9, 12, 16.5, 17.75, 18.5, 22];
 
-const CELL_W = 460;
-const CELL_H = 300;
+const CELL_W = 400;
+const CELL_H = 260;
 
 /** How long the sky is run before it is photographed, s, and at what step.
- * The clouds have to have drifted and the rain has to have filled the box. */
+ * The clouds have to have drifted and the rain has to have filled the box.
+ * The clock is HELD: `t` stays at zero, so the column is the hour it says
+ * rather than a minute of sun past it. */
 const WARM_S = 6;
 /** …and how long the strike row is allowed to wait for one, s. A storm
  * strikes several times a minute at its peak, so this is many chances. */
@@ -68,6 +85,12 @@ const PACE = 32;
 /** How far down the road the harness ever drives, m — the strike row runs
  * the longest and everything it can see has to reach that far. */
 const RUN_M = 1700;
+
+/** The country the harness stands in: a gentle valley under the road, so
+ * the mist has somewhere to lie and the sun something to hide behind. */
+function heightAt(x: number, z: number): number {
+  return -6 + 4 * Math.sin(z / 300) + 26 * Math.max(0, Math.abs(x) - 80) * 0.02;
+}
 
 /** Trees to put something in front of the light. Spread over the whole run,
  * because a camera that drives out of the wood photographs an empty plain
@@ -95,7 +118,7 @@ function plant(scene: THREE.Scene): void {
 
 async function main(): Promise<void> {
   const canvas = document.getElementById("stage") as HTMLCanvasElement;
-  const width = CELL_W * TIMES.length;
+  const width = CELL_W * HOURS.length;
   const height = CELL_H * ROWS.length;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setSize(width, height, true);
@@ -131,24 +154,30 @@ async function main(): Promise<void> {
 
   const environment = createEnvironment(scene);
   environment.setEffects(1);
+  environment.setGround({ floor: 0, peak: 30, heightAt });
 
   /** The slice of `GameState` the atmosphere actually reads. */
   const state = {
+    t: 0,
+    env: null as unknown as RaceEnv,
     wind: { x: 0, z: 0 },
     car: { x: 0, y: 0, z: 0, heading: 0 },
+    track: { climate: { season: "autumn", temperature: 12 } },
   } as unknown as GameState;
 
   ROWS.forEach((row, r) => {
-    TIMES.forEach((timeOfDay, c) => {
+    HOURS.forEach((hour, c) => {
       const env: RaceEnv = {
-        timeOfDay,
+        hour,
         weather: row.weather,
-        season: "summer",
-        temperature: 18,
+        season: "autumn",
+        temperature: 12,
         windDir: 0.7,
         windSpeed: row.windSpeed,
-        gustPhase: 0,
+        gustPhase: row.gust ?? 0.4,
       };
+      state.env = env;
+      environment.setSkyLook(row.sky);
       environment.apply(env);
       // A steady quartering wind, which is what the sheet leans on.
       state.wind.x = Math.sin(env.windDir) * env.windSpeed;
@@ -198,7 +227,7 @@ async function main(): Promise<void> {
       renderer.setViewport(c * CELL_W, y, CELL_W, CELL_H);
       renderer.setScissor(c * CELL_W, y, CELL_W, CELL_H);
       renderer.render(scene, camera);
-      if (r === 0) addLabel(timeOfDay, c, 0);
+      if (r === 0) addLabel(hourLabel(hour), c, 0);
     });
     addLabel(row.name, 0, r, 20);
   });

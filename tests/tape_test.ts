@@ -37,7 +37,7 @@ const STAGE: TapeStage = {
     width: 0.55,
     challenge: 0.5,
   },
-  timeOfDay: "day",
+  hour: 12,
   weather: "clear",
   season: "summer",
 };

@@ -32,6 +32,10 @@ export type Stop<T extends string> = { id: T; label: string; hint?: string };
  * caption bar passes its setter; the pause card passes nothing. */
 export type OnHint = (hint: string | null) => void;
 
+/** The longest ladder still drawn as pips under its value. The temperature
+ * row's thirteen fit; the hour row's twenty-four do not. */
+const PIPS_AT_MOST = 14;
+
 /** THE MARK A ROW LEADS WITH, where the page has one to give it. A word is
  * read; a mark is recognised, and a column of a dozen rows is scanned by
  * recognition rather than read top to bottom — which is what a page of
@@ -105,11 +109,17 @@ export function StepRow<T extends string>({
         </button>
         <span className="knob-value">
           <span className="knob-word">{current.label}</span>
-          <span className="knob-pips" aria-hidden="true">
-            {stops.map((stop, i) => (
-              <i key={stop.id} className={`knob-pip ${i === at ? "knob-pip-on" : ""}`} />
-            ))}
-          </span>
+          {/* The pips say where on a SHORT ladder the value stands. A clock
+              of twenty-four is not a ladder anyone reads by counting dots,
+              and two dozen of them are wider than the value they sit
+              under — the label carries a long ladder on its own. */}
+          {stops.length <= PIPS_AT_MOST && (
+            <span className="knob-pips" aria-hidden="true">
+              {stops.map((stop, i) => (
+                <i key={stop.id} className={`knob-pip ${i === at ? "knob-pip-on" : ""}`} />
+              ))}
+            </span>
+          )}
         </span>
         <button
           type="button"

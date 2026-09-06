@@ -21,7 +21,14 @@ export {
 } from "./output.ts";
 
 // The simulation.
-export { createGame, skipIntro, startsIn, step, type CreateGameOptions } from "./game/step.ts";
+export {
+  DEFAULT_HOUR,
+  createGame,
+  skipIntro,
+  startsIn,
+  step,
+  type CreateGameOptions,
+} from "./game/step.ts";
 // A run stood at a moment instead of driven to it (place.ts).
 export { placeRun, type RunMoment } from "./game/place.ts";
 export {
@@ -72,9 +79,9 @@ export {
   type RaceEnv,
   type RunStats,
   type Season,
-  type TimeOfDay,
   type Weather,
 } from "./game/state.ts";
+export { SUN_SECONDS_PER_HOUR, sunHourAt } from "./game/state.ts";
 export {
   CLIMATE,
   SEASONS,
@@ -522,6 +529,7 @@ export { TRACE_EVERY, traceBytes, type RunTrace } from "./sim/trace.ts";
 // The run tape: a whole run written down as the controls that drove it,
 // and the headless race that records or replays one.
 export {
+  HOUR_OF_WORD,
   SAMPLE_EVERY,
   TAPE_FORMAT,
   createTapeRecorder,

@@ -28,6 +28,7 @@
 
 import { TUNING } from "../game/defs/tuning.ts";
 import type { RunStats, Weather } from "../game/state.ts";
+import { DEFAULT_HOUR } from "../game/step.ts";
 import {
   compileStage,
   finishAt,
@@ -119,7 +120,7 @@ export function simulateHeat(options: HeatOptions): HeatResult {
     {
       seed: options.seed,
       laps: 1,
-      timeOfDay: "day",
+      hour: DEFAULT_HOUR,
       weather: options.weather ?? "clear",
       season: "summer",
     },

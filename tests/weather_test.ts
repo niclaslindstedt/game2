@@ -26,7 +26,7 @@ import { coverOf, squallOf } from "../pwa/src/game/weather.ts";
  * scaled by — set by hand. */
 function conditions(over: Partial<RaceEnv>): RaceEnv {
   return {
-    timeOfDay: "day",
+    hour: 12,
     weather: "clear",
     season: "summer",
     temperature: 18,

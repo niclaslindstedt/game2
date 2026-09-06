@@ -16,6 +16,7 @@
 import { NUMERIC_KNOBS, type GameState, type StageKnobs, type Track } from "@engine";
 
 import type { FreeFlyPose } from "./camera-free.ts";
+import { hourLabel } from "./daylight.ts";
 import type { CameraMode } from "./camera.ts";
 import type { MirrorTier } from "./mirror-pace.ts";
 import type { PlayCamera } from "./settings.ts";
@@ -30,7 +31,8 @@ export type DebugStage = {
   laps: number;
   knobs: StageKnobs;
   carId: string;
-  timeOfDay: string;
+  /** The hour the stage started at, 0..24. */
+  hour: number;
   weather: string;
   /** The climate (climate.ts): the season, and the air at the datum or
    * null for the season's own. Part of what the generator BUILT — a winter
@@ -117,7 +119,7 @@ function stageBox(ctx: DebugContext, state: GameState): DebugBox {
       {
         k: "cond",
         v:
-          `${ctx.stage.timeOfDay} ${ctx.stage.weather} · ${ctx.stage.season}` +
+          `${hourLabel(ctx.stage.hour)} ${ctx.stage.weather} · ${ctx.stage.season}` +
           `${ctx.stage.temperature == null ? "" : ` ${ctx.stage.temperature}°C`}`,
       },
       { k: "car", v: `${ctx.stage.carId} (${state.spec.name})` },
@@ -258,7 +260,7 @@ export function stageParams(stage: DebugStage): URLSearchParams {
     length: stage.length,
     shape: stage.shape,
     laps: String(stage.laps),
-    tod: stage.timeOfDay,
+    hour: String(stage.hour),
     weather: stage.weather,
     car: stage.carId,
   });

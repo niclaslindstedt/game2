@@ -85,7 +85,7 @@ function stageLine(header) {
     `seed ${s.seed}`,
     `${s.length} ${s.shape}${s.laps > 1 ? ` ×${s.laps}` : ""}`,
     `${header.car.id} (${header.car.gearbox})`,
-    `${s.timeOfDay}/${s.weather}/${s.season}`,
+    `${s.hour}h/${s.weather}/${s.season}`,
     dials || null,
   ]
     .filter(Boolean)
@@ -175,7 +175,7 @@ function cmdRecord() {
     shape,
     laps: Number(flag("laps", shape === "circuit" ? STAGE_RULES.circuit.laps : 1)),
     knobs,
-    timeOfDay: flag("time", "day"),
+    hour: Number(flag("hour", 12)),
     weather: flag("weather", "clear"),
     season: flag("season", "summer"),
   };

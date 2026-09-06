@@ -12,7 +12,7 @@
 //
 // The pause card holds the run where it stands. The heavy state lives in
 // refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
-// ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, ?gearbox=, the generator dials
+// ?hour=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, ?gearbox=, the generator dials
 // ?elevation= ?steepness= ?water= ?trees= ?asphalt= ?width=, ?start=1, ?shot=1 and ?bot=1) pin a
 // run for tooling and
 // screenshots, and the developer tools add ?debug=1, ?god=1 and the free
@@ -37,6 +37,7 @@ import {
   placeRun,
   resolveKnobs,
   skipIntro,
+  DEFAULT_HOUR,
   status,
   step,
   type CarInput,
@@ -51,7 +52,6 @@ import {
   type StageShape,
   type Difficulty,
   type Season,
-  type TimeOfDay,
   type Track,
   type Weather,
   isBiomeId,
@@ -60,6 +60,7 @@ import {
 import { cacheIdForBase } from "./app-pwa.ts";
 import { shellHost } from "./shell-host.ts";
 import { BENCHMARK, runBenchmark, type BenchmarkStatus } from "./game/benchmark.ts";
+import { hourOfWord, parseHour } from "./game/daylight.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
 import { createMenuNav } from "./game/menu-nav.ts";
@@ -155,7 +156,6 @@ import {
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
   SEASONS,
-  TIMES_OF_DAY,
   WEATHERS,
   gridSize,
   raceLaps,
@@ -391,7 +391,7 @@ function wantsOff(input: CarInput): boolean {
  * fine. */
 function initialRace(): RaceSettings {
   const race: RaceSettings = {
-    timeOfDay: "day",
+    hour: DEFAULT_HOUR,
     weather: "clear",
     season: "summer",
     temperature: null,
@@ -408,6 +408,15 @@ function initialRace(): RaceSettings {
   } catch {
     /* storage unavailable — keep defaults */
   }
+  // A record written when a stage was set by a WORD carries `timeOfDay`
+  // and no hour: it is read as the hour that light happens at in the
+  // season and the country it stored (daylight.ts).
+  const legacy = (race as { timeOfDay?: unknown }).timeOfDay;
+  if (typeof legacy === "string" && typeof race.hour !== "number") {
+    race.hour = hourOfWord(legacy, race.season, race.knobs?.biome ?? "taiga");
+  }
+  delete (race as { timeOfDay?: unknown }).timeOfDay;
+  race.hour = parseHour(race.hour) ?? DEFAULT_HOUR;
   // A record written before HEADS UP existed has no group at all, and one
   // written by a build with fewer settings in it has half a group: both are
   // the defaults with whatever was actually stored laid over them.
@@ -420,8 +429,15 @@ function initialRace(): RaceSettings {
   if (!STAGE_SHAPES.some((s) => s.id === race.shape)) race.shape = "sprint";
   if (!DIFFICULTY_OPTIONS.some((d) => d.id === race.difficulty)) race.difficulty = "medium";
   const params = new URLSearchParams(location.search);
-  const tod = params.get("tod");
-  if (TIMES_OF_DAY.some((t) => t.id === tod)) race.timeOfDay = tod as TimeOfDay;
+  // ?hour= is the sun's clock at the start (0..24); ?tod= is the word a
+  // stage used to be set by, read as the hour that light happens at in the
+  // season and the country the link names (daylight.ts).
+  const hour = parseHour(params.get("hour"));
+  if (hour !== null) race.hour = hour;
+  else {
+    const tod = params.get("tod");
+    if (tod) race.hour = hourOfWord(tod, race.season, race.knobs.biome);
+  }
   const weather = params.get("weather");
   if (WEATHERS.some((w) => w.id === weather)) race.weather = weather as Weather;
   const season = params.get("season");
@@ -589,7 +605,8 @@ type StageSpec = {
    * boxes scale the gear tops and the drive between them (`gearedSpec`), so
    * a measurement that inherited one would be timing a different car. */
   gearbox?: GearboxMode;
-  timeOfDay: TimeOfDay;
+  /** The hour the stage starts at, 0..24 (`RaceEnv.hour`). */
+  hour: number;
   weather: Weather;
   season: Season;
   /** The air at the datum, °C, or null (or absent — the campaign's levels
@@ -630,7 +647,7 @@ function trainingSpec(carId: string): StageSpec {
     // overlay states the ground that is actually there.
     knobs: { ...DEFAULT_KNOBS, ...ARENA_KNOBS, biome: TRAINING_LOCATION.biome },
     carId,
-    timeOfDay: TRAINING_LEVEL.timeOfDay,
+    hour: TRAINING_LEVEL.hour,
     weather: TRAINING_LEVEL.weather,
     season: TRAINING_LEVEL.season,
     // Nobody is waiting on the line: the training ground is a place you
@@ -652,7 +669,7 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     NUMERIC_KNOBS.every((key) => a.knobs[key] === b.knobs[key]) &&
     a.carId === b.carId &&
     a.gearbox === b.gearbox &&
-    a.timeOfDay === b.timeOfDay &&
+    a.hour === b.hour &&
     a.weather === b.weather &&
     a.season === b.season &&
     (a.temperature ?? null) === (b.temperature ?? null) &&
@@ -673,7 +690,7 @@ function demoStage(race: RaceSettings, seed: number): StageSpec {
     laps: 1,
     knobs: race.knobs,
     carId: race.carId,
-    timeOfDay: race.timeOfDay,
+    hour: race.hour,
     weather: race.weather,
     season: race.season,
     temperature: race.temperature,
@@ -694,7 +711,7 @@ function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed:
         laps: lapsOverride() ?? raceLaps(race),
         knobs: race.knobs,
         carId: race.carId,
-        timeOfDay: race.timeOfDay,
+        hour: race.hour,
         weather: race.weather,
         season: race.season,
         temperature: race.temperature,
@@ -1445,7 +1462,7 @@ export function App() {
       // driven. The rivals are never scaled (`createField`): what the crews
       // do to each other is the simulation being honest.
       damageScale: damageScaleFor(runDifficulty(raceRef.current, runRef.current.mode)),
-      env: { timeOfDay: spec.timeOfDay, weather: spec.weather, season: spec.season },
+      env: { hour: spec.hour, weather: spec.weather, season: spec.season },
     });
     const previous = gameRef.current;
     gameRef.current = state;
@@ -1517,7 +1534,7 @@ export function App() {
     const field = createField(trackRef.current.track, plan ?? fieldPlan(race, mode), {
       seed: spec.seed,
       laps: spec.laps,
-      timeOfDay: spec.timeOfDay,
+      hour: spec.hour,
       weather: spec.weather,
       season: spec.season,
     });
@@ -1587,7 +1604,7 @@ export function App() {
       seed: spec.seed,
       length: spec.length as FiniteStageLength,
       knobs: spec.knobs,
-      timeOfDay: spec.timeOfDay,
+      hour: spec.hour,
       weather: spec.weather,
       season: spec.season,
       temperature: spec.temperature ?? null,
@@ -1612,7 +1629,7 @@ export function App() {
       // to mean the same moment in both games, and whether there was a
       // countdown at all is the first thing that decides it.
       skipCountdown: saved.skipCountdown,
-      env: { timeOfDay: spec.timeOfDay, weather: spec.weather, season: spec.season },
+      env: { hour: spec.hour, weather: spec.weather, season: spec.season },
     });
     ghostRef.current = { state, tape: readGhost(saved), at: 0 };
     renderer.setGhost(state);
@@ -1640,7 +1657,7 @@ export function App() {
       knobs: spec.knobs,
       carId: spec.carId,
       gearbox: optionsRef.current.gearbox,
-      timeOfDay: spec.timeOfDay,
+      hour: spec.hour,
       weather: spec.weather,
       season: spec.season,
       temperature: spec.temperature ?? null,
@@ -1747,7 +1764,7 @@ export function App() {
         // says which country, and the rule book's defaults say the rest.
         knobs: campaignKnobs(level),
         carId: race.carId,
-        timeOfDay: level.timeOfDay,
+        hour: level.hour,
         weather: level.weather,
         season: level.season,
         skipCountdown: false,
@@ -1781,7 +1798,7 @@ export function App() {
         laps: lapsOverride() ?? raceLaps(r),
         knobs: r.knobs,
         carId: r.carId,
-        timeOfDay: r.timeOfDay,
+        hour: r.hour,
         weather: r.weather,
         season: r.season,
         skipCountdown: false,
@@ -1815,7 +1832,7 @@ export function App() {
       knobs: campaignKnobs(level),
       carId: BENCHMARK.carId,
       gearbox: BENCHMARK.gearbox,
-      timeOfDay: level.timeOfDay,
+      hour: level.hour,
       weather: level.weather,
       season: level.season,
       skipCountdown: false,
@@ -2001,7 +2018,7 @@ export function App() {
       length: level.length,
       shape: level.shape ?? "sprint",
       knobs: campaignKnobs(level),
-      timeOfDay: level.timeOfDay,
+      hour: level.hour,
       weather: level.weather,
       season: level.season,
     });
@@ -2272,7 +2289,7 @@ export function App() {
                   laps: lapsOverride() ?? levelLaps(level),
                   knobs: campaignKnobs(level),
                   carId: r.carId,
-                  timeOfDay: level.timeOfDay,
+                  hour: level.hour,
                   weather: level.weather,
                   season: level.season,
                   skipCountdown: false,
@@ -2285,7 +2302,7 @@ export function App() {
                   laps: lapsOverride() ?? raceLaps(r),
                   knobs: r.knobs,
                   carId: r.carId,
-                  timeOfDay: r.timeOfDay,
+                  hour: r.hour,
                   weather: r.weather,
                   season: r.season,
                   skipCountdown: false,
@@ -2697,7 +2714,7 @@ export function App() {
                       seed: spec.seed,
                       length: spec.length as FiniteStageLength,
                       knobs: spec.knobs,
-                      timeOfDay: spec.timeOfDay,
+                      hour: spec.hour,
                       weather: spec.weather,
                     },
                     spec.carId,

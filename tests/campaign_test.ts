@@ -416,7 +416,7 @@ describe("the stage's classification", () => {
       {
         seed: 38,
         laps: 1,
-        timeOfDay: "day",
+        hour: 12,
         weather: "clear",
         season: "summer",
       },
@@ -439,7 +439,7 @@ describe("the stage's classification", () => {
       {
         seed: 38,
         laps: 1,
-        timeOfDay: "day",
+        hour: 12,
         weather: "clear",
         season: "summer",
       },

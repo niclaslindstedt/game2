@@ -41,6 +41,7 @@ export const GLYPH_NAMES = [
   "ruler",
   "globe",
   "sun",
+  "moon",
   "thermometer",
   "cloud",
   "leaf",
@@ -251,6 +252,16 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
     <>
       <circle cx="12" cy="12" r="4.3" />
       <path d="M12 2.2v2.4M12 19.4v2.4M2.2 12h2.4M19.4 12h2.4M5.1 5.1l1.7 1.7M17.2 17.2l1.7 1.7M18.9 5.1l-1.7 1.7M6.8 17.2l-1.7 1.7" />
+    </>
+  ),
+  // A crescent with two stars: the same HOUR row, once the hour it is set
+  // to is dark. The row's mark answers the question the row asks — whether
+  // 16:00 is daylight is the season's and the country's to say, and the
+  // sun or the moon on the row says it before the map does.
+  moon: (
+    <>
+      <path d="M14.6 3.2a8.6 8.6 0 1 0 6.2 12.4 7 7 0 0 1-6.2-12.4Z" />
+      <path d="M4.2 5.2v2.6M2.9 6.5h2.6M7.6 2.6v1.8M6.7 3.5h1.8" />
     </>
   ),
   // A cloud with rain under it: the WEATHER. Rain rather than a bare cloud,

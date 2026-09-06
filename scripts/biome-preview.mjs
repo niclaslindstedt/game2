@@ -244,7 +244,7 @@ function shotsModule(rows) {
       (s) =>
         `  ${s.biome}: {\n    level: "${s.level}",\n    seed: ${s.seed},\n` +
         `    length: "${s.length}",\n    shape: "${s.shape}",\n` +
-        `    timeOfDay: "${s.timeOfDay}",\n    weather: "${s.weather}",\n` +
+        `    hour: ${s.hour},\n    weather: "${s.weather}",\n` +
         `    season: "${s.season}",\n  },`,
     )
     .join("\n");
@@ -268,7 +268,7 @@ export type BiomeShot = {
   seed: number;
   length: string;
   shape: string;
-  timeOfDay: string;
+  hour: number;
   weather: string;
   season: string;
 };
@@ -303,7 +303,7 @@ for (const location of LOCATIONS) {
   const start = track.samples[0];
   const query =
     `?start=1&biome=${location.biome}&seed=${level.seed}&length=${level.length}` +
-    `&shape=${shape}&tod=${level.timeOfDay}&weather=${level.weather}` +
+    `&shape=${shape}&hour=${level.hour}&weather=${level.weather}` +
     `&season=${level.season}&hud=0&air=${AIR}&god=1&freefov=${FOV.toFixed(2)}` +
     `&gx=${start.x.toFixed(1)}&gy=${LIFT}&gz=${start.z.toFixed(1)}` +
     `&gyaw=${start.heading.toFixed(4)}&gpitch=${TILT}`;
@@ -322,7 +322,7 @@ for (const location of LOCATIONS) {
     seed: level.seed,
     length: level.length,
     shape,
-    timeOfDay: level.timeOfDay,
+    hour: level.hour,
     weather: level.weather,
     season: level.season,
   });
@@ -330,7 +330,7 @@ for (const location of LOCATIONS) {
     `${file} — ${(jpeg.length / 1024).toFixed(1)} KB  ${W}x${H} (${(W / H).toFixed(2)}:1)\n` +
       `  ${location.name} over ${level.id} (seed ${level.seed}), ` +
       `${LIFT} m up, tilt ${TILT}, ${ACROSS}° across on a ${FOV.toFixed(1)}° lens, ` +
-      `${level.timeOfDay} ${level.weather} ${level.season}`,
+      `${level.hour}h ${level.weather} ${level.season}`,
   );
 }
 

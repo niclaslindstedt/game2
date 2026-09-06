@@ -23,7 +23,7 @@ import {
   type WindFarm,
 } from "@engine";
 
-import { SUN_AZIMUTH } from "../pwa/src/game/sky.ts";
+import { SOUTH as SUN_AZIMUTH } from "../pwa/src/game/daylight.ts";
 
 const W = R.energy.wind;
 const S = R.energy.solar;

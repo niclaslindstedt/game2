@@ -114,7 +114,7 @@ function enterField(track: Track, options: RaceOptions): RivalField | null {
   const field = createField(track, options.field, {
     seed: options.stage.seed,
     laps: options.stage.laps,
-    timeOfDay: options.stage.timeOfDay,
+    hour: options.stage.hour,
     weather: options.stage.weather,
     season: options.stage.season,
   });
@@ -168,7 +168,7 @@ export function placeAmongField(options: {
   const field = createField(track, options.field, {
     seed: stage.seed,
     laps: stage.laps,
-    timeOfDay: stage.timeOfDay,
+    hour: stage.hour,
     weather: stage.weather,
     season: stage.season,
   });
@@ -203,7 +203,7 @@ export function race(options: RaceOptions): RaceOutcome {
       start.grid && start.grid.gain > 0
         ? { gain: start.grid.gain, untilS: TUNING.massStart.catchUpS }
         : undefined,
-    env: { timeOfDay: stage.timeOfDay, weather: stage.weather, season: stage.season },
+    env: { hour: stage.hour, weather: stage.weather, season: stage.season },
     quiet: true,
   });
   const field = enterField(track, options);

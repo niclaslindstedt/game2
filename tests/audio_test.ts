@@ -565,30 +565,30 @@ describe("the scores", () => {
     const base: Setting = {
       biome: "taiga",
       weather: "clear",
-      timeOfDay: "day",
+      daylight: "day",
       circuit: false,
       endless: false,
     };
     expect(trackFor(base)).toBe("taiga");
     expect(trackFor({ ...base, weather: "rain" })).toBe("spruce");
     expect(trackFor({ ...base, weather: "storm" })).toBe("spruce");
-    expect(trackFor({ ...base, timeOfDay: "night" })).toBe("polar");
-    expect(trackFor({ ...base, timeOfDay: "dusk" })).toBe("polar");
+    expect(trackFor({ ...base, daylight: "night" })).toBe("polar");
+    expect(trackFor({ ...base, daylight: "dusk" })).toBe("polar");
     expect(trackFor({ ...base, biome: "desert" })).toBe("desert");
     expect(trackFor({ ...base, biome: "desert", weather: "storm" })).toBe("desert");
     // The alpine keeps its own score whatever the sky does, like the desert.
     expect(trackFor({ ...base, biome: "alpine" })).toBe("alpine");
     expect(trackFor({ ...base, biome: "alpine", weather: "storm" })).toBe("alpine");
-    expect(trackFor({ ...base, biome: "alpine", timeOfDay: "night" })).toBe("alpine");
+    expect(trackFor({ ...base, biome: "alpine", daylight: "night" })).toBe("alpine");
     // The shape of the road wins over the sky.
     expect(trackFor({ ...base, circuit: true, weather: "storm" })).toBe("circuit");
     expect(trackFor({ ...base, endless: true, biome: "desert" })).toBe("endless");
     expect(trackFor({ ...base, circuit: true, biome: "alpine" })).toBe("circuit");
     const ids = new Set(SCORES.map(([name]) => name));
     for (const weather of ["clear", "rain", "storm"] as const) {
-      for (const timeOfDay of ["dawn", "day", "dusk", "night"] as const) {
+      for (const daylight of ["dawn", "day", "dusk", "night"] as const) {
         for (const biome of ["taiga", "desert", "alpine"] as const) {
-          expect(ids.has(trackFor({ ...base, weather, timeOfDay, biome }))).toBe(true);
+          expect(ids.has(trackFor({ ...base, weather, daylight, biome }))).toBe(true);
         }
       }
     }
@@ -918,7 +918,7 @@ describe("the listener", () => {
 describe("the world", () => {
   const STILL: WorldVoice = {
     biome: "taiga",
-    timeOfDay: "day",
+    daylight: "day",
     season: "summer",
     wet: 0,
     gale: 0,
@@ -940,22 +940,22 @@ describe("the world", () => {
     expect(ids({})).not.toContain("cicada");
     expect(ids({ biome: "desert" })).toContain("cicada");
     expect(ids({ biome: "desert" })).not.toContain("bird_chirp");
-    expect(ids({ timeOfDay: "night" })).toContain("owl");
-    expect(ids({ biome: "desert", timeOfDay: "night" })).toContain("cricket");
-    expect(ids({ biome: "desert", timeOfDay: "night" })).toContain("coyote");
-    expect(ids({ biome: "desert", timeOfDay: "day" })).not.toContain("coyote");
+    expect(ids({ daylight: "night" })).toContain("owl");
+    expect(ids({ biome: "desert", daylight: "night" })).toContain("cricket");
+    expect(ids({ biome: "desert", daylight: "night" })).toContain("coyote");
+    expect(ids({ biome: "desert", daylight: "day" })).not.toContain("coyote");
     expect(ids({ biome: "alpine" })).toContain("chough");
     expect(ids({ biome: "alpine" })).toContain("cowbell");
     expect(ids({ biome: "alpine" })).toContain("marmot");
     expect(ids({ biome: "alpine" })).not.toContain("cicada");
     expect(ids({ biome: "alpine" })).not.toContain("bird_chirp");
-    expect(ids({ biome: "alpine", timeOfDay: "night" })).not.toContain("chough");
-    expect(ids({ biome: "alpine", timeOfDay: "night" })).toContain("owl");
+    expect(ids({ biome: "alpine", daylight: "night" })).not.toContain("chough");
+    expect(ids({ biome: "alpine", daylight: "night" })).toContain("owl");
     // Every id on every roster is a sound the world bank has.
     for (const biome of ["taiga", "desert", "alpine"] as const) {
-      for (const timeOfDay of ["dawn", "day", "dusk", "night"] as const) {
+      for (const daylight of ["dawn", "day", "dusk", "night"] as const) {
         for (const season of ["spring", "summer", "autumn"] as const) {
-          for (const id of ids({ biome, timeOfDay, season, water: 1 }))
+          for (const id of ids({ biome, daylight, season, water: 1 }))
             expect(WORLD_BANK[id], id).toBeDefined();
         }
       }
@@ -1013,14 +1013,14 @@ describe("the world", () => {
       for (const season of ["spring", "autumn"] as const) {
         expect(ids({ biome, season }), `${biome} ${season}`).toContain("goose_honk");
         expect(ids({ biome, season }), `${biome} ${season}`).toContain("swan_call");
-        expect(ids({ biome, season, timeOfDay: "night" })).toContain("goose_honk");
+        expect(ids({ biome, season, daylight: "night" })).toContain("goose_honk");
       }
       // Summer keeps both birds — they live here — but they are between one
       // lake and the next rather than on their way somewhere, so they are
       // far rarer and they are day birds.
       expect(ids({ biome })).toContain("goose_honk");
       expect(ids({ biome })).toContain("swan_call");
-      expect(ids({ biome, timeOfDay: "night" })).not.toContain("goose_honk");
+      expect(ids({ biome, daylight: "night" })).not.toContain("goose_honk");
       const gapOf = (voice: Partial<WorldVoice>, id: string): number =>
         worldRoster({ ...STILL, ...voice }).find((c) => c.id === id)?.gap[0] ?? 0;
       expect(gapOf({ biome }, "goose_honk")).toBeGreaterThan(

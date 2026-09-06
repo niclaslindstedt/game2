@@ -86,7 +86,7 @@ export type CarFx = {
    * life reads it: the cloud base overhead in metres (Infinity when there
    * is none), which decides whether the high traffic above the weather can
    * be seen from under it at all. */
-  setTint: (tint: THREE.Color, dust: THREE.Color, ceiling: number) => void;
+  setTint: (tint: THREE.Color, dust: THREE.Color, ceiling: number, high: THREE.Color) => void;
   /** The ground under the car right now, as a color for whatever is about
    * to be thrown off it. The rock test is deferred: it is a terrain lookup,
    * and only one of the branches ever asks for it. */
@@ -148,12 +148,17 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   );
   for (const cloud of celebration.clouds) scene.add(cloud);
 
-  const setTint = (tint: THREE.Color, dustLight: THREE.Color, ceiling: number): void => {
+  const setTint = (
+    tint: THREE.Color,
+    dustLight: THREE.Color,
+    ceiling: number,
+    high: THREE.Color,
+  ): void => {
     for (const pool of [dust, crash, smoke, plume, gravel, mud]) {
       (pool.points.material as THREE.PointsMaterial).color.copy(dustLight);
     }
     (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
-    life.setSky(tint, ceiling);
+    life.setSky(tint, ceiling, high);
   };
 
   const bareRock = (state: GameState): number =>

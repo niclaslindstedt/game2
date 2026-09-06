@@ -162,11 +162,15 @@ const LIFE: Record<BiomeId, Life> = {
 
 export type AmbientLife = {
   group: THREE.Group;
-  /** The sky's light, which tints the contrails and dims the birds — and
-   * its LID: the cloud base overhead in metres, or Infinity under a clear
-   * sky. High traffic is above the weather, so an overcast stage sees none
-   * of it, and drawing it anyway paints aeroplanes over the ceiling. */
-  setSky: (tint: THREE.Color, ceiling: number) => void;
+  /** The sky's light, which dims the birds — and its LID: the cloud base
+   * overhead in metres, or Infinity under a clear sky. High traffic is
+   * above the weather, so an overcast stage sees none of it, and drawing
+   * it anyway paints aeroplanes over the ceiling. `high` is what a thing
+   * at airliner height is lit (environment.ts's `highTint`): the
+   * contrails, which the sun reaches for a quarter of an hour after it has
+   * left the ground, so they burn orange over a valley that has gone grey
+   * and go grey themselves only after. */
+  setSky: (tint: THREE.Color, ceiling: number, high: THREE.Color) => void;
   /** Which country's life this is and which season it is living — what
    * flies, which way the skeins are pointed, and whether anything crawls.
    * Idempotent, and cheap to call on every re-light. */
@@ -531,14 +535,14 @@ export function createAmbientLife(): AmbientLife {
     lizard.placed = true;
   };
 
-  const setSky = (tint: THREE.Color, ceiling: number): void => {
-    trailMat.color.copy(tint);
+  const setSky = (tint: THREE.Color, ceiling: number, high: THREE.Color): void => {
+    trailMat.color.copy(high);
     // Birds go from near-black silhouettes by day to invisible-dark at
     // night without ever turning grey.
     birdMat.color.set(0x2a2d33).multiply(tint);
     raptors.setTint(tint);
     skeins.setTint(tint);
-    planeMat.color.set(0xd8dde4).multiply(tint);
+    planeMat.color.set(0xd8dde4).multiply(high);
     ceilingNow = ceiling;
     showSky();
   };

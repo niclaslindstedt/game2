@@ -259,7 +259,7 @@ describe("a heads-up field on the road", () => {
   const stage = {
     seed: 38,
     laps: 1,
-    timeOfDay: "day",
+    hour: 12,
     weather: "clear",
     season: "summer",
   } as const;

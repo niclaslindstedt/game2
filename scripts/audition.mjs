@@ -566,7 +566,7 @@ roadBtn.addEventListener("click", () => {
 });
 
 // ── The world ──────────────────────────────────────────────────────────────
-const world = { biome: "taiga", timeOfDay: "day", stock: "none", train: "none" };
+const world = { biome: "taiga", daylight: "day", stock: "none", train: "none" };
 const worldSliders = document.getElementById("worldSliders");
 for (const [id, label, initial] of [
   ["air", "Speed", 0],
@@ -580,7 +580,7 @@ for (const [id, label, initial] of [
   sliderRow(worldSliders, world, id, label, initial);
 }
 switchRow(worldSliders, "Country", ["taiga", "desert", "alpine"], "taiga", (b) => (world.biome = b));
-switchRow(worldSliders, "Hour", ["dawn", "day", "dusk", "night"], "day", (t) => (world.timeOfDay = t));
+switchRow(worldSliders, "Light", ["dawn", "day", "dusk", "night"], "day", (t) => (world.daylight = t));
 switchRow(worldSliders, "Paddock", ["none", "cows", "sheep"], "none", (s) => (world.stock = s));
 switchRow(worldSliders, "Train", ["none", "on the line", "at the crossing"], "none", (t) => (world.train = t));
 
@@ -607,7 +607,7 @@ worldBtn.addEventListener("click", () => {
     w.update(
       {
         biome: world.biome,
-        timeOfDay: world.timeOfDay,
+        daylight: world.daylight,
         wet: world.wet,
         gale: world.gale,
         exposure: world.exposure,

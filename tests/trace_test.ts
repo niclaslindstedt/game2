@@ -48,7 +48,7 @@ const SEED = 44;
 const stage = {
   seed: SEED,
   laps: 1,
-  timeOfDay: "day",
+  hour: 12,
   weather: "clear",
   season: "summer",
 } as const;
@@ -69,7 +69,7 @@ function soloOf(run: RivalRun, track: GameState["track"]): GameState {
     skipCountdown: true,
     quiet: true,
     gridOffset: GRID_STAGGER,
-    env: { timeOfDay: "day", weather: "clear", season: "summer" },
+    env: { hour: 12, weather: "clear", season: "summer" },
   });
 }
 
