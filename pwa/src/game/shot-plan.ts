@@ -16,8 +16,9 @@
 // drift screenshot is usually about. The bottom-right corner is the
 // quietest rectangle a rally frame has.
 
-/** The longest side a picture is allowed. A 4K screen at the HIGH
- * resolution ceiling has a drawing buffer nobody wants to send anywhere,
+/** The longest side a picture is allowed. A 4K screen at HIGH resolution —
+ * every pixel the device has — has a drawing buffer nobody wants to send
+ * anywhere,
  * and a rally screenshot is going into a chat window, not onto a wall. The
  * cap is a DOWNSCALE only: a smaller frame is kept at its own size rather
  * than blown up into pixels the renderer never drew. */
