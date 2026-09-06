@@ -37,7 +37,7 @@ The sun is decided first, everything else reads it.
 | `pwa/src/game/sky-traffic.ts`     | How often an aircraft comes over and how its contrail ages — DOM-free                                                                                                                                                               |
 | `pwa/src/game/skein.ts`           | The birds that are GOING SOMEWHERE — geese, swans, the vee. What flies, which way and how high is the SEASON's answer (`passageFor`); the shape they hold is `formationOffset`, and the same season is heard in `audio/ambience.ts` |
 | `pwa/src/game/water-look.ts`      | What WATER looks like — one flat semi-transparent material for lakes, fords and streams alike; and `iceMaterial` over `iceTexture` (`textures.ts`) for a frozen one. The SHEETS themselves are cut in `terrain.ts` (`flushSheet`)   |
-| `pwa/src/game/environment.ts`     | Hangs it all in the scene: the lamp beams, the brake pool on the road, the horizon's orientation                                                                                                                                    |
+| `pwa/src/game/environment.ts`     | Hangs it all in the scene: the sky, the light, the horizon's orientation. The CAR's own beams and its brake pool are `car-lamps.ts`, which this only drives                                                                         |
 
 WHETHER a lake is frozen at all is the engine's call, not this skill's:
 `CLIMATE.ice` + `waterFrozen` / `icyCountry` in `engine/game/climate.ts`, and
