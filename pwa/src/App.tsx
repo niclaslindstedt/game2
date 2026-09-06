@@ -560,9 +560,14 @@ function initialSettings(): Settings {
   // laid over it. Both switches together rather than only the panel, since
   // half a HUD in shot is the same problem as all of it; pinned from the URL
   // for the reason the gearbox is, so a picture does not depend on what the
-  // machine taking it happens to have stored.
+  // machine taking it happens to have stored. The frame rate is pinned OFF
+  // either way: it is the one readout that is about the machine taking the
+  // picture rather than about the game in it, and a number that differs on
+  // every runner is a number no two shots can be compared across.
   const hud = new URLSearchParams(location.search).get("hud");
-  if (hud === "0" || hud === "1") settings.hud = { on: hud === "1", mirror: hud === "1" };
+  if (hud === "0" || hud === "1") {
+    settings.hud = { on: hud === "1", mirror: hud === "1", fps: false };
+  }
   // ?drawdistance= — how far the air lets the camera see (OPTIONS ▸ VIDEO's
   // own switch, `DRAW_DISTANCE_SCALE` on the sky preset's fog). The fog is
   // tuned for a driver's eye a metre and a half off the road, where 520 m is
@@ -1082,8 +1087,8 @@ export function App() {
    * that works it out. */
   const fpsRef = useRef(0);
   /** ...and the same number rounded off for the HUD's own readout under the
-   * minimap, which only anybody who has let the developer menu out ever
-   * sees. Its own state rather than a field of the HUD snapshot: the
+   * minimap, which only the players who asked for it (OPTIONS ▸ HUD ▸ FPS)
+   * ever see. Its own state rather than a field of the HUD snapshot: the
    * snapshot is what the CAR is doing, and this is what the machine drawing
    * it is doing. Written on the HUD's twelve-a-second tick, and only while
    * there is somebody to read it. */
@@ -1239,12 +1244,15 @@ export function App() {
   const godRef = useRef(false);
   const debugRef = useRef(options.dev.debug);
   debugRef.current = options.dev.debug;
-  /** ...and whether the developer menu has been let out at all, which is
-   * what puts the frame rate on the HUD. A wider door than the overlay on
-   * purpose: the rate is worth watching while the game is being PLAYED, and
-   * the overlay is a set of boxes across the road. */
-  const developerRef = useRef(options.developer);
-  developerRef.current = options.developer;
+  /** Which parts of the HUD the player's switches leave up. Worked out once
+   * here so the readout and the frame loop that feeds it read the same
+   * answer. */
+  const hudParts = hudShow(options.hud);
+  /** ...and whether the frame rate is one of them, as the frame loop sees
+   * it: a rate nobody is looking at is a state that should not be written
+   * twelve times a second. */
+  const hudFpsRef = useRef(hudParts.fps);
+  hudFpsRef.current = hudParts.fps;
   /** `?bot=1` — the bot has the wheel until a human touches a control. A ref
    * rather than a local of the frame loop because god mode's HOLD reads it:
    * a run somebody else is driving is the one flight that must not stop it. */
@@ -3024,7 +3032,7 @@ export function App() {
         if (debugRef.current) setDebugCtx(debugContextRef.current(fps));
         // The rate under the map. Rounded here rather than at the readout,
         // so a state that has not moved is a render that does not happen.
-        if (developerRef.current) setHudFps(Math.round(fps));
+        if (hudFpsRef.current) setHudFps(Math.round(fps));
       };
 
       // Fixed-timestep driver: engine steps at TUNING.dt regardless of frame
@@ -3697,8 +3705,8 @@ export function App() {
           flashes={flashes}
           split={split}
           input={input}
-          show={hudShow(options.hud)}
-          fps={options.developer ? hudFps : null}
+          show={hudParts}
+          fps={hudFps}
           touchLayout={options.touch}
           padDriving={padded && options.pad.hideTouch}
           onPause={() => setPaused(true)}

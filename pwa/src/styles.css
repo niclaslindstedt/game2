@@ -232,12 +232,11 @@ body {
   font-size: clamp(0.7rem, 2vmin, 1rem);
 }
 
-/* With the minimap switched off there is no map to hang under, so the chip
-   takes the dock's own place under the top bar's button row. */
-/* The frame rate, last line of that chip and developers only. Tabular so
-   the digits do not dance as it ticks, and in the info colour rather than
-   the HUD's white: it is the one thing up there that is about the machine
-   rather than about the race, and it should not read as an instrument. */
+/* The frame rate, last line of that chip and only for the players who asked
+   for it. Tabular so the digits do not dance as it ticks, and in the info
+   colour rather than the HUD's white: it is the one thing up there that is
+   about the machine rather than about the race, and it should not read as
+   an instrument. */
 .hud-fps {
   color: var(--hud-info);
   font-variant-numeric: tabular-nums;

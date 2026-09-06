@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// OPTIONS — one page, eleven rows, reached from the front door only.
+// OPTIONS — one page, twelve rows, reached from the front door only.
 //
 //   PICTURE   — how sharp, how much and how far, as three rows.
 //   SOUND     — the two faders.
-//   HUD       — the instrument panel on or off, and the rear-view glass.
+//   HUD       — the instrument panel on or off, the rear-view glass, and
+//               the frame rate under the map.
 //   DRIVING   — the camera a stage opens on, and whether the driver's head
 //               moves. NOT the gearbox: that is asked where it is decided,
 //               on the pre-race card beside the car's own numbers, and the
@@ -144,9 +145,9 @@ function MainPage({
     <div className="menu-card menu-card-options">
       <MenuHead back={onBack} backLabel="MENU" title="OPTIONS" />
       {/* Two columns on anything wide enough, packed by ROW COUNT rather
-          than by subject order — five a side and six with the controller's
-          — so a laptop holds the whole page without scrolling and neither
-          column ends short. */}
+          than by subject order — five on the left, seven on the right once
+          the controller's rows are there — so a laptop holds the whole page
+          without scrolling and neither column ends short. */}
       <div className="knob-groups">
         <div className="knob-col">
           {/* Three rows, not one, because they are three different costs:
@@ -221,6 +222,12 @@ function MainPage({
               stops={ON_OFF}
               value={onOff(settings.hud.mirror)}
               onPick={(id) => set({ hud: { ...settings.hud, mirror: id === "on" } })}
+            />
+            <StepRow
+              label="FPS"
+              stops={ON_OFF}
+              value={onOff(settings.hud.fps)}
+              onPick={(id) => set({ hud: { ...settings.hud, fps: id === "on" } })}
             />
           </KnobGroup>
           <KnobGroup title="CONTROLS">

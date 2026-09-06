@@ -51,27 +51,43 @@ function stored(blob: unknown): void {
   localStorage.setItem(KEY, JSON.stringify(blob));
 }
 
-describe("the HUD's two switches", () => {
+describe("the HUD's three switches", () => {
   it("spread over every instrument", () => {
-    const on = hudShow({ on: true, mirror: true });
+    const on = hudShow({ on: true, mirror: true, fps: true });
     for (const flag of Object.values(on)) expect(flag).toBe(true);
   });
 
   it("take the whole panel down together", () => {
-    const off = hudShow({ on: false, mirror: false });
+    const off = hudShow({ on: false, mirror: false, fps: false });
     for (const flag of Object.values(off)) expect(flag).toBe(false);
   });
 
   // The glass is the CAR's, not the panel's: a driver who wants a clean
   // frame and the road behind them gets exactly that.
   it("keep the mirror apart from the panel", () => {
-    const clean = hudShow({ on: false, mirror: true });
+    const clean = hudShow({ on: false, mirror: true, fps: false });
     expect(clean.mirror).toBe(true);
     expect(clean.minimap).toBe(false);
     expect(clean.cluster).toBe(false);
-    const noGlass = hudShow({ on: true, mirror: false });
+    const noGlass = hudShow({ on: true, mirror: false, fps: false });
     expect(noGlass.mirror).toBe(false);
     expect(noGlass.timer).toBe(true);
+  });
+
+  // The frame rate is the other way round: it hangs off the stage label, so
+  // it is panel furniture and a clean frame loses it with everything else.
+  it("keep the frame rate inside the panel", () => {
+    const asked = hudShow({ on: true, mirror: true, fps: true });
+    expect(asked.fps).toBe(true);
+    const clean = hudShow({ on: false, mirror: true, fps: true });
+    expect(clean.fps).toBe(false);
+    const unasked = hudShow({ on: true, mirror: true, fps: false });
+    expect(unasked.fps).toBe(false);
+  });
+
+  it("leave the frame rate off until somebody asks for it", () => {
+    expect(DEFAULT_SETTINGS.hud.fps).toBe(false);
+    expect(hudShow(DEFAULT_SETTINGS.hud).fps).toBe(false);
   });
 
   it("gate everything the HUD draws that a clean frame must lose", () => {
@@ -82,8 +98,9 @@ describe("the HUD's two switches", () => {
       "stage",
       "position",
       "nameTags",
+      "fps",
     ];
-    const off = hudShow({ on: false, mirror: true });
+    const off = hudShow({ on: false, mirror: true, fps: true });
     for (const key of keys) expect(off[key]).toBe(false);
   });
 });
@@ -351,7 +368,7 @@ describe("a blob from the eight-switch HUD", () => {
   it("keeps the mirror's choice and nothing else", () => {
     stored({ hud: { minimap: false, mirror: false, timer: false } });
     const loaded = loadSettings();
-    expect(loaded.hud).toEqual({ on: true, mirror: false });
+    expect(loaded.hud).toEqual({ on: true, mirror: false, fps: false });
     localStorage.clear();
   });
 
