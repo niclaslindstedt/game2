@@ -221,10 +221,26 @@ function paceEvents(state: GameState, mem: PaceMemory): PaceEvent[] {
  * car that goes backwards out of a corner is a car that has left it, and the
  * strip drops the call rather than unwinding the fill. */
 function throughCorner(state: GameState, note: Pacenote): number {
-  const span = note.endS - note.s;
+  const span = (note.endS - note.s) * THROUGH_FULL;
   if (span <= 0) return 0;
   return clamp((state.progressS - note.s) / span, 0, 1);
 }
+
+/** How much of the corner the fill is spent over — the rest of it is the sign
+ * standing COMPLETE before it comes down.
+ *
+ * It has to be less than the whole corner, or the finished sign is a frame
+ * nobody is ever shown: the call is taken down the moment `endS` is behind
+ * the car (`upcomingPacenotes`), and the strip is built about twelve times a
+ * second, so a fill that only completed AT the exit would be caught at
+ * nine-tenths on its last tick and then be gone — an arrow whose point never
+ * quite arrives, however long the corner was. Spending it over the corner's
+ * first nine tenths leaves the LAST TENTH — the exit, where the car is
+ * straightening up and the sign has nothing left to say — showing the whole
+ * arrow, which is the beat that reads as THROUGH IT. A tenth of a corner is
+ * three to eight ticks of the strip at any pace a corner is taken at, so it
+ * is a beat rather than a flicker. */
+const THROUGH_FULL = 0.9;
 
 /** Turn angle past which a call earns the LONG modifier, radians (~100°). */
 const LONG_NOTE_ANGLE = 1.75;

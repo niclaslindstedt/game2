@@ -23,7 +23,7 @@
 
 import type { JumpSize, TurnSeverity } from "@engine";
 
-import type { PacePoint, PaceSign } from "./pace-shape.ts";
+import { fillSign, type PacePoint, type PaceSign } from "./pace-shape.ts";
 import { clamp } from "../lib/util.ts";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
@@ -56,24 +56,6 @@ export type HudPacenote =
       eta: number;
     };
 
-/** How much of the sign has to be inked in before the head starts to arrive.
- * The head is a triangle rather than a length of road — there is nothing to
- * sweep along — so it comes up over the last of the corner instead, and is
- * solid at the exit. */
-const HEAD_FILL_FROM = 0.86;
-
-/** The length of a drawn corner, in the sign's own box: what the dash that
- * hides the unfilled part of it is measured against. A hairpin and a 300 m
- * sweeper are both fitted to the same 100x100 box, so this is the length of
- * the PICTURE and not of the road. */
-function signLength(line: readonly PacePoint[]): number {
-  let total = 0;
-  for (let i = 1; i < line.length; i++) {
-    total += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
-  }
-  return total;
-}
-
 /** The pacenote sign: the corner's own shape, drawn like a rally note board.
  * The line is the road — the approach at the bottom, the bend the way the
  * bend goes — with a heavy head on the exit. pace-shape.ts has squared both
@@ -82,14 +64,15 @@ function signLength(line: readonly PacePoint[]): number {
  * colour, and the head filled in the same. The stroke itself is CSS
  * (`.hud-pace-arrow path`) rather than an attribute here — see styles.css.
  *
- * THE CORNER FILLS AS IT IS DRIVEN, IN ITS OWN COLOUR. The road is laid down
+ * THE CORNER FILLS AS IT IS DRIVEN, IN ITS OWN COLOUR. The sign is laid down
  * twice: once faint, which is the corner still to come, and once solid in the
- * severity's own colour, clipped to how much of the bend is behind the car.
- * So the sign COMES UP as it is driven — from the approach to the head, over
- * exactly the road the note covers. It is the one moving thing on the strip
- * and it moves the way the car does: a driver who glances at a half-lit
- * hairpin knows there is as much of it left as there is behind, without
- * reading anything.
+ * severity's own colour, cut back to how much of the bend is behind the car.
+ * So the sign COMES UP as it is driven — the road first, then the HEAD ITSELF
+ * filling from its base to its point, over exactly the road the note covers.
+ * It is the one moving thing on the strip and it moves the way the car does:
+ * a driver who glances at a half-lit hairpin knows there is as much of it
+ * left as there is behind, without reading anything. `fillSign` owns the
+ * split between the two shapes and measures it off the sign.
  *
  * ONE COLOUR on the whole plate. The severity is not weakened by the ghost
  * under it — the plate's point is cut and filled solid in that same colour
@@ -98,31 +81,32 @@ function signLength(line: readonly PacePoint[]): number {
  * road is left free to say is HOW FAR THROUGH. */
 export function PacenoteArrow({ sign, fill }: { sign: PaceSign; fill: number }) {
   const line = `M ${sign.line.map((p) => p.join(" ")).join(" L ")}`;
-  const head = sign.head.map((p) => p.join(",")).join(" ");
-  const span = signLength(sign.line);
+  const lit = fillSign(sign, fill);
   return (
     <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
       <g className="hud-pace-road">
         <path d={line} />
-        <polygon points={head} />
+        <polygon points={points(sign.head)} />
       </g>
       {fill > 0 && (
         <g className="hud-pace-fill">
           <path
             d={line}
             style={{
-              strokeDasharray: `${span}`,
-              strokeDashoffset: `${span * (1 - fill)}`,
+              strokeDasharray: `${lit.span}`,
+              strokeDashoffset: `${lit.span - lit.lit}`,
             }}
           />
-          <polygon
-            points={head}
-            style={{ opacity: clamp((fill - HEAD_FILL_FROM) / (1 - HEAD_FILL_FROM), 0, 1) }}
-          />
+          {lit.head && <polygon points={points(lit.head)} />}
         </g>
       )}
     </svg>
   );
+}
+
+/** A polygon's points, in the attribute's own spelling. */
+function points(shape: readonly PacePoint[]): string {
+  return shape.map((p) => p.join(",")).join(" ");
 }
 
 /** The co-driver's word for each severity. Nothing on the strip is lettered

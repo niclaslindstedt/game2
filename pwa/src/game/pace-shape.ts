@@ -84,6 +84,75 @@ export function cornerSign(samples: readonly TrackSample[], note: Pacenote): Pac
   return contain({ line, head: headOn(line) });
 }
 
+/** THE SIGN, PART DRIVEN — what of it is lit, at a given fraction through the
+ * corner. The two shapes are filled in turn, because they are the two halves
+ * of one mark: the road runs up to the head's base, and then the HEAD ITSELF
+ * fills, from that base to its point.
+ *
+ * The head is swept rather than faded. It is the half of the sign that says
+ * which WAY, it is a third of the box across, and a triangle that merely
+ * brightens is a triangle whose corners are still arriving when the corner is
+ * over — the lit road runs into the MIDDLE of it (the base sits back over the
+ * road by `HEAD * (1 - HEAD_LEAD)`) and the two wings are left behind.
+ * Sweeping it fills the whole thing, in the direction the road leaves in.
+ *
+ * The split between the two is MEASURED off the sign rather than chosen: the
+ * head's share is its own depth, base to point, against the road's length up
+ * to that base. So a sign fitted wide and a sign fitted tall both hand the
+ * head the part of the fill it actually occupies. */
+export type PaceFill = {
+  /** The drawn line's whole length, in the sign's box units — what the dash
+   * that hides the unlit part of it is measured against. */
+  span: number;
+  /** How much of that length is lit, from the approach. */
+  lit: number;
+  /** The head, filled from its base toward its point: null until the road has
+   * reached it, the whole triangle once the corner is driven. */
+  head: PacePoint[] | null;
+};
+
+export function fillSign(sign: PaceSign, through: number): PaceFill {
+  const span = lineLength(sign.line);
+  const [tip, left, right] = sign.head;
+  const baseX = (left[0] + right[0]) / 2;
+  const baseY = (left[1] + right[1]) / 2;
+  const depth = Math.hypot(tip[0] - baseX, tip[1] - baseY);
+  // Where the head's base sits on the road, as a length back from the line's
+  // end. Straight-line, which is the same thing here: the base is a couple of
+  // resampled steps back down the EXIT, and an exit does not bend inside two
+  // steps of itself.
+  const last = sign.line[sign.line.length - 1];
+  const road = Math.max(span - Math.hypot(last[0] - baseX, last[1] - baseY), 0);
+  const along = Math.min(Math.max(through, 0), 1) * (road + depth);
+  return {
+    span,
+    lit: Math.min(along, road),
+    head: along <= road ? null : headTo(sign.head, Math.min((along - road) / (depth || 1), 1)),
+  };
+}
+
+/** The head filled `t` of the way from its base to its point. The base edge is
+ * square to that axis by construction (headOn offsets both corners
+ * perpendicular to it), so the cut is the two long edges walked the same
+ * fraction — a quad that closes onto the triangle itself at 1. */
+function headTo(head: readonly [PacePoint, PacePoint, PacePoint], t: number): PacePoint[] {
+  const [tip, left, right] = head;
+  const toTip = (p: PacePoint): PacePoint => [
+    p[0] + (tip[0] - p[0]) * t,
+    p[1] + (tip[1] - p[1]) * t,
+  ];
+  return [left, toTip(left), toTip(right), right];
+}
+
+/** A polyline's length. */
+function lineLength(line: readonly PacePoint[]): number {
+  let total = 0;
+  for (let i = 1; i < line.length; i++) {
+    total += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
+  }
+  return total;
+}
+
 /** The head, straddling the last segment of the line so it points the way
  * the road leaves the corner. */
 function headOn(line: readonly PacePoint[]): [PacePoint, PacePoint, PacePoint] {
