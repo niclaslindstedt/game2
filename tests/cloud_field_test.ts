@@ -83,7 +83,10 @@ describe("the noise", () => {
     // The constants the two copies share: the hash's, the lattice's turn,
     // and the density's threshold. A change to one that is not a change to
     // the other is the sun dimming under a cloud the player cannot see.
-    for (const literal of ["0.1031", "33.33", "1.6", "1.2", "17.3", "9.1", "0.76", "2.6", "7.1"]) {
+    const shared = ["0.1031", "33.33", "1.6", "1.2", "17.3", "9.1", "0.76", "2.6", "7.1"];
+    // …and the fibres' pitch and weight, which the cirrus over the sun is
+    // read through too.
+    for (const literal of [...shared, "1.7", "9.0", "3.7", "11.9", "0.5 + 1.0"]) {
       expect(CLOUD_NOISE_GLSL).toContain(literal);
     }
     for (const literal of ["0.5 - coverage", "0.04 + 0.3"]) {
@@ -224,6 +227,7 @@ describe("the cloud over the sun", () => {
     streak: 1.15,
     body: 1,
     drift: 1,
+    fibre: 0,
     seed: 11,
     deck: false,
   };

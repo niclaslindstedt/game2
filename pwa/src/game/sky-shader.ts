@@ -74,6 +74,7 @@ uniform vec4 uLayerA[${MAX_LAYERS}];
 uniform vec4 uLayerB[${MAX_LAYERS}];
 uniform vec4 uLayerC[${MAX_LAYERS}];
 uniform vec4 uLayerD[${MAX_LAYERS}];
+uniform vec4 uLayerE[${MAX_LAYERS}];
 uniform int uLayers;
 uniform int uOctaves;
 uniform int uSunlit;
@@ -132,12 +133,16 @@ void main() {
     vec4 B = uLayerB[ i ];
     vec4 C = uLayerC[ i ];
     vec4 D = uLayerD[ i ];
+    vec4 E = uLayerE[ i ];
     float dy = A.x - cameraPosition.y;
     if ( dy * up <= 0.0 || abs( up ) < 0.004 ) continue;
     float dist = dy / up;
     vec2 p = cameraPosition.xz + ray.xz * dist;
     vec2 uv = cloudUv( p, C, A.w, B.y, D.x );
-    float n = cloudField( uv, uOctaves );
+    // The fibres, faded out toward the rim the way fibreAt says
+    // (cloud-field.ts) — under a pixel out there, they only sparkle.
+    float fibre = E.x * smoothstep( 0.0, 0.25, abs( up ) );
+    float n = cloudFibres( uv, cloudField( uv, uOctaves ), fibre, uOctaves );
     // Aerial perspective: a sheet seen the long way toward the horizon
     // dissolves into the air between. Mild — six kilometres of clear air
     // takes a quarter of a cloud, not half of it.
@@ -163,12 +168,14 @@ void main() {
     if ( up > 0.0 ) {
       // The underside: in the sheet's own shadow where it is thick, lit
       // through where it is thin, brighter on the sun's side of the sky
-      // than away from it, and rimmed toward the sun.
+      // than away from it, and rimmed toward the sun. A sheet with no
+      // body — cirrus — is lit through wherever it is: ice that thin is
+      // white in every direction, not grey on the far side of the sky.
       float sunward = 0.5 + 0.5 * dot( az, uSunAz );
-      float bottomLit = ( 1.0 - dens * B.z * 0.8 ) * mix( 0.6, 1.0, sunward );
+      float bottomLit = ( 1.0 - dens * B.z * 0.8 ) * mix( mix( 0.92, 0.6, B.z ), 1.0, sunward );
       if ( uSunlit > 0 ) {
         float n2 = cloudField( uv + uSunDir.xz * 0.28 / max( B.y, 1.0 ), max( uOctaves - 2, 2 ) );
-        bottomLit = mix( bottomLit, clamp( 0.5 + ( n - n2 ) * 5.0 * B.z, 0.0, 1.0 ), 0.5 );
+        bottomLit = mix( bottomLit, clamp( 0.5 + ( n - n2 ) * 5.0 * B.z, 0.0, 1.0 ), 0.5 * B.z );
       }
       c = mix( uCloudShade, sunlit, bottomLit );
       float forward = pow( max( dot( ray, uSunDir ), 0.0 ), 8.0 );
@@ -241,6 +248,7 @@ export function createSkyShell(): SkyShell {
   const layerB = Array.from({ length: MAX_LAYERS }, v4);
   const layerC = Array.from({ length: MAX_LAYERS }, v4);
   const layerD = Array.from({ length: MAX_LAYERS }, v4);
+  const layerE = Array.from({ length: MAX_LAYERS }, v4);
   const uniforms: Record<string, THREE.IUniform> = {
     uZenith: { value: new THREE.Color() },
     uHorizon: { value: new THREE.Color() },
@@ -266,6 +274,7 @@ export function createSkyShell(): SkyShell {
     uLayerB: { value: layerB },
     uLayerC: { value: layerC },
     uLayerD: { value: layerD },
+    uLayerE: { value: layerE },
     uLayers: { value: 0 },
     uOctaves: { value: 4 },
     uSunlit: { value: 0 },
@@ -346,6 +355,7 @@ export function createSkyShell(): SkyShell {
         z: layer.deck ? 1 : 0,
         w: opacity,
       });
+      layerE[i].set(layer.fibre, 0, 0, 0);
     });
     writeOffsets();
   };

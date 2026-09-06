@@ -370,9 +370,11 @@ export const glowTexture = once((): THREE.CanvasTexture => {
 export const contrailTexture = once((): THREE.CanvasTexture => {
   const { canvas, ctx } = makeCanvas(64);
   const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  // Soft to the edge: a fresh trail is too few pixels to show a profile,
+  // and the broad old band this same sprite becomes has no edge at all.
   g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.5, "rgba(255,255,255,0.92)");
-  g.addColorStop(0.82, "rgba(255,255,255,0.3)");
+  g.addColorStop(0.35, "rgba(255,255,255,0.8)");
+  g.addColorStop(0.7, "rgba(255,255,255,0.25)");
   g.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 64, 64);

@@ -45,8 +45,10 @@ import { createSkeins } from "./skein.ts";
 import {
   createSkyTraffic,
   puffFade,
+  puffLump,
   puffWidth,
   tipFade,
+  trailLump,
   type Crossing,
   DRIFT,
   LANE,
@@ -56,19 +58,20 @@ import { contrailTexture } from "./textures.ts";
 
 const FLOCKS = 2;
 
-/** How many airframes can be in the sky at once. A crossing lasts about
- * twenty seconds and they come over every fifteen to thirty, so two is the
- * common case and this is the headroom above it. */
-const AIRFRAMES = 4;
+/** How many airframes can be in the sky at once. A crossing lasts over
+ * half a minute and they come over every fifteen to thirty seconds, so two
+ * or three is the common case and this is the headroom above it. */
+const AIRFRAMES = 6;
 
-/** How many puffs of contrail the sky can hold. A trail is thin, so it is
- * laid finely — about four hundred puffs to a crossing — and it outlives
- * eight gaps between crossings, which is what a fully dressed sky costs. It
- * is all ONE draw call of point sprites a few pixels across, so the count
- * is cheaper than it reads. The pool is a ring, so a busier sky than this
- * does not break: the oldest puffs go first, which erodes the faintest
- * trail from its far end and is what would have happened next anyway. */
-const PUFF_POOL = 3500;
+/** How many puffs of contrail the sky can hold. A trail is hair-thin, so it
+ * is laid finely — two cores, some fourteen hundred puffs to a crossing —
+ * and it outlives eight gaps between crossings, which is what a fully
+ * dressed sky costs. It is all ONE draw call of point sprites a few pixels
+ * across, so the count is cheaper than it reads. The pool is a ring, so a
+ * busier sky than this does not break: the oldest puffs go first, which
+ * erodes the faintest trail from its far end and is what would have
+ * happened next anyway. */
+const PUFF_POOL = 16000;
 
 /** Where a retired puff is parked: far enough under the world that nothing
  * frames it, since the pool is never culled. */
@@ -302,15 +305,19 @@ function graftContrail(mat: THREE.PointsMaterial): void {
   mat.customProgramCacheKey = (): string => "contrail";
 }
 
-/** The airframe, at the size a thing half a kilometre up has to be before
- * it is anything at all: a fuselage, a wing and a tailplane, and no detail
- * a speck could not carry. */
+/** The airframe: a fuselage, a wing and a tailplane, and no detail a speck
+ * could not carry. SMALL — nine metres of span four hundred up is about a
+ * degree, a dozen pixels, and the cross shape is all that is left of it,
+ * which is what an airliner at cruise is from the ground. The size is
+ * doing the altitude's job: the lanes cannot go above the far plane, so
+ * how high the traffic reads is set here and by its speed. Its twin
+ * contrails are laid just inboard of the wing tips (`PUFF.cores`). */
 function airframe(mat: THREE.Material): THREE.Group {
   const plane = new THREE.Group();
-  const fuselage = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 13), mat);
-  const wings = new THREE.Mesh(new THREE.BoxGeometry(16, 0.35, 2.6), mat);
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.35, 1.7), mat);
-  tail.position.set(0, 0.9, -5.6);
+  const fuselage = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 8), mat);
+  const wings = new THREE.Mesh(new THREE.BoxGeometry(9, 0.25, 1.6), mat);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.25, 1.1), mat);
+  tail.position.set(0, 0.6, -3.4);
   plane.add(fuselage, wings, tail);
   plane.visible = false;
   return plane;
@@ -423,6 +430,11 @@ export function createAmbientLife(): AmbientLife {
    * tip taper, which never changes once laid, so it is kept rather than
    * recomputed with the age every frame. */
   const trailTip = new Float32Array(PUFF_POOL);
+  /** How much of this puff's brightness the lumps take as the trail ages
+   * (scaled by `puffLump`): the trail's own pattern sampled where the puff
+   * was laid, so an old trail breaks up along its length and never
+   * speckles. */
+  const trailLumps = new Float32Array(PUFF_POOL);
   /** Age in seconds; at `PUFF.life` a puff is spent, which is where they all
    * start so an empty pool needs no second flag. */
   const trailAge = new Float32Array(PUFF_POOL).fill(PUFF.life);
@@ -438,7 +450,7 @@ export function createAmbientLife(): AmbientLife {
     // size is left as the unit the graft multiplies.
     size: 1,
     transparent: true,
-    opacity: 0.38,
+    opacity: PUFF.alpha,
     depthWrite: false,
     fog: false,
   });
@@ -667,6 +679,9 @@ export function createAmbientLife(): AmbientLife {
       // exactly the trail it flew and no more.
       const chord = cross.span * cross.speed;
       const flown = (flying ? cross.age : cross.span) * cross.speed;
+      // Across the heading, for the twin cores.
+      const acrossX = -cross.dirZ;
+      const acrossZ = cross.dirX;
       while (run.laid + PUFF.step <= flown) {
         run.laid += PUFF.step;
         // How old this piece of the trail is: the age of the crossing less
@@ -676,13 +691,22 @@ export function createAmbientLife(): AmbientLife {
         // laid, because there would be nothing left of it to see.
         const born = cross.age - run.laid / cross.speed;
         if (born >= PUFF.life) continue;
-        const p = puffCursor;
-        puffCursor = (puffCursor + 1) % PUFF_POOL;
-        trailPos[p * 3] = cross.fromX + cross.dirX * run.laid;
-        trailPos[p * 3 + 1] = cross.y;
-        trailPos[p * 3 + 2] = cross.fromZ + cross.dirZ * run.laid;
-        trailAge[p] = Math.max(0, born);
-        trailTip[p] = tipFade(run.laid / chord);
+        const age = Math.max(0, born);
+        const tip = tipFade(run.laid / chord);
+        const lump = trailLump(run.laid, cross.wave);
+        const x = cross.fromX + cross.dirX * run.laid;
+        const z = cross.fromZ + cross.dirZ * run.laid;
+        // One puff behind each engine.
+        for (let core = -0.5; core <= 0.5; core += 1) {
+          const p = puffCursor;
+          puffCursor = (puffCursor + 1) % PUFF_POOL;
+          trailPos[p * 3] = x + acrossX * PUFF.cores * core;
+          trailPos[p * 3 + 1] = cross.y;
+          trailPos[p * 3 + 2] = z + acrossZ * PUFF.cores * core;
+          trailAge[p] = age;
+          trailTip[p] = tip;
+          trailLumps[p] = lump;
+        }
       }
       if (run.plane) {
         if (flying) {
@@ -702,7 +726,9 @@ export function createAmbientLife(): AmbientLife {
       if (!flying) live.splice(i, 1);
     }
 
-    // The contrails: spreading, thinning, and creeping on the wind aloft.
+    // The contrails: spreading, thinning, breaking into lumps, and creeping
+    // on the wind aloft — STRAIGHT the whole way, which is what tells a
+    // contrail from smoke.
     for (let i = 0; i < PUFF_POOL; i++) {
       const age = trailAge[i];
       if (age >= PUFF.life) continue;
@@ -716,7 +742,7 @@ export function createAmbientLife(): AmbientLife {
       trailPos[i * 3] += windX * DRIFT * dt;
       trailPos[i * 3 + 2] += windZ * DRIFT * dt;
       trailWidth[i] = puffWidth(aged);
-      trailFade[i] = puffFade(aged) * trailTip[i];
+      trailFade[i] = puffFade(aged) * trailTip[i] * (1 - puffLump(aged) * trailLumps[i]);
     }
     trailGeo.attributes.position.needsUpdate = true;
     trailGeo.attributes.aWidth.needsUpdate = true;
