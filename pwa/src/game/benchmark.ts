@@ -12,8 +12,13 @@
 // the bot, off the engine's own seeded RNG, so the same corners are taken at
 // the same instants on every machine and in every session — and the run is
 // exactly `frames` rendered frames long. What varies is the clock: a fast
-// machine is through the same race in less of it. Lower is better, and two
-// numbers are two numbers about the same thing.
+// machine is through the same race in less of it, and two numbers are two
+// numbers about the same thing.
+//
+// WHAT IS REPORTED is that time divided back into the race's own length —
+// an INDEX where 100 is real time (benchmark-index.ts). Same measurement,
+// read the way a score is read: higher is better, and one machine over
+// another is how many times faster it is.
 //
 // THE SIMULATION IS NOT WHAT IS BEING TIMED. Every rendered frame advances
 // the game by exactly `step` seconds regardless of how long it took to draw,
@@ -56,6 +61,7 @@ import {
   type FieldPlan,
   type RivalField,
 } from "./standings.ts";
+import { SAMPLE_EVERY, benchIndex, type BenchSample } from "./benchmark-index.ts";
 import { MIRROR_TIERS } from "./mirror-pace.ts";
 import type { GameRenderer } from "./renderer.ts";
 import type { PlayCamera } from "./settings.ts";
@@ -110,10 +116,17 @@ export const BENCHMARK: BenchmarkPlan = {
  * no accumulator is carried between frames and nothing drifts. */
 const STEPS_PER_FRAME = Math.max(1, Math.round(BENCHMARK.step / TUNING.dt));
 
-/** How often the card is told where the run is, in frames. Half a second of
- * game, which is a readable counter and sixty renders of a small card over
- * the whole benchmark — far below anything the clock can see. */
-const REPORT_EVERY = 30;
+// How often the card is told where the run is, in frames, is
+// `SAMPLE_EVERY` — the reading and the report are the same event, because
+// the card IS the graph of the readings.
+//
+// THAT REDRAW IS INSIDE THE CLOCK. Nothing here waits for the card, but the
+// page has one thread and a hundred and twenty renders of a small SVG land
+// between the frames being timed. A quarter of a second of game per reading
+// is what keeps that honest: the card costs a fraction of a millisecond
+// against the ~150 ms of frames it sits over, which is a constant tax well
+// under what two runs of the same build differ by anyway. A graph redrawn
+// every frame would be a benchmark measuring its own instrument.
 
 /** Where the benchmark is, and what it has to say about itself. */
 export type BenchmarkStatus = {
@@ -122,8 +135,14 @@ export type BenchmarkStatus = {
   phase: "warmup" | "running" | "done";
   /** Measured frames drawn so far, of `BENCHMARK.frames`. */
   frames: number;
-  /** Wall clock since the lights went out, seconds — THE NUMBER. */
+  /** Wall clock since the lights went out, seconds — what is measured. */
   seconds: number;
+  /** …and the same thing as THE NUMBER: the run so far on the scale where
+   * 100 is real time (benchmark-index.ts). */
+  index: number;
+  /** Every reading taken so far, oldest first — the graph on the card is
+   * this list and nothing else. A snapshot: the run keeps its own. */
+  samples: BenchSample[];
   /** Cars that were actually stood on the grid. */
   cars: number;
   /** The drawing buffer the frames were drawn into, device pixels. A time
@@ -187,6 +206,8 @@ export function runBenchmark({
   /** When the green was, ms on the page's clock; 0 while warming up. */
   let green = 0;
   let elapsed = 0;
+  /** The score, read every `SAMPLE_EVERY` measured frames. */
+  const samples: BenchSample[] = [];
 
   /** Hand the mirror back to the frame rate. Whatever ends this run — the
    * last frame or somebody walking away from it — the next thing this
@@ -198,6 +219,8 @@ export function runBenchmark({
       phase,
       frames,
       seconds: elapsed / 1000,
+      index: benchIndex(frames * BENCHMARK.step, elapsed / 1000),
+      samples: samples.slice(),
       cars: field.of,
       width: canvas.width,
       height: canvas.height,
@@ -235,13 +258,26 @@ export function runBenchmark({
       frames += 1;
       elapsed = performance.now() - green;
     }
-    if (frames >= BENCHMARK.frames) {
+    const finished = frames >= BENCHMARK.frames;
+    // The last frame is a reading whatever it lands on, so the line's end IS
+    // the answer on the card rather than a point short of it. It happens to
+    // land on the cadence too — but a run length that stopped dividing by it
+    // would otherwise draw a graph that never quite reaches its own score.
+    if (green !== 0 && (finished || frames % SAMPLE_EVERY === 0)) {
+      samples.push({ frame: frames, index: benchIndex(frames * BENCHMARK.step, elapsed / 1000) });
+    }
+    if (finished) {
       stopped = true;
       release();
       report("done");
       return;
     }
-    if (drawn % REPORT_EVERY === 0) report(green === 0 ? "warmup" : "running");
+    // Warming up there are no measured frames to count, so the countdown is
+    // reported off the frames drawn instead — the card is alive from the
+    // first one, and the graph stays empty until there is a score to draw.
+    if (green === 0) {
+      if (drawn % SAMPLE_EVERY === 0) report("warmup");
+    } else if (frames % SAMPLE_EVERY === 0) report("running");
     channel.port2.postMessage(0);
   };
 

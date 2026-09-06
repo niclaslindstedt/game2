@@ -6873,29 +6873,30 @@ a.menu-version:focus-visible {
 }
 
 /* THE BENCHMARK'S CARD. It wears the pause card's chrome, because it is the
-   same thing: a card over a run. What it does differently is put ONE NUMBER
-   at the size of a headline — the whole tool exists to be read at a glance
-   and written down, and everything else on the card is the small print that
-   says which race the number is about. */
+   same thing: a card over a run. What it does differently is give the whole
+   card over to ONE GRAPH — the run's index, drawn as it settles — with the
+   small print above it saying which race the score is about, and the score
+   itself at the line's leading edge. */
 .bench {
   align-items: stretch;
   text-align: center;
-  min-width: min(20rem, 84vw);
+  min-width: min(23rem, 88vw);
 }
 
-.bench-time {
+/* The answer, once there is one. Above the graph rather than in it: the line
+   is what the machine DID, and this is the number written down afterwards. */
+.bench-score {
   font-size: clamp(2.4rem, 11vmin, 4rem);
   line-height: 1;
   color: var(--hud-good);
-  /* The seconds tick up while it runs, and digits of different widths under
-     a counter make the whole number jump about. */
   font-variant-numeric: tabular-nums;
 }
 
-.bench-unit {
-  font-size: 0.4em;
-  opacity: 0.75;
-  margin-left: 0.2em;
+.bench-score-label {
+  display: block;
+  font-size: 0.24em;
+  letter-spacing: 0.3em;
+  opacity: 0.7;
 }
 
 .bench-note {
@@ -6905,16 +6906,91 @@ a.menu-version:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.bench-bar {
-  height: 0.35rem;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 20%);
-  overflow: hidden;
+/* THE GRAPH. Its own units inside (menu-dev.tsx's PLOT), scaled to whatever
+   width the card takes — so it is the same picture on a phone and on a
+   monitor, text included, and nothing in it needs a media query. */
+.bench-plot {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
-.bench-bar-fill {
-  height: 100%;
-  background: var(--hud-good);
+.bench-plot-panel {
+  fill: rgb(4 14 34 / 62%);
+  stroke: rgb(255 255 255 / 18%);
+  stroke-width: 1;
+}
+
+.bench-plot-axis,
+.bench-plot-grid {
+  stroke: rgb(255 255 255 / 30%);
+  stroke-width: 1;
+}
+
+.bench-plot-grid {
+  stroke-dasharray: 2 4;
+}
+
+/* Real time is a different KIND of line from the axis — a gradation with a
+   meaning rather than the edge of the box — so it is the readout blue, not
+   another grey dash. */
+.bench-plot-real {
+  stroke: var(--hud-info);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  opacity: 0.55;
+}
+
+.bench-plot-tick {
+  fill: rgb(255 255 255 / 60%);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-plot-tick-real {
+  fill: var(--hud-info);
+  opacity: 0.75;
+}
+
+/* The wash under the line: strong where the line is, gone by the floor. A
+   flat block of it at any opacity reads as a bar chart nobody asked for. */
+.bench-plot-wash-top {
+  stop-color: var(--hud-good);
+  stop-opacity: 0.34;
+}
+
+.bench-plot-wash-foot {
+  stop-color: var(--hud-good);
+  stop-opacity: 0.02;
+}
+
+.bench-plot-area {
+  fill: url("#bench-plot-wash");
+}
+
+.bench-plot-line {
+  fill: none;
+  stroke: var(--hud-good);
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.bench-plot-head {
+  fill: var(--hud-good);
+}
+
+.bench-plot-score {
+  fill: var(--hud-good);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-plot-wait {
+  fill: rgb(255 255 255 / 55%);
+  font-size: 11px;
+  letter-spacing: 0.24em;
 }
 
 /* The developer toggles on the pause card, held apart from the three big
