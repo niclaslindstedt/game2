@@ -4,11 +4,13 @@
 // when there is no corner to call because the car is not on the stage any
 // more (lost in a field, or turned round on the road).
 //
-// IT CARRIES NO WORDS. A call is a SIGN: the corner's own shape drawn off the
-// stage, on a plate coloured by how much the bend is going to ask and cut to a
-// point on the side it turns toward, fading up as the corner comes. All three
-// of those are read out of the corner of an eye that never leaves the road,
-// which is the only way a call is ever read at rally pace — lettering it adds
+// IT CARRIES NO WORDS — not even a number of metres. A call is a SIGN: the
+// corner's own shape drawn off the stage, on a plate coloured by how much the
+// bend is going to ask and cut to a point on the side it turns toward, fading
+// up as the corner comes, with a bar under it closing from both ends as the
+// two seconds it was put up on run out. Every one of those is read out of the
+// corner of an eye that never leaves the road, which is the only way a call
+// is ever read at rally pace — lettering it adds
 // nothing a glance already has and asks for the one thing there is no room
 // for. The words survive as each plate's LABEL, for a reader who cannot see
 // it. The two calls that are instructions rather than corners keep theirs on
@@ -32,8 +34,10 @@ export type HudPacenote =
       severity: TurnSeverity;
       /** True when the turn holds long enough to earn the LONG modifier. */
       long: boolean;
-      /** Meters from the car to the turn entry (0 while inside the turn). */
-      distance: number;
+      /** Seconds from the car to the turn entry at the speed it is doing (0
+       * while inside the turn) — the clock the strip is timed on, and what
+       * the call's opacity is read off. */
+      eta: number;
       /** The corner's own shape, ready to draw in the sign's 100x100 box — the
        * stage's plan view of this turn, already in screen axes (pace-shape.ts). */
       sign: PaceSign;
@@ -44,8 +48,8 @@ export type HudPacenote =
        * and the road past it (`jumpSize`), not of how fast the car is
        * going, so the call cannot change under the lift it asks for. */
       size: JumpSize;
-      /** Meters from the car to the takeoff lip. */
-      distance: number;
+      /** Seconds from the car to the takeoff lip, at the speed it is doing. */
+      eta: number;
     };
 
 /** The pacenote sign: the corner's own shape, drawn like a rally note board.
@@ -192,29 +196,64 @@ export function TurnAroundCall() {
   );
 }
 
+/** The co-driver's lead, seconds — CALL_LEAD in snapshot.ts, restated here
+ * because it is also what the strip DRAWS. The snapshot decides WHEN a call
+ * goes up; this file draws the span running out under it, and the two have
+ * to be the same span or the countdown ends somewhere other than the corner.
+ * Change one, change both. */
+const CALL_SPAN = 2;
+
 /** How far out a call is at its faintest, and how close it has to come to
- * be fully lit, meters. The far end is the co-driver's own lead at speed
- * (CALL_LEAD_MAX in snapshot.ts); the near end is about where the braking is
- * already happening, so the call finishes arriving before it matters. */
-const CALL_FADE_FAR = 150;
-const CALL_FADE_NEAR = 30;
+ * be fully lit — SECONDS to the corner, the same clock the strip is timed
+ * on. The far end is the moment the sign goes up; the near end is about
+ * where the braking is already happening, so the call finishes arriving
+ * before it matters. Seconds rather than metres because the fade IS the
+ * imminence, and at 200 km/h a hundred metres is not imminent in the way it
+ * is at fifty. */
+const CALL_FADE_FAR = CALL_SPAN;
+const CALL_FADE_NEAR = 0.6;
 
 /** The faintest the call being driven ever goes. Deliberately ABOVE the
  * next-corner plate's 0.5: however far off the corner is, the call that is
  * next is never dimmer than the one queued behind it. */
 const CALL_FADE_FLOOR = 0.62;
 
-/** The call's opacity, as a distance: far is faint, near is solid. */
-function callFade(distance: number): number {
-  const near = clamp((CALL_FADE_FAR - distance) / (CALL_FADE_FAR - CALL_FADE_NEAR), 0, 1);
+/** The call's opacity, as a time: far off is faint, about to happen solid. */
+function callFade(eta: number): number {
+  const near = clamp((CALL_FADE_FAR - eta) / (CALL_FADE_FAR - CALL_FADE_NEAR), 0, 1);
   return CALL_FADE_FLOOR + (1 - CALL_FADE_FLOOR) * near;
 }
 
+/** THE COUNTDOWN under the sign: a bar running out as the corner comes —
+ * full width at the moment the call goes up, half of it a second out, and
+ * nothing left at the turn-in. The sign itself stays up through the corner,
+ * so an empty bar under a plate is the corner being driven rather than one
+ * still coming.
+ *
+ * NO FIGURES. What the driver wants off it is HOW CLOSE, and a bar that is
+ * visibly running out answers that without being read — the same reason
+ * nothing else on this strip is lettered. WHICH WAY it runs out is the
+ * corner's own direction (`--pace-drain` in styles.css): a right-hander
+ * empties left to right, into the side of the plate that is already cut to a
+ * point, so the one moving thing on the sign moves the way the road does.
+ *
+ * It is the SECONDS that shrink it, so it stops dead with the car — stand
+ * still fifty metres short of a corner and the bar holds exactly where it
+ * is, because the corner is no closer than it was. */
+function CallTimer({ eta }: { eta: number }) {
+  return (
+    <div
+      className="hud-pace-timer"
+      style={{ transform: `scaleX(${clamp(eta / CALL_SPAN, 0, 1)})` }}
+    />
+  );
+}
+
 /** The co-driver strip: the current call big, and — only when the next
- * corner lands inside the same lead — that one small and half transparent
- * underneath, a hard left into an easy right, the way a crew reads a stage.
- * A corner further out than that is not on the strip at all; the snapshot
- * hands it over when the car gets to it.
+ * corner lands inside four seconds of the car — that one small and half
+ * transparent underneath, a hard left into an easy right, the way a crew
+ * reads a stage. A corner further out than that is not on the strip at all;
+ * the snapshot hands it over when the car gets to it.
  *
  * IT IS THE SIGNS ALONE, with no words on them. A sign that is the corner's
  * own shape carries the direction and the severity by BEING that corner, the
@@ -226,9 +265,11 @@ function callFade(distance: number): number {
  * see it.
  *
  * HOW FAR OFF the corner is, is the call's OPACITY rather than a number of
- * metres beside it. A distance printed on a sign has to be read and then
- * converted into a feeling of imminence; a sign that hardens as the corner
- * comes IS that feeling. */
+ * metres beside it — and it is read in SECONDS, not metres, because a corner
+ * two seconds away asks the same thing of a driver whatever speed those two
+ * seconds were bought at. A distance printed on a sign has to be read and
+ * then converted into a feeling of imminence; a sign that hardens as the
+ * corner comes IS that feeling. */
 export function Pacenotes({ notes }: { notes: HudPacenote[] }) {
   const now = notes[0];
   const next = notes[1];
@@ -238,11 +279,12 @@ export function Pacenotes({ notes }: { notes: HudPacenote[] }) {
         className={`hud-pace-call ${pacenoteClass(now)}${
           now.kind === "turn" ? ` hud-pace-to-${now.dir}` : ""
         }`}
-        style={{ opacity: callFade(now.distance) }}
+        style={{ opacity: callFade(now.eta) }}
         role="img"
         aria-label={pacenoteText(now)}
       >
         <PacenoteIcon note={now} />
+        <CallTimer eta={now.eta} />
       </div>
       {next && (
         <div
@@ -253,6 +295,7 @@ export function Pacenotes({ notes }: { notes: HudPacenote[] }) {
           aria-label={pacenoteText(next)}
         >
           <PacenoteIcon note={next} />
+          <CallTimer eta={next.eta} />
         </div>
       )}
     </div>

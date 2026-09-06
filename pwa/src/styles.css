@@ -594,6 +594,7 @@ body {
   --pace-point: 0.85rem;
   --pace-lead: 0rem;
   --pace-trail: 0rem;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -625,6 +626,7 @@ body {
    keeps its shape at every plate size. */
 .hud-pace-to-left {
   --pace-lead: var(--pace-point);
+  --pace-drain: left;
   clip-path: polygon(
     0 50%,
     calc(var(--pace-point) * 0.72) 14%,
@@ -643,6 +645,7 @@ body {
 
 .hud-pace-to-right {
   --pace-trail: var(--pace-point);
+  --pace-drain: right;
   clip-path: polygon(
     0 0,
     calc(100% - var(--pace-point) * 1.4) 0,
@@ -663,6 +666,39 @@ body {
   width: var(--pace-sign);
   height: var(--pace-sign);
   filter: drop-shadow(2px 2px 0 var(--hud-shadow));
+}
+
+/* THE COUNTDOWN along the foot of the plate: how close the corner is, drawn
+   rather than printed. An inline transform scales it (hud-pace.tsx) — full
+   width at the moment the call goes up, nothing left at the turn-in.
+
+   IT DRAINS THE WAY THE ROAD GOES. The origin it collapses toward is the
+   side the corner turns to, so a right-hander's bar runs off to the right
+   and empties into the plate's own point, and a left-hander's to the left:
+   the countdown and the direction are the same movement, and the direction
+   gets said once more in the one part of the sign that is moving. A jump has
+   no side to go to and keeps the centre.
+
+   ONE COLOUR for every severity, and not the plate's own `currentColor`:
+   the bar answers WHEN, the plate answers HOW MUCH, and a bar that changed
+   colour with the corner would be the severity said a fourth time instead of
+   the one thing on the strip that is not. Yellow because that is the arcade
+   register the rest of this HUD counts in.
+
+   It rides INSIDE the plate's own inset, clear of the wedge either side, and
+   moves on the same 0.12s the plate's opacity does — the snapshot ticks at
+   about 12 Hz, and a bar that stepped would read as a bar that stuttered. */
+.hud-pace-timer {
+  position: absolute;
+  bottom: 0.16rem;
+  left: calc(var(--pace-lead) + 0.45rem);
+  right: calc(var(--pace-trail) + 0.45rem);
+  height: 3px;
+  border-radius: 2px;
+  background-color: #ffd23e;
+  box-shadow: 1px 1px 0 var(--hud-shadow);
+  transform-origin: var(--pace-drain, center);
+  transition: transform 0.12s linear;
 }
 
 .hud-pace-text {
