@@ -27,6 +27,7 @@ import {
   DUST_RAISED,
   EFFECTS_SCALE,
   EXHAUST_SEEN,
+  GLASS_RAIN,
   GLASS_SEEN_THROUGH,
   INTERIOR_DETAIL,
   LOOSE_WHEELS,
@@ -1480,10 +1481,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       car.setInside(inside);
       // THE WATER ON THE WINDSCREEN is the driver's alone, and the pass that
       // draws it costs a copy of the whole frame — so it runs only from the
-      // seat, and only while there is something on the glass. The sky is
-      // pushed here rather than by the car, which knows nothing about the
-      // weather it is being rained on by (car/screen-rain.ts).
-      glassRain = mine && inside && !mapView && (car.screenRain?.active() ?? false);
+      // seat, only while there is something on the glass, and only on an FX
+      // budget that can carry it (`GLASS_RAIN`: a LOW detail machine goes
+      // without). The sky is pushed here rather than by the car, which knows
+      // nothing about the weather it is being rained on by
+      // (car/screen-rain.ts).
+      glassRain =
+        mine &&
+        inside &&
+        !mapView &&
+        GLASS_RAIN[quality.effects] &&
+        (car.screenRain?.active() ?? false);
       if (glassRain) car.screenRain?.setSky(environment.carTint(), environment.flash());
       // From the seat the road behind is read off the mirror hanging in the
       // windscreen, so the strip at the top of the frame stands down and the

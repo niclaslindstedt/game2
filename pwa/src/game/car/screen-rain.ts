@@ -8,12 +8,22 @@
 // the VERTICES of a tessellated pane: the wipe walks them and multiplies each
 // one down, which is the right machine for a slowly deepening wash of road
 // filth seen from any camera on the ladder. Water is the opposite problem.
-// It is not a wash but a field of DISCRETE things — beads a couple of
-// millimetres across, and the runs they leave when one breaks loose — and at
-// arm's length from the driver's eye those millimetres are tens of pixels. A
-// vertex grid fine enough to carry one bead would be a hundred thousand
-// triangles on one window. So the water is procedural: the panes are a few
-// hundred triangles of nothing, and every drop on them is solved per pixel.
+// It is not a wash but a field of DISCRETE things — thousands of beads a
+// millimetre or two across, the few that grow to half a centimetre and break
+// loose, and the threads of water they leave running behind them — and a
+// vertex grid fine enough to carry one bead would be a million triangles on
+// one window. So the water is procedural: the panes are a few hundred
+// triangles of nothing, and every drop on them is solved per pixel.
+//
+// WHAT A WET WINDSCREEN ACTUALLY LOOKS LIKE from the seat, which is what the
+// sizes below are held to. The beading is SMALL and DENSE: a screen that has
+// not been wiped is carpeted with drops one to five millimetres across, each
+// a dark-rimmed lens with a bright point of sky in it, and it is the crowd of
+// them rather than any one that reads as rain. A few grow — collecting what
+// lands on them, and the beads they run into — until at five or six
+// millimetres the glass can no longer hold them and they go, dragging a
+// thin continuous rivulet behind them down a lane they have cleared of
+// beading. Nothing on the glass is ever a centimetre across.
 //
 // THE THREE THINGS THAT MAKE IT READ AS WATER RATHER THAN AS SPOTS:
 //
@@ -105,10 +115,12 @@ const RUN = {
  * streaks for the same reason. `flowing` is the road speed at which the
  * runs are fully going; under `RUN.lift` they are not going at all, which
  * is what lets the pane sit still on the grid without a flip anywhere.
- * `scale` is how big its drops are against the screen's: the door glass is
+ * `scale` is how big its drops are against the screen's. The door glass is
  * a third of the distance from the eye, so the same millimetres are three
- * times the pixels, and a bead sized for the screen is a puddle there. */
-const SIDE = { air: 1.6, flowing: 14, stretch: 3.4, scale: 0.55 };
+ * times the pixels — and that is what a door window looks like from the
+ * seat beside it, so nearly all of it is kept; a touch is given back so
+ * the biggest bead on the door is still a bead. */
+const SIDE = { air: 1.6, flowing: 14, stretch: 3.4, scale: 0.8 };
 
 /** How far the runs LEAN, as metres across the glass per metre up it, at the
  * hardest cornering a rally car does. Water has mass: it keeps going while
@@ -170,19 +182,51 @@ const STRETCH = 1.4;
  * that reads as a screen somebody forgot to clean. */
 const CATCH = 1.7;
 
+/** THE BEADS, in metres of glass: for each layer, how far apart its cells
+ * are and the radius of the smallest and the biggest bead in it. Beading
+ * on a windscreen is one to five millimetres across with the odd one at
+ * eight just before it runs; from the seat that is two to eight pixels at
+ * 1080p, and the sizes here sit a shade over life so the fine end survives
+ * a phone's screen at all. Three layers at scales that do not divide one
+ * another, because one jittered grid is a grid however hard it is
+ * jittered. The haze is the layer that carries the LOOK — it is the crowd
+ * of specks a wet screen is carpeted with, and it is the first thing on the
+ * glass after a wipe and the last to dry. */
+const BEAD = {
+  coarse: { cell: 0.019, radius: [0.0016, 0.0042] },
+  fine: { cell: 0.011, radius: [0.001, 0.0028] },
+  haze: { cell: 0.0065, radius: [0.0006, 0.0018] },
+};
+
+/** THE RUNNERS: the column each one owns (m across the run, m along it) and
+ * the radius of its head. A bead has to reach five or six millimetres
+ * before its weight — or the air — beats the glass's hold on it, so the
+ * heads are the biggest water on the screen, and still under a centimetre.
+ * The columns are narrow so a streaming screen carries dozens of rivulets
+ * a couple of centimetres apart, which is how a screen streams. */
+const RUNNER = {
+  main: { cell: [0.032, 0.26], head: [0.0028, 0.005] },
+  fine: { cell: [0.021, 0.17], head: [0.002, 0.0034] },
+};
+
 /** How far a drop bends the world behind it at its own rim, as a MULTIPLE OF
- * ITS OWN RADIUS ON SCREEN. Well over one, because a bead really is a
- * fisheye: what a drop shows is not the patch of world it is sitting on
- * nudged a little, it is a wide inverted view pulled in from a long way
- * outside itself.
+ * ITS OWN RADIUS ON SCREEN, plus a FLOOR as a fraction of the frame's height.
+ * Well over one, because a bead really is a fisheye: what a drop shows is
+ * not the patch of world it is sitting on nudged a little, it is a wide
+ * inverted view pulled in from a long way outside itself — and the floor is
+ * there because that is true of a bead three pixels across too. A lens
+ * bends by its curvature, not its size; without the floor the small beads
+ * that are most of a wet screen would show the world un-bent, which is a
+ * speck of dirt, not water.
  *
- * IT HAS TO BE THIS FAR IN THIS GAME PARTICULARLY. The world is flat-shaded
+ * IT HAS TO REACH THIS FAR IN THIS GAME PARTICULARLY. The world is flat-shaded
  * fields of one colour — a green bank, a brown road, a grey sky — and a lens
- * that reaches a few pixels shows green over green and disappears. What
- * makes a drop READ here is that it reaches far enough to pull in a
- * different thing entirely: the horizon inside a drop that is sitting on the
- * grass, the road inside one on the sky. */
-const BEND = 2.7;
+ * that reaches a pixel shows green over green and disappears. What makes a
+ * drop READ here is that it reaches far enough to pull in a different thing
+ * entirely: the horizon inside a drop that is sitting on the grass, the road
+ * inside one on the sky. */
+const BEND = 2.2;
+const BEND_FLOOR = 0.007;
 
 /** How fast the rain the shader is drawing follows the rain that is
  * actually falling, per second — filling and drying. Filling is quick,
@@ -193,6 +237,9 @@ const FOLLOW = { wet: 2.6, dry: 0.4 };
 
 /** Under this there is nothing on the glass worth a render pass. */
 const NOTHING = 0.004;
+
+/** A pair of metres, as the shader spells one. */
+const vec2 = (v: number[]): string => `vec2(${v[0].toFixed(4)}, ${v[1].toFixed(4)})`;
 
 export type ScreenRainDrive = {
   /** How hard it is raining on the car, 0..1 — the same number the wipers
@@ -283,9 +330,8 @@ uniform float uSide;
 uniform float uFlowing;
 /** How big the drops on this pane are, as a multiple of the windscreen's.
  * Every size below is metres of glass, and the door window is a third of
- * the distance from the driver's eye that the middle of the screen is: the
- * same bead is three times the pixels there, and what reads as rain on the
- * screen reads as a puddle on the door. */
+ * the distance from the driver's eye that the middle of the screen is, so
+ * the same bead is three times the pixels there (\`SIDE.scale\`). */
 uniform float uScale;
 /** Metres of travel the water has done along the run axis since the stage
  * began, and how far it is leaning. INTEGRATED on the CPU rather than taken
@@ -330,6 +376,21 @@ const float TAU = 6.28318530718;
 /** What wipeAge hands back for a point no blade will ever reach. Long
  * enough that every "how long since" below saturates. */
 const float FOREVER = 1000.0;
+/** The sizes, stated once in the TypeScript above and spelled into the
+ * program here. */
+const float MIST_TALL = ${MIST_TALL.toFixed(2)};
+const float BEND = ${BEND.toFixed(2)};
+const float BEND_FLOOR = ${BEND_FLOOR.toFixed(4)};
+const float BEAD_COARSE_CELL = ${BEAD.coarse.cell.toFixed(4)};
+const vec2 BEAD_COARSE = ${vec2(BEAD.coarse.radius)};
+const float BEAD_FINE_CELL = ${BEAD.fine.cell.toFixed(4)};
+const vec2 BEAD_FINE = ${vec2(BEAD.fine.radius)};
+const float BEAD_HAZE_CELL = ${BEAD.haze.cell.toFixed(4)};
+const vec2 BEAD_HAZE = ${vec2(BEAD.haze.radius)};
+const vec2 RUNNER_MAIN_CELL = ${vec2(RUNNER.main.cell)};
+const vec2 RUNNER_MAIN_HEAD = ${vec2(RUNNER.main.head)};
+const vec2 RUNNER_FINE_CELL = ${vec2(RUNNER.fine.cell)};
+const vec2 RUNNER_FINE_HEAD = ${vec2(RUNNER.fine.head)};
 
 float sat(float x) { return clamp(x, 0.0, 1.0); }
 
@@ -384,14 +445,33 @@ vec4 drop(vec2 dm, float rad, float aa) {
   return vec4(cover, dm / rad * cover, rad);
 }
 
-/** ONE LAYER OF RUNNERS: the drops big enough to have broken loose, each
- * with the dotted trail it left where it came from.
+/** WHERE A RUNNER'S PATH IS at a given height up its column, m across it.
+ * Two harmonics whose periods both divide the column exactly, so the path
+ * does not step where one column wraps into the next. A rivulet wanders a
+ * few millimetres either side over a few centimetres of run, and never in
+ * a clean sine. */
+float meander(float y, float px, float wob, float ph) {
+  return px + wob * (sin(y * TAU * 2.0 + ph) + 0.45 * sin(y * TAU * 5.0 + ph * 1.7));
+}
+
+/** ONE LAYER OF RUNNERS: the beads that have grown big enough to break
+ * loose, each with the rivulet it leaves behind it.
  *
  * The glass is cut into tall narrow columns and each column holds one drop,
  * which travels the length of it and wraps. Everything is measured back into
  * METRES before it is compared, so a column being ten times taller than it
- * is wide does not make an oval of a bead. */
-vec4 runners(vec2 q, vec2 cell, float seed, float density, float stretch, float aa) {
+ * is wide does not make an oval of a bead.
+ *
+ * A running drop is a drop plus a TRACK. It does not fall through the
+ * beading, it eats it: the beads in its path go into the head, and what is
+ * left behind is a lane cleared to the head's own width with a thin
+ * continuous thread of water down the middle of it — the rivulet — and the
+ * odd bead standing on that thread where the water pinched off. The lane
+ * is handed back through \`swept\`, so the beading drawn after this can be
+ * taken out of it. Without the lane a rivulet is a line drawn over the
+ * beads, which is a scratch on the picture rather than water. */
+vec4 runners(vec2 q, vec2 cell, vec2 head, float seed, float density, float stretch, float aa,
+             inout float swept) {
   vec2 g = q / cell;
   vec2 id = floor(g);
   vec2 f = fract(g);
@@ -403,59 +483,77 @@ vec4 runners(vec2 q, vec2 cell, float seed, float density, float stretch, float 
   // Bigger drops run faster, which is what keeps a layer from reading as a
   // sheet of things moving in step.
   float pace = 0.55 + 0.9 * r.y;
-  float head = fract(r.x + uRun * pace / cell.y);
-  // The wander down the column. Its period divides the column exactly, so
-  // the path does not step where one wraps into the next.
-  float wob = 0.045 + 0.05 * r.y;
-  float px = 0.5 + (r.x - 0.5) * 0.42;
+  float hd = fract(r.x + uRun * pace / cell.y);
+  float wob = (0.12 + 0.10 * r.y) * cell.x;
+  float px = (0.5 + (r.x - 0.5) * 0.4) * cell.x;
+  float ph = r.z * 30.0;
+  float radius = mix(head.x, head.y, r.y);
 
   // THE HEAD. Distances wrap the column the short way round, so a drop
   // sitting on the seam is one drop rather than two halves.
-  float hx = px + wob * sin(head * TAU * 2.0 + r.z * 30.0);
-  float dy = fract(f.y - head + 0.5) - 0.5;
-  vec2 dm = vec2(f.x - hx, dy) * cell;
+  float dy = fract(f.y - hd + 0.5) - 0.5;
+  vec2 dm = vec2(f.x * cell.x - meander(hd, px, wob, ph), dy * cell.y);
   // Dragged into a tear by the air going past. A drop on a screen at speed
   // is not a circle and never has been.
   dm.y /= stretch;
-  vec4 head0 = drop(dm, (0.17 + 0.20 * r.y) * cell.x, aa);
+  vec4 head0 = drop(dm, radius, aa);
 
-  // THE TRAIL. How far behind the head we are, measured the way the water
-  // is going, so the trail is always upstream of it.
-  float back = fract((head - f.y) * uDir);
-  float fade = pow(1.0 - back, 2.4) * uTrail;
-  // On the path the head actually took, not on a straight line under it.
-  float onPath = (f.x - (px + wob * sin(f.y * TAU * 2.0 + r.z * 30.0))) * cell.x;
-  // Beads at a fixed spacing along that path: a trail is a row of droplets
-  // left behind, not a drawn line.
-  float per = 9.0;
+  // THE TRACK. How far behind the head we are, measured the way the water
+  // is going, so the track is always upstream of it — and on the path the
+  // head actually took, not on a straight line under it.
+  float back = fract((hd - f.y) * uDir);
+  float fade = pow(1.0 - back, 1.6) * uTrail;
+  float onPath = f.x * cell.x - meander(f.y, px, wob, ph);
+  // The lane the head swept clean, a little wider than the head itself.
+  swept = max(swept, (1.0 - smoothstep(radius * 0.9, radius * 1.4, abs(onPath))) * sat(fade * 2.0));
+  // The rivulet: a thread of water a fraction of the head's width, a
+  // cylinder lens that bends the world ACROSS it and not along it, pinched
+  // here and there so it reads as water that ran rather than a line that
+  // was drawn.
+  float width = radius * (0.32 + 0.12 * sin(f.y * TAU * 7.0 + ph));
+  float thread = (1.0 - smoothstep(width - aa, width + aa, abs(onPath))) * fade;
+  vec4 trail = vec4(thread, vec2(onPath / width, 0.0) * thread, width);
+  // …and the beads left standing on it where the water pinched off.
+  float per = 7.0;
   float gap = (fract(f.y * per + r.z * 11.0) - 0.5) / per * cell.y;
-  vec4 trail = drop(vec2(onPath, gap), max(head0.w * 0.42 * fade, 1e-5), aa);
-  trail.x *= fade;
-  trail.y *= fade;
-  trail.z *= fade;
+  vec4 left = drop(vec2(onPath, gap), max(radius * 0.5 * sat(fade * 1.5), 1e-5), aa);
+  left.xyz *= fade;
+  trail = mix(trail, left, step(trail.x, left.x));
 
   return mix(trail, head0, step(trail.x, head0.x));
 }
 
-/** THE MIST: the fine beading that lands everywhere and is too small to run.
- * A jittered grid, one drop per cell, and the drops GROW rather than appear
- * — a screen filling in has beads swelling on it, not beads switching on. */
-vec4 mist(vec2 q, float across, float seed, float grow, float aa, float shape) {
+/** ONE LAYER OF BEADING: the drops too small to run. A jittered grid, one
+ * bead per cell, sized in metres of glass (\`size\`: the radius of the
+ * smallest and the biggest bead in this layer) and GROWING rather than
+ * appearing — a screen filling in has beads swelling on it, not beads
+ * switching on. \`density\` is how many of the cells have anything in them
+ * at all: a spit is a few beads a long way apart before it is a lot of
+ * small ones close together. */
+vec4 mist(vec2 q, float across, vec2 size, float seed, float density, float grow, float aa,
+          float shape) {
   // The cell is TALLER than it is wide by exactly as much as a drop in it
   // may be stretched, so a bead drawn out along its run still fits the
   // square it was born in and is never clipped at the seam.
-  vec2 cell = vec2(across, across * ${MIST_TALL.toFixed(2)});
+  vec2 cell = vec2(across, across * MIST_TALL);
   vec2 g = q / cell;
   vec2 id = floor(g);
   vec2 f = fract(g) - 0.5;
   vec3 r = hash31(id * 3.1 + seed);
+  float there = step(fract(r.x * 41.7 + r.y * 13.3), density);
   // Jittered nearly the whole width of its cell, and with a wide spread of
-  // sizes on top: a grid whose drops are the same size in the middle of
-  // every square reads as a grid, however fine it is, and that is the one
-  // failure of a procedural field nobody ever mistakes for anything else.
+  // sizes on top, skewed small: a wet screen is mostly its smallest beads
+  // with the odd big one about to run, and a grid whose drops are the same
+  // size in the middle of every square reads as a grid however fine it is.
   vec2 dm = (f - (r.xy - 0.5) * 0.86) * cell;
-  dm.y /= min(shape, ${MIST_TALL.toFixed(2)});
-  return drop(dm, max(across * (0.09 + 0.27 * r.z * r.z) * grow, 1e-5), aa);
+  dm.y /= min(shape, MIST_TALL);
+  return drop(dm, max(mix(size.x, size.y, r.z * r.z) * grow * there, 1e-5), aa);
+}
+
+/** Beading with a runner's lane taken out of it. */
+vec4 cleared(vec4 beads, float swept) {
+  beads.xyz *= 1.0 - swept;
+  return beads;
 }
 
 void main() {
@@ -494,26 +592,31 @@ void main() {
   float pooling = 1.0 + 0.18 * (1.0 - sat(p.y / vSize.y));
   float wet = sat(age / refill) * sat(uWet * 2.4) * pooling;
 
-  // Three passes of water, coarse to fine — the sizes being metres of real
-  // glass, and generous ones. A windscreen bead is two or three millimetres
-  // across and at this focal length that is under a pixel: honest scale here
-  // is a screen with nothing visible on it, which is the whole reason every
-  // game that has ever done this has drawn the drops a size larger than
-  // life. The coarse layer is the drops that are actually going somewhere,
-  // the fine one the haze of beading that fills in between them within a
-  // second of a wipe.
+  // Five passes of water, coarse to fine, every size metres of real glass
+  // (BEAD, RUNNER). The runners are the drops that are actually going
+  // somewhere and are drawn first, because each one hands on the lane it
+  // has cleared; the beading fills in between them within a second of a
+  // wipe, the haze first and the coarse beads last, and every layer swells
+  // with the weather — a downpour's beads are half as big again as a
+  // drizzle's before they run.
   float carried = wet * uFlowing;
   float s = uScale;
-  vec4 w = runners(q, vec2(0.115, 0.50) * s, 0.0, sat(carried * 1.35 - 0.3), shape, perPixel);
-  vec4 b = runners(q + vec2(0.047, 0.21) * s, vec2(0.072, 0.31) * s, 7.3, sat(carried * 1.2 - 0.45), shape, perPixel);
+  float swell = 1.0 + 0.4 * sat(uWet);
+  float swept = 0.0;
+  vec4 w = runners(q, RUNNER_MAIN_CELL * s, RUNNER_MAIN_HEAD * s * swell, 0.0,
+                   sat(carried * 1.35 - 0.3), shape, perPixel, swept);
+  vec4 b = runners(q + vec2(0.013, 0.07) * s, RUNNER_FINE_CELL * s, RUNNER_FINE_HEAD * s * swell,
+                   7.3, sat(carried * 1.2 - 0.45), shape, perPixel, swept);
   w = mix(w, b, step(w.x, b.x));
-  // Two passes of mist rather than one, at scales that do not divide each
-  // other: one grid at one size is a grid however hard its cells are
-  // jittered, and two laid over each other is a scatter.
-  vec4 m = mist(q, 0.042 * s, 21.7, sat(wet * 1.6 - 0.05), perPixel, shape);
+  vec4 m = cleared(mist(q, BEAD_COARSE_CELL * s, BEAD_COARSE * s * swell, 21.7,
+                        sat(wet * 1.3 - 0.2), sat(wet * 1.6 - 0.05), perPixel, shape), swept);
   w = mix(w, m, step(w.x, m.x));
-  vec4 m2 = mist(q + vec2(0.017, 0.011) * s, 0.027 * s, 53.1, sat(wet * 1.4 - 0.3), perPixel, shape);
+  vec4 m2 = cleared(mist(q + vec2(0.0043, 0.0027) * s, BEAD_FINE_CELL * s, BEAD_FINE * s * swell,
+                         53.1, sat(wet * 1.5 - 0.1), sat(wet * 1.5), perPixel, shape), swept);
   w = mix(w, m2, step(w.x, m2.x));
+  vec4 m3 = cleared(mist(q + vec2(0.0021, 0.0038) * s, BEAD_HAZE_CELL * s, BEAD_HAZE * s * swell,
+                         87.9, sat(wet * 1.8), sat(wet * 2.0), perPixel, shape), swept);
+  w = mix(w, m3, step(w.x, m3.x));
 
   // THE FILM UNDER THEM. Between the beads a wet screen carries a continuous
   // skin of water, rippling as the air drags it over the glass, and it is
@@ -582,11 +685,14 @@ void main() {
   // pulled toward the middle and turned over, and it is the inversion rather
   // than the brightness that says "water" to anybody looking.
   //
-  // HOW FAR it bends is the drop's own size ON SCREEN, which is why the
-  // radius is carried this far.
+  // HOW FAR it bends, in pixels, is the drop's own size ON SCREEN — which is
+  // why the radius is carried this far — over a floor a bead a couple of
+  // pixels across still turns the world over inside (BEND_FLOOR). The floor
+  // is the beads' alone: the film and the smear carry thicknesses in \`rad\`,
+  // not lenses.
   vec2 uv = vClip.xy / vClip.w * 0.5 + 0.5;
-  vec2 bent = clamp(uv - slope * (rad / perPixel) * ${BEND.toFixed(2)} * uTexel,
-                    vec2(0.002), vec2(0.998));
+  float reach = rad / perPixel * BEND + bead * BEND_FLOOR / uTexel.y;
+  vec2 bent = clamp(uv - slope * reach * uTexel, vec2(0.002), vec2(0.998));
   vec3 behind = texture2D(uScene, bent).rgb;
 
   // The bead's own surface, as something standing off the glass. A lens
@@ -595,16 +701,20 @@ void main() {
   // most of what makes a drop read as a solid little body of water rather
   // than as a soft spot on the picture.
   vec3 n = normalize(vec3(slope * 1.3, 1.0));
-  float rim = smoothstep(0.4, 1.0, length(slope));
-  vec3 col = behind * (1.14 - 0.72 * rim);
+  float rim = smoothstep(0.3, 0.9, length(slope));
+  vec3 col = behind * (1.1 - 0.8 * rim);
 
   // …and the sky lying in it. On a screen raked back this far the sky is
   // most of the way UP the glass and a little to the driver's side, which is
   // where every drop on a real windscreen carries its highlight. It is the
   // ONE thing on the pane that is added rather than refracted, so it is the
-  // one thing that survives a drop sitting over something black.
+  // one thing that survives a drop sitting over something black. A bead
+  // under a couple of pixels across gets little of it: a highlight the
+  // size of the bead is a white speck, and a screen of white specks is
+  // snow, not the milky haze fine beading actually is.
   float spec = pow(sat(dot(n, normalize(vec3(-0.22, 0.62, 0.75)))), 18.0);
-  col += uTint * (spec * (1.35 + 5.0 * uFlash) + smear * 0.06) * cover;
+  spec *= mix(0.25, 1.0, sat(rad / perPixel / 2.5));
+  col += uTint * (spec * (1.1 + 5.0 * uFlash) + smear * 0.06) * cover;
 
   if (cover < 0.004) discard;
   gl_FragColor = vec4(col, sat(cover) * ${HEAVIEST.toFixed(2)});
@@ -758,7 +868,7 @@ export function buildScreenRain(spec: CarBodySpec, anchor: THREE.Object3D): Scre
     const creep = Math.abs(rate);
     if (creep > 0.02) dir = rate > 0 ? 1 : -1;
     front.uDir.value = dir;
-    front.uTrail.value = Math.min(1, creep / 0.28);
+    front.uTrail.value = Math.min(1, creep / 0.12);
     front.uRun.value = run;
     // Drawn out along the run by the air going past — a tear at pace, a
     // bead at a standstill — and arriving that much faster for being driven
