@@ -48,13 +48,27 @@ const face = new Float32Array(DUST_LAMPS * 4);
 const glow = new Float32Array(DUST_LAMPS * 3);
 
 /** The uniform objects themselves, shared by REFERENCE across every dust
- * material in the scene — a graft assigns these same three objects, so
- * writing the arrays below is what updates all of them at once. */
+ * material in the scene — a graft assigns these same four objects, so
+ * writing the arrays below is what updates all of them at once. The count
+ * is how many slots are actually filled this frame: the shader leaves the
+ * loop there rather than running the empty tail of the register, which is
+ * most of it on a stage with nobody near and all of it by day. */
 export const DUST_LAMP_UNIFORMS = {
   uDustLampSpot: { value: spot },
   uDustLampFace: { value: face },
   uDustLampGlow: { value: glow },
+  uDustLampCount: { value: 0 },
 };
+
+/** How many slots the video options let the register fill, at most —
+ * `DUST_LAMP_CARS` in settings.ts, as lamps. The register fills in
+ * priority order (the player first), so a cap simply drops the farthest
+ * rivals' lamps, which are the ones a puff can least tell apart. */
+let cap = DUST_LAMPS;
+
+export function setDustLampCap(lamps: number): void {
+  cap = Math.max(0, Math.min(DUST_LAMPS, Math.floor(lamps)));
+}
 
 /**
  * WHAT A CAR'S TWO LAMPS DO TO THE AIR BEHIND AND AHEAD OF IT.
@@ -107,6 +121,7 @@ let used = 0;
 export function clearDustLamps(): void {
   used = 0;
   glow.fill(0);
+  DUST_LAMP_UNIFORMS.uDustLampCount.value = 0;
 }
 
 const heading = new THREE.Vector3();
@@ -125,8 +140,9 @@ function put(
   // A lamp too dim to change a pixel still costs every particle in the
   // frame a cone and a falloff, so it does not take a slot from one that
   // would.
-  if (used >= DUST_LAMPS || strength * lamp.gain < 0.02) return;
+  if (used >= cap || strength * lamp.gain < 0.02) return;
   const i = used++;
+  DUST_LAMP_UNIFORMS.uDustLampCount.value = used;
   spot[i * 4] = x;
   spot[i * 4 + 1] = y;
   spot[i * 4 + 2] = z;

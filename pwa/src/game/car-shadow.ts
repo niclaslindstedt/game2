@@ -33,13 +33,14 @@ import * as THREE from "three";
 
 import type { VideoSettings } from "./settings.ts";
 
-/** The side of the depth map, px, per effects level — and whether there is
- * one at all. A shadow is an effect the way dust is: information about the
- * car's weight and its height off the ground, worth a pass on any machine
- * that can afford one and the first thing to go on one that cannot. */
-export const SHADOW_MAP_SIZE: Record<VideoSettings["effects"], number> = {
-  off: 0,
-  low: 1024,
+/** The side of the depth map, px, per stop of the LIGHTING row — and
+ * whether there is one at all. A shadow is a light the way a beam is:
+ * information about the car's weight and its height off the ground, worth
+ * a pass and a lookup on every pixel of ground on any machine that can
+ * afford them, and the first light to go on one that cannot. */
+export const SHADOW_MAP_SIZE: Record<VideoSettings["lighting"], number> = {
+  lean: 0,
+  normal: 1024,
   full: 2048,
 };
 
@@ -120,11 +121,11 @@ export function snapToTexels(
 }
 
 export type SunShadows = {
-  /** Hand over the renderer the map is drawn with, and the effects level it
-   * starts at. Once, when the renderer is made. */
-  bind: (renderer: THREE.WebGLRenderer, effects: VideoSettings["effects"]) => void;
-  /** The video options' effects level: which map, or none. */
-  setQuality: (effects: VideoSettings["effects"]) => void;
+  /** Hand over the renderer the map is drawn with, and the lighting level
+   * it starts at. Once, when the renderer is made. */
+  bind: (renderer: THREE.WebGLRenderer, lighting: VideoSettings["lighting"]) => void;
+  /** The video options' lighting level: which map, or none. */
+  setQuality: (lighting: VideoSettings["lighting"]) => void;
   /** How much of the stage's light is a beam, 0..1 (sky.ts). Below
    * `SHADOW_MIN_HARDNESS` nothing is cast; above it the shadow is faded to
    * match, so a thin overcast throws a soft one. */
@@ -169,8 +170,8 @@ export function createSunShadows(light: THREE.DirectionalLight): SunShadows {
     if (renderer) renderer.shadowMap.enabled = size > 0;
   };
 
-  const setQuality = (effects: VideoSettings["effects"]): void => {
-    const next = SHADOW_MAP_SIZE[effects];
+  const setQuality = (lighting: VideoSettings["lighting"]): void => {
+    const next = SHADOW_MAP_SIZE[lighting];
     if (next !== size) {
       size = next;
       shadow.mapSize.set(Math.max(1, next), Math.max(1, next));
@@ -184,7 +185,7 @@ export function createSunShadows(light: THREE.DirectionalLight): SunShadows {
     refresh();
   };
 
-  const bind = (next: THREE.WebGLRenderer, effects: VideoSettings["effects"]): void => {
+  const bind = (next: THREE.WebGLRenderer, lighting: VideoSettings["lighting"]): void => {
     renderer = next;
     // Soft-filtered: the map is read with a small kernel, so the edge is a
     // short gradient rather than a staircase of texels — the penumbra a
@@ -194,7 +195,7 @@ export function createSunShadows(light: THREE.DirectionalLight): SunShadows {
     // renders the scene twice when the mirror is up, and the map is the
     // same picture for both — the mirror looks back down the same road.
     renderer.shadowMap.autoUpdate = false;
-    setQuality(effects);
+    setQuality(lighting);
   };
 
   const setHardness = (next: number): void => {

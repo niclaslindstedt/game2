@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The player's options as the menu offers them: two HUD switches spread
-// over the whole panel, eight video levers on three independent picture
-// rows, and a stored blob from an older build landing on something the page
-// can still show.
+// over the whole panel, ten video levers on three independent picture rows,
+// and a stored blob from an older build landing on something the page can
+// still show.
 
 import { describe, expect, it } from "vitest";
 
@@ -12,12 +12,14 @@ import {
   DETAIL_PRESETS,
   GLASS_SEEN_THROUGH,
   DRAW_DISTANCE_SCALE,
+  DUST_LAMP_CARS,
   DUST_RAISED,
   EXHAUST_SEEN,
   fogRangeFor,
   freshSettings,
   detailOf,
   hudShow,
+  LAMP_BEAMS,
   loadSettings,
   MIN_FOG_FAR,
   type HudShow,
@@ -387,5 +389,46 @@ describe("whose windows can be seen through at each DETAIL stop", () => {
       expect(over.player || !under.player).toBe(true);
       expect(over.field || !under.field).toBe(true);
     }
+  });
+});
+
+// The LIGHTING row is the one lever on DETAIL that is paid for on every
+// pixel rather than per thing drawn: a spotlight is evaluated by every lit
+// surface in the frame whether the beam reaches it or not, and the sun's
+// shadow is a pass plus a lookup on all of the ground. So what each stop
+// throws is worth holding: the ladder has to come down from the tail lamp
+// first, and never leave a night stage with no light on the road at all.
+describe("what the car's lamps throw at each DETAIL stop", () => {
+  it("throws the car's own four beams on HIGH", () => {
+    expect(LAMP_BEAMS[DETAIL_PRESETS.high.lighting]).toEqual({ head: 2, tail: 2 });
+  });
+
+  it("throws one beam per end on MEDIUM", () => {
+    expect(LAMP_BEAMS[DETAIL_PRESETS.medium.lighting]).toEqual({ head: 1, tail: 1 });
+  });
+
+  it("keeps one headlamp beam and no tail beam on LOW", () => {
+    expect(LAMP_BEAMS[DETAIL_PRESETS.low.lighting]).toEqual({ head: 1, tail: 0 });
+  });
+
+  // A tail lamp is a marker; the headlamp is what a night stage is driven
+  // by. No stop may keep the marker and lose the road.
+  it("never throws a tail beam without a headlamp beam, and never darkens the road", () => {
+    for (const beams of Object.values(LAMP_BEAMS)) {
+      expect(beams.head).toBeGreaterThanOrEqual(1);
+      expect(beams.tail).toBeLessThanOrEqual(beams.head);
+    }
+  });
+
+  it("walks both ladders monotonically, cheapest first", () => {
+    const stops = (["low", "medium", "high"] as const).map((id) => DETAIL_PRESETS[id].lighting);
+    for (let i = 1; i < stops.length; i++) {
+      const cheaper = LAMP_BEAMS[stops[i - 1]];
+      const richer = LAMP_BEAMS[stops[i]];
+      expect(richer.head + richer.tail).toBeGreaterThan(cheaper.head + cheaper.tail);
+      expect(DUST_LAMP_CARS[stops[i]]).toBeGreaterThan(DUST_LAMP_CARS[stops[i - 1]]);
+    }
+    // The player's own lamps are always on the dust, whatever the row.
+    expect(DUST_LAMP_CARS[stops[0]]).toBeGreaterThanOrEqual(1);
   });
 });

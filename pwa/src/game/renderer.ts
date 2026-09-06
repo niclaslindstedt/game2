@@ -23,6 +23,7 @@ import { createGameCamera, type CameraMode, type MapPose } from "./camera.ts";
 import type { FreeFlyMove, FreeFlyPose } from "./camera-free.ts";
 import {
   DRAW_DISTANCE_SCALE,
+  DUST_LAMP_CARS,
   DUST_RAISED,
   EFFECTS_SCALE,
   EXHAUST_SEEN,
@@ -49,7 +50,7 @@ import {
   WILD_THROW,
   type DustTint,
 } from "./dust.ts";
-import { clearDustLamps } from "./dust-light.ts";
+import { clearDustLamps, setDustLampCap } from "./dust-light.ts";
 import { SOOT, groundTints, sootySmoke, type PlumeGround } from "./ground-tint.ts";
 import { createCarFx } from "./car-fx.ts";
 import { CRASH_THROW, crashContact, crashBurst as burstCount, crashGrind } from "./crash-throw.ts";
@@ -288,8 +289,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const scene = new THREE.Scene();
   const environment = createEnvironment(scene);
   // The cars' shadows are a map drawn with this renderer, sized by the
-  // effects option (car-shadow.ts); the environment aims it.
-  environment.shadows.bind(renderer, quality.effects);
+  // lighting option (car-shadow.ts); the environment aims it.
+  environment.shadows.bind(renderer, quality.lighting);
+  /** The LIGHTING row, applied: the beams and the shadow are the
+   * environment's, the dust's register is its own. Both at once, because a
+   * cloud lit by more lamps than the car is throwing is a cloud lit by
+   * lamps that are not there. */
+  const applyLighting = (): void => {
+    environment.setLighting(quality.lighting);
+    setDustLampCap(2 * DUST_LAMP_CARS[quality.lighting]);
+  };
+  applyLighting();
 
   const chase = createGameCamera(canvas.clientWidth || 1, canvas.clientHeight || 1);
   const mirror = createMirror();
@@ -651,7 +661,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const setVideo = (next: VideoSettings): void => {
     quality = next;
     applyResolution();
-    environment.shadows.setQuality(quality.effects);
+    applyLighting();
     field.setCarDetail({ ...carDetail("field"), looseWheels: LOOSE_WHEELS[quality.effects] });
     car?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     ghostCar?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
