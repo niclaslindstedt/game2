@@ -10,15 +10,16 @@ import type { RaceEnv } from "@engine";
 
 import {
   CLOUD_DENSITY_GLSL,
-  CLOUD_NOISE_GLSL,
   MAX_LAYERS,
   cloudDensity,
   cloudFbm,
   cloudField,
   cloudHash,
   cloudNoise,
+  cloudNoiseGlsl,
   cloudUv,
   dressSky,
+  fieldArms,
   skySeed,
   sunOcclusion,
   type CloudLayer,
@@ -83,15 +84,39 @@ describe("the noise", () => {
     // The constants the two copies share: the hash's, the lattice's turn,
     // and the density's threshold. A change to one that is not a change to
     // the other is the sun dimming under a cloud the player cannot see.
+    const glsl = cloudNoiseGlsl([6]);
     const shared = ["0.1031", "33.33", "1.6", "1.2", "17.3", "9.1", "0.76", "2.6", "7.1"];
     // …and the fibres' pitch and weight, which the cirrus over the sun is
     // read through too.
     for (const literal of [...shared, "1.7", "9.0", "3.7", "11.9", "0.5 + 1.0"]) {
-      expect(CLOUD_NOISE_GLSL).toContain(literal);
+      expect(glsl).toContain(literal);
     }
     for (const literal of ["0.5 - coverage", "0.04 + 0.3"]) {
       expect(CLOUD_DENSITY_GLSL).toContain(literal);
     }
+  });
+
+  it("emits a field at each depth asked for, over both its arms and nothing else", () => {
+    // The depths are compiled in rather than passed as a uniform, so the
+    // emitter is what decides the shader agrees with `cloudField` above —
+    // an arm left out is a link error at the first frame of a stage, and an
+    // arm emitted at the wrong depth is a sky that does not match the light.
+    const glsl = cloudNoiseGlsl([3, 6], [4]);
+    for (const octaves of [3, 6]) {
+      expect(glsl).toContain(`float cloudField${octaves}( vec2 uv )`);
+      const [mass, detail] = fieldArms(octaves);
+      expect(glsl).toContain(`0.76 * cloudFbm${mass}( uv )`);
+      expect(glsl).toContain(`0.24 * cloudFbm${detail}( uv * 2.6`);
+    }
+    // Every fbm called is declared, exactly once, with a literal trip count
+    // — a bound the compiler can see is the whole point of emitting these.
+    for (const arm of [1, 2, 4]) {
+      expect(glsl.split(`float cloudFbm${arm}( vec2 p )`)).toHaveLength(2);
+      expect(glsl).toContain(`i < ${arm}; i ++`);
+    }
+    // ...and nothing is compiled that nobody reads.
+    expect(glsl).not.toContain("cloudFbm3(");
+    expect(glsl).not.toContain("cloudField4(");
   });
 
   it("covers about what it is asked to", () => {

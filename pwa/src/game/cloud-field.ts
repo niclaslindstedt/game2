@@ -333,15 +333,101 @@ function wisps(altitude: number, coverage: number, roll: () => number): CloudLay
 
 // ── The noise, twice ─────────────────────────────────────────────────────
 //
-// Value noise on a lattice, from a hash that does not go through `sin` —
-// the classic `fract(sin(dot(...)) * 43758.5453)` loses its mind in
-// mediump and disagrees with itself between a phone and a desktop, and
-// this one is products and fractions the whole way. Six octaves at most,
-// each turned and scaled by the same matrix, so the CPU and the GPU walk
-// exactly the same lattice.
+// Once as GLSL and once on the CPU, walking the same lattice with the same
+// hash so the cloud the player sees over the sun is the cloud the light
+// answers to. Each octave is turned and scaled by the same matrix on both
+// sides; a change to one is a change to the other.
 
-/** The GLSL. `cloudFbm(p, octaves)` is 0..1 with a mean near a half. */
-export const CLOUD_NOISE_GLSL = /* glsl */ `
+/** The two fbm arms `cloudField` reads an `octaves`-deep field from: the
+ * MASS, and the detail that erodes its edges. Stated once, in TypeScript,
+ * because the emitter below and every caller asking for a field have to
+ * agree on which arms that field needs compiled. */
+export function fieldArms(octaves: number): [number, number] {
+  return [Math.min(octaves, 2), Math.max(octaves - 2, 1)];
+}
+
+/** How deep the FIBRES are read, whatever the sheet over them is read at —
+ * see `cloudFibres`. Emitted unconditionally, because every caller that
+ * reads a field can comb one. */
+const FIBRE_OCTAVES = 2;
+
+/** THE NOISE, EMITTED AT THE DEPTHS THE CALLER ACTUALLY READS IT AT.
+ *
+ * The depth has to be a LITERAL, which is why this is an emitter and not
+ * one `cloudFbm(p, octaves)` taking the depth as an argument. A trip count
+ * the compiler cannot see is a loop it cannot unroll, so every octave of
+ * every sample carries a compare, a branch and a live counter — on a shader
+ * that covers the whole sky and, through the fog graft, every lit fragment
+ * in the frame. One function per depth makes each bound a constant, which
+ * unrolls, folds the amplitudes and the divisor, and leaves no control flow
+ * at all.
+ *
+ * `fields` and `fbms` are the depths asked for: a `cloudField<n>` plus both
+ * its arms for each of the first, a bare `cloudFbm<n>` for each of the
+ * second. Ask for the depths that are read and no others — every one
+ * emitted is another function for a phone to compile at the first frame it
+ * is needed. The lattice and the fibres come out whatever is asked, because
+ * every field is read off the one and can be combed by the other. */
+export function cloudNoiseGlsl(fields: readonly number[], fbms: readonly number[] = []): string {
+  const wanted = new Set<number>([FIBRE_OCTAVES, ...fbms]);
+  for (const octaves of fields) for (const arm of fieldArms(octaves)) wanted.add(arm);
+  const fbm = (n: number): string => `
+float cloudFbm${n}( vec2 p ) {
+  float v = 0.0;
+  float a = 0.5;
+  float total = 0.0;
+  for ( int i = 0; i < ${n}; i ++ ) {
+    v += a * cloudNoise( p );
+    total += a;
+    p = vec2( 1.6 * p.x + 1.2 * p.y, - 1.2 * p.x + 1.6 * p.y ) + vec2( 17.3, 9.1 );
+    a *= 0.5;
+  }
+  return v / total;
+}`;
+  // THE FIELD a sheet is cut from: a few big masses, and detail that only
+  // erodes their edges. Thresholding six octaves of fbm directly gives a sky
+  // of small islands — a mackerel sky at noon whatever the genus — because
+  // the fine octaves put the threshold over and under everywhere; weighting
+  // the mass first is what makes a cumulus a heap with a ragged edge rather
+  // than a scatter of flecks.
+  const field = (n: number): string => {
+    const [mass, detail] = fieldArms(n);
+    return `
+float cloudField${n}( vec2 uv ) {
+  return 0.76 * cloudFbm${mass}( uv ) + 0.24 * cloudFbm${detail}( uv * 2.6 + vec2( 7.1, 3.3 ) );
+}`;
+  };
+  const sorted = [...wanted].sort((a, b) => a - b);
+  const once = [...new Set(fields)].sort((a, b) => a - b);
+  return `${CLOUD_HASH_GLSL}${sorted.map(fbm).join("")}${CLOUD_FIBRES_GLSL}${once
+    .map(field)
+    .join("")}
+`;
+}
+
+/** THE FIBRES a cirrus is combed into: the field read again at a pitch that
+ * is fine ACROSS the wind and long along it (the uv is already stretched
+ * along the wind by the streak, so the squeeze is across), and used to
+ * modulate the sheet where it already is rather than to cut it — a filament
+ * is a place the veil is denser, not a cloud of its own.
+ *
+ * Read at `FIBRE_OCTAVES` whatever the sheet over it is read at: the fibres
+ * are already the finest thing in the sky, and a third octave of them is
+ * shimmer. Emitted after the fbm block, because GLSL wants a function
+ * declared before it is called. */
+const CLOUD_FIBRES_GLSL = /* glsl */ `
+float cloudFibres( vec2 uv, float n, float fibre ) {
+  if ( fibre <= 0.0 ) return n;
+  float f = cloudFbm${FIBRE_OCTAVES}( vec2( uv.x * 1.7, uv.y * 9.0 ) + vec2( 3.7, 11.9 ) );
+  return mix( n, n * ( 0.5 + 1.0 * f ), fibre );
+}`;
+
+/** The lattice itself, shared by every depth above. Value noise from a hash
+ * that does not go through `sin` — the classic
+ * `fract(sin(dot(...)) * 43758.5453)` loses its mind in mediump and
+ * disagrees with itself between a phone and a desktop, and this one is
+ * products and fractions the whole way. */
+const CLOUD_HASH_GLSL = /* glsl */ `
 float cloudHash( vec2 p ) {
   vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
   p3 += dot( p3, p3.yzx + 33.33 );
@@ -356,44 +442,7 @@ float cloudNoise( vec2 p ) {
   float c = cloudHash( i + vec2( 0.0, 1.0 ) );
   float d = cloudHash( i + vec2( 1.0, 1.0 ) );
   return mix( mix( a, b, f.x ), mix( c, d, f.x ), f.y );
-}
-float cloudFbm( vec2 p, int octaves ) {
-  float v = 0.0;
-  float a = 0.5;
-  float total = 0.0;
-  for ( int i = 0; i < 6; i ++ ) {
-    if ( i >= octaves ) break;
-    v += a * cloudNoise( p );
-    total += a;
-    p = vec2( 1.6 * p.x + 1.2 * p.y, - 1.2 * p.x + 1.6 * p.y ) + vec2( 17.3, 9.1 );
-    a *= 0.5;
-  }
-  return v / total;
-}
-// THE FIELD a sheet is cut from: a few big masses, and detail that only
-// erodes their edges. Thresholding six octaves of fbm directly gives a sky
-// of small islands — a mackerel sky at noon whatever the genus — because
-// the fine octaves put the threshold over and under everywhere; weighting
-// the mass first is what makes a cumulus a heap with a ragged edge rather
-// than a scatter of flecks.
-float cloudField( vec2 uv, int octaves ) {
-  float mass = cloudFbm( uv, min( octaves, 2 ) );
-  float detail = cloudFbm( uv * 2.6 + vec2( 7.1, 3.3 ), max( octaves - 2, 1 ) );
-  return 0.76 * mass + 0.24 * detail;
-}
-// THE FIBRES a cirrus is combed into: the field read again at a pitch
-// that is fine ACROSS the wind and long along it (the uv is already
-// stretched along the wind by the streak, so the squeeze is across), and
-// used to modulate the sheet where it already is rather than to cut it —
-// a filament is a place the veil is denser, not a cloud of its own.
-// Two octaves only, whatever the sheet is read at: the fibres are already
-// the finest thing in the sky, and a third octave of them is shimmer.
-float cloudFibres( vec2 uv, float n, float fibre, int octaves ) {
-  if ( fibre <= 0.0 ) return n;
-  float f = cloudFbm( vec2( uv.x * 1.7, uv.y * 9.0 ) + vec2( 3.7, 11.9 ), min( octaves, 2 ) );
-  return mix( n, n * ( 0.5 + 1.0 * f ), fibre );
-}
-`;
+}`;
 
 function fract(v: number): number {
   return v - Math.floor(v);
@@ -435,16 +484,11 @@ export function cloudField(x: number, y: number, octaves: number): number {
   return 0.76 * mass + 0.24 * detail;
 }
 
-/** The same fibres as `cloudFibres` in the GLSL, on the CPU. */
-export function cloudFibres(
-  u: number,
-  v: number,
-  n: number,
-  fibre: number,
-  octaves: number,
-): number {
+/** The same fibres as `cloudFibres` in the GLSL, on the CPU — at the same
+ * fixed depth, so the cirrus dimming the sun is the cirrus on the dome. */
+export function cloudFibres(u: number, v: number, n: number, fibre: number): number {
   if (fibre <= 0) return n;
-  const f = cloudFbm(u * 1.7 + 3.7, v * 9.0 + 11.9, Math.min(octaves, 2));
+  const f = cloudFbm(u * 1.7 + 3.7, v * 9.0 + 11.9, FIBRE_OCTAVES);
   return n + (n * (0.5 + 1.0 * f) - n) * fibre;
 }
 
@@ -550,6 +594,6 @@ export function sunOcclusion(
   const px = x + sunDir.x * dist;
   const pz = z + sunDir.z * dist;
   const [u, v] = cloudUv(layer, px, pz, offsetX, offsetZ, windX, windZ);
-  const n = cloudFibres(u, v, cloudField(u, v, octaves), layer.fibre * fibreAt(sunDir.y), octaves);
+  const n = cloudFibres(u, v, cloudField(u, v, octaves), layer.fibre * fibreAt(sunDir.y));
   return cloudDensity(layer, n) * Math.min(1, layer.body + 0.3);
 }

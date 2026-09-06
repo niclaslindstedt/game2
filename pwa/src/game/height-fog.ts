@@ -26,7 +26,7 @@
 
 import * as THREE from "three";
 
-import { CLOUD_DENSITY_GLSL, CLOUD_NOISE_GLSL } from "./cloud-field.ts";
+import { CLOUD_DENSITY_GLSL, cloudNoiseGlsl } from "./cloud-field.ts";
 
 type V4 = { x: number; y: number; z: number; w: number };
 type V3 = { x: number; y: number; z: number };
@@ -56,10 +56,11 @@ export const HEIGHT_FOG = {
   /** The range the map's bytes span: lo and hi, m over the sea. */
   shadowRange: { x: 0, y: 1, z: 0, w: 0 } as V4,
   /** The cumulus layer's shadow on the ground: altitude, 1/scale, and the
-   * layer's drift offset; and its coverage, sharpness, the noise octaves
-   * and the strength (0 switches it off). */
+   * layer's drift offset; and its coverage, sharpness, a spare and the
+   * strength (0 switches it off). How deep the field behind it is read is
+   * `SHADOW_OCTAVES`, which the shader is compiled with rather than told. */
   cloudA: { x: 1200, y: 1 / 900, z: 0, w: 0 } as V4,
-  cloudB: { x: 0, y: 0.75, z: 3, w: 0 } as V4,
+  cloudB: { x: 0, y: 0.75, z: 0, w: 0 } as V4,
   /** The layer's streak axis (the wind's unit vector), its stretch, and
    * its seed's offset along the streak (`seed × 13.7`, as `cloudUv`). */
   cloudC: { x: 1, y: 0, z: 1, w: 0 } as V4,
@@ -78,11 +79,30 @@ HEIGHT_FOG.shadowMap.wrapS = THREE.ClampToEdgeWrapping;
 HEIGHT_FOG.shadowMap.wrapT = THREE.ClampToEdgeWrapping;
 HEIGHT_FOG.shadowMap.needsUpdate = true;
 
-/** The graft's own functions, for the fog chunk AND the sky dome — the
- * dome draws the same mist over the same shadow map, and a cloud sea that
+/** How deep the CLOUD SHADOW reads its field. Three octaves: the sheet it
+ * shades from is the best part of a kilometre across and what lands on the
+ * ground is a soft patch rather than a picture of the cloud, so the arms
+ * under the mass only have to keep its edge off a circle. A literal rather
+ * than a uniform because this field is sampled on every lit fragment in the
+ * frame, and `cloudNoiseGlsl` says what a depth the compiler cannot see
+ * costs there. */
+const SHADOW_OCTAVES = 3;
+
+/** The graft's own functions, for the fog chunk AND the sky dome — the dome
+ * draws the same mist over the same shadow map, and a cloud sea that
  * disagreed with the fog on the ground under it would show a seam at the
- * horizon. */
-export const HEIGHT_FOG_GLSL = /* glsl */ `
+ * horizon.
+ *
+ * The noise comes out with it, because the two share a lattice and a GLSL
+ * function may only be declared once in a shader. `fields` and `fbms` are
+ * the EXTRA depths the caller reads at beyond the cloud shadow's own — the
+ * dome asks for its sheets and its mist lumps here rather than emitting a
+ * second copy of the lattice beside this one. */
+export function heightFogGlsl(
+  fields: readonly number[] = [],
+  fbms: readonly number[] = [],
+): string {
+  return /* glsl */ `
 uniform vec4 hfMist;
 uniform vec3 hfMistLit;
 uniform vec3 hfMistShade;
@@ -94,7 +114,7 @@ uniform vec4 hfCloudA;
 uniform vec4 hfCloudB;
 uniform vec4 hfCloudC;
 uniform sampler2D hfShadowMap;
-${CLOUD_NOISE_GLSL}
+${cloudNoiseGlsl([SHADOW_OCTAVES, ...fields], fbms)}
 ${CLOUD_DENSITY_GLSL}
 // How much of a ray from y0 to y1 over length len is inside the mist, as
 // the fraction of the light it takes. The sheet is full density under its
@@ -138,7 +158,7 @@ float cloudShade( vec3 p ) {
   float along = q.x * hfCloudC.x + q.y * hfCloudC.y;
   float across = - q.x * hfCloudC.y + q.y * hfCloudC.x;
   vec2 uv = vec2( along / hfCloudC.z * hfCloudA.y + hfCloudC.w, across * hfCloudA.y );
-  float n = cloudField( uv, int( hfCloudB.z ) );
+  float n = cloudField${SHADOW_OCTAVES}( uv );
   return cloudDensity( hfCloudB.x, hfCloudB.y, n ) * hfCloudB.w;
 }
 // What the mist is coloured, seen along a ray: the lit tone or the shade,
@@ -149,6 +169,7 @@ vec3 mistColor( vec3 dir, float shade ) {
   return tone + hfSunColor * toward * hfSun.w;
 }
 `;
+}
 
 const FOG_PARS_VERTEX = /* glsl */ `
 #ifdef USE_FOG
@@ -182,7 +203,7 @@ const FOG_PARS_FRAGMENT = /* glsl */ `
 		uniform float fogNear;
 		uniform float fogFar;
 	#endif
-	${HEIGHT_FOG_GLSL}
+	${heightFogGlsl()}
 #endif
 `;
 

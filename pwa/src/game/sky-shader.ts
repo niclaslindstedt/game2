@@ -24,7 +24,7 @@
 import * as THREE from "three";
 
 import { MAX_LAYERS, type CloudLayer, type SkyDressing } from "./cloud-field.ts";
-import { HEIGHT_FOG_GLSL, fogUniforms } from "./height-fog.ts";
+import { fogUniforms, heightFogGlsl } from "./height-fog.ts";
 import { DOME_RADIUS, type Preset } from "./sky.ts";
 
 /** How high the deck's lit rim reaches, radians above the horizon — the
@@ -36,9 +36,35 @@ const RIM_BAND = 0.16;
 const AUTHORED_AT = DOME_RADIUS * 0.86;
 
 /** How the sky is drawn at each stop of the SKY lever the video options
- * carry: how many octaves of noise a layer is read at, and whether the
- * clouds are lit by a second sample toward the sun. */
-export type SkyLook = { octaves: number; sunlit: boolean };
+ * carry: how many octaves of noise a layer is read at, whether the clouds
+ * are lit by a second sample toward the sun, and how many sheets may be
+ * stacked at once. */
+export type SkyLook = { octaves: number; sunlit: boolean; layers: number };
+
+/** How deep the SUNLIT sample reads. Two octaves shallower than the sheet
+ * itself: it is differenced against the first sample to find which way the
+ * cloud's surface faces, and a difference of two fine octaves is noise
+ * rather than a slope. */
+function sunlitOctaves(octaves: number): number {
+  return Math.max(octaves - 2, 2);
+}
+
+/** How deep the MIST's own lumps are read where the dome shows the sea of
+ * it from above. */
+const MIST_OCTAVES = 3;
+
+/** What the source standing in the material was COMPILED for — the same
+ * three numbers a `SkyLook` asks for, held apart from it because one is a
+ * request and this is a fact about the program on the GPU.
+ *
+ * The whole of the sky's cost is per pixel and the dome covers the frame,
+ * so all three are compiled in rather than carried as uniforms: the sheet
+ * loop gets the drawn stack as its literal bound rather than breaking
+ * against one, the fields get their depth as a name (`cloudNoiseGlsl`), and
+ * a sky with no sun on its clouds does not carry the second sample at all
+ * rather than branching past it. Moving any of them is a recompile, which
+ * is why `apply` only takes one when they have actually moved. */
+type SkyBuild = { octaves: number; sunlit: boolean; layers: number };
 
 const VERTEX = /* glsl */ `
 varying vec3 vWorld;
@@ -48,7 +74,10 @@ void main() {
 }
 `;
 
-const FRAGMENT = /* glsl */ `
+function fragmentFor(build: SkyBuild): string {
+  const field = `cloudField${build.octaves}`;
+  const sunField = `cloudField${sunlitOctaves(build.octaves)}`;
+  return /* glsl */ `
 varying vec3 vWorld;
 uniform vec3 uZenith;
 uniform vec3 uHorizon;
@@ -75,13 +104,10 @@ uniform vec4 uLayerB[${MAX_LAYERS}];
 uniform vec4 uLayerC[${MAX_LAYERS}];
 uniform vec4 uLayerD[${MAX_LAYERS}];
 uniform vec4 uLayerE[${MAX_LAYERS}];
-uniform int uLayers;
-uniform int uOctaves;
-uniform int uSunlit;
 uniform vec3 uDeckOverhead;
 uniform vec3 uDeckRim;
 uniform float uDeckRelief;
-${HEIGHT_FOG_GLSL}
+${heightFogGlsl([build.octaves, sunlitOctaves(build.octaves)], [MIST_OCTAVES])}
 
 // The same sample cloud-field.ts takes on the CPU (cloudUv).
 vec2 cloudUv( vec2 p, vec4 c, float scale, float streak, float seed ) {
@@ -126,9 +152,12 @@ void main() {
 
   // The cloud sheets, far to near: for a ray going up that is the highest
   // first, for one going down the lowest.
-  for ( int k = 0; k < ${MAX_LAYERS}; k ++ ) {
-    if ( k >= uLayers ) break;
-    int i = up > 0.0 ? uLayers - 1 - k : k;
+  ${
+    build.layers === 0
+      ? ""
+      : /* glsl */ `
+  for ( int k = 0; k < ${build.layers}; k ++ ) {
+    int i = up > 0.0 ? ${build.layers} - 1 - k : k;
     vec4 A = uLayerA[ i ];
     vec4 B = uLayerB[ i ];
     vec4 C = uLayerC[ i ];
@@ -142,7 +171,7 @@ void main() {
     // The fibres, faded out toward the rim the way fibreAt says
     // (cloud-field.ts) — under a pixel out there, they only sparkle.
     float fibre = E.x * smoothstep( 0.0, 0.25, abs( up ) );
-    float n = cloudFibres( uv, cloudField( uv, uOctaves ), fibre, uOctaves );
+    float n = cloudFibres( uv, ${field}( uv ), fibre );
     // Aerial perspective: a sheet seen the long way toward the horizon
     // dissolves into the air between. Mild — six kilometres of clear air
     // takes a quarter of a cloud, not half of it.
@@ -173,9 +202,13 @@ void main() {
       // white in every direction, not grey on the far side of the sky.
       float sunward = 0.5 + 0.5 * dot( az, uSunAz );
       float bottomLit = ( 1.0 - dens * B.z * 0.8 ) * mix( mix( 0.92, 0.6, B.z ), 1.0, sunward );
-      if ( uSunlit > 0 ) {
-        float n2 = cloudField( uv + uSunDir.xz * 0.28 / max( B.y, 1.0 ), max( uOctaves - 2, 2 ) );
+      ${
+        build.sunlit
+          ? `{
+        float n2 = ${sunField}( uv + uSunDir.xz * 0.28 / max( B.y, 1.0 ) );
         bottomLit = mix( bottomLit, clamp( 0.5 + ( n - n2 ) * 5.0 * B.z, 0.0, 1.0 ), 0.5 * B.z );
+      }`
+          : ""
       }
       c = mix( uCloudShade, sunlit, bottomLit );
       float forward = pow( max( dot( ray, uSunDir ), 0.0 ), 8.0 );
@@ -184,9 +217,13 @@ void main() {
       // The top, from above: sunlit where it faces the sun, and in the
       // country's shadow where the map says the mountain is in the way.
       float topLit = 0.72 + 0.28 * ( 1.0 - dens * B.z );
-      if ( uSunlit > 0 ) {
-        float n2 = cloudField( uv + uSunDir.xz * 0.28 / max( B.y, 1.0 ), max( uOctaves - 2, 2 ) );
+      ${
+        build.sunlit
+          ? `{
+        float n2 = ${sunField}( uv + uSunDir.xz * 0.28 / max( B.y, 1.0 ) );
         topLit = clamp( 0.65 + ( n - n2 ) * 4.0 * B.z, 0.0, 1.0 );
+      }`
+          : ""
       }
       c = mix( uCloudShade, sunlit, topLit );
       c = mix( c, uCloudShade, mountainShade( vec3( p.x, A.x + A.y * 0.5, p.y ) ) );
@@ -194,6 +231,8 @@ void main() {
     c *= 1.0 + 3.4 * uFlash;
     c = mix( c, hazeTone, haze );
     col = mix( col, c, dens * ( 1.0 - 0.6 * haze ) );
+  }
+  `
   }
 
   // The mist: along the whole ray to the far distance, and the SEA where
@@ -207,7 +246,7 @@ void main() {
       float dist = ( hfMist.x - cameraPosition.y ) / up;
       vec2 p = cameraPosition.xz + ray.xz * dist;
       shade = mountainShade( vec3( p.x, hfMist.x, p.y ) );
-      lumps = 0.82 + 0.36 * cloudFbm( p / 260.0, 3 );
+      lumps = 0.82 + 0.36 * cloudFbm${MIST_OCTAVES}( p / 260.0 );
     }
     vec3 tone = mistColor( ray, max( shade, 1.0 - hfMist.w ) ) * lumps;
     col = mix( col, tone, mist );
@@ -216,6 +255,7 @@ void main() {
   gl_FragColor = vec4( col, 1.0 );
 }
 `;
+}
 
 function smooth01(t: number): number {
   const x = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -275,22 +315,39 @@ export function createSkyShell(): SkyShell {
     uLayerC: { value: layerC },
     uLayerD: { value: layerD },
     uLayerE: { value: layerE },
-    uLayers: { value: 0 },
-    uOctaves: { value: 4 },
-    uSunlit: { value: 0 },
     uDeckOverhead: { value: new THREE.Color() },
     uDeckRim: { value: new THREE.Color() },
     uDeckRelief: { value: 0 },
     ...fogUniforms(),
   };
+  /** What the source standing in the material was compiled for. One sheet
+   * and the shallow field until the first `apply` says otherwise — the dome
+   * is not drawn before then, and a build nobody renders costs nothing. */
+  let built: SkyBuild = { octaves: 4, sunlit: false, layers: 0 };
   const material = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: VERTEX,
-    fragmentShader: FRAGMENT,
+    fragmentShader: fragmentFor(built),
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
   });
+
+  /** Recompile the dome, but only when the look or the stack has actually
+   * moved: three rebuilds the program on `needsUpdate`, and a shader rebuilt
+   * every frame is a stall every frame. */
+  const rebuild = (next: SkyBuild): void => {
+    if (
+      next.octaves === built.octaves &&
+      next.sunlit === built.sunlit &&
+      next.layers === built.layers
+    ) {
+      return;
+    }
+    built = next;
+    material.fragmentShader = fragmentFor(next);
+    material.needsUpdate = true;
+  };
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(DOME_RADIUS, 32, 18), material);
   mesh.renderOrder = -3;
   mesh.frustumCulled = false;
@@ -324,15 +381,18 @@ export function createSkyShell(): SkyShell {
     uniforms.uCloudLit.value.set(p.cloud);
     uniforms.uCloudShade.value.set(p.cloudShade);
     uniforms.uSunColor.value.set(p.sun);
-    uniforms.uOctaves.value = look.octaves;
-    uniforms.uSunlit.value = look.sunlit ? 1 : 0;
     if (p.deck) {
       uniforms.uDeckOverhead.value.set(p.deck.overhead);
       uniforms.uDeckRim.value.set(p.deck.rim);
       uniforms.uDeckRelief.value = p.deck.relief;
     }
-    drawn = dressing.layers.slice(0, MAX_LAYERS);
-    uniforms.uLayers.value = drawn.length;
+    // The stack the LOOK will pay for, thickest sheets first — `dressSky`
+    // builds the list from the ground up, so a cap taken off the end drops
+    // the highest, thinnest cirrus rather than the cumulus the stage is
+    // driven under. Every sheet is a whole field sampled on every sky pixel,
+    // which makes this the sky's steepest lever after the octaves.
+    drawn = dressing.layers.slice(0, Math.min(look.layers, MAX_LAYERS));
+    rebuild({ octaves: look.octaves, sunlit: look.sunlit, layers: drawn.length });
     drawn.forEach((layer, i) => {
       // How much of the fair-weather ring a dry country flies thins the
       // sheets' opacity here too, and the deck is a lid in any country.

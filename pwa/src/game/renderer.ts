@@ -36,6 +36,7 @@ import {
   FLORA_SCALE,
   GROUND_SCALE,
   RESOLUTION_SCALE,
+  wantsAntialias,
   type VideoSettings,
   type ViewSettings,
 } from "./settings.ts";
@@ -278,7 +279,7 @@ export type GameRenderer = {
 };
 
 export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings): GameRenderer {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: wantsAntialias() });
   // The map view cuts the world to an island; the sky it hangs in must not
   // be cut with it, so the planes ride on the WORLD's own materials rather
   // than on the renderer.

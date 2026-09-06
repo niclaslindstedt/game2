@@ -386,14 +386,25 @@ export type VideoSettings = {
 
 /** What each stop of the SKY lever draws (sky-shader.ts, height-fog.ts):
  * whether the sky is the shader at all, the noise octaves a cloud sheet is
- * read at, whether its edges take a second sample toward the sun, whether
- * the mist and the mountain's shadow are drawn, and whether the clouds
- * shadow the ground. */
+ * read at, how many sheets may be stacked, whether their edges take a
+ * second sample toward the sun, whether the mist and the mountain's shadow
+ * are drawn, and whether the clouds shadow the ground.
+ *
+ * `octaves` and `layers` are the two that decide what the sky COSTS, and
+ * they multiply: every sheet in the stack is a whole field read at that
+ * depth, on every sky pixel. The chart `dressSky` rolls can stand four
+ * sheets at once (`MAX_LAYERS`) — a cumulus base, an altostratus veil and
+ * cirrus over the top of both — and the top of the stack is the cheapest
+ * thing in the sky to give up: a cirrus sheet ten kilometres up is a pale
+ * wash that hardly moves as the car does, where the cumulus a stage is
+ * driven under is the weather. So `layered` keeps three and `full` takes
+ * the chart as rolled. */
 export const SKY_LOOK: Record<
   VideoSettings["sky"],
   {
     shader: boolean;
     octaves: number;
+    layers: number;
     sunlit: boolean;
     mist: boolean;
     mountainShadow: boolean;
@@ -403,6 +414,7 @@ export const SKY_LOOK: Record<
   simple: {
     shader: false,
     octaves: 0,
+    layers: 0,
     sunlit: false,
     mist: false,
     mountainShadow: false,
@@ -411,6 +423,7 @@ export const SKY_LOOK: Record<
   layered: {
     shader: true,
     octaves: 4,
+    layers: 3,
     sunlit: false,
     mist: true,
     mountainShadow: true,
@@ -419,6 +432,7 @@ export const SKY_LOOK: Record<
   full: {
     shader: true,
     octaves: 6,
+    layers: 4,
     sunlit: true,
     mist: true,
     mountainShadow: true,
@@ -466,6 +480,31 @@ export const RESOLUTION_SCALE: Record<VideoSettings["resolution"], number> = {
   medium: 1,
   high: 2,
 };
+
+/** The pixel ratio at or above which the frame is SUPERSAMPLED enough that
+ * multisampling buys nothing worth its cost.
+ *
+ * A retina phone hands the page CSS pixels two or three device pixels wide.
+ * Every edge in the frame is therefore already resolved finer than the
+ * screen can show, and the 4x multisample buffer three asks for on top of
+ * that is a second colour attachment the size of the frame, written on
+ * every fragment and resolved once a frame — pure bandwidth on a tile GPU
+ * with no fan, spent on an edge nobody can see at 460 ppi. A 1x display is
+ * the opposite case: there the jaggies are the picture, and the buffer is
+ * a quarter of the pixels to pay for it over.
+ *
+ * Read off the DEVICE rather than the RESOLUTION row, because the
+ * multisample buffer is a property of the GL context and the context is
+ * made once — a row the player moves mid-stage cannot re-make it, and a
+ * phone that drops to MEDIUM to get its frames back is not a phone that
+ * wants a multisample buffer handed back with them. */
+export const ANTIALIAS_UNDER_RATIO = 2;
+
+/** ...asked of the device the page is actually on. */
+export function wantsAntialias(): boolean {
+  const ratio = (globalThis as { devicePixelRatio?: number }).devicePixelRatio;
+  return !(typeof ratio === "number" && ratio >= ANTIALIAS_UNDER_RATIO);
+}
 
 /** Multipliers on the environment preset's own fog distances. The fog IS
  * the draw distance: how far it lets the player see is also the radius the
