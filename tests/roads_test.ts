@@ -948,7 +948,14 @@ describe("one ground under the car and the picture of it", () => {
 // it was cornered into handed a car in line with distant road that road's
 // own elevation, and threw it into the air by the difference.
 describe("locating the car against the centerline", () => {
-  /** Every sample on the road, walked without any of the skipping. */
+  /** Every sample on the road, walked without any of the skipping — and the
+   * APRONS with them (R24), because they are road too and they are in no
+   * sample array. A point behind the start gate or past the finish is as
+   * near the stage as it is near that end's SPINE, out to the apron's own
+   * length, and it belongs to the end sample: without that clause a car
+   * sitting on the run-up is attributed to whichever piece of the route
+   * happens to pass nearest, which on a stage that comes back past its own
+   * start is a car on the grid reported as being out in the country. */
   function brute(track: ReturnType<typeof compileStage>, x: number, z: number) {
     let best = 0;
     let bestD2 = Infinity;
@@ -956,6 +963,28 @@ describe("locating the car against the centerline", () => {
       const dx = x - track.samples[i].x;
       const dz = z - track.samples[i].z;
       const d2 = dx * dx + dz * dz;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = i;
+      }
+    }
+    if (track.circuit) return best;
+    const last = track.samples.length - 1;
+    for (const end of [0, 1]) {
+      const i = end === 0 ? 0 : last;
+      if (end === 1 && (track.endless || last === 0)) continue;
+      const s = track.samples[i];
+      const sin = Math.sin(s.heading);
+      const cos = Math.cos(s.heading);
+      const dx = x - s.x;
+      const dz = z - s.z;
+      const lon = dx * sin + dz * cos;
+      const out = end === 0 ? -lon : lon;
+      if (out <= 0) continue;
+      const lateral = dx * cos - dz * sin;
+      const reach = end === 0 ? track.startApron : R.startZone.apron;
+      const over = Math.max(0, out - reach);
+      const d2 = lateral * lateral + over * over;
       if (d2 < bestD2) {
         bestD2 = d2;
         best = i;

@@ -3113,7 +3113,16 @@ export const STAGE_RULES = {
      * 3.5 m a row and a sixteen-car field that is 55 m, rounded up — and
      * the apron is what `GRID_MAX` is derived FROM, so lengthening it here
      * is how a deeper grid gets built. A rally start uses the same road as
-     * a run-up and does not care how much of it there is. */
+     * a run-up and does not care how much of it there is.
+     *
+     * It is the FLOOR under the run-up rather than its length. Every stage
+     * gets exactly this much, and a stage compiled for a grid too deep for
+     * it gets what that grid needs instead (`apronForGrid`, carried as
+     * `Track.startApron`) — the drawn dirt, the terrain shelf and the room
+     * the branches keep off it all read the track rather than this. What
+     * this number still decides on its own is the START ZONE the search
+     * keeps the route out of, which is why it stays a rule: the road a seed
+     * draws must not depend on how many cars turned up. */
     apron: 56,
     /** How far the route has to have travelled before it counts as coming
      * BACK to the start (R24) — inside it the road is simply leaving. */

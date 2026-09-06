@@ -67,7 +67,9 @@ export { GROUND_CELL, TILE_SINK } from "./lattice.ts";
  * rally start's run-up before the gate, and run-off past the flying
  * finish. The terrain keeps its shelf flat under the same corridor so the
  * apron never floats or drowns, the physics rides it, and R26 keeps every
- * other road off it. One number, stated in the rule book. */
+ * other road off it. One number, stated in the rule book — and the FLOOR
+ * under the run-up rather than its length, since a mass start too deep for
+ * it is stood on more (`Track.startApron`). */
 export const APRON = R.startZone.apron;
 
 function clamp01(t: number): number {
@@ -934,6 +936,9 @@ export function createTerrain(track: Track): TerrainField {
    * the apron at either end of the stage. Writes the nearer end into
    * `apron` and says whether there was one. Both searches end here. */
   const apron = { index: -1, d: 0, lateral: 0 };
+  // The two ends are not the same length: the run-up is as long as the grid
+  // standing on it (`Track.startApron`), the run-off is the rule book's.
+  const reach = [track.startApron, APRON];
   const nearerApron = (x: number, z: number, d: number): boolean => {
     apron.index = -1;
     for (let end = 0; end < 2; end++) {
@@ -945,7 +950,7 @@ export function createTerrain(track: Track): TerrainField {
       const out = end === 0 ? -lon : lon;
       if (out <= 0) continue;
       const lateral = (x - s.x) * cosH - (z - s.z) * sinH;
-      const spine = Math.hypot(lateral, Math.max(0, out - APRON));
+      const spine = Math.hypot(lateral, Math.max(0, out - reach[end]));
       if (spine >= d) continue;
       d = spine;
       apron.index = i;

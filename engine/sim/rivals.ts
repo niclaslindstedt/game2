@@ -305,17 +305,69 @@ export const PLAYER_NUMBER = FIELD_SIZE;
  * best seven crews are one tier of driving repeated seven times, where a
  * spread keeps Sprat at the tail, Frostbite at the head, and the characters
  * in between as far apart as the entry list allows. How hard the whole field
- * is stays the difficulty's job, not the entry list's. */
+ * is stays the difficulty's job, not the entry list's.
+ *
+ * A field DEEPER than the roster — which only Roam's opponents slider asks
+ * for — is the whole roster and then club entries behind it (`clubCrew`),
+ * because a fifteenth character is authored and a fifteenth CAR is not. */
 export function entryList(cars: number = FIELD_SIZE): RivalCrew[] {
   const seeded = [...RIVALS].sort((a, b) => b.standing - a.standing);
-  const want = Math.max(0, Math.min(seeded.length, Math.round(cars) - 1));
-  if (want >= seeded.length) return seeded;
+  const want = Math.max(0, Math.round(cars) - 1);
+  if (want >= seeded.length) {
+    const club: RivalCrew[] = [];
+    for (let i = 0; i < want - seeded.length; i++) club.push(clubCrew(i));
+    return [...seeded, ...club];
+  }
   if (want <= 1) return seeded.slice(0, want);
   const picked: RivalCrew[] = [];
   for (let i = 0; i < want; i++) {
     picked.push(seeded[Math.round((i * (seeded.length - 1)) / (want - 1))]);
   }
   return picked;
+}
+
+/** The cars the club runs, walked one at a time. Stated here rather than
+ * imported from the catalog so a car added to it does not silently re-roll
+ * every big field's paint. */
+const CLUB_CARS = ["compact", "classic", "coupe"];
+
+/** THE CLUB ENTRIES — who fills a field DEEPER THAN THE ROSTER.
+ *
+ * Fourteen crews is what the campaign is raced against and there will never
+ * be more of them: each one is a character, a paint scheme and a face behind
+ * the glass, and a fifteenth is AUTHORED rather than generated. Roam's
+ * opponents slider asks for up to thirty-one cars anyway, so the rest of a
+ * big field is what the rest of a big field actually is at a club event —
+ * PRIVATEERS. They share one alias because that is the truth about them, and
+ * what tells them apart on the road is the door number and the paint, which
+ * the renderer rolls off that number (`liveryFor`) rather than off a scheme
+ * nobody authored for them.
+ *
+ * They are not filler in the DRIVING. Each one takes a named crew's shape,
+ * cycled through the roster, so a field of thirty is thirty cars that get it
+ * wrong in thirty different places rather than thirty copies of the mean.
+ * And they sit below Sprat in standing, which is what puts them at the FRONT
+ * of a grid — the slowest crew takes pole (`headsUpField`) — and leaves the
+ * named crews as the last thing between the player and the lead. */
+export function clubCrew(n: number): RivalCrew {
+  const source = RIVALS[n % RIVALS.length];
+  return {
+    id: `club-${n + 1}`,
+    alias: "PRIVATEER",
+    driver: `Privateer ${n + 1}`,
+    // The catalog walked one car at a time, so a club field is mixed the way
+    // a club field is: it is a different cycle length from the roster's, so
+    // no privateer is the crew they borrowed their hands from in their car.
+    carId: CLUB_CARS[n % CLUB_CARS.length],
+    // Below the whole roster and below each other, which is all this has to
+    // be: `budgetFor` clamps at the band's tail, so every privateer is
+    // entered on the tail budget and only the ORDER of them is decided here.
+    standing: -0.001 * (n + 1),
+    weights: source.weights,
+    overtake: source.overtake,
+    temper: source.temper,
+    notes: `A club entry with ${source.alias}'s hands and none of the reputation.`,
+  };
 }
 
 /** The field entered for a stage, in START ORDER. Seeded the way a gravel

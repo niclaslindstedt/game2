@@ -5070,18 +5070,18 @@ a.menu-version:focus-visible {
   width: 2.1rem;
 }
 
-/* R46's DIFFICULTY: the one FADER on the page, across the whole column
-   above the two of dials. It is the same row as every other — the name
-   behind its mark, the value between two arrows — with the fixed widths
-   taken off, because what a fader wants is TRAVEL: a track cut to a
-   two-column card is 60 px on a phone, which is a control nobody can place
-   a thumb on. The name gets its full word here as well, which the narrow
-   columns cannot give a word this long. */
-.roam-diff {
+/* THE FADERS — R46's DIFFICULTY and the OPPONENTS count under it — across
+   the whole column above the two of dials. Each is the same row as every
+   other — the name behind its mark, the value between two arrows — with the
+   fixed widths taken off, because what a fader wants is TRAVEL: a track cut
+   to a two-column card is 60 px on a phone, which is a control nobody can
+   place a thumb on. The name gets its full word here as well, which the
+   narrow columns cannot give a word this long. */
+.roam-slider {
   flex: 0 0 auto;
 }
 
-.roam-diff .knob {
+.roam-slider .knob {
   min-height: 3.1rem;
   padding-left: 0.55rem;
 }
@@ -5090,16 +5090,16 @@ a.menu-version:focus-visible {
    the row is TRACK, which is the whole reason this row is not in a column.
    Left to share the row (`.knob-label` is `flex: 1`) it ate two thirds of a
    phone's width and left the slider 60 px to drag across. */
-.roam-diff .knob-label {
+.roam-slider .knob-label {
   flex: 0 1 auto;
 }
 
-.roam-diff .knob-ctl {
+.roam-slider .knob-ctl {
   flex: 1;
   min-width: 0;
 }
 
-.roam-diff .knob-fade {
+.roam-slider .knob-fade {
   flex: 1;
   width: auto;
   min-width: 0;
@@ -5119,17 +5119,17 @@ a.menu-version:focus-visible {
 
 /* The track fills the row's width rather than its height, which is what
    `.knob-range`'s `flex: 1` would give it in a column. */
-.roam-diff .knob-range {
+.roam-slider .knob-range {
   flex: 0 0 auto;
   width: 100%;
 }
 
-.roam-diff .knob-read {
+.roam-slider .knob-read {
   min-width: 0;
   text-align: center;
 }
 
-.roam-diff .knob-arrow {
+.roam-slider .knob-arrow {
   width: 2.1rem;
 }
 

@@ -20,15 +20,18 @@ import {
   GRID_DEFAULT,
   APRON_HOLDS,
   ANALYSIS,
+  GRID_CEILING,
   GRID_MAX,
   GRID_MIN,
   NEUTRAL_INPUT,
   STAGE_RULES,
   TUNING,
+  apronForGrid,
   catchUpFor,
   compileStage,
   compileTrack,
   createGame,
+  endApron,
   entryList,
   headsUpField,
   locate,
@@ -328,5 +331,82 @@ describe("a heads-up field on the road", () => {
     // order of the times — no stagger to correct for.
     const times = rows.map((row) => row.time).filter((t): t is number => t !== null);
     for (let i = 1; i < times.length; i++) expect(times[i]).toBeGreaterThanOrEqual(times[i - 1]);
+  });
+});
+
+// ── A grid deeper than the rule book's apron ──────────────────────────────
+// Roam's opponents slider offers a full `GRID_CEILING` grid, which is twice
+// what `STAGE_RULES.startZone.apron` was laid for. The answer is not a
+// shorter grid: it is MORE APRON, compiled into the stage, and these are the
+// three things that has to be true of.
+describe("a grid the stage is built for", () => {
+  it("asks for exactly the run-up it needs, and never less than the rule's", () => {
+    // Nothing that races alone, or on a grid the rule book already holds,
+    // moves a metre of ground.
+    expect(apronForGrid(1)).toBe(STAGE_RULES.startZone.apron);
+    expect(apronForGrid(GRID_MAX)).toBe(STAGE_RULES.startZone.apron);
+    // …and every grid up to the ceiling fits on what it asks for, car and
+    // all, which is the same test `APRON_HOLDS` applies to the rule's own.
+    for (let cars = GRID_MIN; cars <= GRID_CEILING; cars++) {
+      const grid = massStartGrid(cars);
+      const tail = grid[grid.length - 1].back + TUNING.collision.halfLength;
+      expect(tail, `${cars} cars`).toBeLessThanOrEqual(apronForGrid(cars));
+    }
+    expect(apronForGrid(GRID_CEILING)).toBeGreaterThan(STAGE_RULES.startZone.apron);
+  });
+
+  it("lays that run-up on the stage, and leaves the road exactly where it was", () => {
+    const apron = apronForGrid(GRID_CEILING);
+    const plain = compileStage(7, "short");
+    const deep = compileStage(7, "short", undefined, "sprint", undefined, apron);
+    expect(plain.startApron).toBe(STAGE_RULES.startZone.apron);
+    expect(deep.startApron).toBe(apron);
+    // THE ROUTE IS THE SEED'S, not the field's: a stage driven with
+    // thirty-one cars on it is the same road as the one driven alone, and
+    // what grew is the dirt behind the line.
+    expect(deep.samples.length).toBe(plain.samples.length);
+    for (let i = 0; i < plain.samples.length; i++) {
+      expect(deep.samples[i].x, `sample ${i}`).toBeCloseTo(plain.samples[i].x, 9);
+      expect(deep.samples[i].z, `sample ${i}`).toBeCloseTo(plain.samples[i].z, 9);
+      expect(deep.samples[i].elevation, `sample ${i}`).toBeCloseTo(plain.samples[i].elevation, 9);
+    }
+    // The run-up is DRAWN as much longer, and the run-off past the finish is
+    // untouched — nothing lines up out there.
+    const runUp = endApron(deep, "start");
+    expect(runUp.length).toBe(Math.round(apron / deep.step));
+    expect(runUp.length).toBeGreaterThan(endApron(plain, "start").length);
+    expect(endApron(deep, "finish").length).toBe(endApron(plain, "finish").length);
+  });
+
+  it("stands a full ceiling grid on the road, every car of it", () => {
+    // The synthetic straight with the deep stage's own run-up under it: what
+    // is being measured is the grid against the apron, not the generator.
+    const apron = apronForGrid(GRID_CEILING);
+    const track = { ...straight(), startApron: apron };
+    const line = track.samples[0];
+    for (const slot of massStartGrid(GRID_CEILING)) {
+      const state = launched(track, { ...slot, gain: 0 });
+      const fix = locate(track, state.car.x, state.car.z, 0);
+      expect(fix.offRoad, `slot ${slot.number}`).toBe(false);
+      expect(along(state, line), `slot ${slot.number}`).toBeCloseTo(-slot.back, 6);
+    }
+    // …and on the rule book's own apron the back of that grid would be off
+    // the stage entirely, which is the whole reason the apron grows.
+    const short = { ...straight(), startApron: STAGE_RULES.startZone.apron };
+    const back = massStartGrid(GRID_CEILING)[GRID_CEILING - 1];
+    const stranded = launched(short, { ...back, gain: 0 });
+    expect(locate(short, stranded.car.x, stranded.car.z, 0).offRoad).toBe(true);
+  });
+
+  it("dresses every slot of it, with nobody entered twice", () => {
+    const entries = headsUpField("medium", GRID_CEILING);
+    expect(entries).toHaveLength(GRID_CEILING - 1);
+    expect(new Set(entries.map((e) => e.crew.id)).size).toBe(entries.length);
+    expect(new Set(entries.map((e) => e.number)).size).toBe(entries.length);
+    // The named crews are the last thing between the player and the front:
+    // the grid is seeded slowest-first, and a club entry is slower than
+    // anybody with a name.
+    expect(entries[0].crew.id.startsWith("club-")).toBe(true);
+    expect(entries[entries.length - 1].crew.id).toBe("frostbite");
   });
 });

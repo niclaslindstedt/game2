@@ -17,6 +17,13 @@
 // nothing is stood up the road on the far side of it, and the apron's length
 // is the hard ceiling on how many cars a grid can hold (`GRID_MAX`).
 //
+// A DEEPER GRID IS A LONGER APRON, and nothing else: `apronForGrid` says how
+// much run-up a given field needs and `compileStage` builds the stage with
+// it, which is how Roam's opponents slider stands thirty-two cars behind a
+// gate the rule book only lays room for sixteen at. The road itself is
+// untouched — the same seed is the same stage whoever is on it — so what
+// grows is the dirt behind the line and the shelf under it.
+//
 // It ZIG-ZAGS: one car per row, alternating sides of the centre line, the way
 // a kart or club grid is laid out. The cars overlap nose to tail and are kept
 // apart across the road instead, which is what a stagger IS — and from the
@@ -72,9 +79,45 @@ export const GRID_MIN = 2;
 export const APRON_HOLDS =
   Math.floor((STAGE_RULES.startZone.apron - TUNING.collision.halfLength) / M.rowGap) + 1;
 
-/** …and the largest grid the game will actually stand up: never more than
- * the apron holds, and never more than the roster can dress. */
+/** …and the largest grid a stage BUILT TO THE RULE BOOK will stand up: never
+ * more than that apron holds, and never more than the AUTHORED roster can
+ * dress. It is the heads-up race's ceiling and the one the stage analysis
+ * measures against, because those are the two that take the stage as the
+ * generator built it — and the roster half of it is a choice rather than a
+ * limit: a heads-up race is the fourteen crews, not fourteen crews and a
+ * club entry to round the number up (`clubCrew`). */
 export const GRID_MAX = Math.min(FIELD_SIZE, APRON_HOLDS);
+
+/** …and the largest grid ANYWHERE, once the stage is built for it.
+ *
+ * Roam's OPPONENTS slider is the only thing that asks: it offers up to
+ * thirty-one of them, the stage is compiled with an apron long enough to
+ * stand them all on (`apronForGrid`), and the roster is dressed out past
+ * fourteen with club entries (`clubCrew`). It is a number the player is
+ * choosing their own frame rate with rather than a balanced field — thirty-two
+ * cars is thirty-two games stepped every frame and thirty-two bodies drawn —
+ * which is why it is Roam's alone and why nothing derives from it. */
+export const GRID_CEILING = 32;
+
+/** THE RUN-UP a grid of `cars` needs behind the start gate, m: a row per car
+ * and the back one's own bodywork inside the apron's end, since past that a
+ * car is off the stage entirely (`pastApron`). Never shorter than the rule
+ * book's apron — a two-car grid does not get a two-car start line, it gets
+ * the stage's own run-up — so this is what `compileStage` is handed and
+ * every stage that enters nobody is built exactly as it always was. */
+export function apronForGrid(cars: number): number {
+  // R24's start zone is the rule book's apron and no more, so a run-up
+  // longer than that is ground the search never kept the route out of. On
+  // about one seed in forty the stage comes back past the start inside the
+  // extra metres, and the deepest rows of a full grid stand on that piece of
+  // road instead of on the apron. It is road either way — nothing falls
+  // through and nothing starts off the stage — and buying the alternative
+  // would mean the seed drawing a different road for every field size, which
+  // is a map that changes under a player moving the opponents slider.
+
+  const rows = Math.max(1, Math.round(cars)) - 1;
+  return Math.max(STAGE_RULES.startZone.apron, rows * M.rowGap + TUNING.collision.halfLength);
+}
 
 /** The default grid, and also the deepest one on offer. Both numbers above
  * it are DERIVED, so this is whatever the apron and the roster currently
@@ -102,9 +145,13 @@ export type GridSlot = {
   gain: number;
 };
 
-/** A grid size the game will actually stand up. */
+/** A grid size the game will actually stand up. The ceiling is Roam's
+ * (`GRID_CEILING`), not the rule book's apron: whoever asks for a grid
+ * deeper than `GRID_MAX` is expected to have built the stage for it, and
+ * the two surfaces that have not — the heads-up page and the analysis —
+ * hold themselves to `GRID_MAX` where they ask. */
 export function gridSize(cars: number): number {
-  return clamp(Math.round(cars), GRID_MIN, GRID_MAX);
+  return clamp(Math.round(cars), GRID_MIN, GRID_CEILING);
 }
 
 /** What a slot `deficit` metres down on pole is given back, as a fraction of

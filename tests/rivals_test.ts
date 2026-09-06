@@ -31,6 +31,7 @@ import {
   DIFFICULTIES,
   DIFFICULTY_IDS,
   FIELD_SIZE,
+  GRID_CEILING,
   PLAYER_NUMBER,
   RIVALS,
   SKILL_AXES,
@@ -39,9 +40,11 @@ import {
   TUNING,
   botInput,
   budgetFor,
+  clubCrew,
   compileStage,
   createGame,
   damageScaleFor,
+  entryList,
   step,
   profileFor,
   gearboxFor,
@@ -185,6 +188,34 @@ describe("the three difficulties", () => {
     });
     expect(times[1]).toBeLessThan(times[0]);
     expect(times[2]).toBeLessThan(times[1]);
+  });
+});
+
+describe("the club entries", () => {
+  it("fill a field deeper than the roster, and never stand in for a crew", () => {
+    // Up to the roster the entry list is the roster: nobody is invented to
+    // round a number up.
+    expect(entryList(FIELD_SIZE).every((crew) => RIVALS.includes(crew))).toBe(true);
+    const deep = entryList(GRID_CEILING);
+    expect(deep).toHaveLength(GRID_CEILING - 1);
+    expect(deep.slice(0, RIVALS.length).every((crew) => RIVALS.includes(crew))).toBe(true);
+    // ...and everything past it is a privateer, with an identity of its own.
+    const club = deep.slice(RIVALS.length);
+    expect(club.length).toBeGreaterThan(0);
+    expect(new Set(club.map((c) => c.id)).size).toBe(club.length);
+    expect(new Set(club.map((c) => c.standing)).size).toBe(club.length);
+    for (const crew of club) {
+      expect(CARS.some((car) => car.id === crew.carId)).toBe(true);
+      // Below every named crew, which is what puts them at the front of a
+      // grid and leaves the roster between the player and the lead.
+      expect(crew.standing).toBeLessThan(Math.min(...RIVALS.map((c) => c.standing)));
+      for (const axis of SKILL_AXES) expect(crew.weights[axis]).toBeGreaterThan(0);
+    }
+  });
+
+  it("are the same field whoever asks for it", () => {
+    expect(clubCrew(3)).toEqual(clubCrew(3));
+    expect(clubCrew(3).id).not.toBe(clubCrew(4).id);
   });
 });
 

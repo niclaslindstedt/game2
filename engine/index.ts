@@ -470,9 +470,11 @@ export {
 } from "./sim/skill.ts";
 export {
   APRON_HOLDS,
+  GRID_CEILING,
   GRID_DEFAULT,
   GRID_MAX,
   GRID_MIN,
+  apronForGrid,
   catchUpFor,
   gridSize,
   headsUpField,
@@ -485,6 +487,7 @@ export {
   PLAYER_NUMBER,
   RIVALS,
   START_INTERVAL,
+  clubCrew,
   entryList,
   rivalField,
   type RivalCrew,

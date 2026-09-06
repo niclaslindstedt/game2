@@ -295,6 +295,16 @@ export type Track = {
    * same one. A training ground that were passed in separately would be a
    * training ground half the readers could not see. */
   arena: ArenaPlan | null;
+  /** R24 — THE RUN-UP behind the start gate, m: how much dirt `endApron`
+   * extrapolates off the first sample, how far the terrain holds its shelf
+   * flat past it, and how far back a car is still ON the stage
+   * (`pastApron`). `STAGE_RULES.startZone.apron` on every stage that starts
+   * one car at a time, and longer only where a MASS START asks for it — a
+   * grid is one row per car and the back row has to be inside this
+   * (`apronForGrid` in sim/grid.ts). The route never moves for it: what
+   * grows is the ground behind the line and the room the branches, the props
+   * and the country are kept out of. */
+  startApron: number;
   /** True when the stage streams forever instead of finishing. */
   endless: boolean;
   /** R22 — true when the stage is a CIRCUIT: the last sample lands back on
@@ -1720,18 +1730,28 @@ function createCompiler(
       const dz = z - end.z;
       const along = (dx * end.sin + dz * end.cos) * end.sign;
       const lateral = dx * end.cos - dz * end.sin;
-      return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - R.startZone.apron));
+      return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - end.reach));
     };
-    type StageEnd = { x: number; z: number; sin: number; cos: number; sign: 1 | -1 };
-    const endOf = (sample: TrackSample, sign: 1 | -1): StageEnd => ({
+    // The two ends are not the same length: the run-up carries whatever grid
+    // is standing on it (`track.startApron`), the run-off is the rule book's.
+    type StageEnd = {
+      x: number;
+      z: number;
+      sin: number;
+      cos: number;
+      sign: 1 | -1;
+      reach: number;
+    };
+    const endOf = (sample: TrackSample, sign: 1 | -1, reach: number): StageEnd => ({
       x: sample.x,
       z: sample.z,
       sin: Math.sin(sample.heading),
       cos: Math.cos(sample.heading),
       sign,
+      reach,
     });
-    const first = endOf(track.samples[0], -1);
-    const last = endOf(track.samples[track.samples.length - 1], 1);
+    const first = endOf(track.samples[0], -1, track.startApron);
+    const last = endOf(track.samples[track.samples.length - 1], 1, R.startZone.apron);
     const parting2 = BUILT_PARTING * BUILT_PARTING;
     return (meet: { x: number; z: number }) =>
       (
@@ -3261,6 +3281,10 @@ function planCountry(
    * compares a branch's height against a route that is not there, and the
    * junction test stops meaning anything. */
   land: ReturnType<typeof createLandField>,
+  /** R24 — the run-up behind the start gate this stage is being built with
+   * (`Track.startApron`): a deeper grid stands on more of it, and a branch
+   * may no more cross the extra metres than the original ones. */
+  apron: number,
 ): Country {
   const box = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
   const pts: { x: number; z: number; y: number; s: number }[] = [];
@@ -3332,6 +3356,9 @@ function planCountry(
     /** The point the road came FROM, so the heading is `behind → at`. */
     behind: { x: number; z: number },
     sign: 1 | -1,
+    /** How far the apron off this end reaches, m — the run-up carries the
+     * grid and is as long as that grid is deep; the run-off is fixed. */
+    reach: number,
   ): ((x: number, z: number) => number) => {
     const heading = Math.atan2(at.x - behind.x, at.z - behind.z);
     const sin = Math.sin(heading);
@@ -3341,12 +3368,17 @@ function planCountry(
       const dz = z - at.z;
       const along = (dx * sin + dz * cos) * sign;
       const lateral = dx * cos - dz * sin;
-      return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - R.startZone.apron));
+      return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - reach));
     };
   };
   const n = pts.length;
-  const first = apronOf(pts[0], { x: 2 * pts[0].x - pts[1].x, z: 2 * pts[0].z - pts[1].z }, -1);
-  const last = apronOf(pts[n - 1], pts[n - 2] ?? pts[n - 1], 1);
+  const first = apronOf(
+    pts[0],
+    { x: 2 * pts[0].x - pts[1].x, z: 2 * pts[0].z - pts[1].z },
+    -1,
+    apron,
+  );
+  const last = apronOf(pts[n - 1], pts[n - 2] ?? pts[n - 1], 1, R.startZone.apron);
   const parting2 = TRIAL_PARTING * TRIAL_PARTING;
   const roadDistance =
     (meet: { x: number; z: number }) =>
@@ -3448,6 +3480,7 @@ function emptyTrack(
   knobs: StageKnobs,
   climate: Climate,
   circuit = false,
+  startApron: number = R.startZone.apron,
 ): Track {
   return {
     seed,
@@ -3460,6 +3493,7 @@ function emptyTrack(
     pacenotes: [],
     checkpoints: [],
     arena: null,
+    startApron: Math.max(R.startZone.apron, startApron),
     endless,
     circuit,
     finishS: null,
@@ -3541,13 +3575,19 @@ function closeCircuitHeight(track: Track, pending: { elevation: number; s: numbe
  * circuit; an endless stage has no shape to pick — it never closes.
  * `climate` is the season and the cold the stage is driven in (climate.ts)
  * — omitted, a summer at the country's own temperature; it changes what the
- * road is MADE OF where the ground is frozen, never where the road goes. */
+ * road is MADE OF where the ground is frozen, never where the road goes.
+ * `startApron` (R24) is how much run-up to lay behind the start gate, for a
+ * MASS START too deep for the rule book's own — omitted, the rule book's. It
+ * moves nothing about the route: the seed draws the same road whatever field
+ * is standing on it, and what grows is the dirt behind the line, the shelf
+ * under it and the room everything else is kept out of. */
 export function compileStage(
   seed: number,
   length: StageLength = "medium",
   knobs?: Partial<StageKnobs>,
   shape: StageShape = "sprint",
   climate?: ClimateChoice,
+  startApron?: number,
 ): Track {
   const dials = resolveKnobs(knobs);
   const weather = resolveClimate(climate, dials.biome);
@@ -3557,7 +3597,7 @@ export function compileStage(
   const widthAt = buildWidth(seed);
   if (length !== "endless") {
     const circuit = shape === "circuit";
-    const track = emptyTrack(seed, false, dials, weather, circuit);
+    const track = emptyTrack(seed, false, dials, weather, circuit, startApron);
     const plans = generateStage(seed, length, dials, shape);
     // R17 — THE TARMAC, laid on the bare country from the seed alone and
     // rebuilt here identically to the copy the search planned against. It
@@ -3574,7 +3614,14 @@ export function compileStage(
       paving,
       bumps,
       widthAt,
-      planCountry(plans, track.width, rolling, dials, createLandField(seed, dials)),
+      planCountry(
+        plans,
+        track.width,
+        rolling,
+        dials,
+        createLandField(seed, dials),
+        track.startApron,
+      ),
       true,
       // R17 — a sprint is routed onto the tarmac; a circuit is not, yet —
       // and neither is a mountain stage (R47), whose seal is a height.
@@ -3582,7 +3629,7 @@ export function compileStage(
     ).append(plans);
     return track;
   }
-  const track = emptyTrack(seed, true, dials, weather);
+  const track = emptyTrack(seed, true, dials, weather, false, startApron);
   const stream = createStageStream(seed, dials);
   const compiler = createCompiler(
     track,
