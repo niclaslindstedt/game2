@@ -51,6 +51,13 @@ export type RoofKind = "tile" | "metal" | "slate" | "flat" | "gambrel";
  * and the green a village's bigger buildings are done in. */
 export type WallPaint = "red" | "yellow" | "white" | "grey" | "brick" | "green";
 
+/** R40 — what KIND of house the country builds (`BiomeRules.houses`): the
+ * Nordic timber house on its stone plinth, or the alpine CHALET — a stone
+ * ground floor under storeys of dark timber, a low roof with deep eaves, and
+ * a balcony across the front. One plan, two vocabularies: the renderer
+ * dispatches on it, the solids never need to. */
+export type HouseStyle = "nordic" | "chalet";
+
 /** THE PLAN of a building — everything the renderer needs to build it,
  * decided in the engine so the same seed stands the same building on both
  * sides of the wire. */
@@ -63,6 +70,7 @@ export type HousePlan = {
   storeys: 1 | 2 | 3;
   roof: RoofKind;
   walls: WallPaint;
+  style: HouseStyle;
   /** A porch over the front door, with its own little roof on posts. */
   porch: boolean;
   /** An L: a second, lower block off one end of the back wall. `side` is
@@ -97,7 +105,7 @@ function roofRoll(rng: Rng): Exclude<RoofKind, "flat"> {
 /** Draw a FARMHOUSE (R37). The proportions are a Nordic timber house's: a
  * block a room or two deep under a pitched roof, one storey more often than
  * two, red more often than anything, and a porch on about half of them. */
-export function drawHousePlan(rng: Rng): HousePlan {
+export function drawHousePlan(rng: Rng, style: HouseStyle = "nordic"): HousePlan {
   const storeys: 1 | 2 = rng.chance(0.38) ? 2 : 1;
   const width = rng.range(7.5, 12.5);
   const depth = rng.range(6, 8.5);
@@ -112,7 +120,18 @@ export function drawHousePlan(rng: Rng): HousePlan {
         depth: rng.range(3.5, 5.5),
       }
     : null;
-  return { kind: "house", width, depth, storeys, roof, walls, porch, wing, detail: rng.next() };
+  return {
+    kind: "house",
+    width,
+    depth,
+    storeys,
+    roof,
+    walls,
+    style,
+    porch,
+    wing,
+    detail: rng.next(),
+  };
 }
 
 /** R37 — draw a BARN. The proportions are a Swedish ladugård's: a long
@@ -122,7 +141,7 @@ export function drawHousePlan(rng: Rng): HousePlan {
  * nearly always; the rest black-tarred or grey with age. `detail` carries
  * the rest: which gable the loft ramp climbs, how many ventilators stand
  * on the ridge, whether the byre is stone or rendered. */
-export function drawBarnPlan(rng: Rng): HousePlan {
+export function drawBarnPlan(rng: Rng, style: HouseStyle = "nordic"): HousePlan {
   const B = STAGE_RULES.homestead.farm.barn;
   const width = rng.range(B.width.min, B.width.max);
   const depth = rng.range(B.depth.min, B.depth.max);
@@ -133,6 +152,7 @@ export function drawBarnPlan(rng: Rng): HousePlan {
     width,
     depth,
     storeys: 2,
+    style,
     roof: roofRoll < 0.55 ? "gambrel" : roofRoll < 0.85 ? "metal" : "tile",
     walls: wallRoll < 0.72 ? "red" : wallRoll < 0.88 ? "grey" : "white",
     porch: false,
@@ -155,13 +175,18 @@ export function drawBarnPlan(rng: Rng): HousePlan {
  * flats is three under a flat roof, a grocery and a post office are one
  * wide storey with the shop front along the street, and a workshop is a
  * long low shed with the doors in the gable. */
-export function drawTownPlan(rng: Rng, kind: BuildingKind): HousePlan {
+export function drawTownPlan(
+  rng: Rng,
+  kind: BuildingKind,
+  style: HouseStyle = "nordic",
+): HousePlan {
   const detail = rng.next();
   switch (kind) {
     case "house": {
       const wallRoll = rng.next();
       return {
         kind,
+        style,
         width: rng.range(7, 11),
         depth: rng.range(6, 8),
         storeys: rng.chance(0.3) ? 2 : 1,
@@ -175,6 +200,7 @@ export function drawTownPlan(rng: Rng, kind: BuildingKind): HousePlan {
     case "villa":
       return {
         kind,
+        style,
         width: rng.range(11, 14),
         depth: rng.range(8, 10),
         storeys: 2,
@@ -191,6 +217,7 @@ export function drawTownPlan(rng: Rng, kind: BuildingKind): HousePlan {
     case "apartments":
       return {
         kind,
+        style,
         width: rng.range(16, 24),
         depth: rng.range(10, 12),
         storeys: 3,
@@ -203,6 +230,7 @@ export function drawTownPlan(rng: Rng, kind: BuildingKind): HousePlan {
     case "grocery":
       return {
         kind,
+        style,
         width: rng.range(14, 20),
         depth: rng.range(10, 14),
         storeys: 1,
@@ -215,6 +243,7 @@ export function drawTownPlan(rng: Rng, kind: BuildingKind): HousePlan {
     case "post":
       return {
         kind,
+        style,
         width: rng.range(10, 13),
         depth: rng.range(8, 10),
         storeys: rng.chance(0.5) ? 2 : 1,
@@ -227,6 +256,7 @@ export function drawTownPlan(rng: Rng, kind: BuildingKind): HousePlan {
     case "workshop":
       return {
         kind,
+        style,
         width: rng.range(12, 18),
         depth: rng.range(9, 12),
         storeys: 1,
@@ -239,7 +269,7 @@ export function drawTownPlan(rng: Rng, kind: BuildingKind): HousePlan {
     case "barn":
       // A village has no barn — a farm does — but the vocabulary is one
       // vocabulary, and a caller that asks gets the farm's own draw.
-      return drawBarnPlan(rng);
+      return drawBarnPlan(rng, style);
   }
 }
 

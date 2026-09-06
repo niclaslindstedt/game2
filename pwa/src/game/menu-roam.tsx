@@ -97,6 +97,7 @@ const DIAL_GLYPHS: Record<string, GlyphName> = {
   water: "water",
   trees: "tree",
   asphalt: "tarmac",
+  peaks: "mountain",
 };
 
 /** THE PAGE. */
@@ -317,20 +318,22 @@ export function RoamPage({
                     })
                   }
                 />
-                {STAGE_DIALS.map((dial) => (
-                  <StepRow
-                    key={dial.key}
-                    label={dial.label}
-                    glyph={DIAL_GLYPHS[dial.key]}
-                    stops={dial.stops}
-                    value={dialStop(dial.stops, race.knobs[dial.key])}
-                    onPick={(id) => {
-                      const stop = dial.stops.find((s) => s.id === id);
-                      if (!stop) return;
-                      onRace({ ...race, knobs: { ...race.knobs, [dial.key]: stop.value } });
-                    }}
-                  />
-                ))}
+                {STAGE_DIALS.filter((dial) => !dial.biome || dial.biome === race.knobs.biome).map(
+                  (dial) => (
+                    <StepRow
+                      key={dial.key}
+                      label={dial.label}
+                      glyph={DIAL_GLYPHS[dial.key]}
+                      stops={dial.stops}
+                      value={dialStop(dial.stops, race.knobs[dial.key])}
+                      onPick={(id) => {
+                        const stop = dial.stops.find((s) => s.id === id);
+                        if (!stop) return;
+                        onRace({ ...race, knobs: { ...race.knobs, [dial.key]: stop.value } });
+                      }}
+                    />
+                  ),
+                )}
               </KnobGroup>
             </div>
           </div>

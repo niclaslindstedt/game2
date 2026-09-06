@@ -40,7 +40,9 @@ import { TUNING } from "../game/defs/tuning.ts";
 import { LAKE_Y } from "../mapgen/land.ts";
 import { biomeRules } from "../mapgen/biomes.ts";
 import type { Track } from "../mapgen/compile.ts";
+import { ROAD_CROSS } from "../mapgen/road.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
+import { tunnelTrench } from "../mapgen/solids.ts";
 import { GROUND_CELL, type TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import {
@@ -184,6 +186,18 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
     const dz = (far(x, z + h) - far(x, z - h)) / cell;
     return Math.hypot(dx, dz) > STAGE_RULES.verge.climb;
   };
+  /** R47 — whether this ground stands over a BORE's trench: the lattice
+   * there is the trench's own wall up to the mountain, rock by rule
+   * (`cutAt`) and under the lid the lining draws over it, so a step there
+   * is not a wall the country stands. As far out as the trench and the
+   * cell that ramps off its edge. */
+  const lidReach =
+    track.width / 2 + ROAD_CROSS.reach + tunnelTrench(track.width) + GROUND_CELL * Math.SQRT2;
+  const bores = track.samples.filter((s) => s.tunnel);
+  const underLid = (x: number, z: number): boolean =>
+    bores.length > 0 &&
+    terrain.roadDistanceAt(x, z) <= lidReach &&
+    bores.some((s) => Math.hypot(s.x - x, s.z - z) <= lidReach);
   for (let j = 0; j < h - 2; j++) {
     for (let i = 0; i < w - 2; i++) {
       const x = (i0 + i + 0.5) * cell;
@@ -236,7 +250,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
           steepAt.built = built;
         }
       }
-      if (steepest > B.wall.slope && !sharp) {
+      if (steepest > B.wall.slope && !sharp && !underLid(x, z)) {
         out.walls++;
         if (steepest > worstWall) {
           worstWall = steepest;
@@ -579,7 +593,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
     {
       id: "rock",
       label: "the bedrock shows where the soil is thin",
-      score: within(rockShare, G.rock, G.slack),
+      score: within(rockShare, country.rock, G.slack),
       weight: 1,
       value: rockShare,
     },
@@ -593,7 +607,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
     {
       id: "cliffs",
       label: "the country is mostly ground a car could cross",
-      score: within(cliffShare, { min: 0, max: G.cliff.max }, G.slack),
+      score: within(cliffShare, { min: 0, max: country.cliff.max }, G.slack),
       weight: 1,
       value: cliffShare,
     },

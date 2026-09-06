@@ -28,13 +28,25 @@ const TAIGA_GROUND = {
   shore: [0xc2, 0xa8, 0x78],
   water: [0x2f, 0x86, 0xe0],
   deepWater: [0x1c, 0x5a, 0xa0],
+  /** The snow over a country's snowline — the game's own off-white
+   * (terrain.ts), the one ground every country paints alike. */
+  snow: [0xee, 0xf2, 0xf7],
 };
+
+/** R40 — where the ground goes to rock and where the rock goes under snow,
+ * m: the taiga's zones, for a picture that is handed no engine to ask. */
+const TAIGA_ZONES = { treeline: 46, rock: { from: 26, to: 52 }, snow: null };
 
 /** The road's own colors — the same split the renderer paints with: worn
  * down the wheel tracks, loose at the edges. */
 const ROAD = {
   gravel: { loose: [0xd2, 0xb4, 0x89], worn: [0x8a, 0x70, 0x46] },
   sand: { loose: [0xf2, 0xe2, 0xb4], worn: [0xd6, 0xbf, 0x8a] },
+  /** R47 — packed snow over the road above the snowline: white, with the
+   * wheel tracks worn to grey ice. */
+  snow: { loose: [0xf1, 0xf3, 0xf6], worn: [0xc4, 0xcc, 0xd6] },
+  /** R47 — a bored run: the road's colour is the lining's. */
+  tunnel: { loose: [0x5c, 0x58, 0x54], worn: [0x48, 0x45, 0x42] },
   asphalt: { loose: [0x3a, 0x3b, 0x40], worn: [0x54, 0x55, 0x5c] },
   water: { loose: [0x8f, 0xa6, 0xc6], worn: [0x8f, 0xa6, 0xc6] },
   deck: { loose: [0xb7, 0xb3, 0xa8], worn: [0xa4, 0xa0, 0x96] },
@@ -94,6 +106,7 @@ export function paletteFor(ground, biome) {
       shore: rgb(ground.shore),
       water: TAIGA_GROUND.water,
       deepWater: TAIGA_GROUND.deepWater,
+      snow: TAIGA_GROUND.snow,
     },
     tree: biome === "desert" ? DESERT_TREE : TAIGA_TREE,
   };
@@ -140,7 +153,12 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     junctionDust,
     junctionFlat,
     junctionMainEdge,
+    biomeRules,
   } = engine;
+  // R40 — the heights the ground is painted against are the country's
+  // (`BiomeLand.zones`), the same rows the game's terrain reads: the meadow
+  // goes to rock over `rock`, and over `snow` the rock goes white.
+  const ZONES = biomeRules?.(track.knobs?.biome).land.zones ?? TAIGA_ZONES;
   const canvas = createCanvas(width, height, GROUND.grass);
 
   // ── Frame: the road, then as much country as the picture has room for ──
@@ -263,9 +281,21 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
       const slope = Math.hypot(dx, dy);
       color = mix(GROUND.grass, GROUND.grassDark, Math.min(1, h / 40));
       if (h < LAKE_Y + 3) color = mix(color, GROUND.shore, 0.7);
-      else if (h > 26) color = mix(color, GROUND.rock, Math.min(1, (h - 26) / 30));
+      else if (h > ZONES.rock.from) {
+        color = mix(color, GROUND.rock, (h - ZONES.rock.from) / (ZONES.rock.to - ZONES.rock.from));
+      }
       if (slope > 0.35) color = mix(color, GROUND.rockDark, Math.min(0.85, (slope - 0.35) / 0.9));
       else if (slope > 0.12) color = mix(color, GROUND.moss, (slope - 0.12) * 1.2);
+      // The snow lies on the gentle ground first and leaves the faces as
+      // rock, fading in over thirty metres from ten under the line, which
+      // climbs with the slope — the game's own rule (ground-rules.ts),
+      // read at map scale.
+      if (ZONES.snow !== null && h >= LAKE_Y + 3) {
+        const normalY = 1 / Math.hypot(slope, 1);
+        const line = ZONES.snow - 10 + (1 - normalY) * 120;
+        const lie = 1 - Math.min(1, Math.max(0, (0.84 - normalY) / 0.24));
+        color = mix(color, GROUND.snow, Math.min(1, Math.max(0, (h - line) / 30)) * lie);
+      }
       // R17 — the junction's own apron, spread over whatever the country
       // was doing here.
       const apron = apronAt(worldX(x), worldZ(y));
@@ -404,12 +434,14 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     const bridge = sample.deck != null;
     const kind = bridge
       ? "deck"
-      : sample.surface === "water"
-        ? "water"
-        : sample.surface === "asphalt"
-          ? "asphalt"
-          : sample.surface;
-    const loose = kind === "gravel" || kind === "sand";
+      : sample.tunnel
+        ? "tunnel"
+        : sample.surface === "water"
+          ? "water"
+          : sample.surface === "asphalt"
+            ? "asphalt"
+            : sample.surface;
+    const loose = kind === "gravel" || kind === "sand" || kind === "snow";
     if (out <= 0) {
       // Inside a junction the wear flattens: two roads' wheel tracks
       // crossing is the tell that two ribbons were laid over one another.

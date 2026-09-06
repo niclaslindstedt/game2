@@ -7,6 +7,7 @@
 import * as THREE from "three";
 
 import { shareOne } from "../lib/shared-gpu.ts";
+import { looseShades } from "./ground-rules.ts";
 
 function makeCanvas(size: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
   const canvas = document.createElement("canvas");
@@ -79,31 +80,34 @@ function withMipmaps(tex: THREE.CanvasTexture): THREE.CanvasTexture {
   return tex;
 }
 
-export const gravelTexture = once((): THREE.CanvasTexture => {
-  const { canvas, ctx } = makeCanvas(128);
-  speckle(ctx, 128, "#b29268", [
-    { color: "#a08258", count: 900, min: 1, max: 3 },
-    { color: "#c4a67a", count: 700, min: 1, max: 3 },
-    { color: "#8a6f4d", count: 350, min: 1, max: 4 },
-    { color: "#d8c096", count: 150, min: 1, max: 2 },
-  ]);
-  return toTexture(canvas, 1);
-});
+/** R40 — THE GRAIN OF A LOOSE ROAD, derived from the country's own grit
+ * (`Biome.grit`: the shield's brown gravel, a desert's sand, a mountain's
+ * grey chippings). One texture per grit colour, painted once and shared —
+ * a stage is in one country, so this is one map per session in practice,
+ * but a Roam that changes country must not keep drawing the last one. */
+const looseTextures = new Map<number, THREE.CanvasTexture>();
 
-/** R40 — the grain of a SAND road: the same speckle as the gravel's with
- * the stone taken out of it. Pale and nearly hueless, because a road bladed
- * out of sand is the colour of the sand and nothing else, and the gravel
- * map's brown would turn a bleached ribbon to ochre. */
-export const sandTexture = once((): THREE.CanvasTexture => {
+export function looseTexture(grit: number): THREE.CanvasTexture {
+  const held = looseTextures.get(grit);
+  if (held) return held;
+  const { ground, flecks } = looseShades(grit);
   const { canvas, ctx } = makeCanvas(128);
-  speckle(ctx, 128, "#e9e0cc", [
-    { color: "#d9cdb2", count: 900, min: 1, max: 3 },
-    { color: "#f4ecd8", count: 700, min: 1, max: 3 },
-    { color: "#c9bb9c", count: 250, min: 1, max: 3 },
-    { color: "#fbf6e8", count: 200, min: 1, max: 2 },
+  speckle(ctx, 128, ground, [
+    { color: flecks[0], count: 900, min: 1, max: 3 },
+    { color: flecks[1], count: 700, min: 1, max: 3 },
+    { color: flecks[2], count: 350, min: 1, max: 4 },
+    { color: flecks[3], count: 150, min: 1, max: 2 },
   ]);
-  return toTexture(canvas, 1);
-});
+  const tex = toTexture(canvas, 1);
+  tex.userData.shared = true;
+  looseTextures.set(grit, tex);
+  return tex;
+}
+
+/** The taiga's gravel — the grit every yard, car park and turbine pad is
+ * graded with whatever country it stands in, and the grain the car preview
+ * stands on. */
+export const gravelTexture = (): THREE.CanvasTexture => looseTexture(0xb29268);
 
 /** A near-white speckle that multiplies vertex colors: pure grain, no hue.
  * The ground and every flora instance share it, so grass, bedrock and

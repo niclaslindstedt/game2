@@ -15,13 +15,21 @@
 // and stuttered when it was starved, and a stutter is what a player reports
 // as crackle.
 
-import { lineAt, startsIn, trainAt, type GameState, type RailCrossing } from "@engine";
+import {
+  SAMPLE_STEP,
+  biomeRules,
+  lineAt,
+  startsIn,
+  trainAt,
+  type GameState,
+  type RailCrossing,
+} from "@engine";
 
 import { squallOf, wetnessOf } from "../weather.ts";
 
 import type { Synth } from "../../lib/voice.ts";
 
-import { createWorld, type World, type WorldVoice } from "./ambience.ts";
+import { createWorld, exposureOf, type World, type WorldVoice } from "./ambience.ts";
 import { WORLD_BANK } from "./bank-world.ts";
 import { RUN_BANK } from "./bank.ts";
 import {
@@ -83,6 +91,10 @@ const FINISH_REACH = 160;
 
 /** How close a paddock has to be to be heard, m. */
 const STOCK_REACH = 160;
+
+/** How far along the road, either way, running water is heard, m — the
+ * ford the road goes through, or the stream a deck carries it over. */
+const WATER_REACH = 70;
 
 /** The railway's three distances, m: how far a train is heard at all, how
  * far from the crossing it sounds its horn, and how close the car has to be
@@ -216,6 +228,24 @@ export function createDriveBed(synth: Synth, random: () => number = Math.random)
       if (d >= STOCK_REACH) continue;
       const near = 1 - d / STOCK_REACH;
       if (!best || near > best.near) best = { kind: paddock.stock, near, pan };
+    }
+    return best;
+  };
+
+  /** How near the road is to running water, 0..1 — read along the road
+   * from the sample the car is at, because a stream is where the road
+   * crosses it and nowhere else the audio can know about. */
+  const waterNear = (state: GameState): number => {
+    const samples = state.track.samples;
+    const reach = Math.ceil(WATER_REACH / SAMPLE_STEP);
+    const at = state.nearIndex;
+    let best = 0;
+    const from = Math.max(0, at - reach);
+    const to = Math.min(samples.length - 1, at + reach);
+    for (let i = from; i <= to; i++) {
+      const sample = samples[i];
+      if (!sample || (sample.surface !== "water" && sample.deck === null)) continue;
+      best = Math.max(best, 1 - Math.abs(i - at) / reach);
     }
     return best;
   };
@@ -382,6 +412,10 @@ export function createDriveBed(synth: Synth, random: () => number = Math.random)
           timeOfDay: state.env.timeOfDay,
           wet,
           gale,
+          // Where the car stands against the country's own zones: the pass
+          // wind, and who lives at this height.
+          exposure: exposureOf(car.y, biomeRules(biome).land.zones),
+          water: waterNear(state),
           air,
           crowd: Math.max(atStart, atFinish),
           stock: stockNear(state),

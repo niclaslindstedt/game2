@@ -3,8 +3,9 @@
 //
 // A rally stage is a road through somebody else's country, and the country
 // was making noise before the car arrived: birds in the spruce, cicadas on
-// a bajada, an owl at dusk, cows behind a fence, a train on the line
-// through the crossing. None of it is a `GameEvent`; the engine has no idea
+// a bajada, choughs round a col, an owl at dusk, cows behind a fence and
+// cowbells on an alm, a train on the line through the crossing. None of it
+// is a `GameEvent`; the engine has no idea
 // a raven exists. These are CUES the ambience scheduler (`ambience.ts`)
 // raises off the state — where the car is, what country it is in, what time
 // it is — and they are all QUIET, because the one thing a world must never
@@ -84,7 +85,7 @@ export const WORLD_BANK: SoundBank = {
 
   raven: {
     description:
-      "A raven going over — the one bird both countries have. A driven " +
+      "A raven going over — the one bird every country has. A driven " +
       "sawtooth croak low in the register with a hard vowel on it: a bandpass " +
       "around 900 Hz opening and shutting across a quarter of a second, " +
       "twice, the second one lower. Rough, dry, and a little too loud for " +
@@ -150,6 +151,128 @@ export const WORLD_BANK: SoundBank = {
         holdMs: 120,
         echo: 0.5,
         filter: { type: "lowpass", frequency: 560 },
+      },
+    ],
+  },
+
+  chough: {
+    description:
+      "A flock of alpine choughs wheeling round the rock. Each call is a " +
+      "CHEE-AH: a sine that flicks up a fourth and then falls away over a " +
+      "quarter of a second with a fast tremor on the fall — and there are " +
+      "three of them, staggered and spread across the stage, because a " +
+      "chough is never alone. Deep in the echo: the call is heard off the " +
+      "faces as much as from the birds.",
+    voices: [
+      {
+        call: "tone",
+        type: "sine",
+        from: 2300,
+        to: 3100,
+        durationMs: 80,
+        volume: 0.011,
+        attackMs: 8,
+        pan: -0.4,
+        echo: 0.45,
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 3000,
+        to: 1900,
+        durationMs: 220,
+        volume: 0.011,
+        delayMs: 80,
+        attackMs: 6,
+        pan: -0.4,
+        echo: 0.45,
+        vibrato: { rateHz: 24, depthCents: 80 },
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 2500,
+        to: 3300,
+        durationMs: 80,
+        volume: 0.01,
+        delayMs: 260,
+        attackMs: 8,
+        pan: 0.3,
+        echo: 0.45,
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 3200,
+        to: 2000,
+        durationMs: 240,
+        volume: 0.01,
+        delayMs: 340,
+        attackMs: 6,
+        pan: 0.3,
+        echo: 0.45,
+        vibrato: { rateHz: 22, depthCents: 80 },
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 2100,
+        to: 2900,
+        durationMs: 80,
+        volume: 0.009,
+        delayMs: 470,
+        attackMs: 8,
+        pan: 0.05,
+        echo: 0.45,
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 2800,
+        to: 1750,
+        durationMs: 260,
+        volume: 0.009,
+        delayMs: 550,
+        attackMs: 6,
+        pan: 0.05,
+        echo: 0.45,
+        vibrato: { rateHz: 26, depthCents: 80 },
+      },
+    ],
+  },
+
+  marmot: {
+    description:
+      "A marmot's alarm whistle from the scree above the road — one sharp " +
+      "note, high and clean, a sine with a hard onset held for a quarter of " +
+      "a second and cut off, and a shorter one a shade lower as the answer " +
+      "from up the slope. Rare, piercing, and the loudest thing the mountain " +
+      "ever says.",
+    voices: [
+      {
+        call: "tone",
+        type: "sine",
+        from: 2700,
+        to: 2550,
+        durationMs: 420,
+        volume: 0.017,
+        attackMs: 8,
+        holdMs: 250,
+        pan: 0.45,
+        echo: 0.55,
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 2550,
+        to: 2400,
+        durationMs: 300,
+        volume: 0.013,
+        delayMs: 900,
+        attackMs: 8,
+        holdMs: 160,
+        pan: 0.6,
+        echo: 0.55,
       },
     ],
   },
@@ -314,6 +437,124 @@ export const WORLD_BANK: SoundBank = {
         echo: 0.2,
         vibrato: { rateHz: 9, depthCents: 70 },
         filter: { type: "bandpass", frequency: 1200, to: 1700, q: 2 },
+      },
+    ],
+  },
+
+  cowbell: {
+    description:
+      "Cowbells on the alm below the road — a cluster of them, far off, on " +
+      "cattle that are grazing rather than walking. Each bell is a square " +
+      "struck once through a narrow bandpass low in the register, with a " +
+      "detuned pair for the beat between a bell's partials, DULL on purpose " +
+      "(an alpine bell is a folded sheet, not a cast one) and deep in the " +
+      "echo for the valley. Five strikes at four pitches, unevenly spaced, " +
+      "which is the whole rhythm of a herd.",
+    voices: [
+      {
+        call: "tone",
+        type: "square",
+        from: 540,
+        durationMs: 260,
+        volume: 0.012,
+        attackMs: 3,
+        holdMs: 30,
+        detuneCents: 22,
+        drive: 0.3,
+        pan: -0.5,
+        echo: 0.55,
+        filter: { type: "bandpass", frequency: 900, q: 2.4 },
+      },
+      {
+        call: "tone",
+        type: "square",
+        from: 610,
+        durationMs: 240,
+        volume: 0.011,
+        delayMs: 190,
+        attackMs: 3,
+        holdMs: 30,
+        detuneCents: 22,
+        drive: 0.3,
+        pan: -0.3,
+        echo: 0.55,
+        filter: { type: "bandpass", frequency: 980, q: 2.4 },
+      },
+      {
+        call: "tone",
+        type: "square",
+        from: 720,
+        durationMs: 220,
+        volume: 0.01,
+        delayMs: 330,
+        attackMs: 3,
+        holdMs: 30,
+        detuneCents: 22,
+        drive: 0.3,
+        pan: -0.6,
+        echo: 0.55,
+        filter: { type: "bandpass", frequency: 1100, q: 2.4 },
+      },
+      {
+        call: "tone",
+        type: "square",
+        from: 660,
+        durationMs: 240,
+        volume: 0.01,
+        delayMs: 620,
+        attackMs: 3,
+        holdMs: 30,
+        detuneCents: 22,
+        drive: 0.3,
+        pan: -0.4,
+        echo: 0.55,
+        filter: { type: "bandpass", frequency: 1040, q: 2.4 },
+      },
+      {
+        call: "tone",
+        type: "square",
+        from: 540,
+        durationMs: 260,
+        volume: 0.011,
+        delayMs: 810,
+        attackMs: 3,
+        holdMs: 30,
+        detuneCents: 22,
+        drive: 0.3,
+        pan: -0.5,
+        echo: 0.55,
+        filter: { type: "bandpass", frequency: 900, q: 2.4 },
+      },
+    ],
+  },
+
+  // ── Water ───────────────────────────────────────────────────────────────
+  meltwater: {
+    description:
+      "Meltwater running beside the road — a stream over stones, heard for " +
+      "a few seconds as the car comes past it. Pink noise swelling in over " +
+      "half a second and holding through a bright bandpass that wanders " +
+      "upward, with a thinner white trickle over the top. Water has no " +
+      "transient, and nothing here has one.",
+    voices: [
+      {
+        call: "noise",
+        color: "pink",
+        durationMs: 2800,
+        volume: 0.011,
+        attackMs: 600,
+        holdMs: 1400,
+        filter: { type: "bandpass", frequency: 1600, to: 2300, q: 1.1 },
+      },
+      {
+        call: "noise",
+        color: "white",
+        durationMs: 2400,
+        volume: 0.005,
+        delayMs: 200,
+        attackMs: 500,
+        holdMs: 1200,
+        filter: { type: "highpass", frequency: 3600 },
       },
     ],
   },

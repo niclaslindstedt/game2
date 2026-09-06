@@ -45,7 +45,8 @@ import { buildFinishGate, buildStartGate } from "../game/finish-gate.ts";
 import { plantSplitBoard } from "../game/split-board.ts";
 import { FLORA_IDS, buildFlora, TRUNK_COLOR } from "../game/flora.ts";
 import { buildBuilding } from "../game/building.ts";
-import { buildHouse, type HousePlan } from "../game/house.ts";
+import { buildDwelling } from "../game/chalet.ts";
+import { type HousePlan } from "../game/house.ts";
 import { markerShape } from "../game/kerbs.ts";
 import { buildParkedCar, parkedCarSpec, PARKED_BODIES } from "../game/parked-car.ts";
 import { raptorModel } from "../game/raptor.ts";
@@ -340,6 +341,17 @@ const ROADSIDE_ITEMS: ItemDef[] = [
       return { object: mesh };
     },
   })),
+  {
+    id: "snow-pole",
+    group: "roadside",
+    note: "the alpine's marker: red and white bands, a reflector on top",
+    build: () => {
+      const { geometry, materials, lift } = markerShape("post", "snowpole");
+      const mesh = new THREE.Mesh(geometry, materials);
+      mesh.position.y = lift;
+      return { object: mesh };
+    },
+  },
 ];
 
 // ── What is in the sky ────────────────────────────────────────────────────
@@ -432,6 +444,7 @@ const HOUSE_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "falu red, clay tile, a storey and a porch",
     plan: {
       kind: "house",
+      style: "nordic",
       width: 10.5,
       depth: 7,
       storeys: 1,
@@ -447,6 +460,7 @@ const HOUSE_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "ochre, black sheet metal, two storeys and a wing",
     plan: {
       kind: "house",
+      style: "nordic",
       width: 11.5,
       depth: 8,
       storeys: 2,
@@ -462,6 +476,7 @@ const HOUSE_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "white boards under slate, a wing and a porch",
     plan: {
       kind: "house",
+      style: "nordic",
       width: 8.5,
       depth: 6.5,
       storeys: 1,
@@ -470,6 +485,38 @@ const HOUSE_PLANS: { id: string; note: string; plan: HousePlan }[] = [
       porch: true,
       wing: { side: -1, width: 4.5, depth: 4 },
       detail: 0.55,
+    },
+  },
+  {
+    id: "chalet-slab",
+    note: "the alpine chalet: stone below, dark larch above, stone slabs on a low roof, a wing",
+    plan: {
+      kind: "house",
+      style: "chalet",
+      width: 10.5,
+      depth: 8,
+      storeys: 2,
+      roof: "slate",
+      walls: "red",
+      porch: true,
+      wing: { side: 1, width: 5, depth: 4.5 },
+      detail: 0.35,
+    },
+  },
+  {
+    id: "chalet-shingle",
+    note: "a small one: a rendered sockel, one timber storey and the gable balcony under shingles",
+    plan: {
+      kind: "house",
+      style: "chalet",
+      width: 8.5,
+      depth: 7,
+      storeys: 1,
+      roof: "tile",
+      walls: "white",
+      porch: false,
+      wing: null,
+      detail: 0.7,
     },
   },
 ];
@@ -484,6 +531,7 @@ const TOWN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "the village's best plot: two storeys, a wing, a porch",
     plan: {
       kind: "villa",
+      style: "nordic",
       width: 12.5,
       depth: 9,
       storeys: 2,
@@ -499,6 +547,7 @@ const TOWN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "three storeys of flats, balconies chequered down the front",
     plan: {
       kind: "apartments",
+      style: "nordic",
       width: 20,
       depth: 11,
       storeys: 3,
@@ -514,6 +563,7 @@ const TOWN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "one tall storey, glass the whole front, the sign over it",
     plan: {
       kind: "grocery",
+      style: "nordic",
       width: 17,
       depth: 12,
       storeys: 1,
@@ -529,6 +579,7 @@ const TOWN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "the post office: postal yellow, a canopy, the postbox by the step",
     plan: {
       kind: "post",
+      style: "nordic",
       width: 11.5,
       depth: 9,
       storeys: 2,
@@ -544,6 +595,7 @@ const TOWN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "the workshop: a shed with the roller doors in the gable",
     plan: {
       kind: "workshop",
+      style: "nordic",
       width: 15,
       depth: 11,
       storeys: 1,
@@ -568,7 +620,7 @@ const HOMESTEAD_ITEMS: ItemDef[] = [
     id,
     group: "homestead",
     note,
-    build: ({ rng }) => ({ object: buildHouse(plan, rng) }),
+    build: ({ rng }) => ({ object: buildDwelling(plan, rng) }),
   })),
   ...PARKED_BODIES.map((body, index): ItemDef => {
     // Walk the roll until it lands on this body, so each row is one kind.
@@ -595,6 +647,7 @@ const BARN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "falu red over a stone byre, gambrel roof, ramp on the right gable, lean-to",
     plan: {
       kind: "barn",
+      style: "nordic",
       width: 24,
       depth: 10.5,
       storeys: 2,
@@ -610,6 +663,7 @@ const BARN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "red boards over render, sheet-metal gable, ramp on the left",
     plan: {
       kind: "barn",
+      style: "nordic",
       width: 19,
       depth: 9.5,
       storeys: 2,
@@ -625,6 +679,7 @@ const BARN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     note: "the black-tarred one, tile roof, the long one",
     plan: {
       kind: "barn",
+      style: "nordic",
       width: 27,
       depth: 11,
       storeys: 2,

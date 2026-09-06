@@ -8,6 +8,11 @@
 //   1. BEDROCK. The rock the whole map is cut from — broad swell, hills,
 //      mountain chains along their ridges, and the fault steps between
 //      them. Everything else is deposited on it or dissolved out of it.
+//      In a mountain country (R47, `BiomeLand.massif`) a MASSIF stands on
+//      all of that: a ridge system hundreds of metres high whose flanks
+//      are concave — a gentle foot, a steep last pitch — and whose valley
+//      floors are flattened to the level the ice left them at, so the
+//      lakes and the villages have somewhere to be.
 //
 //      Bedrock has a SMOOTHNESS, and it is the single number that decides
 //      what country the stage is in. Sweden and Norway are made of the same
@@ -54,7 +59,7 @@
 import { smooth, valueNoise } from "../lib/noise.ts";
 import { createRng } from "../lib/prng.ts";
 import { biomeRules } from "./biomes.ts";
-import { STAGE_RULES as R, knobScale, reliefOf, type StageKnobs } from "./rules.ts";
+import { STAGE_RULES as R, challengeMul, knobScale, reliefOf, type StageKnobs } from "./rules.ts";
 
 /** The water table: ground below this stands under open water — the lakes
  * and the sea. It is where the groundwater surfaces at the map's own base
@@ -77,6 +82,27 @@ const PAN_KNEE = 8;
  * ones over another third, and pan and scrub over the rest. */
 const DUNE_FIELD_FROM = 0.3;
 const DUNE_FIELD_SPAN = 0.25;
+
+/** R47 — the massif's two further octaves of ridge, as divisors of its
+ * scale: the side ridges that run down off a main crest, and the gullies
+ * between them. */
+const MASSIF_SPUR = 2.6;
+const MASSIF_GULLY = 6.5;
+/** ...and how much steeper the folded noise runs per unit than a single
+ * octave's quarter-period climb, once the spurs are folded in — the
+ * factor the flank's free gradient estimate carries. */
+const MASSIF_OCTAVE_GRADE = 1.5;
+/** How far a footprint may be from level and still be a shoulder a stage
+ * can start on, m of spread between its highest and lowest point, and how
+ * hard a metre of spread counts against a metre of height when the
+ * highest such shoulder is chosen (R35, `startHigh`). `SHOULDER_OVER_SNOW`
+ * is how far above the snowline the grid may stand before height stops
+ * counting for it: a stage starts BESIDE the snow, with the peaks over it
+ * and the whole descent under it, not on the summit where every way down
+ * is a wall and the first two kilometres are white. */
+const SHOULDER_SPREAD = 60;
+const SHOULDER_PENALTY = 1.5;
+const SHOULDER_OVER_SNOW = 30;
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
@@ -185,6 +211,23 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     L.mountains *
     (G.mountain.tall - G.mountain.planed * smoothness);
   const escRise = G.bedrock.escarpment.rise * rise;
+  // R47 — THE MASSIF, where the country has one: how high its crests
+  // stand, off the same dial and the same seed the taiga's chains read,
+  // and how much of the taiga's own swell and hills is left under it.
+  const M = L.massif;
+  const massifPeak = M ? M.height * relief * rise : 0;
+  // R47 — the `peaks` dial: how far apart the crests stand and how much of
+  // the country between them is floor. One mountain in a plain at one
+  // end, a range at the other.
+  const massifScale = M ? M.scale * challengeMul(knobs.peaks, R.massif.peaks.scale) : 0;
+  const massifValley = M
+    ? Math.min(0.85, M.valley * challengeMul(knobs.peaks, R.massif.peaks.valley))
+    : 0;
+  const swellAmp = G.bedrock.swell.amp * (M ? M.swell : 1);
+  const hillsAmp = G.bedrock.hills.amp * (M ? M.hills : 1);
+  // The treeline is the country's (`BiomeLand.zones`): where the ice, or
+  // the cold, leaves the ground bare.
+  const treeline = L.zones.treeline;
   const escSpan =
     G.bedrock.escarpment.span.max -
     (G.bedrock.escarpment.span.max - G.bedrock.escarpment.span.min) * sharpShare;
@@ -248,17 +291,17 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     sunk: number;
     sharp: number;
   } => {
-    const swell = (valueNoise(x, z, G.bedrock.swell.scale, noiseSeed) - 0.5) * G.bedrock.swell.amp;
+    const swell = (valueNoise(x, z, G.bedrock.swell.scale, noiseSeed) - 0.5) * swellAmp;
     const H = G.bedrock.hills;
     const hillRaw = valueNoise(x, z, H.scale, noiseSeed + 7);
-    const hills = (hillRaw - 0.5) * H.amp;
+    const hills = (hillRaw - 0.5) * hillsAmp;
     // ...and how steep the hills are HERE, differenced rather than read off
     // a shaping function, because value noise has none to read. See
     // `hills.grade`: this is the only gradient the module pays for and the
     // soil model does not work without it.
     const hx = (valueNoise(x + H.grade, z, H.scale, noiseSeed + 7) - hillRaw) / H.grade;
     const hz = (valueNoise(x, z + H.grade, H.scale, noiseSeed + 7) - hillRaw) / H.grade;
-    const roll = clamp01((Math.hypot(hx, hz) * H.amp * relief) / H.steep);
+    const roll = clamp01((Math.hypot(hx, hz) * hillsAmp * relief) / H.steep);
     const grain = (valueNoise(x, z, G.bedrock.grain.scale, noiseSeed + 13) - 0.5) * grainAmp;
 
     // The mountain chains: a slow mask says where one stands, a ridged
@@ -286,6 +329,45 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     const rounded = 4 * ridgeRaw * (1 - ridgeRaw);
     const crest = rounded + (alpine - rounded) * sharpShare;
     const mountain = mask * crest * peak;
+
+    // R47 — THE MASSIF. Three octaves of folded noise — the main ridge
+    // system, the spurs off it and the gullies between them — summed into
+    // one ridge field (0 in a valley, 1 on a crest) and bent concave by a
+    // power, so a flank is a quarter grade at its foot and near one under
+    // the crest. The fold is a crease by construction, and it is meant to
+    // be: an arête is the sharp thing an alpine country has, and
+    // `massifCrest` says where it is so the analysis can hold the rest of
+    // the flank to a curve. The flank's own grade is estimated off the
+    // shaping function — the fold climbs from valley to crest over a
+    // quarter of its period, the power's chain rule on top — rather than
+    // differenced, for the same reason the taiga's chains are.
+    let massif = 0;
+    let massifFlank = 0;
+    let massifCrest = 0;
+    if (M) {
+      const fold = (n: number): number => 1 - Math.abs(2 * n - 1);
+      const f1 = fold(valueNoise(x, z, massifScale, noiseSeed + 71));
+      const f2 = fold(valueNoise(x, z, massifScale / MASSIF_SPUR, noiseSeed + 73));
+      const f3 = fold(valueNoise(x, z, massifScale / MASSIF_GULLY, noiseSeed + 79));
+      const folded = (f1 + M.spurs * f2 + M.spurs * 0.4 * f3) / (1 + M.spurs * 1.4);
+      // The floor: everything under `valley` is the valley, flat at zero,
+      // and the rest is stretched to climb the whole height.
+      const ridgeSum = clamp01((folded - massifValley) / (1 - massifValley));
+      const shaped = Math.pow(ridgeSum, M.sharp);
+      massif = shaped * massifPeak;
+      const grade =
+        massifPeak *
+        M.sharp *
+        Math.pow(Math.max(ridgeSum, 1e-3), M.sharp - 1) *
+        (4 / massifScale / (1 - massifValley)) *
+        MASSIF_OCTAVE_GRADE;
+      massifFlank = clamp01(grade / M.flankRef);
+      // A crest is where any of the three folds turns over, weighted by
+      // how much of the height that fold carries; the eighth power keeps
+      // the mark to the band along the crease itself.
+      const nearCrest = Math.max(f1, f2 * (0.5 + 0.5 * M.spurs), f3 * 0.5 * M.spurs);
+      massifCrest = Math.pow(nearCrest, 8) * smooth(clamp01(shaped * 4));
+    }
 
     // The escarpments: a wandering fault line where the ground steps down.
     // A cliff where the country is sharp, a hillside where the ice has been
@@ -321,12 +403,12 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     const sunk = seaMask * (b.depth + ponds * b.deeper) + pond * (p.depth + ponds * p.deeper);
 
     const rock = onPan(
-      (swell + hills + grain + mountain + esc * escRise) * relief - sunk + G.bedrock.datum,
+      (swell + hills + grain + mountain + esc * escRise) * relief + massif - sunk + G.bedrock.datum,
     );
     // The water table follows the land without its detail: the swell and
     // the mountains, and nothing finer. That is what puts a mire in a
     // hollow the broad shape does not know about.
-    const broad = onPan((swell + mountain) * relief - sunk + G.bedrock.datum);
+    const broad = onPan((swell + mountain) * relief + massif - sunk + G.bedrock.datum);
     // How steep it is here, 0..1, and it comes in TWO strengths because two
     // rules ask it and they are not asking the same question.
     //
@@ -345,7 +427,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     //
     // The max and not the sum, in both: a hillside on a mountain flank is
     // scoured once.
-    const flank = mask * 4 * crest * (1 - crest);
+    const flank = Math.max(mask * 4 * crest * (1 - crest), massifFlank);
     const step = 4 * esc * (1 - esc);
     const sheer = clamp01(Math.max(flank, step));
     const face = clamp01(Math.max(sheer, roll));
@@ -362,7 +444,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     // analysis holds it to one.
     const crestMark = smooth(clamp01(2 * mask)) * ridge * ridge;
     const faceMark = 1 - smooth(clamp01((Math.abs(escT - 0.5) - 0.5) / 1.5));
-    const sharp = clamp01(sharpShare * 4) * Math.max(crestMark, faceMark);
+    const sharp = Math.max(clamp01(sharpShare * 4) * Math.max(crestMark, faceMark), massifCrest);
     return { rock, broad, face, sheer, sunk, sharp };
   };
 
@@ -451,7 +533,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     // it, which is where everything washed off the tops ends up.
     const hollow = clamp01(0.5 + (broad - rock) / S.hollow);
     const bare = 1 - face;
-    const alpine = 1 - clamp01((rock - S.alpine.from) / S.alpine.over);
+    const alpine = 1 - clamp01((rock - treeline) / S.alpine.over);
     // A glaciated country has MORE in its hollows and LESS on its highs:
     // the ice is what moved it from one to the other.
     const carried = 1 + S.glacial * smoothness * (hollow - 0.5) * 2;
@@ -533,11 +615,14 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   const site = ((): { x: number; z: number } => {
     const S = G.siting;
     /** How far the WORST point of the footprint stands clear of the water
-     * under it, m. Negative anywhere wet; the biggest value wins, so a
-     * country with nowhere dry still gets its driest spot rather than
-     * failing. */
-    const buildable = (ox: number, oz: number): number => {
+     * under it, m — negative anywhere wet — and the footprint's height:
+     * its mean, and the spread between its highest and lowest point. */
+    const footprint = (ox: number, oz: number): { clear: number; mean: number; spread: number } => {
       let worst = Infinity;
+      let sum = 0;
+      let n = 0;
+      let lo = Infinity;
+      let hi = -Infinity;
       for (let r = 0; r <= S.rings; r++) {
         const radius = (S.reach * r) / S.rings;
         const points = r === 0 ? 1 : S.ring;
@@ -546,10 +631,48 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
           const g = rawGround(ox + radius * Math.cos(angle), oz + radius * Math.sin(angle));
           const clear = g.surface - Math.max(LAKE_Y, g.table) - S.freeboard;
           if (clear < worst) worst = clear;
+          sum += g.surface;
+          n++;
+          if (g.surface < lo) lo = g.surface;
+          if (g.surface > hi) hi = g.surface;
         }
       }
-      return worst;
+      return { clear: worst, mean: sum / n, spread: hi - lo };
     };
+    const buildable = (ox: number, oz: number): number => footprint(ox, oz).clear;
+    // R47 — A MOUNTAIN STAGE STARTS HIGH. The whole spiral is walked and
+    // the highest SHOULDER taken: the site with the most height, less a
+    // penalty for every metre its footprint is from level, because a start
+    // on a crest with the country falling away under the grid is a start
+    // the opening straight cannot be laid from (R34). The biggest value
+    // wins, so a country with no shoulder still gets its flattest high
+    // ground rather than failing.
+    if (L.startHigh) {
+      let best = { x: 0, z: 0 };
+      let bestScore = -Infinity;
+      const ceiling = L.zones.snow === null ? Infinity : L.zones.snow + SHOULDER_OVER_SNOW;
+      const consider = (ox: number, oz: number): void => {
+        const f = footprint(ox, oz);
+        if (f.clear < 0) return;
+        // Height counts up to the ceiling and against past it, so the
+        // best shoulder is the one nearest the snowline from below.
+        const height = f.mean <= ceiling ? f.mean : ceiling - (f.mean - ceiling);
+        const score = height - SHOULDER_PENALTY * Math.max(0, f.spread - SHOULDER_SPREAD);
+        if (score > bestScore) {
+          bestScore = score;
+          best = { x: ox, z: oz };
+        }
+      };
+      consider(0, 0);
+      for (let radius = S.step; radius <= S.far; radius += S.step) {
+        const points = Math.max(6, Math.round((2 * Math.PI * radius) / S.step));
+        for (let a = 0; a < points; a++) {
+          const angle = (a / points) * Math.PI * 2;
+          consider(radius * Math.cos(angle), radius * Math.sin(angle));
+        }
+      }
+      if (bestScore > -Infinity) return best;
+    }
     let best = { x: 0, z: 0 };
     let bestClear = buildable(0, 0);
     if (bestClear >= 0) return best;

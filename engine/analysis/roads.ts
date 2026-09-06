@@ -34,6 +34,7 @@ import { SPUR, type Spur } from "../mapgen/spurs.ts";
 import { createHighwayNetwork } from "../mapgen/highway.ts";
 import { crossingParting } from "../mapgen/crossing.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
+import { biomeRules } from "../mapgen/biomes.ts";
 import { isLoose, type Track } from "../mapgen/compile.ts";
 import type { Building } from "../mapgen/buildings.ts";
 import { padHeight } from "../mapgen/carparks.ts";
@@ -602,8 +603,12 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
   let sealedRun = 0;
   let tightestSealed = Infinity;
   let tightestAt: { x: number; z: number; s: number } | null = null;
+  // R47 — a mountain stage's tarmac is its own pass road, hairpins and
+  // all (it is sealed by height, not borrowed), so the rule has nothing to
+  // measure there.
+  const pass = biomeRules(track.knobs.biome).land.massif !== null;
   for (const sample of track.samples) {
-    if (sample.surface !== "asphalt" || sample.deck != null) continue;
+    if (pass || sample.surface !== "asphalt" || sample.deck != null) continue;
     sealedRun += track.step;
     if (track.junctions.some((j) => Math.abs(j.s - sample.s) <= R.sweepClear)) continue;
     const radius = Math.abs(sample.curvature) > 1e-6 ? 1 / Math.abs(sample.curvature) : Infinity;
@@ -651,6 +656,9 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
     const after = track.samples[i];
     if (before.surface === after.surface) continue;
     if (before.surface === "water" || after.surface === "water") continue;
+    // R47 — nor is the SNOWLINE: the road under the snow is the same road,
+    // laid by nobody at that height, and it comes out again lower down.
+    if (before.surface === "snow" || after.surface === "snow") continue;
     if (before.deck != null || after.deck != null) continue;
     if (track.junctions.some((j) => Math.abs(j.s - after.s) <= R.sweepClear)) continue;
     orphanFlips++;

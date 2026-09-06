@@ -133,6 +133,7 @@ const SCORE_FILES = [
   ["spruce", "BLACK SPRUCE", "The taiga in rain or a storm", "SPRUCE_TRACK"],
   ["polar", "MIDNIGHT SUN", "The taiga at dawn, dusk or night", "POLAR_TRACK"],
   ["desert", "SALT PAN", "The desert, whatever the sky", "DESERT_TRACK"],
+  ["alpine", "SNOWLINE", "The alpine, whatever the sky", "ALPINE_TRACK"],
   ["circuit", "SHORT CIRCUIT", "Any circuit stage", "CIRCUIT_TRACK"],
   ["endless", "LONG HAUL", "Any endless stage", "ENDLESS_TRACK"],
 ];
@@ -497,7 +498,7 @@ for (const [id, label, initial] of [
 ]) {
   sliderRow(sliders, road, id, label, initial);
 }
-switchRow(sliders, "Surface", ["gravel", "sand", "asphalt", "nature", "water"], "gravel", (s) => {
+switchRow(sliders, "Surface", ["gravel", "sand", "snow", "asphalt", "nature", "water"], "gravel", (s) => {
   road.surface = s;
 });
 switchRow(sliders, "Seat", Object.keys(LISTENERS), "chase", (s) => {
@@ -573,10 +574,12 @@ for (const [id, label, initial] of [
   ["gale", "Wind", 0],
   ["crowd", "Crowd", 0],
   ["near", "How near", 0.6],
+  ["exposure", "Above the treeline", 0],
+  ["water", "Near water", 0],
 ]) {
   sliderRow(worldSliders, world, id, label, initial);
 }
-switchRow(worldSliders, "Country", ["taiga", "desert"], "taiga", (b) => (world.biome = b));
+switchRow(worldSliders, "Country", ["taiga", "desert", "alpine"], "taiga", (b) => (world.biome = b));
 switchRow(worldSliders, "Hour", ["dawn", "day", "dusk", "night"], "day", (t) => (world.timeOfDay = t));
 switchRow(worldSliders, "Paddock", ["none", "cows", "sheep"], "none", (s) => (world.stock = s));
 switchRow(worldSliders, "Train", ["none", "on the line", "at the crossing"], "none", (t) => (world.train = t));
@@ -607,6 +610,8 @@ worldBtn.addEventListener("click", () => {
         timeOfDay: world.timeOfDay,
         wet: world.wet,
         gale: world.gale,
+        exposure: world.exposure,
+        water: world.water,
         air: world.air,
         crowd: world.crowd,
         stock: world.stock === "none" ? null : { kind: world.stock, near: world.near, pan: 0.5 },

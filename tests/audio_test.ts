@@ -29,6 +29,7 @@ import { TUNING, createGame, standSolid, step, type GameEvent, type GameState } 
 import {
   callGainAtSpeed,
   createWorld,
+  exposureOf,
   worldRoster,
   worldTargets,
   type WorldVoice,
@@ -56,6 +57,7 @@ import {
   type RoadVoice,
 } from "../pwa/src/game/audio/road-voice.ts";
 import { heardFrom, soundForEvent, soundForThunder } from "../pwa/src/game/audio/route.ts";
+import { ALPINE_TRACK } from "../pwa/src/game/audio/scores/alpine.ts";
 import { CIRCUIT_TRACK } from "../pwa/src/game/audio/scores/circuit.ts";
 import { DESERT_TRACK } from "../pwa/src/game/audio/scores/desert.ts";
 import { ENDLESS_TRACK } from "../pwa/src/game/audio/scores/endless.ts";
@@ -137,6 +139,7 @@ const SCORES: [string, Track][] = [
   ["spruce", SPRUCE_TRACK],
   ["polar", POLAR_TRACK],
   ["desert", DESERT_TRACK],
+  ["alpine", ALPINE_TRACK],
   ["circuit", CIRCUIT_TRACK],
   ["endless", ENDLESS_TRACK],
 ];
@@ -573,13 +576,18 @@ describe("the scores", () => {
     expect(trackFor({ ...base, timeOfDay: "dusk" })).toBe("polar");
     expect(trackFor({ ...base, biome: "desert" })).toBe("desert");
     expect(trackFor({ ...base, biome: "desert", weather: "storm" })).toBe("desert");
+    // The alpine keeps its own score whatever the sky does, like the desert.
+    expect(trackFor({ ...base, biome: "alpine" })).toBe("alpine");
+    expect(trackFor({ ...base, biome: "alpine", weather: "storm" })).toBe("alpine");
+    expect(trackFor({ ...base, biome: "alpine", timeOfDay: "night" })).toBe("alpine");
     // The shape of the road wins over the sky.
     expect(trackFor({ ...base, circuit: true, weather: "storm" })).toBe("circuit");
     expect(trackFor({ ...base, endless: true, biome: "desert" })).toBe("endless");
+    expect(trackFor({ ...base, circuit: true, biome: "alpine" })).toBe("circuit");
     const ids = new Set(SCORES.map(([name]) => name));
     for (const weather of ["clear", "rain", "storm"] as const) {
       for (const timeOfDay of ["dawn", "day", "dusk", "night"] as const) {
-        for (const biome of ["taiga", "desert"] as const) {
+        for (const biome of ["taiga", "desert", "alpine"] as const) {
           expect(ids.has(trackFor({ ...base, weather, timeOfDay, biome }))).toBe(true);
         }
       }
@@ -707,7 +715,7 @@ describe("the tyres", () => {
     layers.reduce((s, l) => s + t[l].level, 0);
 
   it("keeps a straight quiet and makes the corner the event", () => {
-    for (const surface of ["gravel", "asphalt"]) {
+    for (const surface of ["gravel", "asphalt", "snow"]) {
       const straight = sum(at({ surface }), SURFACE_LAYERS);
       const turning = sum(at({ surface, corner: 1 }), SURFACE_LAYERS);
       expect(turning, `${surface} sounds the same through a corner`).toBeGreaterThan(
@@ -735,6 +743,39 @@ describe("the tyres", () => {
     const turf = at({ surface: "nature" });
     expect(turf.grain.level).toBe(0);
     expect(turf.body.level + turf.tear.level).toBeGreaterThan(turf.roarBrown.level * 0.9);
+  });
+
+  it("keeps snow quieter than gravel, muffled, and squeaking only on a real slide", () => {
+    // Packed snow throws nothing: no open grain, a banded crunch under a
+    // soft hiss, and less of it than gravel whichever way the car points.
+    for (const corner of [0, 1]) {
+      expect(sum(at({ surface: "snow", corner }), SURFACE_LAYERS)).toBeLessThan(
+        sum(at({ surface: "gravel", corner }), SURFACE_LAYERS),
+      );
+    }
+    const snow = at({ surface: "snow" });
+    expect(snow.grain.level).toBe(0);
+    expect(snow.tear.level).toBeGreaterThan(0);
+    expect(snow.roarPink.level).toBeGreaterThan(0);
+    // The squeak is the scrub's, never the corner's, and it comes in on the
+    // square of the slide — a twitch says nothing, a full slide sings.
+    expect(sum(at({ surface: "snow", corner: 1 }), SCRUB_LAYERS)).toBe(0);
+    const twitch = at({ surface: "snow", slide: 0.3 });
+    const sideways = at({ surface: "snow", slide: 1 });
+    expect(twitch.sing.level).toBeGreaterThan(0);
+    expect(sideways.sing.level / twitch.sing.level).toBeGreaterThan(
+      sideways.dig.level / twitch.dig.level,
+    );
+    // No tyre note on snow — the squeak is a band, not a driven pitch.
+    expect(sideways.singTone.level).toBe(0);
+    // Slush does not squeak, and it drowns the crunch.
+    expect(at({ surface: "snow", slide: 1, wet: 1 }).sing.level).toBeLessThan(
+      sideways.sing.level * 0.5,
+    );
+    expect(at({ surface: "snow", wet: 1 }).tear.level).toBe(0);
+    // The engine's snow is the bed's snow: the row exists under both skies.
+    expect(SURFACES.snow).toBeDefined();
+    expect(WET_SURFACES.snow).toBeDefined();
   });
 
   it("sings on tarmac from the cornering load alone, and digs only on a slide", () => {
@@ -880,6 +921,8 @@ describe("the world", () => {
     timeOfDay: "day",
     wet: 0,
     gale: 0,
+    exposure: 0,
+    water: 0,
     air: 0,
     crowd: 0,
     stock: null,
@@ -888,6 +931,8 @@ describe("the world", () => {
   };
   const ids = (voice: Partial<WorldVoice>): string[] =>
     worldRoster({ ...STILL, ...voice }).map((c) => c.id);
+  const gainOf = (voice: Partial<WorldVoice>, id: string): number =>
+    worldRoster({ ...STILL, ...voice }).find((c) => c.id === id)?.gain ?? 0;
 
   it("gives each country and each hour its own roster", () => {
     expect(ids({})).toContain("bird_chirp");
@@ -898,12 +943,63 @@ describe("the world", () => {
     expect(ids({ biome: "desert", timeOfDay: "night" })).toContain("cricket");
     expect(ids({ biome: "desert", timeOfDay: "night" })).toContain("coyote");
     expect(ids({ biome: "desert", timeOfDay: "day" })).not.toContain("coyote");
+    expect(ids({ biome: "alpine" })).toContain("chough");
+    expect(ids({ biome: "alpine" })).toContain("cowbell");
+    expect(ids({ biome: "alpine" })).toContain("marmot");
+    expect(ids({ biome: "alpine" })).not.toContain("cicada");
+    expect(ids({ biome: "alpine" })).not.toContain("bird_chirp");
+    expect(ids({ biome: "alpine", timeOfDay: "night" })).not.toContain("chough");
+    expect(ids({ biome: "alpine", timeOfDay: "night" })).toContain("owl");
     // Every id on every roster is a sound the world bank has.
-    for (const biome of ["taiga", "desert"] as const) {
+    for (const biome of ["taiga", "desert", "alpine"] as const) {
       for (const timeOfDay of ["dawn", "day", "dusk", "night"] as const) {
-        for (const id of ids({ biome, timeOfDay })) expect(WORLD_BANK[id], id).toBeDefined();
+        for (const id of ids({ biome, timeOfDay, water: 1 }))
+          expect(WORLD_BANK[id], id).toBeDefined();
       }
     }
+  });
+
+  it("moves the mountain's roster with the height of the road", () => {
+    const alpine = { biome: "alpine" as const };
+    // The herd is on the alm and is left behind on the climb; the marmots
+    // are the other way about; the meltwater is only where the road meets
+    // a stream.
+    expect(gainOf({ ...alpine, exposure: 1 }, "cowbell")).toBeLessThan(
+      gainOf({ ...alpine, exposure: 0 }, "cowbell") * 0.5,
+    );
+    expect(gainOf({ ...alpine, exposure: 1 }, "marmot")).toBeGreaterThan(
+      gainOf({ ...alpine, exposure: 0 }, "marmot"),
+    );
+    expect(ids(alpine)).not.toContain("meltwater");
+    expect(ids({ ...alpine, water: 0.5 })).toContain("meltwater");
+    // Nothing chatters in a storm, and a gale keeps the flock on the rock.
+    expect(gainOf({ ...alpine, wet: 1 }, "chough")).toBeLessThan(0.05);
+    expect(gainOf({ ...alpine, gale: 1 }, "chough")).toBeLessThan(gainOf(alpine, "chough"));
+    // How high the road is comes off the country's own zones: nothing
+    // below the treeline, everything at the snowline, and no pass at all in
+    // a country with no snow on its tops.
+    const zones = { treeline: 190, rock: { from: 220, to: 320 }, snow: 340 };
+    expect(exposureOf(100, zones)).toBe(0);
+    expect(exposureOf(190, zones)).toBe(0);
+    expect(exposureOf(265, zones)).toBeCloseTo(0.5, 6);
+    expect(exposureOf(400, zones)).toBe(1);
+    expect(exposureOf(400, { ...zones, snow: null })).toBe(0);
+  });
+
+  it("blows over the pass only above the treeline, harder the higher and windier", () => {
+    const forest = worldTargets({ ...STILL, biome: "alpine" });
+    const col = worldTargets({ ...STILL, biome: "alpine", exposure: 1 });
+    const storm = worldTargets({ ...STILL, biome: "alpine", exposure: 1, gale: 1 });
+    expect(forest.pass.level).toBe(0);
+    expect(col.pass.level).toBeGreaterThan(0);
+    expect(storm.pass.level).toBeGreaterThan(col.pass.level * 2);
+    expect(storm.pass.cutoff ?? 0).toBeGreaterThan(col.pass.cutoff ?? 0);
+    // The trees go out of the hush as the road climbs out of them, and the
+    // car's own wind buries the pass at speed like everything else out there.
+    expect(col.trees.level).toBeLessThan(forest.trees.level);
+    expect(
+      worldTargets({ ...STILL, biome: "alpine", exposure: 1, air: 1 }).pass.level,
+    ).toBeLessThan(col.pass.level * 0.5);
   });
 
   it("sends the birds to cover in the rain and puts the stock on the roster", () => {
@@ -942,7 +1038,7 @@ describe("the world", () => {
       world.update(STILL, i / 30);
     }
     expect(rec.tones.length).toBeGreaterThan(5);
-    expect(rec.layers.length).toBe(3);
+    expect(rec.layers.length).toBe(4);
     // At the top of fourth the wind is the only thing outside the car.
     rec.tones.length = 0;
     world.reset();
@@ -992,9 +1088,9 @@ describe("the road bed", () => {
       bed.update(state, 1 / 60);
       rec.clock += 1 / 60;
     }
-    // Six engine layers, fourteen road layers, three of the world — and no
+    // Six engine layers, fourteen road layers, four of the world — and no
     // more, however many frames go by.
-    expect(rec.layers.length).toBe(6 + 14 + 3);
+    expect(rec.layers.length).toBe(6 + 14 + 4);
     for (const layer of rec.layers) {
       expect(layer.sets.length).toBe(30);
       for (const { target, glide } of layer.sets) {
@@ -1043,7 +1139,7 @@ describe("the road bed", () => {
     bed.reset();
     expect(rec.layers.every((l) => l.stopped)).toBe(true);
     bed.update(state, 1 / 60);
-    expect(rec.layers.filter((l) => !l.stopped).length).toBe(6 + 14 + 3);
+    expect(rec.layers.filter((l) => !l.stopped).length).toBe(6 + 14 + 4);
   });
 
   it("goes quiet the moment nothing is hearing the run, and comes back", () => {
@@ -1062,7 +1158,7 @@ describe("the road bed", () => {
     for (let frame = 0; frame < 30; frame++) bed.silence();
     expect(rec.layers.length).toBe(built);
     bed.update(state, 1 / 60);
-    expect(rec.layers.filter((l) => !l.stopped).length).toBe(6 + 14 + 3);
+    expect(rec.layers.filter((l) => !l.stopped).length).toBe(6 + 14 + 4);
   });
 
   it("keeps what a hushed run has already spent, where a reset hands it back", () => {

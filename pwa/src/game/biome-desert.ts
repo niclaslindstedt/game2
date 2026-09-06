@@ -213,4 +213,6 @@ export const DESERT: Biome = {
   // Nothing grows on a stone here. It varnishes instead, which is a colour
   // the bedrock already carries.
   mossyStone: 0,
+  // A road bladed out of sand is the colour of the sand.
+  grit: 0xd8bd86,
 };

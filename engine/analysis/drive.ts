@@ -392,6 +392,11 @@ function longestStraight(
     if (here.s > finish) break;
     const step = here.s - samples[i - 1].s;
     const speed = Math.max(1, v[i]);
+    // R47 — a bore is not straight with nothing to steer for: it is a
+    // tunnel, and the one straight a rally road is allowed to run long.
+    // Neither counted nor closed, so the run either side of it is measured
+    // on its own.
+    if (here.tunnel) continue;
     if (Math.abs(here.curvature) * D.straightRadius < 1) {
       if (meters === 0) from = samples[i - 1].s;
       meters += step;

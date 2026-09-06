@@ -4,13 +4,16 @@
 // A biome is everything about a landscape that is not the road: what kind
 // of ground it is made of and how it stands, whether there is water in it,
 // what grows on it and in what company, and what the weather over it can
-// be. Two exist — the boreal taiga the game launched with, and a hot
-// desert — and the difference between them is stated here, once, as rows
-// the rest of the generator reads. Nothing else in `mapgen/` knows the
-// word "desert": the geology asks the biome whether the country holds
-// water and whether the wind has piled it into dunes, the prop field asks
-// it which communities quilt the ground and whether a forest sheds timber,
-// the search asks it whether a straight may cross water at all.
+// be. Three exist — the boreal taiga the game launched with, a hot desert,
+// and a high alpine range — and the difference between them is stated
+// here, once, as rows the rest of the generator reads. Nothing else in
+// `mapgen/` knows the word "desert" or "alpine": the geology asks the biome
+// whether the country holds water, whether the wind has piled it into
+// dunes and whether a massif stands over it, the prop field asks it which
+// communities quilt the ground and whether a forest sheds timber, the
+// search asks it whether a straight may cross water at all, how hard to
+// read the country when it picks which way a corner turns, and whether a
+// cut too deep to blast is bored through instead.
 //
 // The quilt lives HERE rather than in the renderer because what it places
 // is solid: the trunks the car collides with are drawn from these rows on
@@ -27,10 +30,10 @@
 
 import type { Weather } from "../game/state.ts";
 
-export type BiomeId = "taiga" | "desert";
+export type BiomeId = "taiga" | "desert" | "alpine";
 
 /** Every biome, in the order they are offered. */
-export const BIOME_IDS: readonly BiomeId[] = ["taiga", "desert"];
+export const BIOME_IDS: readonly BiomeId[] = ["taiga", "desert", "alpine"];
 
 // ── The sub-regions ───────────────────────────────────────────────────────
 
@@ -75,8 +78,77 @@ export type BiomeLand = {
    * country has no water its hollows do not fill — they flatten into pans,
    * and this is the level they flatten to. It also keeps the whole of a dry
    * country above the table, so nothing downstream mistakes a low plain
-   * for a lake bed. */
+   * for a lake bed. In a mountain country it is the VALLEY FLOOR: the flat
+   * a glacier left, with the lakes cut into it and the villages on it. */
   floor: number | null;
+  /** THE MASSIF (R47): a mountain range the whole country is made of, or
+   * null where the country has only the taiga's low chains. `scale` is the
+   * period of the main ridge system across the map, m — a valley and the
+   * ridge beside it; `height` how high a crest stands over the valley
+   * floor before the `elevation` dial and the seed's smoothness scale it,
+   * m; `sharp` the exponent on the folded ridge noise that bends a flank
+   * concave — gentle at the foot, steep under the crest, which is the
+   * profile a real mountain has and the one that leaves a valley floor a
+   * road can be laid along; `valley` the share of the folded noise under
+   * which the ground is VALLEY FLOOR rather than flank — value noise
+   * seldom reaches its own extremes, so without it the fold's low ground
+   * is a broad upland and its crests never stand full height, and with it
+   * the floors are flat and the flanks climb the whole `height` between
+   * one floor and the next crest (the `peaks` dial reads both the period
+   * and the floor share across `STAGE_RULES.massif.peaks`; the row's own
+   * numbers are what the dial's middle builds); `spurs` how much of a second and third
+   * octave of ridges stand on the first, the side ridges and gullies that
+   * break a flank into shoulders; `flankRef` the grade, m per m, at which
+   * the flank counts as fully scoured — steeper than the taiga's hills,
+   * because a mountain forest stands on ground the taiga's soil rule would
+   * call bare; `swell` and `hills` scale the taiga's own two layers down
+   * under the massif, so a valley floor is a floor and not a rolling
+   * plain with a mountain on it. */
+  massif: {
+    scale: number;
+    height: number;
+    sharp: number;
+    valley: number;
+    spurs: number;
+    flankRef: number;
+    swell: number;
+    hills: number;
+  } | null;
+  /** THE ELEVATION ZONES, m of world height (the lake table is `LAKE_Y`,
+   * a valley floor a few metres over it). `treeline` is where the soil
+   * thins to nothing and the trunks stop; `rock` the band over which the
+   * ground paint goes from meadow to bare stone; `snow` where the stone
+   * goes under snow on anything but a face, or null in a country that has
+   * none. The taiga's are the numbers its paint and its planting were
+   * written against; the alpine's are what the massif's height makes of
+   * them, and every side of the world reads them from here. */
+  zones: { treeline: number; rock: { from: number; to: number }; snow: number | null };
+  /** R47 — how hard the route search READS THE COUNTRY when it chooses
+   * which way a corner turns, 0 (the dice) to 1 (always the side the
+   * road can follow). A road in a mountain country is laid along its
+   * contours and turns back on itself where it cannot; the search that
+   * built the taiga draws its corners blind and rejects what will not
+   * sit, which on a flank finds nothing. */
+  steer: number;
+  /** R47 — whether a cut deeper than a road would be blasted is BORED
+   * instead: the straight goes through the shoulder as a tunnel, the
+   * country stands over it, and the search accepts what it would
+   * otherwise refuse. */
+  tunnels: boolean;
+  /** Multiplier on the grade a road may follow the country at
+   * (`elevation.follow.grade`). A mountain pass is built steeper than a
+   * forest road because it has further to climb. */
+  grade: number;
+  /** Multiplier on how far a road may stand OFF the country (R34's
+   * `maxFill` and `maxCut`). A mountain road is built on bigger
+   * earthworks than a forest road — a retaining wall under it, a face
+   * blasted over it — and held to the taiga's caps the search refuses
+   * nearly every line across a flank and walks a pocket for seconds. */
+  earthworks: number;
+  /** R35 — whether the stage STARTS ON THE HIGH GROUND: the origin is
+   * sited on the highest shoulder the start's footprint will sit on, so
+   * the stage runs down off the mountain rather than across a valley. */
+  startHigh: boolean;
 };
 
 export type BiomeRules = {
@@ -128,6 +200,10 @@ export type BiomeRules = {
    * house, a fenced paddock with stock in it, a field, and the machinery
    * outside the barn. Only where the country is farmed at all. */
   farms: boolean;
+  /** R40 — what kind of HOUSE stands on its yards and along its streets:
+   * the Nordic timber house, or the alpine chalet (`HouseStyle`). A country
+   * nobody lives in still names one, so the type has no hole in it. */
+  houses: "nordic" | "chalet";
   /** R41 — whether the country carries a RAILWAY: a single track laid across
    * the map before the rally, that the route may cross square on a ramp and
    * that a train runs down every so often. */
@@ -239,12 +315,28 @@ export const TAIGA: BiomeRules = {
   loose: "gravel",
   water: true,
   deadwood: true,
-  land: { relief: 1, mountains: 1, dunes: null, floor: null },
+  land: {
+    relief: 1,
+    mountains: 1,
+    dunes: null,
+    floor: null,
+    massif: null,
+    // The rock line the taiga's paint was written against, and the height
+    // the ice scoured its high ground bare at — in effect the treeline of
+    // a country that never has one, since its hills barely reach it.
+    zones: { treeline: 46, rock: { from: 26, to: 52 }, snow: null },
+    steer: 0,
+    tunnels: false,
+    grade: 1,
+    earthworks: 1,
+    startHigh: false,
+  },
   weathers: ["clear", "rain", "storm"],
   rain: true,
   latitude: 62,
   settled: true,
   farms: true,
+  houses: "nordic",
   railway: true,
   energy: true,
 };
@@ -388,6 +480,13 @@ export const DESERT: BiomeRules = {
     // rock line that paints the high ground as bare stone is still well
     // above the pans, and the ranges still stand over them.
     floor: 14,
+    massif: null,
+    zones: { treeline: 46, rock: { from: 26, to: 52 }, snow: null },
+    steer: 0,
+    tunnels: false,
+    grade: 1,
+    earthworks: 1,
+    startHigh: false,
   },
   weathers: ["clear", "storm"],
   rain: false,
@@ -397,6 +496,7 @@ export const DESERT: BiomeRules = {
   // from the one through the forest and is not laid yet.
   settled: false,
   farms: false,
+  houses: "nordic",
   railway: false,
   // No grid out here to feed a wind farm into, and nobody to fence a
   // solar farm for: the desert is not a place for the modern country's
@@ -404,7 +504,182 @@ export const DESERT: BiomeRules = {
   energy: false,
 };
 
-export const BIOMES: Record<BiomeId, BiomeRules> = { taiga: TAIGA, desert: DESERT };
+// ── The alpine ────────────────────────────────────────────────────────────
+
+/** The five kinds of mountain country, and they are ZONES more than they
+ * are places: which one a patch falls in is re-weighted by its height as
+ * well as by the region noise (`props.ts` reads the zones), so a stage
+ * that starts on a pass and ends in a valley crosses all five in order.
+ * The HIGH ALPINE is rock, scree and snow with nothing on it that stands;
+ * the ALP is the summer pasture above the trees — bright grass, boulders,
+ * a hut, cattle; the SUBALPINE is the mountain forest, larch and arolla
+ * pine opening out toward the top and spruce closing in below; the
+ * VALLEY is the farmed floor, and the GORGE the forested ravine a stream
+ * has cut down a flank. */
+const ALPINE_REGIONS: readonly Region[] = [
+  {
+    id: "highAlpine",
+    weight: 2,
+    forest: 0.25,
+    groves: {
+      scree: 5,
+      alpMeadow: 1.2,
+      krummholz: 0.8,
+      larchWood: 0,
+      spruceForest: 0,
+      pasture: 0,
+      fen: 0.1,
+    },
+  },
+  {
+    id: "alp",
+    weight: 2.5,
+    forest: 0.5,
+    groves: {
+      alpMeadow: 6,
+      krummholz: 2,
+      scree: 1.2,
+      larchWood: 0.8,
+      spruceForest: 0,
+      pasture: 0.2,
+      fen: 0.6,
+    },
+  },
+  {
+    id: "subalpine",
+    weight: 3,
+    forest: 1.1,
+    groves: {
+      larchWood: 4,
+      spruceForest: 3,
+      krummholz: 0.6,
+      alpMeadow: 1.5,
+      scree: 0.4,
+      pasture: 0.3,
+      fen: 0.3,
+    },
+  },
+  {
+    id: "valley",
+    weight: 2.5,
+    forest: 0.7,
+    groves: {
+      pasture: 6,
+      spruceForest: 1.6,
+      larchWood: 0.4,
+      alpMeadow: 0.8,
+      fen: 0.8,
+      scree: 0,
+      krummholz: 0,
+    },
+  },
+  {
+    id: "gorge",
+    weight: 1,
+    forest: 1.3,
+    groves: {
+      spruceForest: 6,
+      larchWood: 1.5,
+      scree: 1,
+      alpMeadow: 0.2,
+      pasture: 0,
+      krummholz: 0.2,
+      fen: 0.4,
+    },
+  },
+];
+
+/** The alpine communities. The mountain forest is a real forest and its
+ * density says so; everything above the treeline is open by definition,
+ * and the scree carries nothing that stands at all. */
+const ALPINE_GROVES: readonly GroveCommunity[] = [
+  { id: "spruceForest", weight: 3, density: 1.05 },
+  { id: "larchWood", weight: 2.5, density: 0.7 },
+  { id: "krummholz", weight: 1.2, density: 0.28 },
+  { id: "alpMeadow", weight: 3, density: 0.05 },
+  { id: "pasture", weight: 2.5, density: 0.08 },
+  { id: "scree", weight: 1.5, density: 0 },
+  { id: "fen", weight: 0.8, density: 0.12 },
+];
+
+/** The high mountains: a massif of ridges and valleys the whole country is
+ * made of, standing several hundred metres over valley floors that carry
+ * the lakes, the villages and the railway. Water everywhere it can lie —
+ * tarns on the shoulders, a lake in every valley — and a forest that
+ * stops at a treeline, with pasture above it and bare rock and snow above
+ * that. The roads are cut into the flanks, turn back on themselves where
+ * a flank is too steep to take straight, and go through a shoulder where
+ * they cannot go round it. The stage starts high and comes down. */
+export const ALPINE: BiomeRules = {
+  id: "alpine",
+  label: "ALPINE",
+  regions: ALPINE_REGIONS,
+  groves: ALPINE_GROVES,
+  wetGrove: "fen",
+  felled: [],
+  timber: null,
+  // Graded stone, like the taiga's — but the stone is the mountain's own
+  // grey granite and gneiss rather than the shield's brown, which is the
+  // renderer's business (`Biome.grit`).
+  loose: "gravel",
+  water: true,
+  deadwood: true,
+  land: {
+    relief: 1,
+    // The taiga's low chains are not wanted under a massif.
+    mountains: 0,
+    dunes: null,
+    // The valley floor: a flat the ice left, a few metres over the lake
+    // table so the pits still cut lakes into it and a road down it never
+    // reaches the water.
+    floor: 6,
+    massif: {
+      // A valley and the ridge beside it in two and a half kilometres, so
+      // a medium stage's box holds a floor with a flank up each side and
+      // the crest over one of them. A crest around four hundred and fifty
+      // metres over the floor at the middle of the dial, climbed over the
+      // seven or eight hundred metres between the floor's edge and the
+      // crest — a mean grade over a half, a quarter at the foot and near
+      // one under the crest, which is a mountain a road can be got up in
+      // hairpins and not a wall.
+      scale: 2600,
+      height: 340,
+      sharp: 1.6,
+      valley: 0.3,
+      spurs: 0.4,
+      flankRef: 0.95,
+      swell: 0.3,
+      hills: 0.5,
+    },
+    // The zones, as heights over a valley floor that stands near 0 m: the
+    // forest gives out about two-fifths of the way up a full-height
+    // crest, the meadow goes over to rock above that, and the tops carry
+    // snow on anything but a face.
+    zones: { treeline: 190, rock: { from: 220, to: 320 }, snow: 340 },
+    steer: 0.85,
+    tunnels: true,
+    // A mountain road climbs at up to nine per cent where a forest road
+    // is held to seven and a half, and stands a third again as far off
+    // the country on its walls and in its cuts.
+    grade: 1.2,
+    earthworks: 1.3,
+    startHigh: true,
+  },
+  weathers: ["clear", "rain", "storm"],
+  rain: true,
+  latitude: 46,
+  settled: true,
+  farms: true,
+  // The chalet: stone below, dark timber above, a low roof with deep
+  // eaves and a balcony across the front.
+  houses: "chalet",
+  railway: true,
+  // No wind farm stands on a Swiss flank and no solar farm on a pasture:
+  // the mountains make their power out of water, which is not laid yet.
+  energy: false,
+};
+
+export const BIOMES: Record<BiomeId, BiomeRules> = { taiga: TAIGA, desert: DESERT, alpine: ALPINE };
 
 /** The rules for a biome id. An unknown id (a stale URL, a save from a
  * build that had a biome this one has not) is the taiga, which is the

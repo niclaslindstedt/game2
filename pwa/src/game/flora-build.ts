@@ -116,6 +116,32 @@ export const BUNCH_TIP = new THREE.Color(0xe0cf8a);
 export const SALT_CRUST = new THREE.Color(0xece6d4);
 export const BONE = new THREE.Color(0xe9e1cf);
 
+// ── The alpine paint box (flora-alpine.ts) ────────────────────────────────
+// The treeline's conifers are DARKER than the taiga's — a stone pine crown
+// is nearly black-green against snow — over bark that is grey rather than
+// brown; the ground under them is the brightest green in the game, and in
+// summer it is full of flowers. The flowers and the pasture are the
+// season's business (the table below); the conifers hold still.
+export const AROLLA = new THREE.Color(0x2b5237); // Swiss stone pine: dense, dark, blue-green
+export const AROLLA_DARK = new THREE.Color(0x1e3d29); // ...its shaded inner tufts
+export const AROLLA_BARK = new THREE.Color(0x6b5b4d); // grey-brown, fissured in plates
+export const MUGO = new THREE.Color(0x3d6e3a); // mountain pine: a yellower green than the arolla
+export const MUGO_STEM = new THREE.Color(0x5b4b3c);
+export const ALPENROSE_LEAF = new THREE.Color(0x3b5e31); // rhododendron: dark, glossy, evergreen
+/** The alpenrose flower: pink-red in June and July, gone by autumn — so the
+ * season table takes it back to the leaf. */
+export const ALPENROSE_BLOOM = new THREE.Color(0xd8485f);
+export const GENTIAN = new THREE.Color(0x2c56c6); // the one true blue in any biome
+export const ARNICA = new THREE.Color(0xe9b62d); // the yellow half of an alp in flower
+export const FLOWER_WHITE = new THREE.Color(0xf3f1e6); // the white half: yarrow, daisy, edelweiss
+export const ALP_GRASS_BASE = new THREE.Color(0x5c9a2c); // pasture grass, grazed short
+export const ALP_GRASS_TIP = new THREE.Color(0xaad456);
+export const CAIRN_STONE = new THREE.Color(0x9c9e9a); // grey limestone and gneiss, stacked
+export const CAIRN_DARK = new THREE.Color(0x74787a);
+export const CAIRN_LICHEN = new THREE.Color(0xa3a87a); // the green-grey crust on the older stones
+export const SILVER_WOOD = new THREE.Color(0xbfbab0); // an arolla dead for a century: bleached silver
+export const SILVER_WOOD_DARK = new THREE.Color(0x8f8b82);
+
 // ── The seasons ────────────────────────────────────────────────────────────
 // What a boreal forest actually does over a year, and — just as important —
 // what it does NOT do. The conifers are evergreen: a spruce in September is
@@ -211,6 +237,19 @@ const SEASONAL: SeasonalColor[] = [
   { summer: YUCCA_STALK, spring: 0xf3eedd, autumn: 0xa8916a },
   { summer: BUNCH_BASE, spring: 0x9aa858, autumn: 0xc0a24e },
   { summer: BUNCH_TIP, spring: 0xcfcf7e, autumn: 0xe8d08c },
+
+  // THE ALPINE. The larch's gold is the taiga row's, shared. What is this
+  // country's own is the ALP: in June it is flowers over fresh green, in
+  // October it is cured straw and the flowers are seed heads — the blue
+  // and the yellow go to straw, the white to a dry grey — while the
+  // alpenrose, which flowers early summer, goes back to its own leaf. The
+  // arolla, the mountain pine and the stone hold still.
+  { summer: ALPENROSE_BLOOM, spring: 0xd4607c, autumn: 0x3b5e31 },
+  { summer: GENTIAN, spring: 0x3a62d2, autumn: 0x9a9060 },
+  { summer: ARNICA, spring: 0xecc247, autumn: 0xb8a25c },
+  { summer: FLOWER_WHITE, spring: 0xf6f4ea, autumn: 0xb8b09a },
+  { summer: ALP_GRASS_BASE, spring: 0x66a534, autumn: 0x9a8d3c },
+  { summer: ALP_GRASS_TIP, spring: 0xb4dc62, autumn: 0xd2bc5e },
 ];
 
 /** What one season does to the paint box: authored colour → this season's.

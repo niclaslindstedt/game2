@@ -13,14 +13,17 @@
 //      cruise with no finish to build toward and wants the long one. Both
 //      trump the weather, because a player picked them.
 //   2. THE COUNTRY. The desert has its own score whatever the sky is doing
-//      — its storm is sand, not rain, and the dry score fits it.
+//      — its storm is sand, not rain, and the dry score fits it. So does
+//      the alpine: a range in cloud is the same range, and the cold score
+//      was written for both.
 //   3. THE SKY over the taiga. A storm or rain takes the dark score; dusk,
 //      night and dawn take the cold one; a clear day is the anthem.
 
 import type { BiomeId, GameState, TimeOfDay, Weather } from "@engine";
 
 /** Every score this build has. */
-export type TrackId = "menu" | "taiga" | "spruce" | "polar" | "desert" | "circuit" | "endless";
+export type TrackId =
+  "menu" | "taiga" | "spruce" | "polar" | "desert" | "alpine" | "circuit" | "endless";
 
 /** What the picker reads. */
 export type Setting = {
@@ -35,6 +38,7 @@ export function trackFor(setting: Setting): TrackId {
   if (setting.circuit) return "circuit";
   if (setting.endless) return "endless";
   if (setting.biome === "desert") return "desert";
+  if (setting.biome === "alpine") return "alpine";
   if (setting.weather !== "clear") return "spruce";
   if (setting.timeOfDay !== "day") return "polar";
   return "taiga";

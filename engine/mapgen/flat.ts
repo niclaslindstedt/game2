@@ -17,9 +17,9 @@ import type { Surface, Track } from "./compile.ts";
 
 /** Surface codes, as stored in `FlatTrack.surface`. The order is this
  * table's own — index it through `SURFACES`, never by a literal. */
-export const SURFACES: readonly Surface[] = ["gravel", "asphalt", "water", "sand"];
+export const SURFACES: readonly Surface[] = ["gravel", "asphalt", "water", "sand", "snow"];
 
-const CODE_OF: Record<Surface, number> = { gravel: 0, asphalt: 1, water: 2, sand: 3 };
+const CODE_OF: Record<Surface, number> = { gravel: 0, asphalt: 1, water: 2, sand: 3, snow: 4 };
 
 /** Samples per bounding group, as a power of two: the walk tests alignment
  * with a mask and picks a group with a shift, both on every step it takes. */

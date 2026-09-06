@@ -21,7 +21,7 @@ import { buildBlockade } from "./blockade.ts";
 import type { ConeField } from "./cones.ts";
 import { BALE, buildBale, buildFarmGear } from "./farm-gear.ts";
 import { buildFlora, type FloraPlacement } from "./flora.ts";
-import { buildHouse } from "./house.ts";
+import { buildDwelling } from "./chalet.ts";
 import { buildFence, buildField, buildMeadow } from "./paddock.ts";
 import { buildParkedCar, parkedCarSpec } from "./parked-car.ts";
 import { buildRoad, buildSkirts, type GroundBeside } from "./road-mesh.ts";
@@ -100,7 +100,7 @@ export function buildHomestead(
 
   // The house, facing the yard.
   const { house } = homestead;
-  const building = buildHouse(house.plan, rand);
+  const building = buildDwelling(house.plan, rand);
   building.position.set(house.x, house.y, house.z);
   building.rotation.y = house.heading;
   group.add(building);

@@ -345,6 +345,15 @@ undoes it without knowing it was ever a rule.
   That is what the sim sweep is for.
 - **Stages must stay finishable by both cars.** `tests/simulation_test.ts` is
   the contract.
+- **A COUNTRY change is gated by its biome row, and proved by a digest.**
+  Everything a new or changed country asks of the generator — a steer, a
+  bore, a grade, a floor, a seal — is a field on its `BiomeRules` row that
+  the taiga's row holds at its neutral value, so no taiga or desert seed
+  re-rolls (R40/R47). Prove it rather than trust it: build a worktree of
+  `origin/main` (`git worktree add ../base origin/main`, symlink
+  `node_modules`), digest the campaign's seeds on both trees with one
+  script, and diff — a re-rolled campaign stage is a re-shot banner, a
+  stale blurb and a fixture failure three directories away.
 - **The terrain field must never shape itself around the road it is not
   nearest to.** Corridor shelves, spur shelves and junction aprons overlap;
   whichever road is nearer owns the ground.

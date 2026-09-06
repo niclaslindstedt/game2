@@ -31,7 +31,7 @@ import { groundTint, plumeGround, type PlumeGround } from "./ground-tint.ts";
 import { createPlume, type Plume } from "./plume.ts";
 import { createFumes, type Fumes } from "./fumes.ts";
 import { CRASH_THROW } from "./crash-throw.ts";
-import { rockAt } from "./terrain.ts";
+import { rockAt, snowAt } from "./terrain.ts";
 
 export type CarFx = {
   /** Gravel and grit off the wheels on a dry surface, and the wet road's
@@ -157,13 +157,27 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   };
 
   const bareRock = (state: GameState): number =>
-    rockAt(state.terrain.groundAt, state.car.x, state.car.z);
+    rockAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome);
+  const underSnow = (state: GameState): number =>
+    snowAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome);
 
   const groundDust = (state: GameState, wet: boolean): number | DustTint =>
-    groundTint(state.track.knobs.biome, state.surface, wet, () => bareRock(state));
+    groundTint(
+      state.track.knobs.biome,
+      state.surface,
+      wet,
+      () => bareRock(state),
+      () => underSnow(state),
+    );
 
   const plumeDust = (state: GameState, wet: boolean): PlumeGround =>
-    plumeGround(state.track.knobs.biome, state.surface, wet, () => bareRock(state));
+    plumeGround(
+      state.track.knobs.biome,
+      state.surface,
+      wet,
+      () => bareRock(state),
+      () => underSnow(state),
+    );
 
   const atWheels = (
     cloud: Dust,

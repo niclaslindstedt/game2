@@ -158,6 +158,8 @@ export function buildRoadSpill(
   const tufts: Tuft[] = [];
   for (let i = Math.max(1, from); i < to; i++) {
     const s = samples[i];
+    // R47 — nothing spills onto a bore's shoulder: it is lining.
+    if (s.tunnel) continue;
     const r = rightOf(s.heading);
     const width = s.width ?? track.width;
     const half = width / 2;

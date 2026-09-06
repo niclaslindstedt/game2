@@ -192,8 +192,11 @@ export function endApron(track: Track, end: "start" | "finish"): TrackSample[] {
       x: at.x + Math.sin(at.heading) * track.step * i * sign,
       z: at.z + Math.cos(at.heading) * track.step * i * sign,
       s: at.s + track.step * i * sign,
-      surface: "gravel",
+      // Plain dirt — or the snow the stage itself starts or ends on (R47):
+      // an apron ploughed brown in front of a white road is a seam.
+      surface: at.surface === "snow" ? "snow" : "gravel",
       deck: null,
+      tunnel: false,
       lift: 0,
       jump: false,
     });

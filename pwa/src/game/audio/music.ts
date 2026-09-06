@@ -26,6 +26,7 @@ const LOADERS: Record<TrackId, () => Promise<Track>> = {
   spruce: () => import("./scores/spruce.ts").then((m) => m.SPRUCE_TRACK),
   polar: () => import("./scores/polar.ts").then((m) => m.POLAR_TRACK),
   desert: () => import("./scores/desert.ts").then((m) => m.DESERT_TRACK),
+  alpine: () => import("./scores/alpine.ts").then((m) => m.ALPINE_TRACK),
   circuit: () => import("./scores/circuit.ts").then((m) => m.CIRCUIT_TRACK),
   endless: () => import("./scores/endless.ts").then((m) => m.ENDLESS_TRACK),
 };

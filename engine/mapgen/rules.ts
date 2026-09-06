@@ -490,8 +490,39 @@
 //       AT REST — the middle of the dial — every one of those is exactly
 //       the number the rule states, so the stage a seed has always built
 //       is the stage it still builds.
+//   R47 A MOUNTAIN ROAD SOLVES THE MOUNTAIN. In a country with a MASSIF
+//       (`BiomeLand.massif`, the alpine) the geography comes first — a
+//       ridge system hundreds of metres high, concave flanks, flat valley
+//       floors with the lakes cut into them, a treeline, a rock line and
+//       a snowline (`BiomeLand.zones`) — and the road is made to fit it,
+//       never the other way round. Four things make that true. The stage
+//       STARTS HIGH (`startHigh`): the origin is sited on the highest
+//       shoulder the grid will stand on, so a stage runs down off the
+//       mountain. The search READS THE COUNTRY when it draws a corner
+//       (`steer`): it walks both directions and keeps the one whose end
+//       the road can follow the land to, weighed toward the lower ground —
+//       which is what lays a road along a contour, and what turns it back
+//       on itself in a HAIRPIN where the flank is too steep to take
+//       straight, so a sequence of switchbacks down a face is what the
+//       vocabulary builds there without a rule that says "switchback". The
+//       road may follow the country steeper (`grade`), because a pass has
+//       further to climb than a forest road. And a cut deeper than a road
+//       would be blasted is BORED: a straight whose line runs more than
+//       `tunnel.depth` under the country for `tunnel.minLength` or more
+//       becomes a TUNNEL — the road holds its grade through the shoulder,
+//       the country stands over it untouched, its walls are as solid as
+//       they look, and the two portals are cut into the face at either
+//       end. Only in a country that bores (`tunnels`); the taiga's deep
+//       cut is still refused, and the search draws another line. ABOVE THE
+//       SNOWLINE THE ROAD IS SNOW: whatever it was laid as, a sample
+//       standing higher than `zones.snow` is a packed snow road, a surface
+//       of its own to the physics (`TUNING.surfaces.snow`) and a bladed one
+//       to everything about the road's shape. None of it touches a country
+//       without a massif: every multiplier in the taiga's row is 1, its
+//       `steer` is 0 and it bores nothing, so every seed it ever built is
+//       the seed it still builds.
 
-import { isBiomeId, type BiomeId } from "./biomes.ts";
+import { biomeRules, isBiomeId, type BiomeId } from "./biomes.ts";
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -504,7 +535,7 @@ export type TurnSeverity = "soft" | "medium" | "hard";
  * finish somewhere else; a circuit comes back to where it started, which is
  * what makes laps possible. */
 export type StageShape = "sprint" | "circuit";
-export type SegmentFeature = "none" | "jump" | "water" | "crest";
+export type SegmentFeature = "none" | "jump" | "water" | "crest" | "tunnel";
 /** How a stage crosses water: wade through it, span it, or carry it under
  * the road in a pipe (R12). */
 export type Crossing = "ford" | "timber" | "concrete" | "culvert";
@@ -550,6 +581,17 @@ export type StageKnobs = {
    * is the ROAD, and it is the only one of the two Roam has any use for:
    * a seed driven on your own has nobody to be faster than. */
   challenge: number;
+  /** R47 — HOW MANY PEAKS the country has, 0..1 — the one dial only a
+   * mountain country reads (`BiomeLand.massif`; the taiga and the desert
+   * have no peaks to count). At 0 ONE mountain stands alone in a plain:
+   * the ridge system's period is stretched past the stage's box and the
+   * valley floor widened to most of it, so the stage is laid on the one
+   * flank and off the road there is nothing but the drop to the ground.
+   * At 1 the period is tightened to a RANGE — a crest every kilometre and
+   * a valley between each pair — and the road threads them. The middle is
+   * the country the rules were tuned on: one valley and the ridge beside
+   * it inside a medium stage's box. */
+  peaks: number;
   /** R40 — which COUNTRY the stage is built in (`biomes.ts`). The one dial
    * that is a name rather than a number: it does not move a range, it says
    * which set of ranges — the taiga's lakes and spruce, or the desert's
@@ -570,6 +612,7 @@ export const NUMERIC_KNOBS: readonly NumericKnob[] = [
   "width",
   "steepness",
   "challenge",
+  "peaks",
 ];
 
 /** The default dial positions — the stage the rules built before the knobs
@@ -592,6 +635,9 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // R46 — the middle of the difficulty dial, which is the vocabulary every
   // rule above states and every stage in the campaign is built on.
   challenge: 0.5,
+  // R47 — a valley and the ridge beside it; read by a massif and by
+  // nothing else.
+  peaks: 0.5,
 };
 
 function clamp01(v: number): number {
@@ -614,6 +660,7 @@ export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
     width: clamp01(knobs?.width ?? DEFAULT_KNOBS.width),
     steepness: clamp01(knobs?.steepness ?? DEFAULT_KNOBS.steepness),
     challenge: clamp01(knobs?.challenge ?? DEFAULT_KNOBS.challenge),
+    peaks: clamp01(knobs?.peaks ?? DEFAULT_KNOBS.peaks),
   };
 }
 
@@ -994,6 +1041,93 @@ export const STAGE_RULES = {
     fillLadder: [1, 1.7, 3, 0],
   },
 
+  /** R47 — THE TUNNEL. A straight whose line runs under the country by
+   * more than `depth` for at least `minLength` of its run, in a country
+   * that bores (`BiomeLand.tunnels`), goes THROUGH rather than being
+   * refused as too deep a cut — where the country stands `cover` over
+   * the line somewhere along the run, which is what makes it a mountain
+   * to bore and not a shoulder to blast. The bore spans exactly the run that is
+   * under by `depth`, less nothing: the portal at each end is where the
+   * line meets the face. `portal` is how far past the mouth the country
+   * is still cut back to the road (R31's cone) so the face stands a few
+   * metres out from the drawn portal rather than through it; `maxLength`
+   * stops a straight boring the whole width of a ridge — a stage is a
+   * road over a mountain, not a railway under one — and a straight that
+   * would have to is refused like any other. `level` is the grade the road
+   * eases to inside: a bore is driven near level because that is what a
+   * bore is, and a road that kept following the country up through the
+   * rock would come out of the far portal higher than the ridge.
+   * `clearance` is the bore's height over the crown, m, and `wall` how far
+   * outside the road's edge the wall stands — the renderer builds the
+   * lining to these and the physics stands a wall there. */
+  tunnel: {
+    depth: 16,
+    /** The least the country must stand over the line SOMEWHERE along the
+     * bore, m — the mountain it is bored through. `depth` is where a
+     * cutting becomes a portal; this is what makes the run between the
+     * portals worth boring rather than blasting open: a shoulder eleven
+     * metres over the road was being tunnelled with a roof thinner than
+     * the lining at its far end, where a cutting is what a road does. */
+    cover: 35,
+    minLength: 60,
+    maxLength: 420,
+    portal: 14,
+    level: 0.025,
+    clearance: 5.2,
+    wall: 0.9,
+    /** How much of a stage may be BORED at most, as a share of its target
+     * length, and the least open road between one bore's far portal and
+     * the next bore's mouth, m. A pass road has a tunnel or two on it; a
+     * road that is a fifth tunnel is a railway. Over the alpine's first
+     * forty medium seeds the search bored up to a quarter of a stage
+     * unbudgeted — four bores in five kilometres. */
+    share: 0.1,
+    gap: 400,
+    /** The least rock a sample needs OVER it to be inside the bore, m.
+     * The search finds a bore's portals on its own coarser profile, and
+     * the compiled road through the shoulder can stand a few metres over
+     * it; at the far mouth that left samples flagged as tunnel under three
+     * metres of country, where the vault alone is six and a half. Under
+     * the clearance plus the lining's own rise, a sample is open road in
+     * a cutting — the brow it was under was thinner than the lining. */
+    brow: 7,
+  },
+
+  /** R47 — THE MOUNTAIN, as the SEARCH sees it (the massif itself is the
+   * biome row's, `BiomeLand.massif`, and the bore's numbers are `tunnel`
+   * above). */
+  massif: {
+    /** How the search READS THE COUNTRY when a corner is drawn in a
+     * country that steers (`BiomeLand.steer`): the mirrored corner is kept
+     * when it fits the land better by `margin` metres, and a corner's fit
+     * is charged `climb` metres of misfit per metre of height it gains
+     * (and credited the same per metre it loses), so the stage comes down
+     * off the mountain rather than contouring round it forever. Over the
+     * fill cap's own size on purpose: a corner that turns down the flank
+     * stands further off the land than one that holds the ridge, and read
+     * on fit alone the search keeps every stage on the crest it started
+     * on — seeds 1-6 came down under 150 m of a 560 m start at 0.6. */
+    contour: { margin: 1, climb: 1.6 },
+    /** What the `peaks` dial does to a massif: MULTIPLIERS on its ridge
+     * period (`massif.scale`) and on the share of the folded noise that is
+     * VALLEY FLOOR (`massif.valley`), read the way the difficulty dial
+     * reads its own (`challengeMul`): `easy` is the factor at the bottom
+     * of the dial, `hard` at the top, and the middle is exactly the row.
+     * At 0 the period is two and a half times the tuned country's and
+     * twice as much of the ground is floor — one mountain in a plain; at 1
+     * the period is little over half and the floors are narrow — a range. */
+    peaks: { scale: { easy: 2.5, hard: 0.6 }, valley: { easy: 2, hard: 0.7 } },
+    /** How many iterations one sub-seed attempt is given before it is
+     * given up on, in a country with a massif. The taiga's cap is a
+     * thousand plus half the band; a mountain attempt that has not found
+     * its way down inside this many is walking a pocket on the flank with
+     * no way out, and every winning attempt over the first forty long and
+     * extra-long seeds closed inside 2,500 — while the ones that failed
+     * burned the taiga's whole cap first. Restarting is cheaper than
+     * unpicking (`circuit.ts` found the same). */
+    iterations: 2500,
+  },
+
   /** R32 — THE GROUND, IN LAYERS. What the country beside the road is made
    * of, laid in the order it was made: rock, then the water in it, then the
    * soil on top. `geology.ts` builds the field; these are its numbers, and
@@ -1250,9 +1384,10 @@ export const STAGE_RULES = {
        * a patch may keep, so nowhere is scoured to nothing by chance
        * alone. */
       patch: { scale: 210, min: 0.3 },
-      /** Height above which the ice scoured the ground bare, m, and the
-       * band it does it over — the treeline, in effect. */
-      alpine: { from: 46, over: 40 },
+      /** The band over which the ground thins to bare rock above the
+       * country's treeline (`BiomeLand.zones.treeline`, the height the ice
+       * or the cold scoured it bare at), m. */
+      alpine: { over: 40 },
       /** How much a glaciated country moves off its highs and into its
        * hollows, over and above what slope alone does. */
       glacial: 0.5,
@@ -1755,6 +1890,19 @@ export const STAGE_RULES = {
     run: { min: 350, max: 800 },
     gap: { min: 260, max: 6000 },
     floor: 0.03,
+    /** R47 — in a mountain country the route is not routed onto tarmac,
+     * it IS the tarmac: a pass road, sealed from the valley up to a
+     * height and gravel above it, where the money ran out. The dial moves
+     * the height: at its floor the line stands at the ROCK LINE (the
+     * valley, the forest and the alp under it are tarmac; the rock and
+     * the snow are not), at its top `sealAbove` metres over the snowline
+     * (above everything, so the whole road is a sealed pass), and the
+     * middle puts it halfway up the rock band — the lower half of a stage
+     * that starts beside the snow and comes down; below `floor` nothing is
+     * sealed. The change of surface still happens where R17 says it
+     * does — at a corner that can carry a junction, with the arm to the
+     * map's edge — through the same painted path a circuit uses. */
+    sealAbove: 60,
     /** R17 — a surface change is a JUNCTION, and a junction is a place
      * where one road meets another, not a place where two roads dissolve
      * into each other. So the change only ever happens at a CORNER inside
@@ -3150,6 +3298,16 @@ export function reliefOf(knobs: StageKnobs): number {
     knobScale(knobs.elevation, STAGE_RULES.elevation.knob) *
     challengeMul(knobs.challenge, STAGE_RULES.challenge.relief)
   );
+}
+
+/** R34/R47 — the grade the road may follow the country at in this
+ * country: the rule book's, times the biome's own multiplier. Stated once
+ * because two walks read it — the compiler's, which builds the road, and
+ * the search's, which judges the line — and a road judged at one grade
+ * and built at another is a road that stands off the land it was passed
+ * on. */
+export function followGradeOf(knobs: StageKnobs): number {
+  return STAGE_RULES.elevation.follow.grade * biomeRules(knobs.biome).land.grade;
 }
 
 /** R22 — the band ONE LAP of a circuit is searched inside: the sprint band

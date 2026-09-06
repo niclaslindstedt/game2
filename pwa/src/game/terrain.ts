@@ -26,6 +26,9 @@ import {
 
 import { hash2, valueNoise } from "../lib/noise.ts";
 import type { Biome, RegionGround } from "./biome.ts";
+// The rock line, the snowline and the slope rule are stated once, DOM-free,
+// so the dust and the tests read the same rule the tiles are painted with.
+import { ROCK_SLOPE, SNOW, rockAt, snowAt, snowLie } from "./ground-rules.ts";
 // R16 — the ground beside a road takes the ROAD's own edge tone and the
 // SPILL's own noise field, so the ribbon's dissolve, the scattered stones
 // and this wash all hand over along one boundary.
@@ -35,6 +38,7 @@ import { detailTexture } from "./textures.ts";
 import { driftWater, waterMaterial } from "./water-look.ts";
 
 export { APRON, LAKE_Y };
+export { rockAt, snowAt };
 
 /** The tile lattice is the engine's ground lattice: the physics rides
  * exactly the triangles drawn here (TerrainField.groundAt), so the cell
@@ -109,32 +113,6 @@ function clamp01(t: number): number {
  * grass it still has to look like. */
 const DUST = { reach: 9, mix: 0.4, wander: 0.8 };
 
-/** Where the meadow gives out and the mountain starts, m of altitude: the
- * ground goes over to bedrock across this band. */
-const ROCK_LINE = { from: 26, to: 52 };
-/** The normal's Y where a slope starts showing bare rock, and the width of
- * that band — a flank steeper than about 45° is rock all the way. */
-const ROCK_SLOPE = { from: 0.88, band: 0.18 };
-
-/** How much bare rock the ground shows, 0..1: steep flanks first (mountain
- * sides, the cut walls beside the road), then sheer altitude. The tile paint
- * lays the biome's bedrock over the meadow by exactly this much, and the
- * renderer asks the same question of the ground under the wheels — what a
- * tire throws has to be what it is standing on. */
-function bareRock(y: number, normalY: number): number {
-  const steep = clamp01((ROCK_SLOPE.from - normalY) / ROCK_SLOPE.band);
-  return steep + (1 - steep) * clamp01((y - ROCK_LINE.from) / (ROCK_LINE.to - ROCK_LINE.from));
-}
-
-/** The paint rule above, asked at a world position off the RIDDEN ground
- * lattice (the surface the physics uses), so anything reading the ground the
- * car is on agrees with what is drawn under it. */
-export function rockAt(groundAt: (x: number, z: number) => number, x: number, z: number): number {
-  const dx = (groundAt(x - CELL, z) - groundAt(x + CELL, z)) / (2 * CELL);
-  const dz = (groundAt(x, z - CELL) - groundAt(x, z + CELL)) / (2 * CELL);
-  return bareRock(groundAt(x, z), 1 / Math.hypot(dx, 1, dz));
-}
-
 export type Terrain = {
   group: THREE.Group;
   /** The engine's terrain field this ground is drawn from — heights,
@@ -162,6 +140,11 @@ export type Terrain = {
    * tiles carry. The road's outer band fades into it, so the corridor ends
    * in the country rather than at a line ruled against it. */
   paintAt: (x: number, z: number, out: THREE.Color) => void;
+  /** The ground's colour for a surface with a height and slope of ITS OWN
+   * — the lid drawn back over a bore, which stands where the lattice does
+   * not. The road's dust wash is left off it: the road under a lid is
+   * under it. A face (`normalY` 0) paints as the bedrock a cutting shows. */
+  paintLand: (x: number, z: number, y: number, normalY: number, out: THREE.Color) => void;
   /** Catch the ground up with the track and the car: index new samples,
    * cut new stream valleys, build the tiles the road and the car now
    * need, and drop the ones both have left behind. `budget` caps how many
@@ -223,9 +206,16 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   const soil = new THREE.Color(palette.soil);
   const shore = new THREE.Color(palette.shore);
   const bed = new THREE.Color(palette.bed);
-  // R40 — the country's own rules: which regions quilt it, and what its
-  // unsealed road is made of.
+  // The snow is not the palette's: it is the one ground every country
+  // paints the same, a cool off-white with a shaded blue-grey through it,
+  // and it goes over whatever the country was doing under it.
+  const snow = new THREE.Color(0xeef2f7);
+  const snowShade = new THREE.Color(0xd2dbe6);
+  const snowTone = new THREE.Color();
+  // R40 — the country's own rules: which regions quilt it, what its
+  // unsealed road is made of, and the heights its zones stand at.
   const rules = biomeRules(track.knobs.biome);
+  const zones = rules.land.zones;
   // R16 — what the road leaves on the country beside it. The road's own
   // shoulder colour rather than a brown of its own: the wash has to arrive
   // at exactly the tone the ribbon's outer band is already dissolving into,
@@ -315,7 +305,8 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
    *
    * `y` and `normalY` are passed in rather than sampled here: the tile has
    * both already, off a lattice it built for the purpose, and the road has
-   * its own answers. `carved` is a stream bed. */
+   * its own answers. `carved` is a stream bed; `dusted` is whether the
+   * road's wash reaches this surface at all. */
   const paintGround = (
     x: number,
     z: number,
@@ -323,6 +314,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     normalY: number,
     carved: boolean,
     out: THREE.Color,
+    dusted = true,
   ): void => {
     const speck = 0.88 + hash2(Math.round(x * 2), Math.round(z * 2), noiseSeed + 29) * 0.24;
     // THE TRAINING GROUND is not country. Its pad was graded and then
@@ -381,7 +373,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
       // that has been churned, felled or burnt over actually shows.
       const e = valueNoise(x, z, 38, noiseSeed + 59);
       if (e > 0.82 - look.bare) out.lerp(soil, clamp01((e - 0.82 + look.bare) / 0.18) * 0.8);
-      out.lerp(rock, clamp01((y - ROCK_LINE.from) / (ROCK_LINE.to - ROCK_LINE.from)));
+      out.lerp(rock, clamp01((y - zones.rock.from) / (zones.rock.to - zones.rock.from)));
     }
     // Bedrock breaks through wherever the ground is steep — mountain
     // flanks, and the cut walls where the road runs between high rock.
@@ -406,11 +398,31 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     // an edge of its own — and because `paintGround` is the one palette
     // BOTH the tiles and the road's outer band read (see the header above),
     // the wash is continuous across the seam by construction.
-    const past = field.roadDistanceAt(x, z) - LIP;
+    const past = dusted ? field.roadDistanceAt(x, z) - LIP : Infinity;
     if (past < DUST.reach) {
       const fade = 1 - clamp01(past / DUST.reach);
       const wander = valueNoise(x, z, DISSOLVE.patch, DISSOLVE.seed);
       out.lerp(dust, clamp01(fade * (1 + DUST.wander) - wander * DUST.wander) * DUST.mix);
+    }
+    // THE SNOW, over everything above: the meadow, the rock, the road's
+    // dust. Not the lake bed — a tarn above the line is water, and its
+    // floor is painted as one. The cover lies by `snowLie`'s rule (the
+    // faces stay rock), and just above the line it is broken by windows of
+    // bare stone cut by a noise band, closing as the ground climbs, so the
+    // snowline is a ragged margin rather than a contour drawn round the
+    // mountain. A slow second noise leans the white toward its shade, which
+    // is what keeps a snowfield from reading as a blank.
+    if (zones.snow !== null && y >= level + 0.6) {
+      const lie = snowLie(y, normalY, zones);
+      if (lie > 0) {
+        const closed = clamp01((y - zones.snow + SNOW.lead) / SNOW.patchFade);
+        const window = valueNoise(x, z, SNOW.patch, noiseSeed + 67);
+        const cover = lie * clamp01((window - 0.55 + 0.55 * closed) / 0.22);
+        if (cover > 0) {
+          snowTone.copy(snow).lerp(snowShade, valueNoise(x, z, 46, noiseSeed + 71) * 0.7);
+          out.lerp(snowTone, cover);
+        }
+      }
     }
     out.multiplyScalar(speck);
   };
@@ -780,12 +792,16 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     paintGround(x, z, y, 1 / Math.hypot(dx, 1, dz), inStream(field.streams, x, z, 0), out);
   };
 
+  const paintLand = (x: number, z: number, y: number, normalY: number, out: THREE.Color): void =>
+    paintGround(x, z, y, normalY, false, out, false);
+
   return {
     group,
     field,
     standOn: field.groundAt,
     latticeAt: field.latticeAt,
     paintAt,
+    paintLand,
     sync,
     update,
     dispose,

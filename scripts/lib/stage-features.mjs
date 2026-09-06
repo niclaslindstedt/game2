@@ -196,7 +196,7 @@ export function surfaceRuns(track, surface) {
 /**
  * The stage's features in stage order. Each has:
  *   id      the name the picture and the table both use
- *   kind    turn | jump | crest | ford | culvert | bridge | checkpoint |
+ *   kind    turn | jump | crest | ford | culvert | bridge | tunnel | checkpoint |
  *           start | finish | junction | crossing
  *   s       arc position, m (turns and water also carry `endS`)
  *   x z     where that is on the map, and `heading` there
@@ -301,10 +301,34 @@ export function stageFeatures(track, terrain) {
   let fordNo = 0;
   let culvertNo = 0;
   let bridgeNo = 0;
+  let tunnelNo = 0;
   track.segments.forEach((seg, k) => {
     const segStart = starts[k];
     const fromS = segStart + (seg.featureStart ?? 0);
     const toS = segStart + (seg.featureEnd ?? seg.length);
+    // R47 — a bore: named at its mouth, measured portal to portal.
+    if (seg.feature === "tunnel") {
+      tunnelNo++;
+      const mouth = at(fromS);
+      const mid = at((fromS + toS) / 2);
+      const over = track.samples[indexAtS(track.samples, (fromS + toS) / 2)];
+      features.push({
+        id: `TU${tunnelNo}`,
+        kind: "tunnel",
+        s: fromS,
+        endS: toS,
+        ...mouth,
+        exitX: at(toS).x,
+        exitZ: at(toS).z,
+        label: `TU${tunnelNo}`,
+        detail:
+          `tunnel, ${(toS - fromS).toFixed(0)} m portal to portal, ` +
+          `${(over ? terrain.geology.surfaceAt(mid.x, mid.z) - over.elevation : 0).toFixed(0)} m ` +
+          `of rock over the middle`,
+        solids: [],
+      });
+      return;
+    }
     if (seg.feature === "crest") {
       crestNo++;
       const brow = at((fromS + toS) / 2);
@@ -679,6 +703,7 @@ function rank(feature) {
     "culvert",
     "bridge",
     "jump",
+    "tunnel",
     "checkpoint",
     "finish",
   ].indexOf(feature.kind);
@@ -699,6 +724,7 @@ export function stageSummary(track, features) {
     medium: turns.filter((t) => t.severity === "medium").length,
     soft: turns.filter((t) => t.severity === "soft").length,
     jumps: by("jump"),
+    tunnels: by("tunnel"),
     crests: by("crest"),
     fords: by("ford"),
     culverts: by("culvert"),

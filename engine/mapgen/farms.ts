@@ -23,7 +23,7 @@
 // the barn or behind the house, the field where the paddock is not.
 
 import type { Rng } from "../lib/prng.ts";
-import { buildingSolids, drawBarnPlan, type Building } from "./buildings.ts";
+import { buildingSolids, drawBarnPlan, type Building, type HouseStyle } from "./buildings.ts";
 import type { LandField } from "./land.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 import { SPUR } from "./spurs.ts";
@@ -97,6 +97,8 @@ export type FarmSite = {
   heading: number;
   /** How deep the house is, m — the paddock behind it keeps off its back wall. */
   houseDepth: number;
+  /** R40 — the country's building vocabulary: the barn is drawn in it. */
+  houses: HouseStyle;
   land: LandField;
   /** The homestead placer's own test: may a piece of farm stand here? */
   clear: (x: number, z: number) => boolean;
@@ -238,7 +240,7 @@ function fence(
  * or a field can each be refused on their own. */
 export function placeFarm(site: FarmSite): Farm | null {
   const { rng, yard, forward, right } = site;
-  const plan = drawBarnPlan(rng);
+  const plan = drawBarnPlan(rng, site.houses);
   const barnSide: 1 | -1 = rng.chance(0.5) ? 1 : -1;
   // The barn: to one side of the yard with its long front to the middle,
   // set in from the rim so its back corners still stand on the pad.

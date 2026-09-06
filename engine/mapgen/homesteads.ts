@@ -30,6 +30,7 @@ import {
   drawHousePlan,
   parkedSolids,
   type Building,
+  type HouseStyle,
   type ParkedCar,
 } from "./buildings.ts";
 import type { BridgeDeck, Surface } from "./compile.ts";
@@ -101,6 +102,8 @@ export type HomesteadContext = {
   /** R40 — whether the country is FARMED: whether a homestead may be a
    * farm at all. */
   farms: boolean;
+  /** R40 — what kind of house the country builds. */
+  houses: HouseStyle;
   /** The route's samples, in stage order. */
   samples: readonly HomesteadSample[];
   /** Half-open range of sample indices whose slots may be placed on this
@@ -146,6 +149,8 @@ export type HomesteadSample = {
   curvature: number;
   bank: number;
   flat: number;
+  /** R47 — a bored sample: nothing meets the road there. */
+  tunnel?: boolean;
   jump: boolean;
   deck: BridgeDeck | null;
   surface: Surface;
@@ -235,11 +240,15 @@ export function placeHomesteads(ctx: HomesteadContext): Homestead[] {
  * the water runs through (R18). */
 function nearCrossing(samples: readonly HomesteadSample[], index: number): boolean {
   const s = samples[index].s;
+  // R47 — and a bore is the same to a drive: there is no beside the road
+  // to meet it from, and a yard over the portal is a yard on a cutting.
+  const shut = (i: number): boolean =>
+    samples[i].surface === "water" || samples[i].deck !== null || samples[i].tunnel === true;
   for (let i = index; i < samples.length && samples[i].s - s <= H.keepOff.water; i++) {
-    if (samples[i].surface === "water" || samples[i].deck !== null) return true;
+    if (shut(i)) return true;
   }
   for (let i = index; i >= 0 && s - samples[i].s <= H.keepOff.water; i--) {
-    if (samples[i].surface === "water" || samples[i].deck !== null) return true;
+    if (shut(i)) return true;
   }
   return false;
 }
@@ -411,7 +420,7 @@ function tryHomestead(
     }
   }
 
-  const plan = drawHousePlan(rng);
+  const plan = drawHousePlan(rng, ctx.houses);
   // The house stands at the back of the yard facing the way the car comes
   // in, its front wall set back from the drive's end so the yard in front
   // of it is a yard and not a step.
@@ -455,6 +464,7 @@ function tryHomestead(
         right,
         heading: end.heading,
         houseDepth: plan.depth,
+        houses: ctx.houses,
         land: ctx.land,
         clear,
       })

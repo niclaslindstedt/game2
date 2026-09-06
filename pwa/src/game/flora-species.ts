@@ -17,6 +17,7 @@
 
 import * as THREE from "three";
 
+import { ALPINE_VARIANTS } from "./flora-alpine.ts";
 import { DESERT_VARIANTS } from "./flora-desert.ts";
 import {
   GeoBuilder,
@@ -955,7 +956,15 @@ const TAIGA_VARIANTS: Record<string, VariantDef> = {
  * biome's mixes name, and the one place `buildFlora` looks them up. Two
  * countries may not spell a species the same way — a `yucca` is a yucca —
  * so the merge is checked for collisions at import. */
-export const VARIANTS: Record<string, VariantDef> = { ...TAIGA_VARIANTS, ...DESERT_VARIANTS };
-for (const id of Object.keys(DESERT_VARIANTS)) {
-  if (id in TAIGA_VARIANTS) throw new Error(`flora variant "${id}" is in two rosters`);
+export const VARIANTS: Record<string, VariantDef> = {
+  ...TAIGA_VARIANTS,
+  ...DESERT_VARIANTS,
+  ...ALPINE_VARIANTS,
+};
+for (const roster of [DESERT_VARIANTS, ALPINE_VARIANTS]) {
+  for (const id of Object.keys(roster)) {
+    if (id in TAIGA_VARIANTS || (roster !== DESERT_VARIANTS && id in DESERT_VARIANTS)) {
+      throw new Error(`flora variant "${id}" is in two rosters`);
+    }
+  }
 }

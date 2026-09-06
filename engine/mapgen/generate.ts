@@ -20,7 +20,8 @@ import {
   type StageKnobs,
   type StageShape,
 } from "./rules.ts";
-import { challengeMul, knobScale, resolveKnobs, roadWidthOf } from "./rules.ts";
+import { challengeMul, followGradeOf, knobScale, resolveKnobs, roadWidthOf } from "./rules.ts";
+import { biomeRules } from "./biomes.ts";
 import { generateCircuit } from "./circuit.ts";
 import { createLandField, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
@@ -39,6 +40,7 @@ import { crossingParting, planCrossing } from "./crossing.ts";
 import {
   PROBE_STEP,
   assignFeature,
+  boreFor,
   createPointField,
   drawTurn,
   entersStart,
@@ -48,6 +50,7 @@ import {
   straightLength,
   straightRunAt,
   trackRun,
+  type Bore,
   type Cursor,
   type Profile,
   type SameDirRun,
@@ -161,6 +164,11 @@ function tryGenerateStage(
     return water === null ? ground : Math.max(ground, water + R.elevation.follow.freeboard - roll);
   };
   const profile: Profile = { y: groundAt(0, 0, rolling(0)), slope: 0, rollS: 0 };
+  /** R47 — the country's own say in the line: how steep its roads run,
+   * how hard the search reads the land when it picks which way a corner
+   * turns, and whether a deep cut is bored through. */
+  const grade = followGradeOf(knobs);
+  const country = biomeRules(knobs.biome).land;
   /** R24 in height — the start's own ground, for the arm that comes back
    * past its apron (`entersStart`). */
   const start: StartGround = { y: profile.y, shelfEnd };
@@ -171,9 +179,33 @@ function tryGenerateStage(
   const probe = (
     from: Cursor,
     plan: SegmentPlan,
+    bore: Bore | null = null,
   ): { points: Cursor[]; end: Cursor; walked: Profile } => {
     const walked: Profile = { ...profile };
-    return { ...probePoints(from, plan, { profile: walked, groundAt, rolling }), walked };
+    return {
+      ...probePoints(from, plan, { profile: walked, groundAt, rolling, grade, bore }),
+      walked,
+    };
+  };
+  /** R47 — how far the road's BASE stands off the bare land at a probe
+   * point, m: positive on fill, negative in cut. What `sitsOnTheLand`
+   * judges, and what the steer reads. */
+  const offLand = (p: Cursor): number =>
+    p.y === undefined || p.rollS === undefined
+      ? 0
+      : p.y - rolling(p.rollS) - land.heightAt(p.x, p.z);
+  /** R47 — how badly a candidate FITS the country: the furthest its base
+   * stands off the land anywhere along it, plus a charge for climbing,
+   * because a mountain stage is a road coming down off a mountain and a
+   * corner that turns uphill is a corner that turns away from where the
+   * stage is going. The search reads it when it chooses which way a corner
+   * turns, and only then — the rules that decide what is LEGAL are the
+   * same ones the taiga is held to. */
+  const misfit = (from: Cursor, points: Cursor[], end: Cursor): number => {
+    let worst = 0;
+    for (const p of points) worst = Math.max(worst, Math.abs(offLand(p)));
+    const climb = end.y !== undefined && from.y !== undefined ? end.y - from.y : 0;
+    return worst + R.massif.contour.climb * climb;
   };
   /** R12 — A FORD LIES IN ITS VALLEY, and the road dips to it. The water
    * is laid at the bare land's level at the crossing (`fordDip` in
@@ -376,8 +408,24 @@ function tryGenerateStage(
     // either way, and the caps were measured on the base: held against the
     // surface, the roll's swing tightened them by up to six metres and the
     // search refused thirty times the candidates for it.
-    const off = p.y - rolling(p.rollS) - land.heightAt(p.x, p.z);
-    return off <= R.elevation.maxFill * fillScale && -off <= R.elevation.maxCut * fillScale;
+    const off = offLand(p);
+    const scale = fillScale * country.earthworks;
+    return off <= R.elevation.maxFill * scale && -off <= R.elevation.maxCut * scale;
+  };
+  /** R47 — ...except INSIDE A BORE, where the country standing over the
+   * road is the whole point. Everything outside the bore on the same
+   * straight — the approach, the portals, the run out of the far one — is
+   * held to the cap like any other road. */
+  const sitsOrBored = (from: Cursor, plan: SegmentPlan, p: Cursor): boolean => {
+    if (
+      plan.feature === "tunnel" &&
+      plan.featureStart !== undefined &&
+      plan.featureEnd !== undefined
+    ) {
+      const u = p.arc - from.arc;
+      if (u >= plan.featureStart && u <= plan.featureEnd) return true;
+    }
+    return sitsOnTheLand(p);
   };
   /** R17 + R23 — AND IT NEVER WANDERS ACROSS THE TARMAC. The sealed roads
    * were laid across this country before the rally was routed over it, and a
@@ -445,6 +493,22 @@ function tryGenerateStage(
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;
   let sLastLipEnd = -Infinity;
+  /** R47 — how much of the stage is bored so far, m, and where the last
+   * bore came out. Recomputed from the committed plans on a retreat, like
+   * the straight run. */
+  const boredSoFar = (): { length: number; lastEnd: number } => {
+    let length = 0;
+    let lastEnd = -Infinity;
+    let at = 0;
+    for (const p of plans) {
+      if (p.feature === "tunnel" && p.featureStart !== undefined && p.featureEnd !== undefined) {
+        length += p.featureEnd - p.featureStart;
+        lastEnd = at + p.featureEnd;
+      }
+      at += p.length;
+    }
+    return { length, lastEnd };
+  };
   const sameDirRun: SameDirRun = { dir: 0, count: 0, angle: 0 };
 
   const commit = (plan: SegmentPlan, points: Cursor[], end: Cursor, walked?: Profile): void => {
@@ -692,7 +756,8 @@ function tryGenerateStage(
   // `2000 + band.max`, every winning attempt on seeds 1-12, medium and
   // long, is the same attempt (none of them had needed more than this),
   // and the hopeless ones cost half — seed 7 long from 13 s to 9.
-  const maxIterations = 1000 + spec.band.max / 2;
+  // R47 — and a mountain attempt is given up on sooner (`massif.iterations`).
+  const maxIterations = country.massif !== null ? R.massif.iterations : 1000 + spec.band.max / 2;
   let iterations = 0;
 
   // R15/R17 — HOW MUCH OF THE STAGE IS TARMAC, and the state that decides
@@ -735,6 +800,11 @@ function tryGenerateStage(
    * crossing — so a retreat that reaches into one takes the whole of it. */
   const bundles: { from: number; to: number }[] = [];
   const tryBorrow = (needed: boolean): boolean => {
+    // R47 — a mountain stage borrows nothing: its tarmac is its own pass
+    // road, sealed by height in the compiler, and a join onto a public road
+    // contouring a flank at another height was refused on the cut cap
+    // ninety-nine times in a hundred anyway.
+    if (country.massif !== null) return false;
     if (!needed && sealed >= wantSealed) return false;
     if (total - lookedAt < R.paving.borrow.look) return false;
     if (total - leftTarmacAt < R.paving.gap.min) return false;
@@ -965,7 +1035,100 @@ function tryGenerateStage(
       // band's ceiling once the closing straight lands on top.
       if (total + plan.length > spec.band.max - R.closingStraight) continue;
 
-      const { points, end, walked } = probe(cursor, plan);
+      let probed = probe(cursor, plan);
+      // R47 — THE SEARCH READS THE COUNTRY. A corner drawn blind on a
+      // mountain flank turns uphill into the rock or downhill into the
+      // air as often as it turns along the contour; on a country that
+      // asks for it (`steer`), the mirrored corner is walked too and the
+      // one that fits the land better is kept — which is what lays a road
+      // along a hillside, and what turns it back on itself in a hairpin
+      // where the flank is too steep to take straight. The dice still have
+      // their share, or every stage would be the same stage; R5's cap on
+      // same-direction runs binds the mirrored corner exactly as it bound
+      // the drawn one; and nothing about what is LEGAL moves — the corner
+      // kept is validated below like any other.
+      if (
+        country.steer > 0 &&
+        plan.kind === "turn" &&
+        plan.dir !== undefined &&
+        forcedDir === 0 &&
+        rng.chance(country.steer)
+      ) {
+        const mirror: SegmentPlan = { ...plan, dir: plan.dir === 1 ? -1 : 1 };
+        const angle = plan.length / (plan.radius ?? 1);
+        const spirals =
+          mirror.dir === sameDirRun.dir &&
+          (sameDirRun.count >= R.maxSameDirectionTurns ||
+            sameDirRun.angle + angle > R.maxSameDirectionAngle);
+        if (!spirals) {
+          const other = probe(cursor, mirror);
+          const drawn = misfit(cursor, probed.points, probed.end);
+          const flipped = misfit(cursor, other.points, other.end);
+          if (flipped + R.massif.contour.margin < drawn) {
+            plan = mirror;
+            probed = other;
+          }
+        }
+      }
+      // R47 — A DEEP CUT IS BORED. A plain straight whose line runs under
+      // the country by more than a cutting is worth, in a country that
+      // bores, is walked again with a bore from its first deep point: the
+      // road holds its line near level through the shoulder and comes out
+      // where the land drops back to it. A bore that fits — inside the
+      // straight with a portal's worth of open road at each end, long
+      // enough to be a tunnel and not a gap in a cutting — makes the
+      // straight a TUNNEL; one that does not leaves the first walk to be
+      // refused by the cut cap, exactly as it would be anywhere else.
+      if (country.tunnels && plan.kind === "straight" && plan.feature === "none") {
+        const dug = boreFor(cursor, probed.points, offLand);
+        const T = R.tunnel;
+        // ...within the stage's budget of bore, and a run of open road past
+        // the last one. Over budget, the deep straight is a deep cut and
+        // the cap refuses it as it would anywhere.
+        const bored = dug === null ? null : boredSoFar();
+        const room =
+          bored !== null &&
+          bored.length < T.share * targetLength &&
+          total + dug! - bored.lastEnd >= T.gap;
+        if (dug !== null && room) {
+          // The straight is LENGTHENED to come out the far side: a bore is
+          // the one straight a rally road runs longer than R38's cap,
+          // because nothing inside it is road you see the end of
+          // (`straightPart` leaves the bored run out of the count). The
+          // walk finds the far portal; the straight is then cut to it
+          // plus a portal's run, and walked once more at that length so
+          // the points are the plan's own.
+          const left = spec.band.max - R.closingStraight - total;
+          const reach = Math.min(Math.max(plan.length, dug + T.maxLength + T.portal), left);
+          const bore: Bore = { from: cursor.arc + dug, to: null, land: land.heightAt };
+          probe(cursor, { ...plan, length: reach }, bore);
+          const to = bore.to === null ? null : bore.to - cursor.arc;
+          if (to !== null && to - dug >= T.minLength && to + T.portal <= reach) {
+            const length = Math.max(plan.length, to + T.portal);
+            const asTunnel = {
+              ...plan,
+              length,
+              feature: "tunnel" as const,
+              featureStart: dug,
+              featureEnd: to,
+            };
+            const walked = probe(cursor, asTunnel, { ...bore });
+            // ...and only through a MOUNTAIN: the country has to stand
+            // `cover` over the line somewhere between the portals, or the
+            // run is a shoulder a cutting takes, and the first walk stands.
+            let deepest = 0;
+            for (const p of walked.points) {
+              const at = p.arc - cursor.arc;
+              if (at >= dug && at <= to) deepest = Math.max(deepest, -offLand(p));
+            }
+            if (deepest >= T.cover) {
+              plan = asTunnel;
+              probed = walked;
+            }
+          }
+        }
+      }
+      const { points, end, walked } = probed;
       if (!points.every((p) => inBounds(p, spec.worldBound))) continue;
       if (
         points.some(
@@ -973,7 +1136,7 @@ function tryGenerateStage(
             field.blocked(p) ||
             entersStart(p, clear, start) ||
             !keepsDry(p) ||
-            !sitsOnTheLand(p) ||
+            !sitsOrBored(cursor, plan, p) ||
             !clearOfTarmac(p),
         ) ||
         !crossingSits(cursor, plan, points) ||

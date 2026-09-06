@@ -35,6 +35,7 @@ import { isLoose, type Track, type TrackSample } from "../mapgen/compile.ts";
 import { GROUND_CELL, type TerrainField } from "../mapgen/terrain.ts";
 import { createKerbField, KERB_MARKER, markersBetween } from "../mapgen/kerbs.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
+import { biomeRules } from "../mapgen/biomes.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, within, type Check, type Finding, type MetricReport } from "./types.ts";
 
@@ -196,6 +197,17 @@ function jumpMask(track: Track): boolean[] {
       mask[k] = true;
     }
   }
+  // R47 — and the BORES, with their portals: beside a tunnel's mat is its
+  // lining, over it is the mountain, and the ground a cell either side of
+  // a portal is the face the road goes into. The walls are the tunnel's
+  // own solids (`tunnelWalls`), the forest over it is on ground the car
+  // never reaches, and the rank has nothing to say about any of it.
+  for (let i = 0; i < track.samples.length; i++) {
+    if (!track.samples[i].tunnel) continue;
+    for (let k = Math.max(0, i - cell); k <= Math.min(mask.length - 1, i + cell); k++) {
+      mask[k] = true;
+    }
+  }
   return mask;
 }
 
@@ -208,6 +220,7 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   const stride = Math.max(1, ANALYSIS.sampling.stride);
   const skip = jumpMask(track);
   const ramps = rampMask(track);
+  const mountain = biomeRules(track.knobs.biome).land.massif !== null;
 
   // The rank's whole field of contacts: lane-major, so a lane's profile is
   // contiguous and the along-lane walk reads it in order.
@@ -551,6 +564,11 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
           }
         }
         if (Math.abs(grade) <= ANALYSIS.rollers.edge.grade) continue;
+        // R47 — in a mountain country the DROP off the outer edge is the
+        // mountain, and it is the point: a cliff road's edge falls away as
+        // far as the flank does, and nothing keeps a car on it but the
+        // driver. A wall beside the mat is still a wall.
+        if (mountain && grade > 0) continue;
         edgeFaces++;
         if (Math.abs(grade) <= Math.abs(worstEdge)) continue;
         worstEdge = grade;
