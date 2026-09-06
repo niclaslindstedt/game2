@@ -1,5 +1,5 @@
 ---
-title: '`make screenshots` fails on `shot-turn-around` about two runs in three, on unchanged main — do not bisect it into your own change'
+title: "`make screenshots` fails on `shot-turn-around` about two runs in three, on unchanged main — do not bisect it into your own change"
 date: 2026-09-06
 scope: scripts/screenshot.mjs
 concepts: [screenshots, verification, flake, test-conventions]
