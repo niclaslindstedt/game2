@@ -686,23 +686,30 @@ body {
   fill: currentColor;
 }
 
-/* THE CORNER BEING DRIVEN, WRITTEN IN. The same road drawn a second time in
-   the HUD's own ink and clipped by a dash to how much of the bend is behind
-   the car — so the sign fills from the approach to the head over exactly the
-   road the note covers, and is solid as the car straightens up.
+/* THE CORNER STILL TO COME, and THE CORNER BEING DRIVEN. The same road is
+   laid down twice in the severity's own colour: once faint, which is the part
+   of the bend the car has not reached, and once solid, clipped by a dash to
+   how much of it is behind — so the sign comes up from the approach to the
+   head over exactly the road the note covers, and is whole as the car
+   straightens up.
 
-   ONE COLOUR for every severity, and not the plate's own `currentColor`: the
-   fill answers HOW FAR THROUGH, the plate answers HOW MUCH, and a fill in the
-   corner's own colour would be the severity said a fourth time instead of the
-   one thing on the strip that is not. It is drawn OVER the sign rather than
-   under it for the same reason the plate is whole from the moment it goes up
-   — the two seconds of braking before the turn-in are where the colour is
-   worth most, and an outline waiting to be filled says nothing through them.
+   THE CORNER'S OWN COLOUR, not a second one. The plate is one colour from its
+   point to its head, and the fill is that colour arriving rather than another
+   mark laid over it. Nothing is lost on the approach by starting faint: the
+   point is cut and filled solid from the moment the call goes up, and it is
+   the point a braking driver reads the difficulty and the direction off. The
+   drawn road is then free to say the one thing nothing else on the plate says,
+   which is how far through the corner the car is.
+
+   How faint the unlit part goes is a compromise: dark enough that the lit part
+   is unmistakably lit at a glance, light enough that the SHAPE of the corner —
+   which is the whole reason the sign is the corner and not a canned arrow — is
+   still legible before the car reaches it.
 
    It moves on the same 0.12s the plate's opacity does: the snapshot ticks at
    about 12 Hz, and a fill that stepped would read as a fill that stuttered. */
-.hud-pace-fill {
-  color: var(--hud-ink);
+.hud-pace-road {
+  opacity: 0.42;
 }
 
 .hud-pace-fill path {
