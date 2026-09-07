@@ -2479,12 +2479,28 @@ export const TUNING = {
       shallows: 0.2,
       /** Time constant the water takes the car's speed over, s — a car
        * that hits a lake at pace still carries its line a few metres in
-       * before the water has all of it. */
+       * before the water has all of it. FLAT, unlike the yaw below: that
+       * carry is the entry a car is allowed to wade back out on
+       * (`shallows`), so shortening it takes the escape away with it. */
       stopIn: 0.5,
       /** ...and the slower one it takes the YAW over, s. The water stops a
        * car long before it stops it turning, so the hull keeps swinging
-       * gently while it floats instead of freezing on its entry heading. */
+       * gently while it floats instead of freezing on its entry heading.
+       * It is the constant of a GENTLE swing only — `slewAbove` is what a
+       * spin meets. */
       slewIn: 2.5,
+      /** ...and the yaw rate at which that bite has DOUBLED, rad/s. Water
+       * resists with the square of the rate through it, so a hull that
+       * arrives spinning is stopped in a fraction of the time a drifting
+       * one is, and the yaw needs saying because a car LANDS in water: a
+       * plain time constant sheds the same fraction per second however fast
+       * the spin is, so 6 rad/s off a jump carried the car through two full
+       * turns on the surface before it settled. This sits an order under
+       * the spin a crash arrives with (`drift.overYaw`), so the water has
+       * all but stopped a violent one inside half a second while the
+       * quarter-turn swing of a float — a fifth of a rad/s — barely feels
+       * it. */
+      slewAbove: 0.35,
       /** Fastest the entry is allowed to drive the body under, m/s — a
        * plunge off a bridge would otherwise put the car on the lakebed
        * before it has floated at all. */

@@ -841,10 +841,18 @@ reads as a teleport with a delay bolted on:
 
 1. **The plunge.** The water takes the momentum over `stopIn` (0.5 s) and
    the yaw over the slower `slewIn` (2.5 s), so the car carries its line a
-   few metres in and keeps swinging after it has stopped going anywhere. A
-   fall from a bridge is swallowed only as far as `plunge` (7 m/s) — enough
-   to duck the whole car under, not enough to put it on the bed before it
-   has floated.
+   few metres in and keeps swinging after it has stopped going anywhere.
+   The yaw is not a flat constant, though: water resists with the SQUARE of
+   the rate through it, so `slewIn` is the constant of a gentle swing only
+   and the bite has doubled by `slewAbove` (0.35 rad/s). It has to be said
+   for the yaw because a car LANDS in water — under a flat constant the
+   spin sheds the same fraction per second however fast it is, so a car
+   arriving off a jump at `drift.overYaw` turned two full circles on the
+   surface before it settled. The travel keeps its flat constant on purpose:
+   that carry is the entry a car wades back out on (`shallows`), and
+   shortening it takes the escape with it. A fall from a bridge is swallowed
+   only as far as `plunge` (7 m/s) — enough to duck the whole car under, not
+   enough to put it on the bed before it has floated.
 2. **The float.** Buoyancy is an underdamped spring (`buoyancy`, `damping`)
    pulling the hull to its waterline `draft` (0.5 m) under the surface, so
    the entry corks back up past it and rocks two or three times before the
