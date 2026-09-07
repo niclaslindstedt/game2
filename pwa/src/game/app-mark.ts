@@ -37,7 +37,3 @@ export const MARK_TRACKS = [
 
 /** How wide a track is drawn in the icon's space. */
 export const MARK_WIDTH = 26;
-
-/** What every track is declared to be long, so a dash animation over it is
- * written in percent. */
-export const MARK_LENGTH = 100;

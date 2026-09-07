@@ -42,6 +42,27 @@ describe("the app mark", () => {
     expect(icon).toContain(`stroke-width="${MARK_WIDTH}"`);
   });
 
+  it("runs both tracks STRICTLY UPHILL, which is what makes the fill honest", () => {
+    // The mark is filled by a band climbing from the bottom of its box
+    // (`mark-tracks.tsx`) rather than by a stroke drawn along the path,
+    // because a transform survives the main-thread blocks the loading card
+    // is covering for and `stroke-dashoffset` does not.
+    //
+    // The price of a band is this property. It uncovers a track in the order
+    // the car laid it ONLY while every point further along that track is
+    // higher up the box than the one before it; the first time an arc doubles
+    // back downward, the band fills that stretch out of order and the mark
+    // stops reading as something being laid. A redrawn mark that dips even
+    // slightly has to go back to a stroke, or lose the band.
+    for (const d of MARK_TRACKS) {
+      const points = walkPath(d);
+      // The icon's y runs DOWN the page, so "uphill" is y decreasing.
+      expect(points[0].y).toBeGreaterThan(points[points.length - 1].y);
+      const dips = points.filter((point, i) => i > 0 && point.y > points[i - 1].y + 1e-9);
+      expect(dips).toEqual([]);
+    }
+  });
+
   it("frames the tracks alone on the ink they actually cover", () => {
     // The loading card draws the tracks WITHOUT the car, so it needs their own
     // box rather than the badge's square — and a box that is not the ink's is
