@@ -12,6 +12,8 @@
 // flora-build.ts.
 
 import * as THREE from "three";
+
+import type { FloraCasterSource } from "./flora-shadow.ts";
 import { createRng, type Season } from "@engine";
 
 import { GeoBuilder, floraPalette } from "./flora-build.ts";
@@ -35,6 +37,11 @@ export type FloraPlacement = {
 
 export type Flora = {
   group: THREE.Group;
+  /** What this planting can be CAST from (flora-shadow.ts): the geometry,
+   * the material and where each plant stands. Handed out rather than flagged
+   * `castShadow`, because a chunk's mesh spans the whole stage and would put
+   * every tree on it into the shadow map on every frame. */
+  sources: readonly FloraCasterSource[];
   /** Zero out every planted instance whose position `hits` — how an
    * endless run retires plants that road built later runs through. */
   retire: (hits: (x: number, z: number) => boolean) => void;
@@ -178,6 +185,11 @@ export function buildFlora(
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
   return {
     group,
+    sources: planted.map(({ mesh, list }) => ({
+      geometry: mesh.geometry,
+      material: mesh.material as THREE.Material,
+      list,
+    })),
     retire: (hits) => {
       for (const { mesh, list } of planted) {
         let touched = false;

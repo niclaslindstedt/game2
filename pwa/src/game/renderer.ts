@@ -48,6 +48,8 @@ import {
 import type { FrameCost, SceneShare } from "./benchmark-report.ts";
 import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
+import { createFloraShadows } from "./flora-shadow.ts";
+import { SHADOW_REACH } from "./car-shadow.ts";
 import { bodySpecFor, carEyes } from "./car-styles.ts";
 import { pipeAnchors, type PipeAnchor } from "./car/shell.ts";
 import {
@@ -363,6 +365,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // drawing into it (`RICH_SHADOWS`). The rig owns the decision because it
     // owns the bias that goes with it; the bodies own the flag.
     const rich = environment.shadows.rich();
+    floraShadows.setEnabled(rich);
     car?.setShadowDetail(rich);
     ghostCar?.setShadowDetail(rich);
     field.setShadowDetail(rich);
@@ -563,6 +566,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       reflect: GLASS_REFLECT[quality.glass],
     };
   };
+  // The trees that cast onto the car at the top LIGHTING stop. A pool of
+  // its own rather than a flag on the world's flora — see flora-shadow.ts
+  // for why a chunk's mesh can never be culled out of the shadow pass.
+  const floraShadows = createFloraShadows();
+  scene.add(floraShadows.group);
+  const floraFocus = new THREE.Vector3();
+  /** The chunk set the pool was last filled from (`world.floraAge`). */
+  let floraAge = -1;
   const field = createFieldCars(scene);
   // The LIGHTING row, first applied — down here rather than beside its own
   // function because it reaches the cars and the FIELD, and both have to
@@ -737,6 +748,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (world && state.env.season !== builtSeason) {
       scene.remove(world.group);
       world.dispose();
+      floraShadows.setSources([]);
+      floraAge = -1;
       builtSeason = state.env.season;
       world = buildWorld(
         state.track,
@@ -919,6 +932,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (world) {
       scene.remove(world.group);
       world.dispose();
+      floraShadows.setSources([]);
+      floraAge = -1;
     }
     if (route) {
       scene.remove(route.group);
@@ -1566,6 +1581,15 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // ahead get built here, the ones far behind get dropped.
     world?.sync(state, dt);
     world?.update(state, dt, knockPlay ?? undefined);
+    // The trees that cast onto the car (flora-shadow.ts). The pool is
+    // refilled from the live chunks only when the chunk set has actually
+    // changed — `floraCasters()` walks and allocates, and on a finite stage
+    // it changes exactly once.
+    if (world && world.floraAge() !== floraAge) {
+      floraAge = world.floraAge();
+      floraShadows.setSources(world.floraCasters());
+    }
+    floraShadows.follow(floraFocus.set(state.car.x, state.car.y, state.car.z), SHADOW_REACH);
     celebration.update(dt);
     car?.update(state, dt, chase.camera.position);
     if (ghost && ghostCar) ghostCar.update(ghost, dt, chase.camera.position);
