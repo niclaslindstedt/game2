@@ -107,6 +107,10 @@ export type CarCockpit = {
    * switched off, leaving the dark glass behind it. Null when no mirror
    * material was handed in. */
   mirrorGlass: THREE.Object3D | null;
+  /** The mirror itself: housing, stem and backing, on a mesh of its own so
+   * a player who has turned mirrors OFF gets no mirror rather than a dark
+   * slab in the middle of the windscreen (`setMirrorFitted`). */
+  mirrorBody: THREE.Object3D;
   /** Where that pane is, and what it looks at. */
   mirror: MirrorMount;
   /** The steering wheel — car-mesh.ts turns it with the front tyres.
@@ -578,7 +582,7 @@ function buildPillars(
   b: MeshBuilder,
   room: Room,
   mirrorMaterial: THREE.Material | null,
-): THREE.Object3D | null {
+): { body: MeshBuilder; glass: THREE.Object3D | null } {
   const { cabin, floorY, half } = room;
   const spec = cabin.spec;
   const top = cabin.roofY - 0.02;
@@ -662,20 +666,31 @@ function buildMirror(
   b: MeshBuilder,
   room: Room,
   material: THREE.Material | null,
-): THREE.Object3D | null {
+): { body: MeshBuilder; glass: THREE.Object3D | null } {
   const m = RIG.mirror;
   const spec = room.cabin.spec;
   const tall = m.half / MIRROR_SHAPE;
   const mount = cockpitMirrorFor(spec).at;
   const z = spec.cabin.roofFrontZ + m.back;
   const { x, y } = mount;
-  slab(b, [m.half * 2, tall * 2, m.deep], [x, y, z], HUE.rim);
+  // THE HOUSING GOES IN A BUILDER OF ITS OWN, not into the cabin's, because
+  // it is the one piece of the cockpit that can be UNBOLTED. A player who
+  // has turned mirrors off in the options is not asking for a smaller
+  // mirror, they are asking for no mirror — and welded into the shared mesh
+  // this becomes an unremovable slab of dark glass hanging in the middle of
+  // the windscreen for the whole stage. One extra draw call, on the one car
+  // in the game that has a cockpit at all.
+  const body = new MeshBuilder();
+  body.baked = b.baked;
+  slab(body, [m.half * 2, tall * 2, m.deep], [x, y, z], HUE.rim);
   // The stem up to the header, so the housing hangs off something.
-  tube(b, [x, y + tall, z + 0.008], [x, room.cabin.roofY - 0.02, z + 0.02], 0.008, HUE.rim, 5);
-  // The dark backing, so a mirror with no picture in it is still a mirror.
+  tube(body, [x, y + tall, z + 0.008], [x, room.cabin.roofY - 0.02, z + 0.02], 0.008, HUE.rim, 5);
+  // The dark backing, so a mirror whose picture is momentarily off — during
+  // the countdown, or once the flag is out — is still a mirror rather than a
+  // hole. That is only true while the mirror is FITTED; see above.
   const face = z - m.deep / 2 - 0.002;
   wallZ(
-    b,
+    body,
     face,
     x - (m.half - 0.008),
     x + m.half - 0.008,
@@ -684,13 +699,13 @@ function buildMirror(
     HUE.face,
     -1,
   );
-  if (!material) return null;
+  if (!material) return { body, glass: null };
   const geo = new THREE.PlaneGeometry((m.half - 0.008) * 2, (tall - 0.006) * 2)
     .rotateY(Math.PI)
     .translate(x, y, face - 0.002);
   const glass = new THREE.Mesh(geo, material);
   glass.userData[NO_DIRT] = true;
-  return glass;
+  return { body, glass };
 }
 
 /** The tunnel between the seats, the lever and handbrake on it, and the two
@@ -820,8 +835,15 @@ function buildSunStrip(b: MeshBuilder, cabin: Cabin, accent: number): void {
 export function buildCockpit(spec: CarBodySpec, materials: CockpitMaterials): CarCockpit {
   const room = roomOf(spec);
   const { cabin } = room;
+  // BAKED, all of it: the cockpit's materials are unlit on purpose (a cabin
+  // is a closed box the sky never reaches, and a backlit dial does not answer
+  // to the sky at all), so the scene gives these faces no shape and the fake
+  // sun has to. Without it the room, the fascia and the binnacle are flat
+  // blocks of colour at arm's length from the player's eye.
   const b = new MeshBuilder();
+  b.baked = true;
   const ib = new MeshBuilder();
+  ib.baked = true;
   const geos: THREE.BufferGeometry[] = [];
   const group = new THREE.Group();
 
@@ -833,7 +855,8 @@ export function buildCockpit(spec: CarBodySpec, materials: CockpitMaterials): Ca
   buildFascia(b, room);
   const backZ = cabin.cowlZ - RIG.dash.back;
   const instruments = buildBinnacle(b, ib, materials.instrument, room, backZ, geos);
-  const mirrorGlass = buildPillars(b, room, materials.mirror);
+  const mirror = buildPillars(b, room, materials.mirror);
+  const mirrorGlass = mirror.glass;
   buildFurniture(b, room);
 
   const wheelY = room.floorY + RIG.wheel.hub;
@@ -841,6 +864,7 @@ export function buildCockpit(spec: CarBodySpec, materials: CockpitMaterials): Ca
   buildFootwell(b, room, wheelY, wheelZ);
 
   const wb = new MeshBuilder();
+  wb.baked = true;
   buildWheelGeometry(wb, spec.colors.accent);
   const wheelGeo = wb.geometry();
   geos.push(wheelGeo);
@@ -860,6 +884,11 @@ export function buildCockpit(spec: CarBodySpec, materials: CockpitMaterials): Ca
   const dials = new THREE.Mesh(dialGeo, materials.instrument);
   dials.userData[NO_DIRT] = true;
   group.add(shell, dials, wheelMount, ...instruments.objects);
+  const mirrorGeo = mirror.body.geometry();
+  geos.push(mirrorGeo);
+  const mirrorBody = new THREE.Mesh(mirrorGeo, materials.shell);
+  mirrorBody.userData[NO_DIRT] = true;
+  group.add(mirrorBody);
   if (mirrorGlass) {
     geos.push((mirrorGlass as THREE.Mesh).geometry);
     group.add(mirrorGlass);
@@ -881,6 +910,7 @@ export function buildCockpit(spec: CarBodySpec, materials: CockpitMaterials): Ca
   return {
     group,
     mirrorGlass,
+    mirrorBody,
     mirror: cockpitMirrorFor(spec),
     steering: wheel,
     instruments,

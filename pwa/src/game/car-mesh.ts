@@ -266,6 +266,9 @@ export type CarVisual = {
    * below the top LIGHTING stop, where nothing that receives is in the map
    * at all. */
   setShadowDetail: (rich: boolean) => void;
+  /** Whether the car carries a rear-view mirror at all (the player's MIRROR
+   * option) — as opposed to whether its picture is live right now. */
+  setMirrorFitted: (on: boolean) => void;
   /** Which stop of the light switch the stage has the car on (`LampStage`) —
    * the lamps burn harder as it climbs, and their lenses stop taking the
    * tint the paint takes. Pushed from the
@@ -680,6 +683,19 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     if (body.cockpit?.mirrorGlass) body.cockpit.mirrorGlass.visible = on;
   };
 
+  /** Whether the car carries a rear-view mirror at all — the player's own
+   * MIRROR option, which is a different question from whether the picture in
+   * it is live this frame (`setRearView`). Off, the whole assembly comes out:
+   * housing, stem, backing and pane. Left in, a switched-off mirror is a slab
+   * of dark glass hanging in the middle of the windscreen for the whole
+   * stage, which is worse than the feature the player just turned off. */
+  const setMirrorFitted = (on: boolean): void => {
+    const cockpit = body.cockpit;
+    if (!cockpit) return;
+    cockpit.mirrorBody.visible = on;
+    if (!on && cockpit.mirrorGlass) cockpit.mirrorGlass.visible = false;
+  };
+
   const mirrorPass = (draw: () => void): void => {
     const cockpit = body.cockpit;
     if (!cockpit) {
@@ -873,6 +889,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     update,
     setInside,
     setRearView,
+    setMirrorFitted,
     onEvents: damage.onEvents,
     setLooseWheels: damage.setLooseWheels,
     setWheelLoss: damage.setWheelLoss,

@@ -90,7 +90,7 @@ export const DIALS = {
    * radius: the graduations at the rim, the red band just inside them, and
    * the figures inside that. A numeral's height is a fraction of the radius
    * too, so a small dial carries small figures rather than crowded ones. */
-  face: { tick: 0.83, band: { inner: 0.68, outer: 0.74 }, figures: 0.5, figure: 0.24 },
+  face: { tick: 0.83, band: { inner: 0.68, outer: 0.74 }, figures: 0.5, figure: 0.12 },
   /** The gear figure between the tops of the two dials: its height, m, and
    * how far up the panel it sits over the dial centres. */
   gear: { height: 0.022, over: 0.043 },
@@ -257,6 +257,7 @@ function buildDial(
   }
 
   const nb = new MeshBuilder();
+  nb.baked = true;
   // Thick for its length: the needle is read at a dial 600 mm away through
   // the rim of a steering wheel, and a scale-correct one is a couple of
   // pixels wide there — which is a dial with nothing in it.
@@ -504,6 +505,7 @@ function buildTripmeter(
   // The reset button and the mode switch beside the windows: a red button
   // over a grey one, both the size of a fingertip.
   const buttons = new MeshBuilder();
+  buttons.baked = true;
   slab(buttons, [0.011, 0.011, 0.006], [0, 0, 0], HUE.warn);
   slab(buttons, [0.011, 0.011, 0.006], [0, -0.016, 0], HUE.metal);
   const buttonGeo = buttons.geometry();
