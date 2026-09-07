@@ -414,15 +414,23 @@ function CameraGlyph() {
  * of them is big: the place is what is read at speed, the field size is the
  * caption that makes it mean something. It holds its value between split
  * boards rather than counting — a position that ticked over continuously
- * would be claiming knowledge a staggered rally does not have. */
+ * would be claiming knowledge a staggered rally does not have.
+ *
+ * Built like the clock in the opposite corner — a quiet label over a big
+ * figure, no plate under either. The two numbers that say how a run is
+ * going should be read the same way whichever side of the screen they are
+ * on, and a board with a box around it reads as a control. */
 function PositionBoard({ standing }: { standing: HudStanding }) {
   return (
     <div
       className={`hud-place ${standing.place <= PODIUM_PLACES ? "hud-place-podium" : ""}`}
       aria-label={`Position ${standing.place} of ${standing.of}`}
     >
-      <span className="hud-place-no">{standing.place}</span>
-      <span className="hud-place-of">/{standing.of}</span>
+      <span className="hud-place-label">POSITION</span>
+      <span className="hud-place-row">
+        <span className="hud-place-no">{standing.place}</span>
+        <span className="hud-place-of">/{standing.of}</span>
+      </span>
     </div>
   );
 }
@@ -574,35 +582,41 @@ export function Hud({
           )}
         </div>
         <div className="hud-actions pointer-events-auto">
-          {/* R28 — the way back to the last board. Only while there is a
-              run to put back: on the grid there is no road behind the car,
-              and while a run-out is watched the car on the screen is
-              somebody else's. */}
-          {!spectate && snap.phase === "racing" && <RecoverButton onReset={onReset} />}
-          {/* TOUCH ONLY: a keyboard or a controller has the bind, and the
-              angle is also a row on the options page — a button for it on
-              the one strip a driver glances at mid-stage is a third door to
-              something nobody changes twice a run. On a phone it is the
-              ONLY door, which is the whole of its case.
-              Off while a run-out is watched, because the press is: the
-              ladder's in-car views are mounted off the silhouette of the
-              player's OWN car, so App refuses to walk it onto somebody
-              else's. A button that does nothing is worse than no button. */}
-          {show.cameraButton && thumbs && !spectate && (
-            <button
-              type="button"
-              className="hud-mini hud-mini-icon"
-              onClick={onCamera}
-              title="Camera (V)"
-              aria-label="Camera"
-            >
-              <CameraGlyph />
-            </button>
-          )}
-          {/* R29 — the position board, between the camera and the map. It is
-              the last thing on the row, which puts it hard against the
-              minimap: place and route are the two things a driver glances
-              right for, and they should be one glance. */}
+          {/* THE PRESSES, on a row above the place rather than beside it. The
+              group they head is one map tall (styles.css), which is what
+              sizes them: half the map each, with the board making up the
+              rest, so this corner reads as the map and one column beside
+              it. */}
+          <div className="hud-action-stack">
+            {/* R28 — the way back to the last board. Only while there is a
+                run to put back: on the grid there is no road behind the car,
+                and while a run-out is watched the car on the screen is
+                somebody else's. */}
+            {!spectate && snap.phase === "racing" && <RecoverButton onReset={onReset} />}
+            {/* TOUCH ONLY: a keyboard or a controller has the bind, and the
+                angle is also a row on the options page — a button for it on
+                the one strip a driver glances at mid-stage is a third door to
+                something nobody changes twice a run. On a phone it is the
+                ONLY door, which is the whole of its case.
+                Off while a run-out is watched, because the press is: the
+                ladder's in-car views are mounted off the silhouette of the
+                player's OWN car, so App refuses to walk it onto somebody
+                else's. A button that does nothing is worse than no button. */}
+            {show.cameraButton && thumbs && !spectate && (
+              <button
+                type="button"
+                className="hud-mini hud-mini-icon"
+                onClick={onCamera}
+                title="Camera (V)"
+                aria-label="Camera"
+              >
+                <CameraGlyph />
+              </button>
+            )}
+          </div>
+          {/* R29 — the position board, under the presses and still hard
+              against the minimap: place and route are the two things a
+              driver glances right for, and they should be one glance. */}
           {show.position && snap.standing && <PositionBoard standing={snap.standing} />}
         </div>
       </div>
