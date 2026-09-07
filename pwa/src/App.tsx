@@ -1094,6 +1094,12 @@ export function App() {
    * road over — the run is LIVE under a leaving card, which is what makes
    * the lights the first thing a player sees rather than the second. */
   const [loading, setLoading] = useState<boolean | "leaving">(false);
+  /** True while the GPU has the WebGL context and the page does not — see
+   * `gpu-context.ts`. Nothing can be drawn, so the frame loop holds and the
+   * cover goes up; the ref is what the loop reads, since the loop is built
+   * once and never sees a re-render. */
+  const [gpuLost, setGpuLost] = useState(false);
+  const gpuLostRef = useRef(false);
   /** True while ALT is held: the game's chrome comes off so a frame can be
    * judged on the pixels alone. The debug overlay is NOT part of it — a
    * screenshot with nothing to say where it was taken is the one thing the
@@ -2507,6 +2513,51 @@ export function App() {
       if (disposed) return;
       const renderer = createRenderer(canvas, optionsRef.current.video);
       rendererRef.current = renderer;
+      // Pushed before anything that will call INTO the renderer registers its
+      // own cleanup: teardown runs LIFO, so the renderer goes last, after
+      // every listener that could still ask it to resize has been unhooked.
+      cleanups.push(() => renderer.dispose());
+      // THE CANVAS FOLLOWS THE VIEWPORT FROM HERE, not from the first frame.
+      // Everything below this line — the world builder above all — is seconds
+      // of blocked main thread on a phone, and the whole of it is behind the
+      // studio card. A screen rotated while it runs must not be a screen the
+      // buffer is still cut for when the card lifts.
+      const onResize = (): void => renderer.resize();
+      window.addEventListener("resize", onResize);
+      window.addEventListener("orientationchange", onResize);
+      // …and a rotation the page was not AWAKE for. A phone rotated in
+      // another app resizes this one while it is hidden, where it gets no
+      // frame to notice in and, on iOS, no `resize` event either: the app
+      // simply comes back to a box nothing ever announced. Coming back into
+      // view is the event that always arrives, so it is the one that asks.
+      const onShown = (): void => {
+        if (!document.hidden) renderer.resize();
+      };
+      document.addEventListener("visibilitychange", onShown);
+      window.addEventListener("pageshow", onShown);
+      cleanups.push(() => {
+        window.removeEventListener("resize", onResize);
+        window.removeEventListener("orientationchange", onResize);
+        document.removeEventListener("visibilitychange", onShown);
+        window.removeEventListener("pageshow", onShown);
+      });
+      // …and the harder half of the same story: the GPU can take the CONTEXT
+      // back, not just resize the box. `gpu-context.ts` owns why that happens
+      // and how often; this is what the app does about it. A run cannot be
+      // driven behind a screen that draws nothing, so it goes on the pause
+      // card — the same card, and the same rule about a menu, as the pause
+      // key — and the cover goes over the top until the picture is back.
+      renderer.onContext((lost) => {
+        gpuLostRef.current = lost;
+        setGpuLost(lost);
+        if (!lost) return;
+        // The frame loop is what feeds the beds, and it holds while the
+        // context is gone — so an engine left running is one note held for
+        // the whole outage. The MUSIC needs no help: the pause below stops
+        // it the way the pause card always does.
+        audioRef.current?.silence();
+        if (menuRef.current === null) setPaused(true);
+      });
       // Name the roll and decode the mark now rather than on the first
       // press: both are cheap, and the first picture of a session is the
       // one most likely to be shown to somebody.
@@ -2538,7 +2589,6 @@ export function App() {
       renderer.onKnock((speed) => {
         if (menuRef.current === null) audioRef.current?.knock(speed);
       });
-      cleanups.push(() => renderer.dispose());
       const page = menuRef.current;
       if (page) showBackdropRef.current(page);
       else {
@@ -3390,6 +3440,18 @@ export function App() {
         // and did not spend. The pad is still polled above, so the way out
         // of one is a button like anything else.
         if (benchRef.current) return;
+        // NOTHING IS DRAWABLE WITHOUT A GPU CONTEXT (gpu-context.ts), and
+        // every step below aims at a picture: running them spends a phone's
+        // battery on a frame nobody will see, and advances every effect's
+        // clock over a blackout, so the world jumps when the picture returns.
+        // Ahead of the load below, which cannot WARM a shader on a context
+        // that is gone — held here, it picks up where it left off on the
+        // frame after the picture comes back. The pad is polled above and
+        // the cards are DOM, so the pause card the loss raised is still read
+        // and still answers a controller while this holds. `last` moved
+        // above too, so the frame that resumes is one frame long rather than
+        // the whole outage.
+        if (gpuLostRef.current) return;
         // THE LOAD OWNS THE FRAME while a race is being stood up
         // (`race-loader.ts`). Nothing below runs: there is a card over the
         // canvas, so a frame spent drawing the world behind it is a frame
@@ -3650,14 +3712,6 @@ export function App() {
       // The world is built and the loop is turning: everything the studio
       // card was covering has landed.
       setBooted(true);
-
-      const onResize = (): void => renderer.resize();
-      window.addEventListener("resize", onResize);
-      window.addEventListener("orientationchange", onResize);
-      cleanups.push(() => {
-        window.removeEventListener("resize", onResize);
-        window.removeEventListener("orientationchange", onResize);
-      });
     });
 
     return () => {
@@ -3972,7 +4026,13 @@ export function App() {
           onBenchmark={startBenchmark}
         />
       )}
-      {loading !== false && <LoadingScreen leaving={loading === "leaving"} />}
+      {/* THE SAME CARD FOR BOTH WAYS THERE IS NOTHING TO LOOK AT: a race being
+          stood up, and a GPU that has taken the context back (gpu-context.ts).
+          A loss part-way through a load holds the card up and cancels its
+          fade — the road is not ready to be handed over to anybody. */}
+      {(loading !== false || gpuLost) && (
+        <LoadingScreen leaving={loading === "leaving" && !gpuLost} />
+      )}
       {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}
       <UpdateButton
         needRefresh={pwa.needRefresh || forcedUpdate}
