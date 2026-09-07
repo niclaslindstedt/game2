@@ -3718,7 +3718,6 @@ export function App() {
           onReset={() => input.requestReset()}
           mirrorLive={mirrorLive}
           onMirror={toggleMirror}
-          onShot={options.screenshots ? () => takeShotRef.current() : null}
           nextStage={nextStage}
           onRetry={onRetry}
           onRetire={goMainMenu}

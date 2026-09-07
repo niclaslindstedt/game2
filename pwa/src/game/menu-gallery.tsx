@@ -155,7 +155,7 @@ export function GalleryPage({ settings, onBack }: { settings: Settings; onBack: 
       {shots.length === 0 ? (
         <div className="menu-empty">
           {settings.screenshots
-            ? `Nothing here yet. Press ${key} during a run — or the shutter on the button row, on a phone — and the picture lands here.`
+            ? `Nothing here yet. Press ${key} during a run and the picture lands here.`
             : "Screenshots are switched off in OPTIONS ▸ CONTROLS. Turn them back on to take one."}
         </div>
       ) : (

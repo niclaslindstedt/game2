@@ -17,7 +17,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   HUD_LAYER_ROOT,
+  LAYER_STILL_CSS,
   NOTE_MIN,
+  animatedProperties,
+  cssPropertyName,
   hudLayerSvg,
   noteFont,
   notesFit,
@@ -285,6 +288,68 @@ describe("the HUD layer", () => {
 
   it("never emits a picture with no area to it", () => {
     expect(layer({ width: 0, height: -4 })).toContain('width="1" height="1"');
+  });
+
+  // An SVG image is painted at time zero, so a HUD taken in with its
+  // animations live replays every entrance from its first keyframe — and
+  // the news column, the split board and the touch controls all begin at
+  // `opacity: 0`. The layer is STILL, and where each animation had actually
+  // got to is inlined on the copy instead (shot-hud.ts).
+  it("stops the clock on everything in it", () => {
+    const svg = layer();
+    expect(svg).toContain(LAYER_STILL_CSS);
+    expect(LAYER_STILL_CSS).toContain("animation:none !important");
+    expect(LAYER_STILL_CSS).toContain("transition:none !important");
+  });
+
+  // ...and it has to come AFTER the page's own sheet, or a rule with the
+  // same weight later in the document wins and the entrances play again.
+  it("stills the layer after the page's own stylesheet, not before it", () => {
+    const svg = layer({ css: ".hud-flash { animation: pop 1s }" });
+    expect(svg.indexOf(".hud-flash { animation: pop 1s }")).toBeLessThan(
+      svg.indexOf(LAYER_STILL_CSS),
+    );
+  });
+});
+
+// The freeze reads each animated property off the live element and writes it
+// onto the copy, so what it needs from a keyframe list is the SET of CSS
+// property names — not the keys, which arrive in the IDL spelling with the
+// Web Animations API's own timing fields mixed in among them.
+describe("the properties an animation is moving", () => {
+  it("names them the way CSS does", () => {
+    expect(cssPropertyName("opacity")).toBe("opacity");
+    expect(cssPropertyName("backgroundColor")).toBe("background-color");
+    expect(cssPropertyName("transformOrigin")).toBe("transform-origin");
+  });
+
+  // A custom property is already in its CSS spelling and has no camel case
+  // to undo — `--pull` must not come back as `- -pull`.
+  it("leaves a custom property alone", () => {
+    expect(cssPropertyName("--pull")).toBe("--pull");
+  });
+
+  it("drops the timing bookkeeping the API puts beside the properties", () => {
+    const frames = [
+      { offset: 0, computedOffset: 0, easing: "ease-out", composite: "auto", opacity: "0" },
+      { offset: 1, computedOffset: 1, easing: "ease-out", composite: "auto", opacity: "1" },
+    ];
+    expect(animatedProperties(frames)).toEqual(["opacity"]);
+  });
+
+  // A `from`/`to` rule carries the same property in both frames and a
+  // stepped one carries it in four; each is read off the live element once.
+  it("names each property once, in the order it was first seen", () => {
+    const frames = [
+      { opacity: "0", transform: "scale(0.82)" },
+      { transform: "scale(1.06)", opacity: "1" },
+      { transform: "scale(1)", opacity: "1" },
+    ];
+    expect(animatedProperties(frames)).toEqual(["opacity", "transform"]);
+  });
+
+  it("has nothing to freeze for an animation that moves nothing", () => {
+    expect(animatedProperties([{ offset: 0 }, { offset: 1 }])).toEqual([]);
   });
 });
 

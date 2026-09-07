@@ -36,19 +36,25 @@ function RecoverGlyph() {
   );
 }
 
-/** The button, for the action row beside the camera and the shutter.
+/** The button, for the action row beside the camera.
  *
- * Unlike the shutter it is drawn on every device rather than on touch
- * alone, and the reason is what it is FOR: a driver reaches for this with
- * the car upside down in a ditch, which is the worst possible moment to be
- * remembering a keyboard binding. The bind is the fast way for anybody who
- * has learned it; the button is what makes the way out visible to everybody
- * who has not. */
+ * It is drawn on every device rather than on touch alone, and the reason is
+ * what it is FOR: a driver reaches for this with the car upside down in a
+ * ditch, which is the worst possible moment to be remembering a keyboard
+ * binding. The bind is the fast way for anybody who has learned it; the
+ * button is what makes the way out visible to everybody who has not.
+ *
+ * ...and the moment the car is OFF THE ROAD it says so. The mark is up the
+ * whole run because the press has to be findable before it is needed, but a
+ * car in the country is a car that is probably reaching for it, so
+ * `.hud-recover` is lit off the root's `data-off` (styles.css) rather than
+ * appearing from nowhere at the worst moment. A button that arrives while
+ * the driver is already looking for it is a button they have to find twice. */
 export function RecoverButton({ onReset }: { onReset: () => void }) {
   return (
     <button
       type="button"
-      className="hud-mini hud-mini-icon"
+      className="hud-mini hud-mini-icon hud-recover"
       onClick={onReset}
       title="Back to the last checkpoint (R)"
       aria-label="Back to the last checkpoint"
