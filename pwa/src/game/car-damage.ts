@@ -124,6 +124,10 @@ const WHEEL_KICK = { out: 2.2, up: 3 };
  * mirror is a lump and lies however it lands. */
 const PANEL_FACE: Partial<Record<DamagePart, "x" | "y" | "z">> = {
   hood: "y",
+  // A pipe is not a panel, but it is long, and a long piece that settles on
+  // one end is a post standing in the grass: turning its own y upward is
+  // what leaves it LYING along the road behind the car.
+  exhaust: "y",
   hatch: "y",
   spoiler: "y",
   doorL: "x",

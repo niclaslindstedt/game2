@@ -61,7 +61,9 @@ import type { LampStage } from "./daylight.ts";
 import { crewLookFor } from "./car-crew.ts";
 import { liveryForCrew } from "./car-livery.ts";
 import { BRAKE_DUST, lightDust } from "./dust-light.ts";
-import { createFumes, PIPE, pipeBursts, pipeWork } from "./fumes.ts";
+import { bodySpecFor } from "./car-styles.ts";
+import { pipeAnchors, type PipeAnchor } from "./car/shell.ts";
+import { createFumes, pipeBursts, pipeWork } from "./fumes.ts";
 import { plumeGround } from "./ground-tint.ts";
 import { createNameTag, type NameTag } from "./name-tag.ts";
 import { createPlume } from "./plume.ts";
@@ -239,16 +241,20 @@ export type FieldCars = {
    * grime film its wipers clear. Both read when a car is BUILT, so they
    * land on the next stage rather than mid-run, which is the same contract
    * the undergrowth setting keeps; one call because they are one setting.
+   * `exhaust` is the third of that kind — whether a rival is built with
+   * TAILPIPES under its tail — and it rides the same row as the smoke that
+   * leaves them, so a field with no pipes is a field with no plumes.
    * `wheelLoss` is whether a rival may lose a wheel at all, `looseWheels`
    * the question after it — whether one that HAS come off is thrown as a
    * rolling body — `crumple` whether a rival's panels fold into what it
    * hit, and `brakeLights` whether a rival standing on the pedal lights its
-   * tail. Unlike the two above, all four land on the cars already built: none is baked into a geometry, and a
+   * tail. Unlike the three above, all four land on the cars already built: none is baked into a geometry, and a
    * field whose brake lights came in one stage late would be a field of
    * cars that look like they are not braking. */
   setCarDetail: (detail: {
     interior: InteriorDetail;
     screens: FilmDetail;
+    exhaust: boolean;
     looseWheels: boolean;
     wheelLoss: boolean;
     crumple: boolean;
@@ -263,7 +269,15 @@ export type FieldCars = {
  * the seconds since their pipe last fired, which lives here for the same
  * reason: a clock belongs to a car, and a field of them sharing one would
  * put every pipe in the field on the same beat. */
-type FieldCar = { visual: CarVisual; tag: NameTag; fumeClock: number };
+type FieldCar = {
+  visual: CarVisual;
+  tag: NameTag;
+  fumeClock: number;
+  /** Where this crew's car smokes from, whole and with its pipework torn
+   * off — the same pair the player's own car keeps (renderer.ts). */
+  pipes: PipeAnchor[];
+  pipeStub: PipeAnchor[];
+};
 
 /** What a RIVAL's cabin is built at, given the level the renderer hands the
  * field. A level down off the top one: the full cabin's extra is a roll cage
@@ -283,6 +297,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let drawn = 0;
   let interior: InteriorDetail = fieldInterior("high");
   let screens: FilmDetail = "coarse";
+  let piped = true;
   let wheelsRoll = true;
   let shedsWheels = true;
   let folds = true;
@@ -427,6 +442,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
             // rival, they read that its windows have gone brown, and that is
             // 48 triangles rather than 3,456 (car/wipers.ts).
             screens,
+            exhaust: piped,
           });
           // The plate wears the car's own paint and the number off its door,
           // so the name and the colour coming up the road are one crew.
@@ -438,7 +454,17 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           visual.group.name = "field cars";
           visual.debris.name = "field debris";
           scene.add(visual.group, visual.debris, tag.sprite);
-          const fresh = { visual, tag, fumeClock: 0 };
+          // Off the body AS BUILT, for the reason renderer.ts reads it that
+          // way: a crew built without pipes has nowhere for smoke to leave
+          // from, so the EXHAUST row's two halves cannot disagree.
+          const shape = bodySpecFor(run.state.spec);
+          const fresh = {
+            visual,
+            tag,
+            fumeClock: 0,
+            pipes: piped ? pipeAnchors(shape) : [],
+            pipeStub: piped ? pipeAnchors(shape, true) : [],
+          };
           built.set(run, fresh);
           visual.setLooseWheels(wheelsRoll);
           visual.setWheelLoss(shedsWheels);
@@ -506,8 +532,15 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           if (!body) continue;
           const state = crew.run.state;
           const car = state.car;
+          const blown = car.damage.broken.includes("exhaust");
+          const ports = blown ? body.pipeStub : body.pipes;
+          if (ports.length === 0) continue;
           body.fumeClock += dt;
-          const pipe = pipeWork(car.rev, car.u, state.phase, smokedFx, FIELD_FUMES);
+          const pipe = pipeWork(car.rev, car.u, state.phase, smokedFx, {
+            thickness: FIELD_FUMES,
+            pipes: ports.length,
+            broken: blown,
+          });
           const bursts = car.airborne ? 0 : pipeBursts(body.fumeClock, pipe.every);
           if (bursts === 0) continue;
           body.fumeClock -= bursts * pipe.every;
@@ -516,15 +549,17 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           // wrong heading smokes out of somebody's door.
           const fwdX = Math.sin(car.heading);
           const fwdZ = Math.cos(car.heading);
-          for (let puff = 0; puff < bursts * pipe.puffs; puff++) {
-            fumes.spawn(
-              car.x - fwdX * PIPE.back + fwdZ * PIPE.side,
-              car.y + PIPE.up,
-              car.z - fwdZ * PIPE.back - fwdX * PIPE.side,
-              -fwdX * pipe.blast + state.wind.x * 0.85,
-              -fwdZ * pipe.blast + state.wind.z * 0.85,
-              pipe.shade,
-            );
+          for (const at of ports) {
+            for (let puff = 0; puff < bursts * pipe.puffs; puff++) {
+              fumes.spawn(
+                car.x - fwdX * at.back + fwdZ * at.side,
+                car.y + at.up,
+                car.z - fwdZ * at.back - fwdX * at.side,
+                -fwdX * pipe.blast + state.wind.x * 0.85,
+                -fwdZ * pipe.blast + state.wind.z * 0.85,
+                pipe.shade,
+              );
+            }
           }
         }
       }
@@ -555,6 +590,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
     setCarDetail: (detail) => {
       interior = fieldInterior(detail.interior);
       screens = detail.screens;
+      piped = detail.exhaust;
       wheelsRoll = detail.looseWheels;
       shedsWheels = detail.wheelLoss;
       folds = detail.crumple;

@@ -923,9 +923,10 @@ export type DetailSettings = Pick<
 export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   // The phone that stutters: every window solid and every wiper off, the
   // verges bare, under half the particles, a lost wheel gone rather than
-  // rolling, nobody on the road raising any ground, no pipe smoking, no
-  // body bent by what it hit, every wheel staying on the car that lost it,
-  // and one headlamp beam with no shadow under the car.
+  // rolling, nobody on the road raising any ground, not a tailpipe or a
+  // plume of smoke on the whole entry list, no body bent by what it hit,
+  // every wheel staying on the car that lost it, and one headlamp beam with
+  // no shadow under the car.
   low: {
     effects: "low",
     interior: "off",
@@ -940,9 +941,10 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   },
   // The design point — every lever at the number the game was tuned on, and
   // everything that is per car spent on the one car it is worth the most
-  // on: the car being driven has the cabin, the wipers, the dust, the smoke,
-  // the folded panels and the wheels it can actually lose, and the field's
-  // share of all six is what the machine buys back.
+  // on: the car being driven has the cabin, the wipers, the dust, the pipes
+  // and the smoke out of them, the folded panels and the wheels it can
+  // actually lose, and the field's share of all six is what the machine
+  // buys back.
   // The lamps throw one beam per end rather than the pair, and the shadow
   // is the smaller map: a light is paid for on every pixel, and it is what
   // the design point gives up to hold its frame rate.
@@ -959,10 +961,10 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     lighting: "normal",
   },
   // A machine with headroom: a thicker forest floor, stonier verges, and the
-  // whole entry list furnished behind its glass, towing dust, steaming on
-  // the line, wearing every dent it has earned and able to be put out by a
-  // lost wheel, the way a rally actually looks — under all four beams, with
-  // the sharp shadow.
+  // whole entry list furnished behind its glass, towing dust, wearing its
+  // own tailpipes and steaming out of them on the line, wearing every dent
+  // it has earned and able to be put out by a lost wheel, the way a rally
+  // actually looks — under all four beams, with the sharp shadow.
   high: {
     effects: "full",
     interior: "full",

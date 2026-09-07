@@ -18,8 +18,10 @@
 //
 // Dimensions are metres and honest: these are 3.6-4.1 m cars on 2.4-2.5 m
 // wheelbases, which is what the camera, the dust and the road width are
-// tuned around. The longest point of the longest car (its front bumper
-// face) is what TUNING.collision.halfLength has to contain.
+// tuned around. The longest point of the longest car is what
+// TUNING.collision.halfLength has to contain — a bumper face at both ends,
+// or, on a car with a shallow rear bar, the tip of its tailpipe
+// (`bodyHalfLength`, held by tests/car_geometry_test.ts).
 
 import type { CarSpec } from "@engine";
 import type { CarEyes } from "./camera-eye.ts";
@@ -265,7 +267,10 @@ export const COMPACT_BODY: CarBodySpec = {
     bumper: { y: 0.645, height: 0.11, depth: 0.185, wrap: 0.32, color: 0x1c1f24 },
     valance: { y: 0.51, height: 0.16, depth: 0.21, span: 1.3, color: 0x1c1f24 },
     lamps: { y: 0.52, x: 0.4, width: 0.115, height: 0.05, color: 0xf2ede0 },
-    exhaust: { x: -0.44, y: 0.4, radius: 0.04 },
+    // Slung UNDER the floorpan, not through the valance: the pipe's top is
+    // level with `floorY` and the rest of it hangs below, which is where a
+    // real one runs and why the ground is what takes it off.
+    exhaust: { x: -0.44, y: 0.23, radius: 0.04 },
   },
   colors: {
     paint: 0xf4f2ec,
@@ -524,8 +529,9 @@ export const CLASSIC_BODY: CarBodySpec = {
       strip: { y: 0.515, height: 0.025 },
     },
     valance: { y: 0.29, height: 0.13, depth: 0.12, span: 1.54, color: 0x1b1e23 },
-    // One pipe, out of the left, under the valance.
-    exhaust: { x: -0.52, y: 0.2, radius: 0.04 },
+    // One pipe, out of the left, tucked up under the valance's lower edge —
+    // the lowest thing on the car, as a tailpipe is.
+    exhaust: { x: -0.52, y: 0.185, radius: 0.04 },
     // The tailgate's lower panel, between the backlight's foot and the lamps,
     // with the shut line round it.
     deck: { half: 0.67, zFrom: -1.86, zTo: -1.93 },
@@ -583,9 +589,11 @@ export const CLASSIC_BODY: CarBodySpec = {
  * The BACK is where the geometry is spent, because it is the panel the
  * chase camera holds for the whole stage: a lamp band the width of the car
  * with the plate let into the middle of it, a deep body-colour bumper with
- * the black valance under it, the lip on the boot, the two red flaps, and
- * the tail paint carrying the roof's black down the posts and across the
- * quarters so the car reads as a white nose pushing a black tail. */
+ * the black valance under it, TWIN PIPES slung under that — the only car in
+ * the roster with two, and two plumes of smoke to match — the lip on the
+ * boot, the two red flaps, and the tail paint carrying the roof's black
+ * down the posts and across the quarters so the car reads as a white nose
+ * pushing a black tail. */
 export const SEDAN_BODY: CarBodySpec = {
   // The deck FALLS from the cowl to the nose, a little more with each
   // station, and its last 0.4 m ROUNDS DOWN to the lip — the wedge of a
@@ -786,7 +794,17 @@ export const SEDAN_BODY: CarBodySpec = {
     // skirt is a centimetre the car looks jacked up.
     bumper: { y: 0.565, height: 0.19, depth: 0.08, wrap: 0.3, color: 0xf3f1eb },
     valance: { y: 0.39, height: 0.16, depth: 0.18, span: 1.4, color: 0x15171b },
-    exhaust: { x: -0.4, y: 0.36, radius: 0.045 },
+    // TWIN EXIT, one pipe either side of the propshaft tunnel — the works
+    // car's own detail, and the one thing that reads from directly behind
+    // it at any distance. Both smoke, because both are pipes.
+    //
+    // Slung under the floorpan, and stopping 65 mm past the cap rather than
+    // the usual 120: this is the longest tail in the roster, and the whole
+    // of the pipe has to fit inside `TUNING.collision` behind it
+    // (tests/car_geometry_test.ts). Nothing is lost by the short tips — the
+    // run of pipe under the car is what is actually seen from the seat
+    // behind it.
+    exhaust: { x: -0.4, y: 0.2, radius: 0.045, out: 0.065, pair: true },
     deck: { half: 0.62, zFrom: -1.4, zTo: -1.95 },
   },
   colors: {

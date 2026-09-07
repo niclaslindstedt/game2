@@ -16,13 +16,21 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
+import { CARS, TUNING, type DamagePart } from "@engine";
+
 import { MeshBuilder, patchAt } from "../pwa/src/game/car/builder.ts";
+import { buildRear } from "../pwa/src/game/car/fascia.ts";
 import { backlightY, cabinPanels } from "../pwa/src/game/car/greenhouse.ts";
 import { buildTailLights } from "../pwa/src/game/car/lamps.ts";
-import { bodyHalfLength, sampleProfile } from "../pwa/src/game/car/shell.ts";
+import {
+  bodyHalfLength,
+  pipeAnchors,
+  pipeSides,
+  sampleProfile,
+} from "../pwa/src/game/car/shell.ts";
 import type { CarBodySpec } from "../pwa/src/game/car/spec.ts";
 import { buildTrim } from "../pwa/src/game/car/trim.ts";
-import { CLASSIC_BODY } from "../pwa/src/game/car-styles.ts";
+import { CAR_BODIES, CLASSIC_BODY } from "../pwa/src/game/car-styles.ts";
 
 /** A vertex's green-to-red ratio: what a baked sun leaves of a colour,
  * since it multiplies every channel by the same factor. */
@@ -194,5 +202,168 @@ describe("a tailgate wing on posts at its ends", () => {
     }
     expect(feet).toBeGreaterThan(0);
     geo.dispose();
+  });
+});
+
+describe("the tailpipes, and the smoke that has to come out of them", () => {
+  const bodies = Object.entries(CAR_BODIES);
+
+  function axlesOf(spec: CarBodySpec): number[] {
+    const shift = spec.axleShift ?? 0;
+    return [spec.wheelbase / 2 + shift, -spec.wheelbase / 2 + shift];
+  }
+
+  /** Everything the rear clip builds, by part. */
+  function rearParts(
+    spec: CarBodySpec,
+    options?: { exhaust?: boolean },
+  ): Map<DamagePart, MeshBuilder> {
+    const parts = new Map<DamagePart, MeshBuilder>();
+    const part = (name: DamagePart): MeshBuilder => {
+      let b = parts.get(name);
+      if (!b) parts.set(name, (b = new MeshBuilder()));
+      return b;
+    };
+    buildRear(
+      { body: new MeshBuilder(), lens: new MeshBuilder() },
+      spec,
+      axlesOf(spec),
+      part,
+      options,
+    );
+    return parts;
+  }
+
+  /** The pipes as they are actually DRAWN: the geometry the rear clip puts
+   * in the `exhaust` part, which is its own mesh because the ground tears
+   * it off (engine `BELLY_BOLTS`) and a piece that flies has to be one. */
+  function pipeGeometry(spec: CarBodySpec): THREE.BufferGeometry {
+    const pipes = rearParts(spec).get("exhaust");
+    expect(pipes, "the rear clip drew no exhaust at all").toBeDefined();
+    return pipes!.geometry();
+  }
+
+  it.each(bodies)("%s draws one pipe per side its spec claims", (_id, spec) => {
+    const e = spec.rear?.exhaust;
+    const want = pipeSides(e);
+    expect(want.length).toBeGreaterThan(0);
+    const geo = pipeGeometry(spec);
+    const pos = geo.getAttribute("position");
+    // Sort every vertex onto the pipe it is nearest and insist all of them
+    // are used. A spec asking for a twin exit and getting one tube back is
+    // the failure this catches, and it is invisible on a contact sheet shot
+    // from three quarters. `REACH` is how far off its own centreline any of
+    // the assembly — tube, tip or silencer — is allowed to stand: a hand,
+    // which is also what keeps a pipe from wandering onto the other one.
+    const REACH = 0.12;
+    const found = new Set<number>();
+    let widest = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      let on = 0;
+      for (let k = 1; k < want.length; k++) {
+        if (Math.abs(x - want[k]) < Math.abs(x - want[on])) on = k;
+      }
+      const off = Math.abs(x - want[on]);
+      expect(
+        off,
+        `an exhaust vertex at x=${x.toFixed(3)} stands ${off.toFixed(3)} m off its pipe`,
+      ).toBeLessThanOrEqual(REACH);
+      found.add(on);
+      widest = Math.max(widest, Math.abs(x));
+    }
+    expect([...found].sort()).toEqual(want.map((_, i) => i));
+    // Mirrored, not merely two: a pair drawn from one x and its own half
+    // would sit on the same side of the car.
+    if (want.length > 1) expect(want[0]).toBeCloseTo(-want[1], 6);
+    // ...and the whole assembly stays inboard of the REAR TYRES it runs
+    // beside. Nothing draws attention to a silencer modelled through a
+    // wheel, because the wheel is drawn over it from every angle the sheet
+    // is shot at — it shows up in the game, on the one camera that gets
+    // under the car, and by then it is somebody else's bug report.
+    expect(widest).toBeLessThan(spec.trackHalf - spec.wheelWidth / 2);
+    geo.dispose();
+  });
+
+  it("gives the twin exit to the four-wheel-drive car and to nothing else", () => {
+    // The pair is the works car's own detail, and the roster reads it off
+    // the drivetrain: a second car growing a second pipe is a spec change
+    // somebody has to mean.
+    for (const car of CARS) {
+      const twin = pipeSides(CAR_BODIES[car.id].rear?.exhaust).length > 1;
+      expect(twin, `${car.id} (${car.drive})`).toBe(car.drive === "awd");
+    }
+  });
+
+  it.each(bodies)("%s smokes from where its pipe actually ENDS", (_id, spec) => {
+    // The claim the whole feature rests on. The cloud is spawned off
+    // `pipeAnchors` and the tube is drawn off the same spec, and the two are
+    // computed in different files: a car whose smoke leaves 130 mm inside
+    // its own bodywork looks exactly like a car whose smoke leaves its pipe
+    // until somebody stands behind it.
+    const geo = pipeGeometry(spec);
+    const pos = geo.getAttribute("position");
+    let tip = Infinity;
+    for (let i = 0; i < pos.count; i++) tip = Math.min(tip, pos.getZ(i));
+    const anchors = pipeAnchors(spec);
+    expect(anchors).toHaveLength(pipeSides(spec.rear?.exhaust).length);
+    for (const at of anchors) {
+      expect(at.back).toBeCloseTo(-tip, 6);
+      expect(at.up).toBeCloseTo(spec.rear!.exhaust!.y, 6);
+    }
+    expect(anchors.map((a) => a.side)).toEqual(pipeSides(spec.rear?.exhaust));
+    geo.dispose();
+  });
+
+  it.each(bodies)("%s keeps the whole pipe inside the collision box", (_id, spec) => {
+    // A tailpipe is the one piece of trim that can reach past a shallow rear
+    // bumper, and the box the engine collides is one box for the roster. So
+    // `bodyHalfLength` counts it, and the tip has to sit inside what that
+    // number promises rather than hanging out the back of the car the
+    // physics believes in.
+    const back = Math.max(...pipeAnchors(spec).map((a) => a.back));
+    expect(back).toBeLessThanOrEqual(bodyHalfLength(spec) + 1e-9);
+    expect(back).toBeLessThanOrEqual(TUNING.collision.halfLength);
+  });
+
+  it.each(bodies)("%s moves its smoke forward to the BREAK once the pipe is gone", (_id, spec) => {
+    // A car that has left its exhaust on a crest still smokes, and it has to
+    // smoke from somewhere else: one plume, out of the stub under the tail,
+    // ahead of where the tip used to be. Same anchor arithmetic, so the
+    // renderer and the field read it the same way.
+    const whole = pipeAnchors(spec);
+    const stub = pipeAnchors(spec, true);
+    expect(stub).toHaveLength(1);
+    for (const at of whole) expect(stub[0].back).toBeLessThan(at.back);
+    expect(stub[0].up).toBeCloseTo(spec.floorY, 6);
+  });
+
+  it("gives a car with no exhaust authored on it no pipes and no plume", () => {
+    const bare: CarBodySpec = {
+      ...CLASSIC_BODY,
+      rear: { ...CLASSIC_BODY.rear, exhaust: undefined },
+    };
+    expect(pipeAnchors(bare)).toEqual([]);
+    expect(pipeAnchors(bare, true)).toEqual([]);
+  });
+
+  it.each(bodies)("%s builds no pipes at all when the EXHAUST row is off", (_id, spec) => {
+    // The row is part pool and part GEOMETRY (settings.ts's EXHAUST_SEEN),
+    // and this is the geometry half: a machine not paying for fifteen pipes
+    // must not be handed them anyway. The rest of the tail is untouched —
+    // switching the exhaust off is not switching the bumper off.
+    const bare = rearParts(spec, { exhaust: false });
+    expect(bare.get("exhaust")).toBeUndefined();
+    const whole = rearParts(spec);
+    for (const [name, builder] of whole) {
+      if (name === "exhaust") continue;
+      const there = bare.get(name);
+      expect(there, `${name} went missing with the pipes`).toBeDefined();
+      const a = builder.geometry();
+      const b = there!.geometry();
+      expect(b.getAttribute("position").count).toBe(a.getAttribute("position").count);
+      a.dispose();
+      b.dispose();
+    }
   });
 });

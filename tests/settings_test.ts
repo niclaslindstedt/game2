@@ -332,7 +332,12 @@ describe("whose body folds at each DETAIL stop", () => {
 // stop is worth is asserted the same way. The rain is the reason they are
 // not one row and cannot be folded into one: it settles the towed cloud and
 // leaves the pipes smoking, so their answers are free to differ.
-describe("whose pipe smokes at each DETAIL stop", () => {
+//
+// It is also the one row that is part pool and part GEOMETRY: the same
+// answer builds the TAILPIPES on a car (car/fascia.ts) and lets the cloud
+// out of them (fumes.ts). One record for both, so a stop can never be a
+// plume leaving a car with no pipe under it.
+describe("who has an exhaust at each DETAIL stop", () => {
   it("takes the exhaust off every car on LOW", () => {
     expect(EXHAUST_SEEN[DETAIL_PRESETS.low.exhaust]).toEqual({ player: false, field: false });
   });

@@ -145,6 +145,14 @@ if (has("crew")) {
       ledger({ zones: { 2: 0.4, 1: 0.12, 3: 0.14 }, wheels: [0, 0.6, 0, 0.45], wear: 0.6 }),
     ],
     ["rear shunt", ledger({ zones: { 4: 0.3, 3: 0.12, 5: 0.12 }, wear: 0.4 })],
+    // THE ACCIDENT NOTHING WAS HIT IN: a jump landed flat and hard on its
+    // wheels, twice. The FLOOR is the only face that folded, so no panel is
+    // creased and no lamp is out — but the shell is worn by it (the ledger
+    // charges `wearPerCrush` on every metre of fold, wherever it lands), and
+    // the exhaust is the one thing hanging down there to lose. It is the
+    // whole of how a car that left its pipe on a crest is drawn, and the
+    // only row on this sheet the driver never hit anything to reach.
+    ["landed hard, flat", ledger({ belly: 0.16, wear: 0.16 * 2.4 })],
     [
       "rolled",
       ledger({

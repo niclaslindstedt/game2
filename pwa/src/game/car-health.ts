@@ -205,6 +205,10 @@ export function carHealth(damage: CarDamage): CarHealth {
     gone("glassB") * 0.6,
     gone("spoiler") * 0.5,
     gone("bumperR") * 0.5,
+    // The pipe is the cheapest thing on the car to lose — nothing about the
+    // driving changes — so it marks the tail without ever being what makes
+    // the panel red on its own.
+    gone("exhaust") * 0.3,
     worstOf([zone(3), zone(4), zone(5)]),
   ]);
 

@@ -284,8 +284,17 @@ export type RearSpec = {
   bumper?: Bumper;
   /** Recessed number plate, m. */
   plate?: { y: number; width: number; height: number; color?: number };
-  /** Exhaust pipe under the valance, at +x of the centerline (m). */
-  exhaust?: { x: number; y: number; radius: number };
+  /** THE TAILPIPE, under the valance: a tube standing proud of the tail cap
+   * at `x` off the centerline and `y` off the road, `radius` across, with
+   * its tip `out` metres behind the cap (m throughout). `pair` mirrors a
+   * second pipe to −`x` — the twin exit of a car with drive going to all
+   * four wheels, and the one detail that tells the works car apart from
+   * behind, which is where it is looked at all stage.
+   *
+   * THE FUMES ARE PLACED OFF THESE NUMBERS (`pipeAnchors` in
+   * car/fascia.ts), so a car smokes out of the pipes its bodywork has, on
+   * the side it has them, and a twin-exit car smokes out of both. */
+  exhaust?: { x: number; y: number; radius: number; out?: number; pair?: boolean };
   /** Boot/hatch shut line — mirrors FrontSpec.hood on the tail deck. */
   deck?: { half: number; zFrom: number; zTo: number };
   /** The tailgate, for a car whose back is a door. */

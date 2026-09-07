@@ -315,6 +315,9 @@ export type CarOptions = {
   /** How finely the screens carry the grime film the wipers clear
    * (car/wipers.ts) — see `CarBodyOptions.screens`. Defaults to `fine`. */
   screens?: FilmDetail;
+  /** Whether this car is built with its TAILPIPES on — see
+   * `CarBodyOptions.exhaust`. Defaults to on. */
+  exhaust?: boolean;
 };
 
 /** Push the environment onto one body: its light, the shadow that light
@@ -367,6 +370,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     cockpit: options.cockpit,
     rearView: options.rearView,
     screens: options.screens,
+    exhaust: options.exhaust,
   });
   // Panels, parts and wheels share one material, so a ghost is one flag.
   // Its own back faces still occlude its front ones (depth writing stays

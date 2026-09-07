@@ -1465,7 +1465,7 @@ like every other left and right. And an engine that has been called DAMAGED
 SMOKES: steam off the bonnet, thin at first, thicker and darker as the damage
 climbs, black once it is dead.
 
-Twenty-one pieces can come off. The four LAMPS go first (`partAt.lamp`, the
+Twenty-two pieces can come off. The four LAMPS go first (`partAt.lamp`, the
 first fold past a brush), and they go ONE AT A TIME: each is listed under its
 own corner zone and under the centre of its cap, so clipping a tree with the
 right-hand wing takes the right headlamp and leaves the left one lit for the
@@ -1487,6 +1487,27 @@ do. The two DOORS are the deepest thing on the
 flank (`partAt.door`, most of the way to the cage): a skin between the door
 seams that tumbles off and leaves the flank behind it painted into the dark of
 the cabin, stripes and all. And the four WHEELS come off their own ledger.
+
+The EXHAUST is the one piece the car does not have to hit anything to lose. It
+is bolted under the floorpan rather than to a ring zone, so what shears it is
+`CarDamage.belly` — the fold a car takes coming down flat and hard on its own
+wheels — and it is the earliest bolt in the ledger against its own cap
+(`partAt.exhaust`, 0.05 m of a 0.4 m stroke). That line is drawn against what a
+GOOD driver does rather than plucked: over thirty-six bot runs the hardest
+single landing folds 0.028 m of floor and the worst whole run folds 0.033 m, and
+two thirds of them fold nothing at all — so a stage read properly keeps its
+pipe, and one badly missed jump, or a run that keeps bottoming out on crests,
+does not. A tail driven into something takes it too, at the
+rear bumper's own line. What it costs the driving is NOTHING, and deliberately:
+the ground is what removes it, so any number attached to it would be a penalty
+or a reward handed out by the terrain rather than by the driver. What it costs
+is the LOOK — the car spends the rest of the stage trailing a single black
+plume out of the break under its tail instead of clean puffs out of its pipes
+(`EXHAUST.broken`, app-side), and the tail panel of the condition schematic
+marks. A car built with no pipes at all — the bottom of the EXHAUST row —
+still loses one where the ledger says so: the engine's damage is not a
+rendering decision, and there is simply nothing to throw. The works sedan is the one car with TWO of them, so it is the one car
+that loses two.
 
 The four pieces of GLASS — windscreen, backlight, and each flank's windows
 together — are the one part of the car that is already damaged before it comes
@@ -1836,10 +1857,17 @@ everybody, the tremble and the exhaust follow for nothing: the rivals'
 bodies already read it (`car-mesh.ts`), and the field smokes out of a second
 shared cloud on the same terms as its dust (`field-cars.ts` over
 `fumes.ts`), thinned by `FIELD_FUMES` and capped to the nearest few crews.
-Whose pipe smokes at all is the player's, on the EXHAUST lever of the DETAIL
+Who HAS an exhaust at all is the player's, on the EXHAUST lever of the DETAIL
 row (`EXHAUST_SEEN` in `settings.ts`): a grid steaming on the line is what
 the effect is FOR, so it survives to the second stop of the ladder on the
-car being driven and only a LOW picture puts it away entirely.
+car being driven and only a LOW picture puts it away entirely. One lever for
+the pipes AND the smoke, because they are the same feature seen twice and two
+levers could be set to disagree — a plume leaving a car with no pipe under it
+is a bug report. It is the only row on the ladder that is part particle pool
+and part GEOMETRY, so it lands in two halves: turning it down stops the smoke
+at once and the pipes come off the next car built, and turning it up builds
+the pipes first with the smoke following them (`fitCar` reads the row once per
+car, so the cloud can only ever leave a pipe that exists).
 The revs a rival is sat on are the revs its clutch drops on, so the smoke
 and the shake at the lights are a true advertisement of who is about to
 light their tyres up.

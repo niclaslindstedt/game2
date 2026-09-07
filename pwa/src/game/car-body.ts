@@ -227,6 +227,12 @@ export type CarBodyOptions = {
    * Defaults to `fine`, so every tool that builds a body without saying
    * whose it is gets the full one. */
   screens?: FilmDetail;
+  /** Whether the TAILPIPES are built (car/fascia.ts) — the silencer, the run
+   * of pipe under the floorpan and the tip. They ride the EXHAUST detail row
+   * with the smoke that leaves them, so a machine that is not paying for
+   * fifteen pipes is not paying for fifteen plumes either. Defaults to on,
+   * so every tool that builds a body without saying whose it is gets them. */
+  exhaust?: boolean;
 };
 
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
@@ -267,7 +273,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   const engineBay = buildEngineBay(b, spec, stations, axles, detail);
   const panes = buildGreenhouse(b, g, spec);
   buildFront({ body: b, lens: l }, spec, axles, part, { engineBay });
-  buildRear({ body: b, lens: l }, spec, axles, part);
+  buildRear({ body: b, lens: l }, spec, axles, part, { exhaust: options.exhaust });
   buildTrim(b, spec, axles, part);
 
   const chassis = new THREE.Group();

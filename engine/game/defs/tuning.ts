@@ -2776,6 +2776,28 @@ export const TUNING = {
       lamp: 0.05,
       bumper: 0.12,
       spoiler: 0.1,
+      /** THE EXHAUST, and the one bolt in this list the FLOOR shears
+       * (`CarDamage.belly`) rather than a ring zone. The pipe hangs below
+       * the floorpan and is the lowest thing on the car, so the ground is
+       * what finds it.
+       *
+       * SET AGAINST WHAT A GOOD DRIVER DOES, because that is the only line
+       * worth drawing here: over 36 bot runs (three cars, twelve seeds) the
+       * hardest single landing is 12.4 m/s and the most floor any WHOLE run
+       * folds is 0.033 m — two thirds of them fold none at all, because a
+       * driver who reads a crest lands on the far side of it. So 0.05 m is
+       * out of reach of a stage driven well, and one properly missed jump
+       * away for anybody else: about 14.5 m/s of descent past what the
+       * springs swallow free (`hardLandSpeed`), or a run that keeps
+       * bottoming out on crests until the same total arrives the slow way.
+       * Still the earliest bolt in the ledger against its own cap
+       * (`zoneMax`, 0.4 m) — it costs the driving nothing but the noise and
+       * the smoke, so it is allowed to be the thing that goes first.
+       *
+       * A tail driven into something takes it too, at the rear bumper's own
+       * line: a pipe bolted under the rear valance does not survive the
+       * valance. */
+      exhaust: 0.05,
       /** The GLASS does not shear at a line — it crazes toward one. This
        * is the crush that finishes a pane rather than the crush that first
        * marks it: the whole of the way there is a screen the driver is
@@ -3094,6 +3116,12 @@ export const TUNING = {
         lampRL: 0.004,
         lampRR: 0.004,
         spoiler: -0.033,
+        /** A pipe left in a ditch is a car that is fractionally CLEANER
+         * underneath and a few kilos lighter, and neither is worth a
+         * number: what a lost exhaust costs is noise and smoke, not pace.
+         * Zero on purpose, so the ledger says the honest thing rather than
+         * quietly rewarding a driver for bottoming out. */
+        exhaust: 0,
         hood: 0.16,
         hatch: 0.05,
         glassF: 0.23,
@@ -3135,6 +3163,7 @@ export const TUNING = {
         lampRL: 0,
         lampRR: 0,
         spoiler: 0.12,
+        exhaust: 0,
         hood: 0.06,
         hatch: 0.03,
         glassF: 0.03,

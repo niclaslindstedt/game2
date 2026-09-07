@@ -47,7 +47,8 @@ import {
 import type { FrameCost, SceneShare } from "./benchmark-report.ts";
 import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
-import { carEyes } from "./car-styles.ts";
+import { bodySpecFor, carEyes } from "./car-styles.ts";
+import { pipeAnchors, type PipeAnchor } from "./car/shell.ts";
 import {
   AXLE,
   WET_THROW,
@@ -69,7 +70,7 @@ import { createFieldCars, type FieldCars } from "./field-cars.ts";
 import { watchGpuContext } from "./gpu-context.ts";
 import { wetnessOf, type Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
-import { PIPE, pipeBursts, pipeWork } from "./fumes.ts";
+import { pipeBursts, pipeWork } from "./fumes.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
 import {
@@ -559,6 +560,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const field = createFieldCars(scene);
   field.setCarDetail({
     ...carDetail("field"),
+    exhaust: EXHAUST_SEEN[quality.exhaust].field,
     looseWheels: LOOSE_WHEELS[quality.effects],
     wheelLoss: WHEELS_LOST[quality.wheelLoss].field,
     crumple: CRUMPLE_SEEN[quality.crumple].field,
@@ -587,6 +589,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * one grain every ten spawns, not zero forever. */
   let grainDebt = 0;
   let fumeClock = 0;
+  /** Where this car's tailpipes end, read off its bodywork when the car is
+   * fitted: a car with two of them smokes out of both. `pipeStub` is the
+   * same car once the ground has torn the pipework off — one plume, out of
+   * the break under the tail. Both are held rather than re-derived, because
+   * which of them is in use changes the moment a landing shears the part. */
+  let pipes: PipeAnchor[] = [];
+  let pipeStub: PipeAnchor[] = [];
   let smokeClock = 0;
   const smokeTint = new THREE.Color();
   /** HOW HOT THE TIRES ARE, 0..1 — the soot in the tarmac smoke rides on
@@ -761,6 +770,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     applyLighting();
     field.setCarDetail({
       ...carDetail("field"),
+      exhaust: EXHAUST_SEEN[quality.exhaust].field,
       looseWheels: LOOSE_WHEELS[quality.effects],
       wheelLoss: WHEELS_LOST[quality.wheelLoss].field,
       crumple: CRUMPLE_SEEN[quality.crumple].field,
@@ -775,10 +785,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // player's car wears rather than the field's.
     ghostCar?.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     mirror.setGlass(MIRROR_GLASS[quality.effects]);
-    // Unlike the rest of the DETAIL row, the dust and the exhaust are not
-    // geometry and do not wait for the next stage: the pools are standing in
-    // the scene already, so switching either row is switching them, mid-run
-    // included.
+    // Unlike the rest of the DETAIL row, the dust CLOUD is not geometry and
+    // does not wait for the next stage: the pool is standing in the scene
+    // already, so switching that row is switching it, mid-run included.
+    //
+    // The EXHAUST row is the one that is BOTH — a pool and the pipes it
+    // leaves — so it lands in two halves: turning it DOWN stops the smoke
+    // now and leaves the pipes until the next car is built, and turning it
+    // UP builds the pipes then and the smoke waits for them (`fitCar` reads
+    // the row once, so the cloud can only leave a pipe that exists). Either
+    // way the car is never a plume with no pipe under it.
     applyClouds();
     if (game) setConditions(game);
     else applyRange();
@@ -850,6 +866,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     car = buildCar(state.spec, {
       ...carDetail("player"),
       cockpit: true,
+      exhaust: EXHAUST_SEEN[quality.exhaust].player,
       // The rear view goes IN the cockpit's mirror rather than only into the
       // HUD's strip, so the mirror pass's texture is handed to the body that
       // hangs the glass.
@@ -862,6 +879,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     car.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
     car.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     car.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
+    // Off the body AS BUILT: a car built without pipes (the EXHAUST row) has
+    // nowhere for smoke to leave from, and this is what keeps the row's two
+    // halves in step. The cloud switches the instant the row does and the
+    // pipes only land on the next car built, so reading the row twice would
+    // put a plume under a car with no pipe on it every time the row went UP
+    // mid-stage. Read once, here, and the smoke can only ever come out of a
+    // pipe that is actually there.
+    const body = bodySpecFor(state.spec);
+    const piped = EXHAUST_SEEN[quality.exhaust].player;
+    pipes = piped ? pipeAnchors(body) : [];
+    pipeStub = piped ? pipeAnchors(body, true) : [];
     const eyes = carEyes(state.spec);
     chase.setEyes(eyes);
     driverEyeY = eyes.hood.y;
@@ -1396,27 +1424,38 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       }
     }
 
-    // Exhaust: puffs off the tailpipe, faster and sootier the more fuel the
-    // engine is drinking, handed to the wind the moment they leave the pipe.
+    // Exhaust: puffs off every tailpipe the car's bodywork has
+    // (`pipeAnchors`), faster and sootier the more fuel the engine is
+    // drinking, handed to the wind the moment they leave the pipe. The rate
+    // is shared across the pipes rather than paid per pipe, so a twin-exit
+    // car puts up two plumes and the same amount of smoke.
     // A car revving on the grid is drinking plenty and turning none of it
     // into road speed, so it smokes harder than one at pace — `car.rev` is
     // the throttle itself anywhere in the start control, and gearing plus
     // speed at every other moment, which is why the read is phase-gated.
     const pipeFx = exhaustFx();
-    const pipe = pipeWork(c.rev, c.u, state.phase, pipeFx);
+    const blown = c.damage.broken.includes("exhaust");
+    const ports = blown ? pipeStub : pipes;
+    const pipe = pipeWork(c.rev, c.u, state.phase, pipeFx, {
+      pipes: ports.length,
+      broken: blown,
+    });
     fumeClock += dt;
-    const bursts = pipeFx > 0 && !c.airborne ? pipeBursts(fumeClock, pipe.every) : 0;
+    const bursts =
+      pipeFx > 0 && ports.length > 0 && !c.airborne ? pipeBursts(fumeClock, pipe.every) : 0;
     if (bursts > 0) {
       fumeClock -= bursts * pipe.every;
-      for (let i = 0; i < bursts * pipe.puffs; i++) {
-        fumes.spawn(
-          c.x - fwdX * PIPE.back + rightX * PIPE.side,
-          c.y + PIPE.up,
-          c.z - fwdZ * PIPE.back + rightZ * PIPE.side,
-          -fwdX * pipe.blast + state.wind.x * 0.85,
-          -fwdZ * pipe.blast + state.wind.z * 0.85,
-          pipe.shade,
-        );
+      for (const at of ports) {
+        for (let i = 0; i < bursts * pipe.puffs; i++) {
+          fumes.spawn(
+            c.x - fwdX * at.back + rightX * at.side,
+            c.y + at.up,
+            c.z - fwdZ * at.back + rightZ * at.side,
+            -fwdX * pipe.blast + state.wind.x * 0.85,
+            -fwdZ * pipe.blast + state.wind.z * 0.85,
+            pipe.shade,
+          );
+        }
       }
     }
 

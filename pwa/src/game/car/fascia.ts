@@ -16,7 +16,7 @@
 
 import type { DamagePart } from "@engine";
 
-import type { MeshBuilder, V3 } from "./builder.ts";
+import { tube, type MeshBuilder, type V3 } from "./builder.ts";
 import {
   buildHeadlights,
   buildIndicators,
@@ -25,12 +25,28 @@ import {
   disc,
   type LampSurfaces,
 } from "./lamps.ts";
-import { flankX, paintAt, sampleProfile, shade, sideBand } from "./shell.ts";
-import type { Bumper, CarBodySpec, Grille, HoodVents, Tailgate } from "./spec.ts";
+import {
+  EXHAUST_OUT,
+  EXHAUST_RUN,
+  flankX,
+  paintAt,
+  pipeSides,
+  sampleProfile,
+  shade,
+  sideBand,
+} from "./shell.ts";
+import type { Bumper, CarBodySpec, Grille, HoodVents, RearSpec, Tailgate } from "./spec.ts";
 
 /** How far a lamp lens, a grille panel or a badge floats off the cap it is
  * laid on, m — enough to beat depth fighting at any camera distance. */
 const PROUD = 0.008;
+
+/** The box at the inboard end of an exhaust, m. It is there to give the run
+ * of pipe somewhere to come FROM: a bare tube ending in mid-air under the
+ * floor is a mouth with nothing behind it, and a silencer is what a real
+ * one ends in. Kept narrow enough to clear the rear tyres' inner faces on
+ * every car in the catalog. */
+const SILENCER = { wide: 0.15, tall: 0.085, long: 0.3 };
 
 function buildGrille(b: MeshBuilder, g: Grille, z: number, paint: number): void {
   const surround = g.surround ?? 0;
@@ -335,11 +351,42 @@ export function buildFront(
   if (f.vents) buildVents(part("hood"), spec, f.vents);
 }
 
+/** ONE EXHAUST, from the silencer back: a flattened box under the floorpan,
+ * a tube out of the back of it, and the polished rim and dark bore of the
+ * tip. All of it hangs BELOW the floor rather than passing through the tail
+ * panel — a pipe drawn at valance height comes out of the middle of a
+ * painted panel, which reads as a car with a hole punched through its
+ * chassis, and it is the lowest thing on the car that makes the ground
+ * taking it off make sense.
+ *
+ * Drawn into the `exhaust` part rather than the shell, because the ground
+ * does take it off (`BELLY_BOLTS` in engine/game/collision.ts) and what
+ * comes off has to be its own mesh to be thrown. The whole assembly goes
+ * together, so what tumbles down the road is a length of pipe with a box on
+ * the end of it rather than a stub nobody can identify. */
+function buildExhaust(
+  b: MeshBuilder,
+  e: NonNullable<RearSpec["exhaust"]>,
+  x: number,
+  z: number,
+): void {
+  const tip = z - (e.out ?? EXHAUST_OUT);
+  const box = tip + EXHAUST_RUN;
+  b.box(x, e.y, box - SILENCER.long / 2, SILENCER.wide, SILENCER.tall, SILENCER.long, 0x3d424a);
+  tube(b, [x, e.y, box], [x, e.y, tip], e.radius, 0x51565e, 8);
+  disc(b, x, e.y, tip, e.radius * 0.7, e.radius, 0x8d949c, -1, 8);
+  // The bore, set back inside the rim: with the tube open at both ends its
+  // inner wall is culled, so this disc is what closes the pipe, and the
+  // 25 mm in front of it is the depth that makes the tip read as a mouth.
+  disc(b, x, e.y, tip + 0.025, 0, e.radius * 0.7, 0x1a1d22, -1, 8);
+}
+
 export function buildRear(
   s: LampSurfaces,
   spec: CarBodySpec,
   axles: number[],
   part: (name: DamagePart) => MeshBuilder,
+  options: { exhaust?: boolean } = {},
 ): void {
   const b = s.body;
   const r = spec.rear;
@@ -383,11 +430,13 @@ export function buildRear(
     buildIndicators(s, r.lamps, face, -1);
   }
 
-  if (r.exhaust) {
-    const e = r.exhaust;
-    disc(b, e.x, e.y, z - 0.02, 0, e.radius, 0x2a2f36, -1, 8);
-    b.box(e.x, e.y, z + 0.12, e.radius * 1.7, e.radius * 1.7, 0.24, 0x51565e);
-  }
+  // The pipes are per-car geometry on a road that can carry fifteen cars, so
+  // they ride the EXHAUST detail row with the smoke that comes out of them
+  // (settings.ts's `EXHAUST_SEEN`) rather than being built unconditionally.
+  // A car built without them still BREAKS one where the ledger says so —
+  // car-damage.ts books a part with no mesh and throws nothing.
+  if (r.exhaust && (options.exhaust ?? true))
+    for (const x of pipeSides(r.exhaust)) buildExhaust(part("exhaust"), r.exhaust, x, z);
 
   if (r.tailgate) buildTailgate(b, part("hatch"), spec, axles, r.tailgate, z);
 

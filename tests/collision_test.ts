@@ -53,6 +53,7 @@ const EVERY_PART: DamagePart[] = [
   "mirrorL",
   "mirrorR",
   "spoiler",
+  "exhaust",
   "hood",
   "hatch",
   "glassF",
@@ -66,6 +67,15 @@ const EVERY_PART: DamagePart[] = [
   "wheelRL",
   "wheelRR",
 ];
+
+/** ...and the ones whose loss is allowed to cost the driving NOTHING. One
+ * entry, and it earns it: the exhaust is torn off by the GROUND rather than
+ * by anything the car ran into, so a stage rough enough to take it is a
+ * stage that takes it from everybody, and any handling number attached to
+ * it would be a reward or a penalty handed out by the terrain. What a lost
+ * pipe costs is the noise and the black smoke behind the car, which the
+ * player reads without the ledger's help. */
+const COSMETIC_PARTS: DamagePart[] = ["exhaust"];
 
 function freshState(): GameState {
   return createGame({ seed: 3, skipCountdown: true, track: compileTrack(3, LONG_STRAIGHT) });
@@ -899,6 +909,54 @@ describe("the end of the run", () => {
     );
   });
 
+  it("takes the EXHAUST off a car that lands flat and hard, and nothing else", () => {
+    // The one part the stage itself removes. A pipe hangs under the
+    // floorpan, so a heavy arrival on all four wheels is what finds it —
+    // and it is the only thing down there to find: a landing this side of
+    // a rollover must never shear a panel, a lamp or a pane.
+    const state = freshState();
+    const car = state.car;
+    const events: GameEvent[] = [];
+    // Enough descent past what the springs swallow free to fold the floor
+    // past the pipe's own bolt, twice over.
+    const slam =
+      TUNING.collision.hardLandSpeed +
+      (2 * TUNING.collision.partAt.exhaust) / TUNING.collision.crushPerSpeed;
+    landingDamage(state.spec, car, slam, events, state.stats);
+    expect(car.damage.belly).toBeGreaterThanOrEqual(TUNING.collision.partAt.exhaust);
+    expect(car.damage.broken).toEqual(["exhaust"]);
+    expect(events.filter((e) => e.type === "partBreak")).toHaveLength(1);
+    expect(Math.max(...car.damage.zones)).toBe(0);
+    expect(car.damage.roof).toBe(0);
+    // ...and it only comes off once, however many more crests are bottomed
+    // out on afterwards: a piece already lying on the road behind the car
+    // cannot be torn off it a second time.
+    const more: GameEvent[] = [];
+    landingDamage(state.spec, car, slam, more, state.stats);
+    expect(more.filter((e) => e.type === "partBreak")).toHaveLength(0);
+    expect(car.damage.broken).toEqual(["exhaust"]);
+  });
+
+  it("leaves the pipe on a car that lands inside what the springs answer for", () => {
+    // The other side of the line: heavy landings are what a rally stage IS,
+    // and a bolt this early has to be reached by a BAD one rather than by
+    // every jump on the road.
+    const state = freshState();
+    const car = state.car;
+    const events: GameEvent[] = [];
+    const gentle =
+      TUNING.collision.hardLandSpeed +
+      (0.5 * TUNING.collision.partAt.exhaust) / TUNING.collision.crushPerSpeed;
+    landingDamage(state.spec, car, gentle, events, state.stats);
+    expect(car.damage.belly).toBeGreaterThan(0);
+    expect(car.damage.broken).toEqual([]);
+    // …and `shearedParts` reads the floor's ledger back the same way, so a
+    // wreck staged by hand agrees with one that was driven into existence.
+    expect(shearedParts(car.damage)).toEqual([]);
+    car.damage.belly = TUNING.collision.partAt.exhaust;
+    expect(shearedParts(car.damage)).toEqual(["exhaust"]);
+  });
+
   it("a car that comes down on its ROOF folds the greenhouse, not a flank", () => {
     const state = freshState();
     const car = state.car;
@@ -1589,9 +1647,11 @@ describe("the air through the holes a crash leaves", () => {
     // THE AUDIT. A part the ledger tracks and the handling model never
     // reads is a hole in the bodywork the player watches appear while the
     // car drives exactly the same — which is the bug this whole module
-    // exists to answer. Nothing is decoration: run the list.
+    // exists to answer. Run the list, less the one part that is allowed to
+    // be free, and which is named below rather than quietly left out of it.
     const sound = damageEffects(freshState().car, TUNING.collision.aero.speed, 0);
     for (const part of EVERY_PART) {
+      if (COSMETIC_PARTS.includes(part)) continue;
       const car = freshState().car;
       car.damage.broken.push(part);
       if (WHEEL_PARTS.includes(part)) car.damage.wheels[WHEEL_PARTS.indexOf(part)] = 1;
@@ -1600,6 +1660,20 @@ describe("the air through the holes a crash leaves", () => {
         (key) => hurt[key] !== sound[key],
       );
       expect(moved, `${part} comes off the car and nothing about it changes`).toBe(true);
+    }
+  });
+
+  it("charges the free parts NOTHING, rather than nearly nothing", () => {
+    // The other half of the audit, and the reason a carve-out is safe to
+    // have. A part exempted from "everything costs something" has to be
+    // exempt on purpose and all the way: a pipe worth a thousandth of a
+    // drag count is not free, it is an unstated advantage for bottoming the
+    // car out, and the exemption would be hiding it.
+    const sound = damageEffects(freshState().car, TUNING.collision.aero.speed, 0);
+    for (const part of COSMETIC_PARTS) {
+      const car = freshState().car;
+      car.damage.broken.push(part);
+      expect(damageEffects(car, TUNING.collision.aero.speed, 0)).toEqual(sound);
     }
   });
 });

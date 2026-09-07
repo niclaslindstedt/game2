@@ -131,7 +131,7 @@ const CASES: { name: string; note: string; damage: CarDamage }[] = [
       d.systems.gearbox = CALL.spent;
       d.systems.brakes = CALL.hurt;
       d.systems.steering = CALL.hurt;
-      d.broken.push("bumperF", "glassR", "lampFR");
+      d.broken.push("bumperF", "glassR", "lampFR", "exhaust");
       d.wheels[2] = FLAT + 0.2;
     }),
   },
@@ -159,6 +159,7 @@ const CASES: { name: string; note: string; damage: CarDamage }[] = [
         "lampRL",
         "lampRR",
         "spoiler",
+        "exhaust",
       );
     }),
   },

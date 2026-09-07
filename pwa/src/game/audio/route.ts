@@ -155,16 +155,21 @@ export function soundForEvent(
     }
 
     case "partBreak": {
-      // Three things come off a car and none of them sounds like the
-      // others: glass goes in one bright crash, a door or a wheel is a
-      // heavy thing hitting the road, and a mirror or a bumper is the
-      // part-break as authored.
+      // Four things come off a car and none of them sounds like the others:
+      // glass goes in one bright crash, a door or a wheel is a heavy thing
+      // hitting the road, the EXHAUST is a hollow steel tube dragging free
+      // and then bouncing — the same slap, up an octave and cut short,
+      // because a pipe rings where a door thuds — and a mirror or a bumper
+      // is the part-break as authored.
       const part = event.part;
       if (part.startsWith("glass") || part.startsWith("lamps")) {
         return { id: "part_break", shape: { pitch: 1.7, gain: 1.1, stretch: 0.8 } };
       }
       if (part.startsWith("wheel") || part.startsWith("door")) {
         return { id: "impact_hit", shape: { pitch: 0.7, gain: 1.2, stretch: 1.3 } };
+      }
+      if (part === "exhaust") {
+        return { id: "impact_hit", shape: { pitch: 1.4, gain: 0.9, stretch: 0.7 } };
       }
       return { id: "part_break" };
     }
