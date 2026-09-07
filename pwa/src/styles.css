@@ -150,6 +150,12 @@ body {
      hundred metres of country was a squiggle: it is sized to be legible at a
      glance rather than to be unobtrusive. */
   --hud-map: clamp(6.24rem, 20.8vmin, 9.75rem);
+  /* The glyph buttons' edge. The two of them STACK against the map and the
+     column they make comes out exactly one map tall, so that whole corner
+     is the map's edge length twice over: the gap between them is taken out
+     of the pair rather than added to it. */
+  --hud-mini-gap: 0.3rem;
+  --hud-mini: calc((var(--hud-map) - var(--hud-mini-gap)) / 2);
   /* Room the stage chip takes under the map — ONE line, since the chip names
      the stage and nothing else. The pacenote strip clears it in portrait,
      where everything is stacked down the same column. */
@@ -344,33 +350,58 @@ body {
   color: var(--hud-bad);
 }
 
-/* The row is aligned to its own top rather than stretched: every item on it
-   is sized by its own job — the glyph buttons off the minimap, the position
-   board off the clock — and stretching any of them to the tallest would size
-   it by its neighbours instead. */
+/* The top bar's right-hand column: the two presses, and the place under
+   them. It hangs off its own RIGHT edge, which is the minimap's left one,
+   so the board is free to be wider than the buttons without shifting them
+   off the map they are measured against. */
 .hud-actions {
   margin-left: auto;
   display: flex;
-  align-items: flex-start;
-  gap: 0.4rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
   flex: none;
 }
 
-/* R29 — THE POSITION BOARD. Last thing on the top bar's button row, which
-   puts it hard against the minimap: place and route are the two things a
-   driver glances right for, and they should cost one glance rather than
-   two. Sized like a button so the row stays a row, but it is not one —
-   there is nothing to press, only something to read. */
+/* The presses themselves, one above the other. The map is the fixed thing
+   in this corner, so a column of exactly its height is one the player has
+   already measured by eye. */
+.hud-action-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--hud-mini-gap);
+}
+
+/* R29 — THE POSITION BOARD. Under the two presses and still hard against
+   the minimap: place and route are the two things a driver glances right
+   for, and they should cost one glance rather than two.
+   Built like the clock in the opposite corner — a quiet label over a big
+   figure, and no plate under either. The two numbers that say how a run is
+   going are read the same way whichever side of the screen they are on, and
+   the box this used to carry made a READOUT look like one of the controls
+   it now sits beneath. */
 .hud-place {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1;
+  flex: none;
+}
+
+/* The caption over the figure, at the clock label's weight and in its
+   colour: the pair of them are one instrument in two corners. */
+.hud-place-label {
+  font-size: clamp(0.55rem, 1.7vmin, 0.8rem);
+  letter-spacing: 0.12em;
+  color: var(--hud-good);
+  margin-bottom: 0.12rem;
+}
+
+.hud-place-row {
   display: flex;
   align-items: baseline;
   gap: 0.1rem;
-  padding: 0.15rem 0.45rem;
-  border: 2px solid rgb(255 255 255 / 65%);
-  border-radius: 0.4rem;
-  background: rgb(18 48 105 / 75%);
-  line-height: 1;
-  flex: none;
 }
 
 /* Sized to the TOTAL TIME, digit for digit — the two numbers that decide
@@ -408,18 +439,19 @@ body {
 }
 
 /* A glyph button is square around its icon rather than padded around text —
-   and it is sized off the MINIMAP rather than off its own glyph, at half the
-   map's edge. These are the two presses made while the car is moving (the
-   way back to the last board, and the camera), so they are targets before
-   they are labels: a thumb has to find one without leaving the road, and the
-   map beside them is the one thing on that corner of the screen whose size
-   the player already knows. */
+   and it is sized off the MINIMAP rather than off its own glyph, at half of
+   what the map's edge leaves once the gap between the two is taken out.
+   These are the two presses made while the car is moving (the way back to
+   the last board, and the camera), so they are targets before they are
+   labels: a thumb has to find one without leaving the road, and the map
+   beside them is the one thing on that corner of the screen whose size the
+   player already knows. */
 .hud-mini-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: calc(var(--hud-map) * 0.5);
-  height: calc(var(--hud-map) * 0.5);
+  width: var(--hud-mini);
+  height: var(--hud-mini);
   padding: 0;
 }
 
