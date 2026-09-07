@@ -153,9 +153,19 @@ Linux, a `.dmg` on macOS, an NSIS `-setup.exe` on Windows.
 unsigned arm64 code at all, so the default is an ad-hoc signature and
 `APPLE_SIGNING_IDENTITY` is what a release sets instead. An ad-hoc build is
 refused once by Gatekeeper (System Settings → Privacy & Security → Open
-Anyway), which the release notes tell the player.
+Anyway), which the release notes tell the player. On CI that identity is not
+configured by hand: `.github/actions/apple-signing` imports the certificate
+and reads it back out, and the notarization that removes the prompt entirely
+is three more secrets — [configuration.md](../docs/configuration.md) has the
+table.
+
+`--keep` adds to `release/` instead of clearing it, which is what lets one
+Apple Silicon runner produce both macOS slices: the native `aarch64` build,
+then `--target x86_64-apple-darwin --skip-web --keep` for an Intel Mac.
 
 `release.yml` runs the same script on a runner per platform and attaches the
 result to every release — created as a draft, made public only once all three
 downloads are on it. `desktop-tauri.yml`'s dispatch does the same for one
-platform without cutting a version.
+platform without cutting a version, with the identical signing and
+notarization environment, so a certificate can be proved before a version is
+tagged rather than after.

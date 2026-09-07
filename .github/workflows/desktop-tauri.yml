@@ -135,10 +135,13 @@ jobs:
             target: linux
     runs-on: ${{ matrix.os }}
     env:
-      # macOS signing, exactly as release.yml passes it: an absent secret means
-      # an ad-hoc signature, which is the minimum an arm64 app needs to run at
-      # all.
-      APPLE_SIGNING_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+      # macOS notarization, exactly as release.yml passes it — so a dispatch
+      # here is a real rehearsal of the release's macOS half, which is the
+      # only way to find out that a certificate or an app-specific password
+      # is wrong WITHOUT having tagged a version first.
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - name: Skip unselected platform
         if: inputs.platform != 'all' && inputs.platform != matrix.target
@@ -166,10 +169,27 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
             libayatana-appindicator3-dev librsvg2-dev patchelf
 
+      - name: Apple signing
+        if: matrix.target == 'macos' && (inputs.platform == 'all' || inputs.platform == 'macos')
+        uses: ./.github/actions/apple-signing
+        with:
+          certificate: ${{ secrets.MAC_CSC_LINK }}
+          certificate-password: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          identity: ${{ secrets.MAC_SIGN_IDENTITY }}
+
+      - name: An Intel Mac target
+        if: matrix.target == 'macos' && (inputs.platform == 'all' || inputs.platform == 'macos')
+        run: rustup target add x86_64-apple-darwin
+
       - name: Package
         if: inputs.platform == 'all' || inputs.platform == matrix.target
         shell: bash
         run: npm run tauri:package
+
+      - name: Package (macOS, Intel)
+        if: matrix.target == 'macos' && (inputs.platform == 'all' || inputs.platform == 'macos')
+        shell: bash
+        run: npm run tauri:package -- --target x86_64-apple-darwin --skip-web --keep
 
       - uses: actions/upload-artifact@v7
         if: inputs.platform == 'all' || inputs.platform == matrix.target
