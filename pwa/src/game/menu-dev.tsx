@@ -117,8 +117,17 @@ export function DebugLogPage({ onBack }: { onBack: () => void }) {
  * box, so the leading dot at the end of a finished run sits inside its own
  * frame instead of half over the edge, and the gutters outside `x0` and
  * `x1` are the two axes — the same ceiling in index on the left and in
- * frames a second on the right. */
-const PLOT = { w: 320, h: 150, x0: 27, x1: 286, y0: 16, y1: 130 };
+ * frames a second on the right.
+ *
+ * THE GUTTERS ARE SIZED BY THEIR WIDEST LABEL, not by what looks tidy in
+ * the middle. They carry a number AND a unit caption under it, and `INDEX`
+ * — five letters and four letter-spacings at 6.5px — is about 25 units
+ * wide. At the 22 the left gutter used to give it, the word ran off the
+ * left of the viewBox and the SVG cut it in half; full screen, where every
+ * unit is four real pixels, that was the first thing anybody saw. Anything
+ * put in a gutter from here has to be measured against these, not eyeballed
+ * against the card. */
+const PLOT = { w: 320, h: 150, x0: 42, x1: 278, y0: 16, y1: 130 };
 
 /** How close two labels on the same axis may come before the one in the
  * middle is dropped rather than printed over its neighbour. */
