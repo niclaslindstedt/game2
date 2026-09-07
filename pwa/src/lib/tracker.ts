@@ -189,7 +189,38 @@ export function flattenTrack(track: Track): FlatTrack {
   };
 }
 
-const LOOKAHEAD_S = 0.28; // how far ahead notes are booked
+// HOW FAR AHEAD NOTES ARE BOOKED, and it is not a constant.
+//
+// A booking horizon is a bet on the next tick arriving before the last note
+// runs out. Lose that bet and the re-anchor below leaves a HOLE — a stretch
+// of score with nothing booked under it — and a run of holes is what a player
+// reports as the music skipping. The bet is lost whenever the main thread
+// stalls for longer than the horizon, which on a phone is routine: a garbage
+// collection, a world being built, and above all the first seconds after the
+// app comes back from the background, where the page is re-laying itself out
+// and every texture is being re-uploaded while a hidden page's timers are
+// still being let back up to speed.
+//
+// So the horizon is bought with the tick's own punctuality. `LOOKAHEAD_S` is
+// what a healthy clock needs and it stays there; a tick that arrives late
+// widens the horizon to cover that gap twice over, and it decays back as the
+// ticks come good. What it costs is `stop()` latency — nothing un-books a
+// note, so the score can run on for up to the current horizon after the
+// player leaves — which is why the punctual value is tight and the ceiling
+// is the smallest one that covers a stall worth covering.
+//
+// This is the OPPOSITE lever from the one a bed gets. A continuous voice with
+// a hole in it is fixed structurally, by making it a steered layer that books
+// nothing ahead (`Synth.layer`); a SCORE cannot be steered — a note is an
+// event at a time — so booking further ahead is the only cover it has.
+const LOOKAHEAD_S = 0.28;
+/** The most a stalling clock may buy. */
+const LOOKAHEAD_MAX_S = 1.5;
+/** How many of the observed tick gaps the horizon has to span. Two is the
+ * least that survives the same gap happening again; the rest is margin. */
+const LOOKAHEAD_COVER = 2.2;
+/** How much of the widened horizon is given back per punctual tick. */
+const LOOKAHEAD_DECAY = 0.9;
 const TICK_MS = 90; // how often the JS clock checks in
 
 export function createTrackPlayer(synth: Synth): TrackPlayer {
@@ -199,6 +230,11 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
   let stepsPerBeat = 0;
   let stepIndex = 0;
   let nextStepTime = 0;
+  let horizonS = LOOKAHEAD_S;
+  /** The clock the last tick read, so this one can measure how late it is.
+   * Zero means "no tick to compare against" — the first of a run, and after
+   * anything that makes the gap meaningless. */
+  let lastTickTime = 0;
 
   /** Book every voice's note that starts on step `index` at time `at`. */
   const scheduleStep = (t: FlatTrack, index: number, at: number): void => {
@@ -261,22 +297,36 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
       synth.resume();
       return;
     }
+    const stepS = 60 / bpm / stepsPerBeat;
     // (Re)anchor after unlock, a stall, or a clock that jumped BACKWARDS — a
     // rebuilt AudioContext (the iOS zombie recovery) starts its clock near
-    // zero, stranding the old nextStepTime unreachably far ahead. Legitimate
-    // scheduling never books past now + LOOKAHEAD_S + one step, so anything
-    // two seconds out is a stale clock rather than a plan.
+    // zero, stranding the old nextStepTime unreachably far ahead. The widest
+    // horizon plus the step that carries the anchor past it is the furthest
+    // legitimate scheduling can ever reach, so anything beyond that is a
+    // stale clock rather than a plan — derived rather than a figure of its
+    // own, because a horizon that MOVES (see LOOKAHEAD_S) would otherwise
+    // silently grow past a constant one and start re-anchoring real plans.
     //
     // ANY lateness counts, not just a catastrophic one: a step booked in the
     // past does not wait its turn, it sounds the moment it is handed over. A
     // scheduler that crawls back up from behind one step at a time therefore
     // empties its whole backlog into a single instant — half a bar as one
     // chord — where re-anchoring costs nothing but a beat arriving late.
-    if (nextStepTime === 0 || nextStepTime < now || nextStepTime > now + 2) {
+    const stale = LOOKAHEAD_MAX_S + stepS * 2;
+    if (nextStepTime === 0 || nextStepTime < now || nextStepTime > now + stale) {
       nextStepTime = now + 0.05;
     }
-    const stepS = 60 / bpm / stepsPerBeat;
-    while (nextStepTime < now + LOOKAHEAD_S) {
+    // What the last gap was is the best guess at what the next one will be —
+    // see LOOKAHEAD_S. A gap is only meaningful between two ticks on the same
+    // clock, so a rebuilt context's backwards jump falls out through the
+    // floor rather than needing a case of its own.
+    const gap = lastTickTime === 0 ? 0 : now - lastTickTime;
+    lastTickTime = now;
+    horizonS = Math.min(
+      LOOKAHEAD_MAX_S,
+      Math.max(LOOKAHEAD_S, horizonS * LOOKAHEAD_DECAY, gap * LOOKAHEAD_COVER),
+    );
+    while (nextStepTime < now + horizonS) {
       scheduleStep(flat, stepIndex, nextStepTime);
       stepIndex = (stepIndex + 1) % flat.totalSteps;
       nextStepTime += stepS;
@@ -290,6 +340,8 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
       stepsPerBeat = next.stepsPerBeat;
       stepIndex = 0;
       nextStepTime = 0;
+      horizonS = LOOKAHEAD_S;
+      lastTickTime = 0;
       interval ??= setInterval(tick, TICK_MS);
       tick();
     },
@@ -298,6 +350,7 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
       flat = null;
       stepIndex = 0;
       nextStepTime = 0;
+      lastTickTime = 0;
       if (interval !== null) {
         clearInterval(interval);
         interval = null;
@@ -316,6 +369,8 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
 
     resume() {
       if (flat === null || interval !== null) return; // nothing paused
+      // The pause is not a late tick, so it must not buy a horizon.
+      lastTickTime = 0;
       interval = setInterval(tick, TICK_MS);
       tick();
     },
