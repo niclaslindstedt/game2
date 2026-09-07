@@ -437,20 +437,27 @@ body {
   height: 58%;
 }
 
-/* OFF THE ROAD, the way back says so. The button is up for the whole run
-   (hud-recover.tsx) — this is the state that makes it the obvious press
-   rather than one of two: the plate takes the warning colour the rest of
-   the HUD uses for a car in trouble, and it breathes so the eye finds it
-   without being sent there. It comes off the root's `data-off`, which is
-   the one place the HUD is told the car has left the surface. */
-.hud[data-off="1"] .hud-recover {
-  background: var(--hud-bad);
-  border-color: #fff;
-}
-
+/* OFF THE ROAD, the way back says so — QUIETLY. The button is up for the
+   whole run (hud-recover.tsx) and this is the state that makes it the
+   obvious press rather than one of two, but a car with two wheels on the
+   grass is not a car in trouble: it BREATHES, and that is all. The warning
+   colour is kept for what is actually going wrong — the damage instrument
+   and the news column — because a plate that turns red every time the car
+   clips a verge is a HUD that cries wolf, and the eye stops reading it.
+   It comes off the root's `data-off`, which is the one place the HUD is
+   told the car has left the surface. */
 @media (prefers-reduced-motion: no-preference) {
   .hud[data-off="1"] .hud-recover {
     animation: hud-pop 0.9s infinite;
+  }
+}
+
+/* …and where the breath is not allowed, the plate says it in the one way
+   left: its edge comes up to full ink. Still no colour — the point is a
+   button that has been pointed at, not an alarm. */
+@media (prefers-reduced-motion: reduce) {
+  .hud[data-off="1"] .hud-recover {
+    border-color: #fff;
   }
 }
 

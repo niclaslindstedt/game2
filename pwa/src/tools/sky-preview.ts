@@ -45,6 +45,19 @@ const ROWS: Row[] = [
   { name: "clear — the full sky", weather: "clear", windSpeed: 1.5, sky: "full" },
   { name: "clear — another seed's sky", weather: "clear", windSpeed: 2.5, sky: "full", gust: 2.2 },
   { name: "clear — the simple sky (LOW)", weather: "clear", windSpeed: 1.5, sky: "simple" },
+  // A seed the chart rolled NOTHING over (`CLOUDLESS`, cloud-field.ts) —
+  // bare blue from one horizon to the other. Both skies are shot at it,
+  // because the two have to agree about an empty sky: the dome draws no
+  // sheets and the simple sky's ring flies no clusters, and a floor of one
+  // puff on either would park a lone cloud over a stage that has none.
+  { name: "clear — a bare blue day", weather: "clear", windSpeed: 1.5, sky: "full", gust: 2.3 },
+  {
+    name: "clear — a bare blue day (LOW)",
+    weather: "clear",
+    windSpeed: 1.5,
+    sky: "simple",
+    gust: 2.3,
+  },
   { name: "rain — thin, high deck", weather: "rain", windSpeed: 3.5, sky: "full" },
   { name: "rain — low and leaden", weather: "rain", windSpeed: 6.5, sky: "full" },
   { name: "storm — squall", weather: "storm", windSpeed: 7, sky: "full" },

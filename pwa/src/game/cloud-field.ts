@@ -121,6 +121,37 @@ const CUMULUS_BASE: Record<BiomeId, [number, number]> = {
   alpine: [1700, 2300],
 };
 
+/** How often a clear day has NOTHING in it — bare blue from one horizon to
+ * the other, and a sun nothing ever comes over. Every other cell of the
+ * chart below rolls what is up there; this one rolls whether anything is,
+ * because a settled airmass that is sinking rather than rising simply does
+ * not make cloud, and a game whose sky always has something in it reads as
+ * a sky that is drawn rather than one that happened.
+ *
+ * By country, because that is what decides how much water the air is
+ * carrying: the desert's is empty most days, the forest's hardly ever. */
+const CLOUDLESS: Record<BiomeId, number> = {
+  taiga: 0.12,
+  desert: 0.4,
+  alpine: 0.2,
+};
+
+/** …and what the season does to it. Summer is the settled half of the year;
+ * autumn is the one that is always making something. */
+const CLOUDLESS_SEASON: Record<Season, number> = {
+  spring: 0.85,
+  summer: 1,
+  autumn: 0.55,
+  winter: 0.7,
+};
+
+/** Under this much coverage a sheet is a whole field of noise drawn for
+ * nothing: the density rule puts almost no pixel of it over the threshold
+ * (`cloudDensity`), so what it costs is a layer of the budget and what it
+ * returns is empty sky. Dropped instead — which is also how the thinnest
+ * end of the desert's cumulus roll becomes the blue day it looks like. */
+const THIN = 0.05;
+
 /** A uniform draw on [0,1) from a seed — a tiny hash, so the same stage
  * always dresses the same sky. Nothing in the simulation reads it. */
 function dice(seed: number): () => number {
@@ -154,9 +185,11 @@ export function skySeed(env: Pick<RaceEnv, "gustPhase" | "windDir">): number {
  * cumulus all afternoon, a winter one sits under a flat stratocumulus
  * sheet; a desert has a few cumulus a long way up and cirrus more often
  * than not; the Alps build cumulus over the peaks and comb altocumulus
- * into lenticular streaks in the wind. Rain is a deck (nimbostratus in a
- * wet country, blown sand in a dry one) with scud under it; a storm is the
- * same deck lower and blacker with the scud tearing.
+ * into lenticular streaks in the wind. Some days it makes NOTHING at all,
+ * most often over the desert (`CLOUDLESS`), and the stage is driven under
+ * bare blue. Rain is a deck (nimbostratus in a wet country, blown sand in a
+ * dry one) with scud under it; a storm is the same deck lower and blacker
+ * with the scud tearing.
  */
 /** The stack in the order the dome paints it: lowest sheet first, so the
  * shader's walk from the far side of the sky comes out far-to-near whether
@@ -221,6 +254,10 @@ export function dressSky(
   }
 
   // ── The clear sky ────────────────────────────────────────────────────
+  // …which some days is the whole of it. Rolled before anything is put up
+  // there, so a blue day is a day the air made nothing rather than one
+  // where every sheet happened to miss.
+  if (roll() < CLOUDLESS[biome] * CLOUDLESS_SEASON[season]) return { layers: [] };
   const [baseLo, baseHi] = CUMULUS_BASE[biome];
   const summerish = season === "summer" || season === "spring";
   if (biome === "taiga") {
@@ -273,8 +310,7 @@ export function dressSky(
     if (roll() < 0.7)
       layers.push(wisps(between(roll, 8000, 10000), between(roll, 0.15, 0.5), roll, 2));
   }
-  layers.sort((a, b) => a.altitude - b.altitude);
-  return { layers: byAltitude(layers.slice(0, MAX_LAYERS)) };
+  return { layers: byAltitude(layers.filter((l) => l.coverage >= THIN).slice(0, MAX_LAYERS)) };
 }
 
 /** Fair-weather heaps: hard-edged, solid, shadowed underneath, riding the

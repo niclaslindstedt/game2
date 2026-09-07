@@ -44,12 +44,14 @@ function RecoverGlyph() {
  * binding. The bind is the fast way for anybody who has learned it; the
  * button is what makes the way out visible to everybody who has not.
  *
- * ...and the moment the car is OFF THE ROAD it says so. The mark is up the
- * whole run because the press has to be findable before it is needed, but a
- * car in the country is a car that is probably reaching for it, so
- * `.hud-recover` is lit off the root's `data-off` (styles.css) rather than
+ * ...and the moment the car is OFF THE ROAD it says so, quietly. The mark is
+ * up the whole run because the press has to be findable before it is needed,
+ * but a car in the country is a car that is probably reaching for it, so
+ * `.hud-recover` BREATHES off the root's `data-off` (styles.css) rather than
  * appearing from nowhere at the worst moment. A button that arrives while
- * the driver is already looking for it is a button they have to find twice. */
+ * the driver is already looking for it is a button they have to find twice —
+ * and one that turns red every time the car clips a verge is a warning
+ * colour spent on something that is not a warning. */
 export function RecoverButton({ onReset }: { onReset: () => void }) {
   return (
     <button
