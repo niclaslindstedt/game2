@@ -29,17 +29,23 @@
 // step does, which is what keeps it DOM-free and testable. The steps
 // themselves are closures over the app's own refs, built in `App.tsx`.
 
-/** What share of a frame the load may spend. The rest is what the card is
- * drawn in: a stroke animation is main-thread work like any other, so a load
- * that took the whole frame would be a load behind a FROZEN card, which is
- * the thing it replaced. */
+/** What share of a frame the load may spend, leaving the rest to the browser.
+ *
+ * The card's own fill no longer needs it — that is a compositor transform now
+ * (`mark-tracks.tsx`), and it keeps climbing through a main thread that is
+ * blocked solid, which is the whole reason it was moved off a stroke. So this
+ * is not what keeps the card alive; it is what keeps the PAGE alive around
+ * it. A load that took every millisecond of every frame would still animate,
+ * and would still swallow a resize, a pointer event and the card's own
+ * compositing along the way. Leaving four frames in ten costs a load a little
+ * length and buys a page that is still a page. */
 const LOAD_SHARE = 0.6;
 
 /** …bounded, because a share of a frame is only a sane budget while the
  * frames are sane. The floor keeps a machine drawing at 120 Hz from spending
- * five milliseconds a frame on a four-second load; the ceiling keeps one
- * that has fallen to two frames a second from disappearing into a single
- * half-second step with no card drawn between them. */
+ * five milliseconds a frame on a four-second load; the ceiling keeps one that
+ * has fallen to two frames a second from disappearing into a single
+ * half-second step it can answer nothing during. */
 const LOAD_FLOOR_MS = 12;
 const LOAD_CEILING_MS = 250;
 
