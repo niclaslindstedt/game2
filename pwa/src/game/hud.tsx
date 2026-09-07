@@ -582,10 +582,11 @@ export function Hud({
           )}
         </div>
         <div className="hud-actions pointer-events-auto">
-          {/* THE PRESSES, stacked against the map rather than laid in a row
-              beside it: the pair is one map tall, so the whole right-hand
-              corner is the map's own edge length twice over and the strip
-              left of it stays as wide as the clock actually needs. */}
+          {/* THE PRESSES, on a row above the place rather than beside it. The
+              group they head is one map tall (styles.css), which is what
+              sizes them: half the map each, with the board making up the
+              rest, so this corner reads as the map and one column beside
+              it. */}
           <div className="hud-action-stack">
             {/* R28 — the way back to the last board. Only while there is a
                 run to put back: on the grid there is no road behind the car,

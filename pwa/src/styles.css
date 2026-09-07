@@ -150,10 +150,9 @@ body {
      hundred metres of country was a squiggle: it is sized to be legible at a
      glance rather than to be unobtrusive. */
   --hud-map: clamp(6.24rem, 20.8vmin, 9.75rem);
-  /* The glyph buttons' edge. The two of them STACK against the map and the
-     column they make comes out exactly one map tall, so that whole corner
-     is the map's edge length twice over: the gap between them is taken out
-     of the pair rather than added to it. */
+  /* The glyph buttons' edge: half the map, so the two of them side by side
+     and the place under them come to the map's own height. That is the whole
+     of the sizing rule — the group beside the map is as tall as the map. */
   --hud-mini-gap: 0.3rem;
   --hud-mini: calc((var(--hud-map) - var(--hud-mini-gap)) / 2);
   /* Room the stage chip takes under the map — ONE line, since the chip names
@@ -350,32 +349,36 @@ body {
   color: var(--hud-bad);
 }
 
-/* The top bar's right-hand column: the two presses, and the place under
-   them. It hangs off its own RIGHT edge, which is the minimap's left one,
-   so the board is free to be wider than the buttons without shifting them
-   off the map they are measured against. */
+/* The top bar's right-hand group: the two presses on a row, the place under
+   them, and the whole thing EXACTLY ONE MAP TALL. Its height is stated
+   rather than left to what it holds, so the buttons start on the map's top
+   edge and the place lands on its bottom one — the map is the fixed thing in
+   this corner and the group beside it is measured against nothing else. It
+   hangs off its own RIGHT edge, which is the minimap's left, so the board is
+   free to be wider than the buttons without shifting them. */
 .hud-actions {
   margin-left: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.25rem;
+  justify-content: space-between;
+  height: var(--hud-map);
   flex: none;
 }
 
-/* The presses themselves, one above the other. The map is the fixed thing
-   in this corner, so a column of exactly its height is one the player has
-   already measured by eye. */
+/* The presses themselves, side by side: two targets a thumb finds without
+   leaving the road, on the one row a driver already glances at. */
 .hud-action-stack {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: var(--hud-mini-gap);
 }
 
 /* R29 — THE POSITION BOARD. Under the two presses and still hard against
    the minimap: place and route are the two things a driver glances right
-   for, and they should cost one glance rather than two.
+   for, and they should cost one glance rather than two. It is what fills the
+   group's lower half, which is why the buttons above it are sized at half
+   the map rather than to their own glyphs.
    Built like the clock in the opposite corner — a quiet label over a big
    figure, and no plate under either. The two numbers that say how a run is
    going are read the same way whichever side of the screen they are on, and
@@ -2550,18 +2553,14 @@ body {
     --hud-map: clamp(3.4rem, 18vw, 9.75rem);
   }
 
-  /* THE PLACE HAS TO LAND ABOVE THE GLASS. The right-hand column is the map,
-     the two presses stacked beside it and the board under them, and portrait
-     gives that column only the room down to `--glass-top` — the board hangs
-     LEFT of the map's own edge, which is the one part of the column the
-     centred glass reaches across. Landscape has a clear span there and sizes
-     the figure to the clock; here it is sized to the room, which on every
-     phone from 360 up leaves the stack clear of the glass by a few pixels
-     rather than writing the place across the driver's mirror. */
-  .hud-actions {
-    gap: 0.15rem;
-  }
-
+  /* THE PLACE IS SIZED TO THE ROOM HERE, not to the clock. The group is one
+     map tall and the map is 18vw on a phone, so the half left under the
+     buttons is a third of what landscape gives it; a figure at the clock's
+     size overruns that half and takes the group down past the map's foot,
+     into the top corner of the driver's mirror (`--glass-top`, which the
+     centred glass hangs across the one part of this column the board reaches
+     into). Sized to the room it fits, and the group keeps the map's height
+     on a phone as well. */
   .hud-place-label {
     font-size: 0.5rem;
     margin-bottom: 0.08rem;
