@@ -1732,6 +1732,14 @@ await capture(
 
 // The conditions: a dawn run, the dusk sun, storm rain at speed, and night
 // under the headlights.
+//
+// The first two are also the sheet's pictures of the light switch's DIPPED
+// stop (`LampStage`, sky.ts): both stand with the sun still up — 8° climbing
+// and 5° falling — where a car is already running lights. What has to read
+// there is a car that is LIT rather than a car lighting the road: glowing
+// lenses, a short pool a few metres off the bumper, and daylight still on the
+// stage around it. The long corridor is `shot-night`'s, and the two frames
+// side by side are the whole point of having two stops.
 await capture(
   "shot-dawn",
   { width: 1280, height: 720 },
@@ -1755,8 +1763,10 @@ await capture(
 // The thunderstorm. Not the same stage dimmed: the acceptance test is a
 // BLACK sky with a lit strip under the cloud base at the horizon, scud
 // tearing along below it, the rain leaning at the pace the car is doing,
-// and both pairs of lamps on at noon because there is no daylight left to
-// drive by. Every sky in every weather is on one sheet at `make sky`; this
+// and both pairs of lamps lit at noon because there is not enough daylight
+// left to be seen in — DIPPED, not the driving beams, because a black sky at
+// midday is still a day: main beam waits for a deck over an hour that was
+// already losing the light (`LAMPS_GLOOM`, sky.ts). Every sky in every weather is on one sheet at `make sky`; this
 // is the one that has to hold up in the real game.
 await capture(
   "shot-storm",

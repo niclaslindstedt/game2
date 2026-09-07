@@ -31,7 +31,7 @@ import {
 } from "../pwa/src/game/benchmark-index.ts";
 import { BENCHMARK } from "../pwa/src/game/benchmark-plan.ts";
 import { benchmarkReport, type FrameCost } from "../pwa/src/game/benchmark-report.ts";
-import { DAY_ABOVE, LAMPS_UNDER, NIGHT_BELOW, sunAt } from "../pwa/src/game/daylight.ts";
+import { DAY_ABOVE, LAMPS_UNDER, lampsAt, sunAt } from "../pwa/src/game/daylight.ts";
 import { findLevel } from "../pwa/src/game/campaign.ts";
 import { SUN_SECONDS_PER_HOUR } from "@engine";
 
@@ -266,8 +266,8 @@ describe("the benchmark's second axis", () => {
 // of them at noon: its expensive half is the BEAMS, and a car in daylight
 // has none lit, so the whole ladder from one headlamp to four costs the
 // same nothing. So the plan pins an hour, and what it has to be worth is
-// held here — against the same threshold the sky reads (`LAMPS_UNDER`)
-// rather than against a number copied out of it.
+// held here — against the same ladder the sky reads (`lampsAt`) rather than
+// against numbers copied out of it.
 describe("the benchmark's hour", () => {
   /** The stage it is driven on, and therefore the season and — off the
    * COUNTRY the stage belongs to (R40) — the latitude the sun is placed
@@ -294,29 +294,36 @@ describe("the benchmark's hour", () => {
     expect(found).toBeDefined();
   });
 
-  it("has the lamps lit on the first frame and the last", () => {
-    for (const t of [0, RUN / 2, RUN]) {
-      expect(sunAfter(t).elevation).toBeLessThan(LAMPS_UNDER);
-    }
-  });
-
-  it("never reaches night, so the stage stays there to be drawn", () => {
-    // The point of dusk over dark: every lever that draws WORLD still has
-    // world to draw, and the one being bought is the beams on top of it.
+  it("has the DRIVING lamps lit for every frame it measures", () => {
+    // Not merely lit: on MAIN beam. The LIGHTING row is read through the
+    // head-beam ladder, and on dipped beams a car throws its low beams
+    // alone — so its top two rungs would light the same two lamps and score
+    // the same, which is the row failing to move the number again.
     for (const t of [0, RUN / 4, RUN / 2, (3 * RUN) / 4, RUN]) {
-      expect(sunAfter(t).elevation).toBeGreaterThan(NIGHT_BELOW);
+      expect(lampsAt(sunAfter(t).elevation)).toBe("main");
     }
   });
 
-  it("sits inside the dusk band with room at both ends", () => {
-    // Not ON either threshold. The clock runs through the countdown as well
-    // as the measured frames, and the run is half an hour of sky wide, so
-    // an hour that only just clears a threshold at one end is an hour that
-    // crosses it before the last frame — which would change the workload
-    // under the stopwatch, the one thing a fixed race may not do.
+  it("never crosses a stop, so the workload cannot move under the stopwatch", () => {
+    // The one thing a fixed race may not do. A stop crossed mid-run is a car
+    // that was throwing four beams and is now throwing two.
+    const stops = new Set(
+      [0, RUN / 8, RUN / 4, RUN / 2, (3 * RUN) / 4, RUN].map((t) => lampsAt(sunAfter(t).elevation)),
+    );
+    expect([...stops]).toEqual(["main"]);
+    // Running past civil twilight at the end is deliberate and costs
+    // nothing: `NIGHT_BELOW` names the daylight WORD and nothing culls or
+    // skips on it, so every lever that draws world has the same world to
+    // draw. What darkness changes is the picture, not the frame's cost.
+  });
+
+  it("sits inside the main-beam band with room above it", () => {
+    // Not ON the threshold. The clock runs through the countdown as well as
+    // the measured frames, and the run is half an hour of sky wide, so an
+    // hour that only just clears the stop at the green is an hour that
+    // crosses back over it before the last frame.
     const MARGIN = 0.5 * (Math.PI / 180);
-    expect(sunAfter(0).elevation).toBeLessThan(LAMPS_UNDER - MARGIN);
-    expect(sunAfter(RUN).elevation).toBeGreaterThan(NIGHT_BELOW + MARGIN);
+    expect(sunAfter(0).elevation).toBeLessThan(LAMPS_UNDER.main - MARGIN);
     // And well under plain day at the green: an hour that started there
     // would be a plan that had drifted back off the point of pinning one.
     expect(sunAfter(0).elevation).toBeLessThan(DAY_ABOVE);

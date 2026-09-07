@@ -84,15 +84,15 @@ describe("the ladder", () => {
     expect(decemberFour.daylight).toBe("night");
     expect(lum(juneNight.zenith)).toBeGreaterThan(lum(decemberFour.zenith));
     expect(juneNight.stars).toBeLessThan(decemberFour.stars);
-    expect(decemberFour.headlights).toBe(true);
+    expect(decemberFour.lamps).toBe("main");
     expect(decemberFour.stars).toBeGreaterThan(0.5);
     // The same hour over the desert is a golden afternoon with the sun
-    // still up, and the lamps off.
+    // still up: a car with its dipped beams lit, not one driving on them.
     const desertFour = skyAt(conditions({ season: "winter" }), "desert", 16);
     expect(desertFour.daylight).not.toBe("night");
     expect(desertFour.sunUp).toBeGreaterThan(0);
     expect(desertFour.stars).toBe(0);
-    expect(desertFour.headlights).toBe(false);
+    expect(desertFour.lamps).toBe("dipped");
   });
 
   it("carries the real sun's place beside the key light", () => {
@@ -126,14 +126,14 @@ describe("the ladder", () => {
     for (const p of [rise, set]) {
       const c = new THREE.Color(p.horizon);
       expect(c.r).toBeGreaterThan(c.b);
-      expect(p.headlights).toBe(true);
+      expect(p.lamps).not.toBe("off");
     }
   });
 
   it("is the bright arcade day at noon", () => {
     const noon = skyAt(conditions({ season: "summer" }), "taiga", 12);
     expect(noon.stars).toBe(0);
-    expect(noon.headlights).toBe(false);
+    expect(noon.lamps).toBe("off");
     expect(noon.zenith).toBe(NOON.zenith);
     expect(dayLight(noon)).toBeGreaterThan(0.9);
     expect(sunHardness(noon)).toBeGreaterThan(0.9);
@@ -143,6 +143,33 @@ describe("the ladder", () => {
   it("starts a stage where it says and slides on from there", () => {
     const env = conditions({ hour: 17 });
     expect(skyFor(env, "taiga")).toEqual(skyAt(env, "taiga", 17));
+  });
+
+  it("puts the lamps on well before the sun goes, and the driving beams on after", () => {
+    const dipped = skyAt(conditions({}), "taiga", 16);
+    // The lamps are lit with the sun still a good way up — the whole point
+    // of the dipped stop is the stretch of evening BEFORE the sunset.
+    expect(dipped.sunUp).toBeGreaterThan(5 * DEG);
+    expect(dipped.lamps).toBe("dipped");
+    // ...and the driving beams wait for the sun to have actually gone.
+    const set = skyAt(conditions({}), "taiga", 17.6);
+    expect(set.sunUp).toBeGreaterThan(0);
+    expect(set.lamps).toBe("dipped");
+    expect(skyAt(conditions({}), "taiga", 19).lamps).toBe("main");
+  });
+
+  it("never takes the lamps back down as the evening goes on", () => {
+    // The ladder only ever climbs between the last of the daylight and the
+    // night: a car that has switched on cannot switch off again on the way
+    // down, whatever a rung's colours do in between.
+    const rank = { off: 0, dipped: 1, main: 2 };
+    let was = 0;
+    for (let hour = 12; hour <= 23.5; hour += 0.25) {
+      const now = rank[skyAt(conditions({}), "taiga", hour).lamps];
+      expect(now).toBeGreaterThanOrEqual(was);
+      was = now;
+    }
+    expect(was).toBe(rank.main);
   });
 });
 

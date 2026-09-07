@@ -57,16 +57,67 @@ export const DECLINATION: Record<Season, number> = {
 export const NIGHT_BELOW = -6 * DEG;
 export const DAY_ABOVE = 10 * DEG;
 
-/** Under this elevation a car has its lights on — the SUN's own rule; the
- * weather has its own beside it (`WeatherLook.lampsAt`). Four degrees: the
- * golden hour is driven on daylight, the sunset on lamps.
+/**
+ * HOW MUCH LIGHT A CAR IS RUNNING — the three stops a real switch has, and
+ * the two of them that are lit are two different LAMPS rather than one lamp
+ * at two brightnesses, because that is what a dip switch does.
+ *
+ * `dipped` is the dusk stop: the low beams alone, the lenses glowing, and a
+ * short bright patch of road off the bumper. A driver switching on at that
+ * hour is not doing it to SEE — there is still daylight on the road — they
+ * are doing it to be seen, which is why the light it throws is worth so much
+ * less than the picture of a lit car.
+ *
+ * `main` is the driving lamps and the pod bar lit with them: the long
+ * corridor down the road a night stage is actually driven by.
+ *
+ * Everything downstream reads the WORD rather than a brightness, because the
+ * two stops differ in WHICH lamps burn and in the shape of what they throw,
+ * not only in how much (`car-beams.ts`) — and a lamp is switched, so a car
+ * going to main beam has to get there on one frame.
+ */
+export type LampStage = "off" | "dipped" | "main";
+
+/** WHERE ON THE SUN'S WAY DOWN EACH STOP COMES ON, radians of elevation —
+ * the SUN's own rule; the weather has its own beside it
+ * (`WeatherLook.lampsAt`, and sky.ts's floor under it).
+ *
+ * `dipped` is well before anything anybody would call dusk, because that is
+ * when a driver actually reaches for the switch: the sun is a hand's width
+ * off the ridge, everything beside the road is throwing its shadow across
+ * it, and an unlit car has stopped being something you pick out of the trees
+ * behind it. Twelve degrees is roughly the last three quarters of an hour of
+ * daylight.
+ *
+ * `main` waits until the sun has gone. Between the two lies the whole golden
+ * hour and the whole sunset, which is the stretch of evening the middle stop
+ * exists for: it is far too long to spend on either full daylight or a full
+ * night beam, and a single threshold anywhere in it puts the one change the
+ * lamps make in the brightest part of the picture.
  *
  * Here rather than in sky.ts, with the two thresholds above it, because it
  * is the same KIND of fact — what a sun at a given height means — and
- * because sky.ts reaches for three.js, which puts the number out of reach
- * of anything that wants to ask the question without a renderer. The
- * benchmark's own clock is chosen against it (game/benchmark.ts). */
-export const LAMPS_UNDER = 4 * DEG;
+ * because sky.ts reaches for three.js, which puts the answer out of reach of
+ * anything that wants to ask without a renderer. The benchmark's own clock
+ * is chosen against it (game/benchmark-plan.ts). */
+export const LAMPS_UNDER = { dipped: 12 * DEG, main: -1 * DEG };
+
+/** The stops in order, dimmest first — the ladder `brightestLamps` walks. */
+const LAMP_LADDER: readonly LampStage[] = ["off", "dipped", "main"];
+
+/** The brighter of two stops. The rules that ask for lamps only ever turn
+ * them UP: the hour asks for one, the weather over it asks for another, and
+ * a car cannot be less lit for having a storm overhead. */
+export function brightestLamps(a: LampStage, b: LampStage): LampStage {
+  return LAMP_LADDER.indexOf(a) >= LAMP_LADDER.indexOf(b) ? a : b;
+}
+
+/** What the SUN alone asks for, at `elevation` rad. */
+export function lampsAt(elevation: number): LampStage {
+  if (elevation < LAMPS_UNDER.main) return "main";
+  if (elevation < LAMPS_UNDER.dipped) return "dipped";
+  return "off";
+}
 
 export type SunPlace = {
   /** Radians above the horizon; negative under it. */

@@ -47,6 +47,7 @@ import type { Livery } from "./car-livery.ts";
 import { revTremble, trembleAt } from "./car-shake.ts";
 import type { ScreenRain } from "./car/screen-rain.ts";
 import type { ScreenSnow } from "./car/screen-snow.ts";
+import type { LampStage } from "./daylight.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
 import { glowTexture } from "./textures.ts";
@@ -103,10 +104,15 @@ const BRAKE_NIGHT = 0.55;
 const MARKER_SHARE = 0.5;
 const LAMP_DAY = 0;
 const LAMP_NIGHT = BRAKE_NIGHT * MARKER_SHARE;
-/** The headlamps' pair. Nothing in daylight — a switched-off headlight is
- * glass, and a lit one competing with the sun is a car with its dipped
- * beams on, which nobody can see from behind either. */
+/** The headlamps' pair, at each stop of the switch. Nothing in daylight — a
+ * switched-off headlight is glass. On DIPPED the lamp is lit and says so:
+ * the bloom is most of what the change is worth from behind, because the
+ * short pool a low beam lays is ahead of the car where a chase camera cannot
+ * see it, and a lit lens on a car in the failing light is the whole point of
+ * switching on that early. Short of the driving lamps' own figure, so the
+ * moment the beams open up is a moment on the car as well as on the road. */
 const HEAD_DAY = 0;
+const HEAD_DIPPED = 0.34;
 const HEAD_NIGHT = 0.5;
 /** How much of the bloom a fully caked lens swallows, 0..1. A stage's worth
  * of gravel on the glass is the reason rally cars carry lamp pods and
@@ -140,15 +146,16 @@ const GLASS = { glint: 0.26, grime: 0.24, ceiling: 0.94, falloff: 3 };
 const GLASS_INSIDE = 0.25;
 
 /** WHAT THE CABIN KEEPS OF THE WORLD'S LIGHT, by day and once the lamps are
- * on. A closed box gets no sun: even in daylight the room around the driver
- * is a clear step darker than the paint outside it, which is most of what
+ * on, and at the dusk stop between them. A closed box gets no sun: even in
+ * daylight the room around the driver is a clear step darker than the paint
+ * outside it, which is most of what
  * makes the road through the windscreen read as bright. At night it goes to
  * almost nothing — a rally car's cabin is unlit, and the two instruments are
  * the only things in it that are not. Those keep their authored colours
  * whatever the sky is doing (INSTRUMENT_MATERIAL is exempted from the tint
  * the same way a lamp is), so the darker the stage the more they are the
  * only thing there is to see. */
-const CABIN_LIGHT = { day: 0.78, night: 0.16 };
+const CABIN_LIGHT = { day: 0.78, dusk: 0.44, night: 0.16 };
 
 /** Front-wheel visual steer: radians of wheel angle at full lock... */
 const WHEEL_STEER_LOCK = 0.55;
@@ -222,11 +229,12 @@ export type CarVisual = {
    * video options' call, per car, pushed by whoever built it (`CRUMPLE_SEEN`
    * in settings.ts). What comes OFF the car is not on this row. */
   setCrumple: (on: boolean) => void;
-  /** Whether the run's light is gone — the lamps burn harder when it is,
-   * and their lenses stop taking the tint the paint takes. Pushed from the
+  /** Which stop of the light switch the stage has the car on (`LampStage`) —
+   * the lamps burn harder as it climbs, and their lenses stop taking the
+   * tint the paint takes. Pushed from the
    * environment, which owns both decisions, along with the tint itself so
    * an unlit lens can still sit in the light the rest of the car is in. */
-  setLights: (on: boolean, tint?: THREE.Color) => void;
+  setLights: (stage: LampStage, tint?: THREE.Color) => void;
   /** How hard it is raining on this car, 0..1 — what wets its screens and
    * sets its wipers going. Pushed from the environment for the same reason
    * the light is: the weather is the stage's, not the car's. */
@@ -291,7 +299,7 @@ export type CarOptions = {
 export function tintCar(
   visual: CarVisual,
   tint: THREE.Color,
-  lampsLit: boolean,
+  lamps: LampStage,
   rain: number,
   snow = 0,
 ): void {
@@ -311,7 +319,7 @@ export function tintCar(
       if (painted && !driven) mat.color.copy(tint);
     }
   });
-  visual.setLights(lampsLit, tint);
+  visual.setLights(lamps, tint);
   // What is falling is rain until the air says it is snow (climate.ts):
   // the two are handed over apart, because a flake wets nothing until the
   // glass has melted it.
@@ -443,10 +451,10 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     lensMat.transparent = true;
     lensMat.opacity = GHOST_OPACITY;
   }
-  let lit = false;
+  let lamps: LampStage = "off";
   const worldLight = new THREE.Color(1, 1, 1);
-  const setLights = (on: boolean, tint?: THREE.Color): void => {
-    lit = on;
+  const setLights = (stage: LampStage, tint?: THREE.Color): void => {
+    lamps = stage;
     if (tint) worldLight.copy(tint);
   };
   /** Whether the pedal lights this car's tail at all — the LIGHTING row's,
@@ -491,9 +499,13 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // while the red pool on the road behind (environment.ts's own brake
     // beam) only exists once the light has gone.
     const braked = brakeLights && car.braking;
+    const lit = lamps !== "off";
     const tail = braked ? (lit ? BRAKE_NIGHT : BRAKE_DAY) : lit ? LAMP_NIGHT : LAMP_DAY;
     lampMat.opacity = tail * clean * fade;
-    headMat.opacity = (lit ? HEAD_NIGHT : HEAD_DAY) * clean * fade;
+    // The nose walks all three stops: dark glass, a lit lens with a modest
+    // halo round it, then the driving lamps' full bloom.
+    const head = lamps === "main" ? HEAD_NIGHT : lamps === "dipped" ? HEAD_DIPPED : HEAD_DAY;
+    headMat.opacity = head * clean * fade;
     if (lensMat) {
       if (lit) lensMat.color.setRGB(1, 1, 1);
       else lensMat.color.copy(worldLight).lerp(WHITE, LENS_DARK);
@@ -502,7 +514,13 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // into a closed box. `tintCar` has already put the raw tint on it.
     const cabinMat = body.cockpitMaterial;
     if (cabinMat) {
-      cabinMat.color.copy(worldLight).multiplyScalar(lit ? CABIN_LIGHT.night : CABIN_LIGHT.day);
+      const room =
+        lamps === "main"
+          ? CABIN_LIGHT.night
+          : lamps === "dipped"
+            ? CABIN_LIGHT.dusk
+            : CABIN_LIGHT.day;
+      cabinMat.color.copy(worldLight).multiplyScalar(room);
     }
   };
 
@@ -651,7 +669,10 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // disagree about a reading.
     if (body.cockpit && inside) {
       const dash = body.cockpit.instruments;
-      const read = instrumentReadings(state, lit);
+      // The blue lamp on the pod is the MAIN BEAM tell-tale, which is what it
+      // is on every car ever built: it lights when the driving lamps are
+      // open, not when the car merely has its lights on.
+      const read = instrumentReadings(state, lamps === "main");
       body.cockpit.steering.rotation.z = cockpitWheelTurn(lock);
       dash.tacho.rotation.z = dialAngle(read.rev);
       dash.speedo.rotation.z = dialAngle(read.speed / DIAL_TOP_SPEED);

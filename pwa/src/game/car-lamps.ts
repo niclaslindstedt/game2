@@ -5,6 +5,15 @@
 // bowl, the bloom); this is the light they cast, which the Lambert world
 // picks up and the fullbright car correctly ignores.
 //
+// THE SWITCH HAS TWO LIT STOPS, and the sky throws it (`Preset.lamps`). On
+// DIPPED the nose throws the same beams with a low beam's optics on them
+// (`DIPPED`) — a short bright patch a few metres ahead, worth a third of the
+// light — and the tail its usual marker. On MAIN the driving lamps open up
+// to the full budget down the body's own authored reach, which is the long
+// corridor a night stage is driven by. Same lights either way: the stop
+// changes the shape and the strength of the beams, never how many stand in
+// the scene, so it costs nothing to cross.
+//
 // A BEAM PER LAMP, because that is what a car has. One light on the
 // centerline throws a single symmetric pool that never breaks up, and the
 // eye reads it as a searchlight bolted to the roof rather than as the car's
@@ -21,6 +30,8 @@ import * as THREE from "three";
 import type { LampSource } from "./car/lamps.ts";
 import { BRAKE_DUST } from "./dust-light.ts";
 import { LAMP_BEAMS, type VideoSettings } from "./settings.ts";
+import { beamReach, dipFor, dippedOf, headShareAt } from "./car-beams.ts";
+import type { LampStage } from "./daylight.ts";
 import { clamp } from "../lib/util.ts";
 
 /** How much of each end's light a fully caked lens costs, 0..1. The tail
@@ -31,8 +42,9 @@ const HEAD_GRIME = 0.45;
 const TAIL_GRIME = 0.6;
 
 /** WHAT ONE END OF A CAR IS WORTH IN LIGHT, whatever it comes out of. The
- * whole figure is thrown at each end every frame the lamps are on, shared
- * out among the beams actually lit in proportion to the bowls behind them —
+ * whole figure is thrown at each end every frame the driving lamps are on
+ * (a dipped nose is worth `DIPPED.light` of it), shared out among the beams
+ * actually lit in proportion to the bowls behind them —
  * so every car in the field lights the road with the same total and the
  * player's LIGHTING row cannot buy a better view of a night stage than the
  * next machine's, only a better-shaped one.
@@ -119,11 +131,23 @@ export type CarLamps = {
    * end throws (`LAMP_BEAMS` — a CAP, not a count), and whether the pedal is
    * a light at all. */
   setLighting: (level: VideoSettings["lighting"]) => void;
-  /** Whether the lamps are on at all — the sky's switch. A hidden
-   * spotlight leaves the shader as well as the picture (three.js compiles
-   * the lit materials against however many lights are visible), so an
-   * unlit stage costs no beams at all, whatever the row says. */
-  setLit: (lit: boolean) => void;
+  /** Which stop of the light switch the car is on — the sky's say
+   * (`Preset.lamps`). A hidden spotlight leaves the shader as well as the
+   * picture (three.js compiles the lit materials against however many lights
+   * are visible), so a stage in daylight costs no beams at all, whatever the
+   * row says. The two LIT stops cost the same: dipped is the same beams with
+   * a dipped lamp's optics on them, not fewer of them. */
+  setStage: (stage: LampStage) => boolean;
+  /** How far off the nearest car this one could put its beams on, m —
+   * `Infinity` for an empty road. Main beam is for a road with nobody on it:
+   * inside this car's own reach the driver dips, because past the end of the
+   * beam there is nobody to dazzle and inside it there is. Answered per
+   * frame, and it reports whether the stop MOVED, because a car that has
+   * just dipped needs its lenses and its blooms pushed too. */
+  setCompany: (metres: number) => boolean;
+  /** The stop the car is actually running — the sky's ceiling with the dip
+   * taken off it. What anything drawing a lit car reads. */
+  stage: () => LampStage;
   /** WHICH LAMPS THIS CAR HAS, as the light sources its own body authored
    * (`car/lamps.ts`), strongest first — where each one sits, how strong it
    * is and what shape it throws. Pushed in when a car is built, because a
@@ -135,7 +159,8 @@ export type CarLamps = {
   /** How much of each end's lighting the crash has left, 0..1 — a share,
    * not a switch, because the lamps break one at a time. */
   setBroken: (front: number, rear: number) => void;
-  /** Aim the lit beams at the car, at `power` of full (the daylight's say).
+  /** Aim the lit beams at the car, at `power` of full (the daylight's say)
+   * and in whatever shape the current stop of the switch throws them.
    * Headlights track the nose, tail lamps the tail, and the brake pair rides
    * the markers — dark until the pedal is down. A car's light is spread over
    * the lamps it has rather than multiplied by them: four beams on a quad
@@ -182,10 +207,20 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
   const brakelights = Array.from({ length: TAIL_POOL }, () => beam(0xff1b0c));
 
   let beams = LAMP_BEAMS.full;
-  let lit = false;
+  /** What the CONDITIONS ask for (`Preset.lamps`, the sky's say) and what
+   * the car is actually running under it — never brighter, and a stop lower
+   * whenever there is somebody close enough ahead to dazzle. */
+  let ceiling: LampStage = "off";
+  let stage: LampStage = "off";
+  /** How far off the nearest car this one could put its beams on, m. */
+  let company = Infinity;
   let headPlan: readonly LampSource[] = FALLBACK_HEAD;
   let tailPlan: readonly LampSource[] = FALLBACK_TAIL;
   let brakePlan: readonly LampSource[] = brakeLampsOf(FALLBACK_TAIL);
+  /** The nose's lamps as the CURRENT stop throws them — the body's own
+   * optics on main beam, the dipped ones under it. Derived once when either
+   * changes, so the beams are dressed and aimed off one set of numbers. */
+  let headBeams: readonly LampSource[] = FALLBACK_HEAD;
   let grime = 0;
   let headLamps = 1;
   let tailLamps = 1;
@@ -194,12 +229,27 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
    * the car actually carries. */
   const thrown = (cap: number, plan: readonly LampSource[]): number => Math.min(cap, plan.length);
 
+  /** Re-settle the stop and re-dress the beams if it moved. Reports whether
+   * it did, because a car that has just dipped is a car whose LENSES and
+   * whose blooms have changed too, and only the renderer can push those. */
+  const restage = (): boolean => {
+    const next = dipFor(ceiling, company, beamReach(headPlan), stage);
+    if (next === stage) return false;
+    stage = next;
+    applyLamps();
+    return true;
+  };
+
   /** Which lamps stand in the scene, and the cone and reach each one gets.
    * Set here rather than per frame: a driving beam is narrow and long where
    * a flood is broad and short, and neither changes while the car is the car
    * it is. */
   const applyLamps = (): void => {
-    const heads = thrown(beams.head, headPlan);
+    headBeams = stage === "dipped" ? dippedOf(headPlan) : headPlan;
+    // Off `headBeams`, not off the plan: dipping does not only change the
+    // optics, it puts the driving lamps OUT, so a pod car throws fewer beams
+    // on dipped than the LIGHTING row would pay for.
+    const heads = thrown(beams.head, headBeams);
     const tails = thrown(beams.tail, tailPlan);
     const dress = (
       pool: THREE.SpotLight[],
@@ -208,14 +258,14 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
       single: boolean,
     ): void => {
       for (const [i, light] of pool.entries()) {
-        light.visible = lit && i < count;
+        light.visible = stage !== "off" && i < count;
         if (i >= count) continue;
         const lamp = plan[i];
         light.angle = single ? lamp.cone * SINGLE_BEAM_SPREAD : lamp.cone;
         light.distance = lamp.reach;
       }
     };
-    dress(headlights, headPlan, heads, heads === 1);
+    dress(headlights, headBeams, heads, heads === 1);
     dress(taillights, tailPlan, tails, tails === 1);
     // The brake lights ride the markers' own stop of the ladder: at the
     // bottom of it there is no tail beam to add to and nothing to signal
@@ -285,7 +335,7 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
   };
 
   const shares = (power: number, braking = false): { front: number; rear: number } => ({
-    front: power * (1 - HEAD_GRIME * grime) * headLamps,
+    front: power * (1 - HEAD_GRIME * grime) * headLamps * headShareAt(stage),
     rear: power * (1 - TAIL_GRIME * grime) * tailLamps * (beams.brakes && braking ? BRAKE_DUST : 1),
   });
 
@@ -294,15 +344,22 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
       beams = LAMP_BEAMS[level];
       applyLamps();
     },
-    setLit: (next) => {
-      lit = next;
-      applyLamps();
+    setStage: (next) => {
+      ceiling = next;
+      return restage();
     },
+    setCompany: (metres) => {
+      company = metres;
+      return restage();
+    },
+    stage: () => stage,
     setPlan: (head, tail) => {
       headPlan = head.length > 0 ? head : FALLBACK_HEAD;
       tailPlan = tail.length > 0 ? tail : FALLBACK_TAIL;
       brakePlan = brakeLampsOf(tailPlan);
-      applyLamps();
+      // A new body is a new reach, so the distance this car dips at moves
+      // with it — settle before dressing rather than dressing twice.
+      if (!restage()) applyLamps();
     },
     setGrime: (level) => {
       grime = clamp(level, 0, 1);
@@ -312,13 +369,16 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
       tailLamps = clamp(rear, 0, 1);
     },
     aim: (car, power) => {
-      if (!lit) return;
+      if (stage === "off") return;
       const fwd = { x: Math.sin(car.heading), z: Math.cos(car.heading) };
       const right = { x: fwd.z, z: -fwd.x };
       const { front, rear } = shares(power);
-      const heads = thrown(beams.head, headPlan);
+      const heads = thrown(beams.head, headBeams);
       const tails = thrown(beams.tail, tailPlan);
-      aimBeams(headlights, headPlan, heads, car, fwd, right, 1, HEAD_LIGHT, front);
+      // `front` already carries the dipped share, so the nose's budget is the
+      // whole figure at either stop and the beams it is spread over are the
+      // ones this stop actually throws.
+      aimBeams(headlights, headBeams, heads, car, fwd, right, 1, HEAD_LIGHT, front);
       aimBeams(taillights, tailPlan, tails, car, fwd, right, -1, TAIL_LIGHT, rear);
       // ...and the brake lights on top of the markers rather than instead of
       // them, out of the same two lenses, worth nothing at all until the

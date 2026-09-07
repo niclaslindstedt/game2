@@ -64,6 +64,7 @@ import { createCarFx } from "./car-fx.ts";
 import { createSnowMarks, drawnGround } from "./snow-marks.ts";
 import { CRASH_THROW, crashContact, crashBurst as burstCount, crashGrind } from "./crash-throw.ts";
 import { createEnvironment } from "./environment.ts";
+import type { LampStage } from "./daylight.ts";
 import { createFieldCars, type FieldCars } from "./field-cars.ts";
 import { watchGpuContext } from "./gpu-context.ts";
 import { wetnessOf, type Clap } from "./weather.ts";
@@ -272,6 +273,12 @@ export type GameRenderer = {
    * (mirror-pace.ts) — for the debug overlay, which is where a player who
    * thinks the glass is stale finds out that it is, and why. */
   mirrorPace: () => MirrorTier;
+  /** WHAT THE LAMPS ARE DOING — which stop of the switch the car is running
+   * and how far off the nearest crew ahead is, m (`Infinity` for an empty
+   * road). For the debug overlay: the dip switch changes the picture without
+   * anything on screen saying it has, so this is the one place a night stage
+   * can be asked why the beams just went short. */
+  lampState: () => { stage: LampStage; ahead: number };
   /** Hold that rung instead of letting the frame rate choose it, or hand it
    * back with null — `?mirrorhz=` and the profiling harness (mirror-pace.ts
    * says why a meter needs this). */
@@ -596,21 +603,31 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
 
   /** The environment's light tint, pushed onto everything that carries its
    * own baked or vertex colors (the cars, the particles) — and, on the same
-   * trip, the rain the cars' screens are wetted by. */
+   * trip, the rain the cars' screens are wetted by.
+   *
+   * Hung off the environment's own relight (below), because everything here
+   * is a surface the scene's lights cannot reach: a fullbright car takes the
+   * failing light as a MULTIPLY, so nothing about the sun moving reaches it
+   * unless somebody carries it over. Pushed at the sky's cadence rather than
+   * per frame — `RELIGHT_EVERY` is already chosen as the step at which no
+   * eye can see the colours move — and again the moment the lamps change
+   * stop, which is a switch and has to land on one frame. */
   const applyTint = (): void => {
     const tint = environment.carTint();
-    const lit = environment.lampsLit();
+    const lamps = environment.lampStage();
     const rain = environment.rainfall();
     const snowing = environment.snowing();
-    if (car) tintCar(car, tint, lit, rain, snowing);
-    if (ghostCar) tintCar(ghostCar, tint, lit, rain, snowing);
-    field.paint(tint, lit, rain);
+    if (car) tintCar(car, tint, lamps, rain, snowing);
+    if (ghostCar) tintCar(ghostCar, tint, lamps, rain, snowing);
+    field.paint(tint, lamps, rain);
     carFx.setTint(tint, environment.dustTint(), environment.ceiling(), environment.highTint());
   };
 
   /** How thick the transient FX are right now: the effects budget, and
    * nothing at all under the map view, where a gravel particle a metre
    * across is invisible and still costs a draw. */
+  environment.onRelight(applyTint);
+
   const fxScale = (): number => (mapView ? 0 : EFFECTS_SCALE[quality.effects]);
 
   /** …and how thick the ground the car being driven raises is allowed to be:
@@ -1512,6 +1529,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       DUST_RAISED[quality.dust].field ? fx : 0,
     );
     field.update(state, chase.camera, dt, view !== "map");
+    // THE DIP SWITCH. Main beam is for a road with nobody on it: the moment
+    // a crew is close enough ahead for the driving lamps to land on them the
+    // driver drops to dipped, and the pod bar goes out with them. The field
+    // knows where everybody is; the lamps know how far their own beams
+    // throw, which is what "close enough" means (car-lamps.ts).
+    environment.setCompany(field.nearestAhead());
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
     // drone, the map view and god mode's free camera there is nobody lost
     // and nobody to point: left running, it would hang a compass needle over
@@ -2000,6 +2023,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     placeCamera: (pose) => chase.free.place(pose),
     cameraPose: () => ({ ...chase.pose(), speed: chase.free.speed(), mode: chase.mode() }),
     mirrorPace: () => mirrorPace.tier(),
+    lampState: () => ({ stage: environment.lampStage(), ahead: field.nearestAhead() }),
     pinMirrorPace: mirrorPace.pin,
     skipIntroShot: chase.skipStartShot,
     render,

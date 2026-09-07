@@ -83,18 +83,27 @@ export type BenchmarkPlan = {
    * ladder from one headlamp to four costs the same nothing, and a player
    * walking it reads the same score three times.
    *
-   * The lamps come on when the sun drops under four degrees (`LAMPS_UNDER`
-   * in sky.ts). This is set just under it rather than into the dark: at
-   * 18h30 in a desert spring the sun stands at 3.4 degrees, which is lamps
-   * lit on a world still lit from the side — everything on the stage is
-   * still there to be drawn and seen, which a night stage cannot claim.
+   * So it is pinned where the beams are not only lit but FULLY lit: under
+   * `LAMPS_UNDER.main` (daylight.ts), where the driving lamps and the pod
+   * bar burn beside the low beams. That is the stop the LIGHTING row can
+   * actually be read through — on dipped beams a car throws its low beams
+   * alone, so the top two rungs of the head-beam ladder would light the
+   * same two lamps and score the same.
    *
    * ONE MINUTE OF RACING IS ONE HOUR OF SUN (`SUN_SECONDS_PER_HOUR`), so
    * this is the start of a band and not a point: the warm-up and the
-   * measured thirty seconds carry the sun from about +2.8 to about -3.4
-   * degrees, across the horizon and no further. Every frame of the run has
-   * its lamps lit and none of it is night — which is what keeps the
-   * workload the same shape from the green to the last frame. */
+   * measured thirty seconds carry the sun from about -1.9 to about -7.6
+   * degrees. THE WHOLE OF IT IS ON MAIN BEAM, which is the one thing about
+   * the hour that may not change under the stopwatch — a stop crossed
+   * mid-run is a car that was throwing four beams and is now throwing two,
+   * which is the workload moving while it is being measured.
+   *
+   * It runs past civil twilight at the end and that costs nothing: the
+   * daylight WORD is all that changes there (`NIGHT_BELOW`), and nothing
+   * culls or skips on it, so every lever that draws world still has exactly
+   * the same world to draw. What a dark sky does change is the picture the
+   * player watches while it runs, which is why the band is pinned at the
+   * light end of main beam rather than in the middle of the night. */
   hour: number;
   /** Frames MEASURED, after the warm-up. Thirty seconds of racing at the
    * step above: long enough to cover the grid, the run to the first corner
@@ -108,7 +117,7 @@ export const BENCHMARK: BenchmarkPlan = {
   carId: "compact",
   gearbox: "auto",
   camera: "chase",
-  hour: 18.5,
+  hour: 18.95,
   field: { difficulty: "medium" as Difficulty, cars: 15, massStart: true, contact: true },
   step: 1 / 60,
   frames: 1800,

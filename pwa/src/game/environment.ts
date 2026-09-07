@@ -3,8 +3,8 @@
 // `sky.ts` works out for its conditions AT THIS MOMENT. The target look is
 // Sega Rally's chunky saturated world sitting inside Valheim's air — a sky
 // whose horizon glows around the sun, colored distance fog, a sun (or moon)
-// with a soft halo, stars, a horizon of ridge silhouettes, and headlights
-// when the light is gone.
+// with a soft halo, stars, a horizon of ridge silhouettes, and the cars'
+// lamps coming up through their two stops as the light goes.
 //
 // THE SUN MOVES. One minute of racing is one hour of sun (`sunHourAt`), so
 // the preset is not applied once per stage but re-read a few times a
@@ -45,7 +45,7 @@ import { createCarLamps } from "./car-lamps.ts";
 import type { LampSource } from "./car/lamps.ts";
 import { createClouds } from "./clouds.ts";
 import { dressSky, sunOcclusion, type SkyDressing } from "./cloud-field.ts";
-import { horizonCrossing, litAt, sunAt } from "./daylight.ts";
+import { horizonCrossing, litAt, sunAt, type LampStage } from "./daylight.ts";
 import { lightDust as hangDustLamps } from "./dust-light.ts";
 import {
   HEIGHT_FOG,
@@ -178,8 +178,23 @@ export type Environment = {
    * weather rather than under it (ambient-life.ts's high traffic) reads it
    * to know whether the car can see any of it. */
   ceiling: () => number;
-  /** Whether the run's light is gone and the car has its lights on. */
-  lampsLit: () => boolean;
+  /** Which stop of the light switch the car is actually running — off in
+   * daylight, dipped through the long evening, main beam once the light has
+   * gone (`Preset.lamps`), less whatever the dip switch takes off that for
+   * a car close ahead. */
+  lampStage: () => LampStage;
+  /** How far off the nearest car the beams could land on, m (`Infinity` for
+   * an empty road) — pushed per frame by the renderer, which is the only
+   * thing that knows where the field is. */
+  setCompany: (metres: number) => void;
+  /** Call `cb` whenever THE LIGHT HAS CHANGED — the sky re-read on the sun's
+   * clock, or the lamps moving a stop. Everything lit by the scene follows
+   * on its own; this is for what does NOT, which is every surface carrying
+   * its own baked colour: the cars' paint, their lenses, their cabins. Set
+   * once. Without it a stage driven from the last of the daylight into the
+   * night keeps the paint and the dark lamps it was BUILT with, however far
+   * the sun has moved under it. */
+  onRelight: (cb: () => void) => void;
   /** …and how much of a beam survives the daylight it is competing with,
    * 0..1. The environment drives the player's own lamps with it; anything
    * else that lights something off a car (the field's lamps on the dust)
@@ -539,7 +554,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     snow.setTone(snowTone(preset));
     horizon.paint(preset);
     storm.apply(preset);
-    lamps.setLit(preset.headlights);
+    lamps.setStage(preset.lamps);
     if (look.shader) {
       shell.apply(preset, dressing, look);
       litLayers(shell, (layer) => (layer.deck ? 1 : litAt(layer.altitude, preset.sunUp)));
@@ -559,6 +574,10 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     }
     applyMist();
     applyVisibility();
+    // ...and the surfaces the scene's own lights cannot reach: the cars are
+    // fullbright and carry their light as a tint, so the only thing that
+    // moves their paint down with the sun is being told.
+    relit();
   };
 
   const apply = (next: RaceEnv, country: BiomeId = "taiga"): void => {
@@ -627,6 +646,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
    * running lights under a black storm at noon still has daylight on the
    * road, and a full-strength pool under it reads as night. */
   const lampPower = (): number => 1 - 0.75 * dayLight(preset);
+
+  /** What to tell when the light has moved — see `onRelight`. */
+  let relit: () => void = () => {};
 
   /** THE COUNTRY'S SHADOW: re-sample the heights when the camera has
    * walked far enough, re-march when the sun has moved far enough, and
@@ -819,7 +841,15 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     dustTint: () => dustTintFor(preset),
     highTint: () => highLightFor(preset, eyeY + 400),
     ceiling: () => preset.deck?.base ?? Infinity,
-    lampsLit: () => preset.headlights,
+    lampStage: () => lamps.stage(),
+    setCompany: (metres) => {
+      // A stop moved is a car repainted: the beams are the lamps' own to
+      // re-dress, the lenses and the blooms are the renderer's.
+      if (lamps.setCompany(metres)) relit();
+    },
+    onRelight: (cb) => {
+      relit = cb;
+    },
     lampPower,
     rainfall: () => preset.rain,
     snowing: () => flakes,
@@ -843,7 +873,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       // real beam: see dust-light.ts. The brakes count here too, and they
       // are the reason a rival's cloud goes hard red the instant they lift
       // for a corner ahead of you.
-      if (!preset.headlights) return;
+      if (lamps.stage() === "off") return;
       const { front, rear } = lamps.shares(lampPower(), car.braking);
       hangDustLamps(car, front, rear);
     },

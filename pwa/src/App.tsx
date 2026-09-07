@@ -2396,6 +2396,7 @@ export function App() {
       held: heldRef.current,
       fps,
       mirror: renderer.mirrorPace(),
+      lamps: renderer.lampState(),
       build: BUILD,
     };
   };
