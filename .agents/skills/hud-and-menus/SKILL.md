@@ -35,14 +35,15 @@ a drift's drama) load `game-feel`; for the developer surfaces, `debug-tools`.
 
 ## The controls
 
-| Surface                                                   | Where                                                                                                   |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Input mapping                                             | `input.ts` (bindings in `settings.ts`)                                                                  |
-| Touch: the wheel and the pedal zones                      | `hud-touch.tsx`; a zone's grip on a finger is `thumb-guard.ts`, what a drag MEANS is `pedal-gesture.ts` |
-| Which gears a thumb flick may take, and why a key may not | `shift-window.ts` — DOM-free, and the shift light reads off it too                                      |
-| A controller's sticks, triggers and buttons               | `gamepad.ts` reads a POLLED pad (DOM-free); `input.ts` does the polling                                 |
-| Walking a menu on a controller                            | `menu-nav.ts` (the cards, and `data-nav-back`) over `menu-cursor.ts` (where the cursor goes — DOM-free) |
-| Flying god mode on a pad or a phone                       | `readFlyPad` in `gamepad.ts` + `hud-fly.tsx`, merged in `input.ts`'s `flyMove`                          |
+| Surface                                                   | Where                                                                                                                                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Input mapping                                             | `input.ts` (bindings in `settings.ts`)                                                                                                                                         |
+| Touch: the wheel and the pedal zones                      | `hud-touch.tsx`; a zone's grip on a finger is `thumb-guard.ts`, what a drag MEANS is `pedal-gesture.ts`                                                                        |
+| Which gears a thumb flick may take, and why a key may not | `shift-window.ts` — DOM-free, and the shift light reads off it too                                                                                                             |
+| A controller's sticks, triggers and buttons               | `gamepad.ts` reads a POLLED pad (DOM-free); `input.ts` does the polling                                                                                                        |
+| Walking a menu on a controller                            | `menu-nav.ts` (the cards, and `data-nav-back`) over `menu-cursor.ts` (where the cursor goes — DOM-free)                                                                        |
+| Flying god mode on a pad or a phone                       | `readFlyPad` in `gamepad.ts` + `hud-fly.tsx`, merged in `input.ts`'s `flyMove`                                                                                                 |
+| The press a THUMB ON THE GAS costs a button               | `second-finger.ts` — the browser withholds a touch's click for any press that shared the glass; the relay fires those itself, so a button stays a `<button>` with an `onClick` |
 
 ## The menus
 
