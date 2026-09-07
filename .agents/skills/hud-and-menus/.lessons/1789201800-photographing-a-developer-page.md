@@ -24,8 +24,8 @@ Two things that bite:
 
 - **`splash=0` is not optional.** Without it the attract card is still over
   the menu, the tile under it is visible and enabled, and Playwright retries
-  the click until it times out with `<span class="splash-game"> … intercepts
-  pointer events` — which reads as a missing element rather than a cover.
+  the click until it times out saying the splash card's own span "intercepts
+  pointer events" — which reads as a missing element rather than a cover.
 - **A page whose content comes from local storage** (the benchmark history,
   the score boards, the campaign) is seeded in the same init script, so the
   surface is photographed with something on it. A page shot empty is a page
