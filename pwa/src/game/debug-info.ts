@@ -68,6 +68,11 @@ export type DebugContext = {
   held: boolean;
   /** Frames per second, averaged over the last second. */
   fps: number;
+  /** Which stop of the light switch the car is running, and how far off the
+   * nearest crew ahead is, m — the renderer's `lampState`. The dip switch
+   * shortens the beams with nothing on screen to say why, so it is read
+   * here or not at all. */
+  lamps: { stage: string; ahead: number };
   /** What the rear view is currently costing: the rung of the pace ladder
    * the frame rate has put it on (mirror-pace.ts). Read beside `fps`, it is
    * the answer to "why is the glass stale" and to "did the ladder actually
@@ -126,6 +131,12 @@ function stageBox(ctx: DebugContext, state: GameState): DebugBox {
         v:
           `${hourLabel(ctx.stage.hour)} ${ctx.stage.weather} · ${ctx.stage.season}` +
           `${ctx.stage.temperature == null ? "" : ` ${ctx.stage.temperature}°C`}`,
+      },
+      {
+        k: "lamps",
+        v:
+          `${ctx.lamps.stage}` +
+          `${Number.isFinite(ctx.lamps.ahead) ? ` · ${m(ctx.lamps.ahead)} m to the car ahead` : " · road clear"}`,
       },
       { k: "car", v: `${ctx.stage.carId} (${state.spec.name})` },
       { k: "build", v: ctx.build },

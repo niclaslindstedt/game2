@@ -56,6 +56,8 @@ import { type GameEvent, type GameState } from "@engine";
 
 import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
+import { headShareAt } from "./car-beams.ts";
+import type { LampStage } from "./daylight.ts";
 import { crewLookFor } from "./car-crew.ts";
 import { liveryForCrew } from "./car-livery.ts";
 import { BRAKE_DUST, lightDust } from "./dust-light.ts";
@@ -192,11 +194,18 @@ export type FieldCars = {
   /** Hang the nearest crews' lamps on the register the clouds are lit from
    * (dust-light.ts) — a rival ahead of you in the dark is a red glow inside
    * its own dust before it is a car. `power` is how much of a beam the
-   * daylight leaves (the environment's own number), so a field running lights
-   * under a black noon storm does not out-light the car being driven.
-   * Separate from `update` because the register has one owner of the moment
-   * it is emptied, and that is the renderer. */
+   * daylight leaves (the environment's own number), and the stop of the light
+   * switch is taken off the same `paint` the bodies are lit by, so a field
+   * running dipped beams under a black noon storm does not out-light the car
+   * being driven. Separate from `update` because the register has one owner
+   * of the moment it is emptied, and that is the renderer. */
   lightDust: (power: number) => void;
+  /** HOW FAR OFF THE NEAREST CAR AHEAD of the one being watched, m, or
+   * `Infinity` for an empty road — what the dip switch is answered with
+   * (car-lamps.ts). Ahead only: a crew behind sees nothing of your
+   * headlamps, and one alongside is being passed by them. Read off the same
+   * sweep the dust and the plates come from, so it costs no second pass. */
+  nearestAhead: () => number;
   /** Whether a crew that is on the road is NAMED while it is there — the
    * player's option (name-tag.ts). */
   setNames: (on: boolean) => void;
@@ -219,10 +228,10 @@ export type FieldCars = {
    * neither happened here. (The dust it TOWS is not an event — it is the
    * ground under the car, read every frame like the player's own.) */
   events: (run: RivalRun, events: GameEvent[]) => void;
-  /** The conditions: the tint every baked-colour surface takes, whether the
-   * lamps are lit, and how hard it is raining on the glass. Pushed by the
-   * renderer, which owns all three. */
-  paint: (tint: THREE.Color, lampsLit: boolean, rain: number) => void;
+  /** The conditions: the tint every baked-colour surface takes, which stop of
+   * the light switch the stage has the cars on, and how hard it is raining on
+   * the glass. Pushed by the renderer, which owns all three. */
+  paint: (tint: THREE.Color, lamps: LampStage, rain: number) => void;
   /** How much of a rival is built for the sake of what is only visible up
    * close: how much cabin its glass has behind it — what the renderer has
    * already decided the field deserves off the VIDEO rows, taken down a
@@ -279,7 +288,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let folds = true;
   let braked = true;
   let tint = new THREE.Color(1, 1, 1);
-  let lampsLit = false;
+  let lamps: LampStage = "off";
   let rain = 0;
   let named = true;
   let watched: RivalRun | null = null;
@@ -306,6 +315,8 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
    * place, because this is a per-frame path and a fresh array a frame is
    * garbage the collector answers with a pause in the middle of a stage. */
   const near: { run: RivalRun; range: number }[] = [];
+  /** …and the closest of them standing IN FRONT, for the dip switch. */
+  let ahead = Infinity;
 
   /** Whether the field's cloud is worth drawing at all. Three ways it is
    * not, and the second is the common one: rain has settled the stage (what
@@ -357,6 +368,9 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
     update: (viewer, camera, dt, shown) => {
       drawn = 0;
       near.length = 0;
+      ahead = Infinity;
+      // Which way the watched car is pointing, for the ahead/behind test.
+      const nose = { x: Math.sin(viewer.car.heading), z: Math.cos(viewer.car.heading) };
       let budget = BUILD_BUDGET;
       // The same gate the bodies are behind, and the dust needs it MORE than
       // they do. Past the line the classification is settled by stepping
@@ -390,6 +404,14 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         // before the build gate below, because a crew can be raising a cloud
         // a corner ahead while their car does not exist yet.
         if (beat && range <= DUST_RANGE && run !== watched) near.push({ run, range });
+        // ...and whether this crew is in front, which is the only place a
+        // main beam can reach them. Measured along the nose rather than by
+        // a cone: a car round the next bend is still somebody the beams
+        // sweep across, and a driver dips for the glow before the car.
+        if (beat && run !== watched) {
+          const alongNose = (car.x - viewer.car.x) * nose.x + (car.z - viewer.car.z) * nose.z;
+          if (alongNose > 0 && range < ahead) ahead = range;
+        }
         if (!existing) {
           if (range > BUILD_RANGE || budget === 0) continue;
           budget -= 1;
@@ -422,7 +444,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           visual.setWheelLoss(shedsWheels);
           visual.setCrumple(folds);
           visual.setBrakeLights(braked);
-          tintCar(visual, tint, lampsLit, rain);
+          tintCar(visual, tint, lamps, rain);
           visual.update(run.state, 0, camera.position);
           show(fresh, false);
           continue;
@@ -514,16 +536,20 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       showCloud();
     },
     lightDust: (power) => {
-      if (!lampsLit) return;
+      if (lamps === "off") return;
       // No grime term: how filthy a rival's lenses are is not tracked, and
       // at the range one of these is ever seen through dust it would not be
-      // the difference between two frames.
+      // the difference between two frames. The stop of the switch IS taken,
+      // because a nose on dipped beams is worth a third of one on main and
+      // the cloud is most of what a rival is at that hour. Only the nose: a
+      // tail lamp is the same marker at either stop.
+      const front = power * headShareAt(lamps);
       for (let i = 0; i < near.length && i < LAMP_CARS; i++) {
         const rival = near[i]?.run.state.car;
         // A rival's tail flares on the pedal like the player's own — a crew
         // braking into a corner a hundred metres ahead is a red pulse inside
         // their own dust, which is the first thing you get to read about it.
-        if (rival) lightDust(rival, power, power * (rival.braking ? BRAKE_DUST : 1));
+        if (rival) lightDust(rival, front, power * (rival.braking ? BRAKE_DUST : 1));
       }
     },
     setCarDetail: (detail) => {
@@ -563,17 +589,18 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       }
       car.visual.onEvents(run.state, events);
     },
-    paint: (next, lit, wet) => {
+    paint: (next, stage, wet) => {
       tint = next;
-      lampsLit = lit;
+      lamps = stage;
       rain = wet;
-      for (const { visual } of built.values()) tintCar(visual, tint, lampsLit, rain);
+      for (const { visual } of built.values()) tintCar(visual, tint, lamps, rain);
       // The exhaust carries its own colours and is fullbright, so the time of
       // day reaches it the way it reaches every baked-colour surface: through
       // the material tint (car-fx.ts does the same to the player's). Without
       // it a rival's smoke glows pale grey at midnight.
       (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
     },
+    nearestAhead: () => ahead,
     drawn: () => drawn,
     dispose: () => {
       clear();

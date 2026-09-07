@@ -39,7 +39,8 @@ export type Readings = {
   /** The six tell-tales in `TELL_TALES` order (car/cockpit-dials.ts):
    * beams, left turn, oil, charge, brake, right turn. All six light for
    * the bulb check while the car waits on the line; on the road only the
-   * beams' lamp has anything to say. */
+   * beams' lamp has anything to say, and it says MAIN BEAM — a car on
+   * dipped beams has an unlit pod, the way every car ever built does. */
   lamps: readonly boolean[];
 };
 
@@ -48,6 +49,8 @@ const BULB_CHECK: readonly boolean[] = [true, true, true, true, true, true];
  * frame: only its first lamp ever changes. */
 const ON_THE_ROAD: boolean[] = [false, false, false, false, false, false];
 
+/** `beams` is whether the DRIVING lamps are open, not whether the car has
+ * its lights on: the blue lamp on the pod is a main-beam tell-tale. */
 export function instrumentReadings(state: GameState, beams: boolean): Readings {
   const car = state.car;
   const onTheLine = state.phase === "intro" || state.phase === "countdown";

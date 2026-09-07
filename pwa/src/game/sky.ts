@@ -37,12 +37,14 @@ import {
 } from "@engine";
 
 import {
+  brightestLamps,
   daylightOf,
-  LAMPS_UNDER,
+  lampsAt,
   litAt,
   moonAt,
   sunAt,
   type Daylight,
+  type LampStage,
   type SunPlace,
 } from "./daylight.ts";
 import { CASTS, LOOKS, TAIGA_LOOKS } from "./sky-looks.ts";
@@ -145,7 +147,9 @@ export type Preset = {
    * rendering fault and a half-empty sky reads as a dry one. Ignored while
    * a deck is up: a lid is a lid in any country. */
   cloudShare: number;
-  headlights: boolean;
+  /** How much light the car is running (`LampStage`) — the stage's answer,
+   * because what a driver reaches for the switch about is the sky. */
+  lamps: LampStage;
   /** The lid over the sky, or null for an open one. */
   deck: Deck | null;
   /** How hard it is raining, 0..1 — what the drops and the wet beds read. */
@@ -444,6 +448,24 @@ const MOON_TAKES_OVER = { from: -3, to: -9 };
  * light nothing at all. */
 const KEY_FLOOR = 2 * DEG;
 
+/** How little daylight a deck can leave on the road before the lamps come on
+ * at all, whatever the country's own cover threshold says — a share of a
+ * clear noon (`dayLight`). `WeatherLook.lampsAt` is art direction, written
+ * per country and per weather in units of how THICK the lid is, and thick is
+ * not the same question as dark: a squall that never reaches its country's
+ * cover figure can still put less light on the stage than a rain deck that
+ * does. This is the floor under it, so what settles whether a car is running
+ * lights is always how much light there is. */
+const LAMPS_DIM = 0.24;
+
+/** ...and how little is left before the lamps go PAST dipped. A black storm
+ * at midday still has more light on the road than this and stays on dipped
+ * beams — a full driving beam under a sky that is merely dark reads as a
+ * searchlight rather than as weather — where the same deck over an afternoon
+ * that was already losing the light does not, which is the difference
+ * between a dark day and a night that arrived early. */
+const LAMPS_GLOOM = 0.06;
+
 function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
 }
@@ -527,7 +549,7 @@ function clearSky(sun: SunPlace): Preset {
     daylight: daylightOf(sun),
     beam: 1,
     cloudShare: 1,
-    headlights: sun.elevation < LAMPS_UNDER,
+    lamps: lampsAt(sun.elevation),
     deck: null,
     rain: 0,
     thunder: 0,
@@ -545,7 +567,7 @@ export const NOON: Preset = {
   daylight: "day",
   beam: 1,
   cloudShare: 1,
-  headlights: false,
+  lamps: "off",
   deck: null,
   rain: 0,
   thunder: 0,
@@ -601,8 +623,15 @@ function weathered(
   p.hemiIntensity *= lerp(look.hemi[0], look.hemi[1], cover);
   // Dark enough to drive on lights. A rally car under a black sky at noon
   // has its lamps on, and the pair of pools it lays down the road is most
-  // of what makes a storm read as something to be careful in.
-  if (cover >= look.lampsAt) p.headlights = true;
+  // of what makes a storm read as something to be careful in — and once the
+  // deck has taken enough of the day with it that the stage is night in
+  // everything but the clock, the driving lamps go on with them. Read off
+  // `dayLight` rather than off the cover, so it is the light actually left
+  // on the road that decides, and a heavy deck late in the afternoon asks
+  // for main beam where the same deck at noon does not.
+  const under = dayLight(p);
+  if (cover >= look.lampsAt || under <= LAMPS_DIM) p.lamps = brightestLamps(p.lamps, "dipped");
+  if (under <= LAMPS_GLOOM) p.lamps = brightestLamps(p.lamps, "main");
   p.fog = toward(p.fog);
   p.fogNear *= lerp(look.fogNear[0], look.fogNear[1], cover);
   p.fogFar *= lerp(look.fogFar[0], look.fogFar[1], cover);

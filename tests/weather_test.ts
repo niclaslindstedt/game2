@@ -152,8 +152,18 @@ describe("no two wet stages get the same sky", () => {
     expect(heavy.hemiIntensity).toBeLessThan(light.hemiIntensity);
     // A rally car under a black sky at noon is running lights, and a
     // daytime preset would never ask for them on its own.
-    expect(skyFor(conditions({ weather: "clear" })).headlights).toBe(false);
-    expect(heavy.headlights).toBe(true);
+    expect(skyFor(conditions({ weather: "clear" })).lamps).toBe("off");
+    expect(heavy.lamps).not.toBe("off");
+  });
+
+  it("keeps a dark noon on dipped beams and saves main for a dark hour", () => {
+    // A black sky at midday is a dark DAY: the lamps are lit and the car is
+    // visible, and a full driving beam under it would read as a searchlight
+    // rather than as weather. The same deck once the light was already going
+    // is a night that arrived early, and gets the beams.
+    expect(heavy.lamps).toBe("dipped");
+    const evening = skyFor(conditions({ weather: "storm", windSpeed: 11, hour: 20 }));
+    expect(evening.lamps).toBe("main");
   });
 });
 

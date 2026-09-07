@@ -22,10 +22,13 @@ export type WeatherLook = {
   /** What survives of the sun's beam and of the skylight, thin cover →
    * thick. A heavy deck is not a filter over daylight — a thunderstorm at
    * noon puts a few per cent of full sun on the ground, which is why the
-   * headlights go on under one. */
+   * lamps go on under one. */
   dim: [number, number];
   hemi: [number, number];
-  /** How thick the deck has to be before the car turns its lights on. */
+  /** How thick the deck has to be before the car turns its lights on — the
+   * country's own say. sky.ts holds a floor under it in DAYLIGHT (`LAMPS_DIM`)
+   * as well, so a lid darker than this figure allows for still lights the
+   * lamps; what this number buys is a country turning them on EARLY. */
   lampsAt: number;
   /** Fog distances, as fractions of the clear preset's own, thin cover →
    * thick. Heavier weather is not only darker, it is SHORTER: the water in
