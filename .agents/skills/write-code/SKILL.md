@@ -205,7 +205,10 @@ Make targets are the definition of green CI enforces).
   root `tsconfig.json` has no `dom` lib, so a test that reaches a module
   which transitively imports `pwa/src/game/textures.ts` (or anything else
   touching `document`) RUNS green under vitest and fails `make lint` later,
-  with errors pointing at the DOM module rather than at your test. Check the
+  with errors pointing at the DOM module rather than at your test. **An
+  `import type` counts** — the import is erased at runtime but the module it
+  names is still type-CHECKED, so one type pulled from a DOM-touching module
+  poisons an otherwise DOM-free one. State the shape locally instead. Check the
   import chain before writing the test — and when a pure model sits in a
   module that is not DOM-free, either leave it untested or split it the way
   the audio surface already does (`lib/voice.ts` describes, `lib/synth.ts`
