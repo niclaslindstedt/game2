@@ -257,6 +257,7 @@ import {
 } from "./game/audio/music.ts";
 import type { RunAudio } from "./game/audio/index.ts";
 import { armScreenshots, captureFrame, type Capture, type ShotNotes } from "./game/screenshots.ts";
+import { relaySharedTaps } from "./game/second-finger.ts";
 import { readHudLayer, type HudLayer } from "./game/shot-hud.ts";
 import { beginImageCopy } from "./lib/share-image.ts";
 import { splashSkipped } from "./game/splash.ts";
@@ -2634,6 +2635,19 @@ export function App() {
   // rule, including which surfaces still get the browser's own touch; this is
   // the one place it is installed, for the life of the app.
   useEffect(() => guardTextInteraction(document, (el) => getComputedStyle(el as Element)), []);
+
+  // A THUMB ON THE THROTTLE MUST NOT COST THE PLAYER THE BUTTONS. The browser
+  // synthesizes a touch's `click` only from a tap that had the glass to
+  // itself, so with the gas or the wheel held every press on the HUD and the
+  // pause card silently does nothing. second-finger.ts owns the rule and fires
+  // those presses itself; this is the one place it is installed. Every
+  // clickable surface in this app is a `<button>`, which is what the hit test
+  // asks for.
+  useEffect(
+    () =>
+      relaySharedTaps(window, (x, y) => document.elementFromPoint(x, y)?.closest("button") ?? null),
+    [],
+  );
 
   // THE APP GOING AWAY IS AN OUTAGE THE BEDS HAVE TO BE TOLD ABOUT, the same
   // one a lost GPU context is. The frame loop is what feeds them and it stops

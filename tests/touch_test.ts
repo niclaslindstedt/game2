@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The touch controls' two load-bearing promises: they LET GO, and a flick
-// off the pedal is never mistaken for the pedal it is bound over.
+// The touch controls' three load-bearing promises: they LET GO, a flick off
+// the pedal is never mistaken for the pedal it is bound over, and a thumb
+// holding one of them never costs the player a button.
 //
 // The wheel writes a screen-space axis straight into the input manager, and
 // that axis overrides the keyboard and outlives the run — so a lock left
@@ -9,6 +10,12 @@
 // without saying so more or less routinely: a drag off the bottom edge of
 // the screen (which in portrait is where the thumb lives) can deliver no
 // pointerup and no pointercancel to anyone at all.
+//
+// The third is the browser's rule rather than this game's: a `click` on a
+// touchscreen is SYNTHESIZED from a tap that had the glass to itself, so with
+// the gas or the wheel held every press on the HUD and the pause card silently
+// does nothing. second-finger.ts fires those presses itself, and what it must
+// not do is fire the ones the browser still delivers.
 //
 // This test imports from pwa/ because that is where the controls live, and
 // it can: the guard listens on an injected window and ASKS a predicate,
@@ -25,6 +32,12 @@ import {
   type GuardEvent,
   type GuardStyle,
 } from "../pwa/src/game/text-interaction.ts";
+import {
+  createTapWatch,
+  relaySharedTaps,
+  type PressEvent,
+  type PressWindow,
+} from "../pwa/src/game/second-finger.ts";
 import { createThumbGuard, type GuardWindow } from "../pwa/src/game/thumb-guard.ts";
 
 /** Everything the guard uses of a window is EventTarget, which Node has. */
@@ -292,5 +305,160 @@ describe("the loupe", () => {
 
     stop();
     expect(Object.keys(events)).toHaveLength(0);
+  });
+});
+
+describe("the second finger", () => {
+  /** A screen with buttons laid out on it, reduced to what the relay reads: a
+   * hit test that answers with the button under a point, and a count of the
+   * presses each button has actually received. */
+  function stubScreen(buttons: { x: number; y: number; disabled?: boolean }[]) {
+    const pressed = buttons.map(() => 0);
+    const targets = buttons.map((b, i) => ({
+      click: () => void pressed[i]++,
+      disabled: b.disabled,
+    }));
+    const events: Record<string, (e: PressEvent) => void> = {};
+    const target: PressWindow = {
+      addEventListener: (type, fn) => {
+        events[type] = fn;
+      },
+      removeEventListener: (type) => {
+        delete events[type];
+      },
+    };
+    const stop = relaySharedTaps(target, (x, y) => {
+      const hit = buttons.findIndex((b) => b.x === x && b.y === y);
+      return hit === -1 ? null : targets[hit];
+    });
+    const fire = (
+      type: string,
+      pointerId: number,
+      at: { x: number; y: number },
+      pointerType = "touch",
+    ): void => {
+      events[type]?.({ pointerId, pointerType, clientX: at.x, clientY: at.y });
+    };
+    return { pressed, events, fire, stop };
+  }
+
+  /** Somewhere with no button on it: the road, or a thumb zone. */
+  const GLASS = { x: 5, y: 5 };
+  const CAM = { x: 100, y: 20 };
+  const MENU = { x: 140, y: 20 };
+
+  it("fires the press a held thumb costs the browser's own click", () => {
+    const s = stubScreen([CAM]);
+    // The thumb goes down on the pedal zone and stays down; the other hand
+    // taps the camera button. This is the whole bug: two events on the
+    // button, `:active` lit under the finger, and no click at all.
+    s.fire("pointerdown", 1, GLASS);
+    s.fire("pointerdown", 2, CAM);
+    s.fire("pointerup", 2, CAM);
+    expect(s.pressed[0]).toBe(1);
+  });
+
+  it("fires it whichever finger arrived first", () => {
+    const s = stubScreen([CAM]);
+    // The button was pressed first and the thumb landed back on the gas
+    // before it lifted — still a multi-touch gesture, still no click.
+    s.fire("pointerdown", 1, CAM);
+    s.fire("pointerdown", 2, GLASS);
+    s.fire("pointerup", 1, CAM);
+    expect(s.pressed[0]).toBe(1);
+  });
+
+  it("leaves a solitary tap to the browser, or every press fires twice", () => {
+    const s = stubScreen([CAM]);
+    s.fire("pointerdown", 1, CAM);
+    s.fire("pointerup", 1, CAM);
+    expect(s.pressed[0]).toBe(0);
+    // And a press that shared the glass is still only ever one press: the
+    // pointer is forgotten on the way past, so a second pointerup for the
+    // same id — which iOS does deliver — cannot fire it again.
+    s.fire("pointerdown", 1, GLASS);
+    s.fire("pointerdown", 2, CAM);
+    s.fire("pointerup", 2, CAM);
+    s.fire("pointerup", 2, CAM);
+    expect(s.pressed[0]).toBe(1);
+  });
+
+  it("stays shared for the rest of the press, not just while the other is down", () => {
+    const s = stubScreen([CAM]);
+    // The thumb lifts off the gas before the button does. The browser does
+    // not forgive a gesture that was briefly multi-touch, so neither may this.
+    s.fire("pointerdown", 1, GLASS);
+    s.fire("pointerdown", 2, CAM);
+    s.fire("pointerup", 1, GLASS);
+    s.fire("pointerup", 2, CAM);
+    expect(s.pressed[0]).toBe(1);
+  });
+
+  it("wants the same button under both ends of the press", () => {
+    const s = stubScreen([CAM, MENU]);
+    s.fire("pointerdown", 1, GLASS);
+    // Slid off the camera button and lifted over the road: the player pulled
+    // out of it, exactly as they would to abandon a click.
+    s.fire("pointerdown", 2, CAM);
+    s.fire("pointerup", 2, GLASS);
+    // ...and slid from one button onto its neighbour, which is a press of
+    // neither. A touch keeps implicit capture on the element it started on,
+    // so only a hit test can tell these two from a press.
+    s.fire("pointerdown", 3, CAM);
+    s.fire("pointerup", 3, MENU);
+    expect(s.pressed).toEqual([0, 0]);
+  });
+
+  it("presses nothing for a touch that lands on glass, or on a dead button", () => {
+    const s = stubScreen([{ ...CAM, disabled: true }]);
+    s.fire("pointerdown", 1, GLASS);
+    s.fire("pointerdown", 2, CAM);
+    s.fire("pointerup", 2, CAM);
+    expect(s.pressed[0]).toBe(0);
+    // A second thumb on the zone itself is the common case, and there is
+    // nothing under it to press.
+    s.fire("pointerdown", 3, GLASS);
+    s.fire("pointerup", 3, GLASS);
+    expect(s.pressed[0]).toBe(0);
+  });
+
+  it("leaves the mouse alone — its click is reported, not synthesized", () => {
+    const s = stubScreen([CAM]);
+    // A touchscreen laptop: a finger on the gas and a real click on the
+    // button. The browser delivers that click, so rescuing it would double it.
+    s.fire("pointerdown", 1, GLASS);
+    s.fire("pointerdown", 2, CAM, "mouse");
+    s.fire("pointerup", 2, CAM, "mouse");
+    expect(s.pressed[0]).toBe(0);
+    // A pen, though, is synthesized the same way a finger is.
+    s.fire("pointerdown", 3, CAM, "pen");
+    s.fire("pointerup", 3, CAM, "pen");
+    expect(s.pressed[0]).toBe(1);
+  });
+
+  it("forgets a cancelled touch, and lets go of every listener", () => {
+    const s = stubScreen([CAM]);
+    s.fire("pointerdown", 1, GLASS);
+    s.fire("pointerdown", 2, CAM);
+    s.fire("pointercancel", 2, CAM);
+    s.fire("pointerup", 2, CAM);
+    expect(s.pressed[0]).toBe(0);
+
+    s.stop();
+    expect(Object.keys(s.events)).toHaveLength(0);
+  });
+
+  it("counts every kind of pointer as sharing the glass", () => {
+    const watch = createTapWatch();
+    watch.down(1);
+    expect(watch.size()).toBe(1);
+    watch.down(2);
+    expect(watch.size()).toBe(2);
+    // Both of them, not just the arrival.
+    expect(watch.lift(1)).toBe(true);
+    expect(watch.lift(2)).toBe(true);
+    expect(watch.size()).toBe(0);
+    // A pointer nobody ever saw go down is not a shared press.
+    expect(watch.lift(9)).toBe(false);
   });
 });
