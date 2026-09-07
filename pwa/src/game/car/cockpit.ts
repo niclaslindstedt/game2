@@ -53,6 +53,7 @@ import {
 import { buildBinnacle, faceZOf, type Instruments } from "./cockpit-dials.ts";
 import { HUE, roomOf, wallX, wallZ, type Room } from "./cockpit-room.ts";
 import { screenPanes } from "./greenhouse.ts";
+import { fitMirror } from "./mirror-fit.ts";
 import { LAYOUT, SEAT_SIDE, TRIM, buildLining, type Cabin } from "./interior.ts";
 import type { DeckOpening } from "./shell.ts";
 import type { CarBodySpec } from "./spec.ts";
@@ -62,12 +63,17 @@ import type { CarBodySpec } from "./spec.ts";
  * cockpit and the camera cannot disagree about where the seat is. */
 export type CockpitEye = { x: number; y: number; z: number };
 
-/** Where the rear-view mirror's glass hangs and what it is aimed at, both
- * car-local — the mirror pass (mirror.ts) stands its lens on `at` and
- * points it at `look`, so the picture in the glass is what a mirror there
- * would actually show: the backlight, the film on it, and the road through
- * what is left. */
-export type MirrorMount = { at: CockpitEye; look: CockpitEye };
+/** Where the rear-view mirror's glass hangs, what it is aimed at, and how
+ * wide it looks — the first two car-local. The mirror pass (mirror.ts)
+ * stands its lens on `at`, points it at `look` and opens it to `fov`, so
+ * the picture in the glass is what a mirror there would actually show: the
+ * backlight, the film on it, and the road through what is left.
+ *
+ * `fov` is the HORIZONTAL field, deg, and it is fitted to this body's own
+ * backlight (car/mirror-fit.ts) rather than authored — the aperture is what
+ * decides how much road a mirror inside a car can see, and it is a
+ * different aperture on every car in the catalog. */
+export type MirrorMount = { at: CockpitEye; look: CockpitEye; fov: number };
 
 /** The materials a cockpit is drawn with. It has three of its own rather
  * than sharing the body's one, and each split buys something:
@@ -286,11 +292,18 @@ export function cockpitEyeFor(spec: CarBodySpec): CockpitEye {
   };
 }
 
-/** Where the mirror's glass is on a given body, and what it is aimed at:
- * the middle of the backlight, which is what a driver tilts a mirror to
- * see. Stated apart from the mirror's geometry (`buildMirror`) so the
- * mirror pass can be aimed from a spec alone, and held to the same numbers
- * by the test that builds the mirror. */
+/** How the mirror on a given body is set: where its glass is, what it is
+ * aimed at, and how wide it may look.
+ *
+ * The aim starts at the middle of the backlight and is then tilted UP by as
+ * much as the window allows, which is the adjustment a driver makes — the
+ * field and the tilt both come off the body's own rear pane
+ * (car/mirror-fit.ts), so a car with a letterbox backlight and one with a
+ * tall hatch window each get the mirror their own cabin can carry.
+ *
+ * Stated apart from the mirror's geometry (`buildMirror`) so the mirror
+ * pass can be aimed from a spec alone, and held to the same numbers by the
+ * test that builds the mirror. */
 export function cockpitMirrorFor(spec: CarBodySpec): MirrorMount {
   const room = roomOf(spec);
   const m = RIG.mirror;
@@ -304,7 +317,9 @@ export function cockpitMirrorFor(spec: CarBodySpec): MirrorMount {
   const rear = screenPanes(spec).rear;
   const [u, v] = rectAt(rear.rect, 0.5, 0.5);
   const centre = patchAt(rear.patch, u, v);
-  return { at, look: { x: centre[0], y: centre[1], z: centre[2] } };
+  const middle = { x: centre[0], y: centre[1], z: centre[2] };
+  const { fov, look } = fitMirror(rear, at, middle, MIRROR_SHAPE);
+  return { at, look, fov };
 }
 
 /** Width over height of the mirror's pane. The mirror pass renders at this

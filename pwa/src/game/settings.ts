@@ -623,6 +623,20 @@ export const GLASS_RAIN: Record<VideoSettings["effects"], boolean> = {
   full: true,
 };
 
+/** Whether the REAR-VIEW GLASS IS CURVED (mirror.ts) rather than a flat
+ * pane — the bend across a real mirror that draws the middle of the strip
+ * at something like its true size and squeezes the ends in. It is a second
+ * pass over the mirror's own target, so it rides the EFFECTS budget with
+ * the rest of the transients, and it applies the instant it is set. The
+ * pass is a few hundred thousand pixels next to the whole scene the mirror
+ * has just drawn a second time, but it is the mirror's pass it is added to,
+ * and that pass is already the dearest thing in a driving frame. */
+export const MIRROR_GLASS: Record<VideoSettings["effects"], boolean> = {
+  off: false,
+  low: false,
+  full: true,
+};
+
 /** The player's option, as the detail level car-body.ts builds against. The
  * two are not one enum because the setting lives in a module the menus load
  * and the level lives in one that imports three.js. */

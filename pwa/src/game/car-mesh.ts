@@ -160,15 +160,26 @@ const WHEEL_STEER_RATE = 14;
 
 export type CarVisual = {
   group: THREE.Group;
-  /** Where the rear-view mirror's glass hangs in this car and what it is
-   * aimed at, car-local — the mirror pass stands its lens there (mirror.ts).
-   * Null on a car built without a cockpit, which has no mirror to stand in. */
+  /** Where the rear-view mirror's glass hangs in this car, what it is aimed
+   * at and how wide it looks, car-local — the mirror pass stands its lens
+   * there (mirror.ts). Null on a car built without a cockpit, which has no
+   * mirror to stand in. */
   mirrorMount: MirrorMount | null;
+  /** ...and the object those car-local metres are measured in: the SPRUNG
+   * chassis, which is where the cockpit and every panel of the body hang.
+   * The mirror pass reads its world matrix rather than working the body's
+   * chain out again, so the lens cannot drift by a millimetre from the
+   * cabin it is bolted inside — through the springs' heave, the loft off a
+   * brow, the engine's tremble and a corner riding on its bare hub alike.
+   * That agreement is load-bearing now the lens is opened no wider than the
+   * back window: anything the lens does that the body does not puts the
+   * lining in shot. */
+  mirrorFrame: THREE.Object3D;
   /** Draw the rear view. The lens stands on the cockpit's own mirror, so
    * what it sees is decided by which cabin is up around it — and that is
    * settled HERE for the length of the pass rather than by whatever view the
    * player is in: the first-person cabin is put up (its seats, its hoop, and
-   * the backlight through the lining), the field's interior is taken down,
+   * the backlight cut in its lining), the field's interior is taken down,
    * and the mirror's own pane comes out so the pass never samples the
    * texture it is drawing into. A car with no cockpit takes its whole
    * cabin down instead, the way a lens between the seats has to. */
@@ -709,6 +720,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   return {
     group,
     mirrorMount: body.cockpit?.mirror ?? null,
+    mirrorFrame: body.chassis,
     mirrorPass,
     screenRain: body.screenRain,
     screenSnow: body.screenSnow,
