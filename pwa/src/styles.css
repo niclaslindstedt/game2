@@ -3218,22 +3218,22 @@ body {
   gap: 0.9rem;
 }
 
-/* THE MARK, THEN THE NAME. The badge is the launcher icon (`app-badge.tsx`)
-   — the same thing the game was installed by — so the menu opens on the mark
-   a player already knows it as. */
 .menu-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+/* THE MARK, THEN THE NAME, on one line and centred on each other. The billing
+   sits under the PAIR rather than inside it, which is what keeps the mark
+   level with the wordmark instead of a half-line below it. */
+.menu-brand-line {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: clamp(0.5rem, 2vmin, 0.9rem);
-}
-
-.menu-brand-words {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
 }
 
 /* The marks, laid once as the menu arrives and left standing beside the name.
@@ -3467,9 +3467,10 @@ body {
 
   /* Short and wide: the name and its billing sit on ONE line beside the mark,
      which is the whole of what this breakpoint is buying back. */
-  .menu-brand-words {
+  .menu-brand {
     flex-direction: row;
-    align-items: baseline;
+    align-items: center;
+    justify-content: center;
     gap: 0.8rem;
   }
 
@@ -6571,17 +6572,6 @@ a.menu-version:focus-visible {
   animation: splash-in 460ms ease-out both;
 }
 
-.splash-mark {
-  display: block;
-  width: clamp(3.6rem, 15vmin, 7rem);
-  height: auto;
-  margin-bottom: clamp(0.3rem, 1.4vmin, 0.7rem);
-  border-radius: 22%;
-  /* Lifted off the sky it is painted on, or a blue badge on a blue card has
-     no edge at all. */
-  box-shadow: 0 0.35rem 1.1rem rgb(0 0 0 / 28%);
-}
-
 .splash-publisher {
   font-size: clamp(1.1rem, 5vmin, 2rem);
   letter-spacing: 0.1em;
@@ -6656,21 +6646,6 @@ a.menu-version:focus-visible {
 /* The mark under the game's name. Sized against the wordmark rather than the
    viewport so the two stay one lockup, and given a little air above it so it
    reads as the road under the title rather than as an underline on it. */
-.splash-marks {
-  width: clamp(3rem, 10vmin, 6rem);
-  margin-top: clamp(0.2rem, 1.2vmin, 0.6rem);
-}
-
-/* A phone held sideways is the tightest surface the boot card has, and the
-   card is already a crest, a two-line wordmark and a prompt tall on it. The
-   marks are the one thing on it that is pure flourish, so they are what goes
-   rather than the press-to-start line going under the fold. */
-@media (max-height: 500px) {
-  .splash-marks {
-    display: none;
-  }
-}
-
 .splash-prompt {
   font-size: clamp(0.68rem, 2.5vmin, 1rem);
   font-style: normal;

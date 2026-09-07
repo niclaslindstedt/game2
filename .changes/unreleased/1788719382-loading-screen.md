@@ -14,6 +14,5 @@ the fourteen crews are entered, and all fourteen drive the whole stage before
 your lights run. When the card lifts there is nothing left to pay for. A
 restart loads the same way.
 
-The mark shows up in two more places while you are there: laid once under
-SCANDINAVIAN FLICK on the boot screen, and again beside the name on the main
-menu.
+The game's own skid marks are on the main menu too now, laid once beside
+SCANDINAVIAN FLICK as the menu comes up.

@@ -8,31 +8,22 @@
 //   pwa/public/icons/icon.svg      the asset the browser and the stores read
 //   scripts/generate-icons.mjs     the arc centres the raster icons are drawn
 //                                  from (plain Node, no bundler)
-//   pwa/src/game/app-mark.ts       the same geometry as data, for the app to
-//                                  draw at runtime (`app-badge.tsx` on the
-//                                  boot card and the menu, `loading-screen`
-//                                  laying the tracks from nothing)
+//   pwa/src/game/app-mark.ts       the two TRACKS as data, for the app to lay
+//                                  at runtime (`mark-tracks.tsx`, beside the
+//                                  menu's wordmark and on the loading card)
 //
-// A comment asking three files to be edited together is a comment that gets
-// missed, so this reads the SVG and holds the data module to it. A mark that
-// drifts is not a cosmetic problem: it is the game wearing one face on the
-// home screen and a different one on its own menu.
+// The app draws only the tracks — the car at the head of them belongs to the
+// icon and stays there — so only the tracks are held here. A comment asking
+// three files to be edited together is a comment that gets missed, and a mark
+// that drifts is not a cosmetic problem: it is the game wearing one face on
+// the home screen and a different one on its own menu.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import {
-  MARK_CAR,
-  MARK_COLORS,
-  MARK_FADE,
-  MARK_RADIUS,
-  MARK_TRACKS,
-  MARK_TRACKS_VIEWBOX,
-  MARK_VIEWBOX,
-  MARK_WIDTH,
-} from "../pwa/src/game/app-mark.ts";
+import { MARK_TRACKS, MARK_TRACKS_VIEWBOX, MARK_WIDTH } from "../pwa/src/game/app-mark.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const icon = readFileSync(join(root, "pwa", "public", "icons", "icon.svg"), "utf8");
@@ -49,45 +40,6 @@ describe("the app mark", () => {
 
   it("strokes them as wide as the icon does", () => {
     expect(icon).toContain(`stroke-width="${MARK_WIDTH}"`);
-  });
-
-  it("stands in the icon's own square, with its corner", () => {
-    expect(icon).toContain(`viewBox="${MARK_VIEWBOX}"`);
-    expect(icon).toContain(`rx="${MARK_RADIUS}"`);
-  });
-
-  it("fades the tail out along the icon's own axis", () => {
-    for (const [key, value] of Object.entries(MARK_FADE)) {
-      expect(icon).toContain(`${key}="${value}"`);
-    }
-  });
-
-  it("paints in the icon's own colours", () => {
-    expect(icon).toContain(MARK_COLORS.skyHigh);
-    expect(icon).toContain(MARK_COLORS.skyLow);
-    expect(icon).toContain(MARK_COLORS.track);
-    expect(icon).toContain(MARK_COLORS.shell);
-  });
-
-  it("builds the car out of the icon's own boxes", () => {
-    // The icon writes each box as its top-left corner and a size; the data
-    // module writes it as a CENTRE and a size, because that is what a
-    // transform is applied about. Same rectangle either way, so the check is
-    // that every box in the data is one the icon draws.
-    const boxes = [
-      ...icon.matchAll(/<rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"/g),
-    ];
-    const drawn = new Set(boxes.map((m) => `${m[1]},${m[2]},${m[3]},${m[4]}`));
-    expect(MARK_CAR.parts.length).toBe(boxes.length);
-    for (const part of MARK_CAR.parts) {
-      expect(drawn).toContain(`${-part.w / 2},${-part.h / 2},${part.w},${part.h}`);
-    }
-  });
-
-  it("stands the car where the icon stands it", () => {
-    expect(icon).toContain(
-      `translate(${MARK_CAR.at.x},${MARK_CAR.at.y}) rotate(${MARK_CAR.angle})`,
-    );
   });
 
   it("frames the tracks alone on the ink they actually cover", () => {

@@ -116,19 +116,19 @@ By area first. Each row's skill owns the file-by-file map inside that area — g
 
 And the pieces that belong to no skill in particular:
 
-| Kind of change                                    | Where it goes                                                                                                                                                         |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Run orchestration (phases, laps, respawn, events) | `engine/game/step.ts`                                                                                                                                                 |
-| Track geometry / compilation                      | `engine/mapgen/compile.ts`                                                                                                                                            |
-| What a surface does to the car                    | `TUNING.surfaces`; a country's loose surface is `BiomeRules.loose`                                                                                                    |
-| Anything drawn, with no better home               | `pwa/src/game/` (`renderer.ts` and friends)                                                                                                                           |
-| What a RACE COSTS TO STAND UP, and its card       | `pwa/src/game/race-loader.ts` (the steps and the frame budget, DOM-free) + `loading-screen.tsx`; the steps themselves are `App.tsx`'s `beginLoad`                     |
-| The APP MARK, wherever the app draws one          | `pwa/src/game/app-mark.ts` (geometry) → `app-badge.tsx` (the badge) / `mark-tracks.tsx` (the skid marks, laid); `tests/app_mark_test.ts` holds it to `icons/icon.svg` |
-| App identity (name, palette, URLs)                | `pwa/src/identity.ts` — the single source                                                                                                                             |
-| How much GPU a phone or tablet has                | `pwa/src/game/device-gpu.ts` — published Geekbench scores, family fallbacks for a device it has never heard of, and bands; read by nothing yet                        |
-| A Node script needing an app module               | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table                                                            |
-| New CLI tooling                                   | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                                                                 |
-| Engine tests                                      | `tests/<topic>_test.ts`                                                                                                                                               |
+| Kind of change                                    | Where it goes                                                                                                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Run orchestration (phases, laps, respawn, events) | `engine/game/step.ts`                                                                                                                                        |
+| Track geometry / compilation                      | `engine/mapgen/compile.ts`                                                                                                                                   |
+| What a surface does to the car                    | `TUNING.surfaces`; a country's loose surface is `BiomeRules.loose`                                                                                           |
+| Anything drawn, with no better home               | `pwa/src/game/` (`renderer.ts` and friends)                                                                                                                  |
+| What a RACE COSTS TO STAND UP, and its card       | `pwa/src/game/race-loader.ts` (the steps and the frame budget, DOM-free) + `loading-screen.tsx`; the steps themselves are `App.tsx`'s `beginLoad`            |
+| The APP MARK, wherever the app draws one          | `pwa/src/game/app-mark.ts` (the two tracks as data) → `mark-tracks.tsx` (laid, once or over and over); `tests/app_mark_test.ts` holds it to `icons/icon.svg` |
+| App identity (name, palette, URLs)                | `pwa/src/identity.ts` — the single source                                                                                                                    |
+| How much GPU a phone or tablet has                | `pwa/src/game/device-gpu.ts` — published Geekbench scores, family fallbacks for a device it has never heard of, and bands; read by nothing yet               |
+| A Node script needing an app module               | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table                                                   |
+| New CLI tooling                                   | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                                                        |
+| Engine tests                                      | `tests/<topic>_test.ts`                                                                                                                                      |
 
 ### Stated once — never restate these
 

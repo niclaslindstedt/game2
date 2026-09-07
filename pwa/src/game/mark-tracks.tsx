@@ -9,9 +9,9 @@
 //
 // Two ways of laying them, and the difference is the whole point of each:
 //
-//   "once" — laid on arrival and left there. A flourish, for a title that has
-//            just come up (the boot card, the menu's wordmark). It says the
-//            game has arrived.
+//   "once" — laid on arrival and left there. A flourish beside a title that
+//            has just come up (the menu's wordmark). It says the game has
+//            arrived.
 //   "loop" — laid, held, dissolved from the tail, again. A load in progress
 //            (`loading-screen.tsx`). It says the game is working.
 //

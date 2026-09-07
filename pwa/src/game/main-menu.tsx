@@ -225,11 +225,14 @@ function RootPage({
   return (
     <div className="menu-card menu-card-root">
       <div className="menu-brand">
-        <MarkTracks lay="once" className="menu-brand-mark" />
-        <div className="menu-brand-words">
+        {/* The mark rides with the NAME, not with the name and its billing:
+            paired with the whole block it sits visibly low, because the
+            tagline under it drags the centre it is aligned to down a line. */}
+        <div className="menu-brand-line">
+          <MarkTracks lay="once" className="menu-brand-mark" />
           <span className="menu-brand-name">{APP_NAME.toUpperCase()}</span>
-          <span className="menu-brand-tag">arcade rally drifting</span>
         </div>
+        <span className="menu-brand-tag">arcade rally drifting</span>
       </div>
       <div className="menu-tiles">
         {ROOT_ITEMS.map((item) => (
