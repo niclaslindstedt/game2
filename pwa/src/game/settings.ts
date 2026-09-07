@@ -223,7 +223,7 @@ export type AudioSettings = {
   sfx: number;
 };
 
-/** THE ELEVEN LEVERS THE RENDERER READS, on THREE rows the player turns.
+/** THE TWELVE LEVERS THE RENDERER READS, on THREE rows the player turns.
  *
  * `resolution` and `drawDistance` are their own rows because they are their
  * own decisions: how SHARP the picture is and how FAR into it you can see
@@ -233,7 +233,7 @@ export type AudioSettings = {
  * a big low-density screen wants the opposite. Tying them together only ever
  * charges a player for something they did not ask for.
  *
- * The remaining nine are HOW MUCH WORLD IS DRAWN, and they are one row
+ * The remaining ten are HOW MUCH WORLD IS DRAWN, and they are one row
  * (`DETAIL_PRESETS`) because they are one judgement with one answer: they
  * all move together with how much headroom the machine has, and nobody has
  * an opinion about undergrowth density that is not also an opinion about
@@ -298,6 +298,34 @@ export type VideoSettings = {
    * says. `all` furnishes the whole entry list, which is what a rally looks
    * like from the car behind. */
   glass: "player" | "all";
+  /** WHOSE BODY FOLDS: which cars on the road are DISFIGURED by what they
+   * hit — the panels bent into the shape of the impact, the paint scuffed
+   * off the metal that folded, and the dark of the cabin painted into the
+   * hole a door left. Part of DETAIL, and it applies the instant it is set:
+   * nothing here is geometry, it is the same vertices re-derived from the
+   * pristine copy every car keeps.
+   *
+   * It is the dearest thing on a car that is NOT paid per frame, and the
+   * worst possible shape of cost: fifteen thousand vertices re-derived and
+   * every face lit again, on the frame a car takes a hit. A pack of fifteen
+   * trading paint off one green is that bill several times a second, and it
+   * lands as a stutter exactly where the racing is closest.
+   *
+   * So three stops, on the split every per-car row here uses. `all` is the
+   * whole entry list wearing its race: a rally an hour old is a field of
+   * bent cars, and it is most of what says the last corner was survived
+   * rather than driven. `player` bends the one car the damage is NEWS about
+   * — the car being driven, whose every panel is two metres from the camera
+   * and whose crush the HUD is reporting — and leaves the field straight.
+   * `off` is a field of clean cars for the phone that would rather have the
+   * frames.
+   *
+   * It does not reach what comes OFF a car: a bumper, a door, a pane and a
+   * wheel leave on their own events whatever this row says, and a wheel
+   * that has gone still drops its corner onto the hub. Those are cheap, and
+   * a car that shrugs off a hit that tore its bonnet away would read as a
+   * car nothing had happened to. */
+  crumple: "off" | "player" | "all";
   /** How thickly the world is planted with the SOFT stuff — undergrowth,
    * shrubs, stumps. Part of DETAIL, and applies to the NEXT stage built.
    * The undergrowth only: the FOREST's own density is a generator dial the
@@ -723,6 +751,16 @@ export const DUST_RAISED: Record<VideoSettings["dust"], { player: boolean; field
   all: { player: true, field: true },
 };
 
+/** WHOSE BODY THE LEDGER IS BENT INTO, per the row above. Split the same
+ * way the dust and the exhaust are, and for the same reason: the cost is
+ * per car and the road can carry fifteen, while the value is nearly all on
+ * the one car the camera is two metres behind. */
+export const CRUMPLE_SEEN: Record<VideoSettings["crumple"], { player: boolean; field: boolean }> = {
+  off: { player: false, field: false },
+  player: { player: true, field: false },
+  all: { player: true, field: true },
+};
+
 /** Whose pipe is allowed to smoke at each stop of the EXHAUST row, as the
  * same two questions the dust is asked: the car the frame is rendered FROM,
  * and the rest of the entry list. One record for the same reason DUST_RAISED
@@ -802,12 +840,21 @@ export const DUST_LAMP_CARS: Record<VideoSettings["lighting"], number> = {
  * expressed at all. */
 export type Detail = "low" | "medium" | "high";
 
-/** The nine levers DETAIL owns. Named as a slice of `VideoSettings` rather
+/** The ten levers DETAIL owns. Named as a slice of `VideoSettings` rather
  * than restated, so adding a tenth lever is a decision about which row it
  * belongs on instead of a silent omission from both. */
 export type DetailSettings = Pick<
   VideoSettings,
-  "effects" | "interior" | "glass" | "flora" | "ground" | "dust" | "exhaust" | "lighting" | "sky"
+  | "effects"
+  | "interior"
+  | "glass"
+  | "crumple"
+  | "flora"
+  | "ground"
+  | "dust"
+  | "exhaust"
+  | "lighting"
+  | "sky"
 >;
 
 /** What each DETAIL stop is worth, cheapest first — the order the ladder is
@@ -817,12 +864,14 @@ export type DetailSettings = Pick<
 export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   // The phone that stutters: every window solid and every wiper off, the
   // verges bare, under half the particles, a lost wheel gone rather than
-  // rolling, nobody on the road raising any ground, no pipe smoking, one
-  // headlamp beam and no shadow under the car, and the arcade sky.
+  // rolling, nobody on the road raising any ground, no pipe smoking, no
+  // body bent by what it hit, one headlamp beam and no shadow under the
+  // car, and the arcade sky.
   low: {
     effects: "low",
     interior: "off",
     glass: "player",
+    crumple: "off",
     flora: "sparse",
     ground: "plain",
     dust: "off",
@@ -832,8 +881,9 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   },
   // The design point — every lever at the number the game was tuned on, and
   // everything that is per car spent on the one car it is worth the most
-  // on: the car being driven has the cabin, the wipers, the dust and the
-  // smoke, and the field's share of all four is what the machine buys back.
+  // on: the car being driven has the cabin, the wipers, the dust, the smoke
+  // and the folded panels, and the field's share of all five is what the
+  // machine buys back.
   // The lamps throw one beam per end rather than the pair, and the shadow
   // is the smaller map: a light is paid for on every pixel, and it is what
   // the design point gives up to hold its frame rate. The sky is the
@@ -842,6 +892,7 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     effects: "full",
     interior: "full",
     glass: "player",
+    crumple: "player",
     flora: "normal",
     ground: "normal",
     dust: "player",
@@ -850,13 +901,14 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     sky: "layered",
   },
   // A machine with headroom: a thicker forest floor, stonier verges, and the
-  // whole entry list furnished behind its glass, towing dust and steaming on
-  // the line the way a rally actually looks — under all four beams, with
-  // the sharp shadow, and the whole sky.
+  // whole entry list furnished behind its glass, towing dust, steaming on
+  // the line and wearing every dent it has earned, the way a rally actually
+  // looks — under all four beams, with the sharp shadow, and the whole sky.
   high: {
     effects: "full",
     interior: "full",
     glass: "all",
+    crumple: "all",
     flora: "lush",
     ground: "rich",
     dust: "all",

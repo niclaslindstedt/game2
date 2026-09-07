@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The player's options as the menu offers them: two HUD switches spread
-// over the whole panel, ten video levers on three independent picture rows,
+// over the whole panel, twelve video levers on three independent picture rows,
 // and a stored blob from an older build landing on something the page can
 // still show.
 
@@ -11,6 +11,7 @@ import {
   DEFAULT_KEYS,
   DEFAULT_SETTINGS,
   DEFAULT_VIDEO,
+  CRUMPLE_SEEN,
   DETAIL_PRESETS,
   GLASS_RAIN,
   GLASS_SEEN_THROUGH,
@@ -268,6 +269,46 @@ describe("who raises dust at each DETAIL stop", () => {
   it("walks the ladder monotonically", () => {
     const walk = (["low", "medium", "high"] as const).map(
       (id) => DUST_RAISED[DETAIL_PRESETS[id].dust],
+    );
+    for (let i = 1; i < walk.length; i++) {
+      const under = walk[i - 1]!;
+      const over = walk[i]!;
+      expect(over.player || !under.player).toBe(true);
+      expect(over.field || !under.field).toBe(true);
+    }
+  });
+});
+
+// And the CRUMPLE row asks it of the car's own BODY: which cars on the road
+// are bent into the shape of what they hit. It belongs beside the two above
+// because it is read at the same two call sites and walks the same ladder —
+// and it matters more than either, because it is the one of the three whose
+// cost is not paid per frame but in a burst, on the frame a car takes a hit,
+// which is exactly when a pack of fifteen is closest together.
+describe("whose body folds at each DETAIL stop", () => {
+  it("leaves every car straight on LOW", () => {
+    expect(CRUMPLE_SEEN[DETAIL_PRESETS.low.crumple]).toEqual({ player: false, field: false });
+  });
+
+  it("bends only the car being driven on MEDIUM", () => {
+    expect(CRUMPLE_SEEN[DETAIL_PRESETS.medium.crumple]).toEqual({ player: true, field: false });
+  });
+
+  it("wears the whole entry list's dents on HIGH", () => {
+    expect(CRUMPLE_SEEN[DETAIL_PRESETS.high.crumple]).toEqual({ player: true, field: true });
+  });
+
+  // A field of bent cars around a driven one that shrugs off every impact
+  // reads as a bug in the player's car, not as a setting.
+  it("never bends a rival while the driven car stays straight", () => {
+    for (const audience of Object.values(CRUMPLE_SEEN)) {
+      expect(audience.field && !audience.player).toBe(false);
+    }
+  });
+
+  it("walks the ladder monotonically", () => {
+    const walk = (["low", "medium", "high"] as const).map(
+      (id) => CRUMPLE_SEEN[DETAIL_PRESETS[id].crumple],
     );
     for (let i = 1; i < walk.length; i++) {
       const under = walk[i - 1]!;
