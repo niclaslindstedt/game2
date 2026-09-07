@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Roll-camera preview tool: builds the harness page (pwa/roll-preview.html +
 // the real renderer and camera), trips a car off a stage, and photographs the
-// shot it goes over in — CONSECUTIVE FRAMES, from each end of the camera
+// camera while it goes over — CONSECUTIVE FRAMES, from each end of the camera
 // ladder, on a labeled contact sheet at previews/rollcam.png.
 //
-// It is the looking half of camera-roll.ts's loop. `tests/camera_test.ts`
-// measures the shot — that it comes to rest, that it keeps the car in frame
-// and a readable size, that it climbs to see over a bank, that it flies home
-// rather than cutting — and nothing but this shows what any of that looks
-// like. `make roll` is the other picture of the same event and answers a
-// different question: that one is the CAR going over, drawn from behind;
-// this one is the CAMERA, from where a person would be standing.
+// It is the looking half of the accident's HOLD (`holding` in camera.ts).
+// `tests/camera_test.ts` measures it — that the outside rig keeps the framing
+// the crash found it with, that the horizon stays level while the body turns
+// over, that it picks the car's direction back up at `planted` — and nothing
+// but this shows what any of that looks like. `make roll` is the other
+// picture of the same event and answers a different question: that one is the
+// CAR going over, drawn from behind; this one is the CAMERA.
 //
 // Requires `npm i --no-save playwright-core` and a Chromium (CHROMIUM_PATH
 // overrides discovery), same as scripts/screenshot.mjs.

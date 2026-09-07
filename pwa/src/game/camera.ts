@@ -62,19 +62,22 @@
 // common to ease at all, and the flight is the whole of them: it reads as
 // climbing into the car and back out of it, which is what it is.
 //
-// And three BEATS override whichever of them is up, all three of them the
-// same gesture — the lens stops being a rig and becomes an operator standing
+// And two BEATS override whichever of them is up, both of them the same
+// gesture — the lens stops being a rig and becomes an operator standing
 // somewhere. The establishing shot opens every stage: the camera circles the
 // start control while the crew in front leaves, then comes down onto the car
 // it will be driven from (camera-start.ts). The flying finish closes it: the
 // camera stops travelling with the car, plants itself where it stood, and
-// turns to watch it go (camera-finish.ts). And the roll takes the frame
-// whenever it happens, for the one reason the other two do not share — a car
-// past its outside wheels is not a thing a BOOM can follow, so the outside
-// rigs plant, come to rest, and watch it go over from the verge
-// (camera-roll.ts). The three seats inside the car keep theirs and go round
-// with the body, which is the same decision read the other way. This file
-// owns WHEN each of the three has the frame; they own what the shot is.
+// turns to watch it go (camera-finish.ts). This file owns WHEN each of the
+// two has the frame; they own what the shot is.
+//
+// A CRASH IS NOT ONE OF THEM. The player keeps the camera they were driving
+// with, and it keeps the framing it had on the frame the car went over: the
+// outside rigs HOLD (`holding` in `updateChase`) and go on tracking the car
+// through the world from that same angle until it is planted again. The
+// world turns over; the picture does not. The three seats inside the car are
+// the same decision read the other way — bolted to the body, they go round
+// WITH it (camera-eye.ts).
 
 import * as THREE from "three";
 import { angleLerp, clamp } from "../lib/angles.ts";
@@ -119,7 +122,6 @@ import {
   type ShakeSource,
 } from "./camera-shake.ts";
 import { createMapCamera, type MapPose } from "./camera-map.ts";
-import { createRollCamera } from "./camera-roll.ts";
 import { createStartCamera } from "./camera-start.ts";
 import { createSweepCamera } from "./camera-sweep.ts";
 import { DEFAULT_SETTINGS, PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
@@ -607,6 +609,10 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * that stands over the car is built from, with the road's own SURFACE
    * taken out of it. */
   const groundSlack = createSlack(SLACK.ground);
+  /** THE ACCIDENT'S HOLD — whether the car is somewhere in a crash rather
+   * than being driven, and the rig is therefore holding the framing the
+   * accident found it with. See `updateChase`, which owns what it means. */
+  let holding = false;
   /** ...carried on a spring into the height the chase rigs actually stand
    * on, led by the car's own vertical speed (HEIGHT_SPRING). */
   const groundSpring = createSprung(HEIGHT_SPRING);
@@ -634,9 +640,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
   /** The shot the stage closes on: the camera planted at the line, watching
    * the car go (camera-finish.ts). */
   const finishShot = createFinishCamera();
-  /** …and the shot the car goes OVER in: the lens planted at the side of
-   * the road, watching the roll (camera-roll.ts). */
-  const rollShot = createRollCamera();
   /** …and the flight between two cars, for a spectator changing crew
    * (camera-sweep.ts). */
   const sweepShot = createSweepCamera();
@@ -661,6 +664,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
       swingVel = 0;
       floored = false;
       restand = false;
+      holding = false;
       groundSpring.drop();
       climbVy = car.vy;
       slackWas = Number.NaN;
@@ -685,53 +689,90 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const freq = car.airborne ? HEIGHT_SPRING.flying : HEIGHT_SPRING.ground;
     const lead = car.airborne ? car.vy : climbVy;
     const ground = groundSpring.step(slacked, freq, dt, lead);
-    const speed = Math.hypot(car.u, car.w);
+    // THE ACCIDENT'S HOLD. Everything below this line frames the car off
+    // readings of a car being DRIVEN — where its nose points, how far its
+    // travel has come away from that, what its pace asks of the boom and of
+    // the lens. A car going over gives none of them: the heading spins at
+    // most of a turn a second, the travel direction has come apart from it,
+    // and `airborne` flickers between every pair of contacts. A rig that
+    // keeps reading them whips through a full circle.
+    //
+    // So the shot stops reading and holds the FRAMING the accident found it
+    // with — the yaw, the boom and the lens it was watching along — and goes
+    // on tracking the car through the world at that angle. The player
+    // watches their own crash from the view they were driving in.
+    //
+    // It ends at `car.planted` and not a frame earlier. The crash hands a
+    // car back the moment its tyres are down and the rotation is spent,
+    // however far over it is still leaning, and a car caught at forty
+    // degrees and still sliding is not one anybody is steering: coming back
+    // for it would swing the shot onto a heading about to be lost again. A
+    // respawn clears the hold through `restand` — there is no framing worth
+    // keeping across a teleport.
+    if (car.rolling) holding = true;
+    else if (car.planted) holding = false;
     // The Sega Rally read: the camera follows the ROAD, so a drift swings
     // the car across the frame while the road keeps flowing to the
     // vanishing point. Airborne it follows the travel direction fully; the
     // nose is doing its own thing.
-    const slip = speed > 3 ? Math.atan2(car.w, Math.max(0.001, car.u)) : 0;
-    const wantOff = slip * (car.airborne ? 1 : rig.driftWeight);
-    // The drift arrives in the frame at full speed, but once the car has
-    // settled the leftover angle unwinds gently: a camera that snaps back
-    // to centre the instant the slide ends reads as the game grabbing the
-    // wheel. A slide building the OTHER way (the pendulum) counts as
-    // developing, not settling.
-    const developing =
-      Math.abs(wantOff) > Math.abs(driftOff) ||
-      (Math.sign(wantOff) !== Math.sign(driftOff) && Math.abs(wantOff) > 0.05);
-    const driftRate = rig.followRate * (developing ? 1 : DRIFT_SETTLE);
-    driftOff += (wantOff - driftOff) * clamp(driftRate * dt, 0, 1);
-    // Half the follow rate in the air: the framing goes loose while the car
-    // is ballistic, which is what reads as flying rather than as a camera
-    // welded to a boom.
-    const follow = car.airborne ? rig.followRate * 0.5 : rig.followRate;
-    headYaw = angleLerp(headYaw, car.heading, clamp(follow * dt, 0, 1));
+    if (!holding) {
+      const speed = Math.hypot(car.u, car.w);
+      const slip = speed > 3 ? Math.atan2(car.w, Math.max(0.001, car.u)) : 0;
+      const wantOff = slip * (car.airborne ? 1 : rig.driftWeight);
+      // The drift arrives in the frame at full speed, but once the car has
+      // settled the leftover angle unwinds gently: a camera that snaps back
+      // to centre the instant the slide ends reads as the game grabbing the
+      // wheel. A slide building the OTHER way (the pendulum) counts as
+      // developing, not settling.
+      const developing =
+        Math.abs(wantOff) > Math.abs(driftOff) ||
+        (Math.sign(wantOff) !== Math.sign(driftOff) && Math.abs(wantOff) > 0.05);
+      const driftRate = rig.followRate * (developing ? 1 : DRIFT_SETTLE);
+      driftOff += (wantOff - driftOff) * clamp(driftRate * dt, 0, 1);
+      // Half the follow rate in the air: the framing goes loose while the
+      // car is ballistic, which is what reads as flying rather than as a
+      // camera welded to a boom.
+      const follow = car.airborne ? rig.followRate * 0.5 : rig.followRate;
+      headYaw = angleLerp(headYaw, car.heading, clamp(follow * dt, 0, 1));
+    }
     yaw = headYaw + driftOff;
 
-    // Grounded, vy/u is the slope under the wheels, and the camera rides
-    // high over a descent and settles toward the road on a climb. Both
-    // directions serve the same read — what is ahead of the car should own
-    // the frame, and on a hill that is either the drop or the brow. Read
-    // off the EASED climb: the lift is metres per unit of grade, and a
-    // grade that jitters with the ground is a camera that pumps.
-    const grade = clamp(climbVy / Math.max(8, car.u), -0.5, 0.5);
-    const gradeLift = car.airborne ? 0 : -grade * (grade < 0 ? rig.dropLift : rig.climbDuck);
-    const wantDist = rig.dist + car.u * rig.distPerSpeed;
-    const wantHeight = rig.height + gradeLift;
-    // Stood in one frame the first time a rig is used after the camera has
-    // been put down somewhere else (`planted`), and eased from then on.
-    const ease = planted ? clamp(rig.followRate * RIG_EASE * dt, 0, 1) : 1;
-    dist += (wantDist - dist) * ease;
-    height_ += (wantHeight - height_) * ease;
+    // ...and the standoff and the lens are held through an accident with
+    // the yaw, for the same reason: both are read off `car.u`, which
+    // through a tumble is a body's speed along an axis that is pointing
+    // somewhere new every frame. Left to run, the boom telescopes and the
+    // lens breathes over a crash that is already the busiest thing on the
+    // screen.
+    if (!holding) {
+      // Grounded, vy/u is the slope under the wheels, and the camera rides
+      // high over a descent and settles toward the road on a climb. Both
+      // directions serve the same read — what is ahead of the car should own
+      // the frame, and on a hill that is either the drop or the brow. Read
+      // off the EASED climb: the lift is metres per unit of grade, and a
+      // grade that jitters with the ground is a camera that pumps.
+      const grade = clamp(climbVy / Math.max(8, car.u), -0.5, 0.5);
+      const gradeLift = car.airborne ? 0 : -grade * (grade < 0 ? rig.dropLift : rig.climbDuck);
+      const wantDist = rig.dist + car.u * rig.distPerSpeed;
+      const wantHeight = rig.height + gradeLift;
+      // Stood in one frame the first time a rig is used after the camera has
+      // been put down somewhere else (`planted`), and eased from then on.
+      const ease = planted ? clamp(rig.followRate * RIG_EASE * dt, 0, 1) : 1;
+      dist += (wantDist - dist) * ease;
+      height_ += (wantHeight - height_) * ease;
 
-    // Speed lives in the FOV: it stretches hard with pace, capped before
-    // the stretch turns the world into a tunnel.
-    const wantFov = Math.min(rig.fovMax, rig.fov + car.u * rig.fovPerSpeed);
-    fov += (wantFov - fov) * (planted ? clamp(4 * dt, 0, 1) : 1);
+      // Speed lives in the FOV: it stretches hard with pace, capped before
+      // the stretch turns the world into a tunnel.
+      const wantFov = Math.min(rig.fovMax, rig.fov + car.u * rig.fovPerSpeed);
+      fov += (wantFov - fov) * (planted ? clamp(4 * dt, 0, 1) : 1);
+    }
     planted = true;
 
-    const wantSwing = clamp(-car.yawRate * rig.swing, -rig.swingMax, rig.swingMax);
+    // The swing is the camera sliding to the outside of a TURN, and a
+    // rolling car's yaw rate is not a turn — it is the body going round.
+    // Read through an accident it throws the lens sideways at the swing's
+    // own ceiling; so the target is centre, and the spring walks it back
+    // there at the same rate it would leave any other corner.
+    const wantSwing = holding ? 0 : clamp(-car.yawRate * rig.swing, -rig.swingMax, rig.swingMax);
     // Integrated in bounded substeps rather than over the whole frame: a
     // stiff spring stepped at a hitching tab's dt rings or blows up, and
     // clamping the step instead would make the sway run slow on a weak
@@ -756,7 +797,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // the surge puts on and off the boom, the tremor pace puts in it, and
     // the attitude taken after the aim. Read BEFORE the camera is placed,
     // because the standoff decides where the floor under it is sampled.
-    const felt = feel.step(state, climb, rig, orbit, dt);
+    const felt = feel.step(state, climb, rig, orbit, dt, !holding);
     // The boom's own length, plus what the car's acceleration is dragging it
     // out to or shoving it in to. Added here rather than to `wantDist`: the
     // surge is already eased on its own clock, and passing it through the
@@ -961,42 +1002,14 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const overhead = mode === "drone" || mode === "map";
     if (overhead) startShot.reset();
     const shot = !overhead && startShot.flying(state) ? startShot.fly(camera, state, fov, dt) : fov;
-    // THE CAR GOING OVER outranks every beat above it, and rides over the rig
-    // the same way they do: a boom cannot follow a rolling car, so the lens is
-    // planted at the side of the road until it has finished (camera-roll.ts).
-    //
-    // THE SEATS KEEP THEIRS. A camera bolted to the car is not a shot that
-    // fails on a roll, it is the roll from the one place nobody can buy a
-    // ticket for: the bumper and the scuttle go round with the body, and the
-    // cockpit takes the driver over with it. Nothing there needs rescuing,
-    // and standing their lens on the verge would take away the best thing
-    // about driving from inside the car.
-    //
-    // The overhead pair are left alone for their own reason — the drone is a
-    // backdrop with a bot in it, and nobody is driving under the map.
-    //
-    // ASKED FIRST, and of every frame: the shot latches itself off when the
-    // driver takes the car back and releases that latch when the car is
-    // planted again, so it has to be told about every frame whether or not
-    // this one could use it. Behind an `&&` on the view it would go blind for
-    // the whole time the player was in the cockpit and come back still
-    // holding a latch from an accident two corners ago.
-    const going = rollShot.watching(state) && !overhead && !inCar;
-    const watched = going ? rollShot.fly(camera, state, shot, CHASE_CLEARANCE, dt) : shot;
-    if (!going) rollShot.reset();
     // The hor+ ceiling belongs to the view (`capFor`), so a move between two
     // of them carries it across with everything else: stepped at the press,
     // it would re-frame a portrait viewport a whole move before the lens got
-    // there. A planted shot is an OUTSIDE one whichever view it planted from,
-    // and the seat's own ceiling comes back with the hand-back.
+    // there.
     const cap = inCar ? eye.rigOf(inCar).vfovMax : MAX_VFOV;
     const at = change.at();
     const seatCap = change.flying() ? capFor(changeFrom) + (cap - capFor(changeFrom)) * at : cap;
-    camera.fov = verticalFovFor(
-      watched,
-      camera.aspect,
-      going ? MAX_VFOV + (seatCap - MAX_VFOV) * rollShot.at() : seatCap,
-    );
+    camera.fov = verticalFovFor(shot, camera.aspect, seatCap);
     camera.updateProjectionMatrix();
   };
 
@@ -1054,11 +1067,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // somebody else's car, kilometres up the road — so the plant is
       // dropped and the rig is stood around THIS car again first.
       finishShot.reset();
-      // ...and so does the roll's, for the same reason: a shot planted beside
-      // a car that went over is not a shot to watch another crew from — and
-      // neither is the latch that shot left behind, which belongs to an
-      // accident on a different piece of road.
-      rollShot.release();
       // A change of SEAT on the road the lens is leaving means nothing on the
       // road it is going to.
       change.reset();
@@ -1073,14 +1081,14 @@ export function createGameCamera(width: number, height: number): GameCamera {
       placeFor(IN_CAR.includes(mode as InCarCamera) ? (mode as InCarCamera) : null, state, 0);
     },
     replant: (state) => {
-      // A verge lens planted for the accident, a flight between two seats,
-      // a fall the cliff is still holding height for: all of them are
+      // The framing an accident is being held with, a flight between two
+      // seats, a fall the cliff is still holding height for: all of them are
       // readings off the piece of road the car has just been taken off, and
       // none of them survives the move. `restand` is the same drop the rig
-      // takes when it is hung on another crew's car, and `planted` is what
-      // stands the standoff and the lens rather than easing them out of a
-      // shot that ended.
-      rollShot.release();
+      // takes when it is hung on another crew's car — the hold goes with it,
+      // since there is no perspective to keep across a teleport — and
+      // `planted` is what stands the standoff and the lens rather than
+      // easing them out of a shot that ended.
       change.reset();
       eye.reseat();
       restand = true;
@@ -1105,7 +1113,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // flown down to, and nobody starts a run mid-plunge.
       eye.setEyes(next);
       change.reset();
-      rollShot.release();
       restand = true;
       held = 0;
     },

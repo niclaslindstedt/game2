@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Roll-camera preview harness — the page scripts/roll-cam.mjs drives. It
-// trips a car and photographs the shot it goes over in (camera-roll.ts),
-// frame by frame, from each end of the camera ladder.
+// trips a car and photographs THE CAMERA WHILE THE CAR GOES OVER, frame by
+// frame, from each end of the camera ladder.
 //
 // It exists for the same reason the view-change sheet does, only more so. A
 // roll is over in two or three seconds and no single frame says anything
-// about it: what is being judged is whether the lens LETS GO — whether it
-// comes to rest instead of whipping round with a spinning body, whether the
-// car stays in the middle of the picture and a readable size while it goes
-// away, and whether the shot finds its way back to the driving camera
-// afterwards without a cut in it. All four are properties of one frame
-// beside the next one, which is what this lays out.
+// about it: what is being judged is whether the outside rig LETS GO of the
+// car's own direction — whether it holds the framing the accident found it
+// with instead of whipping round with a spinning body, whether the horizon
+// stays level while the world turns over, and whether it picks the car's
+// direction back up once somebody is driving again. All three are properties
+// of one frame beside the next one, which is what this lays out.
 //
 // ...and the other half of the decision is on the sheet with it: the in-car
-// rigs are NOT planted, they go over with the body, so the second row is a
+// rigs hold nothing, they go over with the body, so the second row is a
 // cockpit turning through a roll rather than a shot of one.
 //
 // The trip is STAGED rather than driven into: the car is thrown off the
@@ -35,7 +35,7 @@ declare global {
 }
 
 /** The stage the roll is staged on, and the seconds of bot driving under the
- * camera first — the shot plants from the view the player was driving in, so
+ * camera first — the shot holds the framing the player was driving in, so
  * the rig has to have been driving. */
 const STAGE = { seed: 38, length: "short", carId: "compact" } as const;
 const RUN_IN = 3;
@@ -48,10 +48,11 @@ const RUN_IN = 3;
 const TRIP = { lift: 6.5 };
 
 /** Which seats the roll is watched from — and the pair is the point. `chase`
- * is an outside rig, which plants and watches; `cockpit` is bolted to the
- * body and goes over with it. The two rows are the two halves of the
- * decision, side by side, and a row of upholstery under a `chase` label (or
- * a planted shot under `cockpit`) is the sheet failing loudly. */
+ * is an outside rig, which holds its framing and keeps the horizon level;
+ * `cockpit` is bolted to the body and goes over with it. The two rows are the
+ * two halves of the decision, side by side, and a row of upholstery under a
+ * `chase` label (or a level horizon under `cockpit`) is the sheet failing
+ * loudly. */
 const SEATS = ["chase", "cockpit"] as const;
 
 /** ...and the two ACCIDENTS, which is the other axis of the sheet. They are
@@ -59,14 +60,14 @@ const SEATS = ["chase", "cockpit"] as const;
  * the car does.
  *
  * `the trip` is the accident nobody comes back from: thrown sideways hard
- * enough to go over and over, it ends on its roof, and the lens plants at the
- * verge, holds for the beat the crew are left in, and flies home.
+ * enough to go over and over, it ends on its roof, and the rig holds its
+ * framing right through the beat the crew are left in.
  *
  * `caught` is a roll the car comes out of ON ITS WHEELS, which is the ending
- * the camera treats completely differently — the frame goes back on the short
- * clock and the shot then latches itself off until `car.planted`
- * (`camera-roll.ts`). Both of those are properties of one frame beside the
- * next, which is what this sheet is.
+ * that ends the hold — but not the instant the rotation stops: what releases
+ * it is `car.planted`, and the frames between the two are a car still leaning
+ * with the shot still held. Both of those are properties of one frame beside
+ * the next, which is what this sheet is.
  *
  * THE ONLY THING THAT SEPARATES THEM IS HOW HARD THE CAR IS TRIPPED, and
  * that is the whole design. Two earlier versions of this row scripted a
@@ -94,9 +95,9 @@ const SEATS = ["chase", "cockpit"] as const;
  *
  * The catchable band is narrow — under 12 the car never goes over and past
  * 13 it never comes back — so `caught` sits in the middle of it. A sheet
- * whose caught row starts reading ROLLING to the end, or PLANTED only after
- * a jump back to the start line, is that band having moved, and the labels
- * under each tile say so rather than hiding it. */
+ * whose caught row reads ROLLING to the end, or PLANTED only after a jump
+ * back to the start line, is that band having moved, and the labels under
+ * each tile say so rather than hiding it. */
 const RUNS = [
   { id: "the trip", across: -26 },
   { id: "caught", across: -12.5 },
@@ -109,13 +110,13 @@ const TILE = { width: 320, height: 180, cols: 8 };
 /** Frames rendered per seat, the ones photographed, and how many.
  *
  * THE WINDOW HAS TO OUTLAST THE ACCIDENT, and that is a longer event than it
- * looks. A roll the car comes out of is over at about 2.6 s, the frame goes
- * back over the half second after it, and the car is not `planted` — which is
- * what releases the camera's latch — until about 4.0 s. Sixteen tiles a sixth
- * of a second apart covered 2.67 s and stopped while the car was still
- * rolling: every hand-back this sheet exists to show happened after the last
- * picture. Spaced to cover four and a half seconds instead, which reaches past
- * the plant, the roll, the hand-back and the latch on both endings. */
+ * looks. A roll the car comes out of is over at about 2.6 s, and the car is
+ * not `planted` — which is what releases the camera's hold — until about
+ * 4.0 s. Sixteen tiles a sixth of a second apart covered 2.67 s and stopped
+ * while the car was still rolling: every release this sheet exists to show
+ * happened after the last picture. Spaced to cover four and a half seconds
+ * instead, which reaches past the trip, the roll and the release on both
+ * endings. */
 const PER_SEAT = 280;
 const SHOT_EVERY = 17;
 const SHOTS = TILE.cols * 2;
@@ -198,10 +199,10 @@ async function main(): Promise<void> {
         Math.cos(pose.yaw) * Math.cos(pose.pitch),
       );
       // The three readings that say whether this is a shot: how far the lens
-      // has moved since the frame before (a planted one moves in centimetres
-      // and then in nothing), how far away the car is, and how far off the
-      // middle of the picture it has been allowed to drift.
-      const moved = was.had ? `+${seat.distanceTo(was.at).toFixed(2)}m` : "planting";
+      // has moved since the frame before (a rig travelling with the car
+      // moves as far as the car does), how far away the car is, and how far
+      // off the middle of the picture it has been allowed to drift.
+      const moved = was.had ? `+${seat.distanceTo(was.at).toFixed(2)}m` : "opening";
       const off = ((forward.angleTo(toCar) * 180) / Math.PI).toFixed(0);
       was = { at: seat.clone(), had: true };
       shots.push({
@@ -212,8 +213,8 @@ async function main(): Promise<void> {
             : `+${(f * FRAME).toFixed(2)}s  ${moved}  ${toCar.length().toFixed(0)}m off ${off}°${
                 // WHICH STATE the car is in, because the whole reading of the
                 // caught row is where it stops saying ROLLING, how long after
-                // that the lens is still out in the grass, and where PLANTED
-                // arrives — the frame the camera's latch is released on.
+                // that the framing is still held, and where PLANTED arrives —
+                // the frame the hold is released on.
                 //
                 // AIR is called out separately: the trip is staged by THROWING
                 // the car, so the opening frames are a flight, and labelling
