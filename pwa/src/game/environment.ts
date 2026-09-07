@@ -545,7 +545,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       litLayers(shell, (layer) => (layer.deck ? 1 : litAt(layer.altitude, preset.sunUp)));
     } else {
       paintDome(preset);
-      clouds.apply(preset);
+      clouds.apply(preset, dressing);
       starMat.opacity = preset.stars;
       // The disc and halo park where the light comes from.
       const at = keyV.clone().multiplyScalar(DOME_RADIUS * 0.86);

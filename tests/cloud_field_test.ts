@@ -170,7 +170,7 @@ describe("dressing the sky", () => {
         for (let seed = 0; seed < 12; seed++) {
           const env = conditions({ season, gustPhase: seed * 0.37, windDir: seed * 0.11 });
           const { layers } = dressSky(env, biome, 0, null);
-          expect(layers.length).toBeGreaterThan(0);
+          // A bare blue day is a legal sky — see the cloudless roll below.
           expect(layers.length).toBeLessThanOrEqual(MAX_LAYERS);
           for (let i = 1; i < layers.length; i++) {
             expect(layers[i].altitude).toBeGreaterThan(layers[i - 1].altitude);
@@ -284,6 +284,43 @@ describe("dressing the sky", () => {
             const { layers } = dressSky(env, biome, 0.5, weather === "clear" ? null : 900);
             const climbs = layers.every((l, k) => k === 0 || layers[k - 1].altitude <= l.altitude);
             expect(climbs).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  it("some days puts nothing over the stage at all, most often over the desert", () => {
+    const bare = (biome: "taiga" | "desert" | "alpine"): number => {
+      let empty = 0;
+      for (let seed = 0; seed < 200; seed++) {
+        const env = conditions({ gustPhase: seed * 0.31, windDir: seed * 0.07 });
+        if (dressSky(env, biome, 0, null).layers.length === 0) empty++;
+      }
+      return empty / 200;
+    };
+    for (const biome of ["taiga", "desert", "alpine"] as const) {
+      expect(bare(biome), `bare skies over the ${biome}`).toBeGreaterThan(0);
+    }
+    // The dry country's air is the emptiest, and the forest's the least.
+    expect(bare("desert")).toBeGreaterThan(bare("alpine"));
+    expect(bare("alpine")).toBeGreaterThan(bare("taiga"));
+    // …and a sky under weather always has its deck, however dry the country.
+    for (const biome of ["taiga", "desert", "alpine"] as const) {
+      for (let seed = 0; seed < 40; seed++) {
+        const env = conditions({ weather: "rain", gustPhase: seed * 0.31, windDir: seed * 0.07 });
+        expect(dressSky(env, biome, 0.5, 700).layers.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("drops a sheet too thin to draw rather than spending a layer on it", () => {
+    for (const biome of ["taiga", "desert", "alpine"] as const) {
+      for (const season of ["spring", "summer", "autumn", "winter"] as const) {
+        for (let seed = 0; seed < 60; seed++) {
+          const env = conditions({ season, gustPhase: seed * 0.19, windDir: seed * 0.23 });
+          for (const layer of dressSky(env, biome, 0, null).layers) {
+            expect(layer.coverage, `${layer.genus} over the ${biome}`).toBeGreaterThanOrEqual(0.05);
           }
         }
       }

@@ -21,6 +21,7 @@
 
 import * as THREE from "three";
 
+import type { SkyDressing } from "./cloud-field.ts";
 import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
 import type { Preset } from "./sky.ts";
 
@@ -72,8 +73,10 @@ const SCUD_STRETCH = 1.35;
 
 export type Clouds = {
   group: THREE.Group;
-  /** Re-dress the sky for these conditions. */
-  apply: (p: Preset) => void;
+  /** Re-dress the sky for these conditions. The dressing is the same chart
+   * the dome reads (cloud-field.ts): this sky cannot draw its sheets, but
+   * it has to agree with it about whether there are any. */
+  apply: (p: Preset, dressing: SkyDressing) => void;
   /** Ride the wind. `at` is where the camera-locked group is standing, for
    * the cluster cull. */
   update: (windSpeed: number, dt: number, camera: THREE.Camera | null, at: THREE.Vector3) => void;
@@ -373,13 +376,20 @@ export function createClouds(): Clouds {
    * fair sample of sizes and heights rather than a slice of one kind. */
   let shown = CLOUDS;
 
-  const apply = (p: Preset): void => {
+  const apply = (p: Preset, dressing: SkyDressing): void => {
     const d = p.deck;
     scudding = d !== null;
     // A country's share thins the FAIR-WEATHER ring only. Under a deck the
     // same clusters are the scud torn along beneath it, and a lid is a lid
     // in any country — a dry thunderstorm is not a half-empty one.
-    shown = d !== null ? CLOUDS : Math.max(1, Math.round(CLOUDS * p.cloudShare));
+    //
+    // …and a day the chart put NOTHING over the stage flies none of them.
+    // The ring is this sky's whole answer to what is up there, so a stage
+    // that is bare blue on the layered sky has to be bare blue here too —
+    // a floor of one cluster would leave one puff parked over an empty sky
+    // instead.
+    const bare = d === null && dressing.layers.length === 0;
+    shown = d !== null ? CLOUDS : bare ? 0 : Math.max(1, Math.round(CLOUDS * p.cloudShare));
     deck.visible = d !== null;
     if (d) {
       paintDeck(d);
