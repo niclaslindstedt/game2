@@ -890,6 +890,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     car.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     car.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
     car.setShadowDetail(environment.shadows.rich());
+    car.setMirrorFitted(mirrorOption);
     // Off the body AS BUILT: a car built without pipes (the EXHAUST row) has
     // nowhere for smoke to leave from, and this is what keeps the row's two
     // halves in step. The cloud switches the instant the row does and the
@@ -1984,6 +1985,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setCamera,
     setMirror: (on) => {
       mirrorOption = on;
+      // A mirror the player has switched off comes OFF the car, rather than
+      // hanging there with nothing in it.
+      car?.setMirrorFitted(on);
     },
     setView: (view) => {
       chase.setViewTuning({

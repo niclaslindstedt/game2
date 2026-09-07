@@ -39,6 +39,30 @@ export type V3 = readonly [number, number, number];
  * lacquer and that is rubber" is that one of them holds a highlight and the
  * other does not. A tyre at zero reads as a hole, so RUBBER keeps the
  * faintest sheen — a tyre wall is not matte, it is dark. */
+/**
+ * THE FAKE SUN, for the surfaces the real one never reaches.
+ *
+ * A few things on a car are deliberately NOT lit — a lamp's reflector bowl,
+ * the first-person cabin, the instruments — because they get BRIGHTER as the
+ * light goes rather than darker, and a light that dims them is the wrong
+ * direction. Being unlit, they also get no shape from the scene, and a lamp
+ * bowl with no shading is exactly what `car/lamps.ts` warns about: what reads
+ * as a lamp is the ring of shading around the hollow, not the colour, and a
+ * flat coloured plate reads as a sticker at every distance.
+ *
+ * So those builders bake it in, the way the whole car used to
+ * (`builder.baked`). High, a touch to the front-right, and floored well above
+ * black — the arcade look hates black holes.
+ */
+const LIGHT = new THREE.Vector3(0.35, 1, 0.45).normalize();
+const AMBIENT = 0.62;
+const DIFFUSE = 0.38;
+
+/** That sun's term for a face with this unit normal, 0..1. */
+export function bakedLight(nx: number, ny: number, nz: number): number {
+  return AMBIENT + DIFFUSE * Math.max(0, nx * LIGHT.x + ny * LIGHT.y + nz * LIGHT.z);
+}
+
 export const SHINE = {
   paint: 0.55,
   /** Glass and polished metal: the two things on a car that flare. */
@@ -69,6 +93,13 @@ export class MeshBuilder {
    * nobody reads on the hundreds of faces that just want paint. */
   shine: number = SHINE.paint;
 
+  /** Whether to bake the fake sun into the colours as they are written
+   * (`bakedLight`). OFF for everything the scene lights, which is nearly all
+   * of a car; ON for the handful of surfaces drawn with an UNLIT material,
+   * which would otherwise have no shape at all. Set it before drawing — it
+   * is read per face, so one builder can carry both. */
+  baked = false;
+
   // A parameter property would say this in one line and cost the repo's Node
   // tooling the file: `--experimental-strip-types` refuses to parse them.
   constructor(alpha = false) {
@@ -91,6 +122,7 @@ export class MeshBuilder {
     if (this.n.lengthSq() < 1e-12) return;
     this.n.normalize();
     this.c.set(color);
+    if (this.baked) this.c.multiplyScalar(bakedLight(this.n.x, this.n.y, this.n.z));
     for (const p of [a, b, c]) {
       this.pos.push(p[0], p[1], p[2]);
       this.col.push(this.c.r, this.c.g, this.c.b);
@@ -133,9 +165,10 @@ export class MeshBuilder {
     this.n.crossVectors(this.ab, this.ac);
     if (this.n.lengthSq() < 1e-12) return;
     this.n.normalize();
+    const lit = this.baked ? bakedLight(this.n.x, this.n.y, this.n.z) : 1;
     const p = [a, b, c];
     for (let i = 0; i < 3; i++) {
-      this.c.set(colors[i]);
+      this.c.set(colors[i]).multiplyScalar(lit);
       this.pos.push(p[i][0], p[i][1], p[i][2]);
       this.col.push(this.c.r, this.c.g, this.c.b);
       if (this.alpha) this.col.push(alphas[i]);
@@ -343,19 +376,25 @@ export function flatten(
   source: THREE.BufferGeometry,
   color: number,
   shine?: number,
+  baked = false,
 ): THREE.BufferGeometry {
   const geo = source.index ? source.toNonIndexed() : source;
   if (geo !== source) source.dispose();
   const pos = geo.getAttribute("position");
   const colors = new Float32Array(pos.count * 3);
-  const c = new THREE.Color(color);
+  const normals = faceNormals(pos);
+  const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
+    c.set(color);
+    if (baked) {
+      c.multiplyScalar(bakedLight(normals.getX(i), normals.getY(i), normals.getZ(i)));
+    }
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;
     colors[i * 3 + 2] = c.b;
   }
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geo.setAttribute("normal", faceNormals(pos));
+  geo.setAttribute("normal", normals);
   // Gloss is left OFF unless a caller names one, so a primitive poured into
   // a builder takes that builder's current `shine` like every hand-wound
   // face beside it (`absorb`). A round part is a part of whatever it is
@@ -520,7 +559,7 @@ export function patchFade(
  * either fails silently, faces culled rather than flagged. The geometry is
  * spent. */
 export function solid(b: MeshBuilder, geo: THREE.BufferGeometry, color: number): void {
-  b.absorb(flatten(geo, color));
+  b.absorb(flatten(geo, color, undefined, b.baked));
 }
 
 /** A box that is allowed to lean: a seat back, a visor, a harness strap, a

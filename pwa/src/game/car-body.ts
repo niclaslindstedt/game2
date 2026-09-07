@@ -267,8 +267,12 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // builders rather than one mesh with two draw ranges.
   const g = new MeshBuilder(true);
   // The lit surfaces of every lamp, kept out of the body's buffer because
-  // they are switched rather than tinted — one mesh for both ends.
+  // they are switched rather than tinted — one mesh for both ends. BAKED,
+  // because the scene never lights them and a bowl with no shading is a flat
+  // coloured plate: what reads as a lamp is the ring of shade around the
+  // hollow (car/lamps.ts), not the colour in it.
   const l = new MeshBuilder();
+  l.baked = true;
   // TWO HOLES IN THE TOP DECK, and neither is optional to whatever asks for
   // it. Under the BONNET the deck is cut away so there is an engine bay to
   // see once an impact tears the panel off (car/engine-bay.ts, which closes
