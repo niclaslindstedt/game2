@@ -248,7 +248,19 @@ body {
 
    Nothing here fades. The lamps this follows are a SWITCH and reach main
    beam on one frame (daylight.ts); a cluster easing up over a second while
-   the beams snapped on would read as two cars. */
+   the beams snapped on would read as two cars.
+
+   ONE RULE BINDS EVERY SELECTOR BELOW: a night rule must never out-specify
+   a STATE rule for the same element. Everything here is `.hud[data-night]`
+   plus a class — three classes' worth — where the states it sits over are
+   one (`.hud-lamp-red`, `.hud-gap-down`, `.hud-gearbox-shift`), so a rule
+   written at the resting element silently repaints the lit, the losing and
+   the redlining as well. It fails QUIETLY, because a state that carries a
+   glow or an animation keeps them: the countdown still pulsed and still
+   threw red light, with three dead bulbs inside it. So a night rule aimed
+   at something that has states carries the `:not()` that excludes them —
+   and the states themselves keep the colour they had, which is the second
+   rule above and the reason there was anything to get wrong. */
 .hud[data-night="1"] {
   --hud-plate: 7 13 24;
   --hud-ink: #d9e2ef;
@@ -318,7 +330,7 @@ body {
    asks for nothing. The yellow, the orange, the amber way home and the red
    turn-around are the end that is worth being woken by, and they stay. */
 .hud[data-night="1"] .hud-pace-soft,
-.hud[data-night="1"] .hud-gap {
+.hud[data-night="1"] .hud-gap:not(.hud-gap-down) {
   color: #57bc69;
 }
 
@@ -346,9 +358,13 @@ body {
   opacity: 0.36;
 }
 
-/* A dead bulb on the start gantry, against a night sky rather than a day
-   one. The lit ones are the signal and keep their glow. */
-.hud[data-night="1"] .hud-lamp {
+/* A DEAD BULB on the start gantry, against a night sky rather than a day
+   one — and ONLY a dead one. Written without the `:not()` this rule paints
+   the lit lamps too: it out-specifies `.hud-lamp-red` three classes to one,
+   so every bulb goes dark and the only thing left of the countdown is the
+   glow the lit ones cast, which comes off `box-shadow` and so survives a
+   rule that only names `background`. */
+.hud[data-night="1"] .hud-lamp:not(.hud-lamp-red, .hud-lamp-green) {
   background: #0b111c;
 }
 

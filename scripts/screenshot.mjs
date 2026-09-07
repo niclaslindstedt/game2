@@ -1103,6 +1103,24 @@ for (const [name, viewport] of [
   );
 }
 
+// THE COUNTDOWN AT NIGHT — the one frame that holds a LIT signal against the
+// night dressing, and the reason it is here: the dressing shipped painting
+// every bulb on the gantry dark, because `.hud[data-night] .hud-lamp`
+// out-specifies `.hud-lamp-red` three classes to one. It failed silently —
+// the glow is a `box-shadow` and survived a rule that only named
+// `background`, so the countdown still pulsed and still threw red light onto
+// the road with three dead bulbs sitting inside it, and no driving scene
+// looks at a gantry. Anything that dims a resting element while a STATE has
+// to stay bright is checked here.
+await capture(
+  "shot-hud-night-grid",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await atLamps(page, 2);
+  },
+  { tod: "night" },
+);
+
 // The same card on a phone held sideways — the one shape where its knobs
 // pair up two abreast, and the one where it would otherwise be taller than
 // the screen.
