@@ -177,6 +177,29 @@ export function daylightAt(hour: number, season: Season, biome: BiomeId): Daylig
   return daylightOf(sunAt(hour, season, biome));
 }
 
+/** THE DARK, as the INSTRUMENTS read it: true once the sun is far enough
+ * gone that the car has gone to main beam.
+ *
+ * The HUD's night dressing hangs off this rather than off a threshold of
+ * its own, because that is the wire a real car has — the cluster dims off
+ * the lamp switch, not off a light meter — and because a second opinion
+ * about when it is dark is a second opinion that can drift from the beams
+ * the player is actually driving by. It follows the lamps in the other
+ * respect too: it changes on ONE frame, the way a switch does.
+ *
+ * Note which stop it is. `dipped` comes on a good three quarters of an
+ * hour before sunset, with full daylight still on the road; taking the
+ * HUD down there would dim it against the brightest part of the evening.
+ * `main` waits until the sun has gone, which is the point the picture
+ * behind the HUD actually goes dark. */
+export function nightNow(
+  env: Pick<RaceEnv, "hour" | "season">,
+  t: number,
+  biome: BiomeId,
+): boolean {
+  return lampsAt(sunNow(env, t, biome).elevation) === "main";
+}
+
 /** How much of the sun a body `altitude` metres up still sees when the
  * sun is `elevation` radians off the horizon, 0..1. The horizon DIPS with
  * height — by about √(2h/R) — so a cirrus sheet ten kilometres up is in

@@ -21,6 +21,7 @@ import {
 } from "@engine";
 
 import { buildMinimap } from "./minimap-view.ts";
+import { nightNow } from "./daylight.ts";
 import { clamp } from "../lib/util.ts";
 import { carHealth } from "./car-health.ts";
 import { tachometer } from "./car-instruments.ts";
@@ -394,6 +395,12 @@ export function takeSnapshot(
     pacenotes: state.phase === "racing" && !state.drowning ? upcomingPacenotes(state, pace) : [],
     seed: state.seed,
     training: state.track.arena !== null,
+    // Whether the HUD wears its night dressing, off the same switch the
+    // car's main beam is on (daylight.ts). Read here rather than off the
+    // renderer's own lamps so the instruments stay derivable from a
+    // GameState alone — this module is what keeps the HUD testable
+    // without a browser.
+    night: nightNow(state.env, state.t, state.track.knobs.biome),
     // The co-driver's way-home call is a DRIVING aid, so a car the water
     // has already taken is neither off-road nor lost as far as the HUD is
     // concerned: nothing the player asks for over the next few seconds

@@ -27,8 +27,10 @@ import {
   hourStop,
   litAt,
   moonAt,
+  nightNow,
   parseHour,
   sunAt,
+  LAMPS_UNDER,
 } from "../pwa/src/game/daylight.ts";
 
 const DEG = Math.PI / 180;
@@ -172,5 +174,35 @@ describe("the hour, as the menu and a link read it", () => {
     const winter = hourOfWord("dawn", "winter", "taiga");
     expect(winter).toBeGreaterThan(8);
     expect(winter).toBeLessThan(12);
+  });
+});
+
+describe("the dark the instruments dip for", () => {
+  // The HUD's night dressing is not a threshold of its own: it is the stop
+  // the car's own main beam comes on at, so the cluster and the beams can
+  // never disagree about whether it is dark (daylight.ts's `nightNow`).
+  it("switches with the main beam and not before it", () => {
+    const at = hourOfElevation(LAMPS_UNDER.main, false, "autumn", "taiga");
+    expect(at).not.toBeNull();
+    const dusk = at as number;
+    expect(nightNow({ hour: dusk - 0.25, season: "autumn" }, 0, "taiga")).toBe(false);
+    expect(nightNow({ hour: dusk + 0.25, season: "autumn" }, 0, "taiga")).toBe(true);
+  });
+
+  it("leaves the whole golden hour bright", () => {
+    // The dip switch comes on twelve degrees up — the better part of an
+    // hour of daylight earlier. Taking the HUD down there would dim it
+    // against the brightest part of the evening.
+    const dip = hourOfElevation(LAMPS_UNDER.dipped, false, "autumn", "taiga") as number;
+    expect(nightNow({ hour: dip + 0.1, season: "autumn" }, 0, "taiga")).toBe(false);
+    expect(nightNow({ hour: 12, season: "summer" }, 0, "taiga")).toBe(false);
+  });
+
+  it("comes on mid-stage, because the sun runs on with the race clock", () => {
+    const at = hourOfElevation(LAMPS_UNDER.main, false, "autumn", "taiga") as number;
+    const env = { hour: at - 0.2, season: "autumn" as const };
+    expect(nightNow(env, 0, "taiga")).toBe(false);
+    // An hour of sun a minute of racing: four minutes in, the sun has gone.
+    expect(nightNow(env, 4 * SUN_SECONDS_PER_HOUR, "taiga")).toBe(true);
   });
 });
