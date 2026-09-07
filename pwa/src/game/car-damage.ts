@@ -171,6 +171,15 @@ export type CarDamageVisual = {
   /** Whether a torn-off wheel is thrown as a rolling body or simply gone —
    * the video options' call (`LOOSE_WHEELS` in settings.ts). */
   setLooseWheels: (on: boolean) => void;
+  /** Whether this car's PANELS are folded into the shape of what it hit —
+   * the video options' call, and per car (`CRUMPLE_SEEN` in settings.ts).
+   * Switched off mid-run, the body straightens and the paint comes back;
+   * switched on, the ledger is bent in on the next frame, so a car that
+   * took its hits while the row was off is not a clean car afterwards.
+   *
+   * Only the panels. What has come OFF the car has come off, and a wheel
+   * that has gone still drops its corner onto the hub. */
+  setCrumple: (on: boolean) => void;
   dispose: () => void;
 };
 
@@ -312,6 +321,8 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
   /** The wheels off this car, still moving. */
   const rolling: LooseWheel[] = [];
   let wheelsRoll = true;
+  /** Whether this car's panels are folded at all (`setCrumple`). */
+  let folds = true;
   /** Whether the ledger has been read once: a car BUILT with damage in its
    * ledger — a rival that lost a wheel out of sight — wears it from the
    * first frame, and throws nothing (`breakOff`'s `thrown`). */
@@ -432,10 +443,33 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     pose.pitch = wheelbase > 0 ? (fl + fr - rl - rr) / 2 / wheelbase : 0;
   };
 
-  /** Re-derive every vertex on the car from its pristine copy and the ledger. */
+  /** Put one mesh back the way it was built: the pristine vertices, and the
+   * paint lit off the planes they make. The BASE layer only — the dirt over
+   * it is the painter's, and a car straightened by a settings press should
+   * still be as filthy as the stage left it. */
+  const straighten = ({ pos, layers, restPos, paint }: Crumpleable): void => {
+    const out = pos.array as Float32Array;
+    out.set(restPos);
+    for (let i = 0; i + 2 < pos.count; i += 3) {
+      const light = faceLight(restPos, i);
+      for (let v = i; v < i + 3; v++) {
+        layers.base[v * 3] = paint[v * 3] * light;
+        layers.base[v * 3 + 1] = paint[v * 3 + 1] * light;
+        layers.base[v * 3 + 2] = paint[v * 3 + 2] * light;
+      }
+    }
+    pos.needsUpdate = true;
+    layers.compose();
+  };
+
+  /** Re-derive every vertex on the car from its pristine copy and the
+   * ledger. The PANELS are the video options' call (`folds`); the wheels
+   * are not, because a car sitting on a hub is a fact about the run rather
+   * than a level of detail, and it is three transforms rather than fifteen
+   * thousand vertices. */
   const bend = (state: GameState): void => {
     const damage = state.car.damage;
-    for (const panel of panels.values()) bendPanel(panel, damage);
+    if (folds) for (const panel of panels.values()) bendPanel(panel, damage);
     bendWheels(damage);
     bentVersion = damage.version;
     sinceBend = 0;
@@ -732,6 +766,16 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     wheelsRoll = on;
   };
 
+  const setCrumple = (on: boolean): void => {
+    if (on === folds) return;
+    folds = on;
+    // Off, the body goes back to the shape it was built in NOW rather than
+    // waiting for a hit that may never come; on, the next frame bends the
+    // whole ledger in, which is what `bentVersion` being unreachable buys.
+    if (folds) bentVersion = -1;
+    else for (const panel of panels.values()) straighten(panel);
+  };
+
   const dispose = (): void => {
     for (const d of flying) debris.remove(d.object);
     flying.length = 0;
@@ -754,7 +798,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     }
   };
 
-  return { debris, pose, update, onEvents, setLooseWheels, dispose };
+  return { debris, pose, update, onEvents, setLooseWheels, setCrumple, dispose };
 }
 
 function smoothstep(a: number, b: number, t: number): number {

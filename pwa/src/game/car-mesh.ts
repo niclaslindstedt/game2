@@ -214,6 +214,10 @@ export type CarVisual = {
    * simply gone — the video options' call, pushed by whoever built the car
    * (`LOOSE_WHEELS` in settings.ts). */
   setLooseWheels: (on: boolean) => void;
+  /** Whether this car's PANELS fold into the shape of what it hit — the
+   * video options' call, per car, pushed by whoever built it (`CRUMPLE_SEEN`
+   * in settings.ts). What comes OFF the car is not on this row. */
+  setCrumple: (on: boolean) => void;
   /** Whether the run's light is gone — the lamps burn harder when it is,
    * and their lenses stop taking the tint the paint takes. Pushed from the
    * environment, which owns both decisions, along with the tint itself so
@@ -730,6 +734,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     setRearView,
     onEvents: damage.onEvents,
     setLooseWheels: damage.setLooseWheels,
+    setCrumple: damage.setCrumple,
     setBrakeLights,
     setLights,
     setWet,

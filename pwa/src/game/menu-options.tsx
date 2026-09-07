@@ -48,6 +48,7 @@ import {
   PICTURE_ROWS,
   PLAY_CAMERAS,
   RESOLUTION_STOPS,
+  SKY_STOPS,
   clonePad,
   detailOf,
   freshSettings,
@@ -189,11 +190,14 @@ function MainPage({
           without scrolling and neither column ends short. */}
       <div className="knob-groups">
         <div className="knob-col">
-          {/* Three rows, not one, because they are three different costs:
-              how many pixels, how much world, how far away. A machine can
-              be short of one and rich in another — a dense phone screen
-              that wants every pixel and would rather lose the far ridges
-              is the ordinary case, not the exotic one. */}
+          {/* Four rows, not one, because they are four different costs:
+              how many pixels, how much world, how far away, and what the
+              air over it is made of. A machine can be short of one and rich
+              in another — a dense phone screen that wants every pixel and
+              would rather lose the far ridges is the ordinary case, not the
+              exotic one, and a phone that is bound by how many things it
+              can submit gets nothing at all from a thinner forest and a
+              great deal from a flat sky. */}
           <KnobGroup title="PICTURE">
             {desktop ? (
               // THE SAME ROW, ASKED IN PIXELS. The desktop app owns its
@@ -227,6 +231,17 @@ function MainPage({
               stops={DISTANCE_STOPS}
               value={settings.video.drawDistance}
               onPick={(drawDistance) => set({ video: { ...settings.video, drawDistance } })}
+            />
+            {/* Its own row rather than a share of DETAIL because it is the
+                one lever here paid PER SKY PIXEL — every octave of cloud
+                noise over a third of the frame. Nothing on the row above
+                moves what it costs, and it is the dearest thing in the
+                panel after RESOLUTION. */}
+            <StepRow
+              label={PICTURE_ROWS.sky}
+              stops={SKY_STOPS}
+              value={settings.video.sky}
+              onPick={(sky) => set({ video: { ...settings.video, sky } })}
             />
             {/* The window's own, and so NOT in the settings blob: the shell
                 remembers its geometry (tauri/shell/src/window_state.rs) and

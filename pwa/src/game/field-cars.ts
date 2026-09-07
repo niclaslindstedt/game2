@@ -231,15 +231,17 @@ export type FieldCars = {
    * land on the next stage rather than mid-run, which is the same contract
    * the undergrowth setting keeps; one call because they are one setting.
    * `looseWheels` is the third question on the same row — whether a wheel
-   * a rival loses is thrown as a rolling body — and `brakeLights` whether a
-   * rival standing on the pedal lights its tail. Unlike the two above, both
-   * land on the cars already built: neither is baked into a geometry, and a
+   * a rival loses is thrown as a rolling body — `crumple` whether a rival's
+   * panels fold into what it hit, and `brakeLights` whether a rival
+   * standing on the pedal lights its tail. Unlike the two above, all three
+   * land on the cars already built: none is baked into a geometry, and a
    * field whose brake lights came in one stage late would be a field of
    * cars that look like they are not braking. */
   setCarDetail: (detail: {
     interior: InteriorDetail;
     screens: FilmDetail;
     looseWheels: boolean;
+    crumple: boolean;
     brakeLights: boolean;
   }) => void;
   /** How many rival cars are being drawn right now (the debug overlay). */
@@ -272,6 +274,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let interior: InteriorDetail = fieldInterior("high");
   let screens: FilmDetail = "coarse";
   let wheelsRoll = true;
+  let folds = true;
   let braked = true;
   let tint = new THREE.Color(1, 1, 1);
   let lampsLit = false;
@@ -410,6 +413,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           const fresh = { visual, tag, fumeClock: 0 };
           built.set(run, fresh);
           visual.setLooseWheels(wheelsRoll);
+          visual.setCrumple(folds);
           visual.setBrakeLights(braked);
           tintCar(visual, tint, lampsLit, rain);
           visual.update(run.state, 0, camera.position);
@@ -519,9 +523,11 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       interior = fieldInterior(detail.interior);
       screens = detail.screens;
       wheelsRoll = detail.looseWheels;
+      folds = detail.crumple;
       braked = detail.brakeLights;
       for (const { visual } of built.values()) {
         visual.setLooseWheels(detail.looseWheels);
+        visual.setCrumple(detail.crumple);
         visual.setBrakeLights(detail.brakeLights);
       }
     },
