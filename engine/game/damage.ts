@@ -26,6 +26,7 @@
 // and cooling.ts write the ledger and never read this.
 
 import { clamp } from "../lib/math.ts";
+import { glassCrack } from "./collision.ts";
 import { heatPower } from "./cooling.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { WHEEL_PARTS, type CarState, type DamagePart, type RetireReason } from "./state.ts";
@@ -33,6 +34,7 @@ import { WHEEL_PARTS, type CarState, type DamagePart, type RetireReason } from "
 const S = TUNING.collision.systems;
 const C = TUNING.collision.chassis;
 const A = TUNING.collision.aero;
+const G = TUNING.collision.glass;
 
 /** The multipliers a damaged car drives through. Each one is 1 (or 0) on a
  * sound car, so the handling model can apply them unconditionally. */
@@ -44,8 +46,10 @@ export type DamageEffects = {
    * engine is firing this instant, 0 through a misfire's dead beat — and
    * 0 for good once the engine is dead. */
   firing: number;
-  /** Steering authority, 0..1 — a bent rack answers late and short, and a
-   * driver with no windscreen in front of them answers late too. */
+  /** Steering authority, 0..1 — a bent rack answers late and short, a
+   * driver with no windscreen in front of them answers late too, and one
+   * looking through a crazed one answers late all the way round the
+   * stage. */
   steering: number;
   /** Lock the car carries with the wheel straight, -1..1 — the pull of a
    * shell folded harder down one side than the other, of bent tie rods, of
@@ -229,6 +233,10 @@ export function damageEffects(car: CarState, speed: number, t: number): DamageEf
   const aero = aeroToll(d.broken);
   const wheels = wheelToll(car);
   const dead = sys.engine >= 1;
+  // A screen that has gone is a blast in the driver's face; one that is
+  // still there is a web of cracks in front of them. Never both — the
+  // cracks left with the glass.
+  const screenGone = d.broken.includes("glassF");
   // The floor under grip. The shell, the arms and the downforce together
   // never take it under `gripFloor` — a car that cannot be pointed is not a
   // consequence — but a wheel that is no longer on the car is allowed to,
@@ -247,8 +255,15 @@ export function damageEffects(car: CarState, speed: number, t: number): DamageEf
     firing: dead ? 0 : firing(sys.engine, t),
     // The blast through a screen that is no longer there is the driver's
     // loss, not the rack's — so it fades with the air like the drag does.
+    // The CRACKS in a screen that is still there are the driver's loss
+    // too, and those do not fade with anything: a web across the glass
+    // hides the same corner at 40 km/h as at 140, which is what makes a
+    // knock the car shrugged off something the rest of the stage is
+    // driven around.
     steering:
-      (1 - S.steerLoss * sys.steering) * (1 - (d.broken.includes("glassF") ? A.blast : 0) * air),
+      (1 - S.steerLoss * sys.steering) *
+      (1 - (screenGone ? A.blast : 0) * air) *
+      (1 - (screenGone ? 0 : G.viewLoss * glassCrack(d, 0))),
     pull: clamp(
       crushBias(car) * C.pullPerCrush + rackPull + wheels.pull + aero.side * A.yawPerDrag * air,
       -C.pullMax,

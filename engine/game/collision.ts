@@ -42,9 +42,11 @@ import {
 const T = TUNING;
 
 /** Which zones hold each part on, and how much crush shears its bolts. A
- * part is listed under every zone whose folding can take it off. The
- * wheels are not here: a wheel comes off its own ledger (`dealWheels`),
- * not off a zone's.
+ * part is listed under every zone whose folding can take it off. Two
+ * things are not here, because neither of them shears at a line: a WHEEL
+ * comes off its own ledger (`dealWheels`), and the GLASS crazes toward the
+ * crush that finishes it (`glassCrack`) — a pane the driver has been
+ * looking through a web of cracks in for the whole of the way there.
  *
  * The LAMPS are where the zone list does real work rather than merely being
  * generous. Each of the four is listed under its own corner and under the
@@ -63,10 +65,6 @@ const PART_BOLTS: { part: DamagePart; zones: number[]; crushAt: number }[] = [
   { part: "mirrorR", zones: [1, 2], crushAt: T.collision.partAt.mirror },
   { part: "mirrorL", zones: [6, 7], crushAt: T.collision.partAt.mirror },
   { part: "spoiler", zones: [3, 4, 5], crushAt: T.collision.partAt.spoiler },
-  { part: "glassF", zones: [7, 0, 1], crushAt: T.collision.partAt.glass },
-  { part: "glassB", zones: [3, 4, 5], crushAt: T.collision.partAt.glass },
-  { part: "glassR", zones: [1, 2, 3], crushAt: T.collision.partAt.glass },
-  { part: "glassL", zones: [5, 6, 7], crushAt: T.collision.partAt.glass },
   { part: "hood", zones: [7, 0, 1], crushAt: T.collision.partAt.lid },
   { part: "hatch", zones: [3, 4, 5], crushAt: T.collision.partAt.lid },
   { part: "doorR", zones: [2], crushAt: T.collision.partAt.door },
@@ -74,20 +72,93 @@ const PART_BOLTS: { part: DamagePart; zones: number[]; crushAt: number }[] = [
 ];
 
 /** ...and what the ROOF folding shears, against `CarDamage.roof`. The
- * greenhouse is not a ring zone, so it carries its own list: every pane at
- * once (a shell that has lost its shape cannot hold laminated glass in it),
- * the mirrors hung off the pillars that just went, and finally the lids,
- * whose hinges the fold reaches only once it has pulled the whole deck. */
+ * greenhouse is not a ring zone, so it carries its own list: the mirrors
+ * hung off the pillars that just went, and then the lids, whose hinges the
+ * fold reaches only once it has pulled the whole deck. The GLASS is not on
+ * it — a roof fold crazes every pane at once (`glassCrack`), because a
+ * shell that has lost its shape cannot hold laminated glass in it, and it
+ * takes them out at `partAt.roofGlass` the way it always did. */
 const ROOF_BOLTS: { part: DamagePart; crushAt: number }[] = [
-  { part: "glassF", crushAt: T.collision.partAt.roofGlass },
-  { part: "glassB", crushAt: T.collision.partAt.roofGlass },
-  { part: "glassR", crushAt: T.collision.partAt.roofGlass },
-  { part: "glassL", crushAt: T.collision.partAt.roofGlass },
   { part: "mirrorR", crushAt: T.collision.partAt.roofMirror },
   { part: "mirrorL", crushAt: T.collision.partAt.roofMirror },
   { part: "hood", crushAt: T.collision.partAt.roofLid },
   { part: "hatch", crushAt: T.collision.partAt.roofLid },
 ];
+
+/** THE FOUR PIECES OF GLASS, in the order `glassCrack` reads them: the
+ * windscreen, the backlight, and each flank's windows together. Left and
+ * right are the ENGINE's — a positive `w` is its right. */
+export const GLASS_PARTS: readonly DamagePart[] = ["glassF", "glassB", "glassL", "glassR"];
+
+/** The ring zone each pane FACES, in `GLASS_PARTS` order — zone 0 is the
+ * nose and indices grow clockwise, so the screen looks out over the nose,
+ * the backlight over the tail, and each flank's windows over their own
+ * side. */
+const FACING: readonly number[] = [0, 4, 6, 2];
+
+/** Which zones craze each pane, as (zone, share) pairs — the same idea as
+ * `WHEELS_AT`, read from the pane's end. A pane's own face is worth a full
+ * share; the two zones either side of it reach it at an angle and are
+ * worth `glass.oblique`. Nothing else reaches it at all: a door driven
+ * into a rock leaves the windscreen sitting there. */
+const ZONES_OF: readonly (readonly [number, number])[][] = FACING.map((zone) => {
+  const o = T.collision.glass.oblique;
+  const wrap = (z: number): number => (z + DAMAGE_ZONES) % DAMAGE_ZONES;
+  return [
+    [zone, 1],
+    [wrap(zone - 1), o],
+    [wrap(zone + 1), o],
+  ];
+});
+
+/** HOW BROKEN ONE PANE IS, 0 (clear) .. 1 (out of its frame and lying in
+ * the ditch) — `pane` indexes `GLASS_PARTS`. Read off the crush the panels
+ * around it have already taken rather than kept as a ledger of its own,
+ * which is what makes a hand-written wreck (`shearedParts`, a preview
+ * tool's staged ledger) and a car that crashed its way there agree by
+ * construction.
+ *
+ * Everything in between is a screen with a web of cracks across it, and
+ * that is the whole point: a knock that costs a car nothing else still
+ * leaves a mark in the corner of the glass, and the driver has to keep
+ * looking through it for the rest of the stage.
+ *
+ * The ROOF is added to the ring's own sum because a shell that has lost
+ * its shape cannot hold laminated glass in it, however square the fold
+ * was. TEMPERED glass — the flanks and the backlight — crazes faster than
+ * the laminated screen: it holds together for a moment and then it is
+ * gravel, so it spends far less of its life cracked. */
+export function glassCrack(damage: CarState["damage"], pane: number): number {
+  const P = T.collision.partAt;
+  let sum = damage.roof / P.roofGlass;
+  for (const [zone, share] of ZONES_OF[pane]) sum += (damage.zones[zone] * share) / P.glass;
+  const G = T.collision.glass;
+  const share = Math.min(1, sum * (pane === 0 ? 1 : G.tempered));
+  // The pane still leaves at exactly the fold that always finished it —
+  // the curve only decides what the way there LOOKS like, because 1 to any
+  // power is 1.
+  return share ** G.crazeCurve;
+}
+
+/** Every pane's crack BEFORE a dealt crush, so the one bite that carries a
+ * pane over the top can be told from the dozens either side of it. One
+ * array for the whole engine: `dealCrush` runs on every bite of a contact,
+ * a roll grinding along a flank is dozens of them a second, and it is read
+ * and spent inside the same call. */
+const WAS_GLASS = [0, 0, 0, 0];
+
+function readCracks(damage: CarState["damage"], into: number[]): void {
+  for (let pane = 0; pane < GLASS_PARTS.length; pane++) into[pane] = glassCrack(damage, pane);
+}
+
+/** ...and the panes the crush just carried over the top: each one leaves
+ * its frame exactly once, the way any other part does. */
+function shearGlass(damage: CarState["damage"], was: number[], events: GameEvent[]): void {
+  for (let pane = 0; pane < GLASS_PARTS.length; pane++) {
+    if (was[pane] >= 1 || glassCrack(damage, pane) < 1) continue;
+    shear(damage, GLASS_PARTS[pane], events);
+  }
+}
 
 /** Which wheels each ring zone folds onto, as (wheel index, share) pairs —
  * `WHEEL_PARTS` order: FL, FR, RL, RR. A corner is one wheel's; a flank is
@@ -281,8 +352,13 @@ function dealCrush(
     damage.belly = before + crush;
     return;
   }
+  // The GLASS is read off the crush rather than written, so its before is
+  // taken here — after the early returns that cannot craze anything, and
+  // before the fold that can.
+  readCracks(damage, WAS_GLASS);
   if (face === "roof") {
     damage.roof = before + crush;
+    shearGlass(damage, WAS_GLASS, events);
     for (const bolt of ROOF_BOLTS) {
       if (damage.roof < bolt.crushAt) continue;
       shear(damage, bolt.part, events);
@@ -291,6 +367,7 @@ function dealCrush(
   }
   const zone = face;
   damage.zones[zone] = before + crush;
+  shearGlass(damage, WAS_GLASS, events);
   for (const bolt of PART_BOLTS) {
     if (!bolt.zones.includes(zone)) continue;
     if (damage.zones[zone] < bolt.crushAt) continue;
@@ -313,6 +390,9 @@ export function shearedParts(damage: CarState["damage"]): DamagePart[] {
     if (bolt.zones.some((zone) => damage.zones[zone] >= bolt.crushAt)) add(bolt.part);
   }
   for (const bolt of ROOF_BOLTS) if (damage.roof >= bolt.crushAt) add(bolt.part);
+  GLASS_PARTS.forEach((part, pane) => {
+    if (glassCrack(damage, pane) >= 1) add(part);
+  });
   damage.wheels.forEach((w, i) => {
     if (w >= 1) add(WHEEL_PARTS[i]);
   });

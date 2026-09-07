@@ -24,8 +24,10 @@ import {
   createTerrain,
   damageEffects,
   damageZoneAt,
+  glassCrack,
   landingDamage,
   ridesOver,
+  shearedParts,
   standSolid,
   step,
   updateSlip,
@@ -969,6 +971,132 @@ describe("the end of the run", () => {
     // The left side of the car never touched anything.
     expect(car.damage.broken).not.toContain("glassL");
     expect(car.damage.broken).not.toContain("doorL");
+  });
+});
+
+describe("the glass, on the way to being gone", () => {
+  /** A glancing scrape down the right flank, hard enough to mark the car
+   * and nowhere near hard enough to take anything off it. */
+  function graze(state: GameState, speed: number): GameEvent[] {
+    const car = state.car;
+    const rock = solid({ kind: "rock", size: 0.9, x: car.x + TUNING.collision.halfWidth + 0.35 });
+    const events: GameEvent[] = [];
+    car.w = speed;
+    collideCar(state.spec, car, [rock], events, state.stats);
+    return events;
+  }
+
+  it("crazes a pane before it takes it, and reads the crack off the crush", () => {
+    const state = freshState();
+    expect(glassCrack(state.car.damage, 3)).toBe(0);
+    const events = graze(state, 5);
+    const crack = glassCrack(state.car.damage, 3);
+    expect(crack).toBeGreaterThan(0);
+    expect(crack).toBeLessThan(1);
+    // A mark in the glass is not a pane on the road: nothing came off, and
+    // nothing said it did.
+    expect(state.car.damage.broken).not.toContain("glassR");
+    expect(events.filter((e) => e.type === "partBreak")).toHaveLength(0);
+  });
+
+  it("opens it further with every knock, and takes it exactly once", () => {
+    const state = freshState();
+    const car = state.car;
+    let crack = 0;
+    let breaks = 0;
+    for (let i = 0; i < 12 && !car.damage.broken.includes("glassR"); i++) {
+      car.x = 0;
+      const events = graze(state, 9);
+      breaks += events.filter((e) => e.type === "partBreak" && e.part === "glassR").length;
+      const now = glassCrack(car.damage, 3);
+      expect(now).toBeGreaterThanOrEqual(crack);
+      crack = now;
+    }
+    expect(car.damage.broken).toContain("glassR");
+    expect(glassCrack(car.damage, 3)).toBe(1);
+    expect(breaks).toBe(1);
+    // ...and it stays gone: the crush goes on, the pane does not come off
+    // a second time.
+    car.x = 0;
+    const after = graze(state, 9);
+    expect(after.filter((e) => e.type === "partBreak" && e.part === "glassR")).toHaveLength(0);
+  });
+
+  it("crazes the side a hit landed on and leaves the rest of the car clear", () => {
+    const state = freshState();
+    graze(state, 9);
+    // GLASS_PARTS order: the screen, the backlight, the left flank, the
+    // right. Only the right flank met the rock.
+    expect(glassCrack(state.car.damage, 3)).toBeGreaterThan(0);
+    expect(glassCrack(state.car.damage, 2)).toBe(0);
+    expect(glassCrack(state.car.damage, 1)).toBe(0);
+    expect(glassCrack(state.car.damage, 0)).toBe(0);
+  });
+
+  it("takes the screen on a square nose, and the corners reach it at an angle", () => {
+    const square = freshState();
+    square.car.u = 30;
+    collideCar(
+      square.spec,
+      square.car,
+      [solid({ kind: "boulder", size: 2.4, x: square.car.x, z: square.car.z + 4 })],
+      [],
+      square.stats,
+    );
+    expect(square.car.damage.broken).toContain("glassF");
+
+    // The same fold taken on ONE front corner is a cracked screen, not a
+    // missing one: `glass.oblique` is what a clipped wing puts through it,
+    // so a corner has to fold further than a nose to reach the same glass.
+    const clipped = freshState();
+    clipped.car.damage.zones[1] = TUNING.collision.partAt.glass;
+    const crack = glassCrack(clipped.car.damage, 0);
+    expect(crack).toBeCloseTo(
+      TUNING.collision.glass.oblique ** TUNING.collision.glass.crazeCurve,
+      5,
+    );
+    expect(crack).toBeLessThan(1);
+    expect(shearedParts(clipped.car.damage)).not.toContain("glassF");
+  });
+
+  it("crazes every pane at once when the roof folds, tempered glass first", () => {
+    const damage = freshState().car.damage;
+    const G = TUNING.collision.glass;
+    damage.roof = TUNING.collision.partAt.roofGlass / 2;
+    // The laminated screen is the one that holds on: everything else on the
+    // car is tempered, and is that much further gone at the same fold.
+    expect(glassCrack(damage, 0)).toBeCloseTo(0.5 ** G.crazeCurve, 5);
+    for (const pane of [1, 2, 3]) {
+      expect(glassCrack(damage, pane)).toBeCloseTo((0.5 * G.tempered) ** G.crazeCurve, 5);
+    }
+    damage.roof = TUNING.collision.partAt.roofGlass;
+    expect(shearedParts(damage)).toEqual(
+      expect.arrayContaining(["glassF", "glassB", "glassL", "glassR"]),
+    );
+  });
+
+  it("costs the driver their steering while it is cracked, and the blast once it is gone", () => {
+    const sound = freshState().car;
+    const clear = damageEffects(sound, 30, 0).steering;
+
+    const cracked = freshState().car;
+    cracked.damage.zones[0] = TUNING.collision.partAt.glass / 2;
+    const peering = damageEffects(cracked, 30, 0).steering;
+    expect(peering).toBeLessThan(clear);
+    expect(peering).toBeCloseTo(
+      clear * (1 - TUNING.collision.glass.viewLoss * glassCrack(cracked.damage, 0)),
+      5,
+    );
+
+    // A screen that has GONE is a blast in the driver's face and not a web
+    // in front of them — never both, or the crack goes on being paid for
+    // by a pane that is lying in the ditch.
+    const gone = freshState().car;
+    gone.damage.zones[0] = TUNING.collision.partAt.glass;
+    gone.damage.broken.push("glassF");
+    const blown = damageEffects(gone, 30, 0).steering;
+    const air = Math.min(1, (30 / TUNING.collision.aero.speed) ** 2);
+    expect(blown).toBeCloseTo(clear * (1 - TUNING.collision.aero.blast * air), 5);
   });
 });
 

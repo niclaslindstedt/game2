@@ -40,6 +40,7 @@ STAND, and **`test-scenario`** for staging exact contacts.
 | The SHAPE of a fold: the telescoping, the bulge, the creases, the tear, the kinked frame — DOM-free, and held by `tests/car_crumple_test.ts` | `pwa/src/game/car-crumple.ts`; `make wrecks` is its lab (`SCENE=flank VIEWS=side CELL=1320x930` for one)                                             |
 | The door skins, and where each one is                                                                                                        | `doorSkins` in `pwa/src/game/car/trim.ts`                                                                                                            |
 | Which slice of the glass buffer is which pane, and the grime film over it                                                                    | `buildGreenhouse` (`GlassPanes`) + `CarWipers.shatter` in `car/wipers.ts`                                                                            |
+| The WEB a pane crazes before it goes, and the PLATE that flies when it does                                                                  | `glassCrack` (collision.ts) → `pwa/src/game/car/glass-cracks.ts`; `throwPane` in `car-damage.ts`, over `tumble.ts`; `tests/glass_test.ts`            |
 | Engine smoke off the bonnet, the glass burst, the wheel's throw                                                                              | `pwa/src/game/renderer.ts` (`ENGINE_SMOKE`, `GLASS_AT`)                                                                                              |
 | The retirement card                                                                                                                          | `pwa/src/game/hud-finish.tsx` (`retired`) + `App.tsx`'s `retiredRef`                                                                                 |
 | How the CAR'S CONDITION reads at a glance: the ledger folded to four colours, then the plan and the marks under it                           | `pwa/src/game/car-health.ts` (DOM-free) + `hud-health.tsx`; `make health` is its lab — `hud-and-menus` owns the surface                              |
@@ -120,11 +121,20 @@ STAND, and **`test-scenario`** for staging exact contacts.
   up). `engineFromNose` is set against one bar: a square hit at 100 km/h
   is the engine gone, at 50 a third of it — move `crushPerSpeed` and that
   number has to move with it.
-- **A wheel is a ledger, not a bolt.** Panels and glass come off a ZONE's
-  crush (`PART_BOLTS`); a wheel comes off its own `damage.wheels[i]`
-  reaching 1 (`dealWheel`), fed from the corner, the flank and the side it
-  lands on. Left/right and FL/FR/RL/RR are the ENGINE's frame; the HUD's
-  `wheelCall` is where the screen flips them, once.
+- **A wheel is a ledger, not a bolt.** Panels come off a ZONE's crush
+  (`PART_BOLTS`); a wheel comes off its own `damage.wheels[i]` reaching 1
+  (`dealWheel`), fed from the corner, the flank and the side it lands on.
+  Left/right and FL/FR/RL/RR are the ENGINE's frame; the HUD's `wheelCall`
+  is where the screen flips them, once.
+- **Glass is a ledger too, and a DERIVED one.** `glassCrack` reads a pane's
+  crazing off the crush the zones around it have already taken, rather than
+  keeping a field of its own — which is the only reason a hand-written
+  wreck (`shearedParts`, a preview tool's staged ledger) and a car that
+  crashed its way there agree without anyone keeping them in step. The pane
+  still leaves at the folds that always finished it (`partAt.glass`,
+  `partAt.roofGlass`); everything under that is a screen the driver is
+  looking through, which costs them steering (`glass.viewLoss`) and never
+  the blast as well — the cracks left with the pane.
 - **The collision box must CONTAIN the larger drawn shell.** One box serves
   both cars; size it off the longest/widest station in
   `pwa/src/game/car-styles.ts`, not the average. A body poking out of its

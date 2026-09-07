@@ -32,6 +32,7 @@ export {
 // A run stood at a moment instead of driven to it (place.ts).
 export { placeRun, type RunMoment } from "./game/place.ts";
 export {
+  GLASS_PARTS,
   callDamage,
   clipKerbs,
   clipSolids,
@@ -39,6 +40,7 @@ export {
   collideCars,
   ridesOver,
   damageZoneAt,
+  glassCrack,
   landingDamage,
   shearedParts,
   type ContactSide,

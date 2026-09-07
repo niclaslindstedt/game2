@@ -45,13 +45,19 @@ export const NEUTRAL_INPUT: CarInput = {
 export const DAMAGE_ZONES = 8;
 
 /** The pieces an impact can tear off the body. The engine decides WHEN one
- * breaks — zone crush past its bolt strength for the panels and the glass,
- * a wheel's own ledger reaching the top for a wheel — and the renderer owns
- * what flies. The glass SHATTERS rather than flies: the pane is simply no
- * longer there, and the cabin is seen straight into. A door is bolted
+ * breaks — zone crush past its bolt strength for the panels, a pane's own
+ * crazing reaching the top for the glass (`glassCrack`), a wheel's own
+ * ledger for a wheel — and the renderer owns what flies. A door is bolted
  * deeper than anything on the flank, and a wheel deeper still: the first
  * takes a flank folded most of the way to the cage, the second a corner
  * driven into something at pace, or landed on.
+ *
+ * THE GLASS IS THE ONE PART THAT IS ALREADY DAMAGED before it comes off.
+ * Every other piece here is bolted on until the fold shears it; a pane
+ * cracks the whole way there, and the driver is looking through those
+ * cracks for as long as it holds. When it does let go it leaves as a
+ * PLATE — the pane carries the car's speed away with it, less what
+ * breaking the bond around it cost, and comes to rest in the grass.
  *
  * THE LAMPS ARE FOUR, not two. A lamp is glass at the very corner of a cap,
  * and which corner met the tree decides which one is gone: a car that

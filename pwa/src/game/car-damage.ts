@@ -28,17 +28,31 @@
 // flat and bent on their own ledger and then come off (the corner drops
 // onto its hub, and the whole car sits crooked from then on — `pose`; the
 // wheel itself leaves as a body of its own, loose-wheel.ts, when the video
-// options allow one); the
-// GLASS, which shatters out of its frame rather than flying (its slice of
-// the glass buffer goes to alpha zero, and the grime film over it with it);
-// and the DOORS, which fly like any other part and leave the cabin open
-// behind them (the flank inside the door's rectangle is painted into the
-// hole, stripes and all).
+// options allow one); the GLASS; and the DOORS, which fly like any other
+// part and leave the cabin open behind them (the flank inside the door's
+// rectangle is painted into the hole, stripes and all).
+//
+// THE GLASS IS THE ONE THING HERE THAT HAPPENS TWICE. Long before a pane
+// leaves, the engine has been crazing it (`glassCrack`), and every frame
+// the web across it is opened a little further — from a mark in the corner
+// after a bump to a screen the driver is peering around. Then it goes, and
+// it does not merely stop being drawn: the pane's own triangles are lifted
+// out of the glass buffer with the web still on them, and the plate is
+// thrown clear at the car's speed less what tearing it out of its bonding
+// cost, to land flat in the grass and stay there.
 
 import * as THREE from "three";
-import { TUNING, WHEEL_PARTS, type DamagePart, type GameEvent, type GameState } from "@engine";
+import {
+  GLASS_PARTS,
+  TUNING,
+  WHEEL_PARTS,
+  glassCrack,
+  type DamagePart,
+  type GameEvent,
+  type GameState,
+} from "@engine";
 
-import type { CarBodyParts, GlassPane } from "./car-body.ts";
+import { GLASS_OPACITY, type CarBodyParts, type GlassPane } from "./car-body.ts";
 import { lambert } from "./car/builder.ts";
 import { crumple, noise, rimOf, type CrumpleFrame } from "./car-crumple.ts";
 import { paintLayers, type PaintLayers } from "./car-paint.ts";
@@ -74,6 +88,33 @@ const BEND_EVERY = 0.05;
 /** How far over the ground a torn-off piece's centre ends up over and
  * above its own half-thickness, m — the gravel it is lying on. */
 const DEBRIS_REST = 0.02;
+/** WHAT A PANE WEIGHS, kg — a laminated screen and its bonding is a
+ * surprising amount of glass, and it is the reason the bond below is worth
+ * what it is. */
+const PANE_MASS = 12;
+/** ...and the work it takes to tear one out of its frame, J: the urethane
+ * bead round the edge is what a screen is actually held in by, and it is
+ * the only thing standing between the pane and the road speed it is
+ * already travelling at. */
+const PANE_BOND = 90;
+/** Which the pane pays out of its own speed on the way out: a body of
+ * `PANE_MASS` shedding `PANE_BOND` of kinetic energy comes out this much
+ * slower than the car it left, m/s. Below that the glass has not got
+ * enough in it to go anywhere and drops where the car is. */
+const BOND_SPEED = Math.sqrt((2 * PANE_BOND) / PANE_MASS);
+/** What the frame springs the pane out with once the bond has let go, m/s
+ * along the pane's own normal, and the lift over the bodywork it leaves
+ * across. Small: a screen popping out is thrown by the CAR, not by the
+ * frame. */
+const PANE_POP = 2.4;
+const PANE_LIFT = 2.2;
+/** How fast a loose pane turns as it goes, rad/s either way — a plate this
+ * light and this wide is turned by the air as much as by the hit. */
+const PANE_SPIN = 5;
+/** How thick the plate is drawn, m — half of it is how far its centre ends
+ * up over whatever it comes to rest on. */
+const PANE_HALF = 0.006;
+
 /** What the hit that tears a wheel off adds to the corner's own velocity,
  * m/s: out of the arch and up over it. The rest of what the wheel leaves
  * with is the car's speed and the tread's spin (loose-wheel.ts). */
@@ -216,11 +257,36 @@ function bendable(body: CarBodyParts): Map<THREE.Mesh, Crumpleable> {
 
 const IDENTITY = new THREE.Quaternion();
 
-const GLASS_PANES: readonly GlassPane[] = ["glassF", "glassB", "glassL", "glassR"];
+/** The axis the tumbler is told a plate's face is (`flat`), so a pane comes
+ * to rest lying down rather than standing on its edge. */
+const FORWARD = new THREE.Vector3(0, 0, 1);
+
+/** WHICH WAY A SLICE OF GLASS LOOKS: the area-weighted normal of its own
+ * triangles. Every window is wound outward when it is built, so this is the
+ * pane's outward face without a table saying which pane is which — and it
+ * is the direction the frame springs the plate out along. */
+function faceOf(geometry: THREE.BufferGeometry): THREE.Vector3 {
+  const pos = geometry.getAttribute("position");
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const sum = new THREE.Vector3();
+  for (let i = 0; i + 2 < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i);
+    b.fromBufferAttribute(pos, i + 1).sub(a);
+    c.fromBufferAttribute(pos, i + 2).sub(a);
+    sum.add(b.cross(c));
+  }
+  return sum.lengthSq() > 1e-9 ? sum.normalize() : FORWARD.clone();
+}
 
 function isGlass(part: DamagePart): part is GlassPane {
-  return (GLASS_PANES as readonly string[]).includes(part);
+  return part === "glassF" || part === "glassB" || part === "glassL" || part === "glassR";
 }
+
+/** The panes in the order the ENGINE crazes them — `glassCrack` is asked by
+ * index, so the order is taken from the engine rather than restated here. */
+const GLASS_PANES: readonly GlassPane[] = GLASS_PARTS.filter(isGlass);
 
 export function createCarDamage(body: CarBodyParts): CarDamageVisual {
   const panels = bendable(body);
@@ -240,6 +306,9 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
 
   const debris = new THREE.Group();
   const flying: TumbleBody[] = [];
+  /** The thrown PANES among them — the only loose pieces carrying a
+   * geometry and a material this module made rather than the body's. */
+  const paneMeshes = new Set<THREE.Mesh>();
   /** The wheels off this car, still moving. */
   const rolling: LooseWheel[] = [];
   let wheelsRoll = true;
@@ -408,15 +477,116 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     );
   };
 
+  /** THE PANE AS A PLATE. Its own triangles are lifted out of the glass
+   * buffer with the web that was on them when it let go, re-centred on
+   * themselves, and turned so the plate's face is the local +z the tumbler
+   * lays flat — a windscreen that settles on its edge in the gravel is a
+   * sheet of glass planted there like a sign.
+   *
+   * It leaves with the car's velocity less `BOND_SPEED`, which is what
+   * tearing it out of its bonding costs it, plus the frame's own small pop
+   * along the pane's normal: a screen goes out over the bonnet, a door
+   * window goes out sideways, because the normal says which way each of
+   * them faces without anything here having to know. */
+  const throwPane = (pane: GlassPane, state: GameState): void => {
+    const source = body.glassMesh;
+    if (!source) return;
+    const pos = source.geometry.getAttribute("position");
+    const col = source.geometry.getAttribute("color");
+    const position: number[] = [];
+    const color: number[] = [];
+    for (const { start, count } of body.panes[pane]) {
+      for (let i = start; i < start + count; i++) {
+        position.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+        // The pane's own buffer carries the alpha the material's opacity is
+        // multiplied by, and it runs past 1 at a window's header. The plate
+        // is drawn at full opacity, so that product is baked in here — one
+        // material, and the web on it keeps the alpha it was drawn with.
+        color.push(col.getX(i), col.getY(i), col.getZ(i), Math.min(1, col.getW(i)) * GLASS_OPACITY);
+      }
+    }
+    if (position.length === 0) return;
+    const web = body.cracks?.webOf(pane, 1);
+    if (web) {
+      for (const v of web.position) position.push(v);
+      for (const v of web.color) color.push(v);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(color, 4));
+    geo.computeBoundingBox();
+    const centre = (geo.boundingBox as THREE.Box3).getCenter(new THREE.Vector3());
+    geo.translate(-centre.x, -centre.y, -centre.z);
+    // The plate's face, from the pane's own triangles rather than from a
+    // table: every window is wound outward, so the area-weighted normal of
+    // the slice IS which way this pane looks.
+    const face = faceOf(geo);
+    const turn = new THREE.Quaternion().setFromUnitVectors(FORWARD, face);
+    geo.applyQuaternion(turn.clone().invert());
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    mesh.renderOrder = 1;
+    mesh.position.copy(centre);
+    mesh.quaternion.copy(turn);
+    paneMeshes.add(mesh);
+    body.cabin.add(mesh);
+    // attach() keeps the world transform while re-parenting into the
+    // world-anchored debris group — the pane separates mid-motion.
+    debris.attach(mesh);
+    const c = state.car;
+    const sinH = Math.sin(c.heading);
+    const cosH = Math.cos(c.heading);
+    const vx = sinH * c.u + cosH * c.w;
+    const vz = cosH * c.u - sinH * c.w;
+    const speed = Math.hypot(vx, vz);
+    // What the bond took out of it. A car crawling into a wall drops its
+    // screen at its feet; one at rally pace throws it down the road.
+    const carry = speed > BOND_SPEED ? (speed - BOND_SPEED) / speed : 0;
+    // The plate's own +z is its face now (the geometry was turned onto it),
+    // so the world direction comes off the mesh rather than off `face` —
+    // which is stated in the frame the turn has already left behind.
+    const out = FORWARD.clone().transformDirection(mesh.matrixWorld);
+    flying.push(
+      tumbleFrom(
+        mesh,
+        new THREE.Vector3(
+          vx * carry + out.x * PANE_POP,
+          c.vy * carry + out.y * PANE_POP + PANE_LIFT,
+          vz * carry + out.z * PANE_POP,
+        ),
+        new THREE.Vector3(
+          (Math.random() - 0.5) * PANE_SPIN,
+          (Math.random() - 0.5) * PANE_SPIN,
+          (Math.random() - 0.5) * PANE_SPIN,
+        ),
+        PANE_HALF + DEBRIS_REST,
+        false,
+        "z",
+      ),
+    );
+  };
+
   /** A pane out of its frame: its triangles go to alpha zero and stay
-   * there, and the film the wipers were keeping over it goes with it. */
-  const shatter = (pane: GlassPane): void => {
+   * there, the web that was across it goes with them, and so does the film
+   * the wipers were keeping over it. With `thrown`, the pane itself leaves
+   * as a plate first — the car was built with it already gone otherwise,
+   * and there is nothing to throw. */
+  const shatter = (pane: GlassPane, state: GameState, thrown: boolean): void => {
+    if (thrown) throwPane(pane, state);
     if (glassCol) {
       for (const { start, count } of body.panes[pane]) {
         for (let i = start; i < start + count; i++) glassCol.setW(i, 0);
       }
       glassCol.needsUpdate = true;
     }
+    body.cracks?.clear(pane);
     body.wipers.shatter(pane);
   };
 
@@ -465,7 +635,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     }
     if (isGlass(part)) {
       detached.add(part);
-      shatter(part);
+      shatter(part, state, thrown);
       return;
     }
     const mesh = body.breakables[part];
@@ -523,6 +693,18 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     sinceBend += dt;
     if (state.car.damage.version !== bentVersion && sinceBend >= BEND_EVERY) bend(state);
 
+    // THE WEB, opened to wherever the engine has crazed each pane. Read
+    // every frame rather than off the version, because it is alpha on a
+    // buffer that is already built — there is nothing to re-derive, and
+    // `set` does nothing at all when the level has not moved.
+    if (body.cracks) {
+      for (let i = 0; i < GLASS_PANES.length; i++) {
+        const pane = GLASS_PANES[i];
+        if (detached.has(pane)) continue;
+        body.cracks.set(pane, glassCrack(state.car.damage, i));
+      }
+    }
+
     // A bent rim wobbles as it turns: once per turn, either way.
     const flatAt = TUNING.collision.chassis.wheelFlat;
     for (let i = 0; i < body.wheelGroups.length; i++) {
@@ -553,6 +735,16 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
   const dispose = (): void => {
     for (const d of flying) debris.remove(d.object);
     flying.length = 0;
+    // The thrown PANES are gone through separately, because a piece that
+    // came to rest has already left `flying` and is lying in the grass as
+    // scenery — and unlike every other loose piece, its geometry and its
+    // material are this module's rather than the body's.
+    for (const mesh of paneMeshes) {
+      mesh.removeFromParent();
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    paneMeshes.clear();
     for (const w of rolling) debris.remove(w.object);
     rolling.length = 0;
     hubGeo?.dispose();

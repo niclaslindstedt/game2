@@ -1134,10 +1134,11 @@ every solid is a circle, and a hit does several things at once:
   rather than a ring zone, because the ring is a plan view and has no room
   for the one face a roll spends most of its time on. A shell arrival has
   no suspension under it and gets only `air.roll.shellFree` for nothing,
-  which is why a roll strips a car and a jump does not. Roof crush shears
-  every pane of glass first (a shell that has lost its shape cannot hold
-  laminated glass in it), then the mirrors, then the lids; the renderer
-  caves the greenhouse down and over from the same ledger. A ground
+  which is why a roll strips a car and a jump does not. Roof crush crazes
+  every pane of glass at once and takes them first (a shell that has lost
+  its shape cannot hold laminated glass in it), then shears the mirrors,
+  then the lids; the renderer caves the greenhouse down and over from the
+  same ledger. A ground
   arrival across a whole face feeds the wheels through `wheelFromSideLand`
   / `wheelFromRoof` only — the ring's own rates are a point impact's,
   where a solid reaches past the panel into the upright behind it, and the
@@ -1482,13 +1483,44 @@ is left showing is what the panel was covering. Behind a boot lid that is a
 dark bay painted on the deck; behind a BONNET it is a real one, a well cut down
 into the front of the body with an engine standing in it
 (`pwa/src/game/car/engine-bay.ts`), which crumples with the nose the same folds
-do. The four pieces of GLASS — windscreen, backlight, and each flank's windows
-together — shatter rather than fly, between the bumper and the lid
-(`partAt.glass`): the pane is simply gone, the grime film over it with it, and
-the cabin is seen straight into. The two DOORS are the deepest thing on the
+do. The two DOORS are the deepest thing on the
 flank (`partAt.door`, most of the way to the cage): a skin between the door
 seams that tumbles off and leaves the flank behind it painted into the dark of
 the cabin, stripes and all. And the four WHEELS come off their own ledger.
+
+The four pieces of GLASS — windscreen, backlight, and each flank's windows
+together — are the one part of the car that is already damaged before it comes
+off. Everything else here is bolted on until the fold shears it; a pane CRAZES
+toward the crush that finishes it (`glassCrack`, read off the zones around it
+rather than kept as a ledger of its own, so a hand-written wreck and a car that
+crashed its way there agree by construction). A knock that dents a wing leaves a
+chip and two short legs in the corner of the screen; the web fills out as the
+pane comes up on the fold that finishes it (`glass.crazeCurve`), and only the
+hit that carries it to 1 takes the pane out. The zone a pane FACES is worth a
+full share and the two either side of it `glass.oblique`, so a nose driven in
+square is a screen gone where the same fold on one front corner is a screen
+cracked; TEMPERED glass — the flanks and the backlight — crazes `glass.tempered`
+faster than the laminated screen and so spends far less of its life cracked; and
+roof fold crazes all four at once, because a shell that has lost its shape
+cannot hold laminated glass in it. The finishing folds are the ones that always
+finished them: `partAt.glass` on the ring, `partAt.roofGlass` overhead.
+
+What the driver pays for the way there is their STEERING (`glass.viewLoss`),
+and unlike the blast through a screen that is no longer there (`aero.blast`) it
+does not fade with the speed — a web across the glass hides the same corner at
+40 km/h as at 140. The two are never both charged: the cracks left with the
+pane.
+
+When it does let go the pane does not simply stop being drawn. Its own
+triangles are lifted out of the glass buffer with the web still on them and the
+PLATE is thrown clear — at the car's velocity less what tearing it out of its
+bonding cost it (`PANE_BOND` joules against `PANE_MASS`, which is a fixed few
+metres a second off the top, so a car crawling into a wall drops its screen at
+its feet and one at rally pace throws it down the road), plus a small pop along
+the pane's own normal, so a screen goes out over the bonnet and a door window
+goes out sideways without anything having to be told which is which. It falls
+onto the ground it was drawn over, lies flat, and stays there. What is left on
+the car is the grime film gone with it and the cabin seen straight into.
 
 The polygons fold to match, through one displacement field over each
 vertex's rest position (`pwa/src/game/car-crumple.ts`) — the shortcut every
