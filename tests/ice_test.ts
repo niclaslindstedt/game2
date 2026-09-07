@@ -77,14 +77,17 @@ describe("the freeze", () => {
   it("is asked of the BODY's own height, so a tarn goes over before the lake below it", () => {
     // A datum warm enough to leave a low body open and a high one frozen:
     // the freeze is a field, not a switch on the stage.
-    const climate = resolveClimate({ season: "winter", temperature: -4 }, "alpine");
+    const climate = resolveClimate(
+      { season: "winter", temperature: -4 },
+      resolveKnobs({ biome: "alpine" }),
+    );
     expect(waterFrozen(climate, 0)).toBe(false);
     expect(waterFrozen(climate, 300)).toBe(true);
   });
 
   it("leaves every summer country's water open", () => {
     for (const id of Object.keys(BIOMES) as (keyof typeof BIOMES)[]) {
-      const climate = resolveClimate({ season: "summer" }, id);
+      const climate = resolveClimate({ season: "summer" }, resolveKnobs({ biome: id }));
       expect(icyCountry(climate, BIOMES[id].land.zones)).toBe(false);
     }
   });
@@ -94,7 +97,7 @@ describe("the land under a frozen country", () => {
   const knobs = resolveKnobs(KNOBS);
 
   it("hands the route a floor where the summer handed it a lake", () => {
-    const cold = createLandField(7, knobs, resolveClimate(DEEP, "taiga"));
+    const cold = createLandField(7, knobs, resolveClimate(DEEP, knobs));
     const warm = createLandField(7, knobs);
     let onWater = 0;
     for (let x = -1200; x <= 1200; x += 40) {
@@ -118,7 +121,7 @@ describe("the land under a frozen country", () => {
   });
 
   it("lays the road ON the sheet rather than filling up off the bed", () => {
-    const cold = createLandField(7, knobs, resolveClimate(DEEP, "taiga"));
+    const cold = createLandField(7, knobs, resolveClimate(DEEP, knobs));
     for (let x = -1200; x <= 1200; x += 40) {
       for (let z = -1200; z <= 1200; z += 40) {
         const ice = cold.iceAt(x, z);

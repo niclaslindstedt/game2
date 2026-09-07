@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_KNOBS,
   NEUTRAL_INPUT,
   TAPE_FORMAT,
   createTapeRecorder,
@@ -29,6 +30,7 @@ const STAGE: TapeStage = {
   knobs: {
     biome: "taiga",
     peaks: 0.5,
+    altitude: DEFAULT_KNOBS.altitude,
     elevation: 0.5,
     steepness: 0.5,
     water: 0.5,

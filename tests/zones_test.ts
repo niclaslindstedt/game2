@@ -12,7 +12,7 @@
 // arithmetic — which is what lets this suite read them.
 import { describe, expect, it } from "vitest";
 
-import { BIOMES, LAKE_Y, biomeRules, resolveKnobs } from "@engine";
+import { BIOMES, LAKE_Y, biomeRules, resolveKnobs, type StageKnobs } from "@engine";
 
 import { BIOMES as LOOKS } from "../pwa/src/game/biome.ts";
 import {
@@ -27,7 +27,11 @@ import {
  * they are asked is a whole set of knobs rather than a country's name. Every
  * case here is at the dial's default, which is the country each biome row
  * describes — the alpine's own zones, untouched. */
-const dials = (biome?: string) => resolveKnobs(biome === undefined ? {} : { biome });
+const dials = (biome?: string) =>
+  // `resolveKnobs` takes an unknown country at runtime — a stale URL, a save
+  // from a build that had one this does not — and hands back the taiga; the
+  // cast is what lets a test name one ("nowhere") and check that it does.
+  resolveKnobs(biome === undefined ? {} : ({ biome } as Partial<StageKnobs>));
 
 /** A flat ground standing at `y` — no slope, so only the height decides. */
 const flat = (y: number) => (): number => y;

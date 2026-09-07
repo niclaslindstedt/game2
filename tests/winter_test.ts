@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type BiomeId,
   BIOMES,
   CLIMATE,
   NEUTRAL_INPUT,
@@ -36,7 +37,7 @@ import { stageTerrain, stageTrack } from "./support/stages.ts";
 /** A country's dials at their defaults — what `resolveClimate` and the zone
  * readers now take, since R47's ALTITUDE moves both the bands and the rate
  * the air cools at. */
-const dials = (biome: string) => resolveKnobs({ biome });
+const dials = (biome: BiomeId) => resolveKnobs({ biome });
 
 /** The grip the old alpine ice had — the floor the brief puts under every
  * snow: a winter road slides MORE than gravel and LESS than that. */
@@ -135,7 +136,7 @@ describe("the climate", () => {
     expect(snowlineOf({ season: "autumn", temperature: 2 }, alpine)).toBeLessThan(
       alpine.snow as number,
     );
-    expect(snowlineOf(resolveClimate(WINTER, "alpine"), alpine)).toBeLessThan(0);
+    expect(snowlineOf(resolveClimate(WINTER, dials("alpine")), alpine)).toBeLessThan(0);
   });
 
   it("keeps every snow between gravel and the old ice, glazed near freezing and sharp in the cold", () => {
