@@ -14,7 +14,7 @@
 // Sets window.__done so the screenshot tool knows the sheet is on screen.
 
 import * as THREE from "three";
-import type { GameState, RaceEnv, Weather } from "@engine";
+import type { GameState, RaceEnv, Season, Weather } from "@engine";
 
 import { createEnvironment } from "../game/environment.ts";
 import { hourLabel } from "../game/daylight.ts";
@@ -35,6 +35,11 @@ type Row = {
   windSpeed: number;
   /** Which sky draws it. */
   sky: VideoSettings["sky"];
+  /** Which season it stands in — the sheet is a September day unless a row
+   * says otherwise. The night sky reads it: the sphere of stars is offset a
+   * whole turn a year (starfield.ts), so the same clock hour looks out at a
+   * different part of the galaxy in December than it does in September. */
+  season?: Season;
   /** The seeded gust phase — what the clouds are dressed from. */
   gust?: number;
   /** Hold the frame until a strike is at its brightest. */
@@ -57,6 +62,26 @@ const ROWS: Row[] = [
     windSpeed: 1.5,
     sky: "simple",
     gust: 2.3,
+  },
+  // THE NIGHT SKY, which the columns either side of the day only glance at:
+  // one row in midwinter, where the sphere of stars has turned a quarter of
+  // the way round from September's and the Milky Way stands somewhere else
+  // entirely. Shot on both skies, because the band and the field are the
+  // one part of the chart the LOW setting bakes rather than evaluates, and
+  // the only way to know the two agree is to see them stacked.
+  {
+    name: "clear — midwinter, the sky turned",
+    weather: "clear",
+    windSpeed: 1.5,
+    sky: "full",
+    season: "winter",
+  },
+  {
+    name: "clear — midwinter (LOW)",
+    weather: "clear",
+    windSpeed: 1.5,
+    sky: "simple",
+    season: "winter",
   },
   { name: "rain — thin, high deck", weather: "rain", windSpeed: 3.5, sky: "full" },
   { name: "rain — low and leaden", weather: "rain", windSpeed: 6.5, sky: "full" },
@@ -183,16 +208,18 @@ async function main(): Promise<void> {
 
   ROWS.forEach((row, r) => {
     HOURS.forEach((hour, c) => {
+      const season = row.season ?? "autumn";
       const env: RaceEnv = {
         hour,
         weather: row.weather,
-        season: "autumn",
+        season,
         temperature: 12,
         windDir: 0.7,
         windSpeed: row.windSpeed,
         gustPhase: row.gust ?? 0.4,
       };
       state.env = env;
+      (state.track.climate as { season: Season }).season = season;
       environment.setSkyLook(row.sky);
       environment.apply(env);
       // A steady quartering wind, which is what the sheet leans on.

@@ -133,6 +133,12 @@ export type Preset = {
   haloOpacity: number;
   /** 0–1 star opacity. */
   stars: number;
+  /** …and how much of the DIFFUSE night sky shows — the Milky Way and the
+   * galaxies behind it (starfield.ts). Its own number rather than a share
+   * of the stars, because the two die at very different rates: a first
+   * magnitude star is still there in the last of the twilight, and the band
+   * needs a genuinely black sky before it is there at all. */
+  galaxy: number;
   /** What a cloud in full sun is coloured this hour, and what its shaded
    * underside is. By day the two are white and a pale grey; at sunset the
    * lit face is orange and the shade a purple-grey, and the layered sky
@@ -179,6 +185,7 @@ type Rung = {
   haloSize: number;
   haloOpacity: number;
   stars: number;
+  galaxy: number;
   cloud: number;
   cloudShade: number;
   cloudOpacity: number;
@@ -223,6 +230,7 @@ const DARK: Rung = {
   haloSize: 95,
   haloOpacity: 0.4,
   stars: 1,
+  galaxy: 1,
   cloud: 0x2b3a5a,
   cloudShade: 0x1a2438,
   cloudOpacity: 0.85,
@@ -247,6 +255,7 @@ const DUSK_TWILIGHT: Rung = {
   haloSize: 280,
   haloOpacity: 0.32,
   stars: 0.55,
+  galaxy: 0.4,
   cloud: 0xe0868e,
   cloudShade: 0x3a3054,
   cloudOpacity: 1,
@@ -271,6 +280,7 @@ const DAWN_TWILIGHT: Rung = {
   haloSize: 240,
   haloOpacity: 0.3,
   stars: 0.5,
+  galaxy: 0.34,
   cloud: 0xf0a898,
   cloudShade: 0x46405c,
   cloudOpacity: 1,
@@ -299,6 +309,7 @@ const DUSK_SET: Rung = {
   haloSize: 210,
   haloOpacity: 0.6,
   stars: 0.12,
+  galaxy: 0,
   cloud: 0xff9a74,
   cloudShade: 0x7e5a80,
   cloudOpacity: 1,
@@ -324,6 +335,7 @@ const DAWN_SET: Rung = {
   haloSize: 200,
   haloOpacity: 0.55,
   stars: 0.1,
+  galaxy: 0,
   cloud: 0xffc0a8,
   cloudShade: 0x8a7890,
   cloudOpacity: 1,
@@ -348,6 +360,7 @@ const DUSK_LOW: Rung = {
   haloSize: 170,
   haloOpacity: 0.5,
   stars: 0,
+  galaxy: 0,
   cloud: 0xffd0b0,
   cloudShade: 0xa08898,
   cloudOpacity: 1,
@@ -372,6 +385,7 @@ const DAWN_LOW: Rung = {
   haloSize: 170,
   haloOpacity: 0.55,
   stars: 0,
+  galaxy: 0,
   cloud: 0xffd9c0,
   cloudShade: 0xa89aa8,
   cloudOpacity: 1,
@@ -396,6 +410,7 @@ const MORNING: Rung = {
   haloSize: 130,
   haloOpacity: 0.4,
   stars: 0,
+  galaxy: 0,
   cloud: 0xfff4ea,
   cloudShade: 0xc8ccd8,
   cloudOpacity: 1,
@@ -422,6 +437,7 @@ const DAY: Rung = {
   haloSize: 110,
   haloOpacity: 0.35,
   stars: 0,
+  galaxy: 0,
   cloud: 0xffffff,
   cloudShade: 0xdde4ee,
   cloudOpacity: 1,
@@ -542,6 +558,14 @@ function clearSky(sun: SunPlace): Preset {
   const sunAzimuth = sun.azimuth + Math.PI * handed;
   return {
     ...rung,
+    // HOW VISIBLE THE BAND IS is far steeper than any pair of rungs can
+    // blend: a sky twice as bright does not show half the Milky Way, it
+    // shows almost none of it, because the band is a glow a shade over the
+    // sky's own floor and the twilight it is competing with is not. So the
+    // rungs author how much band a sky HAS and this is the curve between
+    // them — at the bottom of the ladder the whole of it, and at nautical
+    // twilight, four degrees up the ladder, a fifth.
+    galaxy: rung.galaxy * rung.galaxy * rung.galaxy,
     sunElevation,
     sunAzimuth,
     sunUp: sun.elevation,
@@ -648,6 +672,9 @@ function weathered(
   p.haloSize *= 1.5;
   p.discSize = 0;
   p.stars *= 0.2 * through;
+  // The band goes first and goes further: it is a glow a shade over the
+  // sky's own black, and the thinnest sheet of cloud is brighter than it.
+  p.galaxy *= 0.06 * through;
   p.cloud = toward(p.cloud);
   p.cloudShade = toward(p.cloudShade);
   const overheadLit = mixHex(look.overhead[0], look.overhead[1], cover);
