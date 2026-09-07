@@ -27,14 +27,19 @@ import {
   advanceLoad,
   createLoad,
   loadBudgetMs,
+  loadPhase,
+  loadTimes,
   type LoadStep,
 } from "../pwa/src/game/race-loader.ts";
 
-/** A step that takes `slices` frames to finish, counting the calls it got. */
-function slow(id: string, slices: number, seen: string[]): LoadStep {
+/** A step that takes `slices` frames to finish, counting the calls it got.
+ * Every step shares one label unless a test is about the PHASES, so the
+ * sequencing suites below are not also measuring the phase-boundary yield. */
+function slow(id: string, slices: number, seen: string[], label = "work"): LoadStep {
   let left = slices;
   return {
     id,
+    label,
     run: () => {
       seen.push(id);
       left -= 1;
@@ -105,8 +110,8 @@ describe("the load's sequencing", () => {
       return () => (at += 10);
     })();
     const job = createLoad([
-      { id: "road", run: () => false },
-      { id: "drive", run: () => false },
+      { id: "road", label: "work", run: () => false },
+      { id: "drive", label: "work", run: () => false },
     ]);
     while (advanceLoad(job, () => true, clock));
     // Ten a call, one call each.
@@ -123,6 +128,175 @@ describe("the load's sequencing", () => {
       () => 0,
     );
     expect(seen).toEqual(["road"]);
+  });
+});
+
+describe("what the card says the load is doing", () => {
+  it("stops at a phase boundary so the card can name what is coming", () => {
+    // Without this the tail of a load — arming a ghost, arming a tape,
+    // compiling every shader the stage needs — goes through in one slice, and
+    // the phase that covers it is never on screen at all: the card would sit
+    // on `(4/5)` through the longest indivisible call of the lot.
+    const seen: string[] = [];
+    const job = createLoad([
+      slow("ghost", 1, seen, "Warming up"),
+      slow("tape", 1, seen, "Warming up"),
+      slow("warm", 1, seen, "Warming up"),
+      slow("done", 1, seen, "Ready"),
+    ]);
+    // A frame with all the budget in the world still stops where the words
+    // change — and takes the three steps that share a label together.
+    expect(
+      advanceLoad(
+        job,
+        () => true,
+        () => 0,
+      ),
+    ).toBe(true);
+    expect(seen).toEqual(["ghost", "tape", "warm"]);
+    expect(loadPhase(job)).toMatchObject({ label: "Ready", at: 2, of: 2 });
+  });
+
+  it("counts PHASES, not steps — neighbours sharing a label are one line", () => {
+    // The split into steps is about what can be cut up; the card's count is
+    // about what a person can read. Arming a ghost and arming a tape are two
+    // calls and one thing being waited for.
+    const seen: string[] = [];
+    const job = createLoad([
+      slow("road", 1, seen, "Plotting the route"),
+      slow("ghost", 1, seen, "Warming up"),
+      slow("tape", 1, seen, "Warming up"),
+      slow("warm", 1, seen, "Warming up"),
+    ]);
+    expect(loadPhase(job)).toMatchObject({ label: "Plotting the route", at: 1, of: 2 });
+  });
+
+  it("walks the count forward as the steps are paid for", () => {
+    const seen: string[] = [];
+    const job = createLoad([
+      slow("road", 1, seen, "one"),
+      slow("world", 1, seen, "two"),
+      slow("drive", 2, seen, "three"),
+    ]);
+    const spent = () => false; // one slice per frame
+    const at: string[] = [];
+    at.push(`${loadPhase(job).label} ${loadPhase(job).at}/${loadPhase(job).of}`);
+    while (advanceLoad(job, spent, () => 0)) {
+      at.push(`${loadPhase(job).label} ${loadPhase(job).at}/${loadPhase(job).of}`);
+      expect(at.length).toBeLessThan(20);
+    }
+    expect(at).toEqual(["one 1/3", "two 2/3", "three 3/3", "three 3/3"]);
+  });
+
+  it("holds at the last phase once the load is done, never (n+1)/n", () => {
+    // The frame the card lifts on still draws it, and `(4/3)` on the way out
+    // would be the last thing the player read.
+    const seen: string[] = [];
+    const job = createLoad([slow("road", 1, seen, "one"), slow("warm", 1, seen, "two")]);
+    while (
+      advanceLoad(
+        job,
+        () => true,
+        () => 0,
+      )
+    );
+    expect(job.at).toBe(job.steps.length);
+    expect(loadPhase(job)).toMatchObject({ label: "two", at: 2, of: 2 });
+  });
+});
+
+describe("the bar under the words", () => {
+  const seen: string[] = [];
+  /** A step that can count itself: `parts` slices, and it says which it is on. */
+  const counted = (id: string, parts: number, label: string): LoadStep => {
+    let at = 0;
+    return {
+      id,
+      label,
+      progress: () => at / parts,
+      run: () => (at += 1) < parts,
+    };
+  };
+
+  it("offers a MEASURED fraction only where the work can count itself", () => {
+    const job = createLoad([slow("road", 1, seen, "Plotting"), counted("crews", 4, "Entering")]);
+    // Nothing inside compiling a road can be counted, so the card is told so
+    // rather than handed a number somebody made up.
+    expect(loadPhase(job).done).toBe(null);
+    advanceLoad(
+      job,
+      () => false,
+      () => 0,
+    );
+    expect(loadPhase(job).done).toBe(0);
+    advanceLoad(
+      job,
+      () => false,
+      () => 0,
+    );
+    expect(loadPhase(job).done).toBeCloseTo(0.25, 5);
+  });
+
+  it("weighs a phase's steps equally, a finished one whole", () => {
+    // "Entering the field" is the crews counted out of the entry list and
+    // then one call to put them on the road; the bar has to cross the seam
+    // between them without going backwards.
+    const job = createLoad([counted("crews", 2, "Entering"), slow("enter", 1, seen, "Entering")]);
+    const step = () =>
+      advanceLoad(
+        job,
+        () => false,
+        () => 0,
+      );
+    step();
+    expect(loadPhase(job).done).toBeCloseTo(0.25, 5); // half of the first step
+    step();
+    expect(loadPhase(job).done).toBeCloseTo(0.5, 5); // crews in, enter to go
+    step();
+    expect(loadPhase(job).done).toBe(1);
+  });
+
+  it("has nothing to estimate from until a machine has run a load", () => {
+    const job = createLoad([slow("road", 1, seen, "Plotting")]);
+    expect(loadPhase(job).expectedMs).toBe(null);
+  });
+
+  it("estimates a phase at what ALL of its steps cost last time", () => {
+    const job = createLoad(
+      [
+        slow("ghost", 1, seen, "Warming up"),
+        slow("tape", 1, seen, "Warming up"),
+        slow("warm", 1, seen, "Warming up"),
+      ],
+      { ghost: 20, tape: 5, warm: 400 },
+    );
+    expect(loadPhase(job).expectedMs).toBe(425);
+  });
+
+  it("refuses to estimate a phase it only half remembers", () => {
+    // A build that adds a step to a phase leaves last time's numbers covering
+    // part of it, and a bar run against a fraction of the work would fill
+    // early and then sit at its ceiling for the rest.
+    const job = createLoad(
+      [slow("ghost", 1, seen, "Warming up"), slow("warm", 1, seen, "Warming up")],
+      { ghost: 20 },
+    );
+    expect(loadPhase(job).expectedMs).toBe(null);
+  });
+
+  it("only remembers a load that RAN TO THE END", () => {
+    // Half a step's cost, written down, tells the next card the work takes
+    // half as long as it does — and the bar it draws is wrong on every load
+    // after it.
+    const clock = (() => {
+      let at = 0;
+      return () => (at += 10);
+    })();
+    const job = createLoad([slow("road", 1, seen, "one"), slow("warm", 1, seen, "two")]);
+    advanceLoad(job, () => false, clock);
+    expect(loadTimes(job)).toEqual({});
+    while (advanceLoad(job, () => true, clock));
+    expect(loadTimes(job)).toEqual({ road: 10, warm: 10 });
   });
 });
 

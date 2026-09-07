@@ -100,11 +100,15 @@ import {
 } from "./game/split-records.ts";
 import { warmPortraits } from "./game/car-portraits.ts";
 import { LoadingScreen } from "./game/loading-screen.tsx";
+import { loadedTimes, rememberTimes } from "./game/load-times.ts";
 import {
   advanceLoad,
   createLoad,
   loadBudgetMs,
+  loadPhase,
+  loadTimes,
   type LoadJob,
+  type LoadPhase,
   type LoadStep,
 } from "./game/race-loader.ts";
 import type { SheetRow } from "./game/results-sheet.tsx";
@@ -115,6 +119,7 @@ import {
   drainField,
   enterCrew,
   fieldTraced,
+  fieldWritten,
   fieldResults,
   livePlace,
   onRoad,
@@ -234,6 +239,8 @@ import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
 import { playUi } from "./game/audio/ui.ts";
 import {
   armMenuMusic,
+  coastMusic,
+  musicPlaying,
   pauseMusic,
   playMusic,
   resumeMusic,
@@ -1095,6 +1102,10 @@ export function App() {
    * road over — the run is LIVE under a leaving card, which is what makes
    * the lights the first thing a player sees rather than the second. */
   const [loading, setLoading] = useState<boolean | "leaving">(false);
+  /** What the loading card says it is doing, and where that sits in the count
+   * (`race-loader.ts`). Null before the first load of the session, and while
+   * the same card is standing in for a lost GPU context. */
+  const [cardPhase, setCardPhase] = useState<LoadPhase | null>(null);
   /** True while the GPU has the WebGL context and the page does not — see
    * `gpu-context.ts`. Nothing can be drawn, so the frame loop holds and the
    * cover goes up; the ref is what the loop reads, since the loop is built
@@ -1169,6 +1180,12 @@ export function App() {
    * after the freeze it exists to cover — which is the bug, with an extra
    * component. So the driver spends one frame doing nothing at all. */
   const loadShownRef = useRef(false);
+  /** Which phase of the load the card is naming (`loadPhase`). Held in a ref
+   * beside the state because the loop reads it every frame and must be able
+   * to tell a phase CHANGE from the many frames still on the same one — both
+   * so the card is re-rendered once per phase rather than once per frame, and
+   * because a change is what buys the phase a frame to be drawn in. */
+  const cardPhaseRef = useRef<LoadPhase | null>(null);
   /** R30 — the field being RUN HOME behind the results card. The player is
    * across the line, but the crews still out there have places worth points
    * to somebody, so they are driven to the finish off the card's own frames
@@ -1623,8 +1640,15 @@ export function App() {
     setSnap(takeSnapshot(state, paceRef.current, null, null, bookRef.current));
     // The score is a function of the stage — its country, its sky, its
     // shape — so it is picked here, where the stage is. Behind a menu the
-    // stage is scenery under the menu's own theme.
-    if (menuRef.current === null) playMusic(stageTrack(state));
+    // stage is scenery under the menu's own theme, and behind the LOADING
+    // CARD the player has not arrived anywhere yet either: whatever they
+    // pressed start under carries them across, and `endLoad` hands over at
+    // the lights. Silence is the one thing worth interrupting a load for —
+    // a restart from the results card comes in with the finish sting having
+    // stopped the score, and there is nothing to carry.
+    if (menuRef.current === null && (loadRef.current === null || !musicPlaying())) {
+      playMusic(stageTrack(state));
+    }
   };
   const applyStageRef = useRef(applyStage);
   applyStageRef.current = applyStage;
@@ -1633,6 +1657,12 @@ export function App() {
    * the menu for a run — and every restart — goes through here, so a stage
    * re-lit in the rain gets the rain's score without a rebuild. */
   const stageMusic = (): void => {
+    // Not while a race is being stood up: the card is not a place the player
+    // has arrived at, and `endLoad` is what hands the theme over once it
+    // lifts. Every path out of the menu goes through here and every one of
+    // them is a load, so this is the guard that keeps the menu's theme
+    // playing across the card.
+    if (loadRef.current) return;
     const state = gameRef.current;
     playMusic(state ? stageTrack(state) : "taiga");
   };
@@ -1924,13 +1954,17 @@ export function App() {
     clearField();
     let build: FieldBuild | null = null;
     const steps: LoadStep[] = [
-      { id: "road", run: () => (ensureTrack(spec), false) },
+      { id: "road", label: "Plotting the route", run: () => (ensureTrack(spec), false) },
       // The car, the world, the light and the score. `applyStage` finds the
       // road above already compiled and cached, so what is left here is the
       // game state and the renderer's world.
-      { id: "world", run: () => (applyStage(spec, true), false) },
+      { id: "world", label: "Building the country", run: () => (applyStage(spec, true), false) },
       {
         id: "crews",
+        label: "Entering the field",
+        // The entry list is the denominator, and the crews come off it one at
+        // a time — the one phase of the load that can count itself exactly.
+        progress: () => (build ? build.next / build.entries.length : 0),
         run: () => {
           build ??= openFieldFor(spec, mode, plan);
           // A run with nobody entered — a time trial, the training ground,
@@ -1939,28 +1973,52 @@ export function App() {
           return build !== null && enterCrew(build);
         },
       },
-      { id: "enter", run: () => (build && installField(build), false) },
+      {
+        id: "enter",
+        label: "Entering the field",
+        run: () => (build && installField(build), false),
+      },
       // R29 — every crew's whole stage, written down before the lights. The
       // one step that is genuinely long, and the one that cuts cleanly: the
       // engine has taken a budget for it since the establishing shot was
       // what hid it.
       {
         id: "drive",
+        label: "Timing the opposition",
+        // Road written, not crews finished — every crew is written a slice at
+        // a time, so they all reach the line together and a count of finished
+        // ones would sit at nothing and then jump (`fieldWritten`).
+        progress: () => {
+          const field = fieldRef.current;
+          return field === null ? 0 : fieldWritten(field);
+        },
         run: (budget) => {
           const field = fieldRef.current;
           return field !== null && catchUpFrom(field, budget);
         },
       },
-      { id: "ghost", run: () => (armGhost(spec, mode, levelId), false) },
-      { id: "tape", run: () => (armTape(spec, mode, levelId), false) },
+      { id: "ghost", label: "Warming up", run: () => (armGhost(spec, mode, levelId), false) },
+      { id: "tape", label: "Warming up", run: () => (armTape(spec, mode, levelId), false) },
       // Every shader the stage is about to need, compiled where there is
       // nothing to stutter. Last, because it compiles what is IN the scene
       // and the field's cars are part of it.
-      { id: "warm", run: () => (rendererRef.current?.warm(), false) },
+      { id: "warm", label: "Warming up", run: () => (rendererRef.current?.warm(), false) },
     ];
-    loadRef.current = createLoad(steps);
+    // What the same phases cost on this machine last time, for the three of
+    // them that have nothing inside to count (`load-times.ts`).
+    const job = createLoad(steps, loadedTimes());
+    loadRef.current = job;
     loadDoneRef.current = done ?? null;
     loadShownRef.current = false;
+    // The first phase is on the card from its FIRST paint: the frame the card
+    // is given to be drawn in (`loadShownRef`) is the same frame the line has
+    // to be right on, because the step after it holds the thread.
+    cardPhaseRef.current = loadPhase(job);
+    setCardPhase(cardPhaseRef.current);
+    // The frames are about to go away for seconds at a time; the score has to
+    // be written down before they do, or it breaks up over the card
+    // (`coastMusic`).
+    coastMusic(true);
     setLoading(true);
   };
 
@@ -1974,7 +2032,17 @@ export function App() {
     loadDoneRef.current = null;
     setLoading("leaving");
     window.setTimeout(() => setLoading(false), LOAD_FADE_MS);
+    // The frames are back, so the score stops booking ahead — and only NOW
+    // does the stage's own theme come in. Whatever carried the player across
+    // the card plays out its last booked bar and this one starts where that
+    // ends (`TrackPlayer.play`), so the change of theme lands with the lights
+    // instead of arriving on top of the one it replaces.
+    coastMusic(false);
+    stageMusicRef.current();
     if (job) {
+      // …and what it cost this time, for the next card's bars. Only off a
+      // load that ran to the end; `loadTimes` drops an abandoned one.
+      rememberTimes(loadTimes(job));
       // What the load cost, step by step — the one place the shape of one is
       // visible, and the thing to read when a stage starts taking too long.
       debugLog(
@@ -2002,7 +2070,6 @@ export function App() {
      * see `startBenchmark`. */
     done?: () => void,
   ): void => {
-    playUi("start");
     // The time to beat comes out of the book before the run starts, not
     // after: a clock with nothing to chase is only a stopwatch, and a
     // record read back after the finish has already been written is one
@@ -2011,11 +2078,6 @@ export function App() {
     // A new run inherits nothing from the last one: the engine's note would
     // otherwise glide from wherever the previous car left it.
     audioRef.current?.reset();
-    // The finish sting silenced the score (see the finish handler). Starting
-    // the next stage from the results card never passes through the menu, so
-    // the theme is re-armed here rather than by the menu's own effect; it is
-    // a no-op when the score is already the one playing.
-    stageMusicRef.current();
     setPaused(false);
     setRun({ mode, levelId });
     runRef.current = { mode, levelId };
@@ -2768,7 +2830,6 @@ export function App() {
         // from the results card never passes through the menu that would put
         // it back. Both are no-ops mid-race, which is the other way in here.
         audioRef.current?.reset();
-        stageMusicRef.current();
         // …and it LOADS, exactly as a fresh start does. A restart rebuilds
         // the world and re-enters the field, which means it re-drives every
         // crew's whole stage: the same seconds a start costs, and the same
@@ -3531,6 +3592,28 @@ export function App() {
             loadShownRef.current = true;
             return;
           }
+          // …and one frame for each PHASE after it, for the same reason and
+          // read the same way round: the line has to name the work that is
+          // about to happen, not the work that just did. `warm` compiles
+          // every shader the stage needs in one indivisible call, so a phase
+          // announced on the frame it starts is one the player reads after it
+          // is over — or, when the steps behind it all finish inside a single
+          // slice, never reads at all.
+          const phase = loadPhase(load);
+          if (phase.at !== cardPhaseRef.current?.at) {
+            cardPhaseRef.current = phase;
+            setCardPhase(phase);
+            return;
+          }
+          // …and the BAR moves without buying a frame of its own. A phase
+          // that counts itself reports a new fraction every frame, which is
+          // a re-render per frame behind a card nobody is reading that
+          // closely: redrawn on the hundredth of the bar instead.
+          const was = cardPhaseRef.current?.done;
+          if (phase.done !== null && (was == null || Math.abs(phase.done - was) >= 0.01)) {
+            cardPhaseRef.current = phase;
+            setCardPhase(phase);
+          }
           // …and how much of THIS frame it may have, off how long the
           // frames are actually coming (`loadBudgetMs`).
           const deadline = performance.now() + loadBudgetMs(dtFrame * 1000);
@@ -4102,7 +4185,10 @@ export function App() {
           A loss part-way through a load holds the card up and cancels its
           fade — the road is not ready to be handed over to anybody. */}
       {(loading !== false || gpuLost) && (
-        <LoadingScreen leaving={loading === "leaving" && !gpuLost} />
+        <LoadingScreen
+          leaving={loading === "leaving" && !gpuLost}
+          phase={loading === false ? null : cardPhase}
+        />
       )}
       {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}
       <UpdateButton

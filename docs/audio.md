@@ -37,7 +37,7 @@ through a soft curve.
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pwa/src/lib/voice.ts`               | The vocabulary: every parameter a sound may be written in, the `Synth` interface, and the `Layer` a bed is made of. **DOM-free**, so the banks, the router, the beds and the tests can describe a sound without importing a browser. |
 | `pwa/src/lib/synth.ts`               | The instrument. `tone()` and `noise()` for one-shots, `layer()` for the beds, one shared echo bus, a master limiter, and the whole audio-context lifecycle.                                                                          |
-| `pwa/src/lib/tracker.ts`             | The music sequencer: patterns through an order, booked on the audio clock with a lookahead.                                                                                                                                          |
+| `pwa/src/lib/tracker.ts`             | The music sequencer: patterns through an order, booked on the audio clock with a settable lookahead, and one theme handed to the next where the last one's booking ends.                                                             |
 | `pwa/src/game/audio/bus.ts`          | One synth, two volume-scaled views so the options screen can mix effects and music independently.                                                                                                                                    |
 | `pwa/src/game/audio/bank.ts`         | Every discrete sound the CAR makes, as data — and `RUN_BANK`, the car and the stage served together.                                                                                                                                 |
 | `pwa/src/game/audio/bank-stage.ts`   | Every discrete sound the STAGE makes: the lights, the split boards, the line, the crowd, the blocks, the sky.                                                                                                                        |
@@ -51,7 +51,7 @@ through a soft curve.
 | `pwa/src/game/audio/rack.ts`         | The plumbing every bed shares: build a layer, rebuild one whose context died, steer it.                                                                                                                                              |
 | `pwa/src/game/audio/drive-bed.ts`    | The scheduler: the state, once a frame, into every layer's target — and the cues nothing reports (the lights, the lift's crackle, the wipers, the whistle).                                                                          |
 | `pwa/src/game/audio/music-pick.ts`   | Which score a stage gets, from its country, its sky and the shape of its road.                                                                                                                                                       |
-| `pwa/src/game/audio/music.ts`        | The single player: which theme is up, and the per-track dynamic import.                                                                                                                                                              |
+| `pwa/src/game/audio/music.ts`        | The single player: which theme is up, the per-track dynamic import, and the wide booking horizon a race being stood up is carried across on.                                                                                         |
 | `pwa/src/game/audio/scores/`         | The scores themselves, over a shared `kit.ts` of figures and patches.                                                                                                                                                                |
 
 ## An event, a cue, or a bed
@@ -418,6 +418,30 @@ Music sits well under the effects (lead ~0.028, bass ~0.05, pads ~0.011, hats
 the event. The stage themes are written to stay OUT of the bands the car owns
 — their weight is in the mid, and their basses are short and plucked rather
 than sustained.
+
+### Changing from one to the next
+
+Nothing booked can be taken back: a note handed to WebAudio sounds at the time
+it was given, whatever happens next. So a theme swapped in at "now" plays
+underneath whatever the last one still has in the diary — two arrangements at
+two tempos, for as far ahead as the sequencer had booked. `play()` therefore
+anchors the incoming track on the outgoing one's own next step: the last note
+of one theme, then the first of the next, with no overlap and no gap.
+
+That rule is also what lets the booking horizon move. The sequencer buys its
+own horizon with the tick's punctuality — a tick that arrives late widens it
+to cover that gap twice over, decaying back as they come good — which covers a
+stall nobody could have predicted, and cannot cover the FIRST one. A load is
+nothing but first ones: it blocks the main thread in single indivisible calls,
+and while it is blocked the 90 ms timer does not fire at all. Measured on a
+desktop the loading card's longest block is about three and a half seconds and
+the timer has gone five without a tick, so the theme would be silent for most
+of a load. `coastMusic` therefore raises a FLOOR of three seconds under the
+horizon for exactly as long as the card is up: the notes are in the audio
+thread's diary before the frames go away, and the menu's theme carries the
+player across the card unbroken. The stage's own theme is not claimed until
+`endLoad`, so a load never changes what is playing — the change lands with the
+lights instead.
 
 ## When audio is allowed to start
 

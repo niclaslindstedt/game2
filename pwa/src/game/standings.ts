@@ -28,6 +28,7 @@ export {
   enterCrew,
   fieldResults,
   fieldTraced,
+  fieldWritten,
   livePlace,
   onRoad,
   openField,

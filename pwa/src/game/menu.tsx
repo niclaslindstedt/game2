@@ -813,7 +813,6 @@ export function PauseMenu({
           type="button"
           className="hud-pause-act"
           onClick={() => {
-            playUi("start");
             onRestart();
           }}
         >

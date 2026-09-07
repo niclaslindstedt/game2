@@ -6677,6 +6677,107 @@ a.menu-version:focus-visible {
     -1px -1px 0 var(--hud-shadow);
 }
 
+/* What the load is doing, under the word. Quieter than LOADING above it —
+   the word is the card's title and this is its running commentary, so the
+   two must not compete for the same read. */
+.loading-step {
+  margin: 0;
+  font-weight: 600;
+  font-size: clamp(0.7rem, 2.2vmin, 0.95rem);
+  letter-spacing: 0.06em;
+  /* The line is replaced a handful of times per load and each phase is a
+     different length, so it is centred on the card rather than laid out from
+     one edge; nothing else moves as it changes. */
+  text-align: center;
+  color: rgb(255 255 255 / 0.78);
+  text-shadow: 1px 1px 0 var(--hud-shadow);
+  /* Tabular figures keep `(3/5)` from stepping sideways as the digits change. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* THE PHASE'S OWN BAR. Everything that moves in here is a transform, because
+   the phases that most need a bar hold the main thread for seconds at a time
+   and a width would freeze with it (`loading-screen.tsx`). */
+.loading-bar {
+  width: clamp(9rem, 34vmin, 17rem);
+  height: 0.3rem;
+  border-radius: 0.15rem;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.18);
+}
+
+.loading-bar-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: rgb(255 255 255 / 0.9);
+  /* Grown from the left edge rather than the middle, and laid out at full
+     width so the scale is the only thing that ever changes. */
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* MEASURED: the work counted itself, so the fill is put exactly there. The
+   ease covers the step between two readings without ever running ahead of
+   one — the crews arrive in fourteenths, and the bar should not tick. */
+.loading-bar-measured .loading-bar-fill {
+  transition: transform 180ms linear;
+}
+
+/* ESTIMATED: no reading, but a remembered duration to run against. The
+   duration is set per phase from `load-times.ts`; the ceiling is the
+   card's, handed in as a custom property. */
+.loading-bar-estimated .loading-bar-fill {
+  animation: load-estimate linear forwards;
+}
+
+@keyframes load-estimate {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(var(--load-fill, 0.9));
+  }
+}
+
+/* SWEEPING: nothing to claim at all, so the bar says only that work is
+   happening. A short band crossing an empty track reads as motion without
+   reading as a fraction. */
+.loading-bar-sweeping .loading-bar-fill {
+  width: 32%;
+  transform: translateX(-110%) scaleX(1);
+  transform-origin: center;
+  animation: load-sweep 1.15s ease-in-out infinite;
+}
+
+@keyframes load-sweep {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(420%);
+  }
+}
+
+/* A card is not a place to insist on motion. Under reduced motion the sweep
+   holds still as a dim half-bar — it still says "working, and not claiming a
+   number" — and the estimate stops pretending to a clock, which leaves the
+   measured bars as the only ones that move, on readings that are real. */
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar-sweeping .loading-bar-fill,
+  .loading-bar-estimated .loading-bar-fill {
+    animation: none;
+  }
+
+  .loading-bar-sweeping .loading-bar-fill {
+    width: 100%;
+    transform: scaleX(0.5);
+    transform-origin: left center;
+    background: rgb(255 255 255 / 0.45);
+  }
+}
+
 .splash {
   position: fixed;
   inset: 0;
