@@ -285,7 +285,16 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   let lensGeo: THREE.BufferGeometry | null = null;
   let lenses: THREE.Mesh | null = null;
   if (!l.empty) {
-    lensMat = new THREE.MeshBasicMaterial({ name: LENS_MATERIAL, vertexColors: true });
+    // Unfogged, for the reason it is exempt from the environment's tint
+    // (car-mesh.ts): a lens is the one surface on a car that gets BRIGHTER as
+    // the light goes, and the height fog grafted onto every material
+    // (height-fog.ts) mixes the night air into it hard enough at chase range
+    // to take a burning lamp back to dull plastic.
+    lensMat = new THREE.MeshBasicMaterial({
+      name: LENS_MATERIAL,
+      vertexColors: true,
+      fog: false,
+    });
     lensGeo = l.geometry();
     lenses = new THREE.Mesh(lensGeo, lensMat);
     lenses.castShadow = true;

@@ -401,6 +401,16 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       transparent: true,
       opacity: opacity * fade,
       blending: THREE.AdditiveBlending,
+      // A LAMP IS LIGHT, AND LIGHT IS NOT FOGGED. `installHeightFog`
+      // (height-fog.ts) replaces three.js's global fog ShaderChunks, so every
+      // material that has not opted out — MeshBasicMaterial included — gets
+      // the night air mixed into it. On an ADDITIVE bloom that is wrong
+      // twice over: the glow is what the lamp throws INTO the air ahead of
+      // the car, not a surface being seen through it, and the air it was
+      // being mixed toward is the darkest thing in the frame. It is why the
+      // blooms have never read after dark — a pure white quad came back
+      // GREY, and no amount of colour or opacity could win that back.
+      fog: false,
       depthWrite: false,
       // Not culled: the quad is a glow standing off the lamp's face, and
       // which way its winding happens to face is not a fact worth losing a
