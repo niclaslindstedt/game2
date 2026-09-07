@@ -449,6 +449,17 @@ throw the car at a corner on the lever and get no smoke, no dust and no
 counter for it. Sized in the surface, tarmac drifts at tarmac angles: fewer
 degrees than gravel, and really happening.
 
+...and how many fewer is partly the LAYOUT's, which is the one thing about a
+sealed road that is not the same for all three cars (`surfaceBreakawayFor`,
+`drivetrain[].sealedSlip`). A driven rear axle spins its tyres up against
+paved grip and supplies the angle the surface itself refuses everybody else,
+so the saloon takes better than half of tarmac's shortfall against gravel
+back and drifts a paved corner about as freely as the hatch drifts a loose
+one — smoke, tyre song and all. The hatch and the works sedan take none of
+it: asked for an angle on tarmac, driven front wheels wash the nose wide.
+The hatch is still the FASTEST car on a sealed road, on its rubber; it is
+just not the one playing there.
+
 So a paved corner is DRIVEN round, and the drifts that do happen are the
 ones you committed to — entered hot, flicked, or pulled on the handbrake —
 and they are short and smoky rather than a rally angle carried to the exit.
@@ -1601,22 +1612,61 @@ What the layout decides:
   a front-driver understeers up to the limit and gathers itself up quickly;
   a rear-driver has gone before it gets there and hangs on afterwards.
 - **How far the slide DEVELOPS once it has started** (`depth`, 0..1 against
-  the rear-driver's fully developed one, which is the 1). Where it begins
+  `drift.angleSpan`, the reference slide — no layout sits AT it). Where it begins
   and how deep it goes are different questions: a front axle that runs out
   of grip WASHES WIDE, so the hatch crosses the same threshold and then
-  holds well under half the angle the saloon does at the same lock, on a
-  line a third wider. Reaching a real angle in it costs a MOVE — a flick, a
-  trailed brake or the lever — and what each of those is worth is the
-  `flickDepth` / `brakeDepth` / `leverDepth` group above: they lift this
-  ceiling toward 1 for as long as the weight is off the rear. Never set over
-  1: an asked slide above the carried one pins `releasing` at zero and the
-  exit stops existing.
+  holds around three quarters of the angle the saloon does at the same lock,
+  on a line half again as wide. Reaching a real angle in it costs a MOVE — a
+  flick, a trailed brake or the lever — and what each of those is worth is
+  the `flickDepth` / `brakeDepth` / `leverDepth` group above: they lift this
+  ceiling toward the layout's `cap` for as long as the weight is off the
+  rear. Never set over 1: an asked slide above the carried one pins
+  `releasing` at zero and the exit stops existing.
+
+  The three sit CLOSE together on purpose — 0.42 / 0.62 / 0.70 — and the
+  roster used to spread 0.42 / 0.75 / 1. Real layouts differ far less in the
+  angle they can be got to than in what it costs to get there and what holds
+  them once they are, and a roster whose ends sat two to one apart in the
+  same corner had one car that flew and one nobody could hold: a flick put
+  48° into the saloon against the hatch's 29°, arriving in a tenth of a
+  second off a move a driver makes into every third corner. What separates
+  the cars now is which PEDAL rotates them, which GROUND suits them, and how
+  much a move buys — not how far sideways they will go.
+
 - **How much a TRAILED BRAKE is worth to it** (`brake`, × `drift.brakeDepth`
   and `grip.brakeYaw`). Biggest on the front-driver, whose loaded axle is at
   the front, and which has nothing else: the throttle only ever pulls it
   straight, so the brake is what turns it in. Smallest on the rear-driver —
   not because the brake does less, but because a rear axle already loose on
   the throttle has nothing left for it to unstick.
+- **WHICH GROUND SUITS IT**, which is where the roster's identities now
+  live, and both halves are stated once in `limits.ts` so the physics and
+  the bot read the same number.
+
+  A driven REAR axle has a tarmac vocabulary the others do not
+  (`sealedSlip`, in `surfaceBreakawayFor`). What makes a sealed road's
+  breakaway small is that the rubber peaks a few degrees off straight and
+  falls away past it, so there is nothing to hang the car out ON — and a
+  driven rear supplies that itself by spinning the tyres up against grip
+  that is genuinely there, which is the one thing an undriven axle cannot do
+  and a driven FRONT answers by washing the nose wide. So the saloon takes
+  better than half of the sealed road's shortfall against gravel back and
+  the other two take none: on tarmac it holds about the angle the hatch
+  holds on GRAVEL, where both other layouts get a paved section's small,
+  stingy drift and are quicker round it for taking one. It smokes and the
+  tyres sing for it, because both hang off `CarState.drifting`. It costs
+  nothing on the loose — the shortfall is zero there by construction.
+
+  Four driven wheels claw grip back where there is least of it
+  (`slipGrip`, in `surfaceGripFor`). Each tyre spends half as much of its
+  friction budget on going forwards, which is worth almost nothing where the
+  budget is large and a great deal on ice, packed snow, a snowfield or
+  standing water, where it has nearly run out. So the works sedan keeps
+  about a tenth more grip on ice and a twenty-fifth on a snow road, and
+  exactly nothing on gravel or tarmac. The frozen country is its ground, and
+  `npm run sim -- --sweep` has a `winter` archetype so the balance table can
+  see it.
+
 - **How much torque reaches the ground** (`bite` × `spec.traction` × the
   surface's grip). One driven axle on a loose surface spins where four
   driven wheels hook up, worst at the bottom of the gear and gone by the top

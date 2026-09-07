@@ -136,6 +136,7 @@ export {
   latCeiling,
   slideCap,
   slideFloor,
+  surfaceBreakawayFor,
   surfaceGripFor,
   wheelSlide,
 } from "./game/limits.ts";

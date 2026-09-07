@@ -191,12 +191,14 @@ console.log(
  * ranks the cars exactly once. A roster is balanced when each car OWNS a
  * kind of stage — which means measuring over the KINDS.
  *
- * An archetype is two things. The generator's dials say what the road is
- * SURFACED and shaped like (rules.ts); the seed says how twisty it is, and
- * no dial moves that — so a `pick` of "tight" or "flowing" measures the
- * whole seed pool's mean curvature and races only the end of it that
- * matches. Nothing here is a special stage type: the generator builds all
- * of them from the same rules. */
+ * An archetype is two or three things. The generator's dials say what the
+ * road is SURFACED and shaped like (rules.ts); the seed says how twisty it
+ * is, and no dial moves that — so a `pick` of "tight" or "flowing" measures
+ * the whole seed pool's mean curvature and races only the end of it that
+ * matches. Some also carry a CLIMATE (`season`/`temperature`, climate.ts),
+ * because what the road is made of is not the only thing that decides how
+ * much of it a tyre can hold. Nothing here is a special stage type: the
+ * generator builds all of them from the same rules. */
 const ARCHETYPES = [
   { id: "tarmac", label: "fully sealed", pick: "flowing", knobs: { asphalt: 1, elevation: 0.3 } },
   {
@@ -213,6 +215,19 @@ const ARCHETYPES = [
     knobs: { asphalt: 0.25, water: 1, trees: 0.9 },
   },
   { id: "gravel", label: "loose, dry, flat", pick: "all", knobs: { asphalt: 0, elevation: 0.15 } },
+  // THE FROZEN COUNTRY, which the table could not see before: every loose
+  // road under packed snow and the sealed ones glazed (climate.ts), which is
+  // the one ground where how a layout SHARES its torque is worth more than
+  // how much of it there is. A roster whose four-wheel-drive has nothing to
+  // own is a roster with a spare car in it, and without this row the number
+  // that gives it one (`drivetrain.awd.slipGrip`) is invisible here.
+  {
+    id: "winter",
+    label: "frozen, snow-packed",
+    pick: "all",
+    knobs: { asphalt: 0.3, elevation: 0.5 },
+    climate: { season: "winter", temperature: -12 },
+  },
 ];
 
 /** Mean |curvature| over a compiled stage — how twisty the seed built it. */
@@ -255,6 +270,12 @@ if (args.includes("--sweep")) {
           length,
           maxTime,
           weather,
+          // The archetype's own climate wins over the command line's, so a
+          // frozen row stays frozen in a summer sweep; everything else takes
+          // whatever `--season`/`--temperature` asked for, which the sweep
+          // used to drop on the floor entirely.
+          season: arch.climate?.season ?? season,
+          temperature: arch.climate?.temperature ?? temperature,
           knobs: stageKnobs,
         });
         // Pace, not time: the seeds in a pool build stages of different
