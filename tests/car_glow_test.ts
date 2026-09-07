@@ -45,15 +45,22 @@ function grafted(glow: ReturnType<typeof createCarGlow>): {
   const shader = {
     uniforms: {} as Record<string, { value: unknown }>,
     vertexShader: "#include <common>\nvoid main() {\n#include <project_vertex>\n}",
-    fragmentShader:
-      "#include <common>\nvoid main() {\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n" +
-      "\tvec3 outgoingLight = reflectedLight.indirectDiffuse;\n}",
+    fragmentShader: PHONG_FRAGMENT,
   };
   material.onBeforeCompile?.(shader as never, null as never);
   return { material, uniforms: shader.uniforms };
 }
 
 const spec = CAR_BODIES.coupe;
+
+/** The shape of the shader the graft actually lands in — `MeshPhongMaterial`,
+ * which is what a car is drawn with (car-surface.ts). Its outgoing-light line
+ * is the anchor, and it is nothing like the fullbright material's. */
+const PHONG_FRAGMENT =
+  "#include <common>\nvoid main() {\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n" +
+  "#include <specularmap_fragment>\n" +
+  "\tvec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse" +
+  " + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;\n}";
 
 describe("the wash a car's own lamps lay on it", () => {
   it("throws nothing with the lamps off, so a daylight car pays no loop", () => {
@@ -114,6 +121,24 @@ describe("the wash a car's own lamps lay on it", () => {
     expect(brake[front * 3 + 1]).toBeGreaterThan(0);
   });
 
+  it("adds the wash as LIGHT, never into the albedo the scene's light multiplies", () => {
+    // The trap this guards is silent and only shows after dark. On a lit
+    // material the colour attribute is what the sun and sky get multiplied
+    // BY, so a lamp folded into it is multiplied by a night sky of nearly
+    // nothing — and the wash disappears on exactly the frames it exists for.
+    const glow = createCarGlow(frontLampAnchors(spec), rearLampAnchors(spec));
+    const material = new THREE.MeshBasicMaterial();
+    glow.graft(material);
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader: "#include <common>\nvoid main() {\n#include <project_vertex>\n}",
+      fragmentShader: PHONG_FRAGMENT,
+    };
+    material.onBeforeCompile?.(shader as never, null as never);
+    expect(shader.fragmentShader).toContain("vec4 diffuseColor = vec4( diffuse, opacity );");
+    expect(shader.fragmentShader).not.toContain("diffuse + vCarGlow");
+  });
+
   it("puts a smashed lamp out without touching the one beside it", () => {
     const glow = createCarGlow(frontLampAnchors(spec), rearLampAnchors(spec));
     const { uniforms } = grafted(glow);
@@ -133,18 +158,14 @@ describe("the wash a car's own lamps lay on it", () => {
     const shader = {
       uniforms: {} as Record<string, { value: unknown }>,
       vertexShader: "#include <common>\nvoid main() {\n#include <project_vertex>\n}",
-      fragmentShader:
-        "#include <common>\nvoid main() {\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n" +
-        "\tvec3 outgoingLight = reflectedLight.indirectDiffuse;\n}",
+      fragmentShader: PHONG_FRAGMENT,
     };
     material.onBeforeCompile?.(shader as never, null as never);
     expect(shader.vertexShader).toContain("vCarGlow");
     expect(shader.vertexShader).toContain("uCarGlowCount");
-    // The paint's share above the vertex-colour multiply, the gloss's below
-    // it — both anchors must actually have been found, or the term silently
-    // does nothing.
-    expect(shader.fragmentShader).toContain("diffuse + vCarGlow");
-    expect(shader.fragmentShader).toContain("indirectDiffuse + vCarGlow");
+    // The anchor must actually have been found, or the term silently does
+    // nothing: a `.replace` that matches no substring is not an error.
+    expect(shader.fragmentShader).toContain("totalEmissiveRadiance + vCarGlow");
     expect(shader.uniforms.uCarGlowAt).toBeDefined();
   });
 });

@@ -10,6 +10,8 @@
 // shell is on — the entry script has a critical-path budget.
 
 import * as THREE from "three";
+
+import { studioLights } from "./car-surface.ts";
 import type { CarSpec } from "@engine";
 
 import { buildCarBody } from "./car-body.ts";
@@ -59,6 +61,9 @@ export function createCarTurntable(canvas: HTMLCanvasElement): CarTurntable {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   const scene = new THREE.Scene();
+  // A car is lit by the scene now (car-surface.ts), and this scene has no
+  // sky in it — without a rig of its own the body draws black.
+  scene.add(studioLights());
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 60);
 
   // The stand: a soft disc under the car so it reads as standing on

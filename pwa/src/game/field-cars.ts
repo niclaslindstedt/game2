@@ -234,6 +234,11 @@ export type FieldCars = {
    * the light switch the stage has the cars on, and how hard it is raining on
    * the glass. Pushed by the renderer, which owns all three. */
   paint: (tint: THREE.Color, lamps: LampStage, rain: number) => void;
+  /** Whether the rivals READ the shadow map as well as drawing into it —
+   * the LIGHTING row's top stop (`RICH_SHADOWS`, car-shadow.ts). A field
+   * that casts but never receives is a field of cars sitting on the light
+   * beside a player's car that is standing in it. */
+  setShadowDetail: (rich: boolean) => void;
   /** How much of a rival is built for the sake of what is only visible up
    * close: how much cabin its glass has behind it — what the renderer has
    * already decided the field deserves off the VIDEO rows, taken down a
@@ -296,6 +301,9 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   const built = new Map<RivalRun, FieldCar>();
   let drawn = 0;
   let interior: InteriorDetail = fieldInterior("high");
+  /** The LIGHTING row's shadow stop, so a rival built after the setting
+   * moved is born reading the map like the ones already on the road. */
+  let richShadows = false;
   let screens: FilmDetail = "coarse";
   let piped = true;
   let wheelsRoll = true;
@@ -470,6 +478,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           visual.setWheelLoss(shedsWheels);
           visual.setCrumple(folds);
           visual.setBrakeLights(braked);
+          visual.setShadowDetail(richShadows);
           tintCar(visual, tint, lamps, rain);
           visual.update(run.state, 0, camera.position);
           show(fresh, false);
@@ -601,6 +610,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         visual.setCrumple(detail.crumple);
         visual.setBrakeLights(detail.brakeLights);
       }
+    },
+    setShadowDetail: (rich) => {
+      richShadows = rich;
+      for (const { visual } of built.values()) visual.setShadowDetail(rich);
     },
     setNames: (on) => {
       named = on;

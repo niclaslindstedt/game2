@@ -14,13 +14,13 @@
 // can see. It costs geometry and it is the geometry worth spending: a wheel
 // is the one part of a car that is never still.
 //
-// Round parts come from THREE primitives through bakeShading, because
+// Round parts come from THREE primitives through flatten, because
 // hand-winding circular geometry fails silently (faces are culled, not
 // flagged).
 
 import * as THREE from "three";
 
-import { MeshBuilder, bakeShading } from "./builder.ts";
+import { MeshBuilder, SHINE, flatten } from "./builder.ts";
 import type { CarBodySpec, WheelStyle } from "./spec.ts";
 
 /** The rim, as fractions of the tire radius: the outer edge of the flange
@@ -72,7 +72,7 @@ const LATTICE_SKEW = 1;
  * nothing can come back inside out. */
 function tube(b: MeshBuilder, r: number, x0: number, x1: number, color: number): void {
   b.absorb(
-    bakeShading(
+    flatten(
       new THREE.CylinderGeometry(r, r, Math.abs(x1 - x0), RIM_FACETS, 1, true)
         .rotateZ(Math.PI / 2)
         .translate((x0 + x1) / 2, 0, 0),
@@ -91,7 +91,7 @@ function annulus(
   color: number,
 ): void {
   b.absorb(
-    bakeShading(
+    flatten(
       new THREE.RingGeometry(inner, outer, RIM_FACETS)
         .rotateY((outward * Math.PI) / 2)
         .translate(x, 0, 0),
@@ -112,7 +112,7 @@ function radial(
   color: number,
 ): void {
   b.absorb(
-    bakeShading(
+    flatten(
       new THREE.BoxGeometry(thick, length, width)
         .translate(0, at, 0)
         .rotateX(angle)
@@ -143,7 +143,7 @@ function strut(
   const dy = y1 - y0;
   const dz = z1 - z0;
   b.absorb(
-    bakeShading(
+    flatten(
       new THREE.BoxGeometry(thick, Math.hypot(dy, dz), width)
         .rotateX(Math.atan2(dz, dy))
         .translate(x, (y0 + y1) / 2, (z0 + z1) / 2),
@@ -188,7 +188,13 @@ function rimFace(
   // is an OPEN tube — it has to be, or its end cap seals the wheel shut and
   // every recessed thing behind this point is drawn inside a solid drum —
   // so this ring is what closes the gap between rim and tread.
+  b.shine = SHINE.rubber;
   annulus(b, RIM_OUTER, 1, x(0), outward, TIRE);
+
+  // ...and everything from the flange inward is METAL, which is the whole
+  // reason a rim reads as a rim: it is the one part of a wheel that holds a
+  // highlight, and a rim as matte as its tyre is a painted disc.
+  b.shine = SHINE.chrome;
 
   // The flange: a ring standing proud of the rubber with its face turned
   // out. This edge is what says "rim" from every angle but dead side on.
@@ -286,11 +292,12 @@ export function buildWheel(spec: CarBodySpec, outboard: 1 | -1 = 1): THREE.Buffe
   rimGeo.scale(1, r, r);
 
   const b = new MeshBuilder();
+  b.shine = SHINE.rubber;
   // Open-ended: the rim's dish is sunk INSIDE the tire's width, so a capped
   // cylinder would draw a lid straight over the spokes. rimFace lays the
   // sidewall ring back in.
   b.absorb(
-    bakeShading(
+    flatten(
       new THREE.CylinderGeometry(r, r, spec.wheelWidth, TIRE_FACETS, 1, true).rotateZ(Math.PI / 2),
       TIRE,
     ),
@@ -316,7 +323,7 @@ export function buildWheel(spec: CarBodySpec, outboard: 1 | -1 = 1): THREE.Buffe
     for (let i = 0; i < blocks; i++) {
       const angle = i * pitch + (row ? pitch / 2 : 0);
       b.absorb(
-        bakeShading(
+        flatten(
           new THREE.BoxGeometry(rowW, 0.035, r * pitch * 0.88)
             .translate(0, r - 0.0135, 0)
             .rotateX(angle)

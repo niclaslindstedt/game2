@@ -3,28 +3,30 @@
 // panels around them, which after dark is the only light the car gets at
 // all.
 //
-// Everything on a car is fullbright: the shading is baked into vertex
-// colours and the sky arrives as ONE multiply into `material.color`
-// (`carTintFor`, sky.ts). That is a single number for the whole body, so at
-// midnight a car is its daylight paint at a fifth of the brightness and
-// nothing else — the same fifth on the nose, on the roof and on the boot
-// lid. Meanwhile the four spotlights bolted to it (car-lamps.ts) are
-// throwing the brightest light in the frame, and the Lambert world picks up
-// every bit of it while the car they are bolted to picks up none. A car
-// standing in its own red pool with an unlit tail panel a hand's width above
-// it is the shape of the complaint.
+// The car is lit by the scene now (car-surface.ts), and the scene's lights
+// still cannot do this one thing. A headlamp is a spotlight aimed down the
+// road: its cone points AWAY from the bodywork carrying it, so no amount of
+// real lighting puts a single lumen back on the wing behind it. Every car in
+// the field would go on standing in a pool of its own light with an unlit
+// tail panel a hand's width above it.
 //
-// So the car gets the same two-term lighting the dust already gets
-// (dust-light.ts): the sky as an AMBIENT — the tint it has always had — plus
-// its own LAMPS on top. This is the second term.
+// What a night photograph actually shows around a lamp is SPILL: the rim,
+// the bumper and the wing lit by what missed the reflector and by what the
+// road throws back. That is a bounce, and a bounce is exactly what a real-
+// time renderer has none of — so it is authored here instead, the way
+// dust-light.ts authors the same missing bounce for a plume.
 //
-// It is SPILL rather than beam, and that is the whole of the model. A lamp
-// points away from the bodywork behind it; what a photograph of a car at
-// night shows around one is the rim, the bumper and the wing lit by what
-// misses the reflector and by what the road throws back. A short, hard
-// falloff centred on the lens is all that needs saying, and it needs no
-// normal: at the polygon count of these bodies a per-vertex distance is
-// already finer than the panels it is lighting.
+// A short, hard falloff centred on the lens is all that needs saying, and it
+// needs no normal: at the polygon count of these bodies a per-vertex
+// distance is already finer than the panels it is lighting.
+//
+// IT IS ADDED AS LIGHT, NEVER AS ALBEDO. That is the whole difference
+// between this and the same term on a fullbright body. On a lit material the
+// colour attribute is what the scene's light gets MULTIPLIED BY, so a lamp
+// folded into it would be multiplied by a night sky of nearly nothing and
+// come out as nothing — the effect would vanish on exactly the frames it
+// exists for. It goes into the outgoing light instead, where the sun and the
+// sky have already been added.
 //
 // The register is summed in WORLD space even though a car's lamps never move
 // in its own frame, because the panels, the wheels and the parts hang in
@@ -33,6 +35,7 @@
 import * as THREE from "three";
 
 import type { LampAnchor } from "./car/lamps.ts";
+import { graftShader } from "./car-surface.ts";
 
 /** Which end of the car a slot belongs to. */
 export type GlowEnd = "head" | "tail";
@@ -131,7 +134,7 @@ export function createCarGlow(front: LampAnchor[], rear: LampAnchor[]): CarGlow 
   const headTone = new THREE.Color(HEAD_SPILL);
 
   const graft = (material: THREE.Material): void => {
-    material.onBeforeCompile = (shader) => {
+    graftShader(material, "car-glow", (shader) => {
       Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
         .replace(
@@ -165,20 +168,19 @@ export function createCarGlow(front: LampAnchor[], rear: LampAnchor[]): CarGlow 
         varying vec3 vCarGlow;
         const float CAR_SHEEN = ${SHEEN.toFixed(3)};`,
         )
-        // The paint's share goes into the material's colour, ABOVE
-        // `color_fragment`, so the multiply by the baked vertex colour lands
-        // on it and the panel comes out as albedo x (sky + lamps).
+        // Onto the OUTGOING light, where the sun, the sky and the specular
+        // have already been summed — never into `diffuse`, which on a lit
+        // material is the albedo the scene's light is multiplied BY. The
+        // paint's share is multiplied by that albedo here instead, by hand,
+        // so a red lamp on a white bootlid still goes red; the gloss's share
+        // is not, because lacquer throws the lens's own colour back whatever
+        // is underneath it.
         .replace(
-          "vec4 diffuseColor = vec4( diffuse, opacity );",
-          "vec4 diffuseColor = vec4( diffuse + vCarGlow * ( 1.0 - CAR_SHEEN ), opacity );",
-        )
-        // ...and the gloss's share goes onto the outgoing light BELOW it,
-        // where no albedo can take it away again.
-        .replace(
-          "vec3 outgoingLight = reflectedLight.indirectDiffuse;",
-          "vec3 outgoingLight = reflectedLight.indirectDiffuse + vCarGlow * CAR_SHEEN;",
+          "vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;",
+          "vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance" +
+            " + vCarGlow * ( diffuseColor.rgb * ( 1.0 - CAR_SHEEN ) + vec3( CAR_SHEEN ) );",
         );
-    };
+    });
   };
 
   const snuff = (end: GlowEnd, lamp: number): void => {

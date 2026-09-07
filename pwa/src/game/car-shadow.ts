@@ -44,6 +44,28 @@ export const SHADOW_MAP_SIZE: Record<VideoSettings["lighting"], number> = {
   full: 2048,
 };
 
+/**
+ * WHETHER THE CAR READS THE MAP as well as drawing into it, per stop of the
+ * LIGHTING row.
+ *
+ * The two stops under this are the shadow the module was built for and
+ * describes above: cars cast, the GROUND receives, and nothing that receives
+ * is ever in the map — which is what makes it acne-free with no bias to tune.
+ * That shadow is unchanged, and it is what `normal` buys.
+ *
+ * `full` adds the other half. The car receives too, so its own roof shades
+ * its door, its arches shade its tyres, and anything else in the map falls
+ * across it. That is a strictly better picture and a strictly more expensive
+ * one — the receiver is now IN the map, so the classic self-shadow acne
+ * arrives with it and has to be biased away (`normalBias` below) — which is
+ * exactly why it is the top stop's and not everybody's.
+ */
+export const RICH_SHADOWS: Record<VideoSettings["lighting"], boolean> = {
+  lean: false,
+  normal: false,
+  full: true,
+};
+
 /** How far the map reaches from its focus, m, in the light's own plane —
  * so on the ground it covers at least this far in every direction, and a
  * good deal further along a low sun's azimuth. Every car inside it throws
@@ -138,6 +160,10 @@ export type SunShadows = {
   follow: (car: { x: number; y: number; z: number }, camera: THREE.Camera) => void;
   /** Whether anything is being cast right now. */
   active: () => boolean;
+  /** Whether the cars should READ the map at this stop (`RICH_SHADOWS`) —
+   * the renderer pushes it onto the bodies, which are the things that own
+   * their own `receiveShadow` flags. */
+  rich: () => boolean;
 };
 
 export function createSunShadows(light: THREE.DirectionalLight): SunShadows {
@@ -150,15 +176,34 @@ export function createSunShadows(light: THREE.DirectionalLight): SunShadows {
   cam.near = SHADOW_NEAR;
   cam.far = SHADOW_FAR;
   cam.updateProjectionMatrix();
-  // No bias: nothing that reads the map is ever in it (see the module
-  // note), and a bias would only lift every shadow off the tyres that
-  // throw it.
+  // No bias while nothing that reads the map is in it (see the module note):
+  // a bias there would only lift every shadow off the tyres that throw it.
+  // `RICH_SHADOWS` puts the car in the map and turns one on — see `rebias`.
   shadow.bias = 0;
   shadow.normalBias = 0;
 
   let renderer: THREE.WebGLRenderer | null = null;
   let size = 0;
   let hardness = 0;
+  let rich = false;
+
+  /**
+   * The offset that keeps a receiver out of its own shadow, m.
+   *
+   * Along the NORMAL rather than in depth, which is the whole reason it can
+   * be this small: a depth bias has to clear the worst case over a whole
+   * face and peter-pans the shadow off the thing casting it, where a normal
+   * offset moves the sample sideways by the width of the texel that could
+   * have straddled the surface. So it is sized off the texel — one map
+   * cell and a bit — and it re-derives itself when the map does.
+   *
+   * Zero while the car does not receive: at the lower stops nothing in the
+   * map reads it, and a bias then is a shadow lifted off the tyres for
+   * nothing.
+   */
+  const rebias = (): void => {
+    shadow.normalBias = rich && size > 0 ? shadowTexel(size) * 1.2 : 0;
+  };
 
   const dir = new THREE.Vector3();
   const fwd = new THREE.Vector3();
@@ -171,6 +216,7 @@ export function createSunShadows(light: THREE.DirectionalLight): SunShadows {
   };
 
   const setQuality = (lighting: VideoSettings["lighting"]): void => {
+    rich = RICH_SHADOWS[lighting];
     const next = SHADOW_MAP_SIZE[lighting];
     if (next !== size) {
       size = next;
@@ -182,6 +228,7 @@ export function createSunShadows(light: THREE.DirectionalLight): SunShadows {
         shadow.map = null;
       }
     }
+    rebias();
     refresh();
   };
 
@@ -225,5 +272,6 @@ export function createSunShadows(light: THREE.DirectionalLight): SunShadows {
     setHardness,
     follow,
     active: () => light.castShadow,
+    rich: () => rich,
   };
 }
