@@ -24,7 +24,8 @@
 // something on the glass and always finish the stroke they are on, so they
 // park where they started. What "something" means is two different answers
 // (`WIPE`) — rain is a reason to keep wiping, dust is a reason to clear the
-// screen once and wait — and both are read off the part of the pane the
+// screen once and wait, and how much dust that takes is a third answer per
+// screen (`GRIME`) — and all of them are read off the part of the pane the
 // blades can actually REACH (`swept`). Off the whole pane they would never
 // switch off at all: the corners no arm can get to cake solid over a stage
 // and hold the average above any threshold forever.
@@ -186,22 +187,48 @@ const STROKE = { slow: 1.25, fast: 0.6 };
  * which is the same failure as never switching off. */
 const REST = { drizzle: 2.4, dry: 7 };
 
-/** The backlight's arm is the slower of the two, the way a hatch's is. */
-const REAR_RATE = 1.6;
+/** How long this screen's stroke takes against the windscreen's — the
+ * multiplier on `STROKE`. The backlight's arm is the QUICK one, the way a
+ * hatch's is: a short blade on a small pane, thrown across and back rather
+ * than swept, and it is the pane that soils fastest on the car, so an arm
+ * that ambles over it is behind the dirt before it has finished the stroke.
+ * At the slow end of `STROKE` this lands the backlight around one stroke
+ * every nine tenths of a second, which is the brisk end of what a real one
+ * does and reads as a wiper WORKING rather than being animated. */
+const RATE = { front: 1, rear: 0.75 };
 
 /** WHAT SWITCHES THE BLADES ON, and it is deliberately not one number.
  *
  * Rain is a reason to keep wiping and it starts them at the first hint of
  * it, because that is what a windscreen in rain looks like. Grime is a
- * reason to clear the glass ONCE, and the screen has to have properly gone
- * off before it is worth a stroke — a car on a dry gravel stage is soiling
- * its screen every second of the run, so a threshold low enough to catch
- * that is a threshold the blades never come back under.
+ * reason to clear the glass ONCE and then leave it alone, so the coat it
+ * takes is a per-screen number (`GRIME`) rather than a shared one.
  *
- * `off` is where they give up at the end of a stroke, and it sits under
- * what one stroke leaves behind (`SMEAR` of what it found), so a wipe that
- * did its job is always followed by the blades parking. */
-const WIPE = { rain: 0.04, grime: 0.38, off: 0.12 };
+ * `off` is where they give up at the end of a stroke. It sits above what
+ * one stroke leaves behind (`SMEAR` of what it found, which is about a
+ * sixth) on either screen, so a wipe that did its job is always followed by
+ * the blades parking — and the beat before the next one is then however
+ * long the road takes to put `GRIME` back on the glass, which is the whole
+ * of the intermittent wipe. */
+const WIPE = { rain: 0.04, off: 0.12 };
+
+/** How much dry grime is worth a stroke, per screen — and the two screens
+ * are not the same problem.
+ *
+ * The WINDSCREEN is scoured by the airflow, catches only what the car
+ * drives into, and is the pane the driver is looking THROUGH: an arm
+ * swinging across the view every time a haze settles is worse than the
+ * haze, so it waits until the screen has properly gone off.
+ *
+ * The BACKLIGHT is the other way round on every count. It sits in the car's
+ * own wake and cakes faster than anything else on the car (`SOIL`), nothing
+ * of what it costs is in the driver's way, and it is the pane the player
+ * actually watches — in the mirror, all stage. So it goes at the FIRST
+ * film, while the glass is still glass, which is what a hatch's back wiper
+ * is for. It is under `off`, deliberately: every dry stroke on the
+ * backlight ends in a park, and the arm comes back when the road has laid
+ * the film again rather than running on. */
+const GRIME = { front: 0.38, rear: 0.1 };
 
 /** Where a screen's arms are hung and how far they swing. `pivots` are
  * across the pane as fractions of its half-width and `base` is up from its
@@ -394,8 +421,10 @@ type Film = {
   ceiling: number;
   pivots: Pivot[];
   blades: THREE.Object3D[];
-  /** How much slower this screen's arm is than the windscreen's. */
+  /** How long this screen's stroke takes against the windscreen's (`RATE`). */
   rate: number;
+  /** The coat that is worth a stroke on this screen (`GRIME`). */
+  grime: number;
   /** What is left of the beat before the next stroke, s. */
   rest: number;
   /** The stroke itself, in the form anything else on this glass reads it —
@@ -463,6 +492,8 @@ export function buildWipers(
     soil: { rain: number; road: number };
     grid: { cols: number; rows: number };
     ceiling: number;
+    rate: number;
+    grime: number;
   }[] = [
     {
       pane: panes.front,
@@ -470,6 +501,8 @@ export function buildWipers(
       soil: SOIL.front,
       grid: GRID[film === "off" ? "coarse" : film],
       ceiling: COAT_MAX,
+      rate: RATE.front,
+      grime: GRIME.front,
     },
     {
       pane: panes.rear,
@@ -477,13 +510,18 @@ export function buildWipers(
       soil: SOIL.rear,
       grid: GRID[film === "off" ? "coarse" : film],
       ceiling: COAT_MAX,
+      rate: RATE.rear,
+      grime: GRIME.rear,
     },
+    // A flank never wipes, so its beat and its threshold are never read.
     ...panes.sides.map((pane) => ({
       pane,
       arm: null,
       soil: SOIL.side,
       grid: SIDE_GRID,
       ceiling: SIDE_COAT_MAX,
+      rate: RATE.front,
+      grime: GRIME.front,
     })),
   ];
 
@@ -630,7 +668,8 @@ export function buildWipers(
       ceiling: screen.ceiling,
       pivots,
       blades,
-      rate: arm === ARMS.rear ? REAR_RATE : 1,
+      rate: screen.rate,
+      grime: screen.grime,
       rest: 0,
       wipe: {
         pivotX: arm ? ((arm.pivots[0] ?? 0) * frame.width) / 2 : 0,
@@ -701,11 +740,11 @@ export function buildWipers(
     // moment a stroke is actually moving.
     w.parkAge += dt;
     if (f.blades.length === 0) return;
-    // Rain starts them at a hint of it; dry grime has to have properly
-    // built up first. See `WIPE`.
+    // Rain starts them at a hint of it; dry grime at whatever coat this
+    // screen is worth a stroke for. See `WIPE` and `GRIME`.
     const need = Math.max(wet, coat);
     if (!w.running) {
-      if (wet < WIPE.rain && coat < WIPE.grime) return;
+      if (wet < WIPE.rain && coat < f.grime) return;
       w.running = true;
       w.phase = 0;
     }
