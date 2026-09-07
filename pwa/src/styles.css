@@ -8174,8 +8174,38 @@ a.menu-version:focus-visible {
   opacity: 0.8;
 }
 
-.hud-modal-card .hud-pause-act {
+/* THE WAYS OUT, ON ONE LINE. The way out is CENTRED on the card — it is
+   what the eye leaves by, and every other announcement on the card is
+   centred too — and anything else the board can be ACTED on with stands at
+   the card's left edge on the same line. Stacked, the two read as a menu of
+   two ways out, and the one that cannot be undone sits directly under the
+   thumb that was reaching for CLOSE.
+   Three columns rather than a spread row, because the middle one has to be
+   centred on the CARD and not between its neighbours: the left press is a
+   sentence wide once it asks whether you are sure, and a row that centres
+   what is left over would slide the way out sideways as it changed. The
+   outer columns are equal shares of what the way out leaves, and only a
+   press wider than its share can move it. */
+.hud-modal-ways {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
   margin-top: 0.7rem;
+}
+
+.hud-modal-aside {
+  justify-self: start;
+  min-width: 0;
+}
+
+/* A press in that left cell has a share of the row rather than its own
+   width, and the one that lives there asks a whole question once it is
+   armed — so it WRAPS on a small phone rather than pushing the way out off
+   centre, and wraps tightly. */
+.hud-modal-aside .menu-opt {
+  line-height: 1.15;
 }
 
 /* ── R30: the result sheet, PAGED, on the results card ───────────────────
@@ -8579,20 +8609,15 @@ a.menu-version:focus-visible {
    height of a seventh stage box on a page whose job is to show six — and it
    is now a press at the far end of the head (`.menu-head-act`) and a table
    over the top of the page. What survives here is the FOOT of that table:
-   the gate, and the press that tears the points up. */
-
-.menu-standings-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem 0.7rem;
-  margin-top: 0.6rem;
-}
+   the gate. The press that tears the points up stands beside the way out
+   (`.hud-modal-ways`). */
 
 /* The one gate a padlock cannot teach: a country whose stages are all
-   driven still needs its table topped. Only there when it applies. */
+   driven still needs its table topped. Only there when it applies, and on
+   its own line between the rows and the ways out — it is something to READ,
+   where the line under it is something to press. */
 .menu-standings-hint {
+  margin-top: 0.6rem;
   font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
   letter-spacing: 0.1em;
   color: var(--hud-good);
