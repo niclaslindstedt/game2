@@ -34,6 +34,7 @@ import {
   INTERIOR_DETAIL,
   CRUMPLE_SEEN,
   LOOSE_WHEELS,
+  WHEELS_LOST,
   MIRROR_GLASS,
   SCREEN_GRIME,
   FLORA_SCALE,
@@ -533,6 +534,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   field.setCarDetail({
     ...carDetail("field"),
     looseWheels: LOOSE_WHEELS[quality.effects],
+    wheelLoss: WHEELS_LOST[quality.wheelLoss].field,
     crumple: CRUMPLE_SEEN[quality.crumple].field,
     brakeLights: LAMP_BEAMS[quality.lighting].brakes,
   });
@@ -723,11 +725,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     field.setCarDetail({
       ...carDetail("field"),
       looseWheels: LOOSE_WHEELS[quality.effects],
+      wheelLoss: WHEELS_LOST[quality.wheelLoss].field,
       crumple: CRUMPLE_SEEN[quality.crumple].field,
       brakeLights: LAMP_BEAMS[quality.lighting].brakes,
     });
     car?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     ghostCar?.setLooseWheels(LOOSE_WHEELS[quality.effects]);
+    car?.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
+    ghostCar?.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
     car?.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     // The ghost is a REPLAY of the player's own car, so it wears the row the
     // player's car wears rather than the field's.
@@ -815,6 +820,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     });
     scene.add(car.group, car.debris);
     car.setLooseWheels(LOOSE_WHEELS[quality.effects]);
+    car.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
     car.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     car.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
     const eyes = carEyes(state.spec);
@@ -915,6 +921,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     ghostTag = createNameTag("Ghost", null, GHOST_LOOK);
     scene.add(ghostCar.group, ghostCar.debris, ghostTag.sprite);
     ghostCar.setLooseWheels(LOOSE_WHEELS[quality.effects]);
+    ghostCar.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
     ghostCar.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     ghostCar.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
     applyTint();

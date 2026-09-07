@@ -223,7 +223,7 @@ export type AudioSettings = {
   sfx: number;
 };
 
-/** THE TWELVE LEVERS THE RENDERER READS, on FOUR rows the player turns.
+/** THE THIRTEEN LEVERS THE RENDERER READS, on FOUR rows the player turns.
  *
  * `resolution`, `drawDistance` and `sky` are their own rows because they are
  * their own decisions, and because each is paid for in a different currency:
@@ -243,7 +243,7 @@ export type AudioSettings = {
  * fill-bound gets the opposite. Buried inside one preset, neither player
  * could reach the lever that was theirs.
  *
- * The remaining nine are HOW MUCH WORLD IS DRAWN, and they are one row
+ * The remaining ten are HOW MUCH WORLD IS DRAWN, and they are one row
  * (`DETAIL_PRESETS`) because they are one judgement with one answer: they
  * all move together with how much headroom the machine has, and nobody has
  * an opinion about undergrowth density that is not also an opinion about
@@ -336,6 +336,36 @@ export type VideoSettings = {
    * a car that shrugs off a hit that tore its bonnet away would read as a
    * car nothing had happened to. */
   crumple: "off" | "player" | "all";
+  /** WHOSE CAR MAY SHED A WHEEL: which cars on the road actually lose one
+   * when the ledger says it has gone — the wheel off the hub, the corner
+   * dropped onto it, and the car crooked from then on. Part of DETAIL, and
+   * it applies the instant it is set.
+   *
+   * The row above it decides whether a wheel that HAS come off is thrown as
+   * a rolling body or is simply gone (`LOOSE_WHEELS`, the EFFECTS row);
+   * this one is the question before that, and it is the dearer of the two.
+   * A shed wheel is a hub mesh and a material per corner, a body sitting
+   * crooked on a fitted plane, and — where the row above allows it — a
+   * whole extra rigid body rolling down the stage with its own contacts
+   * against the ground, the car and everything standing in the way.
+   *
+   * Three stops, on the split every per-car row here uses. `all` is a rally
+   * where anybody can be put out; `player` sheds only from the car being
+   * driven, which is the one whose lost wheel is a fact the driver has to
+   * read off the road, and leaves the field's wheels on; `off` keeps every
+   * wheel on every car.
+   *
+   * A car whose wheels STICK still handles like the three-wheeler it is —
+   * the ledger is the engine's and this changes nothing in it — so a rival
+   * on a wheel it visually still has is a rival driving badly for reasons
+   * the picture no longer shows. That is the trade, and at the two hundred
+   * metres a rival is usually read at, it is a cheap one.
+   *
+   * The row only decides whether a wheel may LEAVE. One already gone has
+   * gone: turning the row down does not bolt it back on, and turning it up
+   * sheds what the ledger had already lost, without throwing it — nothing
+   * flies off a car for a wheel it lost a corner ago. */
+  wheelLoss: "off" | "player" | "all";
   /** How thickly the world is planted with the SOFT stuff — undergrowth,
    * shrubs, stumps. Part of DETAIL, and applies to the NEXT stage built.
    * The undergrowth only: the FOREST's own density is a generator dial the
@@ -765,6 +795,17 @@ export const DUST_RAISED: Record<VideoSettings["dust"], { player: boolean; field
   all: { player: true, field: true },
 };
 
+/** WHOSE CAR MAY SHED A WHEEL, per the row above. The same split as the
+ * dust, the exhaust and the fold, for the same reason: the cost is per car
+ * and the road can carry fifteen, while a lost wheel means most on the one
+ * car the driver has to keep on the road. */
+export const WHEELS_LOST: Record<VideoSettings["wheelLoss"], { player: boolean; field: boolean }> =
+  {
+    off: { player: false, field: false },
+    player: { player: true, field: false },
+    all: { player: true, field: true },
+  };
+
 /** WHOSE BODY THE LEDGER IS BENT INTO, per the row above. Split the same
  * way the dust and the exhaust are, and for the same reason: the cost is
  * per car and the road can carry fifteen, while the value is nearly all on
@@ -854,7 +895,7 @@ export const DUST_LAMP_CARS: Record<VideoSettings["lighting"], number> = {
  * expressed at all. */
 export type Detail = "low" | "medium" | "high";
 
-/** The nine levers DETAIL owns. Named as a slice of `VideoSettings` rather
+/** The ten levers DETAIL owns. Named as a slice of `VideoSettings` rather
  * than restated, so adding a tenth lever is a decision about which row it
  * belongs on instead of a silent omission from both. */
 export type DetailSettings = Pick<
@@ -863,6 +904,7 @@ export type DetailSettings = Pick<
   | "interior"
   | "glass"
   | "crumple"
+  | "wheelLoss"
   | "flora"
   | "ground"
   | "dust"
@@ -878,13 +920,14 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   // The phone that stutters: every window solid and every wiper off, the
   // verges bare, under half the particles, a lost wheel gone rather than
   // rolling, nobody on the road raising any ground, no pipe smoking, no
-  // body bent by what it hit, and one headlamp beam with no shadow under
-  // the car.
+  // body bent by what it hit, every wheel staying on the car that lost it,
+  // and one headlamp beam with no shadow under the car.
   low: {
     effects: "low",
     interior: "off",
     glass: "player",
     crumple: "off",
+    wheelLoss: "off",
     flora: "sparse",
     ground: "plain",
     dust: "off",
@@ -893,9 +936,9 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   },
   // The design point — every lever at the number the game was tuned on, and
   // everything that is per car spent on the one car it is worth the most
-  // on: the car being driven has the cabin, the wipers, the dust, the smoke
-  // and the folded panels, and the field's share of all five is what the
-  // machine buys back.
+  // on: the car being driven has the cabin, the wipers, the dust, the smoke,
+  // the folded panels and the wheels it can actually lose, and the field's
+  // share of all six is what the machine buys back.
   // The lamps throw one beam per end rather than the pair, and the shadow
   // is the smaller map: a light is paid for on every pixel, and it is what
   // the design point gives up to hold its frame rate.
@@ -904,6 +947,7 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     interior: "full",
     glass: "player",
     crumple: "player",
+    wheelLoss: "player",
     flora: "normal",
     ground: "normal",
     dust: "player",
@@ -912,13 +956,15 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   },
   // A machine with headroom: a thicker forest floor, stonier verges, and the
   // whole entry list furnished behind its glass, towing dust, steaming on
-  // the line and wearing every dent it has earned, the way a rally actually
-  // looks — under all four beams, with the sharp shadow.
+  // the line, wearing every dent it has earned and able to be put out by a
+  // lost wheel, the way a rally actually looks — under all four beams, with
+  // the sharp shadow.
   high: {
     effects: "full",
     interior: "full",
     glass: "all",
     crumple: "all",
+    wheelLoss: "all",
     flora: "lush",
     ground: "rich",
     dust: "all",

@@ -171,6 +171,16 @@ export type CarDamageVisual = {
   /** Whether a torn-off wheel is thrown as a rolling body or simply gone —
    * the video options' call (`LOOSE_WHEELS` in settings.ts). */
   setLooseWheels: (on: boolean) => void;
+  /** Whether this car may SHED A WHEEL at all when the ledger says one has
+   * gone — the video options' call, and per car (`WHEELS_LOST` in
+   * settings.ts). The row above it (`setLooseWheels`) decides what a wheel
+   * that HAS come off does next; this one decides whether it comes off.
+   *
+   * Only whether a wheel may LEAVE. One already gone has gone — switching
+   * this off does not bolt it back on — and switching it on sheds whatever
+   * the ledger had already lost WITHOUT throwing it, because nothing should
+   * fly off a car for a wheel it lost a corner ago. */
+  setWheelLoss: (on: boolean) => void;
   /** Whether this car's PANELS are folded into the shape of what it hit —
    * the video options' call, and per car (`CRUMPLE_SEEN` in settings.ts).
    * Switched off mid-run, the body straightens and the paint comes back;
@@ -323,6 +333,13 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
   let wheelsRoll = true;
   /** Whether this car's panels are folded at all (`setCrumple`). */
   let folds = true;
+  /** Whether this car may lose a wheel at all (`setWheelLoss`). */
+  let shedsWheels = true;
+  /** Wheels the ledger says are gone that this car was not allowed to shed.
+   * Kept so that turning the row back on catches them up in one frame, and
+   * so the catch-up can be told from a wheel that has just come off: the
+   * first flies nothing, the second flies. */
+  const declined = new Set<DamagePart>();
   /** Whether the ledger has been read once: a car BUILT with damage in its
    * ledger — a rival that lost a wheel out of sight — wears it from the
    * first frame, and throws nothing (`breakOff`'s `thrown`). */
@@ -662,6 +679,13 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     if (detached.has(part)) return;
     const wheel = WHEEL_PARTS.indexOf(part);
     if (wheel >= 0) {
+      // Not this car's to lose. Booked rather than forgotten, and NOT put in
+      // `detached` — the ledger is unchanged, so the corner keeps its wheel,
+      // stays up on it, and the car is drawn whole.
+      if (!shedsWheels) {
+        declined.add(part);
+        return;
+      }
       detached.add(part);
       loseWheel(wheel, state, thrown);
       bentVersion = -1;
@@ -722,6 +746,13 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     // anything it says is broken and still bolted on comes off now. On
     // the first read it comes off without flying: whatever tore it off
     // happened before this body existed.
+    // A row turned back on mid-run catches up here, where there is a state
+    // to do it with — and unthrown, because these are wheels this car lost
+    // while it was not allowed to lose them.
+    if (shedsWheels && declined.size > 0) {
+      for (const part of declined) breakOff(part, state, false);
+      declined.clear();
+    }
     for (const part of state.car.damage.broken) breakOff(part, state, caughtUp);
     caughtUp = true;
     sinceBend += dt;
@@ -766,6 +797,10 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     wheelsRoll = on;
   };
 
+  const setWheelLoss = (on: boolean): void => {
+    shedsWheels = on;
+  };
+
   const setCrumple = (on: boolean): void => {
     if (on === folds) return;
     folds = on;
@@ -798,7 +833,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     }
   };
 
-  return { debris, pose, update, onEvents, setLooseWheels, setCrumple, dispose };
+  return { debris, pose, update, onEvents, setLooseWheels, setWheelLoss, setCrumple, dispose };
 }
 
 function smoothstep(a: number, b: number, t: number): number {

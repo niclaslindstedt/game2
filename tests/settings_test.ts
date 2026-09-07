@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The player's options as the menu offers them: two HUD switches spread
-// over the whole panel, twelve video levers on four independent picture rows,
+// over the whole panel, thirteen video levers on four independent picture rows,
 // and a stored blob from an older build landing on something the page can
 // still show.
 
@@ -26,9 +26,11 @@ import {
   hudShow,
   LAMP_BEAMS,
   loadSettings,
+  LOOSE_WHEELS,
   MIN_FOG_FAR,
   PICTURE_ROWS,
   SKY_STOPS,
+  WHEELS_LOST,
   pictureRows,
   SKY_LOOK,
   type HudShow,
@@ -170,6 +172,7 @@ describe("the four picture rows", () => {
         dust: "player",
         glass: "player",
         crumple: "player",
+        wheelLoss: "player",
       }),
     ).toBe("medium");
     // A blob carrying one lever MEDIUM and HIGH agree on is a genuine tie,
@@ -646,6 +649,59 @@ describe("what each SKY stop draws", () => {
     }
     // A sky that is a shader at all reads its clouds at some octaves.
     for (const look of Object.values(SKY_LOOK)) expect(look.shader).toBe(look.octaves > 0);
+  });
+});
+
+// And WHOSE CAR MAY SHED A WHEEL, the fourth row asking the WHO question —
+// and the one where the two halves of the answer are least alike. A lost
+// wheel on the driven car is a fact the driver has to get home on; on a
+// rival two hundred metres away it is a shape nobody reads. The stops are
+// held here for the same reason the dust's are: the renderer asks twice a
+// frame and the two answers have to walk the ladder together.
+describe("whose car may shed a wheel at each DETAIL stop", () => {
+  it("keeps every wheel on every car on LOW", () => {
+    expect(WHEELS_LOST[DETAIL_PRESETS.low.wheelLoss]).toEqual({ player: false, field: false });
+  });
+
+  it("sheds only from the car being driven on MEDIUM", () => {
+    expect(WHEELS_LOST[DETAIL_PRESETS.medium.wheelLoss]).toEqual({ player: true, field: false });
+  });
+
+  it("lets anybody be put out on HIGH", () => {
+    expect(WHEELS_LOST[DETAIL_PRESETS.high.wheelLoss]).toEqual({ player: true, field: true });
+  });
+
+  // A rival on three wheels beside a driven car that cannot lose one reads
+  // as a bug in the player's car, exactly as the dust and the fold do.
+  it("never sheds a rival's wheel while the driven car keeps all four", () => {
+    for (const audience of Object.values(WHEELS_LOST)) {
+      expect(audience.field && !audience.player).toBe(false);
+    }
+  });
+
+  it("walks the ladder monotonically", () => {
+    const walk = (["low", "medium", "high"] as const).map(
+      (id) => WHEELS_LOST[DETAIL_PRESETS[id].wheelLoss],
+    );
+    for (let i = 1; i < walk.length; i++) {
+      const under = walk[i - 1]!;
+      const over = walk[i]!;
+      expect(over.player || !under.player).toBe(true);
+      expect(over.field || !under.field).toBe(true);
+    }
+  });
+
+  // The two wheel rows are asked in order and must not disagree: LOOSE_WHEELS
+  // (the EFFECTS row) decides what a wheel that HAS come off does next, so a
+  // stop that threw a rolling body from a car which may not shed one at all
+  // would be a wheel out of nowhere.
+  it("never throws a body from a car that keeps its wheels", () => {
+    for (const id of ["low", "medium", "high"] as const) {
+      const preset = DETAIL_PRESETS[id];
+      if (LOOSE_WHEELS[preset.effects]) {
+        expect(WHEELS_LOST[preset.wheelLoss].player).toBe(true);
+      }
+    }
   });
 });
 

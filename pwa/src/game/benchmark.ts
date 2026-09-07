@@ -97,7 +97,32 @@ import type { PlayCamera } from "./settings.ts";
  * OPTIONS ▸ VIDEO — the whole point of running this twice is to find out
  * what a resolution or a draw distance costs. */
 export type BenchmarkPlan = {
-  /** The campaign's first stage: short, open, and on every install. */
+  /** THE STAGE, and it is chosen rather than convenient: it has to be one
+   * where every row of OPTIONS ▸ VIDEO can move the number, or the tool
+   * cannot answer the question anybody runs it to ask.
+   *
+   * The campaign's first stage — short, open, on every install — was the
+   * obvious pick and the wrong one. Metered headlessly at the fog's two
+   * ends (draw calls a frame at DISTANCE NEAR vs FAR, bot driving, same
+   * stage time):
+   *
+   *   taiga-1  Loggers' Run     203 → 229   +13%
+   *   desert-1 Bajada           174 → 183    +5%
+   *   desert-2 Creosote Flats   222 → 365   +64%
+   *
+   * On a tree-lined sprint the whole row is worth 13% of what is submitted,
+   * which disappears under the ten per cent two runs of the same build
+   * differ by — so a player could walk DISTANCE end to end and read the
+   * same score three times, and conclude the row does nothing. It is not
+   * that the row does nothing; it is that a stage with nothing far away to
+   * cull cannot show it. An OPEN stage is not the answer either, and
+   * Bajada is the proof: the flats have long sight lines and almost
+   * nothing standing in them, so the fog reaches further and finds less.
+   *
+   * What is needed is DEPTH WITH THINGS IN IT — a stage that is open enough
+   * to see a long way and dense enough that seeing further costs something.
+   * Creosote Flats is that, and by a distance: the row is worth two thirds
+   * of the frame's draw calls and half its triangles there. */
   levelId: string;
   /** The car the benchmark is driven in. */
   carId: string;
@@ -127,7 +152,7 @@ export type BenchmarkPlan = {
 };
 
 export const BENCHMARK: BenchmarkPlan = {
-  levelId: "taiga-1",
+  levelId: "desert-2",
   carId: "compact",
   gearbox: "auto",
   camera: "chase",
