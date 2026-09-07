@@ -27,6 +27,7 @@ import { MAX_LAYERS, type CloudLayer, type SkyDressing } from "./cloud-field.ts"
 import { fogUniforms, heightFogGlsl } from "./height-fog.ts";
 import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
 import { DOME_RADIUS, type Preset } from "./sky.ts";
+import { GALAXY_OCTAVES, starfieldGlsl } from "./starfield.ts";
 
 /** How high the deck's lit rim reaches, radians above the horizon — the
  * same band the simple sky paints its deck mesh over (clouds.ts). */
@@ -96,6 +97,9 @@ uniform float uHaloSize;
 uniform float uHaloOpacity;
 uniform float uThrough;
 uniform float uStars;
+uniform float uGalaxy;
+uniform mat3 uSkyTurn;
+uniform float uStarTime;
 uniform float uFlash;
 uniform vec3 uCloudLit;
 uniform vec3 uCloudShade;
@@ -108,7 +112,8 @@ uniform vec4 uLayerE[${MAX_LAYERS}];
 uniform vec3 uDeckOverhead;
 uniform vec3 uDeckRim;
 uniform float uDeckRelief;
-${heightFogGlsl([build.octaves, sunlitOctaves(build.octaves)], [MIST_OCTAVES])}
+${heightFogGlsl([build.octaves, sunlitOctaves(build.octaves)], [MIST_OCTAVES, GALAXY_OCTAVES])}
+${starfieldGlsl()}
 
 // The same sample cloud-field.ts takes on the CPU (cloudUv).
 vec2 cloudUv( vec2 p, vec4 c, float scale, float streak, float seed ) {
@@ -131,21 +136,24 @@ void main() {
   // Under the horizon the dome is the far ground, which is fog.
   col = mix( uBelow, col, smoothstep( - 0.04, 0.0, up ) );
 
-  // Stars: one per cell of a grid the sky's directions are quantised on.
-  if ( uStars > 0.0 && up > 0.0 ) {
-    vec3 sd = ray * 130.0;
-    vec3 cell = floor( sd );
-    float h = cloudHash( vec2( cell.x + cell.z * 57.0, cell.y + cell.z * 13.0 ) );
-    float d = length( fract( sd ) - 0.5 );
-    float star = smoothstep( 0.985, 1.0, h ) * smoothstep( 0.32, 0.0, d );
-    float twinkle = 0.55 + 0.45 * fract( h * 97.0 );
-    col += star * twinkle * uStars * vec3( 0.87, 0.91, 1.0 );
+  float cosA = dot( ray, uKeyDir );
+  float ang = acos( clamp( cosA, - 1.0, 1.0 ) );
+
+  // THE NIGHT BEHIND EVERYTHING — the stars, the Milky Way and the other
+  // galaxies, on the sphere the hour has turned (starfield.ts). Drawn
+  // before the cloud sheets so a sheet drifting across takes them exactly
+  // as it takes the moon: gone under a thick one, hinted through a thin
+  // one, and the band still readable through a veil of cirrus.
+  if ( uStars > 0.0 || uGalaxy > 0.0 ) {
+    // How much of the moon's own sky glow this pixel is in. The halo is a
+    // few degrees; the glow that actually kills the faint sky is tens of
+    // them, which is why it is its own falloff and not the halo's.
+    float glare = exp( - ang * ang * 7.0 );
+    col += nightSky( uSkyTurn * ray, ray, up, glare, uStars, uGalaxy, uStarTime );
   }
 
   // The disc and its halo — under the clouds, so a cloud over the sun is
   // a bright patch with no edge, which is what a covered sun is.
-  float cosA = dot( ray, uKeyDir );
-  float ang = acos( clamp( cosA, - 1.0, 1.0 ) );
   float halo = exp( - ang / max( uHaloSize, 1e-3 ) * 2.5 ) * uHaloOpacity * uThrough;
   col += uHalo * halo;
   float disc = ( 1.0 - smoothstep( uDiscSize * 0.85, uDiscSize, ang ) ) * uThrough;
@@ -272,6 +280,9 @@ export type SkyShell = {
   /** Where the real sun and the disc are, and how much of the disc gets
    * through (0..1 — behind a ridge or a cloud, less). */
   setSun: (sun: THREE.Vector3, key: THREE.Vector3, through: number) => void;
+  /** Where the sphere of fixed stars has turned to (starfield.ts): world
+   * directions into celestial ones. */
+  setTurn: (basis: THREE.Matrix3) => void;
   setFlash: (surge: number) => void;
   /** The layers as drawn, with their live offsets — for the CPU to ask
    * the same field how much cloud is over the sun. */
@@ -307,6 +318,9 @@ export function createSkyShell(): SkyShell {
     uHaloOpacity: { value: 0 },
     uThrough: { value: 1 },
     uStars: { value: 0 },
+    uGalaxy: { value: 0 },
+    uSkyTurn: { value: new THREE.Matrix3() },
+    uStarTime: { value: 0 },
     uFlash: { value: 0 },
     uCloudLit: { value: new THREE.Color() },
     uCloudShade: { value: new THREE.Color() },
@@ -382,6 +396,7 @@ export function createSkyShell(): SkyShell {
     uniforms.uHaloSize.value = (p.haloSize / AUTHORED_AT) * 0.5;
     uniforms.uHaloOpacity.value = p.haloOpacity;
     uniforms.uStars.value = p.stars;
+    uniforms.uGalaxy.value = p.galaxy;
     uniforms.uCloudLit.value.set(p.cloud);
     uniforms.uCloudShade.value.set(p.cloudShade);
     uniforms.uSunColor.value.set(p.sun);
@@ -440,6 +455,10 @@ export function createSkyShell(): SkyShell {
   };
 
   const tick = (windX: number, windZ: number, dt: number): void => {
+    // The clock the stars scintillate on. Wrapped, because a float that has
+    // been counting seconds all afternoon has no precision left for a
+    // twinkle by the time the sun goes down.
+    uniforms.uStarTime.value = (uniforms.uStarTime.value + dt) % 3600;
     const speed = Math.hypot(windX, windZ);
     if (speed > 0.05) {
       windUnit.x = windX / speed;
@@ -462,6 +481,9 @@ export function createSkyShell(): SkyShell {
       uniforms.uSunDir.value.copy(sun);
       uniforms.uKeyDir.value.copy(key);
       uniforms.uThrough.value = through;
+    },
+    setTurn: (basis) => {
+      (uniforms.uSkyTurn.value as THREE.Matrix3).copy(basis);
     },
     setFlash: (surge) => {
       uniforms.uFlash.value = surge;

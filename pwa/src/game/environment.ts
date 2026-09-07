@@ -58,11 +58,13 @@ import {
 import { createHorizon } from "./horizon.ts";
 import { DENSITY_PER_M, mistFor } from "./mist.ts";
 import { createShadowMarch, type ShadowMarch } from "./mountain-shadow.ts";
+import { createNightSky } from "./night-sky.ts";
 import { createRain } from "./rain.ts";
 import { createSnowfall } from "./snowfall.ts";
 import { createSkyShell, litLayers } from "./sky-shader.ts";
 import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
 import { createStorm } from "./storm.ts";
+import { skyTurnAt, turnBasis } from "./starfield.ts";
 import {
   beamShareOf,
   carTintFor,
@@ -327,42 +329,19 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     domeGeo.getAttribute("color").needsUpdate = true;
   };
 
-  // ── Stars ────────────────────────────────────────────────────────────────
-  const starCount = 420;
-  const starPos = new Float32Array(starCount * 3);
-  for (let i = 0; i < starCount; i++) {
-    // Uniform over the upper dome, biased away from the horizon band.
-    const a = Math.random() * Math.PI * 2;
-    const e = 0.12 + Math.random() * (Math.PI / 2 - 0.12);
-    const r = DOME_RADIUS * 0.96;
-    starPos[i * 3] = Math.sin(a) * Math.cos(e) * r;
-    starPos[i * 3 + 1] = Math.sin(e) * r;
-    starPos[i * 3 + 2] = Math.cos(a) * Math.cos(e) * r;
-  }
-  const starGeo = new THREE.BufferGeometry();
-  starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
-  // BACKDROP, all of it: the stars, the sun and its halo ride the stack
-  // sky-depth.ts owns — last in the opaque pass, depth-tested at the far
-  // plane — so a mountain occludes the sun however far off it stands, and
-  // none of the three is shaded on a pixel the country already covers.
-  // They stay OUT of the transparent pass: marked `transparent` they would
-  // be depth-tested at their own distance instead, which is `DOME_RADIUS`
-  // and a bit, under 500 m — and a ridge further off than that would have
-  // the sun shining through it. The blend modes are additive because a
-  // material that is not `transparent` gets NO blending under normal mode,
-  // and the stars and the halo fade by opacity.
-  const starMat = new THREE.PointsMaterial({
-    color: 0xdfe8ff,
-    size: 1.6,
-    sizeAttenuation: false,
-    opacity: 0,
-    fog: false,
-    blending: THREE.AdditiveBlending,
-  });
-  drawAsBackdrop(starMat);
-  const stars = new THREE.Points(starGeo, starMat);
-  stars.renderOrder = SKY_ORDER - 2;
-  eye.add(stars);
+  // ── The night sky the simple one flies ───────────────────────────────────
+  // BACKDROP, all of it: the stars, the Milky Way, the sun and its halo ride
+  // the stack sky-depth.ts owns — last in the opaque pass, depth-tested at
+  // the far plane — so a mountain occludes the sun however far off it
+  // stands, and none of them is shaded on a pixel the country already
+  // covers. They stay OUT of the transparent pass: marked `transparent`
+  // they would be depth-tested at their own distance instead, which is
+  // `DOME_RADIUS` and a bit, under 500 m — and a ridge further off than
+  // that would have the sun shining through it. The blend modes are
+  // additive because a material that is not `transparent` gets NO blending
+  // under normal mode, and the night sky and the halo fade by opacity.
+  const night = createNightSky();
+  eye.add(night.group);
 
   // ── Sun / moon: a hard disc inside a soft halo, billboarded ──────────────
   const glowMap = glowTexture();
@@ -475,7 +454,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     const simple = !look.shader && skyShown;
     shell.mesh.visible = shader;
     dome.visible = simple;
-    stars.visible = simple;
+    night.setVisible(simple);
     clouds.setVisible(simple);
     disc.visible = simple && preset.discSize > 0;
     halo.visible = simple && preset.haloOpacity > 0.01;
@@ -556,13 +535,18 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     horizon.paint(preset);
     storm.apply(preset);
     lamps.setStage(preset.lamps);
+    // WHERE THE SPHERE OF STARS HAS TURNED TO this hour (starfield.ts) —
+    // the same answer to both skies, one as a change of basis on the dome's
+    // ray and one as the rotation of the group the field is baked in.
+    const turn = skyTurnAt(hour, env.season, biome);
     if (look.shader) {
+      shell.setTurn(turnBasis(turn));
       shell.apply(preset, dressing, look);
       litLayers(shell, (layer) => (layer.deck ? 1 : litAt(layer.altitude, preset.sunUp)));
     } else {
       paintDome(preset);
       clouds.apply(preset, dressing);
-      starMat.opacity = preset.stars;
+      night.apply(preset, turn, keyV);
       // The disc and halo park where the light comes from.
       const at = keyV.clone().multiplyScalar(DOME_RADIUS * 0.86);
       disc.position.copy(at);
@@ -772,6 +756,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     const windSpeed = Math.hypot(state.wind.x, state.wind.z);
     if (clouds.group.visible) clouds.update(windSpeed, dt, camera, group.position);
     if (shell.mesh.visible) shell.tick(state.wind.x, state.wind.z, dt);
+    if (night.group.visible) night.tick(dt);
 
     // THE SUN BEHIND THINGS. The ridge on its bearing, first: past it the
     // disc is gone and so is the beam, which is what a valley losing the
@@ -857,8 +842,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     domeGeo.dispose();
     domeMat.dispose();
     shell.dispose();
-    starGeo.dispose();
-    starMat.dispose();
+    night.dispose();
     haloMat.dispose();
     disc.geometry.dispose();
     discMat.dispose();
