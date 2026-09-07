@@ -10,13 +10,15 @@
 // over is the one thing no instrument on that layout can say: whose car it
 // is. That is this, and this is all of it.
 //
-// It stands in the CO-DRIVER'S SLOT (`.hud-pace`, above the car), which is
-// free for exactly as long as the mode lasts: there is nobody in this car to
-// be called a corner, so `Hud` takes the pacenotes down and hands the space
-// over. It takes the WHOLE slot, top of the frame included: the rear-view
-// glass is the one thing that shares it, and the renderer keeps that down
-// while the camera is on somebody else's car. What the feed IS lives in
-// spectate.ts.
+// It stands AT THE TOP EDGE of the frame, borrowing the co-driver's column
+// (`.hud-pace`: full width, centred, deaf to the pointer) but not its offset
+// — the slot itself hangs down over the road ahead of the watched car, which
+// is the one thing the mode exists to show. `Hud` takes the pacenotes down
+// for the duration, since there is nobody in this car to be called a corner,
+// and the renderer keeps the rear-view glass down while the camera is on
+// somebody else's car, so the strip is the banner's alone. Held upright it
+// drops to the condition schematic's row, the first line the clock and the
+// minimap dock leave clear across. What the feed IS lives in spectate.ts.
 
 import { playUi } from "./audio/ui.ts";
 import type { Watched } from "./spectate.ts";

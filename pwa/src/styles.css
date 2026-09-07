@@ -171,6 +171,14 @@ body {
   --hud-health-marks: calc(var(--hud-health-row) * 2 + 0.12rem);
   --hud-health-car: calc(var(--hud-map) * 0.78);
   --hud-health: calc(var(--hud-health-car) + var(--hud-health-marks) + 0.15rem);
+  /* ...and where that schematic's box STARTS, which is the foot of the
+     right-hand column: the map, the run's label, then this. Stated here
+     rather than on `.hud-health` because the spectator's banner lines itself
+     up with the schematic on a phone, and a second copy of this sum is a bug
+     the day the column above it gains or loses a row. */
+  --hud-health-top: calc(
+    max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) + 0.35rem
+  );
   /* The OTHER corner's one number: the tach's edge length, which is also the
      height of the whole instrument cluster, because the dial is the tallest
      thing in that row. Anything that has to stand clear of the panel — the
@@ -1510,21 +1518,25 @@ body {
 }
 
 /* ── The spectator's banner (hud-spectate.tsx) ───────────────────────────
-   THE CO-DRIVER'S SLOT, BORROWED. While a run-out is watched the driving
-   layout stays where it is and simply reads the watched car — clock and gap
-   top left, minimap and position top right, dials and damage bottom left —
-   so the only thing left to draw is whose car it is and the two presses that
-   change it. That is small, and it goes above the car where the corner calls
-   would be, which is free because there is nobody in this car to call one
-   to.
+   While a run-out is watched the driving layout stays where it is and simply
+   reads the watched car — clock and gap top left, minimap and position top
+   right, dials and damage bottom left — so the only thing left to draw is
+   whose car it is and the two presses that change it.
 
-   The banner wears `.hud-pace` itself rather than restating its offsets, so
-   the slot's two moves — down under the mirror, and down the stacked column
-   in portrait — can never drift apart from the calls it stands in for. That
-   rule is also full width and deaf to the pointer, so the controls inside it
-   take their own hearing back one at a time; a transparent band across the
-   screen would eat presses meant for the canvas under it. */
+   THAT GOES AT THE TOP EDGE, not in the co-driver's slot it used to borrow.
+   The slot hangs a band or two down the frame, which on a stage is where the
+   corner being called is — and the road ahead of the watched car is the one
+   thing this mode exists to show. A plate parked over it is in the way for
+   the whole of the run-out. Across the top the frame is genuinely free: the
+   mirror is kept down while the camera is on somebody else's car (hud.tsx),
+   and the clock and the minimap dock keep to their corners.
+
+   It still WEARS `.hud-pace` for everything but the offset — full width,
+   centred, columnar, and deaf to the pointer so the controls inside it take
+   their own hearing back one at a time; a transparent band across the screen
+   would eat presses meant for the canvas under it. */
 .hud-spectate {
+  top: max(0.6rem, env(safe-area-inset-top));
   gap: 0.25rem;
 }
 
@@ -1629,6 +1641,19 @@ body {
 .hud-spec-leave:active {
   background: rgb(255 210 62 / 75%);
   color: var(--hud-shadow);
+}
+
+/* Held upright there is no free strip at the very top: the clock takes the
+   left of that line and the minimap dock the right, and a centred banner
+   between the two is pinched to nothing. So it drops to the first row where
+   the frame is clear all the way across — the condition schematic's, at the
+   foot of the dock (`--hud-health-top`). Level with the last instrument in
+   that column it reads as one more thing on that line, and everything below
+   it is still road. */
+@media (orientation: portrait) {
+  .hud-spectate {
+    top: var(--hud-health-top);
+  }
 }
 
 /* R28 — the split, in its own band under the mirror (`--split-top`). It is
@@ -2349,11 +2374,11 @@ body {
 
 .hud-health {
   position: absolute;
-  /* The FOOT of the right-hand column: the map, the run's label, then this.
-     The two above it are read once — where you are, and what you are in —
-     and this one is read all the way down the stage, so it takes the edge of
-     the group that nothing else can push around. */
-  top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) + 0.35rem);
+  /* The FOOT of the right-hand column (`--hud-health-top`). The two above it
+     are read once — where you are, and what you are in — and this one is read
+     all the way down the stage, so it takes the edge of the group that
+     nothing else can push around. */
+  top: var(--hud-health-top);
   right: max(0.8rem, env(safe-area-inset-right));
   width: var(--hud-map);
   height: var(--hud-health);
@@ -2570,14 +2595,13 @@ body {
     font-size: clamp(0.95rem, 4.8vw, 1.35rem);
   }
 
-  /* Below the minimap, always: a percentage top clears the dock on a tall
-     phone and slides under it on a short one. The band moves, not the strip
+  /* Below the WHOLE dock, always: a percentage top clears it on a tall phone
+     and slides under it on a short one. Measured off the last instrument in
+     that column rather than re-summed from the top of the screen, so a row
+     gained or lost up there moves this with it. The band moves, not the strip
      — `--pace-top` follows it, so the split and the calls stay stacked. */
   .hud {
-    --split-top: calc(
-      max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) +
-        var(--hud-health) + 0.55rem
-    );
+    --split-top: calc(var(--hud-health-top) + var(--hud-health) + 0.2rem);
   }
 
   /* ...and below the GLASS when the glass is up, which on a phone hangs
