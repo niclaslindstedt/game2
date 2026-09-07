@@ -23,8 +23,16 @@
 // a simple game does not hand somebody a question about undergrowth
 // density. Which levers share a row is a design decision; see
 // `VideoSettings`.
+//
+// RESOLUTION is asked TWICE, because the honest question is not the same in
+// a browser tab and in a window the game owns: the site asks for a share of
+// the device's pixels, the desktop app names a height. Both are that one
+// row and only one of them is ever offered — `desktop-video.ts` owns the
+// desktop half and the reason.
 
 import type { GearboxMode } from "@engine";
+
+import { NATIVE_HEIGHT, renderHeightOf } from "./desktop-video.ts";
 
 /** Where the camera watches the car from, walked from the nose BACKWARDS:
  * the three seats first, closest to the road first, then out onto the boom
@@ -234,6 +242,12 @@ export type VideoSettings = {
   /** Pixel-ratio ceiling — the single biggest lever on a weak GPU, and its
    * own player-facing row (RESOLUTION). Applies the moment it is set. */
   resolution: "low" | "medium" | "high";
+  /** The SAME row, as the DESKTOP APP asks it: the height in device pixels
+   * the frame is drawn at, or `NATIVE_HEIGHT` for the window's own. Only the
+   * desktop shell offers it and only the desktop shell reads it — see
+   * `desktop-video.ts` for why a window that belongs to the game gets a
+   * question a browser tab cannot be asked. Applies the moment it is set. */
+  renderHeight: number;
   /** How far the fog lets you see, which is the same thing as how much
    * stage is submitted: the world is culled at the fog's own far distance
    * (`DRAW_DISTANCE_SCALE`). Its own player-facing row (DISTANCE), and it
@@ -897,6 +911,7 @@ export const DISTANCE_STOPS: { id: VideoSettings["drawDistance"]; label: string 
  * a player who wants the view has one row to move and sees it immediately. */
 export const DEFAULT_VIDEO: VideoSettings = {
   resolution: "high",
+  renderHeight: NATIVE_HEIGHT,
   drawDistance: "near",
   ...DETAIL_PRESETS.medium,
 };
@@ -1454,6 +1469,10 @@ export function loadSettings(): Settings {
       const video = parsed.video as Partial<Record<keyof VideoSettings, unknown>>;
       const resolution = RESOLUTION_STOPS.find((stop) => stop.id === video.resolution);
       if (resolution) settings.video.resolution = resolution.id;
+      // The desktop row, checked against its own ladder for the same reason:
+      // a height this build no longer offers is a stop the arrows could
+      // never bring the player back to, so it lands on NATIVE instead.
+      settings.video.renderHeight = renderHeightOf(String(video.renderHeight));
       const distance = DISTANCE_STOPS.find((stop) => stop.id === video.drawDistance);
       if (distance) settings.video.drawDistance = distance.id;
       Object.assign(settings.video, DETAIL_PRESETS[detailOf(parsed.video)]);

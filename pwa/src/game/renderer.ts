@@ -21,6 +21,7 @@ import {
 import { clamp } from "../lib/util.ts";
 import { createGameCamera, type CameraMode, type MapPose } from "./camera.ts";
 import type { FreeFlyMove, FreeFlyPose } from "./camera-free.ts";
+import { desktopPicture, renderHeightScale } from "./desktop-video.ts";
 import {
   DRAW_DISTANCE_SCALE,
   DUST_LAMP_CARS,
@@ -289,10 +290,19 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // than on the renderer.
   renderer.localClippingEnabled = true;
   let quality = video;
-  const applyResolution = (): void => {
+  /** THE RESOLUTION ROW, APPLIED — off the canvas's own box, because the
+   * desktop half of the row is a height and a height is only a share of a
+   * window somebody may have just resized. */
+  const applyResolution = (cssHeight = canvas.clientHeight || 1): void => {
+    const dpr = window.devicePixelRatio;
     // A SHARE of the device's own pixels, not a ceiling on them: HIGH is the
-    // screen the machine actually has, and each stop down halves it.
-    renderer.setPixelRatio(window.devicePixelRatio * RESOLUTION_SCALE[quality.resolution]);
+    // screen the machine actually has, and each stop down halves it. The
+    // desktop app asks the same question in pixels instead, and NATIVE there
+    // works out to this same 1 (desktop-video.ts).
+    const share = desktopPicture()
+      ? renderHeightScale(quality.renderHeight, cssHeight * dpr)
+      : RESOLUTION_SCALE[quality.resolution];
+    renderer.setPixelRatio(dpr * share);
   };
   applyResolution();
 
@@ -1638,6 +1648,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     const sameBuffer =
       canvas.width === Math.floor(w * ratio) && canvas.height === Math.floor(h * ratio);
     if (sameBox && sameBuffer) return;
+    // The desktop row names a HEIGHT, so the share it works out to is a
+    // property of the box about to be cut — re-derived here rather than left
+    // at whatever the last window size made it.
+    applyResolution(h);
     renderer.setSize(w, h, false);
     applyAspect();
   };

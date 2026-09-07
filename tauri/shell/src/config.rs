@@ -56,14 +56,35 @@ pub const WINDOW_TITLE: &str = "Scandinavian Flick";
 pub const APP_DIR_NAME: &str = "scanflick";
 
 /// The global the shell's initialization script defines on the page before
-/// the game's own scripts run — the page's WHOLE view of the shell, and the
-/// name `pwa/src/shell-host.ts` reads. Not a handle to anything: one frozen
-/// word saying which binary is showing the page, which is what lets the page
-/// keep its PWA update lifecycle off in here.
+/// the game's own scripts run — the first half of the page's view of the
+/// shell, and the name `pwa/src/shell-host.ts` reads. Not a handle to
+/// anything: one frozen word saying which binary is showing the page, which
+/// is what lets the page keep its PWA update lifecycle off in here.
 pub const SHELL_GLOBAL: &str = "__SF_SHELL__";
 
 /// The word [`SHELL_GLOBAL`] carries.
 pub const SHELL_ID: &str = "tauri";
+
+/// THE FULLSCREEN CONVERSATION, and the other half of what the page knows.
+///
+/// The window's fullscreen is the one thing the game may ask this shell to
+/// DO, because it is the one thing a desktop window has that a browser tab
+/// keeps for itself: the Fullscreen API belongs to a browser chrome this
+/// window does not have, so a FULLSCREEN switch drawn in the game's own
+/// options has nowhere else to go.
+///
+/// It is two DOM events rather than a handle — the page dispatches
+/// [`SHELL_FULLSCREEN_ASK`], the shell answers with
+/// [`SHELL_FULLSCREEN_STATE`] — so nothing the game holds outlives the frame
+/// it was asked in, and the answer is the same whether the change came from
+/// the switch, from F11 or from the window manager. Both words are spelled
+/// again in `pwa/src/shell-host.ts`, which cannot import this file;
+/// `tests/tauri_test.ts` holds the pair together.
+pub const SHELL_FULLSCREEN_ASK: &str = "sf-shell-fullscreen-ask";
+
+/// The shell's answer, carrying `{ on: boolean }`. See
+/// [`SHELL_FULLSCREEN_ASK`].
+pub const SHELL_FULLSCREEN_STATE: &str = "sf-shell-fullscreen";
 
 /// This app's own directory under the OS's app-data root.
 pub fn user_data_dir(app_data_root: &Path) -> PathBuf {
