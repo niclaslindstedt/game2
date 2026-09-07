@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The player's options as the menu offers them: two HUD switches spread
-// over the whole panel, twelve video levers on three independent picture rows,
+// over the whole panel, twelve video levers on four independent picture rows,
 // and a stored blob from an older build landing on something the page can
 // still show.
 
@@ -28,6 +28,7 @@ import {
   loadSettings,
   MIN_FOG_FAR,
   PICTURE_ROWS,
+  SKY_STOPS,
   pictureRows,
   SKY_LOOK,
   type HudShow,
@@ -121,7 +122,7 @@ describe("the HUD's three switches", () => {
   });
 });
 
-describe("the three picture rows", () => {
+describe("the four picture rows", () => {
   it("name every set of levers DETAIL defines", () => {
     for (const id of ["low", "medium", "high"] as const) {
       expect(detailOf(DETAIL_PRESETS[id])).toBe(id);
@@ -168,7 +169,7 @@ describe("the three picture rows", () => {
         ground: "normal",
         dust: "player",
         glass: "player",
-        sky: "layered",
+        crumple: "player",
       }),
     ).toBe("medium");
     // A blob carrying one lever MEDIUM and HIGH agree on is a genuine tie,
@@ -197,13 +198,17 @@ describe("the three picture rows", () => {
 
   // The regression this whole change exists to prevent: the loader used to
   // put the six levers back on ONE preset, so a sharp-but-cheap picture was
-  // a picture the player could set and never load again.
+  // a picture the player could set and never load again. The sky is in the
+  // blob deliberately off the stop the rest of it resembles: it is its own
+  // row now, and a row that came back snapped to the picture beside it
+  // would be the same bug in a new place.
   it("keep a mixed picture across a save and a load", () => {
     const mixed = {
       ...DETAIL_PRESETS.low,
       resolution: "high",
       renderHeight: NATIVE_HEIGHT,
       drawDistance: "near",
+      sky: "full",
     } as const;
     stored({ video: mixed });
     expect(loadSettings().video).toEqual(mixed);
@@ -595,27 +600,43 @@ describe("what the car's lamps throw at each DETAIL stop", () => {
 });
 
 // The SKY row is paid per sky pixel — every octave of cloud noise over a
-// third of the frame — so which stop draws which sky is worth holding: the
-// design point gets the layered sky a stop short of everything, the floor
-// keeps the arcade one, and the ladder only ever adds.
-describe("what sky each DETAIL stop draws", () => {
-  it("keeps the arcade sky on LOW and draws the shader on the two above", () => {
-    expect(SKY_LOOK[DETAIL_PRESETS.low.sky].shader).toBe(false);
-    expect(SKY_LOOK[DETAIL_PRESETS.medium.sky].shader).toBe(true);
-    expect(SKY_LOOK[DETAIL_PRESETS.high.sky].shader).toBe(true);
+// third of the frame — which is a different currency from everything on the
+// DETAIL row, all of which is paid per object. That is why it is a row of
+// its own, and it is why the ladder is worth holding: the floor keeps the
+// arcade sky, the design point gets the shader a stop short of everything,
+// and the ladder only ever adds.
+describe("what each SKY stop draws", () => {
+  it("offers three stops, cheapest first", () => {
+    expect(SKY_STOPS.map((stop) => stop.id)).toEqual(["simple", "layered", "full"]);
   });
 
-  it("saves the cloud shadows and the sunlit edges for HIGH", () => {
-    expect(SKY_LOOK[DETAIL_PRESETS.medium.sky].cloudShadow).toBe(false);
-    expect(SKY_LOOK[DETAIL_PRESETS.medium.sky].sunlit).toBe(false);
-    expect(SKY_LOOK[DETAIL_PRESETS.high.sky].cloudShadow).toBe(true);
-    expect(SKY_LOOK[DETAIL_PRESETS.high.sky].sunlit).toBe(true);
+  it("keeps the arcade sky on SIMPLE and draws the shader on the two above", () => {
+    expect(SKY_LOOK.simple.shader).toBe(false);
+    expect(SKY_LOOK.layered.shader).toBe(true);
+    expect(SKY_LOOK.full.shader).toBe(true);
+  });
+
+  it("saves the cloud shadows and the sunlit edges for FULL", () => {
+    expect(SKY_LOOK.layered.cloudShadow).toBe(false);
+    expect(SKY_LOOK.layered.sunlit).toBe(false);
+    expect(SKY_LOOK.full.cloudShadow).toBe(true);
+    expect(SKY_LOOK.full.sunlit).toBe(true);
+  });
+
+  it("ships the design point, a stop short of everything", () => {
+    expect(DEFAULT_VIDEO.sky).toBe("layered");
+  });
+
+  // The DETAIL row must not carry a sky any more, or the two rows would
+  // fight: moving DETAIL would silently undo a sky the player picked.
+  it("is nobody else's lever", () => {
+    for (const preset of Object.values(DETAIL_PRESETS)) {
+      expect(preset).not.toHaveProperty("sky");
+    }
   });
 
   it("walks the ladder monotonically, cheapest first", () => {
-    const stops = (["low", "medium", "high"] as const).map(
-      (id) => SKY_LOOK[DETAIL_PRESETS[id].sky],
-    );
+    const stops = SKY_STOPS.map((stop) => SKY_LOOK[stop.id]);
     for (let i = 1; i < stops.length; i++) {
       expect(stops[i].octaves).toBeGreaterThanOrEqual(stops[i - 1].octaves);
       expect(Number(stops[i].mist)).toBeGreaterThanOrEqual(Number(stops[i - 1].mist));
@@ -667,6 +688,7 @@ describe("the picture, reported", () => {
       PICTURE_ROWS.resolution,
       PICTURE_ROWS.detail,
       PICTURE_ROWS.distance,
+      PICTURE_ROWS.sky,
     ]);
   });
 
@@ -675,7 +697,21 @@ describe("the picture, reported", () => {
       "HIGH",
       "MEDIUM",
       "NEAR",
+      "LAYERED",
     ]);
+  });
+
+  it("reports the SKY row off its own lever, not off DETAIL", () => {
+    // The two rows are independent now, so every combination has to read
+    // back as itself: a sky picked on one DETAIL stop must survive a move
+    // of the other row.
+    for (const detail of ["low", "medium", "high"] as const) {
+      for (const sky of ["simple", "layered", "full"] as const) {
+        const rows = pictureRows({ ...DEFAULT_VIDEO, ...DETAIL_PRESETS[detail], sky }, false);
+        expect(rows[1].value).toBe(detail.toUpperCase());
+        expect(rows[3].value).toBe(sky.toUpperCase());
+      }
+    }
   });
 
   it("reports the DETAIL row as the stop a blob most resembles", () => {

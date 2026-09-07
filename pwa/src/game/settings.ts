@@ -223,17 +223,27 @@ export type AudioSettings = {
   sfx: number;
 };
 
-/** THE TWELVE LEVERS THE RENDERER READS, on THREE rows the player turns.
+/** THE TWELVE LEVERS THE RENDERER READS, on FOUR rows the player turns.
  *
- * `resolution` and `drawDistance` are their own rows because they are their
- * own decisions: how SHARP the picture is and how FAR into it you can see
- * cost different things on different machines, and wanting one without the
- * other is the normal case rather than the exotic one — a retina phone with
- * a modest GPU wants every pixel and the fog pulled in, and a laptop driving
- * a big low-density screen wants the opposite. Tying them together only ever
- * charges a player for something they did not ask for.
+ * `resolution`, `drawDistance` and `sky` are their own rows because they are
+ * their own decisions, and because each is paid for in a different currency:
+ * how SHARP the picture is, how FAR into it you can see, and what the AIR
+ * over it is made of. Wanting one without the others is the normal case
+ * rather than the exotic one — a retina phone with a modest GPU wants every
+ * pixel and the fog pulled in, and a laptop driving a big low-density screen
+ * wants the opposite. Tying them together only ever charges a player for
+ * something they did not ask for.
  *
- * The remaining ten are HOW MUCH WORLD IS DRAWN, and they are one row
+ * SKY is its own row for a sharper reason than either: it is the dearest
+ * lever in the whole panel after RESOLUTION, and it is paid PER SKY PIXEL —
+ * every octave of noise over a third of the frame — which is a completely
+ * different cost from everything on the DETAIL row below, all of which is
+ * paid per object. A machine that is submission-bound gets nothing from
+ * thinning the forest and a great deal from a flat sky; a machine that is
+ * fill-bound gets the opposite. Buried inside one preset, neither player
+ * could reach the lever that was theirs.
+ *
+ * The remaining nine are HOW MUCH WORLD IS DRAWN, and they are one row
  * (`DETAIL_PRESETS`) because they are one judgement with one answer: they
  * all move together with how much headroom the machine has, and nobody has
  * an opinion about undergrowth density that is not also an opinion about
@@ -407,9 +417,10 @@ export type VideoSettings = {
    * having on a machine with headroom and the first light to go on one
    * without. `lean` throws none. */
   lighting: "lean" | "normal" | "full";
-  /** WHAT THE SKY IS MADE OF, and what the air does with the light. Part
-   * of DETAIL, and it applies the instant it is set — the dome is one mesh
-   * either way, and the ground reads the same fog chunk whichever is up.
+  /** WHAT THE SKY IS MADE OF, and what the air does with the light. Its own
+   * player-facing row (SKY), and it applies the instant it is set — the dome
+   * is one mesh either way, and the ground reads the same fog chunk
+   * whichever is up.
    *
    * `simple` is the arcade sky: a vertex-coloured gradient with a ring of
    * cumulus puffs floating in it and, under weather, a mesh ceiling with
@@ -426,7 +437,10 @@ export type VideoSettings = {
    *
    * It is the dearest lever after RESOLUTION on a phone, because it is
    * paid per sky pixel — every octave of noise on a third of the frame —
-   * which is why the design point stops one short of everything. */
+   * which is why the design point stops one short of everything, and why it
+   * is a row of its own rather than a share of DETAIL: no object count on
+   * that row moves what this one costs, and nothing this one does is
+   * cheaper for a thinner forest. */
   sky: "simple" | "layered" | "full";
 };
 
@@ -840,7 +854,7 @@ export const DUST_LAMP_CARS: Record<VideoSettings["lighting"], number> = {
  * expressed at all. */
 export type Detail = "low" | "medium" | "high";
 
-/** The ten levers DETAIL owns. Named as a slice of `VideoSettings` rather
+/** The nine levers DETAIL owns. Named as a slice of `VideoSettings` rather
  * than restated, so adding a tenth lever is a decision about which row it
  * belongs on instead of a silent omission from both. */
 export type DetailSettings = Pick<
@@ -854,7 +868,6 @@ export type DetailSettings = Pick<
   | "dust"
   | "exhaust"
   | "lighting"
-  | "sky"
 >;
 
 /** What each DETAIL stop is worth, cheapest first — the order the ladder is
@@ -865,8 +878,8 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   // The phone that stutters: every window solid and every wiper off, the
   // verges bare, under half the particles, a lost wheel gone rather than
   // rolling, nobody on the road raising any ground, no pipe smoking, no
-  // body bent by what it hit, one headlamp beam and no shadow under the
-  // car, and the arcade sky.
+  // body bent by what it hit, and one headlamp beam with no shadow under
+  // the car.
   low: {
     effects: "low",
     interior: "off",
@@ -877,7 +890,6 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     dust: "off",
     exhaust: "off",
     lighting: "lean",
-    sky: "simple",
   },
   // The design point — every lever at the number the game was tuned on, and
   // everything that is per car spent on the one car it is worth the most
@@ -886,8 +898,7 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
   // machine buys back.
   // The lamps throw one beam per end rather than the pair, and the shadow
   // is the smaller map: a light is paid for on every pixel, and it is what
-  // the design point gives up to hold its frame rate. The sky is the
-  // layered one, a stop short of the cloud shadows.
+  // the design point gives up to hold its frame rate.
   medium: {
     effects: "full",
     interior: "full",
@@ -898,12 +909,11 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     dust: "player",
     exhaust: "player",
     lighting: "normal",
-    sky: "layered",
   },
   // A machine with headroom: a thicker forest floor, stonier verges, and the
   // whole entry list furnished behind its glass, towing dust, steaming on
   // the line and wearing every dent it has earned, the way a rally actually
-  // looks — under all four beams, with the sharp shadow, and the whole sky.
+  // looks — under all four beams, with the sharp shadow.
   high: {
     effects: "full",
     interior: "full",
@@ -914,7 +924,6 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     dust: "all",
     exhaust: "all",
     lighting: "full",
-    sky: "full",
   },
 };
 
@@ -940,6 +949,16 @@ export const DISTANCE_STOPS: { id: VideoSettings["drawDistance"]; label: string 
   { id: "far", label: "FAR" },
 ];
 
+/** The stops name what the sky IS rather than how much of it there is,
+ * because that is what a player is choosing between: a flat drawn one, the
+ * real sheets at their real heights, or those with the sun working on their
+ * edges and their shadows on the ground. */
+export const SKY_STOPS: { id: VideoSettings["sky"]; label: string }[] = [
+  { id: "simple", label: "SIMPLE" },
+  { id: "layered", label: "LAYERED" },
+  { id: "full", label: "FULL" },
+];
+
 /** Where the three rows stand on a first launch — and the three answers are
  * not the same answer, because the three costs are not the same cost.
  *
@@ -955,7 +974,13 @@ export const DISTANCE_STOPS: { id: VideoSettings["drawDistance"]; label: string 
  * was tuned on, with the per-car spending on the one car it is worth most
  * on. HIGH there is a choice somebody makes after finding out they can.
  *
- * DISTANCE ships NEAR, which is the row that pays for the other two. What it
+ * SKY ships LAYERED: the design point, the real cloud chart at its real
+ * altitudes, one stop short of lighting every cloud edge by a second sample
+ * and throwing their shadows on the ground. FULL there is the same kind of
+ * choice HIGH is on DETAIL — something a player picks after finding out the
+ * machine can hold it.
+ *
+ * DISTANCE ships NEAR, which is the row that pays for the other three. What it
  * buys back is the far half of the world — ridges read through fog at the
  * horizon, submitted every frame and looked at by nobody at rally pace,
  * where the picture that matters is the next four seconds of road. Giving up
@@ -965,6 +990,7 @@ export const DEFAULT_VIDEO: VideoSettings = {
   resolution: "high",
   renderHeight: NATIVE_HEIGHT,
   drawDistance: "near",
+  sky: "layered",
   ...DETAIL_PRESETS.medium,
 };
 
@@ -975,6 +1001,7 @@ export const PICTURE_ROWS = {
   resolution: "RESOLUTION",
   detail: "DETAIL",
   distance: "DISTANCE",
+  sky: "SKY",
 } as const;
 
 /** One row, as it reads on screen. */
@@ -1002,6 +1029,7 @@ export function pictureRows(video: VideoSettings, desktop: boolean): PictureRow[
     },
     { label: PICTURE_ROWS.detail, value: stop(DETAIL_STOPS, detailOf(video)) },
     { label: PICTURE_ROWS.distance, value: stop(DISTANCE_STOPS, video.drawDistance) },
+    { label: PICTURE_ROWS.sky, value: stop(SKY_STOPS, video.sky) },
   ];
 }
 
@@ -1565,6 +1593,14 @@ export function loadSettings(): Settings {
       const distance = DISTANCE_STOPS.find((stop) => stop.id === video.drawDistance);
       if (distance) settings.video.drawDistance = distance.id;
       Object.assign(settings.video, DETAIL_PRESETS[detailOf(parsed.video)]);
+      // AFTER the preset, and off the blob rather than off the preset: SKY
+      // used to be the tenth lever on the DETAIL row, so a blob written on
+      // that ladder carries a sky that the row it came in on no longer
+      // sets. Read on its own, that choice survives the change; read off
+      // the preset, everybody who had ever moved DETAIL would come back to
+      // a sky they never picked.
+      const sky = SKY_STOPS.find((stop) => stop.id === video.sky);
+      if (sky) settings.video.sky = sky.id;
     }
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
     if (parsed.touch) Object.assign(settings.touch, parsed.touch);
