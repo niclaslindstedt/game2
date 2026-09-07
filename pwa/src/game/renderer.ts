@@ -47,7 +47,8 @@ import {
 import type { FrameCost, SceneShare } from "./benchmark-report.ts";
 import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
-import { carEyes } from "./car-styles.ts";
+import { bodySpecFor, carEyes } from "./car-styles.ts";
+import { pipeAnchors, type PipeAnchor } from "./car/shell.ts";
 import {
   AXLE,
   WET_THROW,
@@ -69,7 +70,7 @@ import { createFieldCars, type FieldCars } from "./field-cars.ts";
 import { watchGpuContext } from "./gpu-context.ts";
 import { wetnessOf, type Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
-import { PIPE, pipeBursts, pipeWork } from "./fumes.ts";
+import { pipeBursts, pipeWork } from "./fumes.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
 import {
@@ -587,6 +588,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * one grain every ten spawns, not zero forever. */
   let grainDebt = 0;
   let fumeClock = 0;
+  /** Where this car's tailpipes end, read off its bodywork when the car is
+   * fitted: a car with two of them smokes out of both. `pipeStub` is the
+   * same car once the ground has torn the pipework off — one plume, out of
+   * the break under the tail. Both are held rather than re-derived, because
+   * which of them is in use changes the moment a landing shears the part. */
+  let pipes: PipeAnchor[] = [];
+  let pipeStub: PipeAnchor[] = [];
   let smokeClock = 0;
   const smokeTint = new THREE.Color();
   /** HOW HOT THE TIRES ARE, 0..1 — the soot in the tarmac smoke rides on
@@ -862,6 +870,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     car.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
     car.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     car.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
+    const body = bodySpecFor(state.spec);
+    pipes = pipeAnchors(body);
+    pipeStub = pipeAnchors(body, true);
     const eyes = carEyes(state.spec);
     chase.setEyes(eyes);
     driverEyeY = eyes.hood.y;
@@ -1396,27 +1407,38 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       }
     }
 
-    // Exhaust: puffs off the tailpipe, faster and sootier the more fuel the
-    // engine is drinking, handed to the wind the moment they leave the pipe.
+    // Exhaust: puffs off every tailpipe the car's bodywork has
+    // (`pipeAnchors`), faster and sootier the more fuel the engine is
+    // drinking, handed to the wind the moment they leave the pipe. The rate
+    // is shared across the pipes rather than paid per pipe, so a twin-exit
+    // car puts up two plumes and the same amount of smoke.
     // A car revving on the grid is drinking plenty and turning none of it
     // into road speed, so it smokes harder than one at pace — `car.rev` is
     // the throttle itself anywhere in the start control, and gearing plus
     // speed at every other moment, which is why the read is phase-gated.
     const pipeFx = exhaustFx();
-    const pipe = pipeWork(c.rev, c.u, state.phase, pipeFx);
+    const blown = c.damage.broken.includes("exhaust");
+    const ports = blown ? pipeStub : pipes;
+    const pipe = pipeWork(c.rev, c.u, state.phase, pipeFx, {
+      pipes: ports.length,
+      broken: blown,
+    });
     fumeClock += dt;
-    const bursts = pipeFx > 0 && !c.airborne ? pipeBursts(fumeClock, pipe.every) : 0;
+    const bursts =
+      pipeFx > 0 && ports.length > 0 && !c.airborne ? pipeBursts(fumeClock, pipe.every) : 0;
     if (bursts > 0) {
       fumeClock -= bursts * pipe.every;
-      for (let i = 0; i < bursts * pipe.puffs; i++) {
-        fumes.spawn(
-          c.x - fwdX * PIPE.back + rightX * PIPE.side,
-          c.y + PIPE.up,
-          c.z - fwdZ * PIPE.back + rightZ * PIPE.side,
-          -fwdX * pipe.blast + state.wind.x * 0.85,
-          -fwdZ * pipe.blast + state.wind.z * 0.85,
-          pipe.shade,
-        );
+      for (const at of ports) {
+        for (let i = 0; i < bursts * pipe.puffs; i++) {
+          fumes.spawn(
+            c.x - fwdX * at.back + rightX * at.side,
+            c.y + at.up,
+            c.z - fwdZ * at.back + rightZ * at.side,
+            -fwdX * pipe.blast + state.wind.x * 0.85,
+            -fwdZ * pipe.blast + state.wind.z * 0.85,
+            pipe.shade,
+          );
+        }
       }
     }
 

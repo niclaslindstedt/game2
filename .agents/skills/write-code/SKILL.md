@@ -201,6 +201,15 @@ Make targets are the definition of green CI enforces).
   and a rule joining two layers has nowhere else to be checked. What unit
   tests cannot judge is how anything LOOKS — that is verified by looking
   (`make screenshots`, the `playtest` skill).
+  **The WHOLE import graph is the test, and vitest will not tell you.** The
+  root `tsconfig.json` has no `dom` lib, so a test that reaches a module
+  which transitively imports `pwa/src/game/textures.ts` (or anything else
+  touching `document`) RUNS green under vitest and fails `make lint` later,
+  with errors pointing at the DOM module rather than at your test. Check the
+  import chain before writing the test — and when a pure model sits in a
+  module that is not DOM-free, either leave it untested or split it the way
+  the audio surface already does (`lib/voice.ts` describes, `lib/synth.ts`
+  touches WebAudio); do not widen the root config.
 - Import the engine through the **`@engine`** alias (→ `engine/index.ts`),
   never a relative path into `engine/`.
 - Physics tests build **synthetic tracks** via `compileTrack(seed, segments)`

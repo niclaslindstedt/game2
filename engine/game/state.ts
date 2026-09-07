@@ -47,7 +47,16 @@ export const DAMAGE_ZONES = 8;
 /** The pieces an impact can tear off the body. The engine decides WHEN one
  * breaks — zone crush past its bolt strength for the panels, a pane's own
  * crazing reaching the top for the glass (`glassCrack`), a wheel's own
- * ledger for a wheel — and the renderer owns what flies. A door is bolted
+ * ledger for a wheel, and the FLOOR's fold for the exhaust — and the
+ * renderer owns what flies.
+ *
+ * THE EXHAUST IS THE ONE PART THE GROUND TAKES. Everything else on this
+ * list is sheared by something the car ran into; the pipe hangs under the
+ * floorpan, lower than the car itself, so what tears it off is a stage
+ * taken too fast over ground that is not flat — a jump landed heavily, a
+ * crest bottomed out on. It is the cheapest thing on the car to lose and
+ * the loudest: nothing about the driving changes, and the car spends the
+ * rest of the stage trailing black smoke out of the break. A door is bolted
  * deeper than anything on the flank, and a wheel deeper still: the first
  * takes a flank folded most of the way to the cage, the second a corner
  * driven into something at pace, or landed on.
@@ -75,6 +84,7 @@ export type DamagePart =
   | "mirrorL"
   | "mirrorR"
   | "spoiler"
+  | "exhaust"
   | "hood"
   | "hatch"
   | "glassF"

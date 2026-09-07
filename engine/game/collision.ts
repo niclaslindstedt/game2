@@ -65,10 +65,23 @@ const PART_BOLTS: { part: DamagePart; zones: number[]; crushAt: number }[] = [
   { part: "mirrorR", zones: [1, 2], crushAt: T.collision.partAt.mirror },
   { part: "mirrorL", zones: [6, 7], crushAt: T.collision.partAt.mirror },
   { part: "spoiler", zones: [3, 4, 5], crushAt: T.collision.partAt.spoiler },
+  { part: "exhaust", zones: [3, 4, 5], crushAt: T.collision.partAt.bumper },
   { part: "hood", zones: [7, 0, 1], crushAt: T.collision.partAt.lid },
   { part: "hatch", zones: [3, 4, 5], crushAt: T.collision.partAt.lid },
   { part: "doorR", zones: [2], crushAt: T.collision.partAt.door },
   { part: "doorL", zones: [6], crushAt: T.collision.partAt.door },
+];
+
+/** ...and what the FLOOR shears, against `CarDamage.belly`. The exhaust is
+ * the whole of it, because it is the whole of what hangs below the
+ * floorpan: every other part on the car is bolted somewhere the ground
+ * cannot reach without the car being off its wheels, and a car off its
+ * wheels is folding a flank or the roof rather than the floor. This is the
+ * one list a car collects entries on WITHOUT hitting anything — the stage
+ * itself is what takes the pipe off, which is why the ledger it reads is
+ * the one that grows on every heavy landing. */
+const BELLY_BOLTS: { part: DamagePart; crushAt: number }[] = [
+  { part: "exhaust", crushAt: T.collision.partAt.exhaust },
 ];
 
 /** ...and what the ROOF folding shears, against `CarDamage.roof`. The
@@ -350,6 +363,10 @@ function dealCrush(
   dealWheels(car, face, crush, flat, events);
   if (face === "belly") {
     damage.belly = before + crush;
+    for (const bolt of BELLY_BOLTS) {
+      if (damage.belly < bolt.crushAt) continue;
+      shear(damage, bolt.part, events);
+    }
     return;
   }
   // The GLASS is read off the crush rather than written, so its before is
@@ -390,6 +407,7 @@ export function shearedParts(damage: CarState["damage"]): DamagePart[] {
     if (bolt.zones.some((zone) => damage.zones[zone] >= bolt.crushAt)) add(bolt.part);
   }
   for (const bolt of ROOF_BOLTS) if (damage.roof >= bolt.crushAt) add(bolt.part);
+  for (const bolt of BELLY_BOLTS) if (damage.belly >= bolt.crushAt) add(bolt.part);
   GLASS_PARTS.forEach((part, pane) => {
     if (glassCrack(damage, pane) >= 1) add(part);
   });

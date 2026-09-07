@@ -48,13 +48,18 @@ export const EXHAUST = {
    * the back of it — anything jetted hard streams straight past the chase
    * camera and leaves the start line looking clean. */
   rev: { from: 0.12, every: 0.016, puffs: 4, shade: 0.85, blast: 1.4 },
+  /** THE PIPE TORN OFF BY THE GROUND (`DamagePart` "exhaust"). What is
+   * left is an open port under the floor: nothing silencing it, and
+   * nothing between the combustion chamber and the daylight, so what the
+   * engine failed to burn leaves as soot instead of being finished on the
+   * way out. `every` scales the interval between bursts — under 1 the car
+   * smokes harder than any intact pipe ever does — `puffs` is the extra
+   * each burst carries, and `shade` is the floor the soot is held above,
+   * so a broken car is black at idle and stays black at pace rather than
+   * darkening toward it. `blast` is what the unsilenced port throws them
+   * out with. */
+  broken: { every: 0.5, puffs: 2, shade: 0.9, blast: 1.1 },
 };
-
-/** WHERE THE PIPE IS, in metres off the car's own axes: back from the
- * centre, out to one side, and up off the road. One statement of it, because
- * a rival's exhaust leaving from somewhere its own bodywork is not would be
- * visible on any car the player sits behind. */
-export const PIPE = { back: 1.9, side: 0.35, up: 0.32 } as const;
 
 /** How hard a pipe is working this instant. */
 export type PipeWork = {
@@ -76,29 +81,53 @@ export type PipeWork = {
  * pipe. Everywhere else `rev` is gearing plus speed, and a car at pace
  * smokes less than one going nowhere loudly.
  *
- * `fx` is the transient-FX budget and `thickness` is how much of a pipe this
- * car gets: 1 for the car being driven, less for a rival, which is the same
- * bargain the field's dust makes (`FIELD_PLUME`). A cloud seen across a
- * start line does not need the density of the one coming off your own
- * bumper, and eight of them at full rate would spend the shared pool in a
- * third of a second. */
+ * `fx` is the transient-FX budget; `car` is what this particular car brings
+ * to it:
+ *
+ *   `thickness` — how much of a pipe it gets: 1 for the car being driven,
+ *   less for a rival, which is the same bargain the field's dust makes
+ *   (`FIELD_PLUME`). A cloud seen across a start line does not need the
+ *   density of the one coming off your own bumper, and eight of them at
+ *   full rate would spend the shared pool in a third of a second.
+ *
+ *   `pipes` — HOW MANY EXITS IT HAS, and the answer is a share rather than
+ *   a multiplier: an engine burns the fuel it burns whichever way out the
+ *   gas leaves, so a twin-exit car fires each of its pipes half as often
+ *   and puts the same amount of smoke behind itself as a single. Left as a
+ *   multiplier the works sedan would ask its cloud for twice the pool it
+ *   holds at the limiter, and the answer to that is not more smoke, it is
+ *   a cloud tearing holes in itself at the moment it is thickest. Each
+ *   burst keeps its full `puffs`, because that is what makes a blip read
+ *   as a burst rather than a tick, and it is per pipe.
+ *
+ *   `broken` — the pipework torn off by the ground, which is the one thing
+ *   here that is not a fact about the throttle. It goes on top of whatever
+ *   the engine was doing rather than replacing it, so a wrecked car still
+ *   blips blacker on the grid than it idles; and it holds the soot up from
+ *   below rather than setting it, so a broken car cannot come out PALER
+ *   than the intact one it was a moment ago. */
 export function pipeWork(
   rev: number,
   u: number,
   phase: GameState["phase"],
   fx: number,
-  thickness = 1,
+  car: { thickness?: number; pipes?: number; broken?: boolean } = {},
 ): PipeWork {
   const X = EXHAUST;
+  const thickness = car.thickness ?? 1;
+  const pipes = Math.max(1, car.pipes ?? 1);
+  const gone = car.broken ? X.broken : null;
   const blipping = phase === "intro" || phase === "countdown";
   const worked = blipping ? Math.max(0, (rev - X.rev.from) / (1 - X.rev.from)) : 0;
   const idling = u > 1 ? X.every.rolling : X.every.idle;
   const rolling = X.shade.base + X.shade.pace * Math.min(1, u / X.shade.paceAt);
   return {
-    every: (idling + (X.rev.every - idling) * worked) / (Math.max(0.2, fx) * thickness),
-    puffs: 1 + Math.round((X.rev.puffs - 1) * worked * thickness),
-    shade: rolling + (X.rev.shade - rolling) * worked,
-    blast: u * 0.15 + X.rev.blast * worked,
+    every:
+      (pipes * (gone?.every ?? 1) * (idling + (X.rev.every - idling) * worked)) /
+      (Math.max(0.2, fx) * thickness),
+    puffs: (gone ? gone.puffs : 0) + 1 + Math.round((X.rev.puffs - 1) * worked * thickness),
+    shade: Math.max(gone?.shade ?? 0, rolling + (X.rev.shade - rolling) * worked),
+    blast: (gone?.blast ?? 0) + u * 0.15 + X.rev.blast * worked,
   };
 }
 

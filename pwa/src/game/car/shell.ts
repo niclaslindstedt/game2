@@ -630,13 +630,65 @@ export function bodyHalfWidth(spec: CarBodySpec, axles: number[]): number {
 
 /** Half-length of a spec, m, measured to the furthest point it actually
  * DRAWS rather than to the profile's end stations: the bumpers stand proud
- * of both caps, and they are what a tree meets first. */
+ * of both caps, and they are what a tree meets first. The TAILPIPE is in
+ * here for the same reason and not because a tree ever meets one — on a car
+ * with a shallow rear bumper the pipe is the last thing on it, and a
+ * measurement that says otherwise stops being the number the collision box
+ * is checked against. */
 export function bodyHalfLength(spec: CarBodySpec): number {
   const nose = spec.profile[0].z;
   const tail = spec.profile[spec.profile.length - 1].z;
   // buildBumper centers the bar at zEnd ± (depth/2 − 0.02), so its outer
   // face lands depth − 0.02 past the cap.
   const front = spec.front?.bumper ? spec.front.bumper.depth - 0.02 : 0;
-  const rear = spec.rear?.bumper ? spec.rear.bumper.depth - 0.02 : 0;
-  return Math.max(nose + front, -tail + rear);
+  const bumper = spec.rear?.bumper ? spec.rear.bumper.depth - 0.02 : 0;
+  const pipe = spec.rear?.exhaust ? (spec.rear.exhaust.out ?? EXHAUST_OUT) : 0;
+  return Math.max(nose + front, -tail + Math.max(bumper, pipe));
+}
+
+/** How far forward of its tip the exhaust runs, m — the length of pipe and
+ * silencer that hangs under the floorpan. Long enough that the assembly
+ * reads as a real one from the side and tumbles as a recognisable piece
+ * when the ground takes it off, and short enough to stop behind the rear
+ * axle on the shortest car in the catalog rather than beside its tyres. */
+export const EXHAUST_RUN = 0.6;
+
+/** How far a tailpipe's tip stands behind the tail cap when a spec does not
+ * say, m. Far enough to clear the valance every spec hangs 60 mm proud of
+ * that cap and still read as a pipe from the chase camera. It is also the
+ * one number that can push a car out of `TUNING.collision`: a spec whose
+ * tail already reaches the box wants its own shorter `out` rather than a
+ * pipe drawn outside the shape the engine collides. */
+export const EXHAUST_OUT = 0.12;
+
+/** Which sides of the centerline a spec's pipes come out of, m — one entry
+ * for a single exit, two mirrored for a twin. One statement of it, because
+ * the pipes are DRAWN off it (car/fascia.ts) and the exhaust cloud is
+ * SPAWNED off it, and a car smoking out of somewhere it has no pipe is
+ * visible on every car the player sits behind. */
+export function pipeSides(e: NonNullable<CarBodySpec["rear"]>["exhaust"]): number[] {
+  if (!e) return [];
+  return e.pair ? [e.x, -e.x] : [e.x];
+}
+
+/** WHERE A CAR'S EXHAUST LEAVES IT, in the car's own axes: back from the
+ * body's origin, out to the side (signed, +x is the car's right), and up
+ * off the road. Metres.
+ *
+ * `broken` is the same car with the pipework torn off by the ground
+ * (`DamagePart` "exhaust"). Then there is one plume rather than two and it
+ * leaves at the BREAK — at the tail cap, down at the floor line, where the
+ * pipe used to bolt on — so a car that has lost its exhaust reads as one
+ * from behind before the colour of the smoke is even legible.
+ *
+ * A spec with no exhaust authored on it gets no entries and makes no
+ * smoke, which is the honest answer: no pipe, no plume. */
+export type PipeAnchor = { back: number; side: number; up: number };
+
+export function pipeAnchors(spec: CarBodySpec, broken = false): PipeAnchor[] {
+  const e = spec.rear?.exhaust;
+  if (!e) return [];
+  const tail = spec.profile[spec.profile.length - 1].z;
+  if (broken) return [{ back: -tail, side: e.x * 0.5, up: spec.floorY }];
+  return pipeSides(e).map((x) => ({ back: -(tail - (e.out ?? EXHAUST_OUT)), side: x, up: e.y }));
 }
