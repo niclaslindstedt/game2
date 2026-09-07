@@ -7854,12 +7854,6 @@ a.menu-version:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.bench-plot-wait {
-  fill: rgb(255 255 255 / 55%);
-  font-size: 11px;
-  letter-spacing: 0.24em;
-}
-
 /* THE CONDITIONS, under the graph: the three PICTURE rows the run did not
    pin. One line of three cells, each a dim label over its stop, so the
    screenshot of a score carries the settings that produced it. It wraps

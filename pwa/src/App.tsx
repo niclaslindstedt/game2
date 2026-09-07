@@ -63,7 +63,12 @@ import {
 import { cacheIdForBase } from "./app-pwa.ts";
 import { shellHost } from "./shell-host.ts";
 import { BENCHMARK } from "./game/benchmark-plan.ts";
-import { runBenchmark, type BenchmarkStatus } from "./game/benchmark.ts";
+import {
+  runBenchmark,
+  warmBenchmark,
+  type BenchmarkStatus,
+  type BenchmarkWarmup,
+} from "./game/benchmark.ts";
 import { rememberBenchmark } from "./game/benchmark-history.ts";
 import { desktopPicture } from "./game/desktop-video.ts";
 import { hourOfWord, parseHour } from "./game/daylight.ts";
@@ -1951,6 +1956,7 @@ export function App() {
     levelId?: string,
     plan?: FieldPlan,
     done?: () => void,
+    extra: readonly LoadStep[] = [],
   ): void => {
     // The field being replaced comes off the road NOW rather than inside the
     // load: a run being abandoned has a classification to finish writing
@@ -2007,6 +2013,13 @@ export function App() {
       // nothing to stutter. Last, because it compiles what is IN the scene
       // and the field's cars are part of it.
       { id: "warm", label: "Warming up", run: () => (rendererRef.current?.warm(), false) },
+      // …and whatever the CALLER still owes before its first frame, which is
+      // the benchmark and nothing else: the countdown it warms the machine up
+      // on belongs under this card rather than in front of the stopwatch
+      // (`startBenchmark`). Last, after every shader the stage needs is
+      // compiled, because the frames it draws are frames of the finished
+      // scene.
+      ...extra,
     ];
     // What the same phases cost on this machine last time, for the three of
     // them that have nothing inside to count (`load-times.ts`).
@@ -2073,6 +2086,9 @@ export function App() {
     /** Run on the frame the loading card lifts. Only the benchmark uses it —
      * see `startBenchmark`. */
     done?: () => void,
+    /** Steps the caller adds to the tail of the load, paid for under the same
+     * card as the rest of it. Only the benchmark uses these either. */
+    extra?: readonly LoadStep[],
   ): void => {
     // The time to beat comes out of the book before the run starts, not
     // after: a clock with nothing to chase is only a stopwatch, and a
@@ -2087,7 +2103,7 @@ export function App() {
     runRef.current = { mode, levelId };
     setMenu(null);
     menuRef.current = null;
-    beginLoad(spec, mode, levelId, plan, done);
+    beginLoad(spec, mode, levelId, plan, done, extra);
     pickPlayCamera(startCamera(optionsRef.current.camera));
     audioRef.current?.setView(playCameraRef.current);
     // The god-mode effect owns the camera while it is flying; setting a play
@@ -2225,7 +2241,32 @@ export function App() {
     // the far side has its world built, its shaders compiled and its whole
     // field driven, so the frames being timed are frames of RACING rather
     // than frames with a generator still running underneath them.
-    startStage(benchmarkStage(found.level), "headsup", undefined, BENCHMARK.field, () => {
+    //
+    // AND SO DOES THE WARM-UP (benchmark.ts). The countdown is a stretch of
+    // race the machine has to draw before it is warm — a WAIT, like every
+    // other wait standing a stage up costs, so it belongs under the same card
+    // as the rest of them rather than in front of a stopwatch that is not
+    // running yet. It goes on the tail of the load with the loader's own mark
+    // over it and a bar counting it out, and what the card lifts on is a race
+    // already at green.
+    let warm: BenchmarkWarmup | null = null;
+    const warmUp: LoadStep = {
+      id: "grid",
+      label: "Warming the tyres",
+      progress: () => warm?.progress() ?? 0,
+      run: (budget) => {
+        // Built on the first slice and not with the step: the game and the
+        // field it warms are what the steps ABOVE it have just made.
+        const state = gameRef.current;
+        const field = fieldRef.current;
+        if (!state || !field) return false;
+        warm ??= warmBenchmark({ state, field, renderer, canvas });
+        return warm.run(budget);
+      },
+    };
+    /** Take the canvas and start the stopwatch. Run on the frame the card
+     * lifts, which is the frame after the warm-up's last one. */
+    const measure = (): void => {
       // Nothing about a measurement is written down, and the developer switch
       // that collects race data would otherwise be recording one.
       tapeRef.current = null;
@@ -2272,7 +2313,10 @@ export function App() {
           },
         }),
       };
-    });
+    };
+    startStage(benchmarkStage(found.level), "headsup", undefined, BENCHMARK.field, measure, [
+      warmUp,
+    ]);
   };
 
   /** Put the canvas back. The frozen last frame goes with it: the way out of
