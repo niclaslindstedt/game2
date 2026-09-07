@@ -94,6 +94,14 @@ export const GLASS_OPACITY = 0.44;
 export const COCKPIT_MATERIAL = "car-cockpit";
 export const INSTRUMENT_MATERIAL = "car-instrument";
 
+/** ...and the name that marks the FURNITURE behind the glass — the lining,
+ * the seats, the cage, the crew. It takes the sky exactly as the paint does,
+ * so it is not driven; it carries a name so that the light the car's own
+ * lamps put back on its bodywork (car-glow.ts) can be kept OUT of it. A tail
+ * lamp is a sealed cluster on the outside of a closed box, and the room
+ * behind it is the one place on a car that its own lamps never reach. */
+export const CABIN_TRIM_MATERIAL = "car-cabin-trim";
+
 /** The backlight's outward normal in car-local metres. This is the pane the
  * game is actually watched through — every driving camera but the hood one
  * stands behind the car — so it is the pane whose angle to the eye decides
@@ -186,6 +194,10 @@ export type CarBodyParts = {
   /** The first-person cabin, built only when a car asks for one — one car on
    * the stage ever does. Hidden until the cockpit camera is up. */
   cockpit: CarCockpit | null;
+  /** The furniture's own material — the same paint tint the shell takes, on
+   * a material of its own so the lamps' wash can be kept out of a room they
+   * do not light. */
+  cabinTrimMaterial: THREE.MeshBasicMaterial;
   /** The cabin's own material, so the night can black the room out without
    * touching the paint outside it. Null on a car with no cockpit. */
   cockpitMaterial: THREE.MeshBasicMaterial | null;
@@ -310,7 +322,16 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // The cabin goes on BEFORE the glass, because it is what the glass is for.
   const cabin = new THREE.Group();
   chassis.add(cabin);
-  const interior = buildInterior(spec, detail, material, options.crew);
+  // The furniture gets its OWN material rather than the shell's, so it can be
+  // exempted from the lamps' wash by name (`CABIN_TRIM_MATERIAL`). It costs
+  // no draw call: the cabin is already meshes of its own, and what it shares
+  // with the paint outside is the tint, which `tintCar` puts on every
+  // fullbright material it finds.
+  const trimMat = new THREE.MeshBasicMaterial({
+    name: CABIN_TRIM_MATERIAL,
+    vertexColors: true,
+  });
+  const interior = buildInterior(spec, detail, trimMat, options.crew);
   if (interior.group) cabin.add(interior.group);
 
   // DOUBLE-sided, and drawn without writing depth. Both are about looking
@@ -516,6 +537,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     lensGeo?.dispose();
     for (const geo of wheelGeo) geo.dispose();
     material.dispose();
+    trimMat.dispose();
     glassMat?.dispose();
     lensMat?.dispose();
     filmMat.dispose();
@@ -545,6 +567,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     lens: lensMat,
     cabin,
     cabinTrim: interior.group,
+    cabinTrimMaterial: trimMat,
     cockpitMaterial: cockpitMat,
     steering: interior.steering,
     cockpit,

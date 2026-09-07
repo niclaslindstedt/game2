@@ -30,6 +30,8 @@ import {
   rearLampAnchors,
   steeringTurn,
   tailLampSources,
+  CABIN_TRIM_MATERIAL,
+  COCKPIT_MATERIAL,
   DIAL_TOP_SPEED,
   GLASS_OPACITY,
   INSTRUMENT_MATERIAL,
@@ -43,6 +45,7 @@ import { instrumentReadings } from "./car-instruments.ts";
 import type { CrewLook } from "./car-crew.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, glassSpray, groundTravel, wheelSpray } from "./car-dirt.ts";
+import { createCarGlow } from "./car-glow.ts";
 import type { Livery } from "./car-livery.ts";
 import { revTremble, trembleAt } from "./car-shake.ts";
 import type { ScreenRain } from "./car/screen-rain.ts";
@@ -378,9 +381,10 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   // INSIDE of is a bag of polygons.
   const fade = options.ghost ? GHOST_OPACITY : 1;
   if (options.ghost) {
-    const shell = body.body.material as THREE.MeshBasicMaterial;
-    shell.transparent = true;
-    shell.opacity = GHOST_OPACITY;
+    for (const mat of [body.body.material as THREE.MeshBasicMaterial, body.cabinTrimMaterial]) {
+      mat.transparent = true;
+      mat.opacity = GHOST_OPACITY;
+    }
   }
   // The glass is already translucent, so a ghost's glass is a fade ON a
   // fade: whatever the pane works out to this frame, times the ghost's own.
@@ -390,6 +394,27 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   group.add(body.group);
   const dirt = createCarDirt(body.group, wheelSpray(bodySpec));
   const damage = createCarDamage(body);
+
+  // What the car's own lamps put back on its own panels (car-glow.ts) — the
+  // second term of the two the body is lit by, and the only one that is not
+  // the sky. Grafted onto the BODYWORK and nothing else. The materials
+  // `tintCar` drives rather than tints are lamps and instruments, which are
+  // sources in their own right and must not be lit a second time by the
+  // light they are throwing; and the cabin's furniture is exempt for the
+  // opposite reason, that a lamp bolted to the outside of a closed box does
+  // not light the room behind it.
+  const glow = createCarGlow(frontLampAnchors(bodySpec), rearLampAnchors(bodySpec));
+  group.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    for (const mat of mats) {
+      if (!(mat instanceof THREE.MeshBasicMaterial)) continue;
+      if (mat.name === LAMP_MATERIAL || mat.name === LENS_MATERIAL) continue;
+      if (mat.name === INSTRUMENT_MATERIAL || mat.name === COCKPIT_MATERIAL) continue;
+      if (mat.name === CABIN_TRIM_MATERIAL) continue;
+      glow.graft(mat);
+    }
+  });
 
   // The lamp blooms ride the SPRUNG body, so they squat and rebound with the
   // panel they are stuck to instead of hovering where the tail used to be.
@@ -505,6 +530,8 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   }
   let lamps: LampStage = "off";
   const worldLight = new THREE.Color(1, 1, 1);
+  /** Scratch for the tail's colour this frame, handed to the glow register. */
+  const glowTail = new THREE.Color();
   const setLights = (stage: LampStage, tint?: THREE.Color): void => {
     lamps = stage;
     if (tint) worldLight.copy(tint);
@@ -538,11 +565,13 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       if (snuffed.has(part) || !car.damage.broken.includes(part)) continue;
       snuffed.add(part);
       snuffFront(i);
+      glow.snuff("head", i);
     }
     for (const [i, part] of REAR_LAMPS.entries()) {
       if (snuffed.has(part) || !car.damage.broken.includes(part)) continue;
       snuffed.add(part);
       snuffRear(i);
+      glow.snuff("tail", i);
     }
     // The tail: a dim marker, or the brake light the same lenses become the
     // moment the pedal goes down. It is the bloom rather than the beam that
@@ -559,6 +588,16 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // halo round it, then the driving lamps' full bloom.
     const head = lamps === "main" ? HEAD_NIGHT : lamps === "dipped" ? HEAD_DIPPED : HEAD_DAY;
     headMat.opacity = head * clean * fade;
+    // ...and the same two figures again, as the light those lamps put back
+    // on the car carrying them (car-glow.ts). The blooms' own ladder drives
+    // it, so a nose that is only on dipped washes less of the body than an
+    // open one and a lens the stage has caked washes less than a clean one —
+    // but only once the lamps are ON. A brake light in daylight is a lamp
+    // read against the sun; the panel around it is not lit by it in any way
+    // the eye can find, and lifting it there is a car with a glowing tail
+    // at noon.
+    glowTail.set(braked ? BRAKE_GLOW : LAMP_GLOW);
+    glow.shine(group, lit ? head * clean : 0, lit ? tail * clean : 0, glowTail);
     if (lensMat) {
       if (lit) lensMat.color.setScalar(LENS_LIT);
       else lensMat.color.copy(worldLight).lerp(WHITE, LENS_DARK);
