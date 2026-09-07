@@ -253,6 +253,7 @@ import { readHudLayer, type HudLayer } from "./game/shot-hud.ts";
 import { beginImageCopy } from "./lib/share-image.ts";
 import { splashSkipped } from "./game/splash.ts";
 import { SplashScreen } from "./game/splash-screen.tsx";
+import { guardTextInteraction } from "./game/text-interaction.ts";
 import { UpdateButton } from "./game/update-button.tsx";
 
 connectOutput();
@@ -2543,6 +2544,13 @@ export function App() {
   useEffect(() => {
     setAudioVolumes(optionsRef.current.audio);
   }, []);
+
+  // NO LOUPE, ANYWHERE. iOS reads a press-and-hold as "put the caret here"
+  // and answers it with a magnifying lens — over the road, taking the thumb
+  // that was holding the throttle with it. text-interaction.ts owns the whole
+  // rule, including which surfaces still get the browser's own touch; this is
+  // the one place it is installed, for the life of the app.
+  useEffect(() => guardTextInteraction(document, (el) => getComputedStyle(el as Element)), []);
 
   // THE APP GOING AWAY IS AN OUTAGE THE BEDS HAVE TO BE TOLD ABOUT, the same
   // one a lost GPU context is. The frame loop is what feeds them and it stops

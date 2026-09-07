@@ -17,6 +17,14 @@
 import { describe, expect, it } from "vitest";
 
 import { createPedalGesture, PEDAL_DEAD_PX } from "../pwa/src/game/pedal-gesture.ts";
+import {
+  browserKeepsTouch,
+  guardTextInteraction,
+  selectionAllowed,
+  type GuardElement,
+  type GuardEvent,
+  type GuardStyle,
+} from "../pwa/src/game/text-interaction.ts";
 import { createThumbGuard, type GuardWindow } from "../pwa/src/game/thumb-guard.ts";
 
 /** Everything the guard uses of a window is EventTarget, which Node has. */
@@ -181,5 +189,108 @@ describe("pedal flick", () => {
     pedal.move(0, 0, 1400);
     pedal.move(0, REACH, 1500);
     expect(pedal.lift(0, REACH, 1560)).toBe(-1);
+  });
+});
+
+// ── The loupe ────────────────────────────────────────────────────────────
+
+/** The game's own glass: what `*` in styles.css leaves every element as. */
+const GAME_GLASS: GuardStyle = {
+  overflowX: "visible",
+  overflowY: "visible",
+  userSelect: "none",
+  webkitUserSelect: "none",
+};
+
+const styles = new Map<GuardElement, GuardStyle>();
+const styleOf = (el: GuardElement): GuardStyle => styles.get(el) ?? GAME_GLASS;
+
+/** Build a chain from the root down, so the leaf is what a touch lands on. */
+function chain(...levels: { tag?: string; style?: Partial<GuardStyle> }[]): GuardElement {
+  let parent: GuardElement | null = null;
+  for (const level of levels) {
+    const el: GuardElement = {
+      tagName: level.tag ?? "DIV",
+      parentElement: parent,
+      isContentEditable: false,
+    };
+    styles.set(el, { ...GAME_GLASS, ...level.style });
+    parent = el;
+  }
+  return parent as GuardElement;
+}
+
+const keeps = (el: GuardElement): boolean => browserKeepsTouch(el, styleOf);
+
+describe("the loupe", () => {
+  it("takes the touch off the road and off both thumb zones", () => {
+    // A thumb on the pedal: the hint span it actually lands on, inside the
+    // zone, inside the HUD. Nothing in that chain is the browser's.
+    expect(keeps(chain({}, { tag: "CANVAS" }))).toBe(false);
+    expect(keeps(chain({}, {}, {}, { tag: "SPAN" }))).toBe(false);
+    // …and an SVG marker on the wheel, whose tagName is lower case.
+    expect(keeps(chain({}, {}, { tag: "svg" }, { tag: "circle" }))).toBe(false);
+  });
+
+  it("leaves a button alone — every tap in the game is a click on one", () => {
+    expect(keeps(chain({}, { tag: "BUTTON" }))).toBe(true);
+    // Including one pressed on the glyph inside it.
+    expect(keeps(chain({}, { tag: "BUTTON" }, { tag: "svg" }))).toBe(true);
+    expect(keeps(chain({}, { tag: "INPUT" }))).toBe(true);
+    expect(keeps(chain({}, { tag: "A" }))).toBe(true);
+  });
+
+  it("leaves a card that scrolls alone, however deep the touch lands in it", () => {
+    const card = { style: { overflowY: "auto" } };
+    expect(keeps(chain({}, card))).toBe(true);
+    expect(keeps(chain({}, card, {}, { tag: "SPAN" }))).toBe(true);
+    // A card that does NOT scroll is glass like any other.
+    expect(keeps(chain({}, { style: { overflowY: "hidden" } }, {}))).toBe(false);
+  });
+
+  it("leaves selectable text alone — the stylesheet is what says which", () => {
+    const log = { style: { userSelect: "text", webkitUserSelect: "text" } };
+    expect(keeps(chain({}, log))).toBe(true);
+    // `*` puts `none` back on the children, so the answer has to come from
+    // the ancestor that was given the exemption.
+    expect(keeps(chain({}, log, { tag: "SPAN" }))).toBe(true);
+    expect(selectionAllowed(chain({}, log, { tag: "SPAN" }), styleOf)).toBe(true);
+    expect(selectionAllowed(chain({}, {}, { tag: "SPAN" }), styleOf)).toBe(false);
+  });
+
+  it("refuses the selection and the callout on glass, and neither on a field", () => {
+    const events: Record<string, (e: GuardEvent) => void> = {};
+    const target = {
+      addEventListener: (type: string, fn: (e: GuardEvent) => void) => {
+        events[type] = fn;
+      },
+      removeEventListener: (type: string) => {
+        delete events[type];
+      },
+    };
+    const stop = guardTextInteraction(target, styleOf);
+    const fire = (type: string, el: GuardElement): boolean => {
+      let prevented = false;
+      events[type]?.({ target: el, cancelable: true, preventDefault: () => (prevented = true) });
+      return prevented;
+    };
+
+    const glass = chain({}, {}, { tag: "SPAN" });
+    const field = chain({}, { tag: "INPUT" });
+    for (const type of ["touchstart", "selectstart", "contextmenu"]) {
+      expect(fire(type, glass)).toBe(true);
+      expect(fire(type, field)).toBe(false);
+    }
+    // An event nobody may prevent is left alone rather than warned about.
+    let prevented = false;
+    events.touchstart?.({
+      target: glass,
+      cancelable: false,
+      preventDefault: () => (prevented = true),
+    });
+    expect(prevented).toBe(false);
+
+    stop();
+    expect(Object.keys(events)).toHaveLength(0);
   });
 });

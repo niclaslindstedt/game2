@@ -100,7 +100,6 @@ export function FlyStickZone({ fly, side }: { fly: FlyTouch; side: "left" | "rig
       onPointerUp={(e) => guard.release(e.pointerId)}
       onPointerCancel={(e) => guard.release(e.pointerId)}
       onLostPointerCapture={(e) => guard.release(e.pointerId)}
-      onContextMenu={(e) => e.preventDefault()}
     >
       <div ref={ringRef} className="hud-fly-stick" aria-hidden="true">
         <div className="hud-fly-ring" />
@@ -142,7 +141,6 @@ export function FlyLookZone({ fly, side }: { fly: FlyTouch; side: "left" | "righ
       onPointerUp={(e) => guard.release(e.pointerId)}
       onPointerCancel={(e) => guard.release(e.pointerId)}
       onLostPointerCapture={(e) => guard.release(e.pointerId)}
-      onContextMenu={(e) => e.preventDefault()}
     >
       <div className="hud-fly-hint" aria-hidden="true">
         DRAG TO LOOK
@@ -182,7 +180,6 @@ function HoldButton({
       onPointerUp={(e) => guard.release(e.pointerId)}
       onPointerCancel={(e) => guard.release(e.pointerId)}
       onLostPointerCapture={(e) => guard.release(e.pointerId)}
-      onContextMenu={(e) => e.preventDefault()}
     >
       {label}
     </button>

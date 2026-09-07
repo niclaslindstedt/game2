@@ -75,7 +75,16 @@ body {
 
    `-webkit-touch-callout` is the same gesture's other half — the long-press
    action sheet (COPY / LOOK UP / SHARE) — and had been said only on the
-   splash card, so every other screen was still offering it. */
+   splash card, so every other screen was still offering it.
+
+   THIS IS ONLY HALF THE RULE, and the weaker half. These properties say a
+   selection may not be MADE; WebKit arms its text-interaction recognizer
+   from the TOUCH, before it asks, so the loupe still came up over the road
+   with a thumb on the throttle. The other half is a `touchstart` whose
+   default is prevented, which no stylesheet can be — text-interaction.ts
+   installs it, and READS what is declared here to decide where the browser
+   still gets its own way. The three fields below that take typed text are
+   the answer to both questions at once. */
 *,
 *::before,
 *::after {
