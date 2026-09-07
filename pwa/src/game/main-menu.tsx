@@ -422,28 +422,29 @@ function StandingsBoard({
       rows={rows}
       yourCarId={carId}
       foot={
-        <div className="menu-standings-foot">
-          {!won && locationComplete(location, progress) && (
-            <span className="menu-standings-hint">TOP THE TABLE TO OPEN THE NEXT COUNTRY</span>
-          )}
-          {mine.points > 0 && (
-            <button
-              type="button"
-              className="menu-opt"
-              onClick={() => {
-                playUi("select");
-                if (!sure) {
-                  setSure(true);
-                  return;
-                }
-                onClose();
-                onReset(location.id);
-              }}
-            >
-              {sure ? "SURE? THE POINTS GO" : "RESET"}
-            </button>
-          )}
-        </div>
+        !won &&
+        locationComplete(location, progress) && (
+          <div className="menu-standings-hint">TOP THE TABLE TO OPEN THE NEXT COUNTRY</div>
+        )
+      }
+      aside={
+        mine.points > 0 && (
+          <button
+            type="button"
+            className="menu-opt"
+            onClick={() => {
+              playUi("select");
+              if (!sure) {
+                setSure(true);
+                return;
+              }
+              onClose();
+              onReset(location.id);
+            }}
+          >
+            {sure ? "SURE? THE POINTS GO" : "RESET"}
+          </button>
+        )
       }
       onClose={onClose}
     />

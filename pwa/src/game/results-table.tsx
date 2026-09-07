@@ -210,17 +210,28 @@ export type StandingsModalProps = StandingsSheetProps & {
   title: string;
   /** One line under it: how far into the location it has been driven. */
   sub: string;
-  /** Anything the table is worth doing something ABOUT, between it and the
-   * way out: the gate the location is still behind, and the press that tears
-   * its points up. They belong to the table rather than to the page that
-   * opens it — a board is where you go to read where you stand, and a page
-   * of stage boxes has no row to spare for either. */
+  /** Anything the table is worth SAYING, on its own line between the rows
+   * and the ways out: the gate the location is still behind. It belongs to
+   * the table rather than to the page that opens it — a board is where you
+   * go to read where you stand, and a page of stage boxes has no row to
+   * spare for it. */
   foot?: ComponentChildren;
+  /** Anything the table is worth DOING something about — the press that
+   * tears its points up. It stands beside the way out rather than above it:
+   * see `.hud-modal-ways`. */
+  aside?: ComponentChildren;
   onClose: () => void;
 };
 
 /** The board over the top of whatever opened it, with one way out. */
-export function StandingsModal({ title, sub, foot, onClose, ...sheet }: StandingsModalProps) {
+export function StandingsModal({
+  title,
+  sub,
+  foot,
+  aside,
+  onClose,
+  ...sheet
+}: StandingsModalProps) {
   return (
     <div className="hud-modal pointer-events-auto">
       <div className="hud-modal-card hud-modal-board">
@@ -228,17 +239,20 @@ export function StandingsModal({ title, sub, foot, onClose, ...sheet }: Standing
         <div className="hud-modal-sub">{sub}</div>
         <StandingsSheet {...sheet} />
         {foot}
-        <button
-          type="button"
-          className="hud-pause-act"
-          data-nav-back
-          onClick={() => {
-            playUi("select");
-            onClose();
-          }}
-        >
-          CLOSE
-        </button>
+        <div className="hud-modal-ways">
+          <div className="hud-modal-aside">{aside}</div>
+          <button
+            type="button"
+            className="hud-pause-act"
+            data-nav-back
+            onClick={() => {
+              playUi("select");
+              onClose();
+            }}
+          >
+            CLOSE
+          </button>
+        </div>
       </div>
     </div>
   );
