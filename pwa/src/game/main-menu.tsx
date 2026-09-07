@@ -53,7 +53,7 @@ import { StandingsModal, warmStandings, type StandingsRow } from "./results-tabl
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
 import { TRAINING_ID, TRAINING_LEVEL, TRAINING_LOCATION, isTraining } from "./training.ts";
-import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
+import { DebugLogPage, DeveloperPage, UnlockPage } from "./menu-dev.tsx";
 import { HeadsUpPage } from "./menu-headsup.tsx";
 import { DifficultyPicker, MenuHead, gridSize, type PlayMode, type RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsSub } from "./menu-options.tsx";
@@ -101,7 +101,8 @@ export type MenuPage =
    * way Roam's stage list is: BACK from it lands on the rows. */
   | { page: "options"; sub?: OptionsSub }
   | { page: "developer" }
-  | { page: "debuglog" };
+  | { page: "debuglog" }
+  | { page: "unlocks" };
 
 export type MainMenuProps = {
   page: MenuPage;
@@ -117,7 +118,10 @@ export type MainMenuProps = {
   onSettings: (settings: Settings) => void;
   /** Let the developer menu out — the chassis secret found (see DEV_TAPS). */
   onDeveloper: () => void;
-  onUnlockEverything: () => void;
+  /** Open the campaign up to one country, or the whole ladder for null. */
+  onUnlock: (locationId: string | null) => void;
+  /** Shut one country and everything in front of it; null shuts the lot. */
+  onLock: (locationId: string | null) => void;
   /** Tear a location's table up and drive it again. */
   onResetPoints: (locationId: string) => void;
   /** Where Roam's map pane is, for the renderer to draw the stage into. */
@@ -618,6 +622,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
   developer: 1,
   location: 2,
   debuglog: 2,
+  unlocks: 2,
   // Deeper than either grid that reaches it, so arriving at the pre-race
   // card sounds like going IN from both of them.
   car: 3,
@@ -653,6 +658,9 @@ function parentOf(page: MenuPage): MenuPage | null {
   if (page.page === "headsup" && page.locationId !== undefined) return { page: "headsup" };
   if (page.page === "location") return locationParent();
   if (page.page === "car") return carParent(page.levelId, page.mode);
+  // The developer menu's own two pages walk back into it rather than out to
+  // the front door — the same step their back buttons take.
+  if (page.page === "debuglog" || page.page === "unlocks") return { page: "developer" };
   return { page: "root" };
 }
 
@@ -877,7 +885,7 @@ export function MainMenu(props: MainMenuProps) {
             progress={props.progress}
             dev={props.settings.dev}
             onDev={(dev) => props.onSettings({ ...props.settings, dev })}
-            onUnlockEverything={props.onUnlockEverything}
+            onUnlocks={() => navigate({ page: "unlocks" })}
             onBack={() => navigate({ page: "root" })}
             onDebugLog={() => navigate({ page: "debuglog" })}
             onMapViewer={() => navigate({ page: "roam", viewing: true, picking: true })}
@@ -886,6 +894,14 @@ export function MainMenu(props: MainMenuProps) {
         )}
         {page.page === "debuglog" && (
           <DebugLogPage onBack={() => navigate({ page: "developer" })} />
+        )}
+        {page.page === "unlocks" && (
+          <UnlockPage
+            progress={props.progress}
+            onUnlock={props.onUnlock}
+            onLock={props.onLock}
+            onBack={() => navigate({ page: "developer" })}
+          />
         )}
         {page.page === "options" && (
           <OptionsPage

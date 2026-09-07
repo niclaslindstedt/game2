@@ -35,6 +35,7 @@ import {
   LOCATIONS,
   PODIUM,
   POINTS,
+  bestPlace,
   campaignKnobs,
   continueAt,
   ladderAfter,
@@ -53,9 +54,12 @@ import {
   recordFinish,
   recordResult,
   resetPoints,
+  lockEverything,
+  lockLocation,
   stagesTimed,
   timeTrialOpen,
   unlockEverything,
+  unlockLocation,
   type CampaignLevel,
 } from "../pwa/src/game/campaign.ts";
 import {
@@ -270,6 +274,80 @@ describe("the location's table", () => {
       expect(locationWon(location, won)).toBe(true);
       expect(locationUnlocked(location, won)).toBe(true);
     }
+  });
+});
+
+describe("the developer's locks", () => {
+  beforeEach(() => {
+    stubStorage();
+  });
+
+  /** Every stage of `location` the player is on points for. */
+  const cleared = (location: (typeof LOCATIONS)[number], progress = loadProgress()): number =>
+    location.levels.filter((level) => levelCleared(progress, level.id)).length;
+
+  it("opens the ladder as far as the country pressed, and no further", () => {
+    const progress = unlockLocation(LOCATIONS[1].id);
+    // The ladder is a prefix: a country is only reachable once the one
+    // before it has been won, so opening the second opens the first with it.
+    expect(cleared(LOCATIONS[0], progress)).toBe(LOCATIONS[0].levels.length);
+    expect(cleared(LOCATIONS[1], progress)).toBe(LOCATIONS[1].levels.length);
+    expect(locationWon(LOCATIONS[1], progress)).toBe(true);
+    expect(locationUnlocked(LOCATIONS[1], progress)).toBe(true);
+    // ...and stops there. The country in front is untouched: its door is
+    // open, because winning a country is what opens the next one, but not a
+    // stage of it has been driven and it is nobody's win yet.
+    expect(cleared(LOCATIONS[2], progress)).toBe(0);
+    expect(locationWon(LOCATIONS[2], progress)).toBe(false);
+    expect(levelUnlocked(LOCATIONS[2], 1, progress)).toBe(false);
+  });
+
+  it("shuts the country pressed and everything in front of it", () => {
+    unlockEverything();
+    const progress = lockLocation(LOCATIONS[1].id);
+    expect(cleared(LOCATIONS[0], progress)).toBe(LOCATIONS[0].levels.length);
+    expect(cleared(LOCATIONS[1], progress)).toBe(0);
+    expect(cleared(LOCATIONS[2], progress)).toBe(0);
+    expect(locationUnlocked(LOCATIONS[1], progress)).toBe(true);
+    expect(locationUnlocked(LOCATIONS[2], progress)).toBe(false);
+  });
+
+  it("takes the finish line with it, so a country the ladder no longer reaches shuts to the clock too", () => {
+    // A stage merely un-scored stays open to the clock forever (`resetPoints`
+    // keeps it that way on purpose, because a finish line cannot be un-seen).
+    // A LOCKED one must not: the whole point is a save that reads as never
+    // having been there.
+    unlockEverything();
+    expect(timeTrialOpen(LOCATIONS[2], loadProgress())).toBe(true);
+    const progress = lockLocation(LOCATIONS[1].id);
+    expect(levelCompleted(LOCATIONS[2].levels[0], progress)).toBe(false);
+    expect(timeTrialOpen(LOCATIONS[2], progress)).toBe(false);
+    // The country pressed is still REACHED — the ladder stops at it rather
+    // than short of it — so the campaign and the clock both still offer it.
+    expect(timeTrialOpen(LOCATIONS[1], progress)).toBe(true);
+  });
+
+  it("keeps the best times on both presses — a lock is not a lost result", () => {
+    recordFinish(TAIGA.levels[0].id, 100, { place: 1, difficulty: "hard" });
+    expect(unlockEverything().best[TAIGA.levels[0].id]).toBe(100);
+    const shut = lockEverything();
+    expect(shut.best[TAIGA.levels[0].id]).toBe(100);
+    expect(bestPlace(shut, TAIGA.levels[0].id, "hard")).toBe(1);
+  });
+
+  it("puts the whole save back to a campaign nobody has driven", () => {
+    unlockEverything();
+    const progress = lockEverything();
+    expect(progress.finished).toEqual([]);
+    expect(progress.points).toEqual({});
+    for (const location of LOCATIONS) {
+      expect(locationWon(location, progress)).toBe(false);
+      expect(locationUnlocked(location, progress)).toBe(location === LOCATIONS[0]);
+    }
+    // The first stage of the first country is always open — the ladder has
+    // to have a way in.
+    expect(levelUnlocked(LOCATIONS[0], 0, progress)).toBe(true);
+    expect(levelUnlocked(LOCATIONS[0], 1, progress)).toBe(false);
   });
 });
 
