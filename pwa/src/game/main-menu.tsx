@@ -55,6 +55,7 @@ import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
 import { TRAINING_ID, TRAINING_LEVEL, TRAINING_LOCATION, isTraining } from "./training.ts";
 import { DebugLogPage, DeveloperPage, UnlockPage } from "./menu-dev.tsx";
+import { BenchmarkHistoryPage } from "./menu-bench.tsx";
 import { HeadsUpPage } from "./menu-headsup.tsx";
 import { DifficultyPicker, MenuHead, gridSize, type PlayMode, type RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsSub } from "./menu-options.tsx";
@@ -103,6 +104,7 @@ export type MenuPage =
   | { page: "options"; sub?: OptionsSub }
   | { page: "developer" }
   | { page: "debuglog" }
+  | { page: "benchhistory" }
   | { page: "unlocks" };
 
 export type MainMenuProps = {
@@ -629,6 +631,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
   developer: 1,
   location: 2,
   debuglog: 2,
+  benchhistory: 2,
   unlocks: 2,
   // Deeper than either grid that reaches it, so arriving at the pre-race
   // card sounds like going IN from both of them.
@@ -667,7 +670,9 @@ function parentOf(page: MenuPage): MenuPage | null {
   if (page.page === "car") return carParent(page.levelId, page.mode);
   // The developer menu's own two pages walk back into it rather than out to
   // the front door — the same step their back buttons take.
-  if (page.page === "debuglog" || page.page === "unlocks") return { page: "developer" };
+  if (page.page === "debuglog" || page.page === "unlocks" || page.page === "benchhistory") {
+    return { page: "developer" };
+  }
   return { page: "root" };
 }
 
@@ -897,7 +902,11 @@ export function MainMenu(props: MainMenuProps) {
             onDebugLog={() => navigate({ page: "debuglog" })}
             onMapViewer={() => navigate({ page: "roam", viewing: true, picking: true })}
             onBenchmark={props.onBenchmark}
+            onBenchmarkHistory={() => navigate({ page: "benchhistory" })}
           />
+        )}
+        {page.page === "benchhistory" && (
+          <BenchmarkHistoryPage onBack={() => navigate({ page: "developer" })} />
         )}
         {page.page === "debuglog" && (
           <DebugLogPage onBack={() => navigate({ page: "developer" })} />
