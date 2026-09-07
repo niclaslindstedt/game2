@@ -204,6 +204,9 @@ export type GameRenderer = {
   /** Re-light an already-built stage (the pre-race menu flipping time of
    * day / weather) without rebuilding its geometry. */
   setConditions: (state: GameState) => void;
+  /** Compile every shader the standing scene needs, so none of them is
+   * compiled during the race. Called from behind the loading card. */
+  warm: () => void;
   /** What to do when a clap of thunder arrives. The storm is drawn here and
    * heard elsewhere: the renderer knows WHEN and how far away, the audio
    * knows what that sounds like. */
@@ -1710,6 +1713,38 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     syncSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
   };
 
+  /** COMPILE EVERY SHADER THE STAGE IS ABOUT TO NEED, before a frame of it is
+   * asked for. A three.js material is compiled the first time something
+   * wearing it is drawn, so a stage's programs would otherwise arrive during
+   * the establishing shot and the first corners — a dozen stalls of tens of
+   * milliseconds each, spread through exactly the part of a run a player is
+   * building their first impression of. Behind the loading card it is one
+   * cost, paid once, where there is nothing to stutter.
+   *
+   * It compiles what is IN the scene, so it belongs after the world, the car
+   * and the field are built and after `setConditions` has put the stage's own
+   * light on them — which is where `race-loader.ts` calls it. */
+  const warm = (): void => {
+    if (!game) return;
+    // Programs first: this walks the scene and links one for every material
+    // in it, which is the half `compile` is for.
+    renderer.compile(scene, chase.camera);
+    // ...and then a WHOLE FRAME, thrown away, which is the half that actually
+    // costs the time. Linking a program is not compiling it: WebGL drivers
+    // defer the real work — the shader compile, the texture upload, the
+    // buffer upload — until something is first DRAWN with it. Measured on
+    // this stage, `compile` alone took sixteen milliseconds and the first
+    // frame after it took three and a half seconds, which is precisely the
+    // stall this is meant to be spending on the player's behalf.
+    //
+    // It is the renderer's own frame rather than a bare `render(scene, cam)`
+    // so that every pass a real frame has is warmed with it: the mirror's own
+    // target, the screen effects, the sky. Nothing moves — a zero-length
+    // frame advances no clock — and it is drawn behind the loading card, so
+    // the picture it puts on the canvas is one nobody sees.
+    render(game, 0);
+  };
+
   const dispose = (): void => {
     marks.dispose();
     world?.dispose();
@@ -1730,6 +1765,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   return {
     setGame,
     setCar,
+    warm,
     setVideo,
     setCamera,
     setMirror: (on) => {

@@ -198,6 +198,17 @@ export function createNameTag(label: string, badge: string | null, look: TagLook
     // Tested against the world so a car out of sight is not named, but
     // never WRITTEN: a plate is a label over the scene, not a hole in it.
     depthWrite: false,
+    // ...and for the same reason it is not WEATHERED either: a plate is
+    // chrome, and a name that faded into the haze at the far end of a
+    // straight would be unreadable exactly where it is most wanted.
+    //
+    // It is also the only way this material compiles at all. The app swaps
+    // three's fog chunks for its own height fog (`height-fog.ts`), and the
+    // vertex half reads `transformed` — the local position every MESH shader
+    // declares and no SPRITE shader does. So a fogged sprite fails to build
+    // its vertex program, which is a plate that never appears rather than a
+    // plate that is merely hazy.
+    fog: false,
     // Constant angular size: three multiplies the scale by the sprite's own
     // view depth when attenuation is off, which cancels the perspective
     // divide. The scale below is therefore an angle, not a length.

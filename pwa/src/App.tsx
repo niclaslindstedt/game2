@@ -98,20 +98,31 @@ import {
   type SplitRecords,
 } from "./game/split-records.ts";
 import { warmPortraits } from "./game/car-portraits.ts";
+import { LoadingScreen } from "./game/loading-screen.tsx";
+import {
+  advanceLoad,
+  createLoad,
+  loadBudgetMs,
+  type LoadJob,
+  type LoadStep,
+} from "./game/race-loader.ts";
 import type { SheetRow } from "./game/results-sheet.tsx";
 import {
   advanceField,
   catchUpField,
-  createField,
+  catchUpFrom,
   drainField,
+  enterCrew,
   fieldTraced,
   fieldResults,
   livePlace,
   onRoad,
+  openField,
   placeAtFinish,
   placeAtSplit,
   placeField,
   rubRivals,
+  sealField,
   settleField,
   settleLimit,
   splitLeader,
@@ -122,6 +133,7 @@ import {
   PLAYER_ID,
   RALLY_FIELD,
   type ClassRow,
+  type FieldBuild,
   type FieldPlan,
   type RivalField,
   type RivalRun,
@@ -959,6 +971,11 @@ const SETTLE_PASSES = 500;
  * frames a second while nearly all of the machine goes on the field. */
 const FIELD_HOLD_MS = 40;
 
+/** How long the loading card takes to fade off the road, ms. Must match the
+ * `.loading` transition in styles.css, which is what times the unmount
+ * behind it. */
+const LOAD_FADE_MS = 260;
+
 /** Air time under which a landing is not worth a banner, s — every ripple
  * and curb technically leaves the ground, and "CLEAN AIR 0.0s" three times
  * in a row is the HUD talking over the game. */
@@ -1072,6 +1089,11 @@ export function App() {
   // surface a screenshot of it wants, and a press to raise it is a press a
   // scene has to time.
   const [paused, setPaused] = useState(URL_PLACE.paused);
+  /** Whether the loading card is up. Two beats, like the splash card: `true`
+   * while the load is running, then `"leaving"` for the fade that hands the
+   * road over — the run is LIVE under a leaving card, which is what makes
+   * the lights the first thing a player sees rather than the second. */
+  const [loading, setLoading] = useState<boolean | "leaving">(false);
   /** True while ALT is held: the game's chrome comes off so a frame can be
    * judged on the pixels alone. The debug overlay is NOT part of it — a
    * screenshot with nothing to say where it was taken is the one thing the
@@ -1127,6 +1149,16 @@ export function App() {
    * the player's. Null on every run with nobody entered (Roam, time trial,
    * the menu's demo). */
   const fieldRef = useRef<RivalField | null>(null);
+  /** THE RACE BEING STOOD UP, and null whenever one is not (`race-loader.ts`).
+   * The frame loop hands it whole frames for as long as it is here, and draws
+   * nothing else while it does: there is a card over the canvas. */
+  const loadRef = useRef<LoadJob | null>(null);
+  /** Whether the loading card has had a frame to be DRAWN in. The first
+   * step of a load compiles a road and holds the frame it does it in, so
+   * starting one on the same frame the card is mounted would paint the card
+   * after the freeze it exists to cover — which is the bug, with an extra
+   * component. So the driver spends one frame doing nothing at all. */
+  const loadShownRef = useRef(false);
   /** R30 — the field being RUN HOME behind the results card. The player is
    * across the line, but the crews still out there have places worth points
    * to somebody, so they are driven to the finish off the card's own frames
@@ -1466,14 +1498,16 @@ export function App() {
   /** (Re)build the run for a stage spec, unless that exact stage is already
    * standing. The compiled track is cached per seed and length, so changing
    * only the light re-lights instead of rebuilding the world. */
-  const applyStage = (spec: StageSpec, force = false): void => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-    if (!force && sameStage(stageRef.current, spec)) return;
-    stageRef.current = spec;
-    // An endless track is never reused: a restart must begin from a fresh
-    // opening window, not from however far the last run streamed (the
-    // renderer has long since dropped the world around the start).
+  /** COMPILE THIS STAGE'S ROAD into the cache, unless the one standing there
+   * is already it. The most expensive single thing the generator does, and
+   * the first thing a race needs — so it is its own step of the load
+   * (`race-loader.ts`), and `applyStage` below finds the cache warm.
+   *
+   * The KEY is what makes two requests the same stage. An endless track is
+   * never reused: a restart must begin from a fresh opening window, not from
+   * however far the last run streamed (the renderer has long since dropped
+   * the world around the start). */
+  const ensureTrack = (spec: StageSpec): Track => {
     // R24 — how much run-up this stage is built with: enough to stand the
     // whole grid behind the gate. It is part of the compiled track, so it
     // is part of the key: the same seed asked for with a deeper field is a
@@ -1486,21 +1520,32 @@ export function App() {
         // winter is the same route made of snow, and that is a different
         // compiled track.
         `/${spec.season}/${spec.temperature ?? "auto"}/${apron}`;
-    if (trackRef.current?.key !== key || spec.length === "endless") {
-      trackRef.current = {
-        key,
-        track: spec.arena
-          ? compileArena(spec.seed)
-          : compileStage(
-              spec.seed,
-              spec.length,
-              spec.knobs,
-              spec.shape,
-              { season: spec.season, temperature: spec.temperature },
-              apron,
-            ),
-      };
-    }
+    const held = trackRef.current;
+    if (held && held.key === key && spec.length !== "endless") return held.track;
+    trackRef.current = {
+      key,
+      track: spec.arena
+        ? compileArena(spec.seed)
+        : compileStage(
+            spec.seed,
+            spec.length,
+            spec.knobs,
+            spec.shape,
+            { season: spec.season, temperature: spec.temperature },
+            apron,
+          ),
+    };
+    return trackRef.current.track;
+  };
+  const ensureTrackRef = useRef(ensureTrack);
+  ensureTrackRef.current = ensureTrack;
+
+  const applyStage = (spec: StageSpec, force = false): void => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    if (!force && sameStage(stageRef.current, spec)) return;
+    stageRef.current = spec;
+    const track = ensureTrack(spec);
     finishTimeRef.current = null;
     retiredRef.current = null;
     // THE CAR'S COUNTER FOLLOWS THE CAR. A different car is a different
@@ -1527,7 +1572,7 @@ export function App() {
       // one is built, and never mid-run — unless the stage pins one, which
       // only a measurement does.
       gearbox: spec.gearbox ?? optionsRef.current.gearbox,
-      track: trackRef.current.track,
+      track,
       laps: spec.laps,
       // The countdown is the start line's ceremony for a DRIVER. In god
       // mode there is nobody on the grid — the car is handed neutral input
@@ -1601,7 +1646,9 @@ export function App() {
    * a time trial, on the training ground or behind the menu. Called on every
    * start AND every restart — a field carried over from the last attempt
    * would be a dozen cars already halfway down the road. */
-  const armField = (spec: StageSpec, mode: PlayMode, plan?: FieldPlan): void => {
+  /** Take the LAST attempt's field off the road. Every path that enters one
+   * runs this first, whether or not it goes on to enter another. */
+  const clearField = (): void => {
     fieldRef.current = null;
     standingRef.current = null;
     // Whatever the last attempt was still running home is FINISHED FIRST and
@@ -1614,29 +1661,42 @@ export function App() {
     setResult(null);
     rendererRef.current?.setStanding(null);
     rendererRef.current?.field.clear();
-    if (!trackRef.current || menuRef.current) return;
-    const race = raceRef.current;
+  };
+
+  /** DRAW UP the entry list for a run, with nobody's game built yet — the
+   * crews go in one at a time (`enterCrew`), which is what lets the loading
+   * card pay for fourteen of them a crew at a time rather than in one lump.
+   * Null wherever nobody is entered: a time trial, the training ground, a
+   * Roam stage with the opponents slider at zero, or behind the menu. */
+  const openFieldFor = (spec: StageSpec, mode: PlayMode, plan?: FieldPlan): FieldBuild | null => {
+    if (!trackRef.current || menuRef.current) return null;
     // …unless the caller states the entry list itself. Only the benchmark
     // does: a measurement cannot be entered off settings the player is free
     // to move, or two runs of it are two different races.
-    const entry = plan ?? fieldPlan(race, mode, spec);
-    if (!entry) return;
-    const field = createField(trackRef.current.track, entry, {
+    const entry = plan ?? fieldPlan(raceRef.current, mode, spec);
+    if (!entry) return null;
+    return openField(trackRef.current.track, entry, {
       seed: spec.seed,
       laps: spec.laps,
       hour: spec.hour,
       weather: spec.weather,
       season: spec.season,
     });
+  };
+
+  /** Put the built field on the road. */
+  const installField = (build: FieldBuild): void => {
+    const race = raceRef.current;
+    const field = sealField(build);
     fieldRef.current = field;
     // The cars themselves. Nothing is built until a crew comes within reach
     // (field-cars.ts), so entering a field costs the fourteen games and no
     // geometry at all until one of them is actually somewhere you can see.
     rendererRef.current?.field.set(field.runs);
     // …and their PORTRAITS, for the results sheet at the end of this stage
-    // (car-portraits.ts): ordered now, taken one per idle slot under the
-    // establishing shot and the first corners, so the card at the line has
-    // its pictures before it is asked for them.
+    // (car-portraits.ts). Behind the loading card they are ordered AND taken
+    // before the lights; on the paths that do not load — a tooling link —
+    // they are taken one per idle slot under the establishing shot instead.
     warmPortraits([
       { carId: race.carId, crewId: PLAYER_ID, number: field.playerNumber, you: true },
       ...field.runs.map((run) => ({
@@ -1649,6 +1709,18 @@ export function App() {
     // Last car on the road until a board says otherwise — which is the truth
     // on the grid, not a placeholder.
     standingRef.current = { place: field.playerNumber, of: field.of };
+  };
+
+  /** R29 in one call: the whole field entered where nobody is holding a
+   * frame. The loading card takes the same three steps apart so it can draw
+   * between them (`race-loader.ts`); this is the path for everything that
+   * does not load — a tooling `?start=1` link, and the boot stage. */
+  const armField = (spec: StageSpec, mode: PlayMode, plan?: FieldPlan): void => {
+    clearField();
+    const build = openFieldFor(spec, mode, plan);
+    if (!build) return;
+    while (enterCrew(build));
+    installField(build);
   };
   const armFieldRef = useRef(armField);
   armFieldRef.current = armField;
@@ -1807,6 +1879,97 @@ export function App() {
     setMenu({ page: "root" });
   };
 
+  /** THE PREPARATION A RACE NEEDS, cut into steps and put behind the loading
+   * card (`race-loader.ts`, `loading-screen.tsx`).
+   *
+   * The order is a dependency chain and not a preference: the road has to be
+   * compiled before a car can be put on it, the world built before its
+   * shaders can be compiled, and the field entered before its crews can be
+   * driven. What each step cost when it was last MEASURED — the campaign's
+   * first stage, a quick desktop, the debug log's own `load` line, which is
+   * where to read these again rather than guess at them:
+   *
+   *   road      219 ms   whole, the generator compiling the route
+   *   world     333 ms   whole, the game state and the country and its forest
+   *   crews     508 ms   fourteen games, cut a crew to a slice
+   *   enter       1 ms
+   *   drive    2391 ms   fourteen whole stages DRIVEN, cut by the frame
+   *   ghost/tape  1 ms
+   *   warm     1130 ms   whole, every shader the stage is about to need
+   *
+   * `drive` is over half of it and cuts cleanly, so most of a load is frames
+   * the card is free to draw in. The steps that cannot be cut hold a frame
+   * each; that is the honest cost of work that cannot be halved, and the
+   * reason to keep an eye on `warm`, which is the biggest of them. */
+  const beginLoad = (spec: StageSpec, mode: PlayMode, levelId?: string, plan?: FieldPlan): void => {
+    // The field being replaced comes off the road NOW rather than inside the
+    // load: a run being abandoned has a classification to finish writing
+    // (`clearField`), and it belongs to the press that abandoned it.
+    clearField();
+    let build: FieldBuild | null = null;
+    const steps: LoadStep[] = [
+      { id: "road", run: () => (ensureTrack(spec), false) },
+      // The car, the world, the light and the score. `applyStage` finds the
+      // road above already compiled and cached, so what is left here is the
+      // game state and the renderer's world.
+      { id: "world", run: () => (applyStage(spec, true), false) },
+      {
+        id: "crews",
+        run: () => {
+          build ??= openFieldFor(spec, mode, plan);
+          // A run with nobody entered — a time trial, the training ground,
+          // Roam with the slider at zero — has no crews and no traces, and
+          // is a load of the road and the world alone.
+          return build !== null && enterCrew(build);
+        },
+      },
+      { id: "enter", run: () => (build && installField(build), false) },
+      // R29 — every crew's whole stage, written down before the lights. The
+      // one step that is genuinely long, and the one that cuts cleanly: the
+      // engine has taken a budget for it since the establishing shot was
+      // what hid it.
+      {
+        id: "drive",
+        run: (budget) => {
+          const field = fieldRef.current;
+          return field !== null && catchUpFrom(field, budget);
+        },
+      },
+      { id: "ghost", run: () => (armGhost(spec, mode, levelId), false) },
+      { id: "tape", run: () => (armTape(spec, mode, levelId), false) },
+      // Every shader the stage is about to need, compiled where there is
+      // nothing to stutter. Last, because it compiles what is IN the scene
+      // and the field's cars are part of it.
+      { id: "warm", run: () => (rendererRef.current?.warm(), false) },
+    ];
+    loadRef.current = createLoad(steps);
+    loadShownRef.current = false;
+    setLoading(true);
+  };
+
+  /** Hand the run over. Called on the frame the last step finished: the card
+   * starts fading and the run under it is live from that frame, so the fade
+   * uncovers a countdown that is already running rather than a still. */
+  const endLoad = (): void => {
+    const job = loadRef.current;
+    loadRef.current = null;
+    setLoading("leaving");
+    window.setTimeout(() => setLoading(false), LOAD_FADE_MS);
+    if (job) {
+      // What the load cost, step by step — the one place the shape of one is
+      // visible, and the thing to read when a stage starts taking too long.
+      debugLog(
+        "load",
+        job.steps.map((step, i) => `${step.id} ${job.spent[i].toFixed(0)}ms`).join(" · "),
+      );
+    }
+  };
+
+  const beginLoadRef = useRef(beginLoad);
+  beginLoadRef.current = beginLoad;
+  const endLoadRef = useRef(endLoad);
+  endLoadRef.current = endLoad;
+
   const startStage = (
     spec: StageSpec,
     mode: PlayMode,
@@ -1832,10 +1995,7 @@ export function App() {
     runRef.current = { mode, levelId };
     setMenu(null);
     menuRef.current = null;
-    applyStage(spec, true);
-    armField(spec, mode, plan);
-    armGhost(spec, mode, levelId);
-    armTape(spec, mode, levelId);
+    beginLoad(spec, mode, levelId, plan);
     pickPlayCamera(startCamera(optionsRef.current.camera));
     audioRef.current?.setView(playCameraRef.current);
     // The god-mode effect owns the camera while it is flying; setting a play
@@ -2495,11 +2655,12 @@ export function App() {
         // it back. Both are no-ops mid-race, which is the other way in here.
         audioRef.current?.reset();
         stageMusicRef.current();
-        applyStageRef.current(spec, true);
+        // …and it LOADS, exactly as a fresh start does. A restart rebuilds
+        // the world and re-enters the field, which means it re-drives every
+        // crew's whole stage: the same seconds a start costs, and the same
+        // card over them (`race-loader.ts`).
         const active = runRef.current;
-        armFieldRef.current(spec, active.mode);
-        armGhostRef.current(spec, active.mode, active.levelId);
-        armTapeRef.current(spec, active.mode, active.levelId);
+        beginLoadRef.current(spec, active.mode, active.levelId);
       };
       const camera = (): void => {
         if (menuRef.current) return;
@@ -3229,6 +3390,32 @@ export function App() {
         // and did not spend. The pad is still polled above, so the way out
         // of one is a button like anything else.
         if (benchRef.current) return;
+        // THE LOAD OWNS THE FRAME while a race is being stood up
+        // (`race-loader.ts`). Nothing below runs: there is a card over the
+        // canvas, so a frame spent drawing the world behind it is a frame
+        // taken off the work the card is there to hide — and the game state
+        // under it is still the LAST stage's, which nobody should be
+        // stepping. The pad is polled above, as it is behind every other
+        // early return here.
+        const load = loadRef.current;
+        if (load) {
+          // One frame for the card to be drawn in, before a step that cannot
+          // be cut up takes the next one whole.
+          if (!loadShownRef.current) {
+            loadShownRef.current = true;
+            return;
+          }
+          // …and how much of THIS frame it may have, off how long the
+          // frames are actually coming (`loadBudgetMs`).
+          const deadline = performance.now() + loadBudgetMs(dtFrame * 1000);
+          // Both closures, not `performance.now` itself: a native method
+          // handed over bare is called with no receiver and throws.
+          const clock = () => performance.now();
+          if (!advanceLoad(load, () => clock() < deadline, clock)) {
+            endLoadRef.current();
+          }
+          return;
+        }
         // The cursor is only ever placed for a pad: a focus ring appearing
         // under somebody's mouse is the game moving their cursor for them.
         if (padNow) menuNav.sync();
@@ -3785,6 +3972,7 @@ export function App() {
           onBenchmark={startBenchmark}
         />
       )}
+      {loading !== false && <LoadingScreen leaving={loading === "leaving"} />}
       {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}
       <UpdateButton
         needRefresh={pwa.needRefresh || forcedUpdate}

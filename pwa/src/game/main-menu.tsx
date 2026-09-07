@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { APP_NAME, REPO_URL } from "../identity.ts";
+import { MarkTracks } from "./mark-tracks.tsx";
 import { ordinal } from "../lib/util.ts";
 import {
   LOCATIONS,
@@ -224,7 +225,13 @@ function RootPage({
   return (
     <div className="menu-card menu-card-root">
       <div className="menu-brand">
-        <span className="menu-brand-name">{APP_NAME.toUpperCase()}</span>
+        {/* The mark rides with the NAME, not with the name and its billing:
+            paired with the whole block it sits visibly low, because the
+            tagline under it drags the centre it is aligned to down a line. */}
+        <div className="menu-brand-line">
+          <MarkTracks lay="once" className="menu-brand-mark" />
+          <span className="menu-brand-name">{APP_NAME.toUpperCase()}</span>
+        </div>
         <span className="menu-brand-tag">arcade rally drifting</span>
       </div>
       <div className="menu-tiles">

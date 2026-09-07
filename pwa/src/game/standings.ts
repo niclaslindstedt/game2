@@ -25,15 +25,18 @@ export {
   advanceField,
   advanceRun,
   createField,
+  enterCrew,
   fieldResults,
   fieldTraced,
   livePlace,
   onRoad,
+  openField,
   placeAtFinish,
   placeAtSplit,
   placeField,
   playerSlot,
   rubRivals,
+  sealField,
   settleField,
   settleLimit,
   splitLeader,
@@ -42,6 +45,7 @@ export {
   stopField,
   watchField,
   type ClassRow,
+  type FieldBuild,
   type FieldPlan,
   type FieldStage,
   type RivalField,
@@ -65,7 +69,15 @@ const CATCHUP_GRAIN = 64;
  * to do, which is what the debug overlay reads. */
 export function catchUpField(field: RivalField, budgetMs = CATCHUP_MS): boolean {
   const deadline = performance.now() + budgetMs;
-  return payHeadStart(field, () => performance.now() < deadline, CATCHUP_GRAIN);
+  return catchUpFrom(field, () => performance.now() < deadline);
+}
+
+/** The same catch-up against SOMEBODY ELSE'S budget. The loading card owns
+ * the whole frame rather than a slice of one, and it is spending that frame
+ * across a list of steps this is only one of (`race-loader.ts`), so the
+ * deadline is the load's and not this function's. */
+export function catchUpFrom(field: RivalField, budget: () => boolean): boolean {
+  return payHeadStart(field, budget, CATCHUP_GRAIN);
 }
 
 /** Pay the WHOLE head start now, however long it takes. The classification
