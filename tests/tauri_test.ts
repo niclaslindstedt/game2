@@ -19,7 +19,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { APP_DESCRIPTION, APP_NAME } from "../pwa/src/identity.ts";
-import { SHELL_GLOBAL } from "../pwa/src/shell-host.ts";
+import {
+  SHELL_FULLSCREEN_ASK,
+  SHELL_FULLSCREEN_STATE,
+  SHELL_GLOBAL,
+} from "../pwa/src/shell-host.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TAURI = path.join(ROOT, "tauri");
@@ -33,6 +37,8 @@ const config = JSON.parse(
   bundle: { longDescription: string; macOS: Record<string, unknown>; icon: string[] };
 };
 const rustConfig = readFileSync(path.join(TAURI, "shell", "src", "config.rs"), "utf8");
+const rustPage = readFileSync(path.join(TAURI, "src-tauri", "src", "page.rs"), "utf8");
+const rustMain = readFileSync(path.join(TAURI, "src-tauri", "src", "main.rs"), "utf8");
 const appManifest = readFileSync(path.join(TAURI, "src-tauri", "Cargo.toml"), "utf8");
 
 /** One `pub const NAME: &str = "…";` out of a Rust source, as text. */
@@ -70,6 +76,21 @@ describe("the desktop app's names", () => {
   it("tell the page about the shell through the one global shell-host.ts reads", () => {
     expect(rustConst(rustConfig, "SHELL_GLOBAL")).toBe(SHELL_GLOBAL);
     expect(rustConst(rustConfig, "SHELL_ID")).toBe("tauri");
+  });
+
+  // The FULLSCREEN row in the game's options talks to the window over two
+  // DOM events, and neither side can import the other's spelling of them.
+  it("hear the fullscreen ask, and answer it, on the events the page uses", () => {
+    expect(rustConst(rustConfig, "SHELL_FULLSCREEN_ASK")).toBe(SHELL_FULLSCREEN_ASK);
+    expect(rustConst(rustConfig, "SHELL_FULLSCREEN_STATE")).toBe(SHELL_FULLSCREEN_STATE);
+  });
+
+  // A command the page invokes by a name the builder does not register is a
+  // switch that silently does nothing, and only a launch would show it.
+  it("register the one command the initialization script invokes", () => {
+    const command = rustConst(rustPage, "FULLSCREEN_COMMAND");
+    expect(rustMain).toContain(`generate_handler![${command}]`);
+    expect(rustMain).toContain(`fn ${command}(`);
   });
 });
 

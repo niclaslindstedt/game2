@@ -4,6 +4,7 @@
 //! `scanflick_shell::window_state` and of `scanflick_shell::config`.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use scanflick_shell::config::{
     is_internal_url, remote_game_url, start_url, BRAND_BG, WINDOW_TITLE,
@@ -17,7 +18,7 @@ use tauri::{
     WindowEvent,
 };
 
-use crate::page::initialization_script;
+use crate::page::{announce_fullscreen, initialization_script};
 use crate::Shell;
 
 /// The origin the platform grants our registered scheme.
@@ -118,7 +119,7 @@ pub fn build(app: &AppHandle, shell: &Shell) -> tauri::Result<WebviewWindow> {
     }
     let _ = window.show();
 
-    remember_geometry(&window, shell.user_data.clone());
+    watch_geometry(&window, shell.user_data.clone());
     Ok(window)
 }
 
@@ -173,16 +174,31 @@ fn open_externally(app: &AppHandle, url: &str) {
     }
 }
 
-/// Persist geometry on the way out.
+/// Watch the window's shape: persist the rect on the way out, and tell the
+/// page whenever the fullscreen state moves.
 ///
-/// Hooked to the CLOSE REQUEST rather than to anything later, because the rect
-/// has to be read while the window still exists.
-fn remember_geometry(window: &WebviewWindow, user_data: PathBuf) {
+/// The rect is written on the CLOSE REQUEST rather than on anything later,
+/// because it has to be read while the window still exists.
+///
+/// The fullscreen push hangs off RESIZE, which is the one event every way into
+/// and out of fullscreen has in common — the game's own switch, F11, and the
+/// window manager's own button, which never tells the page anything at all.
+/// It is a cheap `eval` on an event a window emits while it is being dragged,
+/// so it is sent only when the answer has actually changed.
+fn watch_geometry(window: &WebviewWindow, user_data: PathBuf) {
     let handle = window.clone();
-    window.on_window_event(move |event| {
-        if matches!(event, WindowEvent::CloseRequested { .. }) {
-            remember_now(&handle, &user_data);
+    // The handler is a `Fn`, so the last answer is held in a cell rather than
+    // in a `mut` the closure could not have.
+    let announced = AtomicBool::new(handle.is_fullscreen().unwrap_or(false));
+    window.on_window_event(move |event| match event {
+        WindowEvent::CloseRequested { .. } => remember_now(&handle, &user_data),
+        WindowEvent::Resized(_) => {
+            let full = handle.is_fullscreen().unwrap_or(false);
+            if announced.swap(full, Ordering::Relaxed) != full {
+                announce_fullscreen(&handle, full);
+            }
         }
+        _ => {}
     });
 }
 

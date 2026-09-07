@@ -2,27 +2,48 @@
 //! THE PAGE'S WHOLE VIEW OF THE SHELL.
 //!
 //! It is one initialization script, evaluated before the game's own scripts on
-//! every load, and it exposes exactly one thing: a frozen global saying which
-//! binary is showing the page (`scanflick_shell::config::SHELL_GLOBAL`). The
-//! page reads it in `pwa/src/shell-host.ts` to keep its PWA update lifecycle
-//! off in here — the bundle is the update — and for nothing else.
+//! every load, and it exposes exactly two things: a frozen global saying which
+//! binary is showing the page (`scanflick_shell::config::SHELL_GLOBAL`), and a
+//! conversation about the window's fullscreen carried on two DOM events
+//! (`SHELL_FULLSCREEN_ASK` / `SHELL_FULLSCREEN_STATE`). The page reads the
+//! global in `pwa/src/shell-host.ts` to keep its PWA update lifecycle off in
+//! here — the bundle is the update — and holds the other half of the
+//! conversation there too, behind the FULLSCREEN row in the game's options.
 //!
 //! **The page never sees Tauri.** `withGlobalTauri` is off,
 //! `capabilities/default.json` grants the window almost nothing, and the one
 //! command it may reach is looked up at CALL time inside `send` rather than
 //! captured here — so nothing in this script hands the game a handle it could
-//! keep.
+//! keep. An ask is a word, the answer is an event, and neither is a handle.
 
-use scanflick_shell::config::{SHELL_GLOBAL, SHELL_ID};
+use scanflick_shell::config::{
+    SHELL_FULLSCREEN_ASK, SHELL_FULLSCREEN_STATE, SHELL_GLOBAL, SHELL_ID,
+};
+use tauri::WebviewWindow;
 
-/// The internal command the fullscreen key press invokes.
+/// The internal command every fullscreen ask invokes, with one argument: the
+/// word `on`, `off`, `toggle` or `state`.
 ///
-/// A webview has no native hook for a window-level key: F11 and Alt+Enter never
-/// reach the native side at all. So the shell listens for them IN the page, on
-/// the capture phase, and asks itself to toggle. It stays shell code either
-/// way: the game has no fullscreen of its own to fight over, since the
-/// Fullscreen API belongs to a browser chrome this window does not have.
-pub const FULLSCREEN_COMMAND: &str = "shell_toggle_fullscreen";
+/// A webview has no native hook for a window-level key either: F11 and
+/// Alt+Enter never reach the native side at all. So the shell listens for them
+/// IN the page, on the capture phase, and asks itself to toggle — the same
+/// command the game's own switch reaches, so the two can never disagree about
+/// what the window is doing.
+pub const FULLSCREEN_COMMAND: &str = "shell_fullscreen";
+
+/// Tell the page where the window now stands.
+///
+/// PUSHED rather than returned, because the page is not the only thing that
+/// changes it: F11, the window manager and the macOS green button all move the
+/// window without the game asking, and every one of them comes back through
+/// this one event.
+pub fn announce_fullscreen(window: &WebviewWindow, on: bool) {
+    let script = format!(
+        "window.dispatchEvent(new CustomEvent({SHELL_FULLSCREEN_STATE:?}, \
+         {{ detail: {{ on: {on} }} }}))"
+    );
+    let _ = window.eval(script.as_str());
+}
 
 /// The script the window is built with.
 pub fn initialization_script() -> String {
@@ -35,11 +56,19 @@ pub fn initialization_script() -> String {
   // The pipe is resolved on every call rather than captured: this script and
   // Tauri's own are both injected at document start, and depending on one
   // having run first is the kind of ordering that works until it doesn't.
-  var send = function (command) {{
+  var send = function (want) {{
     var internals = window.__TAURI_INTERNALS__;
     if (!internals || typeof internals.invoke !== 'function') return;
-    try {{ internals.invoke(command, {{}}); }} catch (e) {{ /* page tearing down */ }}
+    try {{ internals.invoke({FULLSCREEN_COMMAND:?}, {{ want: want }}); }}
+    catch (e) {{ /* page tearing down */ }}
   }};
+
+  // The game's own FULLSCREEN switch, and the read that tells it where the
+  // window stands. Every ask is answered the same way, on SHELL_FULLSCREEN_STATE.
+  window.addEventListener({SHELL_FULLSCREEN_ASK:?}, function (event) {{
+    var want = event && event.detail && event.detail.want;
+    send(want === 'on' || want === 'off' || want === 'toggle' ? want : 'state');
+  }});
 
   // F11 / Alt+Enter — see FULLSCREEN_COMMAND. Capture phase, so a game that
   // swallows the key for its own reasons does not take the window's chrome
@@ -47,7 +76,7 @@ pub fn initialization_script() -> String {
   window.addEventListener('keydown', function (event) {{
     if (event.key !== 'F11' && !(event.key === 'Enter' && event.altKey)) return;
     event.preventDefault();
-    send({FULLSCREEN_COMMAND:?});
+    send('toggle');
   }}, true);
 }})();"#
     )

@@ -6,7 +6,7 @@
 
 //! The Tauri desktop shell — as thin as a shell around a finished website can
 //! be: one window showing the bundled game, served from a private scheme, plus
-//! the one command the page may ask of it (a fullscreen toggle).
+//! the one command the page may ask of it (the window's fullscreen).
 //!
 //! The ORDER of the startup work matters, and two things happen before the
 //! window exists:
@@ -44,15 +44,30 @@ pub struct Shell {
     pub webroot: PathBuf,
 }
 
-/// F11 / Alt+Enter, forwarded from the page's own key handler — see
-/// [`page::FULLSCREEN_COMMAND`] for why a webview cannot do this natively.
+/// THE ONE COMMAND THE PAGE MAY REACH — the game's FULLSCREEN switch, and
+/// F11 / Alt+Enter forwarded from the page's own key handler. See
+/// [`page::FULLSCREEN_COMMAND`] for why a webview cannot do either natively.
+///
+/// `want` is one word: `on`, `off`, `toggle`, or anything else for a read.
+/// Every one of them is answered the same way — with where the window now
+/// stands — so the switch in the options is right after a key press it did
+/// not make, and a read costs the page nothing to ask for.
 #[tauri::command]
-fn shell_toggle_fullscreen(app: AppHandle) {
+fn shell_fullscreen(app: AppHandle, want: String) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
-    let full = window.is_fullscreen().unwrap_or(false);
-    let _ = window.set_fullscreen(!full);
+    let now = window.is_fullscreen().unwrap_or(false);
+    let next = match want.as_str() {
+        "on" => true,
+        "off" => false,
+        "toggle" => !now,
+        _ => now,
+    };
+    if next != now {
+        let _ = window.set_fullscreen(next);
+    }
+    page::announce_fullscreen(&window, next);
 }
 
 /// FAIL LOUDLY.
@@ -122,7 +137,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![shell_toggle_fullscreen])
+        .invoke_handler(tauri::generate_handler![shell_fullscreen])
         .register_uri_scheme_protocol(APP_SCHEME, |ctx, request| {
             // `try_state`: a request cannot arrive before the window is built,
             // and the window is built after the state is managed — but a 404

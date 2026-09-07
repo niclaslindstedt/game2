@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { NATIVE_HEIGHT } from "../pwa/src/game/desktop-video.ts";
 import {
   DEFAULT_KEYS,
   DEFAULT_SETTINGS,
@@ -195,7 +196,12 @@ describe("the three picture rows", () => {
   // put the six levers back on ONE preset, so a sharp-but-cheap picture was
   // a picture the player could set and never load again.
   it("keep a mixed picture across a save and a load", () => {
-    const mixed = { ...DETAIL_PRESETS.low, resolution: "high", drawDistance: "near" } as const;
+    const mixed = {
+      ...DETAIL_PRESETS.low,
+      resolution: "high",
+      renderHeight: NATIVE_HEIGHT,
+      drawDistance: "near",
+    } as const;
     stored({ video: mixed });
     expect(loadSettings().video).toEqual(mixed);
     localStorage.clear();

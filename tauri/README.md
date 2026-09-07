@@ -13,7 +13,9 @@ on macOS, WebKitGTK on Linux) rather than carrying a browser engine of its
 own, which is what keeps the download a few megabytes over the site itself.
 What is added around the page is the short list a browser tab cannot give a
 game and nothing more: one stable origin, a window that remembers itself, a
-fullscreen key, links out that open in the browser, and a launch log.
+fullscreen the game's own options can reach (and a key for it), a RESOLUTION
+row that names real pixels, links out that open in the browser, and a launch
+log.
 
 ---
 
@@ -67,8 +69,26 @@ platform, which is the property that matters.
 
 **The page never sees Tauri.** `withGlobalTauri` is off, the ACL grants the
 window `core:default` and nothing else, and the one command the page may reach
-(`shell_toggle_fullscreen`, off F11 / Alt+Enter) is looked up at call time
-rather than captured. The dialog and opener plugins are called from Rust only.
+(`shell_fullscreen`) is looked up at call time rather than captured. The
+dialog and opener plugins are called from Rust only.
+
+**The window's fullscreen is the one thing the page may ask for**, because it
+is the one thing a desktop window has that a browser tab keeps for itself —
+the Fullscreen API belongs to a chrome this window does not have. It is two
+DOM events rather than a handle: the page dispatches `sf-shell-fullscreen-ask`
+carrying one word (`on`, `off`, `toggle`, `state`), and the shell answers on
+`sf-shell-fullscreen` with where the window now stands. The answer is PUSHED
+— on every ask and on every resize — so F11, Alt+Enter and the window
+manager's own button all reach the FULLSCREEN row in the game's options,
+which never has to guess. Both event names are spelled again in
+`pwa/src/shell-host.ts`, and `tests/tauri_test.ts` holds the pair together.
+
+**The RESOLUTION row is different in here**, and it is the page's decision
+rather than the shell's: a web page cannot see a monitor, so on the site the
+row is a share of the device's pixels, while the desktop app owns its window
+and can name a height (`NATIVE`, `1440P`, `1080P`…). See
+`pwa/src/game/desktop-video.ts` — the gate is the shell's word, so a laptop
+running the site in a browser is not the desktop app.
 
 **The window is pinned to its own origin.** The site's own pages navigate
 normally; the repository link on the main menu and any credit open in the

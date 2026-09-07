@@ -22,6 +22,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { askShellFullscreen, onShellFullscreen } from "../shell-host.ts";
+import { desktopPicture, renderHeightOf, renderHeightStops } from "./desktop-video.ts";
 import { captureAxis, captureSource, type PadFrame } from "./gamepad.ts";
 import { deviceControls, holdPad, readPadFrames } from "./input.ts";
 import { MenuHead } from "./menu.tsx";
@@ -108,6 +110,36 @@ function usePadPresence(): { connected: boolean; standard: boolean; name: string
   return pads;
 }
 
+/** How tall the window is in DEVICE pixels — what the desktop RESOLUTION row
+ * is a share of, and the measurement that decides which of its stops are
+ * worth offering at all. Watched rather than read once, because going
+ * fullscreen is exactly the press that changes it. */
+function useWindowPixels(): number {
+  const measure = (): number => window.innerHeight * window.devicePixelRatio;
+  const [pixels, setPixels] = useState(measure);
+  useEffect(() => {
+    const remeasure = (): void => setPixels(measure());
+    window.addEventListener("resize", remeasure);
+    return () => window.removeEventListener("resize", remeasure);
+  }, []);
+  return pixels;
+}
+
+/** Where the shell's window stands on fullscreen. It is the SHELL's answer
+ * rather than this page's memory of what it last asked for: F11, Alt+Enter
+ * and the window manager's own button all move the window without asking,
+ * and every one of them comes back on the same event (shell-host.ts). In a
+ * browser nothing ever answers, which is fine — the row is not drawn. */
+function useShellFullscreen(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const stop = onShellFullscreen(setOn);
+    askShellFullscreen("state");
+    return stop;
+  }, []);
+  return on;
+}
+
 function summarise(frames: PadFrame[]): { connected: boolean; standard: boolean; name: string } {
   const first = frames[0];
   if (!first) return { connected: false, standard: false, name: "" };
@@ -140,6 +172,12 @@ function MainPage({
   // options page is open, and re-probing on every render would churn.
   const [device] = useState(deviceControls);
   const pads = usePadPresence();
+  // ...and the two rows only the desktop app has. The shell's word is fixed
+  // for the life of the process, so it is read once; the window it describes
+  // is not, so both of those are watched.
+  const [desktop] = useState(desktopPicture);
+  const windowPixels = useWindowPixels();
+  const fullscreen = useShellFullscreen();
   const set = (patch: Partial<Settings>): void => onSettings({ ...settings, ...patch });
   return (
     <div className="menu-card menu-card-options">
@@ -156,12 +194,27 @@ function MainPage({
               that wants every pixel and would rather lose the far ridges
               is the ordinary case, not the exotic one. */}
           <KnobGroup title="PICTURE">
-            <StepRow
-              label="RESOLUTION"
-              stops={RESOLUTION_STOPS}
-              value={settings.video.resolution}
-              onPick={(resolution) => set({ video: { ...settings.video, resolution } })}
-            />
+            {desktop ? (
+              // THE SAME ROW, ASKED IN PIXELS. The desktop app owns its
+              // window, so it can answer the question a browser tab cannot:
+              // how tall, in real pixels, rather than what share of a screen
+              // the page is not allowed to see. desktop-video.ts says why.
+              <StepRow
+                label="RESOLUTION"
+                stops={renderHeightStops(windowPixels)}
+                value={String(settings.video.renderHeight)}
+                onPick={(id) =>
+                  set({ video: { ...settings.video, renderHeight: renderHeightOf(id) } })
+                }
+              />
+            ) : (
+              <StepRow
+                label="RESOLUTION"
+                stops={RESOLUTION_STOPS}
+                value={settings.video.resolution}
+                onPick={(resolution) => set({ video: { ...settings.video, resolution } })}
+              />
+            )}
             <StepRow
               label="DETAIL"
               stops={DETAIL_STOPS}
@@ -174,6 +227,18 @@ function MainPage({
               value={settings.video.drawDistance}
               onPick={(drawDistance) => set({ video: { ...settings.video, drawDistance } })}
             />
+            {/* The window's own, and so NOT in the settings blob: the shell
+                remembers its geometry (tauri/shell/src/window_state.rs) and
+                answers every ask with where it now stands, which is what
+                keeps this switch right after an F11 nobody told it about. */}
+            {desktop && (
+              <StepRow
+                label="FULLSCREEN"
+                stops={ON_OFF}
+                value={onOff(fullscreen)}
+                onPick={(id) => askShellFullscreen(id === "on" ? "on" : "off")}
+              />
+            )}
           </KnobGroup>
           <KnobGroup title="DRIVING">
             <StepRow
