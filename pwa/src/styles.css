@@ -194,6 +194,15 @@ body {
      news column in portrait, where the panel has the width of the screen —
      measures itself against this. */
   --hud-tach: clamp(8.72rem, 28.8vmin, 14.4rem);
+  /* THE CHROME'S OWN NAVY, as bare channels so every plate below can still
+     mix its own alpha. It is the same colour the glyphs are stamped in, so
+     `--hud-shadow` is taken off it rather than restated: the outline round
+     a letter and the ground under a plate are one idea, and stating them
+     once is what lets the night dressing take the whole of the chrome down
+     with a single number. The MENU cards mix their own — they are pages
+     rather than instruments, and none of them is ever read over a road. */
+  --hud-plate: 18 48 105;
+  --hud-shadow: rgb(var(--hud-plate));
   color: var(--hud-ink);
   font-weight: 800;
   font-style: italic;
@@ -202,6 +211,145 @@ body {
     -1px -1px 0 var(--hud-shadow),
     1px -1px 0 var(--hud-shadow),
     -1px 1px 0 var(--hud-shadow);
+}
+
+/* ── THE NIGHT DRESSING: the HUD's own dip switch ────────────────────────
+   A car's cluster dips when the lamps go on, and so does this one. The
+   switch is the snapshot's `night` — the same stop the main beam comes on
+   at (`nightNow` in daylight.ts) — carried on the root as `data-night`.
+
+   The reason is contrast, not mood. Every colour above was mixed to hold
+   over a bright road at noon: full white ink, a hard navy outline stamped
+   four ways round every glyph, and plates in the arcade's own blue. Over a
+   stage lit by nothing but the car's own beams that same chrome has several
+   times the contrast it needs, and spends the surplus as glare — a screen
+   of white halos in front of the one thing the player is straining to see
+   into, which is the dark past the end of the lights.
+
+   So the surplus is handed back, on three rules:
+
+     * THE CHROME COMES DOWN A STOP, and never further. The ink goes off
+       pure white; the arcade navy goes to nearly black, which takes the
+       outline and every plate with it in one number (`--hud-plate`).
+     * THE DRESSING LOSES ITS COLOUR; THE SIGNAL KEEPS IT. Everything that
+       is merely dressed — the gold captions, the info blue, the sound car's
+       green, the easy end of the co-driver's ladder — goes quiet. Note what
+       is NOT redefined here: `--hud-bad`. A warning lamp is the one thing
+       on a real cluster that never dims, and the red is all of them — the
+       needle in the red, the shift plate, a broken panel, the wrong-way
+       call. Dimming it with everything else is the one change that would
+       cost the player something.
+     * THE GLYPHS GET THEIR SHAPE BACK. The four-way stamp is a DAYLIGHT
+       tool: it fattens every letterform by a pixel on each side, which is
+       a price worth paying against a sunlit road and not against a black
+       one. A soft drop does the same work here and leaves the letters the
+       shape they were drawn in — which is most of what makes this screen
+       read as cleaner than the day one rather than merely darker.
+
+   Nothing here fades. The lamps this follows are a SWITCH and reach main
+   beam on one frame (daylight.ts); a cluster easing up over a second while
+   the beams snapped on would read as two cars. */
+.hud[data-night="1"] {
+  --hud-plate: 7 13 24;
+  --hud-ink: #d9e2ef;
+  --hud-good: #e6b93c;
+  --hud-info: #86b2d2;
+  --hud-green: #3ba54c;
+  --hud-steer: #2a63c9;
+  --hud-hp-spent: #dd8637;
+  /* Restated rather than left to the root's own aliases: a `var()` inside a
+     custom property is substituted where the property is DECLARED, so the
+     two rungs that are spelt as other tokens were resolved against the day
+     palette on `:root` and would carry it down here. */
+  --hud-hp-ok: var(--hud-green);
+  --hud-hp-hurt: var(--hud-good);
+
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 92%),
+    0 0 7px rgb(0 0 0 / 62%);
+}
+
+/* The two presses beside the map are the brightest objects on a night
+   screen after the road itself, because a 65% white edge was drawn to be
+   found against a sky. Against a black one it only has to be found. */
+.hud[data-night="1"] .hud-mini,
+.hud[data-night="1"] .hud-edge-pull {
+  border-color: rgb(255 255 255 / 40%);
+}
+
+/* THE DIAL, backlit rather than printed. The scale and its figures step
+   back to what a lit instrument looks like at night; the NEEDLE does not,
+   because the needle is the reading. */
+.hud[data-night="1"] .hud-tach-track {
+  stroke: rgb(255 255 255 / 34%);
+}
+
+.hud[data-night="1"] .hud-tach-tick {
+  stroke: rgb(255 255 255 / 46%);
+}
+
+.hud[data-night="1"] .hud-tach-label,
+.hud[data-night="1"] .hud-odo-digit {
+  fill: var(--hud-ink);
+}
+
+.hud[data-night="1"] .hud-odo-window {
+  stroke: rgb(255 255 255 / 52%);
+}
+
+/* THE GEAR PLATE is a white slab — the single brightest thing on the
+   screen at noon, and at night a lamp sitting where the road is. It turns
+   over: a dark plate with a lit figure on it, which is how a cluster has
+   always shown a gear. The `:not()` is the whole point of the change — the
+   plate that goes RED against the limiter is the shift light, and it is
+   left exactly as bright as it was. */
+.hud[data-night="1"] .hud-gearbox:not(.hud-gearbox-shift) {
+  background: rgb(var(--hud-plate) / 92%);
+  color: var(--hud-ink);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 24%);
+}
+
+.hud[data-night="1"] .hud-gearbox:not(.hud-gearbox-shift) .hud-shiftlight {
+  background: rgb(255 255 255 / 12%);
+  color: var(--hud-ink);
+}
+
+/* The calm end of both ladders — the corner that flows and the lip that
+   asks for nothing. The yellow, the orange, the amber way home and the red
+   turn-around are the end that is worth being woken by, and they stay. */
+.hud[data-night="1"] .hud-pace-soft,
+.hud[data-night="1"] .hud-gap {
+  color: #57bc69;
+}
+
+.hud[data-night="1"] .hud-pace-jump-small {
+  color: #4c9fbd;
+}
+
+/* The map's water: a lake at full saturation is a lit hole in a plate that
+   everything else on has been taken down. */
+.hud[data-night="1"] .hud-minimap-water {
+  fill: rgb(48 104 168 / 88%);
+}
+
+.hud[data-night="1"] .hud-minimap-stream {
+  stroke: rgb(48 104 168 / 88%);
+}
+
+/* A SOUND CAR IS QUIETER STILL. The schematic already stands back while
+   there is nothing to report (`.hud-health.hud-hp-ok` above); at night it
+   is the largest block of colour left on the screen, and a full green car
+   glowing in the corner of a dark frame for the whole of a clean run is
+   the one reading that would go on saying nothing loudly. The tiers that
+   have something to say are untouched. */
+.hud[data-night="1"] .hud-health.hud-hp-ok {
+  opacity: 0.36;
+}
+
+/* A dead bulb on the start gantry, against a night sky rather than a day
+   one. The lit ones are the signal and keep their glow. */
+.hud[data-night="1"] .hud-lamp {
+  background: #0b111c;
 }
 
 .hud-top {
@@ -307,7 +455,7 @@ body {
 .hud-lap-count {
   font-size: clamp(0.7rem, 2.1vmin, 1rem);
   font-variant-numeric: tabular-nums;
-  background: rgb(18 48 105 / 82%);
+  background: rgb(var(--hud-plate) / 82%);
   border-radius: 0.25rem;
   padding: 0 0.3rem;
 }
@@ -448,7 +596,7 @@ body {
   font: inherit;
   font-size: clamp(0.55rem, 1.8vmin, 0.8rem);
   color: var(--hud-ink);
-  background: rgb(18 48 105 / 75%);
+  background: rgb(var(--hud-plate) / 75%);
   border: 2px solid rgb(255 255 255 / 65%);
   border-radius: 0.4rem;
   padding: 0.25rem 0.5rem;
@@ -695,7 +843,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  background-color: rgb(18 48 105 / 62%);
+  background-color: rgb(var(--hud-plate) / 62%);
   border-radius: 0.7rem;
   padding: 0.3rem calc(0.8rem + var(--pace-trail)) 0.3rem calc(0.45rem + var(--pace-lead));
   transition: opacity 0.12s linear;
@@ -861,7 +1009,7 @@ body {
   transform: scale(0.58);
   transform-origin: top center;
   opacity: 0.5;
-  background-color: rgb(18 48 105 / 45%);
+  background-color: rgb(var(--hud-plate) / 45%);
 }
 
 /* Severity is the color story: green flows, yellow commits, orange bites.
@@ -2698,7 +2846,7 @@ body {
   width: clamp(2rem, 6vmin, 2.8rem);
   height: clamp(2rem, 6vmin, 2.8rem);
   color: var(--hud-ink);
-  background: rgb(18 48 105 / 75%);
+  background: rgb(var(--hud-plate) / 75%);
   border: 2px solid rgb(255 255 255 / 65%);
   border-radius: 0 50% 50% 0;
   opacity: 0;
@@ -2730,7 +2878,7 @@ body {
   height: 120px;
   color: var(--hud-ink);
   opacity: 0.85;
-  filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 60%));
+  filter: drop-shadow(2px 2px 0 rgb(var(--hud-plate) / 60%));
 }
 
 /* Only the spokes, hub and marker turn — the rim below them is a circle,
@@ -2861,7 +3009,7 @@ body {
   gap: 1.7rem;
   transform: translateY(-50%);
   color: var(--hud-ink);
-  filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 70%));
+  filter: drop-shadow(2px 2px 0 rgb(var(--hud-plate) / 70%));
 }
 
 /* Sized as an INSTRUMENT, not a caption: this is decision-driving, glanced at
@@ -2932,7 +3080,7 @@ body {
   border: 5px solid currentcolor;
   border-radius: 50%;
   opacity: 0.5;
-  filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 60%));
+  filter: drop-shadow(2px 2px 0 rgb(var(--hud-plate) / 60%));
 }
 
 /* Moved by the pointer handler through `transform`, never by React: the
@@ -2947,7 +3095,7 @@ body {
   border-radius: 50%;
   background: var(--hud-steer);
   opacity: 0.85;
-  filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 60%));
+  filter: drop-shadow(2px 2px 0 rgb(var(--hud-plate) / 60%));
 }
 
 /* What the other half is FOR, said once. A look zone has nothing anchored
@@ -2991,7 +3139,7 @@ body {
   padding: 0;
   border: 3px solid var(--hud-ink);
   border-radius: 0.5rem;
-  background: rgb(18 48 105 / 45%);
+  background: rgb(var(--hud-plate) / 45%);
   color: var(--hud-ink);
   font: inherit;
   font-size: 1.3rem;

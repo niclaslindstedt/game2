@@ -93,7 +93,11 @@ async function racing(page) {
   // null there rather than parsing an optional chain's `undefined` into a
   // number: `null > 0` is false, so the scene waits instead of starting to
   // press keys at the loading screen.
-  await page.waitForFunction(`${READ_CLOCK} > 0`, null, { timeout: 60000 });
+  // The longest wait in this file, and so the longest timeout: it covers
+  // building the world AND the whole of the countdown behind it, where
+  // `atLamps` below only covers the first of those. A software-rendered
+  // night stage on four cores spends over a minute on the build alone.
+  await page.waitForFunction(`${READ_CLOCK} > 0`, null, { timeout: 180000 });
 }
 
 /** Wait until the RUN's own clock has passed `seconds`. Under software
@@ -1072,6 +1076,32 @@ await capture("shot-hud-off", { width: 1280, height: 720 }, async (page) => {
   await page.waitForTimeout(24000);
   await page.keyboard.up("ArrowUp");
 });
+
+// THE HUD AT NIGHT — the same chrome under its own dip switch (the night
+// dressing in styles.css, off `data-night`). Its own scene rather than a
+// note on the night DRIVING shot because what is judged here is the
+// foreground and not the road: the ink off full white, the arcade navy gone
+// to black behind every glyph and under every plate, the dial backlit
+// rather than printed, the gear plate turned over — and the one colour that
+// must not have moved anywhere, which is the red. Shot with a corner called,
+// since the co-driver's sign is the largest block of colour on the screen
+// and the piece the dressing has most to say about. Both reference
+// viewports: in portrait the whole right-hand column stacks down one edge.
+for (const [name, viewport] of [
+  ["shot-hud-night", { width: 1280, height: 720 }],
+  ["shot-hud-night-portrait", { width: 390, height: 844 }],
+]) {
+  await capture(
+    name,
+    viewport,
+    async (page) => {
+      await racing(page);
+      await page.keyboard.down("ArrowUp");
+      await atNextCall(page);
+    },
+    { tod: "night" },
+  );
+}
 
 // The same card on a phone held sideways — the one shape where its knobs
 // pair up two abreast, and the one where it would otherwise be taller than

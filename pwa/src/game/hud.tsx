@@ -106,6 +106,19 @@ export type HudSnapshot = {
    * nothing there is timed, and a running clock over a practice ground is
    * the game asking a question the level does not answer. */
   training: boolean;
+  /** THE SUN HAS GONE — the stage is being driven on main beam
+   * (`nightNow` in daylight.ts). Nothing is DRAWN from it: it goes on the
+   * HUD root as `data-night`, and the night dressing in styles.css is what
+   * reads it. A dark picture gives the same ink far more contrast than the
+   * noon one it was drawn for, and the dressing is how that surplus is
+   * spent — everything decorative comes down a stop, the arcade navy the
+   * chrome is stamped in goes to black, and what is left bright is what
+   * was always the signal.
+   *
+   * It is the LAMPS' own switch rather than a threshold of the HUD's, so
+   * the cluster and the beams can never disagree about whether it is dark
+   * — and it moves on one frame, exactly as they do. */
+  night: boolean;
   /** Two wheels past the verge. Nothing is drawn from it — it goes on the
    * HUD root as `data-off`, which is what lets the screenshot harness wait
    * for turf under the wheels without the debug overlay in the frame. */
@@ -528,7 +541,10 @@ export function Hud({
   // the whole layout and points it at somebody else (see `spectate`).
   if (watching && !spectate) {
     return (
-      <div className="hud pointer-events-none absolute inset-0 select-none">
+      <div
+        className="hud pointer-events-none absolute inset-0 select-none"
+        data-night={snap.night ? "1" : undefined}
+      >
         <div className="hud-center">{finish}</div>
       </div>
     );
@@ -543,6 +559,7 @@ export function Hud({
     <div
       className="hud pointer-events-none absolute inset-0 select-none"
       data-off={snap.offRoad ? "1" : undefined}
+      data-night={snap.night ? "1" : undefined}
       data-air={snap.airborne && snap.phase === "racing" ? "1" : undefined}
       data-glass={glass === "off" ? undefined : "1"}
       data-seated={seated ? "1" : undefined}
