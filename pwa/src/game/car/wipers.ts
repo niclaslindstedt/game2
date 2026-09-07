@@ -43,7 +43,7 @@
 import * as THREE from "three";
 
 import { NO_DIRT } from "../car-dirt.ts";
-import { MeshBuilder, patchAt, rectAt, shadeFactor, type V3 } from "./builder.ts";
+import { MeshBuilder, patchAt, rectAt, type V3 } from "./builder.ts";
 import { GLASS_LIFT, screenPanes, type GlassPane, type ScreenPane } from "./greenhouse.ts";
 import { paneFrame, type PaneFrame } from "./pane-frame.ts";
 import type { CarBodySpec } from "./spec.ts";
@@ -389,7 +389,6 @@ type Film = {
    * one number paints a dry stage's dust the colour of mud. */
   soak: number;
   tone: THREE.Color;
-  shade: number;
   /** How opaque this pane's coat may get — `COAT_MAX` on a screen, less on
    * a side window, which nothing ever takes it back off (`SIDE_COAT_MAX`). */
   ceiling: number;
@@ -570,7 +569,6 @@ export function buildWipers(
       blades.push(blade);
     }
 
-    const shade = shadeFactor([frame.normal.x, frame.normal.y, frame.normal.z]);
     const bias = new Float32Array(count);
     const ridge = new Uint8Array(count);
     for (let k = 0; k < count; k++) {
@@ -619,7 +617,6 @@ export function buildWipers(
       mud: 0,
       soak: 0,
       tone: new THREE.Color(),
-      shade,
       ceiling: screen.ceiling,
       pivots,
       blades,
@@ -664,7 +661,7 @@ export function buildWipers(
     // weather in it — and then how much of the film is that rather than
     // rain's own smear.
     grime.copy(DUST_TONE).lerp(MUD_TONE, f.soak);
-    f.tone.copy(WATER_TONE).lerp(grime, f.mud).multiplyScalar(f.shade);
+    f.tone.copy(WATER_TONE).lerp(grime, f.mud);
     const arr = colors.array as Float32Array;
     for (let k = 0; k < f.count; k++) {
       const i = (f.offset + k) * 4;

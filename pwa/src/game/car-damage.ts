@@ -53,7 +53,7 @@ import {
 } from "@engine";
 
 import { GLASS_OPACITY, type CarBodyParts, type GlassPane } from "./car-body.ts";
-import { lambert } from "./car/builder.ts";
+import { writeFaceNormal } from "./car/builder.ts";
 import { crumple, noise, rimOf, type CrumpleFrame } from "./car-crumple.ts";
 import { paintLayers, type PaintLayers } from "./car-paint.ts";
 import { looseWheel, stepLooseWheel, throwWheel, type LooseWheel } from "./loose-wheel.ts";
@@ -207,9 +207,15 @@ type Crumpleable = {
    * one that rolled out of the service park. */
   layers: PaintLayers;
   restPos: Float32Array;
-  /** The colour each vertex was baked with, DIVIDED BACK OUT of the sun's
-   * term for the face it sat in: the paint itself, to be lit again from
-   * whatever plane the fold leaves the face in. */
+  /** The face normals, rewritten every time the panel bends. The car is lit
+   * by the scene (car/builder.ts), so a fold is re-lit by handing the GPU
+   * the plane the face now lies in. */
+  nrm: THREE.BufferAttribute;
+  /** The pristine albedo every bend re-derives its scuffing from — a plain
+   * copy, where a fullbright body had to divide a baked sun back out of it
+   * first. Taken off the BASE layer rather than off the buffer: the buffer
+   * may already have a stage's dirt composed over it, and a livery recovered
+   * through a coat of mud is a car that gets muddier every time it is bent. */
   paint: Float32Array;
 };
 
@@ -217,40 +223,8 @@ function crumpleable(mesh: THREE.Mesh): Crumpleable {
   const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
   const layers = paintLayers(mesh.geometry) as PaintLayers;
   const restPos = new Float32Array(pos.array as Float32Array);
-  const paint = new Float32Array(pos.count * 3);
-  // Off the BASE layer rather than off the buffer: the buffer may already
-  // have a stage's dirt composed over it, and a livery recovered through a
-  // coat of mud is a car that gets muddier every time it is bent.
-  for (let i = 0; i + 2 < pos.count; i += 3) {
-    const k = faceLight(restPos, i);
-    for (let v = i; v < i + 3; v++) {
-      paint[v * 3] = layers.base[v * 3] / k;
-      paint[v * 3 + 1] = layers.base[v * 3 + 1] / k;
-      paint[v * 3 + 2] = layers.base[v * 3 + 2] / k;
-    }
-  }
-  return { pos, layers, restPos, paint };
-}
-
-/** The baked sun's term for the triangle starting at vertex `i` of a
- * position buffer. A face the fold has flattened to nothing keeps the
- * light of a face pointing straight up — no plane, no shade. */
-function faceLight(p: ArrayLike<number>, i: number): number {
-  const ax = p[i * 3];
-  const ay = p[i * 3 + 1];
-  const az = p[i * 3 + 2];
-  const bx = p[i * 3 + 3] - ax;
-  const by = p[i * 3 + 4] - ay;
-  const bz = p[i * 3 + 5] - az;
-  const cx = p[i * 3 + 6] - ax;
-  const cy = p[i * 3 + 7] - ay;
-  const cz = p[i * 3 + 8] - az;
-  const nx = by * cz - bz * cy;
-  const ny = bz * cx - bx * cz;
-  const nz = bx * cy - by * cx;
-  const l = Math.hypot(nx, ny, nz);
-  if (l < 1e-9) return lambert(0, 1, 0);
-  return lambert(nx / l, ny / l, nz / l);
+  const nrm = mesh.geometry.getAttribute("normal") as THREE.BufferAttribute;
+  return { pos, layers, restPos, nrm, paint: new Float32Array(layers.base) };
 }
 
 /** The meshes the field bends: everything on the sprung body that is
@@ -360,7 +334,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
 
   /** One mesh's worth of that: every triangle bent, lit again, scuffed. */
   const bendPanel = (
-    { pos, layers, restPos, paint }: Crumpleable,
+    { pos, layers, restPos, nrm, paint }: Crumpleable,
     damage: GameState["car"]["damage"],
   ): void => {
     const holes = body.doors.filter((door) => damage.broken.includes(door.part));
@@ -380,7 +354,10 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
         out[j * 3 + 1] = bent.y;
         out[j * 3 + 2] = bent.z;
       }
-      const light = faceLight(out, i);
+      // The fold has moved the plane, so the face is handed its new normal
+      // and the scene lights it from there — the one write that replaces the
+      // whole un-bake-and-re-bake the fullbright body needed.
+      writeFaceNormal(out, nrm.array as Float32Array, i);
       for (let v = 0; v < 3; v++) {
         const j = i + v;
         const x0 = restPos[j * 3];
@@ -394,9 +371,9 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
         const chip =
           mark *
           smoothstep(0.25, 0.7, noise(x0 / CHIP_SCALE + 5.1, y0 / CHIP_SCALE, z0 / CHIP_SCALE));
-        let cr = (paint[j * 3] * keep * (1 - chip) + PRIMER.r * chip) * light;
-        let cg = (paint[j * 3 + 1] * keep * (1 - chip) + PRIMER.g * chip) * light;
-        let cb = (paint[j * 3 + 2] * keep * (1 - chip) + PRIMER.b * chip) * light;
+        let cr = paint[j * 3] * keep * (1 - chip) + PRIMER.r * chip;
+        let cg = paint[j * 3 + 1] * keep * (1 - chip) + PRIMER.g * chip;
+        let cb = paint[j * 3 + 2] * keep * (1 - chip) + PRIMER.b * chip;
         // The hole where a door was: everything on that flank inside the
         // door's rectangle — the shell and whatever stripe was painted over
         // it — is the dark of the cabin now.
@@ -419,6 +396,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
       }
     }
     pos.needsUpdate = true;
+    nrm.needsUpdate = true;
     layers.compose();
   };
 
@@ -464,21 +442,17 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     pose.pitch = wheelbase > 0 ? (fl + fr - rl - rr) / 2 / wheelbase : 0;
   };
 
-  /** Put one mesh back the way it was built: the pristine vertices, and the
-   * paint lit off the planes they make. The BASE layer only — the dirt over
-   * it is the painter's, and a car straightened by a settings press should
-   * still be as filthy as the stage left it. */
-  const straighten = ({ pos, layers, restPos, paint }: Crumpleable): void => {
+  /** Put one mesh back the way it was built: the pristine vertices, the
+   * planes they make, and the paint that was on them. The BASE layer only —
+   * the dirt over it is the painter's, and a car straightened by a settings
+   * press should still be as filthy as the stage left it. */
+  const straighten = ({ pos, layers, restPos, nrm, paint }: Crumpleable): void => {
     const out = pos.array as Float32Array;
     out.set(restPos);
-    for (let i = 0; i + 2 < pos.count; i += 3) {
-      const light = faceLight(restPos, i);
-      for (let v = i; v < i + 3; v++) {
-        layers.base[v * 3] = paint[v * 3] * light;
-        layers.base[v * 3 + 1] = paint[v * 3 + 1] * light;
-        layers.base[v * 3 + 2] = paint[v * 3 + 2] * light;
-      }
-    }
+    layers.base.set(paint);
+    const normals = nrm.array as Float32Array;
+    for (let i = 0; i + 2 < pos.count; i += 3) writeFaceNormal(restPos, normals, i);
+    nrm.needsUpdate = true;
     pos.needsUpdate = true;
     layers.compose();
   };

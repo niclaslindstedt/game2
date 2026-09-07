@@ -24,6 +24,7 @@ import * as THREE from "three";
 import type { DamagePart } from "@engine";
 
 import { MeshBuilder, mergeGeometries, patchNormal } from "./car/builder.ts";
+import { carSurface } from "./car-surface.ts";
 import { buildFront, buildRear } from "./car/fascia.ts";
 import { buildGlassCracks, type GlassCracks } from "./car/glass-cracks.ts";
 import { buildGreenhouse, screenPanes, type GlassPanes } from "./car/greenhouse.ts";
@@ -157,7 +158,7 @@ export type CarBodyParts = {
   /** Every window, as one translucent mesh, and the material that decides
    * how much of the cabin shows through it this frame. Null on a spec with
    * no glass at all. */
-  glass: THREE.MeshBasicMaterial | null;
+  glass: THREE.MeshPhongMaterial | null;
   /** ...the mesh itself, and where each pane sits in its buffer — what the
    * damage visual takes a shattered pane out of. Null alongside `glass`. */
   glassMesh: THREE.Mesh | null;
@@ -197,7 +198,7 @@ export type CarBodyParts = {
   /** The furniture's own material — the same paint tint the shell takes, on
    * a material of its own so the lamps' wash can be kept out of a room they
    * do not light. */
-  cabinTrimMaterial: THREE.MeshBasicMaterial;
+  cabinTrimMaterial: THREE.MeshPhongMaterial;
   /** The cabin's own material, so the night can black the room out without
    * touching the paint outside it. Null on a car with no cockpit. */
   cockpitMaterial: THREE.MeshBasicMaterial | null;
@@ -250,7 +251,7 @@ export type CarBodyOptions = {
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
   const detail = options.interior ?? "high";
   const group = new THREE.Group();
-  const material = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const material = carSurface();
   const shift = spec.axleShift ?? 0;
   const axles = [spec.wheelbase / 2 + shift, -spec.wheelbase / 2 + shift];
 
@@ -325,12 +326,9 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // The furniture gets its OWN material rather than the shell's, so it can be
   // exempted from the lamps' wash by name (`CABIN_TRIM_MATERIAL`). It costs
   // no draw call: the cabin is already meshes of its own, and what it shares
-  // with the paint outside is the tint, which `tintCar` puts on every
-  // fullbright material it finds.
-  const trimMat = new THREE.MeshBasicMaterial({
-    name: CABIN_TRIM_MATERIAL,
-    vertexColors: true,
-  });
+  // with the paint outside is the light, which reaches every lit material
+  // in the scene alike.
+  const trimMat = carSurface({ name: CABIN_TRIM_MATERIAL });
   const interior = buildInterior(spec, detail, trimMat, options.crew);
   if (interior.group) cabin.add(interior.group);
 
@@ -348,12 +346,11 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // pane goes back to being a solid panel — front faces, writing depth, in
   // the opaque pass with the body it belongs to.
   const solid = detail === "off";
-  let glassMat: THREE.MeshBasicMaterial | null = null;
+  let glassMat: THREE.MeshPhongMaterial | null = null;
   let glassGeo: THREE.BufferGeometry | null = null;
   let glassMesh: THREE.Mesh | null = null;
   if (!g.empty) {
-    glassMat = new THREE.MeshBasicMaterial({
-      vertexColors: true,
+    glassMat = carSurface({
       transparent: !solid,
       opacity: GLASS_OPACITY,
       depthWrite: solid,
@@ -444,8 +441,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // is a back face — and a back face is culled, which is a windscreen that
   // cakes solid for everyone watching from the road and stays spotless for
   // the one person looking through it.
-  const filmMat = new THREE.MeshBasicMaterial({
-    vertexColors: true,
+  const filmMat = carSurface({
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,

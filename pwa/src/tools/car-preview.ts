@@ -8,6 +8,8 @@
 
 import * as THREE from "three";
 
+import { studioLights } from "../game/car-surface.ts";
+
 import type { CarDamage, GameState } from "@engine";
 
 import { buildCarBody, crewSeats, type CarBodySpec } from "../game/car-body.ts";
@@ -244,6 +246,9 @@ async function main(): Promise<void> {
   cars.forEach((variant, row) => {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#3fa9f5");
+    // The car is lit by the scene now (car-surface.ts); a sheet shot in an
+    // unlit one is a sheet of black cars.
+    scene.add(studioLights());
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(240, 240),
       new THREE.MeshBasicMaterial({ map: gravelTexture() }),

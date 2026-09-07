@@ -8,8 +8,11 @@ description: "Use when designing or changing how a CAR LOOKS — its silhouette,
 Cars in this game are not modeled in a DCC tool and not hand-placed boxes:
 they are **generated**. `pwa/src/game/car-body.ts` lofts a low-poly body from
 a `CarBodySpec` — silhouette stations, cabin, flares, wheels, spoiler,
-colors — and bakes a fixed fake sun into vertex colors so the fullbright
-arcade look still has panel definition. Designing a car means editing a spec
+colors — and writes flat albedo, a FACE NORMAL and a gloss weight per
+vertex, which the scene's own sun, sky and lamps then light
+(`car-surface.ts`). The normal is per face rather than averaged on purpose:
+a low-poly body lit per face reads as panels, and the same body lit per
+averaged vertex reads as a bar of soap. Designing a car means editing a spec
 and LOOKING, never guessing from numbers.
 
 **Before starting, read this skill's lessons** —
@@ -105,8 +108,9 @@ skill for any code change.
   boxy (white over blue, roof blade); the big car is long, low, a fastback
   under a whale tail on a red roof; the coupe is red on box flares. Any new
   car needs its own one-glance signature.
-- **Match the world's art direction**: fullbright, faceted, chunky. No
-  smooth curves — the loft's hard stations ARE the style. Keep glass light
+- **Match the world's art direction**: faceted, chunky, flat-shaded. No
+  smooth curves — the loft's hard stations ARE the style, and the face
+  normals are what keep them reading as stations. Keep glass light
   (an arcade near-sky tone, not black): a dark greenhouse reads as a hole.
 - **Wheels sell rally**: big, proud of the body (tire face outside the
   rocker), light hubs. If wheels vanish under the body, raise `floorY` or

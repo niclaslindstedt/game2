@@ -16,6 +16,8 @@
 // shell is on — the entry script has a critical-path budget.
 
 import * as THREE from "three";
+
+import { studioLights } from "./car-surface.ts";
 import type { CarSpec } from "@engine";
 
 import { buildCarBody } from "./car-body.ts";
@@ -67,6 +69,9 @@ export function createPortraitStand(): PortraitStand {
   renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
+  // A car is lit by the scene now (car-surface.ts), and this scene has no
+  // sky in it — without a rig of its own the body draws black.
+  scene.add(studioLights());
   const camera = new THREE.PerspectiveCamera(FOV, PORTRAIT_WIDTH / PORTRAIT_HEIGHT, 0.1, 60);
   const bounds = new THREE.Box3();
   const size = new THREE.Vector3();

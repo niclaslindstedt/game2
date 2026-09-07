@@ -31,7 +31,6 @@ import {
   steeringTurn,
   tailLampSources,
   CABIN_TRIM_MATERIAL,
-  COCKPIT_MATERIAL,
   DIAL_TOP_SPEED,
   GLASS_OPACITY,
   INSTRUMENT_MATERIAL,
@@ -261,6 +260,12 @@ export type CarVisual = {
    * video options' call, per car, pushed by whoever built it (`CRUMPLE_SEEN`
    * in settings.ts). What comes OFF the car is not on this row. */
   setCrumple: (on: boolean) => void;
+  /** Whether this body READS the shadow map as well as drawing into it
+   * (`RICH_SHADOWS`, car-shadow.ts): its own roof over its door, its arches
+   * over its tyres, and whatever else is in the map falling across it. Off
+   * below the top LIGHTING stop, where nothing that receives is in the map
+   * at all. */
+  setShadowDetail: (rich: boolean) => void;
   /** Which stop of the light switch the stage has the car on (`LampStage`) —
    * the lamps burn harder as it climbs, and their lenses stop taking the
    * tint the paint takes. Pushed from the
@@ -342,16 +347,23 @@ export function tintCar(
     if (!(obj instanceof THREE.Mesh) && !(obj instanceof THREE.Points)) return;
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
     for (const mat of mats) {
-      const painted = mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial;
-      // Three names are driven rather than tinted: the lamp bloom and its
-      // lens, which get BRIGHTER as the light goes, and the cockpit's own
-      // instruments, which do not answer to the sky at all. The cabin is
-      // tinted here and then darkened again by `setLights`.
+      // The PAINT is not here any more. A lit material takes the hour from
+      // the sun and the sky like the road under it (car-surface.ts), and a
+      // tint on top of that would be the failing light applied twice — the
+      // car darker at dusk than the ground it stands on.
+      //
+      // What is left is the handful of surfaces that are still UNLIT because
+      // being lit would be wrong for them: the sparks and flecks a
+      // `PointsMaterial` draws, which have no normal to light and are their
+      // own light anyway. The lamps, their lenses and the instruments are
+      // unlit too and are DRIVEN rather than tinted — they get brighter as
+      // the light goes, which is the opposite of a tint — so `setLights`
+      // below owns them and they are skipped here.
       const driven =
         mat.name === LAMP_MATERIAL ||
         mat.name === LENS_MATERIAL ||
         mat.name === INSTRUMENT_MATERIAL;
-      if (painted && !driven) mat.color.copy(tint);
+      if (mat instanceof THREE.PointsMaterial && !driven) mat.color.copy(tint);
     }
   });
   visual.setLights(lamps, tint);
@@ -395,22 +407,23 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   const dirt = createCarDirt(body.group, wheelSpray(bodySpec));
   const damage = createCarDamage(body);
 
-  // What the car's own lamps put back on its own panels (car-glow.ts) — the
-  // second term of the two the body is lit by, and the only one that is not
-  // the sky. Grafted onto the BODYWORK and nothing else. The materials
-  // `tintCar` drives rather than tints are lamps and instruments, which are
-  // sources in their own right and must not be lit a second time by the
-  // light they are throwing; and the cabin's furniture is exempt for the
-  // opposite reason, that a lamp bolted to the outside of a closed box does
-  // not light the room behind it.
+  // The one light the scene cannot throw for itself: what the car's own
+  // lamps spill onto the panels around them (car-glow.ts). A headlamp is
+  // aimed down the road, so the real spotlight behind it never touches the
+  // wing carrying it, and this is the bounce a renderer has no way to
+  // compute.
+  //
+  // It goes on the LIT materials and nothing else. The lamps and the
+  // instruments are unlit by design — they are sources, and must not be lit
+  // a second time by the light they are throwing — and the cabin's furniture
+  // is exempt for the opposite reason, that a lamp bolted to the outside of
+  // a closed box does not light the room behind it.
   const glow = createCarGlow(frontLampAnchors(bodySpec), rearLampAnchors(bodySpec));
   group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
     for (const mat of mats) {
-      if (!(mat instanceof THREE.MeshBasicMaterial)) continue;
-      if (mat.name === LAMP_MATERIAL || mat.name === LENS_MATERIAL) continue;
-      if (mat.name === INSTRUMENT_MATERIAL || mat.name === COCKPIT_MATERIAL) continue;
+      if (!(mat instanceof THREE.MeshPhongMaterial)) continue;
       if (mat.name === CABIN_TRIM_MATERIAL) continue;
       glow.graft(mat);
     }
@@ -528,6 +541,17 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     lensMat.transparent = true;
     lensMat.opacity = GHOST_OPACITY;
   }
+  /** The car reads the map only at the top stop, and only ever on the LIT
+   * surfaces: a lamp bloom and an instrument are their own light, and a
+   * shadow across one would be a lamp somebody had put a hand over. */
+  const setShadowDetail = (rich: boolean): void => {
+    group.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      obj.receiveShadow = rich && mats.some((mat) => mat instanceof THREE.MeshPhongMaterial);
+    });
+  };
+
   let lamps: LampStage = "off";
   const worldLight = new THREE.Color(1, 1, 1);
   /** Scratch for the tail's colour this frame, handed to the glow register. */
@@ -854,6 +878,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     setWheelLoss: damage.setWheelLoss,
     setCrumple: damage.setCrumple,
     setBrakeLights,
+    setShadowDetail,
     setLights,
     setWet,
     setSnow,

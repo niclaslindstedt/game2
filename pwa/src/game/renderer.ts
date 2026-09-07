@@ -358,6 +358,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     const brakes = LAMP_BEAMS[quality.lighting].brakes;
     car?.setBrakeLights(brakes);
     ghostCar?.setBrakeLights(brakes);
+    // …and whether the bodies READ the shadow map at this stop as well as
+    // drawing into it (`RICH_SHADOWS`). The rig owns the decision because it
+    // owns the bias that goes with it; the bodies own the flag.
+    const rich = environment.shadows.rich();
+    car?.setShadowDetail(rich);
+    ghostCar?.setShadowDetail(rich);
+    field.setShadowDetail(rich);
   };
 
   const chase = createGameCamera(canvas.clientWidth || 1, canvas.clientHeight || 1);
@@ -554,10 +561,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       screens: grime ? (whose === "player" ? "fine" : "coarse") : "off",
     };
   };
-  // The LIGHTING row, first applied — down here rather than beside its own
-  // function because it reaches the cars, and those are declared above.
-  applyLighting();
   const field = createFieldCars(scene);
+  // The LIGHTING row, first applied — down here rather than beside its own
+  // function because it reaches the cars and the FIELD, and both have to
+  // exist before it runs. A `const` read before its line is a temporal dead
+  // zone, and the whole app fails to start with a minified name in the
+  // message and nothing pointing at this line.
+  applyLighting();
   field.setCarDetail({
     ...carDetail("field"),
     exhaust: EXHAUST_SEEN[quality.exhaust].field,
@@ -879,6 +889,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     car.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
     car.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     car.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
+    car.setShadowDetail(environment.shadows.rich());
     // Off the body AS BUILT: a car built without pipes (the EXHAUST row) has
     // nowhere for smoke to leave from, and this is what keeps the row's two
     // halves in step. The cloud switches the instant the row does and the
@@ -996,6 +1007,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     ghostCar.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
     ghostCar.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     ghostCar.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
+    ghostCar.setShadowDetail(environment.shadows.rich());
     applyTint();
   };
 
