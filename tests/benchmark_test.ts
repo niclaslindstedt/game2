@@ -30,6 +30,7 @@ import {
   type BenchSample,
 } from "../pwa/src/game/benchmark-index.ts";
 import { BENCHMARK } from "../pwa/src/game/benchmark-plan.ts";
+import { benchmarkReport, type FrameCost } from "../pwa/src/game/benchmark-report.ts";
 import { DAY_ABOVE, LAMPS_UNDER, NIGHT_BELOW, sunAt } from "../pwa/src/game/daylight.ts";
 import { findLevel } from "../pwa/src/game/campaign.ts";
 import { SUN_SECONDS_PER_HOUR } from "@engine";
@@ -319,5 +320,101 @@ describe("the benchmark's hour", () => {
     // And well under plain day at the green: an hour that started there
     // would be a plan that had drifted back off the point of pinning one.
     expect(sunAfter(0).elevation).toBeLessThan(DAY_ABOVE);
+  });
+});
+
+// THE REPORT — a run written down for somebody who is going to make the
+// game faster rather than for somebody deciding whether their phone copes.
+// Held to its CONTENT rather than its wording: what may not go missing is
+// the conditions (without which two runs cannot be compared at all), the
+// per-frame cost (without which "it is slow" is the whole bug report), and
+// every reading, so a sag can be found at the frame it happened on.
+describe("the benchmark's debug report", () => {
+  const costs: FrameCost[] = [
+    { calls: 500, triangles: 400_000, programs: 40, geometries: 900, textures: 30 },
+    { calls: 300, triangles: 200_000, programs: 40, geometries: 900, textures: 30 },
+    { calls: 400, triangles: 300_000, programs: 40, geometries: 900, textures: 30 },
+  ];
+  const samples: BenchSample[] = [
+    { frame: 15, index: 150, fps: 90 },
+    { frame: 900, index: 120, fps: 60 },
+    { frame: 1800, index: 79, fps: 41 },
+  ];
+  const run = {
+    conditions: {
+      stage: "Creosote Flats",
+      cars: 15,
+      width: 2556,
+      height: 1179,
+      pixelRatio: 3,
+      picture: [
+        { label: "RESOLUTION", value: "HIGH" },
+        { label: "DETAIL", value: "HIGH" },
+      ],
+      plan: [{ label: "car", value: "compact" }],
+    },
+    samples,
+    costs,
+    scene: [
+      { name: "world", objects: 300, triangles: 900_000 },
+      { name: "field cars", objects: 60, triangles: 120_000 },
+    ],
+    step: STEP,
+    frames: FRAMES,
+  };
+
+  it("carries the conditions a second run has to match", () => {
+    const text = benchmarkReport(run);
+    expect(text).toContain("Creosote Flats");
+    expect(text).toContain("15 cars");
+    expect(text).toContain("2556×1179");
+    // The device ratio, without which the buffer above cannot be reproduced.
+    expect(text).toContain("3x");
+    expect(text).toContain("RESOLUTION HIGH");
+    expect(text).toContain("DETAIL HIGH");
+    expect(text).toContain("car compact");
+  });
+
+  it("leads with the score in both units", () => {
+    const text = benchmarkReport(run);
+    expect(text).toContain("INDEX 79");
+    expect(text).toContain("47 fps average");
+  });
+
+  it("reports the MEDIAN frame, so one stalled frame does not set the figure", () => {
+    // 500 / 300 / 400 — the mean is 400 and so is the median here, so the
+    // claim is made with a spike that separates them.
+    const spiked = {
+      ...run,
+      costs: [...costs, { ...costs[0], calls: 5000, triangles: 9_000_000 }],
+    };
+    const text = benchmarkReport(spiked);
+    expect(text).toContain("450");
+    expect(text).not.toContain("1 550");
+  });
+
+  it("prints every reading, so a sag can be found at the frame it happened", () => {
+    const text = benchmarkReport(run);
+    for (const s of samples) expect(text).toContain(String(s.frame));
+    // …with the cost sitting in the same row as the rate, which is the
+    // whole point: a rate that fell while the draw calls did not is a
+    // machine, and one that fell with them is the scene.
+    // Frame 900 of 1800 is the reading half way through the run.
+    const row = text.split("\n").find((line) => line.trimStart().startsWith("50%"));
+    expect(row).toBeDefined();
+    expect(row).toContain("900");
+    expect(row).toContain("120");
+    expect(row).toContain("300");
+  });
+
+  it("sorts the scene by what it costs, heaviest first", () => {
+    const text = benchmarkReport(run);
+    expect(text.indexOf("world")).toBeLessThan(text.indexOf("field cars"));
+  });
+
+  it("says something useful before there is anything to say", () => {
+    const empty = benchmarkReport({ ...run, samples: [], costs: [], scene: [] });
+    expect(empty).toContain("Creosote Flats");
+    expect(empty).toContain("INDEX 0");
   });
 });

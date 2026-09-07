@@ -7269,6 +7269,11 @@ a.menu-version:focus-visible {
   align-items: stretch;
   text-align: center;
   min-width: min(23rem, 88vw);
+  /* Wider than the other cards on this tier, because the thing it exists to
+     show is a GRAPH and a graph is only as good as the width it is drawn
+     across: the run is a hundred and twenty readings, and at the pause
+     card's width the interesting kink in one is a pixel. */
+  max-width: min(40rem, 94vw);
 }
 
 /* The answer, once there is one. Above the graph rather than in it: the line
@@ -7312,6 +7317,102 @@ a.menu-version:focus-visible {
   display: block;
   width: 100%;
   height: auto;
+  /* NEVER THE THING THAT GIVES. The card is a column flex box with a
+     `max-height`, so once the score and the four video cells arrive the
+     content is taller than the screen on a phone held sideways — and an SVG
+     sized from its own aspect ratio is the one item in the column with a
+     height a flex layout feels free to take. It collapsed to a sliver
+     exactly when there was finally something worth looking at on it. The
+     card scrolls instead. */
+  flex: 0 0 auto;
+}
+
+/* The graph on the finished card is a PRESS: the whole run full screen is
+   behind it. A plain button would put a chrome frame and a focus ring round
+   a picture, so it wears none of that and says what it does underneath. */
+.bench-plot-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.bench-plot-more {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: clamp(0.5rem, 1.8vmin, 0.62rem);
+  letter-spacing: 0.22em;
+  opacity: 0.6;
+}
+
+/* THE GRAPH WITH THE SCREEN TO ITSELF. The same viewBox as the panel — the
+   same picture, only bigger, which is the entire point — and the box it
+   sits in is what grows. The aspect it was drawn at is very nearly a
+   landscape phone's, so it fills one almost exactly. */
+.bench-full {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: stretch;
+  width: min(100%, 100vw);
+  max-height: 100%;
+}
+
+.bench-full-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.3rem 1rem;
+  color: var(--hud-ink);
+  text-shadow: 0 2px 0 var(--hud-shadow);
+}
+
+.bench-full-title {
+  font-size: clamp(1rem, 4vmin, 1.6rem);
+  letter-spacing: 0.08em;
+  color: var(--hud-good);
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-full-sub {
+  font-size: clamp(0.6rem, 2.2vmin, 0.85rem);
+  letter-spacing: 0.14em;
+  opacity: 0.85;
+}
+
+/* Full screen the graph has room the panel never had, so the ink comes up
+   to match: a hairline that read correctly at eight centimetres is a
+   thread at thirty. */
+.bench-plot-full {
+  max-height: 74vh;
+}
+
+/* ITS OWN GROUND, AND MORE OF IT. On the card the panel sits on the card's
+   fill and 62% is plenty; with the screen to itself the only thing behind
+   it is the rally, and a line read against a moving road and a lit car is
+   a line nobody can follow. Photographed before this was raised: the sign
+   board and the car's own headlamp were visible straight through the two
+   lines at the bottom of the box. */
+.bench-plot-full .bench-plot-panel {
+  fill: rgb(4 14 34 / 92%);
+}
+
+.bench-plot-full .bench-plot-line {
+  stroke-width: 1.6;
+}
+
+.bench-plot-full .bench-plot-rate {
+  stroke-width: 0.8;
+}
+
+.bench-plot-full .bench-plot-head {
+  r: 2.2;
 }
 
 .bench-plot-panel {
