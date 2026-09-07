@@ -101,7 +101,7 @@ export const SKYLINE: Record<BiomeId, number> = {
  * by; `ceiling` keeps the pane short of solid even edge-on, for the reason
  * the per-frame numbers have one — a window that closes completely is a
  * panel. */
-const REFLECT = { base: 0.3, falloff: 3, strength: 1, ceiling: 0.97 };
+const REFLECT = { base: 0.45, falloff: 3, strength: 1, ceiling: 0.97 };
 
 /** ...and what the COAT over it does with the same sky. `share` is how much
  * of the pane's own reflectance a filmed surface keeps — less, because dirt

@@ -439,6 +439,15 @@ export function buildWipers(
   const armed = arms && spec.cabin.wipers === true;
 
   const position: number[] = [];
+  // THE COAT IS LIT, like every other surface on the car (car-surface.ts) —
+  // so it needs a normal to be lit BY. It is the pane's own, the same one
+  // every vertex here is already lifted along: a film is a sheet lying on a
+  // window, and there is nothing else it could face. Without it the
+  // attribute reads zero, the sun contributes nothing at all and the
+  // hemisphere only its midpoint, and a dry stage's dust — which is the
+  // PALEST thing on a rally car's back window — comes out darker than the
+  // paint around it.
+  const normal: number[] = [];
   const color: number[] = [];
   const index: number[] = [];
   const films: Film[] = [];
@@ -497,6 +506,7 @@ export function buildWipers(
           const [u, v] = rectAt(pane.rect, i / cols, j / rows);
           const p = vec(patchAt(pane.patch, u, v)).addScaledVector(frame.normal, FILM_LIFT);
           position.push(p.x, p.y, p.z);
+          normal.push(frame.normal.x, frame.normal.y, frame.normal.z);
           color.push(0, 0, 0, 0);
           p.sub(frame.origin);
           local.push(p.dot(frame.right), p.dot(frame.up));
@@ -644,6 +654,7 @@ export function buildWipers(
   if (film !== "off") {
     filmGeo = new THREE.BufferGeometry();
     filmGeo.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
+    filmGeo.setAttribute("normal", new THREE.Float32BufferAttribute(normal, 3));
     colors = new THREE.Float32BufferAttribute(color, 4);
     filmGeo.setAttribute("color", colors);
     filmGeo.setIndex(index);
