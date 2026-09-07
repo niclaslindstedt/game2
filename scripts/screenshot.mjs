@@ -2236,6 +2236,22 @@ await capture(
   },
   { level: "taiga-1", at: "finish", time: "30", difficulty: "hard" },
 );
+// The same mode held upright, which is a different placement and so a
+// different picture: the banner cannot take the top edge here — the clock has
+// the left of it and the minimap dock the right — so it drops to the row the
+// condition schematic stands on. What this shot is for is the check that it
+// clears BOTH of them and still leaves the road under it open.
+await capture(
+  "shot-spectate-portrait",
+  { width: 390, height: 844 },
+  async (page) => {
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
+    await page.getByRole("button", { name: "SPECTATE" }).click();
+    await page.waitForSelector(".hud-spectate", { timeout: 120000 });
+    await page.waitForTimeout(1500);
+  },
+  { level: "taiga-1", at: "finish", time: "30", difficulty: "hard" },
+);
 // …and HEADS UP's own sheet: the same card with the board taken off, on a
 // grid the whole field left together.
 await capture(
