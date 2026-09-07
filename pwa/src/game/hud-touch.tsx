@@ -200,7 +200,6 @@ export function SteerZone({
       // Capture taken away mid-drag: whatever the browser does with the rest
       // of that touch, this zone is no longer hearing about it.
       onLostPointerCapture={(e) => guard.release(e.pointerId)}
-      onContextMenu={(e) => e.preventDefault()}
     >
       <div ref={wheelRef} className="hud-wheel" aria-hidden="true">
         {/* The rim is a circle: rotating it would show nothing, so it stays
@@ -357,7 +356,6 @@ export function PedalZone({
       }}
       onPointerCancel={(e) => guard.release(e.pointerId)}
       onLostPointerCapture={(e) => guard.release(e.pointerId)}
-      onContextMenu={(e) => e.preventDefault()}
     >
       <div
         ref={hintRef}

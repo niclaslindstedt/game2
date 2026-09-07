@@ -128,7 +128,6 @@ export function EdgeRecoverZone({ onReset }: { onReset: () => void }) {
       }}
       onPointerCancel={(e) => guard.release(e.pointerId)}
       onLostPointerCapture={(e) => guard.release(e.pointerId)}
-      onContextMenu={(e) => e.preventDefault()}
     >
       <div ref={pullRef} className="hud-edge-pull" aria-hidden="true">
         <RecoverGlyph />
