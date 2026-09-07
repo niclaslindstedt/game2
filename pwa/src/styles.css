@@ -2550,6 +2550,27 @@ body {
     --hud-map: clamp(3.4rem, 18vw, 9.75rem);
   }
 
+  /* THE PLACE HAS TO LAND ABOVE THE GLASS. The right-hand column is the map,
+     the two presses stacked beside it and the board under them, and portrait
+     gives that column only the room down to `--glass-top` — the board hangs
+     LEFT of the map's own edge, which is the one part of the column the
+     centred glass reaches across. Landscape has a clear span there and sizes
+     the figure to the clock; here it is sized to the room, which on every
+     phone from 360 up leaves the stack clear of the glass by a few pixels
+     rather than writing the place across the driver's mirror. */
+  .hud-actions {
+    gap: 0.15rem;
+  }
+
+  .hud-place-label {
+    font-size: 0.5rem;
+    margin-bottom: 0.08rem;
+  }
+
+  .hud-place-no {
+    font-size: clamp(0.95rem, 4.8vw, 1.35rem);
+  }
+
   /* Below the minimap, always: a percentage top clears the dock on a tall
      phone and slides under it on a short one. The band moves, not the strip
      — `--pace-top` follows it, so the split and the calls stay stacked. */
