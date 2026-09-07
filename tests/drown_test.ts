@@ -205,6 +205,48 @@ describe("going under (TUNING.crash.drown)", () => {
     // penalty is charged to the run, which is what makes it one.
     expect(state.raceTime - raceAtEntry).toBeCloseTo(D.duration, 1);
   });
+
+  /** How far the car turns over one whole drowning, given the yaw it
+   * arrives with. One plunge per entry rate — the drive is deterministic,
+   * so every call replays the same one and only the spin set on the step
+   * the water takes it differs. That is a car LANDING in water: an
+   * airborne arrival carries its spin in whole, where a car that drives in
+   * has already scrubbed most of it off against the ground. */
+  function turnsWhileDrowning(yawRate: number): number {
+    const { state } = driveIntoDeepWater();
+    state.car.yawRate = yawRate;
+    let turned = 0;
+    let was = state.car.heading;
+    for (
+      let i = 0;
+      i < Math.round(TUNING.crash.drown.duration / TUNING.dt) && state.drowning;
+      i++
+    ) {
+      step(state, NEUTRAL_INPUT);
+      turned += Math.abs(state.car.heading - was);
+      was = state.car.heading;
+    }
+    return turned / (2 * Math.PI);
+  }
+
+  it("takes a landing car's spin instead of letting it turn circles", () => {
+    // The spin a crash actually hands the water (`drift.overYaw`), which is
+    // what a car thrown off a jump arrives with.
+    const spun = turnsWhileDrowning(TUNING.drift.overYaw);
+    // A settling hull, not a top: it swings round to where the water leaves
+    // it and stops. Under a flat time constant this was 2.06 turns, because
+    // the whole drowning came to a fixed 2.16 x the entry rate.
+    expect(spun).toBeLessThan(0.5);
+
+    // ...and that is the SQUARE law rather than a clamp or a slower
+    // constant: eight times the entry spin buys nowhere near eight times
+    // the turning, which is the one thing a flat constant cannot do. The
+    // gentle end has to keep swinging, or the beat freezes on its entry
+    // heading — so it is bounded at both ends.
+    const drifting = turnsWhileDrowning(TUNING.drift.overYaw / 8);
+    expect(drifting).toBeGreaterThan(0.02);
+    expect(spun).toBeLessThan(drifting * 4);
+  });
 });
 
 describe("driving out again (TUNING.crash.drown.shallows)", () => {

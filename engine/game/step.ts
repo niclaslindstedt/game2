@@ -460,6 +460,25 @@ function beach(state: GameState, events: GameEvent[]): void {
   events.push({ type: "splash", speed: Math.abs(car.u), deep: false });
 }
 
+/** What the water leaves of the car's YAW after one step.
+ *
+ * Water resists with the SQUARE of the rate through it, so the constant it
+ * takes a rotation over is not a constant: a hull that arrives spinning is
+ * stopped in a fraction of the time a drifting one is. Written as a plain
+ * `exp(-dt/slewIn)` it is linear drag, which takes the same FRACTION per
+ * second however violent the spin is — and that is what carried a car
+ * landing in a lake through two full turns before it settled. The whole
+ * five seconds is a fixed 2.16 x the entry rate however fast the car came
+ * in, so an airborne arrival at `drift.overYaw` simply spun, and the water
+ * read as not being there at all.
+ *
+ * The square term is bounded rather than punitive: it is the difference
+ * between a car the lake grabs and a car the lake ignores, and past about
+ * `slewAbove` the swing a float wants is untouched. */
+function spinDrag(yawRate: number, slewIn: number, above: number): number {
+  return Math.exp((-T.dt / slewIn) * (1 + Math.abs(yawRate) / above));
+}
+
 /** One step of a car going down. Nothing else in the run advances while
  * this is running — no progress, no surface, no wedge clock, and no input:
  * the seconds ARE the penalty, and a driver who could steer out of them
@@ -472,10 +491,13 @@ function stepDrowning(state: GameState, events: GameEvent[]): void {
 
   // The water takes the momentum, but not instantly: the car carries its
   // entry line a few metres into the lake, and keeps swinging on its yaw
-  // long after it has stopped going anywhere.
+  // long after it has stopped going anywhere. The TRAVEL decays over a flat
+  // constant — that carry is the entry the car is allowed to wade back out
+  // on (`beach`), and it is short enough already. The YAW does not: see
+  // `spinDrag`.
   car.u *= Math.exp(-T.dt / D.stopIn);
   car.w *= Math.exp(-T.dt / D.stopIn);
-  car.yawRate *= Math.exp(-T.dt / D.slewIn);
+  car.yawRate *= spinDrag(car.yawRate, D.slewIn, D.slewAbove);
   car.heading += car.yawRate * T.dt;
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
