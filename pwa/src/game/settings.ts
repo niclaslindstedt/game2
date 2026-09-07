@@ -306,7 +306,9 @@ export type VideoSettings = {
    * a grid where only the car being driven is built that way: every other
    * car is the solid one the INTERIOR row's `off` builds, whatever that row
    * says. `all` furnishes the whole entry list, which is what a rally looks
-   * like from the car behind. */
+   * like from the car behind — and, being the stop only the top of DETAIL
+   * reaches, it is also what turns the WORLD on in the glass rather than
+   * only the gradient baked into it (`GLASS_REFLECT`). */
   glass: "player" | "all";
   /** WHOSE BODY FOLDS: which cars on the road are DISFIGURED by what they
    * hit — the panels bent into the shape of the impact, the paint scuffed
@@ -757,6 +759,25 @@ export const GLASS_SEEN_THROUGH: Record<
 > = {
   player: { player: true, field: false },
   all: { player: true, field: true },
+};
+
+/** WHETHER A WINDOW SHOWS THE WORLD, off the same row — the reflection
+ * car/glass-reflect.ts strikes per pixel: the sky the pane is pointed at
+ * this instant, the horizon lying across it at the angle it is raked, the
+ * cloud sliding through and the sun smearing down the greenhouse as the car
+ * turns. Below it every pane keeps the gradient baked into its vertices
+ * (car/greenhouse.ts), which is paint and does not move with the car.
+ *
+ * It rides the GLASS row rather than one of its own because it is the same
+ * question that row already asks — how much of a window is worth paying for
+ * — and because `all` is the stop only DETAIL ▸ HIGH reaches, which is the
+ * machine this is for. It is a few dozen instructions on window pixels and
+ * nothing else: no pass, no target, no cube map, not one extra draw call, so
+ * the whole entry list can carry it wherever one car could. It applies to a
+ * car when it is BUILT, like the cabin behind the glass. */
+export const GLASS_REFLECT: Record<VideoSettings["glass"], boolean> = {
+  player: false,
+  all: true,
 };
 
 /** Flora density multiplier — the scatter chance for everything the world

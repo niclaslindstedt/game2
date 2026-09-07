@@ -30,6 +30,7 @@ import {
   EFFECTS_SCALE,
   EXHAUST_SEEN,
   GLASS_RAIN,
+  GLASS_REFLECT,
   GLASS_SEEN_THROUGH,
   INTERIOR_DETAIL,
   CRUMPLE_SEEN,
@@ -553,12 +554,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * brown (car/wipers.ts). */
   const carDetail = (
     whose: "player" | "field",
-  ): { interior: InteriorDetail; screens: FilmDetail } => {
+  ): { interior: InteriorDetail; screens: FilmDetail; reflect: boolean } => {
     const furnished = GLASS_SEEN_THROUGH[quality.glass][whose];
     const grime = furnished && SCREEN_GRIME[quality.interior];
     return {
       interior: furnished ? INTERIOR_DETAIL[quality.interior] : "off",
       screens: grime ? (whose === "player" ? "fine" : "coarse") : "off",
+      reflect: GLASS_REFLECT[quality.glass],
     };
   };
   const field = createFieldCars(scene);

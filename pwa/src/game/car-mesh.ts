@@ -329,6 +329,9 @@ export type CarOptions = {
   /** Whether this car is built with its TAILPIPES on — see
    * `CarBodyOptions.exhaust`. Defaults to on. */
   exhaust?: boolean;
+  /** Whether its windows show the world as well as the gradient baked into
+   * them — see `CarBodyOptions.reflect`. Defaults to on. */
+  reflect?: boolean;
 };
 
 /** Push the environment onto one body: its light, the shadow that light
@@ -389,6 +392,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     rearView: options.rearView,
     screens: options.screens,
     exhaust: options.exhaust,
+    reflect: options.reflect,
   });
   // Panels, parts and wheels share one material, so a ghost is one flag.
   // Its own back faces still occlude its front ones (depth writing stays
@@ -666,7 +670,14 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       glint = Math.pow(1 - Math.abs(view.dot(screen)), GLASS.falloff);
     }
     const want = GLASS_OPACITY + GLASS.glint * glint + GLASS.grime * dirt.level();
-    glassMat.opacity = Math.min(want, GLASS.ceiling) * fade * (inside ? GLASS_INSIDE : 1);
+    const seat = inside ? GLASS_INSIDE : 1;
+    glassMat.opacity = Math.min(want, GLASS.ceiling) * fade * seat;
+    // The WORLD in that glass rides the same two scales as the pane's own
+    // opacity, and for the same two reasons: a ghost's windows are as much a
+    // picture as the rest of it, and a windscreen being looked THROUGH is
+    // nearly clear — a reflection at full strength from the driver's own
+    // chair is a wash of sky over the next four seconds of stage.
+    if (body.reflection) body.reflection.strength.value = fade * seat;
   };
 
   /** Whether the lens is inside this car this frame — what the glass and
@@ -714,12 +725,15 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // mirror shows a window washed with the baked sky meant for a lens ten
     // metres back.
     const wasOpacity = glassMat?.opacity ?? 0;
+    const wasReflect = body.reflection?.strength.value ?? 0;
     if (glassMat && !inside) glassMat.opacity = wasOpacity * GLASS_INSIDE;
+    if (body.reflection && !inside) body.reflection.strength.value = wasReflect * GLASS_INSIDE;
     cockpit.group.visible = true;
     if (body.cabinTrim) body.cabinTrim.visible = false;
     if (cockpit.mirrorGlass) cockpit.mirrorGlass.visible = false;
     draw();
     if (glassMat) glassMat.opacity = wasOpacity;
+    if (body.reflection) body.reflection.strength.value = wasReflect;
     cockpit.group.visible = wasUp;
     if (body.cabinTrim) body.cabinTrim.visible = wasTrim;
     if (cockpit.mirrorGlass) cockpit.mirrorGlass.visible = wasGlass;
