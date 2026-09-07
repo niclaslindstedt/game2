@@ -1134,6 +1134,43 @@ export function pictureRows(video: VideoSettings, desktop: boolean): PictureRow[
   ];
 }
 
+/** THE SAME ROWS AS LADDERS — every stop each one can report, cheapest
+ * first.
+ *
+ * `pictureRows` above says what a row READS right now; this says what it
+ * could ever have read, which is what anything decoding a stored row back
+ * into a POSITION needs — the benchmark's score sheet draws each row as a bar
+ * whose height is its rung on its own ladder (`benchmark-sheet.ts`).
+ *
+ * IT LIVES HERE, INCHES FROM `pictureRows`, because the two are one list
+ * written twice and the cost of them disagreeing is silent: a row added to
+ * `pictureRows` alone still reports a value, and every stored run then draws
+ * it as "a stop this build does not have". That is exactly what a LIGHTING
+ * row added to one and not the other did. `tests/picture_rows_test.ts` walks
+ * every stop of every row through both and fails when they diverge.
+ *
+ * RESOLUTION carries TWO ladders, because the row is a different question in
+ * the desktop app: a share of the screen in a browser tab, a height in pixels
+ * in a window the game owns (`desktop-video.ts`). A given run was measured on
+ * one of them, so both are offered and the stored value picks. The desktop
+ * ladder is REVERSED on the way in — the row is walked downhill from NATIVE
+ * on screen, and a ladder is climbed. */
+export const PICTURE_LADDERS: { label: string; ladders: string[][] }[] = [
+  {
+    label: PICTURE_ROWS.resolution,
+    ladders: [
+      RESOLUTION_STOPS.map((s) => s.label),
+      renderHeightStops(0)
+        .map((s) => s.label)
+        .reverse(),
+    ],
+  },
+  { label: PICTURE_ROWS.detail, ladders: [DETAIL_STOPS.map((s) => s.label)] },
+  { label: PICTURE_ROWS.distance, ladders: [DISTANCE_STOPS.map((s) => s.label)] },
+  { label: PICTURE_ROWS.lighting, ladders: [LIGHTING_STOPS.map((s) => s.label)] },
+  { label: PICTURE_ROWS.sky, ladders: [SKY_STOPS.map((s) => s.label)] },
+];
+
 /** Which DETAIL stop a set of video knobs IS: by exact match, else the stop
  * that agrees with the most of the nine, ties going to the CHEAPER picture
  * because `DETAIL_PRESETS` is walked cheapest first. So a blob written on

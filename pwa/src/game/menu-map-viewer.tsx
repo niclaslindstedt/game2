@@ -164,7 +164,7 @@ function MapCopyButton({ map }: { map: MapDebug }) {
   return (
     <button
       type="button"
-      className={said ? "map-copy map-copy-on" : "map-copy"}
+      className={said ? "menu-copy menu-copy-on" : "menu-copy"}
       title="Copy the stage, the layer's reading, the framing and the REPRO link as text"
       aria-label="Copy debug info"
       data-map-copy
@@ -195,7 +195,7 @@ function MapCopyButton({ map }: { map: MapDebug }) {
       {/* The receipt still gets words. A glyph can say "copy this"; nothing
           drawn in a 24 px box can say COPY FAILED, and a button that
           silently did nothing is the one this page cannot afford. */}
-      {said && <span className="map-copy-said">{said}</span>}
+      {said && <span className="menu-copy-said">{said}</span>}
     </button>
   );
 }

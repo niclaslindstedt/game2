@@ -33,7 +33,7 @@ import { findLevel } from "./campaign.ts";
 import { playUi } from "./audio/ui.ts";
 import { desktopPicture } from "./desktop-video.ts";
 import { pictureRows, type VideoSettings } from "./settings.ts";
-import { CopyButton } from "./menu-dev.tsx";
+import { CopyButton, CopyGlyphButton } from "./menu-dev.tsx";
 
 /** THE GRAPH'S BOX, in its own units — the SVG scales to whatever width the
  * card ends up, so these are proportions rather than pixels. `x0`..`x1` and
@@ -272,9 +272,9 @@ function BenchmarkVideo({ video }: { video: VideoSettings }) {
  * without them — the whole use of the tool is running it twice with one row
  * moved — and a screenshot that carries them is a measurement somebody can
  * still read next year. */
-/** THE GRAPH, GIVEN THE SCREEN. The card has to carry a score, the
- * conditions and two buttons as well, so the graph on it is a panel; this
- * is the same graph with nothing else on the page.
+/** THE GRAPH, GIVEN THE SCREEN. The card carries a score, the conditions and
+ * five VIDEO rows as well, so the graph on it is a panel; this is the same
+ * graph with nothing else on the page.
  *
  * It REPLACES the card rather than sitting over it. A layer inside
  * `.hud-menu` would be laid out against a box with a backdrop filter on it,
@@ -286,6 +286,7 @@ export function BenchmarkFull({
   plot,
   step,
   sub,
+  report,
   onClose,
 }: {
   plot: BenchPlot;
@@ -298,20 +299,28 @@ export function BenchmarkFull({
    * them from different places and neither should have to know about the
    * other. */
   sub: string;
+  /** This run as text, for the copy mark in the head. Same control and same
+   * corner as the card this view came from, because it is the same run: a
+   * graph that made you close it to reach the report would be asking for the
+   * one press nobody wants to make while looking at the thing. */
+  report: () => string;
   onClose: () => void;
 }) {
   return (
     <div className="bench-full">
       <div className="bench-full-head">
-        <span className="bench-full-title">
-          INDEX {Math.round(plot.index)} · {Math.round(fpsOfIndex(plot.index, step))} FPS
+        <button type="button" className="menu-back" data-nav-back onClick={onClose}>
+          ‹ CLOSE
+        </button>
+        <span className="bench-full-titles">
+          <span className="bench-full-title">
+            INDEX {Math.round(plot.index)} · {Math.round(fpsOfIndex(plot.index, step))} FPS
+          </span>
+          <span className="bench-full-sub">{sub}</span>
         </span>
-        <span className="bench-full-sub">{sub}</span>
+        <CopyGlyphButton label="Copy debug report" text={report} />
       </div>
       <BenchmarkPlot plot={plot} warming={false} full />
-      <button type="button" className="hud-pause-act" data-nav-back onClick={onClose}>
-        CLOSE
-      </button>
     </div>
   );
 }
@@ -344,6 +353,35 @@ export function BenchmarkCard({
   // through the measurement it is sitting on.
   const kept = done ? benchmarkRuns().length : 0;
   const [full, setFull] = useState(false);
+  /** THIS RUN AS TEXT. The card answers "is this machine coping"; this
+   * answers "what was the frame doing", which is where somebody making the
+   * game faster has to start — and a score pasted without its draw calls and
+   * its conditions is a bug report nobody can act on.
+   *
+   * Built once for both heads: the card's and the full-screen graph's copy
+   * marks are the same press on the same run. */
+  const report = (): string =>
+    benchmarkReport({
+      conditions: {
+        stage,
+        cars: status.cars,
+        width: status.width,
+        height: status.height,
+        pixelRatio: devicePixelRatio,
+        picture: pictureRows(video, desktopPicture()),
+        plan: [
+          { label: "car", value: BENCHMARK.carId },
+          { label: "box", value: BENCHMARK.gearbox },
+          { label: "camera", value: BENCHMARK.camera },
+          { label: "hour", value: `${BENCHMARK.hour}` },
+        ],
+      },
+      samples: status.samples,
+      costs: status.costs,
+      scene: status.scene,
+      step: BENCHMARK.step,
+      frames: BENCHMARK.frames,
+    });
   if (done && full) {
     return (
       <div className="hud-menu-wrap pointer-events-auto">
@@ -351,6 +389,7 @@ export function BenchmarkCard({
           plot={plot}
           step={BENCHMARK.step}
           sub={conditions}
+          report={report}
           onClose={() => setFull(false)}
         />
       </div>
@@ -359,6 +398,32 @@ export function BenchmarkCard({
   return (
     <div className="hud-menu-wrap pointer-events-auto">
       <div className="hud-menu bench">
+        {/* THE HEAD: the way out on the left, where every other card in these
+            menus keeps it, and the copy mark on the right. Both were at the
+            FOOT of the card, under a graph and four rows of settings — which
+            on a phone is under a scroll, so the two things somebody reaches
+            for most were the two furthest from the thumb.
+
+            `data-nav-back` rides the leave button and not the copy one: it is
+            what a controller's B press finds (menu-nav.ts), and a B that put
+            a report on the clipboard instead of leaving would be a pad that
+            cannot get out of the benchmark. */}
+        <div className="bench-head">
+          <button
+            type="button"
+            className="menu-back"
+            data-nav-back
+            onClick={() => {
+              playUi("back");
+              onLeave();
+            }}
+          >
+            {/* Where it GOES either way; the word is what it costs. Mid-run
+                that is the measurement, which is why it still says STOP. */}
+            {done ? "‹ DEVELOPER" : "‹ STOP"}
+          </button>
+          {done && <CopyGlyphButton label="Copy debug report" text={report} />}
+        </div>
         <div className="hud-menu-title">BENCHMARK</div>
         <div className="hud-pause-sub">{conditions}</div>
         {done && (
@@ -390,39 +455,6 @@ export function BenchmarkCard({
           <BenchmarkPlot plot={plot} warming={status.phase === "warmup"} />
         )}
         {done && <BenchmarkVideo video={video} />}
-        {done && (
-          // THE RUN, AS TEXT. The card answers "is this machine coping";
-          // this answers "what was the frame doing", which is the question
-          // somebody making the game faster has to start from — and a score
-          // pasted without its draw calls and its conditions is a bug report
-          // nobody can act on.
-          <CopyButton
-            label="COPY DEBUG REPORT"
-            text={() =>
-              benchmarkReport({
-                conditions: {
-                  stage,
-                  cars: status.cars,
-                  width: status.width,
-                  height: status.height,
-                  pixelRatio: devicePixelRatio,
-                  picture: pictureRows(video, desktopPicture()),
-                  plan: [
-                    { label: "car", value: BENCHMARK.carId },
-                    { label: "box", value: BENCHMARK.gearbox },
-                    { label: "camera", value: BENCHMARK.camera },
-                    { label: "hour", value: `${BENCHMARK.hour}` },
-                  ],
-                },
-                samples: status.samples,
-                costs: status.costs,
-                scene: status.scene,
-                step: BENCHMARK.step,
-                frames: BENCHMARK.frames,
-              })
-            }
-          />
-        )}
         {/* A browser stops drawing a page nobody is looking at, and a clock
             that kept running through it would be timing the machine's
             screensaver. */}
@@ -456,17 +488,6 @@ export function BenchmarkCard({
             RUN AGAIN
           </button>
         )}
-        <button
-          type="button"
-          className="hud-pause-act"
-          data-nav-back
-          onClick={() => {
-            playUi("back");
-            onLeave();
-          }}
-        >
-          {done ? "DEVELOPER" : "STOP"}
-        </button>
       </div>
     </div>
   );
@@ -592,11 +613,7 @@ export function BenchmarkHistoryPage({ onBack }: { onBack: () => void }) {
           plot={plot}
           step={showing.step}
           sub={`${showing.stage.toUpperCase()} · ${showing.cars} CARS · ${showing.width}×${showing.height} · ${runWhen(showing.at)}`}
-          onClose={() => setOpen(null)}
-        />
-        <CopyButton
-          label="COPY DEBUG REPORT"
-          text={() =>
+          report={() =>
             benchmarkReport({
               conditions: {
                 stage: showing.stage,
@@ -614,6 +631,7 @@ export function BenchmarkHistoryPage({ onBack }: { onBack: () => void }) {
               frames: showing.frames,
             })
           }
+          onClose={() => setOpen(null)}
         />
       </div>
     );

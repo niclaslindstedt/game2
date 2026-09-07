@@ -33,3 +33,13 @@ Two things that bite:
 
 Put the script under `previews/` rather than `/tmp` — it is gitignored, and
 `playwright-core` only resolves from inside the repo.
+
+**A surface that only exists after a long run gets there by shortening the
+run.** The benchmark's card needs a finished measurement, and 1800 frames on
+this container's software rasterizer is half an hour; dropping
+`BENCHMARK.frames` to 30 in `benchmark-plan.ts`, building, and photographing
+gives the same card in one stage load. Restore the constant and rebuild before
+committing — take a copy of the file first, because a hand-edit back is how a
+shipped plan quietly acquires a different number. Even shortened, the pass is
+minutes rather than seconds: the cost is the STAGE LOAD (generator, forest,
+shaders), not the frames, so run it in the background and do other work.

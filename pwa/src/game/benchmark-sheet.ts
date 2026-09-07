@@ -32,24 +32,19 @@
 //
 // THE LEGEND IS AT THE BOTTOM, and it is generated from the ladders the sheet
 // actually used rather than written out here. A legend restating the stops
-// would be a second copy of `RESOLUTION_STOPS` and would go stale the first
-// time a row gained a rung; this asks the same tables the menu walks, so a
-// sheet cannot describe a ladder the game does not have.
+// would be a second copy of them and would go stale the first time a row
+// gained a rung — so both the code and the legend read `PICTURE_LADDERS`,
+// which sits beside `pictureRows` in settings.ts precisely so that a row
+// added to the picture is added to the thing that decodes it in the same
+// breath. Restated here, a new row reports a value this file cannot read, and
+// every stored run draws it as "a stop this build does not have".
 //
 // DOM-free: numbers and records in, a string out.
 
 import { fpsOfIndex } from "./benchmark-index.ts";
 import { big, median, pad } from "./benchmark-report.ts";
 import type { BenchmarkRecord } from "./benchmark-history.ts";
-import { renderHeightStops } from "./desktop-video.ts";
-import {
-  DETAIL_STOPS,
-  DISTANCE_STOPS,
-  PICTURE_ROWS,
-  RESOLUTION_STOPS,
-  SKY_STOPS,
-  type PictureRow,
-} from "./settings.ts";
+import { PICTURE_LADDERS, type PictureRow } from "./settings.ts";
 
 /** The ladder, cheapest first. Eight rungs because the longest row the
  * picture has is eight stops — the desktop RESOLUTION row, NATIVE over the
@@ -61,32 +56,6 @@ export const RUNGS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
  * stop, or a store somebody edited. It keeps the column's width so the sheet
  * still reads down, and the legend names it. */
 const UNKNOWN = "?";
-
-/** THE PICTURE ROWS AS LADDERS, cheapest stop first — asked of the same
- * tables OPTIONS ▸ VIDEO walks, so the sheet and the menu cannot drift into
- * two vocabularies for one setting.
- *
- * RESOLUTION has TWO, because the row is a different question in the desktop
- * app: a share of the screen in a browser tab, a height in pixels in a window
- * the game owns (desktop-video.ts). A sheet is read on one machine and so
- * uses one of them — but which one is a fact about the run, not about the
- * code reading it, so both are offered and the value picks. The desktop
- * ladder is reversed on the way in: the row is walked downhill from NATIVE on
- * screen, and a ladder here is climbed. */
-const LADDERS: { label: string; stops: string[][] }[] = [
-  {
-    label: PICTURE_ROWS.resolution,
-    stops: [
-      RESOLUTION_STOPS.map((s) => s.label),
-      renderHeightStops(0)
-        .map((s) => s.label)
-        .reverse(),
-    ],
-  },
-  { label: PICTURE_ROWS.detail, stops: [DETAIL_STOPS.map((s) => s.label)] },
-  { label: PICTURE_ROWS.distance, stops: [DISTANCE_STOPS.map((s) => s.label)] },
-  { label: PICTURE_ROWS.sky, stops: [SKY_STOPS.map((s) => s.label)] },
-];
 
 /** The rung a stop stands on, spread over the eight so a three-stop row uses
  * the bottom, the middle and the top of the same bar every other row is drawn
@@ -106,9 +75,9 @@ function rungAt(at: number, stops: number): number {
 export type GlyphRead = { glyph: string; rung: number; stops: string[] | null };
 
 export function pictureGlyph(row: PictureRow): GlyphRead {
-  for (const ladder of LADDERS) {
+  for (const ladder of PICTURE_LADDERS) {
     if (ladder.label !== row.label) continue;
-    for (const stops of ladder.stops) {
+    for (const stops of ladder.ladders) {
       const at = stops.indexOf(row.value);
       if (at < 0) continue;
       const rung = rungAt(at, stops.length);
