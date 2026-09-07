@@ -61,6 +61,7 @@ import { createSnowMarks, drawnGround } from "./snow-marks.ts";
 import { CRASH_THROW, crashContact, crashBurst as burstCount, crashGrind } from "./crash-throw.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFieldCars, type FieldCars } from "./field-cars.ts";
+import { watchGpuContext } from "./gpu-context.ts";
 import { wetnessOf, type Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
 import { PIPE, pipeBursts, pipeWork } from "./fumes.ts";
@@ -279,6 +280,11 @@ export type GameRenderer = {
   render: (state: GameState, dt: number) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
   resize: () => void;
+  /** Told whenever the GPU hands the context back or takes it away
+   * (`gpu-context.ts`). Nothing can be drawn while it is gone, so the app
+   * holds the run and covers the screen rather than letting a blank canvas
+   * read as a crash. */
+  onContext: (fn: (lost: boolean) => void) => void;
   dispose: () => void;
 };
 
@@ -1098,6 +1104,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   };
 
   const render = (state: GameState, dt: number): void => {
+    // Everything below aims at a picture — the FX pools, the mirror's aim,
+    // the cull — and there is nowhere to put one while the GPU holds the
+    // context (gpu-context.ts). Said here as well as in the app's frame loop
+    // because the renderer is what knows: any caller drawing a frame during
+    // an outage would otherwise run a stage's worth of effects blind.
+    if (gpu.lost()) return;
     const c = state.car;
     const view = chase.mode();
     const fwdX = Math.sin(c.heading);
@@ -1745,7 +1757,21 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     render(game, 0);
   };
 
+  /** Who to tell when the GPU takes the context away or gives it back. */
+  let contextWatcher: ((lost: boolean) => void) | null = null;
+  const gpu = watchGpuContext(canvas, {
+    onLost: () => contextWatcher?.(true),
+    onRestored: () => {
+      // The buffer that comes back is a new one and the canvas may have been
+      // resized while the page was away, so it is cut before the first frame
+      // is allowed to draw into it.
+      resize();
+      contextWatcher?.(false);
+    },
+  });
+
   const dispose = (): void => {
+    gpu.dispose();
     marks.dispose();
     world?.dispose();
     route?.dispose();
@@ -1865,6 +1891,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     render,
     onEvents,
     resize,
+    onContext: (fn) => {
+      contextWatcher = fn;
+    },
     dispose,
   };
 }
