@@ -306,7 +306,6 @@ export function FinishCard({
               className="hud-start fin-next"
               data-nav-next
               onClick={() => {
-                playUi("start");
                 onRetry();
               }}
             >
@@ -406,7 +405,6 @@ export function FinishCard({
                 className="hud-start fin-next"
                 data-nav-next
                 onClick={ending(() => {
-                  playUi("start");
                   nextStage.go();
                 })}
               >
@@ -422,7 +420,6 @@ export function FinishCard({
                 className="hud-start fin-next"
                 data-nav-next
                 onClick={ending(() => {
-                  playUi("start");
                   onRetry();
                 })}
               >

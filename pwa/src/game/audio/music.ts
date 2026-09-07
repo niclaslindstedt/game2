@@ -64,6 +64,42 @@ export function playMusic(id: TrackId): void {
     });
 }
 
+/** Whether a theme is claimed — playing, or fetched and about to be. */
+export function musicPlaying(): boolean {
+  return current !== null;
+}
+
+/** How far ahead the sequencer is held to book while a race is being stood
+ * up, seconds.
+ *
+ * The sequencer already widens its own horizon off a tick that arrived late,
+ * which is what covers a stall nobody could have predicted. What it cannot do
+ * is cover the FIRST one, and a load is nothing but first ones: standing a
+ * stage up blocks the main thread in indivisible calls — compiling the road,
+ * building the country and its forest — and while it is blocked the
+ * scheduler's 90 ms timer does not fire at all. Measured on a desktop the
+ * card's longest single block is about three and a half seconds and the timer
+ * has gone five without a tick, so the theme goes quiet for most of a load,
+ * which is what a player hears as the music breaking up when they press
+ * start.
+ *
+ * A floor raised BEFORE the block is what buys that back — notes already in
+ * the audio thread's diary keep sounding through a stretch the timer sleeps
+ * through. Its price is the tail: nothing booked can be unbooked, so the
+ * stage's own theme cannot take over until this much of the menu's has played
+ * out. Set against a countdown, so the hand-over lands with the lights rather
+ * than after them. */
+const COAST_LOOKAHEAD_S = 3;
+
+/** Hold the booking horizon open (`on`), or let the sequencer have it back.
+ *
+ * On for exactly as long as the loading card is up: the frames are about to
+ * go away, and a theme that is going to survive that has to have been written
+ * down before they did. */
+export function coastMusic(on: boolean): void {
+  ensurePlayer().lookahead(on ? COAST_LOOKAHEAD_S : 0);
+}
+
 /** Silence the music — the finish jingle plays over quiet. */
 export function stopMusic(): void {
   current = null;

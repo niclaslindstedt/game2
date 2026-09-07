@@ -482,6 +482,35 @@ export function fieldTraced(field: RivalField): boolean {
   return true;
 }
 
+/** How much of the field's driving is WRITTEN DOWN, 0–1.
+ *
+ * Measured in ROAD COVERED rather than in crews finished, and it has to be:
+ * `traceField` writes every unsealed crew a slice at a time, so the whole
+ * field reaches the line within a few frames of each other and a count of
+ * sealed traces would read nothing at all for the length of the step and
+ * then jump to everything. Road covered moves the way the work does.
+ *
+ * A crew doubling back or spinning does not give any of it up — `progressS`
+ * is the arc they have reached, and a run that ends early (retired, or out
+ * of time against the trace's cap) is sealed and therefore whole. A SOLID
+ * field writes no traces at all and is finished the moment it is asked. */
+export function fieldWritten(field: RivalField): number {
+  if (field.contact || field.runs.length === 0) return 1;
+  let done = 0;
+  for (const run of field.runs) {
+    if (run.trace?.sealed) {
+      done += 1;
+      continue;
+    }
+    const sim = run.sim;
+    const lap = sim.track.length;
+    const whole = lap * Math.max(1, sim.laps);
+    const driven = (sim.lap - 1) * lap + sim.progressS;
+    done += whole > 0 ? Math.min(1, Math.max(0, driven / whole)) : 0;
+  }
+  return done / field.runs.length;
+}
+
 /** One car as a bot's eyes see it — no more than a driver reads out of a
  * mirror, and nothing at all about who is in it. */
 function seenAs(state: GameState): TrafficCar {

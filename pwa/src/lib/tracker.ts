@@ -84,8 +84,21 @@ export type Track = {
 };
 
 export type TrackPlayer = {
-  /** Start looping `track`, replacing whatever was playing. */
+  /** Start looping `track`, replacing whatever was playing. The new theme
+   * begins where the outgoing one's booking ends, so the two never overlap. */
   play: (track: Track) => void;
+  /** Hold the booking horizon at no less than `seconds` — clamped, and zero
+   * to let go of it.
+   *
+   * The horizon the sequencer buys for itself is REACTIVE: it widens off a
+   * tick that already arrived late (see `LOOKAHEAD_S`), which covers a stall
+   * nobody could have predicted and cannot cover the FIRST one. Raise a floor
+   * before a stretch that is known to block the main thread — standing a race
+   * up (`race-loader.ts`) does it for seconds at a time — so the notes are in
+   * the audio thread's diary before the frames go away. Drop it the moment
+   * they are back: everything booked has to play out, so a floor is also how
+   * long the score takes to answer a stop or a hand-over. */
+  lookahead: (seconds: number) => void;
   stop: () => void;
   /** Halt the scheduler without forgetting the track or losing the play
    * position — `resume()` picks the arrangement back up where it left off. */
@@ -214,8 +227,19 @@ export function flattenTrack(track: Track): FlatTrack {
 // nothing ahead (`Synth.layer`); a SCORE cannot be steered — a note is an
 // event at a time — so booking further ahead is the only cover it has.
 const LOOKAHEAD_S = 0.28;
-/** The most a stalling clock may buy. */
+/** The most a stalling clock may buy for itself. */
 const LOOKAHEAD_MAX_S = 1.5;
+/** …and the most a CALLER may ask for on top, seconds (`lookahead`).
+ *
+ * Separate from the ceiling above, and higher, because the two are bought on
+ * different terms. The reactive one is spent by the sequencer on stalls it
+ * has already met, so it is held to the smallest horizon worth having and its
+ * cost in `stop()` latency is paid without anybody choosing it. A floor is a
+ * caller stating that a long block is COMING — standing a race up holds the
+ * thread for three and a half seconds at a stretch, which no amount of
+ * reacting to the last tick can cover in time — and accepting the latency
+ * that buys. */
+const FLOOR_MAX_S = 3;
 /** How many of the observed tick gaps the horizon has to span. Two is the
  * least that survives the same gap happening again; the rest is margin. */
 const LOOKAHEAD_COVER = 2.2;
@@ -231,6 +255,11 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
   let stepIndex = 0;
   let nextStepTime = 0;
   let horizonS = LOOKAHEAD_S;
+  /** What a caller has asked the horizon to be at least (`lookahead`). Not
+   * touched by `play`, `stop` or `pause`: it is a statement about what the
+   * PAGE is about to do, not about the track, and a load that swapped themes
+   * half way through would otherwise lose its cover. */
+  let floorS = 0;
   /** The clock the last tick read, so this one can measure how late it is.
    * Zero means "no tick to compare against" — the first of a run, and after
    * anything that makes the gap meaningless. */
@@ -306,13 +335,18 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
     // stale clock rather than a plan — derived rather than a figure of its
     // own, because a horizon that MOVES (see LOOKAHEAD_S) would otherwise
     // silently grow past a constant one and start re-anchoring real plans.
+    // It is the WIDEST horizon either lever can reach and not the one in
+    // force: a floor that has just been dropped still has its notes in the
+    // diary, and re-anchoring over those is the overlap `play` exists to
+    // prevent. Both ceilings are seconds and a restarted clock strands the
+    // anchor by minutes, so nothing is given up by taking the larger.
     //
     // ANY lateness counts, not just a catastrophic one: a step booked in the
     // past does not wait its turn, it sounds the moment it is handed over. A
     // scheduler that crawls back up from behind one step at a time therefore
     // empties its whole backlog into a single instant — half a bar as one
     // chord — where re-anchoring costs nothing but a beat arriving late.
-    const stale = LOOKAHEAD_MAX_S + stepS * 2;
+    const stale = Math.max(LOOKAHEAD_MAX_S, FLOOR_MAX_S) + stepS * 2;
     if (nextStepTime === 0 || nextStepTime < now || nextStepTime > now + stale) {
       nextStepTime = now + 0.05;
     }
@@ -326,7 +360,12 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
       LOOKAHEAD_MAX_S,
       Math.max(LOOKAHEAD_S, horizonS * LOOKAHEAD_DECAY, gap * LOOKAHEAD_COVER),
     );
-    while (nextStepTime < now + horizonS) {
+    // A caller's floor is applied OVER the bought horizon rather than into
+    // it: it must not decay away while the block it was raised for is still
+    // to come, and it must not be what the next tick's decay is measured
+    // from once it has been dropped.
+    const booking = Math.max(horizonS, floorS);
+    while (nextStepTime < now + booking) {
       scheduleStep(flat, stepIndex, nextStepTime);
       stepIndex = (stepIndex + 1) % flat.totalSteps;
       nextStepTime += stepS;
@@ -335,15 +374,30 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
 
   return {
     play(next) {
+      // THE NEW TRACK STARTS WHERE THE OLD ONE'S BOOKING ENDS, not now.
+      //
+      // Nothing booked can be taken back — a note handed to WebAudio sounds at
+      // the time it was given — so a track swapped in at `now + 0.05` plays
+      // underneath whatever the last one still has in the diary. At the
+      // punctual horizon that is a quarter-second of two themes at two
+      // tempos; after a stall has widened it, or under a caller's floor, it
+      // is seconds of them. Anchoring on the outgoing track's own
+      // `nextStepTime` makes the hand-over exact instead: the last note of
+      // one theme, then the first of the next.
+      const from = flat !== null ? nextStepTime : 0;
       flat = flattenTrack(next);
       bpm = next.bpm;
       stepsPerBeat = next.stepsPerBeat;
       stepIndex = 0;
-      nextStepTime = 0;
+      nextStepTime = from;
       horizonS = LOOKAHEAD_S;
       lastTickTime = 0;
       interval ??= setInterval(tick, TICK_MS);
       tick();
+    },
+
+    lookahead(seconds) {
+      floorS = Math.min(FLOOR_MAX_S, Math.max(0, seconds));
     },
 
     stop() {
