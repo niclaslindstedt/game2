@@ -41,6 +41,7 @@ import { clearDebugLog, debugLogCounts, debugLogTail, debugLogText } from "./deb
 import { playUi } from "./audio/ui.ts";
 import { ToggleRow } from "./menu.tsx";
 import { desktopPicture } from "./desktop-video.ts";
+import { benchmarkReport } from "./benchmark-report.ts";
 import { pictureRows, type DevSettings, type VideoSettings } from "./settings.ts";
 import { copyText } from "../lib/copy-text.ts";
 
@@ -145,7 +146,19 @@ const LABEL_GAP = 12;
  * back, and the two crossing is the moment the machine changed. The right
  * axis is that same ceiling in frames a second — the unit anybody actually
  * has a feel for. */
-function BenchmarkPlot({ plot, warming }: { plot: BenchPlot; warming: boolean }) {
+function BenchmarkPlot({
+  plot,
+  warming,
+  full,
+}: {
+  plot: BenchPlot;
+  warming: boolean;
+  /** Drawn as the whole screen rather than as a panel on the card. Same
+   * viewBox and therefore the same picture — only bigger, which is the
+   * whole point: the readings are a hundred and twenty points wide and on a
+   * card they land inside two millimetres of each other. */
+  full?: boolean;
+}) {
   const px = (x: number): number => PLOT.x0 + x * (PLOT.x1 - PLOT.x0);
   const py = (y: number): number => PLOT.y0 + y * (PLOT.y1 - PLOT.y0);
   const at = (p: { x: number; y: number }): string => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`;
@@ -173,7 +186,11 @@ function BenchmarkPlot({ plot, warming }: { plot: BenchPlot; warming: boolean })
   const realFps =
     real !== null && real - PLOT.y0 > LABEL_GAP && PLOT.y1 - real > LABEL_GAP ? real : null;
   return (
-    <svg className="bench-plot" viewBox={`0 0 ${PLOT.w} ${PLOT.h}`} role="img">
+    <svg
+      className={full ? "bench-plot bench-plot-full" : "bench-plot"}
+      viewBox={`0 0 ${PLOT.w} ${PLOT.h}`}
+      role="img"
+    >
       {/* Its own ground. The card is see-through and what is behind it is a
           rally at speed — a line drawn straight onto that is a line read
           against moving scenery. */}
@@ -322,6 +339,45 @@ function BenchmarkVideo({ video }: { video: VideoSettings }) {
  * without them — the whole use of the tool is running it twice with one row
  * moved — and a screenshot that carries them is a measurement somebody can
  * still read next year. */
+/** THE GRAPH, GIVEN THE SCREEN. The card has to carry a score, the
+ * conditions and two buttons as well, so the graph on it is a panel; this
+ * is the same graph with nothing else on the page.
+ *
+ * It REPLACES the card rather than sitting over it. A layer inside
+ * `.hud-menu` would be laid out against a box with a backdrop filter on it,
+ * which becomes the containing block for anything fixed — the trap the
+ * pause card's modals already have to dodge — and a graph that is the whole
+ * point of the view has no business fighting for room with the card it came
+ * from. */
+function BenchmarkFull({
+  status,
+  plot,
+  onClose,
+}: {
+  status: BenchmarkStatus;
+  plot: BenchPlot;
+  onClose: () => void;
+}) {
+  const stage = findLevel(BENCHMARK.levelId)?.level.name ?? BENCHMARK.levelId;
+  return (
+    <div className="bench-full">
+      <div className="bench-full-head">
+        <span className="bench-full-title">
+          INDEX {Math.round(status.index)} · {Math.round(fpsOfIndex(status.index, BENCHMARK.step))}{" "}
+          FPS
+        </span>
+        <span className="bench-full-sub">
+          {stage.toUpperCase()} · {status.cars} CARS · {status.width}×{status.height}
+        </span>
+      </div>
+      <BenchmarkPlot plot={plot} warming={false} full />
+      <button type="button" className="hud-pause-act" data-nav-back onClick={onClose}>
+        CLOSE
+      </button>
+    </div>
+  );
+}
+
 export function BenchmarkCard({
   status,
   video,
@@ -339,6 +395,14 @@ export function BenchmarkCard({
   const done = status.phase === "done";
   const stage = findLevel(BENCHMARK.levelId)?.level.name ?? BENCHMARK.levelId;
   const plot = benchPlot(status.samples, BENCHMARK.frames, BENCHMARK.step);
+  const [full, setFull] = useState(false);
+  if (done && full) {
+    return (
+      <div className="hud-menu-wrap pointer-events-auto">
+        <BenchmarkFull status={status} plot={plot} onClose={() => setFull(false)} />
+      </div>
+    );
+  }
   return (
     <div className="hud-menu-wrap pointer-events-auto">
       <div className="hud-menu bench">
@@ -355,8 +419,59 @@ export function BenchmarkCard({
             </span>
           </div>
         )}
-        <BenchmarkPlot plot={plot} warming={status.phase === "warmup"} />
+        {done ? (
+          // A press rather than a picture, once there is something to look
+          // at: a hundred and twenty readings on a card are two millimetres
+          // apart, and the kink worth seeing is smaller than that.
+          <button
+            type="button"
+            className="bench-plot-open"
+            onClick={() => {
+              playUi("select");
+              setFull(true);
+            }}
+            title="See the whole run full screen"
+          >
+            <BenchmarkPlot plot={plot} warming={false} />
+            <span className="bench-plot-more">TAP TO ENLARGE</span>
+          </button>
+        ) : (
+          <BenchmarkPlot plot={plot} warming={status.phase === "warmup"} />
+        )}
         {done && <BenchmarkVideo video={video} />}
+        {done && (
+          // THE RUN, AS TEXT. The card answers "is this machine coping";
+          // this answers "what was the frame doing", which is the question
+          // somebody making the game faster has to start from — and a score
+          // pasted without its draw calls and its conditions is a bug report
+          // nobody can act on.
+          <CopyButton
+            label="COPY DEBUG REPORT"
+            text={() =>
+              benchmarkReport({
+                conditions: {
+                  stage,
+                  cars: status.cars,
+                  width: status.width,
+                  height: status.height,
+                  pixelRatio: devicePixelRatio,
+                  picture: pictureRows(video, desktopPicture()),
+                  plan: [
+                    { label: "car", value: BENCHMARK.carId },
+                    { label: "box", value: BENCHMARK.gearbox },
+                    { label: "camera", value: BENCHMARK.camera },
+                    { label: "hour", value: `${BENCHMARK.hour}` },
+                  ],
+                },
+                samples: status.samples,
+                costs: status.costs,
+                scene: status.scene,
+                step: BENCHMARK.step,
+                frames: BENCHMARK.frames,
+              })
+            }
+          />
+        )}
         {/* A browser stops drawing a page nobody is looking at, and a clock
             that kept running through it would be timing the machine's
             screensaver. */}

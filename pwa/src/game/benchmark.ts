@@ -72,6 +72,7 @@ import { TUNING, botInput, skipIntro, step, type GameEvent, type GameState } fro
 import { advanceField, rubRivals, stepField, type RivalField } from "./standings.ts";
 import { BENCHMARK } from "./benchmark-plan.ts";
 import { SAMPLE_EVERY, benchIndex, type BenchSample } from "./benchmark-index.ts";
+import type { FrameCost, SceneShare } from "./benchmark-report.ts";
 import { MIRROR_TIERS } from "./mirror-pace.ts";
 import type { GameRenderer } from "./renderer.ts";
 
@@ -106,6 +107,12 @@ export type BenchmarkStatus = {
   /** Every reading taken so far, oldest first — the graph on the card is
    * this list and nothing else. A snapshot: the run keeps its own. */
   samples: BenchSample[];
+  /** What each of those frames cost the renderer, same order — the half of
+   * the report a person optimising the game reads (benchmark-report.ts). */
+  costs: FrameCost[];
+  /** What was standing in the scene on the LAST frame, by subsystem. Taken
+   * once, at the end: it is a walk of the whole graph. */
+  scene: SceneShare[];
   /** Cars that were actually stood on the grid. */
   cars: number;
   /** The drawing buffer the frames were drawn into, device pixels. A time
@@ -181,11 +188,21 @@ export function runBenchmark({
   let framed = 0;
   /** The score, read every `SAMPLE_EVERY` measured frames. */
   const samples: BenchSample[] = [];
+  /** …and what the frame it was read on cost the renderer. Counting is
+   * switched on for the run and off again at the end: it costs three its
+   * own counters, which is nothing, but a benchmark that left the meter
+   * running would be charging every later race for it.  */
+  const costs: FrameCost[] = [];
+  let scene: SceneShare[] = [];
+  renderer.meterFrames(true);
 
   /** Hand the mirror back to the frame rate. Whatever ends this run — the
    * last frame or somebody walking away from it — the next thing this
    * renderer draws is a person driving, and they should have the ladder. */
-  const release = (): void => renderer.pinMirrorPace(null);
+  const release = (): void => {
+    renderer.pinMirrorPace(null);
+    renderer.meterFrames(false);
+  };
 
   const report = (phase: BenchmarkStatus["phase"]): void => {
     onStatus({
@@ -194,6 +211,8 @@ export function runBenchmark({
       seconds: elapsed / 1000,
       index: benchIndex(frames * BENCHMARK.step, elapsed / 1000),
       samples: samples.slice(),
+      costs: costs.slice(),
+      scene,
       cars: field.of,
       width: canvas.width,
       height: canvas.height,
@@ -250,9 +269,14 @@ export function runBenchmark({
         index: benchIndex(frames * BENCHMARK.step, elapsed / 1000),
         fps,
       });
+      costs.push(renderer.meter());
     }
     if (finished) {
       stopped = true;
+      // The graph is walked ONCE, here, on the last frame that was drawn —
+      // before the mirror is handed back and the meter switched off, so what
+      // it reports is the scene the run was actually measured against.
+      scene = renderer.sceneTally();
       release();
       report("done");
       return;

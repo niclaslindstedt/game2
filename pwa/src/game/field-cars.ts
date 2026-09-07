@@ -411,6 +411,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           const tag = createNameTag(run.entry.crew.alias, livery.number, {
             color: livery.paint,
           });
+          // Named so the benchmark's breakdown can tell a field of rivals
+          // from the car being driven (renderer.ts's `sceneTally`).
+          visual.group.name = "field cars";
+          visual.debris.name = "field debris";
           scene.add(visual.group, visual.debris, tag.sprite);
           const fresh = { visual, tag, fumeClock: 0 };
           built.set(run, fresh);

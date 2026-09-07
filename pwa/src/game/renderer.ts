@@ -44,6 +44,7 @@ import {
   type VideoSettings,
   type ViewSettings,
 } from "./settings.ts";
+import type { FrameCost, SceneShare } from "./benchmark-report.ts";
 import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { carEyes } from "./car-styles.ts";
@@ -281,6 +282,23 @@ export type GameRenderer = {
    * cutting to the driving rig (camera-start.ts). */
   skipIntroShot: () => void;
   render: (state: GameState, dt: number) => void;
+  /** WHAT THE LAST FRAME COST, and what is standing in the scene to make it
+   * cost that — three's own counters plus a walk of the graph, for the
+   * benchmark's report (benchmark-report.ts).
+   *
+   * Only honest with `meterFrames` on: three resets its render counters on
+   * every `render()` call, and a frame here is not one render (the mirror
+   * fills its own target, the map draws its pane). The switch turns that
+   * reset off so the counts accumulate over a whole frame, and `render`
+   * clears them at the TOP of each one instead. */
+  meter: () => FrameCost;
+  /** WHAT IS STANDING IN THE SCENE, by subsystem — a walk of the graph, so
+   * it is asked ONCE at the end of a run and never per frame. */
+  sceneTally: () => SceneShare[];
+  /** Count what the frames cost, or stop. Off by default: it is a walk of
+   * the scene graph, which is exactly the kind of thing that has no business
+   * running in a frame nobody is measuring. */
+  meterFrames: (on: boolean) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
   resize: () => void;
   /** Told whenever the GPU hands the context back or takes it away
@@ -378,6 +396,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // The marks the player's car leaves in snow (snow-marks.ts); the field's
   // are the field's own. Whose are drawn is the DUST row's call.
   const marks = createSnowMarks();
+  marks.group.name = "marks";
   scene.add(marks.group);
   const { dust, crash, mud, smoke, plume, gravel, spray, foam, fumes, life, celebration } = carFx;
   const { showCrash } = carFx;
@@ -687,6 +706,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         builtSeason,
         GROUND_SCALE[quality.ground],
       );
+      world.group.name = "world";
       scene.add(world.group);
       applyIsland();
     }
@@ -818,6 +838,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // hangs the glass.
       rearView: { texture: mirror.texture },
     });
+    car.group.name = "player car";
+    car.debris.name = "debris";
     scene.add(car.group, car.debris);
     car.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     car.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
@@ -855,15 +877,18 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       builtSeason,
       GROUND_SCALE[quality.ground],
     );
+    world.group.name = "world";
     scene.add(world.group);
     marks.reset();
     route = buildMapRoute(state.track);
     route.group.visible = mapView;
+    route.group.name = "map route";
     scene.add(route.group);
     // The layers follow the stage they describe. Cheap to stand up — the
     // sampling waits for a layer to be picked — so a seed the developer is
     // stepping through carries its X-ray without paying for one.
     layers = buildMapLayers(state.track, state.terrain, island);
+    layers.group.name = "map layers";
     scene.add(layers.group);
     if (layerId) layers.show(layerId);
     fitCar(state);
@@ -919,6 +944,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // information. Its own colour and its own fade, held under a real
     // crew's, so the plate is as much a picture as the car under it.
     ghostTag = createNameTag("Ghost", null, GHOST_LOOK);
+    ghostCar.group.name = "ghost";
+    ghostCar.debris.name = "ghost debris";
     scene.add(ghostCar.group, ghostCar.debris, ghostTag.sprite);
     ghostCar.setLooseWheels(LOOSE_WHEELS[quality.effects]);
     ghostCar.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
@@ -1136,6 +1163,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // because the renderer is what knows: any caller drawing a frame during
     // an outage would otherwise run a stage's worth of effects blind.
     if (gpu.lost()) return;
+    // A FRAME IS EVERY PASS IN IT. Three clears its render counters on each
+    // `render()`, and this draws more than one — so the reset is here, at
+    // the top of the frame, and `autoReset` is off underneath (`meterFrames`).
+    if (metering) renderer.info.reset();
     const c = state.car;
     const view = chase.mode();
     const fwdX = Math.sin(c.heading);
@@ -1818,6 +1849,59 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   };
 
   resize();
+  /** Whether the frames are being counted (`meterFrames`). Off by default:
+   * the walk below is the sort of thing that must not run in a frame nobody
+   * asked to measure. */
+  let metering = false;
+
+  const meterFrames = (on: boolean): void => {
+    metering = on;
+    // Three clears its render counters on every `render()`; a frame here is
+    // several. Off, and `render` owns the reset (at the top of the frame);
+    // back on, and three goes back to doing it itself.
+    renderer.info.autoReset = !on;
+    if (!on) renderer.info.reset();
+  };
+
+  /** THE SCENE, WALKED, and bucketed by what it belongs to. The bucket is
+   * the nearest NAMED ancestor, which is why the groups this adds to the
+   * scene carry names: without one an object would be reported against the
+   * scene itself and the breakdown would be a single row saying "all of it".
+   *
+   * Only what would actually be DRAWN: an invisible object, and everything
+   * under it, is skipped exactly as three's own traversal skips it — a
+   * breakdown that counted the map's pane while the map was shut would send
+   * somebody optimising a thing that was never submitted. */
+  const sceneTally = (): SceneShare[] => {
+    const buckets = new Map<string, SceneShare>();
+    const walk = (object: THREE.Object3D, under: string): void => {
+      if (!object.visible) return;
+      const name = object.name !== "" ? object.name : under;
+      const geometry = (object as Partial<THREE.Mesh>).geometry;
+      if (geometry !== undefined) {
+        const share = buckets.get(name) ?? { name, objects: 0, triangles: 0 };
+        share.objects += 1;
+        const index = geometry.getIndex();
+        const position = geometry.getAttribute("position");
+        const verts = index ? index.count : (position?.count ?? 0);
+        const instances = (object as Partial<THREE.InstancedMesh>).count ?? 1;
+        share.triangles += (verts / 3) * instances;
+        buckets.set(name, share);
+      }
+      for (const child of object.children) walk(child, name);
+    };
+    walk(scene, "scene");
+    return [...buckets.values()];
+  };
+
+  const meter = (): FrameCost => ({
+    calls: renderer.info.render.calls,
+    triangles: renderer.info.render.triangles,
+    programs: renderer.info.programs?.length ?? 0,
+    geometries: renderer.info.memory.geometries,
+    textures: renderer.info.memory.textures,
+  });
+
   return {
     setGame,
     setCar,
@@ -1919,6 +2003,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     pinMirrorPace: mirrorPace.pin,
     skipIntroShot: chase.skipStartShot,
     render,
+    meter,
+    meterFrames,
+    sceneTally,
     onEvents,
     resize,
     onContext: (fn) => {
