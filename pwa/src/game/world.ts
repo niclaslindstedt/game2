@@ -38,6 +38,7 @@ import { buildBlockade } from "./blockade.ts";
 import { createBreakage } from "./breakage.ts";
 import { createConeField, plantJumpCones, type ConeField } from "./cones.ts";
 import { TRUNK_COLOR, buildFlora, swayFlora, type FloraPlacement } from "./flora.ts";
+import type { FloraCasterSource } from "./flora-shadow.ts";
 import {
   RIPARIAN_BAND,
   communityByGrove,
@@ -128,6 +129,9 @@ type SceneryChunk = {
   /** The engine trunks this chunk drew — released when the chunk drops so
    * the ownership set stays bounded on an endless run. */
   treeKeys: string[];
+  /** What this chunk's flora can be cast from (flora-shadow.ts). The pool
+   * outside the chunks picks the few plants nearest the car out of it. */
+  casters: readonly FloraCasterSource[];
 };
 
 /** The living landscape for one chunk of road: the biome's forest scattered
@@ -432,7 +436,7 @@ function buildScenery(
     planted.retire((px, pz) => samePlace(px, pz, x, z));
   };
 
-  return { group, clearNear, retireAt, treeKeys };
+  return { group, clearNear, retireAt, treeKeys, casters: planted.sources };
 }
 
 /** Everything that carries a bridge deck over its water (R13): the parapet
@@ -701,6 +705,13 @@ export type World = {
    * `dt` is the frame's own length, which is how much of the outstanding
    * work this call takes on. */
   sync: (state: GameState, dt: number) => void;
+  /** Every live chunk's flora, as the shadow pool's source (flora-shadow.ts).
+   * Walks the chunks and allocates, so it is read when `floraAge` says the
+   * set has changed and not per frame. */
+  floraCasters: () => readonly FloraCasterSource[];
+  /** How many times the chunk set has changed — the cheap check that says
+   * whether `floraCasters()` is worth calling again. */
+  floraAge: () => number;
   /** Hide everything the frame cannot show. A finite stage builds its
    * whole road — kilometres of it — and the camera's far plane stands well
    * past where the air goes solid, so without this the frame pays for five
@@ -859,6 +870,9 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     trace: Float64Array;
   };
   const chunks: Chunk[] = [];
+  /** Bumped whenever the chunk set changes, so a reader can tell that the
+   * flora it is holding is stale without walking the chunks to find out. */
+  let floraAge = 0;
   /** Engine trunks already drawn by some scenery chunk — chunk queries
    * overlap at the seams, and a tree drawn twice z-fights itself. */
   const drawnTrees = new Set<string>();
@@ -1065,6 +1079,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     chunkGroup.name = "road chunks";
     group.add(chunkGroup);
     chunks.push({ toS, group: chunkGroup, scenery, trace: chunkTrace(ribbon) });
+    floraAge++;
   };
 
   /** R26 — (re)build the people. The stands come from the terrain field,
@@ -1147,6 +1162,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     if (!track.endless) return;
     while (chunks.length > 1 && chunks[0].toS < state.progressS - PRUNE_BEHIND) {
       const old = chunks.shift() as Chunk;
+      floraAge++;
       for (const key of old.scenery.treeKeys) drawnTrees.delete(key);
       group.remove(old.group);
       disposeGroup(old.group);
@@ -1239,5 +1255,20 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     terrain.dispose();
   };
 
-  return { group, update, sync, cull, fell, dispose, muzzles: () => finish?.muzzles ?? [] };
+  return {
+    group,
+    update,
+    sync,
+    cull,
+    fell,
+    dispose,
+    muzzles: () => finish?.muzzles ?? [],
+    /** Every live chunk's flora, for the shadow pool to pick from. Read
+     * after a chunk is built or dropped rather than every frame: on an
+     * endless run the set changes only when the road does. */
+    floraCasters: () => chunks.flatMap((chunk) => chunk.scenery.casters),
+    /** How many times the chunk set has changed. Compared per frame instead
+     * of rebuilding the list above, which allocates. */
+    floraAge: () => floraAge,
+  };
 }
