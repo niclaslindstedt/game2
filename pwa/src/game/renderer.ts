@@ -560,6 +560,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const field = createFieldCars(scene);
   field.setCarDetail({
     ...carDetail("field"),
+    exhaust: EXHAUST_SEEN[quality.exhaust].field,
     looseWheels: LOOSE_WHEELS[quality.effects],
     wheelLoss: WHEELS_LOST[quality.wheelLoss].field,
     crumple: CRUMPLE_SEEN[quality.crumple].field,
@@ -769,6 +770,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     applyLighting();
     field.setCarDetail({
       ...carDetail("field"),
+      exhaust: EXHAUST_SEEN[quality.exhaust].field,
       looseWheels: LOOSE_WHEELS[quality.effects],
       wheelLoss: WHEELS_LOST[quality.wheelLoss].field,
       crumple: CRUMPLE_SEEN[quality.crumple].field,
@@ -783,10 +785,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // player's car wears rather than the field's.
     ghostCar?.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     mirror.setGlass(MIRROR_GLASS[quality.effects]);
-    // Unlike the rest of the DETAIL row, the dust and the exhaust are not
-    // geometry and do not wait for the next stage: the pools are standing in
-    // the scene already, so switching either row is switching them, mid-run
-    // included.
+    // Unlike the rest of the DETAIL row, the dust CLOUD is not geometry and
+    // does not wait for the next stage: the pool is standing in the scene
+    // already, so switching that row is switching it, mid-run included.
+    //
+    // The EXHAUST row is the one that is BOTH — a pool and the pipes it
+    // leaves — so it lands in two halves: turning it DOWN stops the smoke
+    // now and leaves the pipes until the next car is built, and turning it
+    // UP builds the pipes then and the smoke waits for them (`fitCar` reads
+    // the row once, so the cloud can only leave a pipe that exists). Either
+    // way the car is never a plume with no pipe under it.
     applyClouds();
     if (game) setConditions(game);
     else applyRange();
@@ -858,6 +866,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     car = buildCar(state.spec, {
       ...carDetail("player"),
       cockpit: true,
+      exhaust: EXHAUST_SEEN[quality.exhaust].player,
       // The rear view goes IN the cockpit's mirror rather than only into the
       // HUD's strip, so the mirror pass's texture is handed to the body that
       // hangs the glass.
@@ -870,9 +879,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     car.setWheelLoss(WHEELS_LOST[quality.wheelLoss].player);
     car.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     car.setBrakeLights(LAMP_BEAMS[quality.lighting].brakes);
+    // Off the body AS BUILT: a car built without pipes (the EXHAUST row) has
+    // nowhere for smoke to leave from, and this is what keeps the row's two
+    // halves in step. The cloud switches the instant the row does and the
+    // pipes only land on the next car built, so reading the row twice would
+    // put a plume under a car with no pipe on it every time the row went UP
+    // mid-stage. Read once, here, and the smoke can only ever come out of a
+    // pipe that is actually there.
     const body = bodySpecFor(state.spec);
-    pipes = pipeAnchors(body);
-    pipeStub = pipeAnchors(body, true);
+    const piped = EXHAUST_SEEN[quality.exhaust].player;
+    pipes = piped ? pipeAnchors(body) : [];
+    pipeStub = piped ? pipeAnchors(body, true) : [];
     const eyes = carEyes(state.spec);
     chase.setEyes(eyes);
     driverEyeY = eyes.hood.y;

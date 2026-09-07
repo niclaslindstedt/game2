@@ -1504,7 +1504,9 @@ or a reward handed out by the terrain rather than by the driver. What it costs
 is the LOOK — the car spends the rest of the stage trailing a single black
 plume out of the break under its tail instead of clean puffs out of its pipes
 (`EXHAUST.broken`, app-side), and the tail panel of the condition schematic
-marks. The works sedan is the one car with TWO of them, so it is the one car
+marks. A car built with no pipes at all — the bottom of the EXHAUST row —
+still loses one where the ledger says so: the engine's damage is not a
+rendering decision, and there is simply nothing to throw. The works sedan is the one car with TWO of them, so it is the one car
 that loses two.
 
 The four pieces of GLASS — windscreen, backlight, and each flank's windows
@@ -1855,10 +1857,17 @@ everybody, the tremble and the exhaust follow for nothing: the rivals'
 bodies already read it (`car-mesh.ts`), and the field smokes out of a second
 shared cloud on the same terms as its dust (`field-cars.ts` over
 `fumes.ts`), thinned by `FIELD_FUMES` and capped to the nearest few crews.
-Whose pipe smokes at all is the player's, on the EXHAUST lever of the DETAIL
+Who HAS an exhaust at all is the player's, on the EXHAUST lever of the DETAIL
 row (`EXHAUST_SEEN` in `settings.ts`): a grid steaming on the line is what
 the effect is FOR, so it survives to the second stop of the ladder on the
-car being driven and only a LOW picture puts it away entirely.
+car being driven and only a LOW picture puts it away entirely. One lever for
+the pipes AND the smoke, because they are the same feature seen twice and two
+levers could be set to disagree — a plume leaving a car with no pipe under it
+is a bug report. It is the only row on the ladder that is part particle pool
+and part GEOMETRY, so it lands in two halves: turning it down stops the smoke
+at once and the pipes come off the next car built, and turning it up builds
+the pipes first with the smoke following them (`fitCar` reads the row once per
+car, so the cloud can only ever leave a pipe that exists).
 The revs a rival is sat on are the revs its clutch drops on, so the smoke
 and the shake at the lights are a true advertisement of who is about to
 light their tyres up.

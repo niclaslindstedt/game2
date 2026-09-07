@@ -213,18 +213,32 @@ describe("the tailpipes, and the smoke that has to come out of them", () => {
     return [spec.wheelbase / 2 + shift, -spec.wheelbase / 2 + shift];
   }
 
-  /** The pipes as they are actually DRAWN: the geometry the rear clip puts
-   * in the `exhaust` part, which is its own mesh because the ground tears
-   * it off (engine `BELLY_BOLTS`) and a piece that flies has to be one. */
-  function pipeGeometry(spec: CarBodySpec): THREE.BufferGeometry {
+  /** Everything the rear clip builds, by part. */
+  function rearParts(
+    spec: CarBodySpec,
+    options?: { exhaust?: boolean },
+  ): Map<DamagePart, MeshBuilder> {
     const parts = new Map<DamagePart, MeshBuilder>();
     const part = (name: DamagePart): MeshBuilder => {
       let b = parts.get(name);
       if (!b) parts.set(name, (b = new MeshBuilder()));
       return b;
     };
-    buildRear({ body: new MeshBuilder(), lens: new MeshBuilder() }, spec, axlesOf(spec), part);
-    const pipes = parts.get("exhaust");
+    buildRear(
+      { body: new MeshBuilder(), lens: new MeshBuilder() },
+      spec,
+      axlesOf(spec),
+      part,
+      options,
+    );
+    return parts;
+  }
+
+  /** The pipes as they are actually DRAWN: the geometry the rear clip puts
+   * in the `exhaust` part, which is its own mesh because the ground tears
+   * it off (engine `BELLY_BOLTS`) and a piece that flies has to be one. */
+  function pipeGeometry(spec: CarBodySpec): THREE.BufferGeometry {
+    const pipes = rearParts(spec).get("exhaust");
     expect(pipes, "the rear clip drew no exhaust at all").toBeDefined();
     return pipes!.geometry();
   }
@@ -331,5 +345,25 @@ describe("the tailpipes, and the smoke that has to come out of them", () => {
     };
     expect(pipeAnchors(bare)).toEqual([]);
     expect(pipeAnchors(bare, true)).toEqual([]);
+  });
+
+  it.each(bodies)("%s builds no pipes at all when the EXHAUST row is off", (_id, spec) => {
+    // The row is part pool and part GEOMETRY (settings.ts's EXHAUST_SEEN),
+    // and this is the geometry half: a machine not paying for fifteen pipes
+    // must not be handed them anyway. The rest of the tail is untouched —
+    // switching the exhaust off is not switching the bumper off.
+    const bare = rearParts(spec, { exhaust: false });
+    expect(bare.get("exhaust")).toBeUndefined();
+    const whole = rearParts(spec);
+    for (const [name, builder] of whole) {
+      if (name === "exhaust") continue;
+      const there = bare.get(name);
+      expect(there, `${name} went missing with the pipes`).toBeDefined();
+      const a = builder.geometry();
+      const b = there!.geometry();
+      expect(b.getAttribute("position").count).toBe(a.getAttribute("position").count);
+      a.dispose();
+      b.dispose();
+    }
   });
 });

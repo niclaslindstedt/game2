@@ -386,6 +386,7 @@ export function buildRear(
   spec: CarBodySpec,
   axles: number[],
   part: (name: DamagePart) => MeshBuilder,
+  options: { exhaust?: boolean } = {},
 ): void {
   const b = s.body;
   const r = spec.rear;
@@ -429,7 +430,12 @@ export function buildRear(
     buildIndicators(s, r.lamps, face, -1);
   }
 
-  if (r.exhaust)
+  // The pipes are per-car geometry on a road that can carry fifteen cars, so
+  // they ride the EXHAUST detail row with the smoke that comes out of them
+  // (settings.ts's `EXHAUST_SEEN`) rather than being built unconditionally.
+  // A car built without them still BREAKS one where the ledger says so —
+  // car-damage.ts books a part with no mesh and throws nothing.
+  if (r.exhaust && (options.exhaust ?? true))
     for (const x of pipeSides(r.exhaust)) buildExhaust(part("exhaust"), r.exhaust, x, z);
 
   if (r.tailgate) buildTailgate(b, part("hatch"), spec, axles, r.tailgate, z);
