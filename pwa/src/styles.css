@@ -5624,10 +5624,13 @@ a.menu-version:focus-visible {
   flex: 1;
 }
 
-/* COPY DEBUG INFO, as a mark in the header. It wears the seed stepper's
-   chrome rather than the tool row's, because that is the row it is in — a
-   button in a header has to look like the other buttons in that header. */
-.map-copy {
+/* A COPY BUTTON AS A MARK IN A HEADER — the map viewer's COPY DEBUG INFO and
+   the benchmark's COPY DEBUG REPORT, which are one control in two headers:
+   the whole of what is on screen, as text, put where the way OUT of the page
+   already is. It wears the chrome of the buttons it sits beside rather than a
+   chrome of its own, because a button in a header has to look like the other
+   buttons in that header. */
+.menu-copy {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -5643,25 +5646,25 @@ a.menu-version:focus-visible {
   text-shadow: none;
 }
 
-.map-copy:hover,
-.map-copy:focus-visible {
+.menu-copy:hover,
+.menu-copy:focus-visible {
   background: rgb(255 210 62 / 25%);
 }
 
-.map-copy-on {
+.menu-copy-on {
   color: #0b1830;
   background: var(--hud-good);
   border-color: var(--hud-good);
 }
 
-.map-copy:disabled {
+.menu-copy:disabled {
   opacity: 0.45;
   cursor: default;
 }
 
 /* The receipt beside the mark — smaller than the glyph, because it is a
    flash of state and not a label the button wears. */
-.map-copy-said {
+.menu-copy-said {
   font-size: 0.58em;
   letter-spacing: 0.12em;
 }
@@ -7410,6 +7413,41 @@ a.menu-version:focus-visible {
   max-width: min(40rem, 94vw);
 }
 
+/* THE CARD'S HEAD: the way out on the left, the copy mark on the right.
+
+   IT IS PINNED, because `.hud-menu` is the scroll container — the card
+   carries a score, a graph, five VIDEO rows and two actions, which on a phone
+   is more card than screen. A head that scrolled with the body would put the
+   way out and the copy mark off the top of the view the moment anybody looked
+   at the bottom of the graph, which is the same fault as keeping them at the
+   foot, only upside down.
+
+   Its background is the card's own colour at FULL opacity, and it has to be:
+   the card itself is 82% over a rally at speed, and at anything less than
+   solid the title and the score ghost through the band as they scroll under
+   it — legible enough to read as a rendering fault rather than as depth. So
+   the head gives up the card's translucency, and the rule under it says that
+   is deliberate. */
+.bench-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  /* IT EATS THE CARD'S TOP PADDING AND GIVES IT BACK INSIDE ITSELF. Sticky
+     pins the band to the top of the scrollport, which sits BELOW `.hud-menu`'s
+     1.2rem of padding — so without this the title scrolls up through that
+     1.2rem strip above the band and is cut in half by the card's own edge.
+     The negative margin lifts the box over the strip; the padding puts the
+     buttons back where they were. */
+  margin-top: -1.2rem;
+  padding-block: 1.2rem 0.35rem;
+  background: rgb(18 48 105);
+  border-bottom: 1px solid rgb(255 255 255 / 22%);
+}
+
 /* The answer, once there is one. Above the graph rather than in it: the line
    is what the machine DID, and this is the number written down afterwards. */
 .bench-score {
@@ -7497,14 +7535,29 @@ a.menu-version:focus-visible {
   max-height: 100%;
 }
 
+/* THE FULL-SCREEN GRAPH'S HEAD — the same three things in the same corners as
+   the card it came from: the way out on the left, what this run scored in the
+   middle, the copy mark on the right. Nothing is pinned here because nothing
+   scrolls: this view is a graph sized to the screen it is on. */
 .bench-full-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem 1rem;
+  color: var(--hud-ink);
+  text-shadow: 0 2px 0 var(--hud-shadow);
+}
+
+/* The score and its conditions, which are one label in two sizes and wrap
+   together rather than letting the conditions drift off on their own. */
+.bench-full-titles {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: center;
-  gap: 0.3rem 1rem;
-  color: var(--hud-ink);
-  text-shadow: 0 2px 0 var(--hud-shadow);
+  gap: 0.2rem 0.8rem;
 }
 
 .bench-full-title {

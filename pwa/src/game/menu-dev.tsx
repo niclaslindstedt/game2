@@ -38,6 +38,7 @@ import {
 } from "./campaign.ts";
 import { clearDebugLog, debugLogCounts, debugLogTail, debugLogText } from "./debug-log.ts";
 import { playUi } from "./audio/ui.ts";
+import { Glyph } from "./menu-glyphs.tsx";
 import { ToggleRow } from "./menu.tsx";
 import { type DevSettings } from "./settings.ts";
 import { copyText } from "../lib/copy-text.ts";
@@ -47,9 +48,15 @@ import { copyText } from "../lib/copy-text.ts";
  * nobody scrolls to the bottom of. */
 const TAIL_LINES = 60;
 
+/** How long a copy button wears its receipt before going back to its label. */
+const SAID_MS = 2000;
+
 /** A button that puts a block of text on the clipboard and says so — the
  * developer menu's own way out of a card, shared with the benchmark's
- * surfaces (menu-bench.tsx). */
+ * surfaces (menu-bench.tsx). A ROW, for a page that has room for one: the
+ * label is the whole button, so what is about to be copied is named.
+ *
+ * `CopyGlyphButton` below is the same control for a page that has not. */
 export function CopyButton({ label, text }: { label: string; text: () => string }) {
   const [said, setSaid] = useState<string | null>(null);
   return (
@@ -60,11 +67,45 @@ export function CopyButton({ label, text }: { label: string; text: () => string 
         playUi("select");
         void copyText(text()).then((ok) => {
           setSaid(ok ? "COPIED" : "COPY FAILED — SELECT IT BELOW");
-          setTimeout(() => setSaid(null), 2000);
+          setTimeout(() => setSaid(null), SAID_MS);
         });
       }}
     >
       {said ?? label}
+    </button>
+  );
+}
+
+/** THE SAME CONTROL AS A MARK IN A HEADER, for a card whose body is a
+ * picture: the benchmark's, where a full-width row saying COPY DEBUG REPORT
+ * pushes the graph it is about up the screen and off a phone.
+ *
+ * The clipboard is the one glyph in these menus that stands ALONE rather than
+ * beside a word (menu-glyphs.tsx), which is exactly why it needs the `title`
+ * and the `aria-label` every other glyph gets from the word next to it — the
+ * mark is drawn `aria-hidden`, so without them the button has no name at all.
+ *
+ * The receipt still gets WORDS. A mark can say "copy this"; nothing drawn in
+ * a 24 px box can say COPY FAILED, and a button that silently did nothing is
+ * the one a developer tool cannot afford. */
+export function CopyGlyphButton({ label, text }: { label: string; text: () => string }) {
+  const [said, setSaid] = useState<string | null>(null);
+  return (
+    <button
+      type="button"
+      className={said ? "menu-copy menu-copy-on" : "menu-copy"}
+      title={label}
+      aria-label={label}
+      onClick={() => {
+        playUi("select");
+        void copyText(text()).then((ok) => {
+          setSaid(ok ? "COPIED" : "COPY FAILED");
+          setTimeout(() => setSaid(null), SAID_MS);
+        });
+      }}
+    >
+      <Glyph name="clipboard" />
+      {said && <span className="menu-copy-said">{said}</span>}
     </button>
   );
 }
