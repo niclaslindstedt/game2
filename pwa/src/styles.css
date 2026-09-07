@@ -7692,6 +7692,212 @@ a.menu-version:focus-visible {
   color: var(--hud-info);
 }
 
+/* THE HISTORY — every run this machine has scored, one row each.
+
+   The rows are a GRID rather than four floated cells, so the scores line up
+   down the page: comparing two runs is the only thing this list is for, and
+   two numbers that do not share a left edge are two numbers the eye has to
+   go and find. On a narrow screen the last column drops under the first
+   three rather than squeezing, since a date is the one part of a row that
+   can wait its turn. */
+.bench-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.2rem 0;
+}
+
+.bench-run {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem 0.7rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid rgb(159 216 255 / 25%);
+  border-radius: 0.4rem;
+  background: rgb(6 14 30 / 55%);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bench-run:hover,
+.bench-run:focus-visible {
+  border-color: rgb(159 216 255 / 60%);
+  background: rgb(10 24 48 / 75%);
+}
+
+.bench-run-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
+}
+
+.bench-run-index {
+  font-size: clamp(1.1rem, 4.5vmin, 1.5rem);
+  color: var(--hud-good);
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-run-fps {
+  font-size: clamp(0.45rem, 1.5vmin, 0.58rem);
+  letter-spacing: 0.14em;
+  color: var(--hud-info);
+  opacity: 0.8;
+}
+
+/* THE PICTURE, AS A CODE. Monospace and unslanted, because the point of the
+   glyphs is that a column of them reads DOWN: the run that moved one row of
+   OPTIONS ▸ VIDEO is the line with one bar at a different height, and that
+   only shows when every code sits in the same grid. The menu's own face is
+   an oblique condensed one, which would lean them out of it. */
+.bench-run-code,
+.bench-legend .bench-rung {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  font-style: normal;
+}
+
+.bench-run-code {
+  font-size: clamp(0.9rem, 3.4vmin, 1.2rem);
+  white-space: nowrap;
+}
+
+/* EVERY RUNG THE SAME CELL WIDTH. The bars are block-element glyphs, and no
+   font on the menu's own stack carries them — so each one is substituted
+   individually and comes back with whatever advance the fallback happens to
+   give it, which is narrow for the low bars and wide for the full one. That
+   is enough to leave one row's code shorter than the next's, and a code that
+   does not line up DOWN the list is a code that has lost the only thing it
+   was for: the run that moved one row of OPTIONS ▸ VIDEO is the line with one
+   bar at a different height, and that reads only in a grid. */
+.bench-rung {
+  display: inline-block;
+  width: 0.8em;
+  text-align: center;
+}
+
+/* THE RUNG'S TINT — a SECOND reading of what the bar already says, never the
+   only one. The bar's height carries the setting on its own, so the code
+   survives a colour-blind reader, a greyscale screenshot and the trip
+   through a text field; the colour is what makes the code legible as a group
+   at a glance, and it splits the ladder where a player would: the cool half
+   is the cheap side of every row, the warm half the dear one. */
+.bench-rung-0,
+.bench-rung-1,
+.bench-rung-2,
+.bench-rung-3,
+.bench-rung-4 {
+  color: var(--hud-info);
+}
+
+.bench-rung-5,
+.bench-rung-6,
+.bench-rung-7 {
+  color: var(--hud-good);
+}
+
+.bench-rung-0 {
+  opacity: 0.5;
+}
+
+.bench-rung-1 {
+  opacity: 0.62;
+}
+
+.bench-rung-2 {
+  opacity: 0.74;
+}
+
+.bench-rung-3 {
+  opacity: 0.86;
+}
+
+.bench-rung-5 {
+  opacity: 0.75;
+}
+
+.bench-rung-6 {
+  opacity: 0.87;
+}
+
+/* A stop no ladder in this build has. Dimmed rather than alarmed: it is an
+   old record, not a fault. */
+.bench-rung-x {
+  color: var(--hud-info);
+  opacity: 0.45;
+}
+
+.bench-run-cost {
+  font-size: clamp(0.5rem, 1.7vmin, 0.62rem);
+  letter-spacing: 0.14em;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-run-when {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  font-size: clamp(0.5rem, 1.7vmin, 0.62rem);
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.bench-run-buffer {
+  opacity: 0.7;
+}
+
+/* WHAT THE GLYPHS MEAN, at the bottom of the list — the same legend the
+   copied sheet prints under itself, off the same ladders (benchmark-sheet.ts).
+   A code with no legend is a code the second reader gives up on. */
+.bench-legend {
+  margin-top: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgb(255 255 255 / 18%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: clamp(0.45rem, 1.6vmin, 0.6rem);
+}
+
+.bench-legend-head {
+  letter-spacing: 0.18em;
+  opacity: 0.55;
+}
+
+.bench-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+}
+
+.bench-legend-label {
+  letter-spacing: 0.16em;
+  opacity: 0.75;
+  min-width: 7rem;
+}
+
+.bench-legend-stops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.7rem;
+  opacity: 0.85;
+}
+
+.bench-legend-stop {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  letter-spacing: 0.1em;
+}
+
 /* The developer toggles on the pause card, held apart from the three big
    actions above them so nobody reaches for GOD MODE aiming for RESUME. */
 .hud-pause-dev {

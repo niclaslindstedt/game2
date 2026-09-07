@@ -64,6 +64,8 @@ import { cacheIdForBase } from "./app-pwa.ts";
 import { shellHost } from "./shell-host.ts";
 import { BENCHMARK } from "./game/benchmark-plan.ts";
 import { runBenchmark, type BenchmarkStatus } from "./game/benchmark.ts";
+import { rememberBenchmark } from "./game/benchmark-history.ts";
+import { desktopPicture } from "./game/desktop-video.ts";
 import { hourOfWord, parseHour } from "./game/daylight.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
@@ -186,7 +188,7 @@ import {
   type RaceSettings,
 } from "./game/menu.tsx";
 import { MainMenu, type MenuPage } from "./game/main-menu.tsx";
-import { BenchmarkCard } from "./game/menu-dev.tsx";
+import { BenchmarkCard } from "./game/menu-bench.tsx";
 import type { MapDebug } from "./game/menu-map-viewer.tsx";
 import type { MapRect, MapView } from "./game/map-pane.tsx";
 import { mapDebugBoxes, mapReproQuery } from "./game/map-debug.ts";
@@ -228,6 +230,7 @@ import {
   frameFloorMs,
   hudShow,
   loadSettings,
+  pictureRows,
   saveSettings,
   type DevSettings,
   type PlayCamera,
@@ -2231,19 +2234,55 @@ export function App() {
       const field = fieldRef.current;
       if (!state || !field) return;
       benchRef.current = {
-        stop: runBenchmark({ state, field, renderer, canvas, onStatus: setBench }),
+        stop: runBenchmark({
+          state,
+          field,
+          renderer,
+          canvas,
+          onStatus: (status) => {
+            setBench(status);
+            // KEPT AT THE END, and here rather than on the card: a score is
+            // only worth anything against a second one taken on the same
+            // machine with a row of OPTIONS ▸ VIDEO moved, and by the time
+            // that second run is set up the first card is gone. Writing it
+            // down is an effect of the run finishing, which is a fact about
+            // the app and not about the card that happens to be drawing it.
+            if (status.phase !== "done") return;
+            rememberBenchmark({
+              at: Date.now(),
+              index: status.index,
+              stage: found.level.name,
+              cars: status.cars,
+              width: status.width,
+              height: status.height,
+              pixelRatio: devicePixelRatio,
+              picture: pictureRows(optionsRef.current.video, desktopPicture()),
+              plan: [
+                { label: "car", value: BENCHMARK.carId },
+                { label: "box", value: BENCHMARK.gearbox },
+                { label: "camera", value: BENCHMARK.camera },
+                { label: "hour", value: `${BENCHMARK.hour}` },
+              ],
+              frames: BENCHMARK.frames,
+              step: BENCHMARK.step,
+              samples: status.samples,
+              costs: status.costs,
+              scene: status.scene,
+            });
+          },
+        }),
       };
     });
   };
 
   /** Put the canvas back. The frozen last frame goes with it: the way out of
    * a benchmark is the developer menu it was started from. */
-  const leaveBenchmark = (): void => {
+  const leaveBenchmark = (page: MenuPage = { page: "developer" }): void => {
     benchRef.current?.stop();
     benchRef.current = null;
     setBench(null);
     goMainMenu();
-    setMenu({ page: "developer" });
+    setMenu(page);
   };
   const leaveBenchmarkRef = useRef(leaveBenchmark);
   leaveBenchmarkRef.current = leaveBenchmark;
@@ -4144,7 +4183,8 @@ export function App() {
           status={bench}
           video={options.video}
           onAgain={startBenchmark}
-          onLeave={leaveBenchmark}
+          onHistory={() => leaveBenchmark({ page: "benchhistory" })}
+          onLeave={() => leaveBenchmark()}
         />
       )}
       {paused && !menu && !bench && (

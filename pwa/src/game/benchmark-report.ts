@@ -78,8 +78,10 @@ export type BenchmarkRun = {
 };
 
 /** Thousands separators, because a triangle count is read at a glance and
- * `1284933` is not. */
-function big(n: number): string {
+ * `1284933` is not. Shared with the score sheet (benchmark-sheet.ts), which
+ * is the other thing a run gets pasted as: two of them in one comment have to
+ * spell a triangle count the same way. */
+export function big(n: number): string {
   return Math.round(n)
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
@@ -88,8 +90,10 @@ function big(n: number): string {
 /** The middle reading rather than the mean: one stalled frame — a chunk
  * built, a shader compiled, another program waking up — moves a mean of a
  * hundred readings and moves a median not at all, and what this line is for
- * is what the frame USUALLY costs. */
-function median(values: number[]): number {
+ * is what the frame USUALLY costs. Exported because the score sheet's DRAWS
+ * column is this same figure — a run's median frame — and two numbers under
+ * one name have to be one number. */
+export function median(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const half = sorted.length >> 1;
@@ -97,8 +101,9 @@ function median(values: number[]): number {
 }
 
 /** A fixed-width column, so the table reads down as well as across when it
- * lands in a comment nobody has re-formatted. */
-function pad(text: string, width: number): string {
+ * lands in a comment nobody has re-formatted. Shared with the score sheet for
+ * the same reason `big` is. */
+export function pad(text: string, width: number): string {
   return text.length >= width ? text : " ".repeat(width - text.length) + text;
 }
 

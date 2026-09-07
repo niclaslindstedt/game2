@@ -102,9 +102,11 @@ places they are written down.
 
 ### Timing the machine, and how it differs from `make profile`
 
-**DEVELOPER → BENCHMARK** races fifteen cars off one green on the campaign's
-first stage and reports how long this machine took to draw a fixed number of
-frames of it, as an index against the race's own length (100 is real time —
+**DEVELOPER → BENCHMARK** races fifteen cars off one green on the stage the
+plan pins (`pwa/src/game/benchmark-plan.ts` — chosen for having depth with
+things in it, so every row of OPTIONS ▸ VIDEO can move the number) and
+reports how long this machine took to draw a fixed number of frames of it, as
+an index against the race's own length (100 is real time —
 `pwa/src/game/benchmark-index.ts`). Every frame advances the game by exactly a sixtieth of a
 second whatever it cost to draw, so the race is the same race every run and
 on every machine; the render loop never waits for anything (no
@@ -116,20 +118,18 @@ The two measurements answer different questions and neither replaces the
 other:
 
 - **`make profile`** counts what a frame ASKS FOR — draw calls, triangles,
-  program and texture binds. What a frame asks for does not depend on the
-  GPU, which is what makes this the table a PR quotes. Its fps column is
-  software rasterization and means nothing.
+  program and texture binds — which does not depend on the GPU, and is what
+  makes it the table a PR quotes. Read it structurally and ignore its fps, as
+  `AGENTS.md` says.
   **But the table is not repeatable to better than about ten per cent on a
   slow machine.** Each scene settles at a fixed STAGE TIME and is then
   metered over a fixed six-second WALL-CLOCK window (`WINDOW` in
-  `scripts/profile-render.mjs`), so where the container draws five frames in
-  it and the next run draws fifteen, the car has covered a different distance
-  and a different set of chunks, props and trees was in frustum. Judge a
-  rendering change STRUCTURALLY first — does it add a pass, a material, a
-  mesh, or only change an instance COUNT? — and quote the table only when the
-  movement is far outside that spread, or when the frames-metered counts
-  match. An instanced batch drawn with fewer instances cannot move `draws` at
-  all, whatever the table says.
+  `scripts/profile-render.mjs`), so a run that draws five frames in it and one
+  that draws fifteen covered different ground, with a different set of chunks,
+  props and trees in frustum. Quote the table only when the movement is far
+  outside that spread, or when the frames-metered counts match: an instanced
+  batch drawn with fewer instances cannot move `draws` at all, whatever it
+  says.
   It also PINS the rear-view mirror (`?mirrorhz=60`), because the mirror is
   redrawn at whatever the machine can afford (`pwa/src/game/mirror-pace.ts`)
   and this machine can afford nothing — unpinned, the table reports a
@@ -147,6 +147,18 @@ other:
 
 Run it twice, changing one thing between: a video setting, a branch. What it
 compares honestly is two runs on one machine.
+
+**Every finished run is kept** (`pwa/src/game/benchmark-history.ts`), so that
+method no longer rests on having written the first number down: **DEVELOPER →
+BENCHMARK HISTORY** is the last twenty runs this machine scored, newest first,
+each line carrying the score, its median frame and what OPTIONS ▸ VIDEO was
+set to. A row opens the run back up — its graph, and its debug report on the
+clipboard, off the stored readings.
+
+**COPY SCORE SHEET** is the list as text, which is what goes in a PR. The
+picture is a block-glyph code on the line — one a row, `▁` cheapest to `█`
+dearest, with a legend generated from the same ladders the menu walks — so the
+run that moved one row is the line with one bar at a different height.
 
 ### X-raying the ground
 
