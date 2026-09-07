@@ -790,6 +790,10 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   // solid thing from the same id; this is what dresses it.
   const biome = biomeFor(track.knobs.biome);
   const terrain = buildTerrain(track, biome, season);
+  // Named for the benchmark's breakdown (renderer.ts's `sceneTally`): the
+  // world is most of what a frame draws, and "world" as one row says
+  // nothing about which half of it to go after.
+  terrain.group.name = "terrain";
   group.add(terrain.group);
   terrain.sync(track, 0, track.samples[0].x, track.samples[0].z);
   // R16 — what the road's outer band hands over TO. The ribbon reads the
@@ -811,12 +815,14 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   // `clearNear` is what retires the ones it later claims.
   const fullGuard = track.endless ? null : chunkSamples(track, 0, track.samples.length);
   const wild = buildWild(track, biome, terrain, density, season);
+  wild.group.name = "wild";
   group.add(wild.group);
   wild.sync(track.samples[0].x, track.samples[0].z);
   // The cones live OUTSIDE the road chunks: a chunk drops the moment the car
   // is far enough past it, and one that took a cone still in the air with it
   // would leave it hanging.
   const cones = createConeField();
+  cones.group.name = "cones";
   group.add(cones.group);
   // R26 — the marker posts. Their instanced batches live in the road
   // chunks that draw them; the field only holds the references, so the car
@@ -829,16 +835,19 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   // reason they live outside the road chunks: a chunk dropped behind an
   // endless run would take a trunk still in the air with it.
   const breakage = createBreakage(TRUNK_COLOR, biome.ground.bedrock);
+  breakage.group.name = "breakage";
   group.add(breakage.group);
   // R41 — the trains: one consist per railway crossing, posed each frame
   // off the engine's timetable. Their facet jitter is the seed's, so a
   // stage's train is the same train every run.
   const trainRng = createRng((track.seed ^ 0x2c9f1b57) >>> 0);
   const trains = createTrains(() => trainRng.next());
+  trains.group.name = "trains";
   group.add(trains.group);
   // R37 — the livestock: every farm's herd, wandering its paddock on the
   // renderer's own clock. Herds arrive with the chunk their farm is in.
   const livestock = createLivestock();
+  livestock.group.name = "livestock";
   group.add(livestock.group);
 
   type Chunk = {
@@ -1053,6 +1062,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       finish = buildFinishGate(track, track.circuit ? "START/FINISH" : "FINISH");
       chunkGroup.add(finish.group);
     }
+    chunkGroup.name = "road chunks";
     group.add(chunkGroup);
     chunks.push({ toS, group: chunkGroup, scenery, trace: chunkTrace(ribbon) });
   };
