@@ -7393,6 +7393,16 @@ a.menu-version:focus-visible {
   max-height: 74vh;
 }
 
+/* ITS OWN GROUND, AND MORE OF IT. On the card the panel sits on the card's
+   fill and 62% is plenty; with the screen to itself the only thing behind
+   it is the rally, and a line read against a moving road and a lit car is
+   a line nobody can follow. Photographed before this was raised: the sign
+   board and the car's own headlamp were visible straight through the two
+   lines at the bottom of the box. */
+.bench-plot-full .bench-plot-panel {
+  fill: rgb(4 14 34 / 92%);
+}
+
 .bench-plot-full .bench-plot-line {
   stroke-width: 1.6;
 }
