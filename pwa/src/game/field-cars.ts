@@ -246,19 +246,24 @@ export type FieldCars = {
    * grime film its wipers clear. Both read when a car is BUILT, so they
    * land on the next stage rather than mid-run, which is the same contract
    * the undergrowth setting keeps; one call because they are one setting.
-   * `exhaust` is the third of that kind — whether a rival is built with
-   * TAILPIPES under its tail — and it rides the same row as the smoke that
+   * `reflect` is read there too — whether a rival's windows show the world
+   * they are pointed at (car/glass-reflect.ts) rather than only the gradient
+   * baked into them — because it is a graft on the material the glass is
+   * built with. `exhaust` is the fourth of that kind: whether a rival is
+   * built with TAILPIPES under its tail, on the same row as the smoke that
    * leaves them, so a field with no pipes is a field with no plumes.
    * `wheelLoss` is whether a rival may lose a wheel at all, `looseWheels`
    * the question after it — whether one that HAS come off is thrown as a
    * rolling body — `crumple` whether a rival's panels fold into what it
    * hit, and `brakeLights` whether a rival standing on the pedal lights its
-   * tail. Unlike the three above, all four land on the cars already built: none is baked into a geometry, and a
-   * field whose brake lights came in one stage late would be a field of
-   * cars that look like they are not braking. */
+   * tail. Unlike the four above, all four of those land on the cars already
+   * built: none is baked into a geometry, and a field whose brake lights
+   * came in one stage late would be a field of cars that look like they are
+   * not braking. */
   setCarDetail: (detail: {
     interior: InteriorDetail;
     screens: FilmDetail;
+    reflect: boolean;
     exhaust: boolean;
     looseWheels: boolean;
     wheelLoss: boolean;
@@ -305,6 +310,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
    * moved is born reading the map like the ones already on the road. */
   let richShadows = false;
   let screens: FilmDetail = "coarse";
+  /** Whether a rival's windows show the world (car/glass-reflect.ts). Baked
+   * into the material a car is built with, so like the two above it reaches
+   * the field one car at a time, as each is built. */
+  let reflects = true;
   let piped = true;
   let wheelsRoll = true;
   let shedsWheels = true;
@@ -451,6 +460,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
             // 48 triangles rather than 3,456 (car/wipers.ts).
             screens,
             exhaust: piped,
+            reflect: reflects,
           });
           // The plate wears the car's own paint and the number off its door,
           // so the name and the colour coming up the road are one crew.
@@ -599,6 +609,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
     setCarDetail: (detail) => {
       interior = fieldInterior(detail.interior);
       screens = detail.screens;
+      reflects = detail.reflect;
       piped = detail.exhaust;
       wheelsRoll = detail.looseWheels;
       shedsWheels = detail.wheelLoss;

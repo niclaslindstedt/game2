@@ -27,6 +27,7 @@ import { MeshBuilder, mergeGeometries, patchNormal } from "./car/builder.ts";
 import { carSurface } from "./car-surface.ts";
 import { buildFront, buildRear } from "./car/fascia.ts";
 import { buildGlassCracks, type GlassCracks } from "./car/glass-cracks.ts";
+import { glassReflect, reflectFilm, reflectGlass, type GlassReflect } from "./car/glass-reflect.ts";
 import { buildGreenhouse, screenPanes, type GlassPanes } from "./car/greenhouse.ts";
 import { buildCockpit, cabinOpening, type CarCockpit } from "./car/cockpit.ts";
 import { bayOpening, buildEngineBay } from "./car/engine-bay.ts";
@@ -159,6 +160,12 @@ export type CarBodyParts = {
    * how much of the cabin shows through it this frame. Null on a spec with
    * no glass at all. */
   glass: THREE.MeshPhongMaterial | null;
+  /** How much of the WORLD those windows are showing this frame
+   * (car/glass-reflect.ts) — one number for the pane and the coat of dirt
+   * over it alike, driven from car-mesh.ts beside the pane's own opacity.
+   * Null on a car built without the reflection: every level of detail below
+   * the top one, and every solid car. */
+  reflection: GlassReflect | null;
   /** ...the mesh itself, and where each pane sits in its buffer — what the
    * damage visual takes a shattered pane out of. Null alongside `glass`. */
   glassMesh: THREE.Mesh | null;
@@ -246,6 +253,19 @@ export type CarBodyOptions = {
    * fifteen pipes is not paying for fifteen plumes either. Defaults to on,
    * so every tool that builds a body without saying whose it is gets them. */
   exhaust?: boolean;
+  /** Whether the windows show the WORLD as well as the gradient baked into
+   * them (car/glass-reflect.ts) — the sky they are pointed at this instant,
+   * the horizon lying across them, and the sun swinging down the greenhouse
+   * as the car turns. The top detail stop's (`GLASS_REFLECT` in settings.ts),
+   * because it is the one thing on a window that has to be worked out per
+   * pixel; every level below it keeps the baked gradient on its own, which
+   * is what makes a window free there. Defaults to ON, so every tool that
+   * builds a body without saying whose it is judges the full one.
+   *
+   * A car built SOLID (`interior: off`) never takes it: its panes are opaque
+   * panels standing in for windows, and a reflection is a thing a window
+   * does. */
+  reflect?: boolean;
 };
 
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
@@ -350,6 +370,10 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // pane goes back to being a solid panel — front faces, writing depth, in
   // the opaque pass with the body it belongs to.
   const solid = detail === "off";
+  // THE WORLD IN THE GLASS, if this car is paying for it: one strength for
+  // every surface of this car's glazing, so the pane and the dirt on it can
+  // never disagree about how hard the sky is landing on them.
+  const reflection = !solid && (options.reflect ?? true) ? glassReflect() : null;
   let glassMat: THREE.MeshPhongMaterial | null = null;
   let glassGeo: THREE.BufferGeometry | null = null;
   let glassMesh: THREE.Mesh | null = null;
@@ -361,6 +385,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
       side: solid ? THREE.FrontSide : THREE.DoubleSide,
     });
     glassGeo = g.geometry();
+    if (reflection) reflectGlass(glassMat, reflection);
     glassMesh = new THREE.Mesh(glassGeo, glassMat);
     glassMesh.renderOrder = 1;
     // The glass casts solid: a car's shadow has no windows in it, because
@@ -451,6 +476,10 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     side: THREE.DoubleSide,
   });
   const wipers = buildWipers(spec, material, filmMat, options.screens ?? "fine", !solid);
+  // The coat catches the sky as well as the pane under it does. Without
+  // that, the reflection is buried the moment a stage starts throwing filth
+  // at the glass — car/glass-reflect.ts states the case at length.
+  if (reflection && wipers.film) reflectFilm(filmMat, reflection);
   if (wipers.film) wipers.film.renderOrder = 2;
   chassis.add(wipers.group);
 
@@ -559,6 +588,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     unbolt,
     wipers,
     glass: glassMat,
+    reflection,
     glassMesh,
     panes,
     cracks,

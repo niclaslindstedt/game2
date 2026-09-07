@@ -11,14 +11,22 @@
 // share a buffer with the opaque body around it. What the metal keeps is the
 // SEAL — the rubber band around each opening is hardware, not glass.
 //
-// A fullbright game has no reflections, so the one a window needs is BAKED:
-// every pane fades, in colour AND in opacity, from a pale sky at its header
-// to a dark, clearer pane at its sill. That single gradient does the work of
-// an environment map — the top of the glass reads as the sky lying in it,
-// the bottom as the cabin showing through — and it costs nothing at all: it
-// is the same two triangles with different vertex colours on them. The
-// view-angle glint that finishes it is a per-frame number on the material
-// (car-mesh.ts), not geometry.
+// A LIT PANE IS NOT A REFLECTING ONE — the scene's sun and sky reach the
+// glass like every other surface on the car (car-surface.ts), and what they
+// give it is a highlight, not a sky lying in it. So the reflection every
+// window carries here is BAKED: every pane fades, in colour AND in opacity,
+// from a pale sky at its header to a dark, clearer pane at its sill. That
+// single gradient does the work of an environment map — the top of the glass
+// reads as the sky lying in it, the bottom as the cabin showing through —
+// and it costs nothing at all: it is the same two triangles with different
+// vertex colours on them. The view-angle glint that finishes it is a
+// per-frame number on the material (car-mesh.ts), not geometry.
+//
+// It is also what every detail level below the top one gets, and all it can
+// ever be: paint on the pane, which does not move when the car does. The top
+// level strikes the reflection for real instead, per pixel, off the sky the
+// pane is actually pointed at — car/glass-reflect.ts, grafted onto this same
+// material and drawn in this same call.
 //
 // Also the small period hardware that lives up here: the rain gutters
 // along the roof edges. The wipers are their own module (car/wipers.ts) —

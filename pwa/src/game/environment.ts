@@ -42,6 +42,7 @@ import {
 } from "@engine";
 
 import { createCarLamps } from "./car-lamps.ts";
+import { GLASS_SKY, SKYLINE } from "./car/glass-reflect.ts";
 import type { LampSource } from "./car/lamps.ts";
 import { createClouds } from "./clouds.ts";
 import { dressSky, sunOcclusion, type SkyDressing } from "./cloud-field.ts";
@@ -673,6 +674,50 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     HEIGHT_FOG.shadowRange.y = march.hi - march.lo;
   };
 
+  /** THE SKY IN THE CARS' WINDOWS (car/glass-reflect.ts), on the same terms
+   * the mist and the cloud shadows are written on: one block of numbers,
+   * shared by reference with every pane on the road.
+   *
+   * All of it is the sky the dome is already drawing — its two colours this
+   * hour, the cloud tone, the lid's underside where there is one, and the
+   * lowest sheet's own coverage and drift — so a window shows the weather
+   * that is actually overhead rather than a picture of some other one. The
+   * SUN is not written here: the glass reads `HEIGHT_FOG.sun` by reference,
+   * which the frame below sets once for everything that needs it. */
+  const glassSky = (cam: THREE.Vector3): void => {
+    // Under a deck the sky IS the lid: its underside overhead, and the light
+    // that gets in under its rim at the horizon.
+    const zenith = new THREE.Color(preset.deck ? preset.deck.overhead : preset.zenith);
+    const horizon = new THREE.Color(preset.deck ? preset.deck.rim : preset.horizon);
+    Object.assign(GLASS_SKY.zenith, { x: zenith.r, y: zenith.g, z: zenith.b });
+    Object.assign(GLASS_SKY.horizon, { x: horizon.r, y: horizon.g, z: horizon.b });
+    const cloud = new THREE.Color(preset.cloud);
+    Object.assign(GLASS_SKY.cloud, { x: cloud.r, y: cloud.g, z: cloud.b });
+    // The land, at the distance a reflected horizon is always at: the
+    // hemisphere's own ground colour, washed most of the way into the fog —
+    // and the trees on it as the same tone with the light taken out of it.
+    const fogTone = new THREE.Color(preset.fog);
+    const ground = new THREE.Color(preset.hemiGround).lerp(fogTone, 0.45);
+    Object.assign(GLASS_SKY.ground, { x: ground.r, y: ground.g, z: ground.b });
+    const trees = new THREE.Color(preset.hemiGround).multiplyScalar(0.4).lerp(fogTone, 0.3);
+    Object.assign(GLASS_SKY.trees, { x: trees.r, y: trees.g, z: trees.b });
+    GLASS_SKY.look.y = SKYLINE[biome];
+    // The sheet a window can actually see through: the lowest one over the
+    // eye, at the coverage and the offsets the dome is drawing it at. A lid
+    // is not one — it is the sky itself up there, and the pane has it in the
+    // two colours above — so what it contributes is the ragged relief of its
+    // own underside.
+    const over = shell.layers().find(({ layer }) => !layer.deck && layer.altitude > cam.y);
+    if (!skyShown) GLASS_SKY.look.x = 0;
+    else if (preset.deck) GLASS_SKY.look.x = 0.3 * preset.deck.relief;
+    else GLASS_SKY.look.x = over ? over.layer.coverage : 0;
+    // The drift, off the layer's own offset and its own cell size, so what
+    // slides through a window keeps pace with what is overhead.
+    const pitch = over ? 1 / over.layer.scale : 0;
+    GLASS_SKY.look.z = over ? over.offsetX * pitch : 0;
+    GLASS_SKY.look.w = over ? over.offsetZ * pitch : 0;
+  };
+
   /** THE CLOUDS' SHADOW on the ground: the lowest sheet over the eye,
    * read by the fog chunk at the same offsets the dome draws it at. */
   const shadeByClouds = (cam: THREE.Vector3): void => {
@@ -802,6 +847,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     }
     marchShadow(cam);
     shadeByClouds(cam);
+    glassSky(cam);
     // Last, so the map is built around wherever the light ended up.
     shadows.follow(state.car, camera);
   };
