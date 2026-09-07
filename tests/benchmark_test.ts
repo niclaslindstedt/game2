@@ -25,6 +25,8 @@ import {
   SAMPLE_EVERY,
   benchIndex,
   benchPlot,
+  fpsOfIndex,
+  indexOfFps,
   type BenchSample,
 } from "../pwa/src/game/benchmark-index.ts";
 
@@ -43,11 +45,16 @@ const STEP = 1 / 60;
 const RACE = FRAMES * STEP;
 
 /** A run scored at one steady pace: the readings a machine that held
- * `rate` x real time would have produced. */
+ * `rate` x real time would have produced. Steady means the snapshots agree
+ * with the average, which is what a machine that never changed looks like. */
 function steady(rate: number): BenchSample[] {
   const out: BenchSample[] = [];
   for (let f = SAMPLE_EVERY; f <= FRAMES; f += SAMPLE_EVERY) {
-    out.push({ frame: f, index: benchIndex(f * STEP, (f * STEP) / rate) });
+    out.push({
+      frame: f,
+      index: benchIndex(f * STEP, (f * STEP) / rate),
+      fps: rate / STEP,
+    });
   }
   return out;
 }
@@ -86,7 +93,7 @@ describe("the benchmark's index", () => {
 describe("the benchmark's graph", () => {
   it("walks the run across the box and ends on the score", () => {
     const samples = steady(3);
-    const plot = benchPlot(samples, FRAMES);
+    const plot = benchPlot(samples, FRAMES, STEP);
     expect(plot.points).toHaveLength(samples.length);
     expect(plot.points[0].x).toBeCloseTo(SAMPLE_EVERY / FRAMES, 6);
     // The x axis is the RUN, not the readings: the last frame of the run is
@@ -98,13 +105,13 @@ describe("the benchmark's graph", () => {
 
   it("puts a run half drawn half way across", () => {
     const half = steady(2).filter((s) => s.frame <= FRAMES / 2);
-    const plot = benchPlot(half, FRAMES);
+    const plot = benchPlot(half, FRAMES, STEP);
     expect(plot.points[plot.points.length - 1].x).toBeCloseTo(0.5, 6);
   });
 
   it("keeps headroom over the score, so the line never draws on the ceiling", () => {
     for (const rate of [0.4, 1, 1.73, 4, 11]) {
-      const plot = benchPlot(steady(rate), FRAMES);
+      const plot = benchPlot(steady(rate), FRAMES, STEP);
       expect(plot.top).toBeGreaterThanOrEqual(plot.index + 25);
       expect(plot.top).toBeLessThanOrEqual(plot.index + 75);
       // y is measured DOWN from the top of the box, so the line sitting
@@ -116,7 +123,7 @@ describe("the benchmark's graph", () => {
   it("holds the axis still while a converging score drifts", () => {
     // What a settling run does: the same score, a point or two either way.
     const tops = [180, 183, 179, 186].map(
-      (index) => benchPlot([{ frame: 900, index }], FRAMES).top,
+      (index) => benchPlot([{ frame: 900, index, fps: fpsOfIndex(index, STEP) }], FRAMES, STEP).top,
     );
     expect(new Set(tops).size).toBe(1);
   });
@@ -126,31 +133,125 @@ describe("the benchmark's graph", () => {
     // looking at is the spike.
     const plot = benchPlot(
       [
-        { frame: 15, index: 400 },
-        { frame: 30, index: 150 },
-        { frame: 45, index: 120 },
+        { frame: 15, index: 400, fps: fpsOfIndex(400, STEP) },
+        { frame: 30, index: 150, fps: fpsOfIndex(150, STEP) },
+        { frame: 45, index: 120, fps: fpsOfIndex(120, STEP) },
       ],
       FRAMES,
+      STEP,
     );
     expect(plot.top).toBeGreaterThanOrEqual(400);
     for (const p of plot.points) expect(p.y).toBeGreaterThanOrEqual(0);
   });
 
   it("marks real time only where the axis reaches it", () => {
-    const fast = benchPlot([{ frame: 900, index: 250 }], FRAMES);
+    const fast = benchPlot([{ frame: 900, index: 250, fps: 150 }], FRAMES, STEP);
     expect(fast.real).not.toBeNull();
     // 100 sits proportionally up an axis measured from zero.
     expect(fast.real).toBeCloseTo(1 - INDEX_REAL / fast.top, 6);
     // A machine well under real time has no 100 on its axis to point at.
-    const slow = benchPlot([{ frame: 900, index: 20 }], FRAMES);
+    const slow = benchPlot([{ frame: 900, index: 20, fps: 12 }], FRAMES, STEP);
     expect(slow.top).toBeLessThan(INDEX_REAL);
     expect(slow.real).toBeNull();
   });
 
   it("draws an empty box before the first reading", () => {
-    const plot = benchPlot([], FRAMES);
+    const plot = benchPlot([], FRAMES, STEP);
     expect(plot.points).toHaveLength(0);
     expect(plot.index).toBe(0);
     expect(plot.top).toBeGreaterThan(0);
+  });
+});
+
+describe("the benchmark's two units", () => {
+  it("reads an index as a frame rate and back", () => {
+    // The pin: real time is one frame per step, which at the shipped
+    // sixtieth is sixty a second. Everything else on the scale follows.
+    expect(fpsOfIndex(INDEX_REAL, STEP)).toBeCloseTo(60, 6);
+    expect(indexOfFps(60, STEP)).toBeCloseTo(INDEX_REAL, 6);
+    expect(fpsOfIndex(78, STEP)).toBeCloseTo(46.8, 6);
+    expect(indexOfFps(105, STEP)).toBeCloseTo(175, 6);
+  });
+
+  it("is a ratio, so a longer step is fewer frames for the same score", () => {
+    // Thirty a second of game per frame is half the frames for the same
+    // racing drawn — the index is about seconds of stage, not about frames.
+    expect(fpsOfIndex(INDEX_REAL, 1 / 30)).toBeCloseTo(30, 6);
+    expect(indexOfFps(30, 1 / 30)).toBeCloseTo(INDEX_REAL, 6);
+  });
+
+  it("has no rate to report without a step to divide by", () => {
+    expect(fpsOfIndex(100, 0)).toBe(0);
+    expect(fpsOfIndex(100, -1)).toBe(0);
+  });
+});
+
+describe("the benchmark's snapshot line", () => {
+  it("lies on the score line for a machine that never changed", () => {
+    // The two lines are one quantity in two units, so a steady run draws
+    // them on top of each other. That is what makes any GAP between them
+    // worth looking at.
+    const plot = benchPlot(steady(2), FRAMES, STEP);
+    expect(plot.rate).toHaveLength(plot.points.length);
+    for (let i = 0; i < plot.rate.length; i++) {
+      expect(plot.rate[i].x).toBeCloseTo(plot.points[i].x, 6);
+      expect(plot.rate[i].y).toBeCloseTo(plot.points[i].y, 6);
+    }
+  });
+
+  it("puts a stall at the frame it happened on, where the average hides it", () => {
+    // A run that halves its rate for the second half. The average ends
+    // somewhere in between and never says where; the snapshot drops on the
+    // reading it dropped on.
+    const samples: BenchSample[] = [];
+    let wall = 0;
+    for (let f = SAMPLE_EVERY; f <= FRAMES; f += SAMPLE_EVERY) {
+      const rate = f > FRAMES / 2 ? 1 : 2;
+      wall += (SAMPLE_EVERY * STEP) / rate;
+      samples.push({ frame: f, index: benchIndex(f * STEP, wall), fps: rate / STEP });
+    }
+    const plot = benchPlot(samples, FRAMES, STEP);
+    const half = Math.floor(plot.rate.length / 2);
+    // The snapshot is at its two levels and nothing between them…
+    expect(indexOfFps(samples[half - 1].fps, STEP)).toBeCloseTo(200, 6);
+    expect(indexOfFps(samples[half + 1].fps, STEP)).toBeCloseTo(100, 6);
+    // …so the step down is one reading wide on the graph, where the score
+    // line is still coasting well above the rate it is now being drawn at.
+    expect(plot.rate[half + 1].y - plot.rate[half - 1].y).toBeGreaterThan(0.2);
+    expect(plot.points[half + 1].y).toBeLessThan(plot.rate[half + 1].y);
+    // And the run's own score lands between the two paces it was drawn at.
+    expect(plot.index).toBeGreaterThan(100);
+    expect(plot.index).toBeLessThan(200);
+  });
+
+  it("keeps a spike the score never saw under the ceiling", () => {
+    // One cheap frame in the middle of a slow run. The average barely
+    // moves, so an axis sized off the score alone would draw the snapshot
+    // straight through the top of the box.
+    const samples = steady(1);
+    samples[40] = { ...samples[40], fps: 400 };
+    const plot = benchPlot(samples, FRAMES, STEP);
+    expect(plot.top).toBeGreaterThanOrEqual(indexOfFps(400, STEP));
+    for (const p of plot.rate) expect(p.y).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("the benchmark's second axis", () => {
+  it("is the same ceiling in the other unit", () => {
+    for (const rate of [0.4, 1, 1.73, 4]) {
+      const plot = benchPlot(steady(rate), FRAMES, STEP);
+      expect(plot.topFps).toBeCloseTo(fpsOfIndex(plot.top, STEP), 6);
+      // Both ends of both axes are whole numbers, because the index axis
+      // steps in multiples of five: 25 index is 15 fps, and an axis
+      // labelled 174.6 is one nobody reads twice.
+      expect(plot.topFps).toBeCloseTo(Math.round(plot.topFps), 6);
+    }
+  });
+
+  it("reports the rate of the frame the last reading was taken on", () => {
+    const samples = steady(2);
+    samples[samples.length - 1] = { ...samples[samples.length - 1], fps: 33 };
+    expect(benchPlot(samples, FRAMES, STEP).fps).toBeCloseTo(33, 6);
+    expect(benchPlot([], FRAMES, STEP).fps).toBe(0);
   });
 });

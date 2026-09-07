@@ -4015,7 +4015,14 @@ export function App() {
       {godActive && !options.dev.debug && !paused && !bench && (
         <DebugCopyButton read={() => readDebugRef.current()} />
       )}
-      {bench && <BenchmarkCard status={bench} onAgain={startBenchmark} onLeave={leaveBenchmark} />}
+      {bench && (
+        <BenchmarkCard
+          status={bench}
+          video={options.video}
+          onAgain={startBenchmark}
+          onLeave={leaveBenchmark}
+        />
+      )}
       {paused && !menu && !bench && (
         <PauseMenu
           seed={stageRef.current?.seed ?? seed}

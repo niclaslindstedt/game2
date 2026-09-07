@@ -7261,9 +7261,10 @@ a.menu-version:focus-visible {
 
 /* THE BENCHMARK'S CARD. It wears the pause card's chrome, because it is the
    same thing: a card over a run. What it does differently is give the whole
-   card over to ONE GRAPH — the run's index, drawn as it settles — with the
-   small print above it saying which race the score is about, and the score
-   itself at the line's leading edge. */
+   card over to ONE GRAPH — the run's index as it settles, with the frame
+   rate of each reading drawn through it — with the small print above it
+   saying which race the score is about, the score at the line's leading
+   edge, and the video rows that produced it underneath. */
 .bench {
   align-items: stretch;
   text-align: center;
@@ -7284,6 +7285,17 @@ a.menu-version:focus-visible {
   font-size: 0.24em;
   letter-spacing: 0.3em;
   opacity: 0.7;
+}
+
+/* The same score in the unit people have a feel for. Under the number
+   rather than beside it: it is a restatement, not a second result, and two
+   figures on one line read as two things measured. */
+.bench-score-rate {
+  display: block;
+  font-size: 0.26em;
+  letter-spacing: 0.16em;
+  color: var(--hud-info);
+  opacity: 0.85;
 }
 
 .bench-note {
@@ -7319,10 +7331,12 @@ a.menu-version:focus-visible {
 }
 
 /* Real time is a different KIND of line from the axis — a gradation with a
-   meaning rather than the edge of the box — so it is the readout blue, not
-   another grey dash. */
+   meaning rather than the edge of the box — so it is drawn at full ink and
+   dashed rather than as another grey hairline. It wears NEITHER line's
+   colour: gold is the score, blue is the frame rate, and real time is the
+   one mark on the graph that is true on both scales at once. */
 .bench-plot-real {
-  stroke: var(--hud-info);
+  stroke: rgb(255 255 255 / 85%);
   stroke-width: 1;
   stroke-dasharray: 5 4;
   opacity: 0.55;
@@ -7335,9 +7349,27 @@ a.menu-version:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.bench-plot-tick-real {
-  fill: var(--hud-info);
+/* The unit under each axis's ceiling — INDEX on the left, FPS on the right.
+   Smaller and dimmer than the number it explains, and tinted like the line
+   read against it, which is the whole legend a two-line graph needs. */
+.bench-plot-unit {
+  font-size: 6.5px;
+  letter-spacing: 0.16em;
   opacity: 0.75;
+}
+
+.bench-plot-tick-index {
+  fill: var(--hud-good);
+  opacity: 0.7;
+}
+
+.bench-plot-tick-rate {
+  fill: var(--hud-info);
+  opacity: 0.85;
+}
+
+.bench-plot-tick-real {
+  fill: rgb(255 255 255 / 80%);
 }
 
 /* The wash under the line: strong where the line is, gone by the floor. A
@@ -7364,6 +7396,18 @@ a.menu-version:focus-visible {
   stroke-linecap: round;
 }
 
+/* The frame-rate snapshots: a hairline, because it is the busy line — a
+   hundred and twenty independent readings, and at full weight it would be
+   the graph rather than the thing drawn through it. */
+.bench-plot-rate {
+  fill: none;
+  stroke: var(--hud-info);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
 .bench-plot-head {
   fill: var(--hud-good);
 }
@@ -7378,6 +7422,39 @@ a.menu-version:focus-visible {
   fill: rgb(255 255 255 / 55%);
   font-size: 11px;
   letter-spacing: 0.24em;
+}
+
+/* THE CONDITIONS, under the graph: the three PICTURE rows the run did not
+   pin. One line of three cells, each a dim label over its stop, so the
+   screenshot of a score carries the settings that produced it. It wraps
+   rather than shrinks — on the narrowest phone three cells become two and
+   one, which is longer and still legible, where three squeezed cells are
+   three truncated words. */
+.bench-video {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 1.1rem;
+  margin-top: 0.15rem;
+}
+
+.bench-video-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.bench-video-label {
+  font-size: clamp(0.45rem, 1.5vmin, 0.58rem);
+  letter-spacing: 0.22em;
+  opacity: 0.55;
+}
+
+.bench-video-value {
+  font-size: clamp(0.7rem, 2.2vmin, 0.9rem);
+  letter-spacing: 0.1em;
+  color: var(--hud-info);
 }
 
 /* The developer toggles on the pause card, held apart from the three big

@@ -26,7 +26,7 @@
 import { useState } from "react";
 
 import { BENCHMARK, type BenchmarkStatus } from "./benchmark.ts";
-import { INDEX_REAL, benchPlot, type BenchPlot } from "./benchmark-index.ts";
+import { INDEX_REAL, benchPlot, fpsOfIndex, type BenchPlot } from "./benchmark-index.ts";
 import {
   LOCATIONS,
   findLevel,
@@ -39,7 +39,8 @@ import {
 import { clearDebugLog, debugLogCounts, debugLogTail, debugLogText } from "./debug-log.ts";
 import { playUi } from "./audio/ui.ts";
 import { ToggleRow } from "./menu.tsx";
-import type { DevSettings } from "./settings.ts";
+import { desktopPicture } from "./desktop-video.ts";
+import { pictureRows, type DevSettings, type VideoSettings } from "./settings.ts";
 import { copyText } from "../lib/copy-text.ts";
 
 /** How many lines of the log the page shows. Enough that the tail is worth
@@ -110,27 +111,45 @@ export function DebugLogPage({ onBack }: { onBack: () => void }) {
 
 /** THE GRAPH'S BOX, in its own units — the SVG scales to whatever width the
  * card ends up, so these are proportions rather than pixels. `x0`..`x1` and
- * `y0`..`y1` are where the LINE may go; the panel behind it is the whole
+ * `y0`..`y1` are where the LINES may go; the panel behind them is the whole
  * box, so the leading dot at the end of a finished run sits inside its own
- * frame instead of half over the edge, and the gutter to the left of `x0`
- * is where the vertical axis says what its two ends are worth. */
-const PLOT = { w: 320, h: 150, x0: 27, x1: 311, y0: 16, y1: 130 };
+ * frame instead of half over the edge, and the gutters outside `x0` and
+ * `x1` are the two axes — the same ceiling in index on the left and in
+ * frames a second on the right. */
+const PLOT = { w: 320, h: 150, x0: 27, x1: 286, y0: 16, y1: 130 };
 
-/** THE RUN, DRAWN. One line: the score of the whole run so far, read every
- * fifteen frames and walked across the eighteen hundred the run is — so how
- * far along it is IS how far across the line has got, and the number at its
- * leading edge is the score as it currently stands.
+/** How close two labels on the same axis may come before the one in the
+ * middle is dropped rather than printed over its neighbour. */
+const LABEL_GAP = 12;
+
+/** THE RUN, DRAWN — twice, because one line cannot say both things.
  *
- * It settles as it goes, which is the point of plotting the running answer
- * rather than each window on its own: the first readings scatter over the
- * grid and the first corner, and the line then walks steadily onto the
- * number the run ends on. A machine that stumbles halfway puts a kink in it
- * that a single figure at the end would have averaged away. */
+ * THE SCORE, in gold: the index of the whole run so far, read every fifteen
+ * frames and walked across the eighteen hundred the run is, so how far along
+ * it is IS how far across the line has got, and the number at its leading
+ * edge is the score as it currently stands. It settles as it goes, which is
+ * the point of plotting a running answer: the first readings scatter over
+ * the grid and the first corner, and the line then walks steadily onto the
+ * number the run ends on.
+ *
+ * THE RATE, in blue: the frame at each of those same readings, on its own,
+ * unsmoothed. It is the line that says WHEN — an average eighteen hundred
+ * frames deep cannot, and a machine that spends the second half of the race
+ * at half the frame rate shows up on the gold line only as a long sag with
+ * no place in it.
+ *
+ * They share the box and the ceiling because they are one quantity in two
+ * units (benchmark-index.ts), which is what makes the pair readable: a rate
+ * ABOVE the score is a run still earning it, a rate below is a run paying it
+ * back, and the two crossing is the moment the machine changed. The right
+ * axis is that same ceiling in frames a second — the unit anybody actually
+ * has a feel for. */
 function BenchmarkPlot({ plot, warming }: { plot: BenchPlot; warming: boolean }) {
   const px = (x: number): number => PLOT.x0 + x * (PLOT.x1 - PLOT.x0);
   const py = (y: number): number => PLOT.y0 + y * (PLOT.y1 - PLOT.y0);
   const at = (p: { x: number; y: number }): string => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`;
   const line = plot.points.map(at).join(" ");
+  const rate = plot.rate.map(at).join(" ");
   const last = plot.points.length > 0 ? plot.points[plot.points.length - 1] : null;
   // The same line dropped to the floor at both ends: under a fading wash it
   // reads as a quantity where a bare stroke reads as a squiggle. It falls at
@@ -146,6 +165,12 @@ function BenchmarkPlot({ plot, warming }: { plot: BenchPlot; warming: boolean })
   const near = last !== null && last.x > 0.62;
   const under = last !== null && last.y < 0.18;
   const real = plot.real === null ? null : py(plot.real);
+  // Real time on the right-hand axis is a whole number of frames a second
+  // by construction (it is one over the step), and it is the one gradation
+  // worth a third label — printed only where it has room between the two
+  // ends of the axis it sits on.
+  const realFps =
+    real !== null && real - PLOT.y0 > LABEL_GAP && PLOT.y1 - real > LABEL_GAP ? real : null;
   return (
     <svg className="bench-plot" viewBox={`0 0 ${PLOT.w} ${PLOT.h}`} role="img">
       {/* Its own ground. The card is see-through and what is behind it is a
@@ -165,35 +190,70 @@ function BenchmarkPlot({ plot, warming }: { plot: BenchPlot; warming: boolean })
         height={PLOT.h - 1}
         rx={5}
       />
-      {/* The two axes, and what their ends are worth. The floor is always
-          zero — an index graph with a cropped bottom would make every
+      {/* THE TWO AXES, and what their ends are worth. The floor is always
+          zero on both — a graph with a cropped bottom would make every
           machine look like every other one — and the ceiling is whatever
-          this run's score needed. */}
+          this run needed, said in index on the left and in frames a second
+          on the right. Each is tinted like the line that is read against
+          it, which is the whole legend the card needs. */}
       <line className="bench-plot-axis" x1={PLOT.x0} y1={PLOT.y1} x2={PLOT.x1} y2={PLOT.y1} />
       <line className="bench-plot-axis" x1={PLOT.x0} y1={PLOT.y0} x2={PLOT.x0} y2={PLOT.y1} />
+      <line className="bench-plot-axis" x1={PLOT.x1} y1={PLOT.y0} x2={PLOT.x1} y2={PLOT.y1} />
       <line className="bench-plot-grid" x1={PLOT.x0} y1={PLOT.y0} x2={PLOT.x1} y2={PLOT.y0} />
-      <text className="bench-plot-tick" x={PLOT.x0 - 5} y={PLOT.y0 + 3} textAnchor="end">
+      <text
+        className="bench-plot-tick bench-plot-tick-index"
+        x={PLOT.x0 - 5}
+        y={PLOT.y0 + 3}
+        textAnchor="end"
+      >
         {plot.top}
+      </text>
+      <text
+        className="bench-plot-unit bench-plot-tick-index"
+        x={PLOT.x0 - 5}
+        y={PLOT.y0 + 13}
+        textAnchor="end"
+      >
+        INDEX
       </text>
       <text className="bench-plot-tick" x={PLOT.x0 - 5} y={PLOT.y1 + 3} textAnchor="end">
         0
       </text>
+      <text className="bench-plot-tick bench-plot-tick-rate" x={PLOT.x1 + 5} y={PLOT.y0 + 3}>
+        {Math.round(plot.topFps)}
+      </text>
+      <text className="bench-plot-unit bench-plot-tick-rate" x={PLOT.x1 + 5} y={PLOT.y0 + 13}>
+        FPS
+      </text>
+      <text className="bench-plot-tick" x={PLOT.x1 + 5} y={PLOT.y1 + 3}>
+        0
+      </text>
       {/* Real time, where the axis reaches it: the one gradation on this
           scale that means something without a second machine to compare
-          against — the race drawn as fast as it is driven. It goes unnamed
+          against — the race drawn as fast as it is driven. It is a mark on
+          BOTH scales, so it wears neither line's colour. It goes unnamed
           where the ceiling has come down onto it, rather than printing two
           labels over each other. */}
       {real !== null && (
         <>
           <line className="bench-plot-real" x1={PLOT.x0} y1={real} x2={PLOT.x1} y2={real} />
-          {real - PLOT.y0 > 12 && (
+          {real - PLOT.y0 > LABEL_GAP && (
             <text className="bench-plot-tick bench-plot-tick-real" x={PLOT.x0 + 5} y={real - 5}>
               100 · REAL TIME
+            </text>
+          )}
+          {realFps !== null && (
+            <text className="bench-plot-tick bench-plot-tick-rate" x={PLOT.x1 + 5} y={realFps + 3}>
+              {Math.round((plot.topFps * INDEX_REAL) / plot.top)}
             </text>
           )}
         </>
       )}
       {last !== null && <polygon className="bench-plot-area" points={area} />}
+      {/* The rate goes on before the score and stays a hairline: it is the
+          busier line by far, and a run is read as a score with a rate around
+          it rather than the other way round. */}
+      {last !== null && <polyline className="bench-plot-rate" points={rate} />}
       {last !== null && <polyline className="bench-plot-line" points={line} />}
       {last !== null && (
         <circle className="bench-plot-head" cx={px(last.x)} cy={py(last.y)} r={3.4} />
@@ -222,32 +282,62 @@ function BenchmarkPlot({ plot, warming }: { plot: BenchPlot; warming: boolean })
   );
 }
 
+/** WHAT THE PICTURE WAS SET TO — the three rows OPTIONS ▸ VIDEO owns, on the
+ * card once the run is over.
+ *
+ * They are the one thing the benchmark deliberately does NOT pin, which is
+ * what makes the whole tool useful: run it, move a row, run it again, and
+ * the difference is what that row costs on this machine. A score with the
+ * settings printed under it is a screenshot that can be compared against
+ * another screenshot months later; without them it is a number whose
+ * conditions live in somebody's memory of what they pressed. */
+function BenchmarkVideo({ video }: { video: VideoSettings }) {
+  return (
+    <div className="bench-video">
+      {pictureRows(video, desktopPicture()).map((row) => (
+        <div className="bench-video-cell" key={row.label}>
+          <span className="bench-video-label">{row.label}</span>
+          <span className="bench-video-value">{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** THE BENCHMARK'S CARD — over the race while it is being measured, and the
  * answer once it is. What it says at every moment is one number: this
  * machine's INDEX, where 100 is the race drawn in the time it takes to
- * drive (game/benchmark-index.ts).
+ * drive (game/benchmark-index.ts), with the same figure in frames a second
+ * under it because that is the unit anybody has a feel for.
  *
  * It is a graph and not a counter because the number is only worth anything
  * once it has settled, and a figure ticking over says nothing about whether
- * it has. The line shows it converging — and shows the machine's bad
- * moments, which a single figure at the end cannot.
+ * it has. The lines show it converging — and show the machine's bad moments,
+ * and WHERE in the race they were, which no figure at the end can.
  *
- * The buffer it was drawn into is on the card beside the field, because a
- * score without them is a score that compares to nothing — and it is the
- * VIDEO options, the one thing the benchmark deliberately does not pin, that
- * decide both. */
+ * And under it, once there is an answer, THE CONDITIONS: the buffer the
+ * frames were drawn into, the field that was on the road, and the three
+ * VIDEO rows the run deliberately did not pin. A score is worth nothing
+ * without them — the whole use of the tool is running it twice with one row
+ * moved — and a screenshot that carries them is a measurement somebody can
+ * still read next year. */
 export function BenchmarkCard({
   status,
+  video,
   onAgain,
   onLeave,
 }: {
   status: BenchmarkStatus;
+  /** What the picture was set to. Read at render rather than captured with
+   * the run: there is no way to the options from under this card, so the
+   * settings on screen are the settings the frames were drawn with. */
+  video: VideoSettings;
   onAgain: () => void;
   onLeave: () => void;
 }) {
   const done = status.phase === "done";
   const stage = findLevel(BENCHMARK.levelId)?.level.name ?? BENCHMARK.levelId;
-  const plot = benchPlot(status.samples, BENCHMARK.frames);
+  const plot = benchPlot(status.samples, BENCHMARK.frames, BENCHMARK.step);
   return (
     <div className="hud-menu-wrap pointer-events-auto">
       <div className="hud-menu bench">
@@ -259,9 +349,13 @@ export function BenchmarkCard({
           <div className="bench-score">
             <span className="bench-score-label">INDEX</span>
             {Math.round(status.index)}
+            <span className="bench-score-rate">
+              {Math.round(fpsOfIndex(status.index, BENCHMARK.step))} FPS AVERAGE
+            </span>
           </div>
         )}
         <BenchmarkPlot plot={plot} warming={status.phase === "warmup"} />
+        {done && <BenchmarkVideo video={video} />}
         {/* A browser stops drawing a page nobody is looking at, and a clock
             that kept running through it would be timing the machine's
             screensaver. */}

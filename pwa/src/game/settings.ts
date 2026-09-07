@@ -32,7 +32,7 @@
 
 import type { GearboxMode } from "@engine";
 
-import { NATIVE_HEIGHT, renderHeightOf } from "./desktop-video.ts";
+import { NATIVE_HEIGHT, renderHeightOf, renderHeightStops } from "./desktop-video.ts";
 
 /** Where the camera watches the car from, walked from the nose BACKWARDS:
  * the three seats first, closest to the road first, then out onto the boom
@@ -915,6 +915,43 @@ export const DEFAULT_VIDEO: VideoSettings = {
   drawDistance: "near",
   ...DETAIL_PRESETS.medium,
 };
+
+/** THE THREE PICTURE ROWS, NAMED ONCE. OPTIONS ▸ VIDEO sets them and the
+ * benchmark's card reports what they were standing at, and the two have to
+ * agree or a score cannot be mapped back onto the menu that produced it. */
+export const PICTURE_ROWS = {
+  resolution: "RESOLUTION",
+  detail: "DETAIL",
+  distance: "DISTANCE",
+} as const;
+
+/** One row, as it reads on screen. */
+export type PictureRow = { label: string; value: string };
+
+/** What the picture is set to, in the rows the player actually turns —
+ * every value taken off the same stop list the menu walks, so the card and
+ * the menu cannot drift into two vocabularies for one setting.
+ *
+ * `desktop` is `desktopPicture()`, asked by the caller rather than here: the
+ * shell is a fact about where the code is running, and a pure function that
+ * went and looked would be one no test could put on the other machine. On
+ * the desktop the RESOLUTION row is a height in pixels (desktop-video.ts),
+ * and the ladder is read with the window unknown so every stop is on it —
+ * this is reporting a stored choice, not offering one. */
+export function pictureRows(video: VideoSettings, desktop: boolean): PictureRow[] {
+  const stop = (stops: readonly { id: string; label: string }[], id: string): string =>
+    stops.find((s) => s.id === id)?.label ?? id.toUpperCase();
+  return [
+    {
+      label: PICTURE_ROWS.resolution,
+      value: desktop
+        ? stop(renderHeightStops(0), String(video.renderHeight))
+        : stop(RESOLUTION_STOPS, video.resolution),
+    },
+    { label: PICTURE_ROWS.detail, value: stop(DETAIL_STOPS, detailOf(video)) },
+    { label: PICTURE_ROWS.distance, value: stop(DISTANCE_STOPS, video.drawDistance) },
+  ];
+}
 
 /** Which DETAIL stop a set of video knobs IS: by exact match, else the stop
  * that agrees with the most of the nine, ties going to the CHEAPER picture

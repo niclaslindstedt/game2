@@ -45,6 +45,7 @@ import {
   DISTANCE_STOPS,
   KEY_ACTIONS,
   PAD_ACTIONS,
+  PICTURE_ROWS,
   PLAY_CAMERAS,
   RESOLUTION_STOPS,
   clonePad,
@@ -200,7 +201,7 @@ function MainPage({
               // how tall, in real pixels, rather than what share of a screen
               // the page is not allowed to see. desktop-video.ts says why.
               <StepRow
-                label="RESOLUTION"
+                label={PICTURE_ROWS.resolution}
                 stops={renderHeightStops(windowPixels)}
                 value={String(settings.video.renderHeight)}
                 onPick={(id) =>
@@ -209,20 +210,20 @@ function MainPage({
               />
             ) : (
               <StepRow
-                label="RESOLUTION"
+                label={PICTURE_ROWS.resolution}
                 stops={RESOLUTION_STOPS}
                 value={settings.video.resolution}
                 onPick={(resolution) => set({ video: { ...settings.video, resolution } })}
               />
             )}
             <StepRow
-              label="DETAIL"
+              label={PICTURE_ROWS.detail}
               stops={DETAIL_STOPS}
               value={detailOf(settings.video)}
               onPick={(detail) => set({ video: { ...settings.video, ...DETAIL_PRESETS[detail] } })}
             />
             <StepRow
-              label="DISTANCE"
+              label={PICTURE_ROWS.distance}
               stops={DISTANCE_STOPS}
               value={settings.video.drawDistance}
               onPick={(drawDistance) => set({ video: { ...settings.video, drawDistance } })}

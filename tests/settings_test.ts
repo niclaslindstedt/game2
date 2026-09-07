@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { NATIVE_HEIGHT } from "../pwa/src/game/desktop-video.ts";
+import { NATIVE_HEIGHT, RENDER_HEIGHTS } from "../pwa/src/game/desktop-video.ts";
 import {
   DEFAULT_KEYS,
   DEFAULT_SETTINGS,
@@ -26,6 +26,8 @@ import {
   LAMP_BEAMS,
   loadSettings,
   MIN_FOG_FAR,
+  PICTURE_ROWS,
+  pictureRows,
   SKY_LOOK,
   type HudShow,
 } from "../pwa/src/game/settings.ts";
@@ -609,5 +611,57 @@ describe("the two keys a run can be given up on", () => {
     }
     expect(bound.get("KeyR")).toBe("reset");
     expect(bound.get("KeyB")).toBe("restart");
+  });
+});
+
+// WHAT THE PICTURE IS SET TO, as one line of three cells — the benchmark's
+// card prints it under a score so a screenshot carries the conditions that
+// produced it (game/menu-dev.tsx). Held here because the whole point of the
+// function is that it takes its words off the SAME stop lists the options
+// page walks: a card that said "MED" where the menu says "MEDIUM" would be
+// a score nobody could map back onto the row that made it.
+describe("the picture, reported", () => {
+  it("names the three rows the options page names", () => {
+    expect(pictureRows(DEFAULT_VIDEO, false).map((r) => r.label)).toEqual([
+      PICTURE_ROWS.resolution,
+      PICTURE_ROWS.detail,
+      PICTURE_ROWS.distance,
+    ]);
+  });
+
+  it("reads the shipped defaults back", () => {
+    expect(pictureRows(DEFAULT_VIDEO, false).map((r) => r.value)).toEqual([
+      "HIGH",
+      "MEDIUM",
+      "NEAR",
+    ]);
+  });
+
+  it("reports the DETAIL row as the stop a blob most resembles", () => {
+    for (const detail of ["low", "medium", "high"] as const) {
+      const rows = pictureRows({ ...DEFAULT_VIDEO, ...DETAIL_PRESETS[detail] }, false);
+      expect(rows[1].value).toBe(detail.toUpperCase());
+      // …which is `detailOf`'s answer and not a second opinion about it.
+      expect(rows[1].value).toBe(
+        detailOf({ ...DEFAULT_VIDEO, ...DETAIL_PRESETS[detail] }).toUpperCase(),
+      );
+    }
+  });
+
+  it("asks the desktop's RESOLUTION row in pixels", () => {
+    // The desktop app sets a render HEIGHT rather than a share of the
+    // screen, so the row it reports has to be that ladder and not the
+    // browser's three stops.
+    expect(pictureRows({ ...DEFAULT_VIDEO, renderHeight: NATIVE_HEIGHT }, true)[0].value).toBe(
+      "NATIVE",
+    );
+    expect(pictureRows({ ...DEFAULT_VIDEO, renderHeight: 1080 }, true)[0].value).toBe("1080P");
+    // Every height the ladder offers has a word, whatever window it was
+    // chosen in: this is reporting a stored choice, not offering one.
+    for (const height of RENDER_HEIGHTS) {
+      expect(pictureRows({ ...DEFAULT_VIDEO, renderHeight: height }, true)[0].value).toBe(
+        `${height}P`,
+      );
+    }
   });
 });

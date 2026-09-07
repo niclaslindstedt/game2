@@ -206,6 +206,16 @@ export function runBenchmark({
   /** When the green was, ms on the page's clock; 0 while warming up. */
   let green = 0;
   let elapsed = 0;
+  /** When the LAST frame ended, ms on the same clock — so a reading can
+   * report the frame it was taken on and not just the run behind it. It is
+   * the frame's own duration and nothing averaged in, which is what the
+   * card's second line is (benchmark-index.ts).
+   *
+   * The card's redraw does not land inside it. A reading is reported at the
+   * END of the frame it was taken on, so the React render is paid by the
+   * NEXT frame — never by a frame that is itself about to be a reading,
+   * since the readings are a whole cadence apart. */
+  let framed = 0;
   /** The score, read every `SAMPLE_EVERY` measured frames. */
   const samples: BenchSample[] = [];
 
@@ -237,7 +247,10 @@ export function runBenchmark({
       renderer.skipIntroShot();
       advanceField(field, skipIntro(state));
     }
-    if (green === 0 && state.phase === "racing") green = performance.now();
+    if (green === 0 && state.phase === "racing") {
+      green = performance.now();
+      framed = green;
+    }
     for (let i = 0; i < STEPS_PER_FRAME; i++) {
       // The field takes the tick first, then the player, then the one place
       // two cars can be at once — the same order the game's own loop uses,
@@ -254,17 +267,26 @@ export function runBenchmark({
     renderer.render(state, BENCHMARK.step);
     fence();
     drawn += 1;
+    const now = performance.now();
+    /** This frame alone, as a rate. */
+    let fps = 0;
     if (green !== 0) {
       frames += 1;
-      elapsed = performance.now() - green;
+      elapsed = now - green;
+      fps = now > framed ? 1000 / (now - framed) : 0;
     }
+    framed = now;
     const finished = frames >= BENCHMARK.frames;
     // The last frame is a reading whatever it lands on, so the line's end IS
     // the answer on the card rather than a point short of it. It happens to
     // land on the cadence too — but a run length that stopped dividing by it
     // would otherwise draw a graph that never quite reaches its own score.
     if (green !== 0 && (finished || frames % SAMPLE_EVERY === 0)) {
-      samples.push({ frame: frames, index: benchIndex(frames * BENCHMARK.step, elapsed / 1000) });
+      samples.push({
+        frame: frames,
+        index: benchIndex(frames * BENCHMARK.step, elapsed / 1000),
+        fps,
+      });
     }
     if (finished) {
       stopped = true;
