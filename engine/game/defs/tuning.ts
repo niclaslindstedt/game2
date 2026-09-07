@@ -685,29 +685,62 @@ export const TUNING = {
        * Lift and brake together are how a hatch is turned in — the pedals
        * do the rotating and the wheel only points it. */
       brake: 1,
+      /** Grip clawed back where the ground holds less than gravel,
+       * ×the shortfall (`surfaceGripFor`). Nothing: one driven axle spends
+       * one axle's worth of a friction budget, whatever the budget is. */
+      slipGrip: 0,
+      /** ...and BREAKAWAY clawed back on a sealed road, ×the shortfall
+       * (`surfaceBreakawayFor`). Also nothing, and this is the half of the
+       * roster's tarmac story the hatch is on the wrong side of: asked for
+       * an angle on a surface that peaks a few degrees off straight, driven
+       * front wheels wash the nose wide. It is the FASTEST car on tarmac —
+       * the sealed-road rubber in the catalog is what buys that — and the
+       * one that cannot play there. */
+      sealedSlip: 0,
     },
     rwd: {
-      powerYaw: 0.95,
+      // THE THROTTLE DEEPENS THE SLIDE, which is the whole reason to drive
+      // this car — sized so it deepens it no faster than a driver can
+      // answer. Past about 0.9 every corner exit arrives with the tail
+      // already going, and a car nobody can hold a line in is not a playful
+      // one, it is a car in the roster that nobody actually plays.
+      powerYaw: 0.8,
       pullStraight: 0,
       pullIn: 0,
       liftYaw: 0.25,
-      spin: 1.9,
-      entry: 0.82,
-      // THE REFERENCE, and the reason to drive this car: a rear axle with
-      // torque under it does not wash wide, it comes round, and it sits at an
-      // angle neither other layout reaches. Every knob in the slide is
-      // calibrated against a fully developed one, so this is the row that
-      // stays at 1 — the other two are what a layout gives away.
-      depth: 1,
-      /** ...and the ceiling, which for the reference layout is the
-       * reference: THE deepest slide in the game is a rear-driver's, on
-       * the throttle, and every other number in this group is a fraction
-       * of it. A move buys this car nothing it does not already have —
-       * what it buys is the ROTATION to get there (`grip.flickYaw` and
-       * friends), which is a different question. */
-      cap: 1,
-      release: 0.75,
-      snap: 0.7,
+      // Torque alone unsticks this axle and neither of the others: the tail
+      // steps out at walking pace, which is the layout's signature. It is
+      // large because it is measured THROUGH `depth` below — the product is
+      // what the car does at 10 km/h, and `drivetrain_test` holds it there —
+      // so the two move together and neither is readable alone.
+      spin: 2.4,
+      // Earliest in the roster, but only just. A rear-driver that starts
+      // sliding well before either other car reaches its own limit spends
+      // every ordinary corner in a state the other two only reach when
+      // asked, which is a car being driven for it rather than by anybody.
+      entry: 0.9,
+      // THE DEEPEST IN THE ROSTER, and still a fraction of the reference:
+      // `drift.angleSpan` is the slide every layout is quoted against and no
+      // layout sits AT it. One that does has a saturation band that never
+      // shuts, and a flick then puts 48° into this car against the hatch's
+      // 29° in the same corner — a spread at which one car flies and the
+      // other is a fight, which is two games rather than a roster of three
+      // cars. Two thirds keeps the ordering — the saloon comes round where
+      // the hatch washes wide — over a spread a driver can hold every end
+      // of.
+      depth: 0.7,
+      /** ...and the ceiling, still the roster's highest and still barely
+       * over its own `depth`: a move buys this car almost nothing it does
+       * not already have, which is the shape a rear-driver has. What it
+       * buys is the ROTATION to get there (`grip.flickYaw` and friends),
+       * which is a different question. */
+      cap: 0.95,
+      // Between the hatch's and the four-wheel-drive's. Together these two
+      // decide whether a slide the driver has stopped asking for is still
+      // there at the next corner: much under 1 and this car carries one
+      // through the next two corners on its own.
+      release: 1.05,
+      snap: 0.85,
       bite: 0.7,
       // THE ONE EXCEPTION to the game's 70 km/h floor, and the reason it is
       // a per-layout number at all: a rear axle with torque under it steps
@@ -716,25 +749,60 @@ export const TUNING = {
       // far enough below the ramp (`slideSpan`) that the slide is properly
       // open by 10 km/h rather than 1% open at it.
       driftFloor: 0.06,
-      flick: 0.75,
+      // LEAST OF THE THREE, because a flick is a weight throw landing on an
+      // axle that is already loose and the two compound: the move has to
+      // leave this car sideways without overtaking the driver on the way,
+      // and it is made into every third corner. The `depth` above is the
+      // other half of that sum — read them together.
+      flick: 0.55,
       // Least of the three, and not because the brake does less to this car:
       // a rear axle already loose on the throttle has nothing left for a
       // trailed brake to unstick. The move is worth most to the layout that
       // has no other way of asking.
       brake: 0.5,
+      /** Nothing to claw back on the loose: one driven axle, one axle's
+       * share of a small budget, and this is the car that spins its wheels
+       * off the line on anything soft. */
+      slipGrip: 0,
+      /** ...and MORE THAN HALF OF THE SEALED ROAD'S BREAKAWAY BACK, which is
+       * this car's whole day out and the reason the roster now has three
+       * grounds instead of one. A sealed road is where a driven rear axle
+       * stops being a liability: there is real grip to pull against, the
+       * tyres will spin up against it on demand, and the angle they supply
+       * is the angle the surface itself refuses to give anybody else. So the
+       * saloon on tarmac is about what the hatch is on gravel — a car that
+       * answers the wheel with an angle it can hold — while the other two
+       * layouts get a paved section's small, stingy drift and are quicker
+       * round it for taking one.
+       *
+       * It costs nothing on the loose, where the shortfall is zero by
+       * construction, so this is an identity that arrives with the surface
+       * rather than a number added to the car everywhere. Written against
+       * gravel rather than named at asphalt so a sealed surface added later
+       * — and there are meant to be more — collects it without a second
+       * statement of who is allowed to drift on what. */
+      sealedSlip: 0.55,
     },
     awd: {
-      powerYaw: 0.5,
-      pullStraight: 0.3,
-      pullIn: 0.45,
+      // Between the two: the pedal opens the slide and does not hold it
+      // there the way a driven rear does.
+      powerYaw: 0.32,
+      // Driven FRONT wheels are half of this layout, so half the hatch's
+      // pull: it is what lets a four-wheel-drive be driven out of a mistake
+      // on the throttle rather than leaving it nothing to do but wait.
+      pullStraight: 0.5,
+      pullIn: 0.6,
       liftYaw: 0.5,
-      spin: 0.4,
-      entry: 1,
+      spin: 0.28,
+      // Nearer the hatch than the saloon: a car that puts its torque down
+      // whatever it is standing on holds on a while before it lets go.
+      entry: 1.05,
       // Between the two, as everything about this car is: it slides when
-      // asked and it is never the one hanging furthest out. Well clear of
-      // the hatch, though — with drive to the rear as well it steps out on
-      // the wheel where the front-driver would only push.
-      depth: 0.75,
+      // asked and it is never the one hanging furthest out. Clear of the
+      // hatch — with drive to the rear as well it steps out on the wheel
+      // where the front-driver would only push — but clear by a stride, not
+      // by half the roster's spread.
+      depth: 0.62,
       /** ...and the ceiling, a shade under the saloon's and a shade over
        * the hatch's — which is the whole roster in one line. Provoked, all
        * three go round: real layouts differ far less in the angle they can
@@ -743,12 +811,31 @@ export const TUNING = {
        * is need it: four driven wheels are what makes it quick, and what
        * makes it quick is that it does not have to be sideways. */
       cap: 0.96,
-      release: 1,
+      release: 1.2,
       snap: 1,
       bite: 1.2,
       driftFloor: 1,
-      flick: 0.85,
+      flick: 0.7,
       brake: 0.8,
+      /** THE WINTER ROAD IS THIS CAR'S, and this is what makes it so.
+       * Splitting the torque four ways leaves each tyre spending half as
+       * much of its friction budget on going forwards — worth almost nothing
+       * where the budget is large, and worth a great deal on ice, packed
+       * snow, a snowfield or standing water, where it has nearly run out.
+       * Sized so the alpine stage is a genuine reason to pick this car (a
+       * tenth more grip on ice, a twenty-fifth on a snow road) and the
+       * gravel stage is untouched, because the shortfall it is read against
+       * is zero there.
+       *
+       * It is read through `surfaceGripFor`, so the BOT plans corners around
+       * it as well — a car whose advantage the driver of it cannot see is
+       * not an advantage, it is a number. */
+      slipGrip: 0.14,
+      /** ...and nothing back on the sealed road. Four driven wheels have no
+       * more idea how to hang a car out on tarmac than two driven front ones
+       * do: the surface's own answer to being asked for an angle is to
+       * refuse, and only a driven REAR argues with it. */
+      sealedSlip: 0,
     },
   },
 
@@ -776,25 +863,18 @@ export const TUNING = {
      * angle, and a centred wheel asks for zero, which is grip gathering the
      * car up.
      *
-     * It is the REAR-DRIVER's angle, on the wheel alone, at pace: the one
-     * layout whose `depth` is 1. Every other car in the roster reaches some
-     * fraction of it and has to be provoked for the rest, so this number is
-     * the ceiling on the whole game's drift and not an average of it.
+     * THE REFERENCE SLIDE, which no layout actually sits at: every car in
+     * the roster reaches some fraction of it (`drivetrain[].depth`) and has
+     * to be provoked toward its own ceiling (`cap`) for the rest, so this
+     * number is the ceiling on the whole game's drift and not an average of
+     * it. It is a scale rather than a car, which is what lets the roster be
+     * retuned without every knob quoted against it moving too.
      *
-     * HALF what it was, and the halving is the whole scale: the deepest
-     * slide in the game is the rear-driver's, and every layout under it is
-     * a fraction of THIS number and of `drivetrain[].cap` beside it. The
-     * roster used to spread 0.42 / 0.75 / 1 of a span twice this size and
-     * then hand all three the same ceiling the moment a move was made, so
-     * the hatch on the lever was as sideways as the saloon on the throttle
-     * and there was nothing to choose between the cars but which one
-     * gathered itself up afterwards. The span halves and the ceilings
-     * separate, in one change: they are the same statement made twice.
-     *
-     * The layouts then sit at 30 / 40 / 50 of what the old rear-driver held
-     * — 10° / 13.5° / 18° at full lock on gravel — and that is a TIGHT
-     * spread on purpose. Real layouts do not differ two to one in how far
-     * sideways they can be got; what separates them is whether the THROTTLE
+     * The layouts sit at 0.42 / 0.62 / 0.70 of it — about 8.7° / 12.8° /
+     * 14.5° at full lock on gravel — and that is a TIGHT spread on purpose.
+     * Real layouts do not differ two to one in how far sideways they can be
+     * got; what separates them is which GROUND suits them
+     * (`sealedSlip`, `slipGrip`) and whether the THROTTLE
      * sustains the angle once it is there. A rear-driver has a genuine
      * steady-state drift on power. A front-driver has none at all — the
      * driven front pulls the velocity back under the nose, so its big

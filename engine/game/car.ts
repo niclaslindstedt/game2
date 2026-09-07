@@ -13,7 +13,13 @@
 // defs/, not here.
 
 import { clamp } from "../lib/math.ts";
-import { askedSlide, latCeiling, slideFloor, surfaceGripFor } from "./limits.ts";
+import {
+  askedSlide,
+  latCeiling,
+  slideFloor,
+  surfaceBreakawayFor,
+  surfaceGripFor,
+} from "./limits.ts";
 import { damageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
@@ -364,7 +370,10 @@ export function stepGrounded(
   // is the setpoint and the other is the room around it, and stretching one
   // without the other would make the paved car's drift sharp-edged instead
   // of small.
-  const breakaway = T.surfaces.breakaway[ctx.surface];
+  // ...and the LAYOUT's share of it: a driven rear axle can spin its tyres
+  // up against a sealed road's grip and supply an angle the surface itself
+  // refuses everybody else (`surfaceBreakawayFor`).
+  const breakaway = surfaceBreakawayFor(spec, ctx.surface);
   // A CLOSED THROTTLE ASKS FOR MORE ANGLE. Lifting mid-corner throws the
   // weight onto the nose and takes it off the driven axle, and the tail
   // comes round: it is the oldest way there is of making a car turn in

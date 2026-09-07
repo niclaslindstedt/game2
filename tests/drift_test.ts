@@ -499,13 +499,17 @@ describe("the wheel, and what the surface does with it", () => {
     // meaningfully tighter on the surface it is built for.
     const [hatchLoose, hatchSealed] = radii[0];
     expect(hatchSealed).toBeLessThan(hatchLoose * 0.95);
-    // ...and the gain falls away with the rubber: the coupe's all-round
-    // tires buy some of it, the saloon's loose ones none. Ordering the
-    // ratios is what pins the advantage to `tyres.sealed / tyres.loose`
-    // rather than to the surface alone.
+    // ...and the gain falls away with the rubber: neither of the other two
+    // finds anything like it, which is what pins the advantage to
+    // `tyres.sealed / tyres.loose` rather than to the surface alone. Stated
+    // as the hatch being alone in gaining, rather than as an ordering of the
+    // other two against each other: those two sit a percent apart, which is
+    // noise, and the rear-driver's own paved gain is not its rubber's at all
+    // — it is the layout's (`surfaceBreakawayFor`), and it is spent on ANGLE
+    // rather than on line.
     const [hatch, coupe, saloon] = radii.map(([loose, sealed]) => sealed / loose);
-    expect(hatch).toBeLessThan(coupe);
-    expect(coupe).toBeLessThan(saloon);
+    expect(hatch).toBeLessThan(coupe * 0.95);
+    expect(hatch).toBeLessThan(saloon * 0.95);
   });
 
   it("can be drifted on tarmac — on a move, and less than on gravel", () => {
@@ -698,14 +702,19 @@ describe("the floor under the slide", () => {
   it("but the same lock at pace is a drift", () => {
     const state = at(110);
     run(state, { throttle: 1, steer: 1 }, 1);
-    expect(state.car.slide).toBeGreaterThan(0.5);
+    // A REAL slide, not a twitch — the number is a proxy for that and not a
+    // claim about how deep this layout goes. What is being asserted here is
+    // the FLOOR: shut below it (above), open above it, on the same lock.
+    // Sized under the four-wheel-drive's own `depth`, which is a fraction of
+    // the reference slide and deliberately a small one.
+    expect(state.car.slide).toBeGreaterThan(0.35);
     expect(state.car.drifting).toBe(true);
   });
 
   it("lets a slide go as the car slows into the floor", () => {
     const state = at(110);
     run(state, { throttle: 1, steer: 1 }, 1);
-    expect(state.car.slide).toBeGreaterThan(0.5);
+    expect(state.car.slide).toBeGreaterThan(0.35);
     // Off the power and hard on the brakes, still on full lock: the angle
     // has to be gone by the time the car is under the floor, not carried
     // down to a standstill. A trailed brake lowers the floor (it is one of
@@ -736,8 +745,13 @@ describe("the front-driver has to be asked", () => {
   it("washes wide where the rear-driver steps out — same lock, same speed", () => {
     const hatch = corner("compact");
     const saloon = corner("classic");
-    // Under half the angle...
-    expect(Math.abs(hatch.car.slip)).toBeLessThan(Math.abs(saloon.car.slip) * 0.6);
+    // Clearly less angle — but only clearly. The layouts are meant to be
+    // three answers to the same corner and not three games: a roster whose
+    // ends sit two to one apart in the same corner has one car nobody drives
+    // at each end of it, which is what this margin used to demand. What has
+    // to survive is that the front-driver is the one running out of angle
+    // and out of road, and the pair below is what says so.
+    expect(Math.abs(hatch.car.slip)).toBeLessThan(Math.abs(saloon.car.slip) * 0.75);
     // ...on a visibly wider line. Both halves matter: a car with less angle
     // on the SAME radius is a tidier car, not a front-driver. This one is
     // running out of road, which is what a front axle out of grip does.

@@ -15,10 +15,13 @@ import {
   compileTrack,
   createGame,
   step,
+  surfaceBreakawayFor,
+  surfaceGripFor,
   type CarInput,
   type GameState,
-  type Surface,
   type SegmentPlan,
+  type Surface,
+  type Underfoot,
 } from "@engine";
 
 const STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 4000, feature: "none" }];
@@ -192,6 +195,68 @@ describe("the drivetrain", () => {
     };
     expect(keptInWater(AWD)).toBeGreaterThan(keptInWater(FWD));
     expect(keptInWater(FWD)).toBeGreaterThan(keptInWater(RWD));
+  });
+
+  it("gives the rear-driver a tarmac drift the other two layouts do not have", () => {
+    // THE SEALED ROAD IS THE REAR-DRIVER'S GROUND. What makes a paved
+    // surface hard to hang a car out on is that the rubber peaks a few
+    // degrees off straight and falls away past it, so there is nothing to
+    // hang it out ON — and a driven rear axle supplies that itself by
+    // spinning the tyres up against grip that is actually there. A driven
+    // front answers the same question by washing the nose wide.
+    const held = (carId: string, surface: Surface): number => {
+      const state = game(carId, surface);
+      atSpeed(state, 30);
+      pinned(state, { steer: 0.85, throttle: 1 }, 30, 2.5);
+      return Math.abs(state.car.slip);
+    };
+    const paved = {
+      fwd: held(FWD, "asphalt"),
+      awd: held(AWD, "asphalt"),
+      rwd: held(RWD, "asphalt"),
+    };
+    // Half again what either other layout finds on the same road at the same
+    // lock — where on GRAVEL the three sit within a stride of each other.
+    expect(paved.rwd).toBeGreaterThan(paved.fwd * 1.5);
+    expect(paved.rwd).toBeGreaterThan(paved.awd * 1.5);
+    // ...and it is a real drift, not an angle under the readout: the smoke
+    // off a sealed road and the tyres singing both hang off this flag.
+    const state = game(RWD, "asphalt");
+    atSpeed(state, 30);
+    pinned(state, { steer: 0.85, throttle: 1 }, 30, 2.5);
+    expect(state.car.drifting).toBe(true);
+    // It costs nothing anywhere else: the claw-back is measured against
+    // GRAVEL's breakaway, so the loose surfaces are untouched by it.
+    for (const drive of ["fwd", "rwd", "awd"] as const) {
+      expect(surfaceBreakawayFor({ ...carById(FWD), drive }, "gravel")).toBe(
+        TUNING.surfaces.breakaway.gravel,
+      );
+    }
+  });
+
+  it("gives the four-wheel-drive grip where there is least of it to have", () => {
+    // Four driven wheels each spend half as much of their friction budget on
+    // going forwards, which is worth almost nothing where the budget is large
+    // and a great deal where it has nearly run out. So the winter road is
+    // this layout's, and the graded stone it shares with everybody.
+    const spec = carById(AWD);
+    const asIf = (drive: "fwd" | "rwd" | "awd", surface: Underfoot): number =>
+      surfaceGripFor({ ...spec, drive }, surface);
+    for (const surface of ["ice", "snow", "snowfield", "water"] as const) {
+      expect(asIf("awd", surface)).toBeGreaterThan(asIf("fwd", surface));
+      expect(asIf("fwd", surface)).toBe(asIf("rwd", surface));
+    }
+    // Most of it on the ice, least on a packed snow road — the shortfall
+    // against gravel is what it is read against, so it tracks how bad the
+    // ground actually is.
+    const gain = (surface: Underfoot): number => asIf("awd", surface) / asIf("fwd", surface);
+    expect(gain("ice")).toBeGreaterThan(gain("snowfield"));
+    expect(gain("snowfield")).toBeGreaterThan(gain("snow"));
+    // ...and nothing at all on the two surfaces a stage is mostly made of,
+    // where there is no shortfall to claw back.
+    for (const surface of ["gravel", "asphalt"] as const) {
+      expect(asIf("awd", surface)).toBe(asIf("fwd", surface));
+    }
   });
 
   it("puts the slide's speed floor where the layout can reach it", () => {

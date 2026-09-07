@@ -35,7 +35,41 @@ const D = TUNING.drift;
  * stated here: two of them computing the product separately is two cars. */
 export function surfaceGripFor(spec: CarSpec, surface: Underfoot): number {
   const tyre = surface === "asphalt" ? spec.tyres.sealed : spec.tyres.loose;
-  return T.surfaces.grip[surface] * tyre;
+  const ground = T.surfaces.grip[surface];
+  // ...AND WHAT THE LAYOUT CLAWS BACK WHERE THERE IS LITTLE TO HOLD. A tyre
+  // has one budget of grip and driving through it spends some: split the
+  // torque across four wheels and each one spends half as much of a budget
+  // that is already small, so the advantage of driving all of them is not
+  // flat — it is worth almost nothing on a surface that grips and most of
+  // its value on the ice, the snow and the standing water where the budget
+  // has nearly run out. Measured as the shortfall against GRAVEL, which is
+  // what every other number in the handling model is quoted against, so
+  // graded stone and tarmac are untouched and the winter road is where the
+  // four-wheel-drive collects.
+  const shortfall = Math.max(0, 1 - ground);
+  return (ground + shortfall * T.drivetrain[spec.drive].slipGrip) * tyre;
+}
+
+/** ...and HOW FAR SIDEWAYS the pair will go before the tyres give up, as
+ * the multiple of the slide's own angles (`TUNING.drift.angleSpan` and its
+ * fade band) that every angle in the drift model is scaled by. The
+ * surface's own `breakaway` is most of it — a rally road has a slip
+ * vocabulary tens of degrees wide and a sealed road's is a few degrees off
+ * straight — and the layout is the rest.
+ *
+ * A DRIVEN REAR AXLE HAS A TARMAC VOCABULARY THE OTHERS DO NOT. What makes
+ * a sealed road's breakaway small is that the rubber peaks a few degrees
+ * off straight and falls away past it, so there is nothing to hang the car
+ * out ON; what a driven rear does is spin the tyres up and supply that
+ * itself, which is the one thing an undriven one cannot do and a driven
+ * FRONT answers by washing the nose wide instead. So this is the shortfall
+ * against gravel read the other way round: the sealed road is the only
+ * surface under it, the rear-driver takes back better than half of what it
+ * costs, and the other two layouts take back none. */
+export function surfaceBreakawayFor(spec: CarSpec, surface: Underfoot): number {
+  const ground = T.surfaces.breakaway[surface];
+  const shortfall = Math.max(0, 1 - ground);
+  return ground + shortfall * T.drivetrain[spec.drive].sealedSlip;
 }
 
 /** THE TRACTION CEILING: the most lateral acceleration this car's tires
