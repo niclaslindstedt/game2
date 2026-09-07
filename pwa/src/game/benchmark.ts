@@ -36,6 +36,30 @@
 // actually drawn. It costs a round trip per frame — a constant, and the
 // alternative is a benchmark that never waits for the GPU at all.
 //
+// HOW TO READ THE LINE, and the one thing that makes it readable: THE
+// WORKLOAD IS FIXED ACROSS RUNS BUT NOT FLAT ACROSS ONE. The race starts
+// with the whole field inside a hundred metres of each other and ends with
+// it strung out, so the frame gets steadily cheaper as the run goes on —
+// metered headlessly at DETAIL HIGH it falls from about 515 draw calls a
+// frame over the first tenth to about 365 over the last, a third of the
+// work gone, with the triangle count following it down.
+//
+// That is not a fault in the measurement — every machine draws the same
+// declining race, so the SCORE compares exactly — but it is the whole of
+// how the rate line has to be read:
+//
+//   * a rate that RISES through the run is a machine holding its pace on a
+//     scene that is thinning: the expected shape, and a healthy one;
+//   * a rate that is FLAT is a machine losing exactly as much as the scene
+//     is giving back;
+//   * a rate that FALLS is a machine getting slower faster than the race is
+//     getting cheaper — which on a phone is nearly always the thermal
+//     governor, and is the one reading worth acting on.
+//
+// A machine that throttles therefore shows up as a rate line bending down
+// while the work goes down with it, and the same run drawn on something
+// that cannot throttle holds its score flat from end to end.
+//
 // THE WARM-UP. The first frames of any run are the expensive ones: shaders
 // compile, geometry and textures go up to the card, and the first of each
 // kind of effect allocates its pool. That is a real cost and it is not what
