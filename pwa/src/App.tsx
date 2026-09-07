@@ -1153,6 +1153,9 @@ export function App() {
    * The frame loop hands it whole frames for as long as it is here, and draws
    * nothing else while it does: there is a card over the canvas. */
   const loadRef = useRef<LoadJob | null>(null);
+  /** What to run on the frame the load finishes, for the one caller that
+   * cannot simply be handed a run and left to it. */
+  const loadDoneRef = useRef<(() => void) | null>(null);
   /** Whether the loading card has had a frame to be DRAWN in. The first
    * step of a load compiles a road and holds the frame it does it in, so
    * starting one on the same frame the card is mounted would paint the card
@@ -1901,7 +1904,13 @@ export function App() {
    * the card is free to draw in. The steps that cannot be cut hold a frame
    * each; that is the honest cost of work that cannot be halved, and the
    * reason to keep an eye on `warm`, which is the biggest of them. */
-  const beginLoad = (spec: StageSpec, mode: PlayMode, levelId?: string, plan?: FieldPlan): void => {
+  const beginLoad = (
+    spec: StageSpec,
+    mode: PlayMode,
+    levelId?: string,
+    plan?: FieldPlan,
+    done?: () => void,
+  ): void => {
     // The field being replaced comes off the road NOW rather than inside the
     // load: a run being abandoned has a classification to finish writing
     // (`clearField`), and it belongs to the press that abandoned it.
@@ -1943,6 +1952,7 @@ export function App() {
       { id: "warm", run: () => (rendererRef.current?.warm(), false) },
     ];
     loadRef.current = createLoad(steps);
+    loadDoneRef.current = done ?? null;
     loadShownRef.current = false;
     setLoading(true);
   };
@@ -1952,7 +1962,9 @@ export function App() {
    * uncovers a countdown that is already running rather than a still. */
   const endLoad = (): void => {
     const job = loadRef.current;
+    const done = loadDoneRef.current;
     loadRef.current = null;
+    loadDoneRef.current = null;
     setLoading("leaving");
     window.setTimeout(() => setLoading(false), LOAD_FADE_MS);
     if (job) {
@@ -1963,6 +1975,10 @@ export function App() {
         job.steps.map((step, i) => `${step.id} ${job.spent[i].toFixed(0)}ms`).join(" · "),
       );
     }
+    // Whatever was waiting for a stage that is actually STANDING — which is
+    // the benchmark, and nothing else. Run last, because it may take the
+    // canvas off the frame loop entirely.
+    done?.();
   };
 
   const beginLoadRef = useRef(beginLoad);
@@ -1975,6 +1991,9 @@ export function App() {
     mode: PlayMode,
     levelId?: string,
     plan?: FieldPlan,
+    /** Run on the frame the loading card lifts. Only the benchmark uses it —
+     * see `startBenchmark`. */
+    done?: () => void,
   ): void => {
     playUi("start");
     // The time to beat comes out of the book before the run starts, not
@@ -1995,7 +2014,7 @@ export function App() {
     runRef.current = { mode, levelId };
     setMenu(null);
     menuRef.current = null;
-    beginLoad(spec, mode, levelId, plan);
+    beginLoad(spec, mode, levelId, plan, done);
     pickPlayCamera(startCamera(optionsRef.current.camera));
     audioRef.current?.setView(playCameraRef.current);
     // The god-mode effect owns the camera while it is flying; setting a play
@@ -2117,17 +2136,29 @@ export function App() {
     const found = findLevel(BENCHMARK.levelId);
     if (!renderer || !canvas || !found) return;
     benchRef.current?.stop();
-    startStage(benchmarkStage(found.level), "headsup", undefined, BENCHMARK.field);
-    // Nothing about a measurement is written down, and the developer switch
-    // that collects race data would otherwise be recording one.
-    tapeRef.current = null;
-    renderer.setCamera(BENCHMARK.camera);
-    const state = gameRef.current;
-    const field = fieldRef.current;
-    if (!state || !field) return;
-    benchRef.current = {
-      stop: runBenchmark({ state, field, renderer, canvas, onStatus: setBench }),
-    };
+    // THE MEASUREMENT WAITS FOR THE LOAD. A stage is stood up behind the
+    // loading card now (`race-loader.ts`), so nothing about it exists on the
+    // line after this call: the field has just been cleared and the game
+    // still belongs to the last stage. Taking the canvas here would read a
+    // null field and never start — and it would also stop the frame loop the
+    // load is driven from, hanging the card for good.
+    //
+    // Waiting is what the measurement wanted anyway. The stage that comes out
+    // the far side has its world built, its shaders compiled and its whole
+    // field driven, so the frames being timed are frames of RACING rather
+    // than frames with a generator still running underneath them.
+    startStage(benchmarkStage(found.level), "headsup", undefined, BENCHMARK.field, () => {
+      // Nothing about a measurement is written down, and the developer switch
+      // that collects race data would otherwise be recording one.
+      tapeRef.current = null;
+      renderer.setCamera(BENCHMARK.camera);
+      const state = gameRef.current;
+      const field = fieldRef.current;
+      if (!state || !field) return;
+      benchRef.current = {
+        stop: runBenchmark({ state, field, renderer, canvas, onStatus: setBench }),
+      };
+    });
   };
 
   /** Put the canvas back. The frozen last frame goes with it: the way out of

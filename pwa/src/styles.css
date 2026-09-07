@@ -6414,10 +6414,26 @@ a.menu-version:focus-visible {
    title under its finish flags with the prompt blinking under both. */
 
 /* ── THE APP MARK'S SKID MARKS ─────────────────────────────────────────────
-   The two tracks off the icon, laid (`mark-tracks.tsx`). Sized by whoever
-   mounts one — a width, and the aspect comes off the viewBox. */
+   The two tracks off the icon, filled from the tail at the bottom up to the
+   head at the top (`mark-tracks.tsx`). Sized by whoever mounts one — a width,
+   and the aspect comes off the svg's own viewBox.
+
+   IT IS A WIPE, NOT A STROKE. `stroke-dashoffset` is the obvious way to draw
+   a line on and was the first way this worked, but it animates on the MAIN
+   THREAD — which is the thread this card exists to cover for. Standing a long
+   stage up blocks it for seconds at a time, and the card froze solid for
+   those seconds, which reads as a hung game rather than a loading one.
+
+   A transform does not: browsers run it on the compositor, so the fill keeps
+   climbing through a block that would stop a stroke animation dead. */
 .mark-tracks {
+  position: relative;
   display: block;
+}
+
+.mark-tracks svg {
+  display: block;
+  width: 100%;
   height: auto;
   overflow: visible;
   fill: none;
@@ -6425,62 +6441,105 @@ a.menu-version:focus-visible {
   stroke-linecap: round;
 }
 
-/* The full shape, held under the one being laid. On a loop it is what keeps
-   the composition balanced — the bright stroke is drawn from the tail, so for
-   most of every cycle only the lower-left half is inked and the mark reads as
-   sitting left of whatever is beside it. On a one-shot it holds the space the
-   mark is about to fill, so nothing beside it shifts as it draws. Faint enough
-   to read as the road rather than as a second pair of tracks. */
-.mark-track-ghost {
+/* The finished shape, faint, under everything. It holds the space the fill is
+   about to take — so nothing beside the mark shifts as it runs, and the card
+   never shows a half-drawn mark adrift of its own box. Faint enough to read as
+   the road rather than as a second pair of tracks. */
+.mark-tracks-ghost {
   opacity: 0.22;
 }
 
-/* Every track is declared 100 units long (`pathLength` in app-mark.ts), so the
-   dash pattern is written in percent and the long track and the short one draw
-   at one rate and finish together.
+/* THE WINDOW, and the drawing inside it. The window slides UP over the shape
+   while the shape slides DOWN by the same amount, so what is on screen stays
+   put and only the window into it moves: at `translateY(100%)` the window sits
+   entirely below the mark and nothing shows, and at `0` it covers all of it.
+   Both halves are transforms, which is the whole point.
 
-   A dash as long as the path with a gap as long again is a window that slides
-   along it, and the offset runs against the path's own direction: at +100 the
-   gap covers everything and nothing shows, coming down to 0 the dash fills in
-   FROM THE TAIL, and going on to -100 it walks off the tail and leaves the
-   head last. So one property lays the mark the way the car laid it, and — on
-   the loop — dissolves it from the end the icon's own gradient fades out. */
-.mark-track {
-  stroke-dasharray: 100 100;
+   It uncovers the tracks in the order the car laid them because both of them
+   descend STRICTLY — every point further along a track is higher up the box
+   than the one before it (`tests/app_mark_test.ts` walks them and proves it),
+   so a band climbing from the bottom reaches each in path order. One band
+   covers both tracks, which is why the pair fills together, as one car's two
+   wheels would lay them. */
+.mark-tracks-wipe {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* Its own layer, so the fill is composited rather than repainted. */
+  will-change: transform;
 }
 
-/* LAID ONCE, and left there: a flourish under a title that has just arrived.
-   `both` is what keeps it — the mark holds the finished state rather than
-   snapping back to nothing at the end of the run. */
-.mark-tracks-once .mark-track {
-  animation: mark-lay 900ms cubic-bezier(0.33, 0, 0.2, 1) both;
+.mark-tracks-slide {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+/* FILLED ONCE, and left there: a flourish beside a title that has just come
+   up. `both` is what keeps it — the mark holds the finished state rather than
+   snapping back to empty at the end of the run. */
+.mark-tracks-once .mark-tracks-wipe {
+  animation: mark-wipe 900ms cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+
+.mark-tracks-once .mark-tracks-slide {
+  animation: mark-slide 900ms cubic-bezier(0.33, 0, 0.2, 1) both;
 }
 
 /* ...and over and over, for a load in progress. */
-.mark-tracks-loop .mark-track {
-  animation: mark-lay-loop 1700ms cubic-bezier(0.4, 0, 0.25, 1) infinite;
+.mark-tracks-loop .mark-tracks-wipe {
+  animation: mark-wipe-loop 1700ms cubic-bezier(0.4, 0, 0.25, 1) infinite;
 }
 
-@keyframes mark-lay {
+.mark-tracks-loop .mark-tracks-slide {
+  animation: mark-slide-loop 1700ms cubic-bezier(0.4, 0, 0.25, 1) infinite;
+}
+
+@keyframes mark-wipe {
   from {
-    stroke-dashoffset: 100;
+    transform: translateY(100%);
   }
   to {
-    stroke-dashoffset: 0;
+    transform: translateY(0);
   }
 }
 
-@keyframes mark-lay-loop {
-  0% {
-    stroke-dashoffset: 100;
+@keyframes mark-slide {
+  from {
+    transform: translateY(-100%);
   }
-  /* Laid, and held long enough to be read as a shape rather than a sweep. */
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Filled, held long enough to be read as a shape rather than a sweep, then
+   faded off so the next one starts from nothing. The fade is opacity, which
+   is composited like the transform beside it; at the moment the loop wraps
+   the window is back below the mark and there is nothing on screen to pop. */
+@keyframes mark-wipe-loop {
+  0% {
+    transform: translateY(100%);
+    opacity: 1;
+  }
   55%,
-  70% {
-    stroke-dashoffset: 0;
+  78% {
+    transform: translateY(0);
+    opacity: 1;
   }
   100% {
-    stroke-dashoffset: -100;
+    transform: translateY(0);
+    opacity: 0;
+  }
+}
+
+@keyframes mark-slide-loop {
+  0% {
+    transform: translateY(-100%);
+  }
+  55%,
+  100% {
+    transform: translateY(0);
   }
 }
 
@@ -6741,16 +6800,17 @@ a.menu-version:focus-visible {
      one piece of motion on that card, so parking it mid-sweep would leave a
      half-drawn shape reading as a broken image; the word under it is what
      says the load is still going. */
-  .mark-track {
+  .mark-tracks-wipe,
+  .mark-tracks-slide {
     animation: none;
-    stroke-dashoffset: 0;
+    transform: none;
   }
 
-  /* The mark is parked FULL, so the ghost under it would only darken the same
-     stroke twice. Parking it half-drawn instead would leave a broken-looking
+  /* The mark stands FILLED, so the ghost under it would only darken the same
+     stroke twice. Parking it part-way instead would leave a broken-looking
      shape; on the loading card the word under it is what says the load is
      still going. */
-  .mark-track-ghost {
+  .mark-tracks-ghost {
     opacity: 0;
   }
 
