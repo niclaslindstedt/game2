@@ -876,28 +876,32 @@ export const DUST_LAMP_CARS: Record<VideoSettings["lighting"], number> = {
   full: 4,
 };
 
-/** THE PICTURE, AS THREE QUESTIONS: how sharp, how much, how far. Every one
- * of the eleven levers above is real and still read by the renderer, but a
- * player does not have an opinion about undergrowth density — they have an
- * opinion about whether the game is smooth, and about which of the things
- * making it unsmooth they would rather keep. Three rows is what lets them
- * answer that: RESOLUTION and DISTANCE are single levers, and DETAIL is the
- * nine that are one judgement.
+/** THE PICTURE, AS FOUR QUESTIONS: how sharp, how much, how far, and what
+ * the air over it is made of. Every one of the thirteen levers above is
+ * real and still read by the renderer, but a player does not have an
+ * opinion about undergrowth density — they have an opinion about whether
+ * the game is smooth, and about which of the things making it unsmooth they
+ * would rather keep. Four rows is what lets them answer that: RESOLUTION,
+ * DISTANCE and SKY are single levers, and DETAIL is the ten that are one
+ * judgement.
  *
- * The point of the split is that the three costs are NOT the same cost.
+ * The point of the split is that the four costs are NOT the same cost.
  * Resolution is pixels — every one of them, every frame, whatever is on
  * screen. Distance is how much stage is submitted at all. Detail is how
- * much of it there is per metre — the geometry each one is made of, and the
- * dust the cars hang over it. A machine can be short of one and rich in
- * another, and a phone with a dense screen is the ordinary case of exactly
- * that: it wants the pixels it has and would rather give up the far ridges
- * than look at a soft picture. Under one knob that trade could not be
- * expressed at all. */
+ * much of it there is per metre — the geometry each one is made of, the
+ * dust the cars hang over it, and what a crash is allowed to do to them.
+ * Sky is pixels again, but only the ones with nothing in front of them, and
+ * it is read at a depth the rest of the frame never pays.
+ *
+ * A machine can be short of one and rich in another, and a phone with a
+ * dense screen is the ordinary case of exactly that: it wants the pixels it
+ * has and would rather give up the far ridges than look at a soft picture.
+ * Under one knob that trade could not be expressed at all. */
 export type Detail = "low" | "medium" | "high";
 
 /** The ten levers DETAIL owns. Named as a slice of `VideoSettings` rather
- * than restated, so adding a tenth lever is a decision about which row it
- * belongs on instead of a silent omission from both. */
+ * than restated, so adding another is a decision about which row it belongs
+ * on instead of a silent omission from both. */
 export type DetailSettings = Pick<
   VideoSettings,
   | "effects"

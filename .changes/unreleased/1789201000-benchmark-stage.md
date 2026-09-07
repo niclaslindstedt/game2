@@ -11,11 +11,11 @@ nothing.
 
 Metered at the fog's two ends, draw calls a frame:
 
-| stage | NEAR | FAR | |
-| --- | --- | --- | --- |
-| Loggers' Run | 203 | 229 | +13% |
-| Bajada | 174 | 183 | +5% |
-| Creosote Flats | 222 | 365 | **+64%** |
+| stage          | NEAR | FAR |          |
+| -------------- | ---- | --- | -------- |
+| Loggers' Run   | 203  | 229 | +13%     |
+| Bajada         | 174  | 183 | +5%      |
+| Creosote Flats | 222  | 365 | **+64%** |
 
 An open stage is not the answer either — Bajada's flats see a long way and
 find almost nothing out there. What is needed is depth with things in it,

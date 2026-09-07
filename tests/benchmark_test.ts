@@ -29,6 +29,10 @@ import {
   indexOfFps,
   type BenchSample,
 } from "../pwa/src/game/benchmark-index.ts";
+import { BENCHMARK } from "../pwa/src/game/benchmark-plan.ts";
+import { DAY_ABOVE, LAMPS_UNDER, NIGHT_BELOW, sunAt } from "../pwa/src/game/daylight.ts";
+import { findLevel } from "../pwa/src/game/campaign.ts";
+import { SUN_SECONDS_PER_HOUR } from "@engine";
 
 // The shape of a run, restated here rather than imported: the plan lives in
 // `benchmark.ts`, which reaches for a canvas and a WebGL context, and this
@@ -253,5 +257,67 @@ describe("the benchmark's second axis", () => {
     samples[samples.length - 1] = { ...samples[samples.length - 1], fps: 33 };
     expect(benchPlot(samples, FRAMES, STEP).fps).toBeCloseTo(33, 6);
     expect(benchPlot([], FRAMES, STEP).fps).toBe(0);
+  });
+});
+
+// THE CLOCK THE BENCHMARK RUNS ON. A row of OPTIONS ▸ VIDEO that cannot
+// move the number is a row the tool cannot report on, and LIGHTING is one
+// of them at noon: its expensive half is the BEAMS, and a car in daylight
+// has none lit, so the whole ladder from one headlamp to four costs the
+// same nothing. So the plan pins an hour, and what it has to be worth is
+// held here — against the same threshold the sky reads (`LAMPS_UNDER`)
+// rather than against a number copied out of it.
+describe("the benchmark's hour", () => {
+  /** The stage it is driven on, and therefore the season and — off the
+   * COUNTRY the stage belongs to (R40) — the latitude the sun is placed
+   * with. Read off the campaign rather than restated, so moving the
+   * benchmark to another country moves this with it. */
+  const found = findLevel(BENCHMARK.levelId);
+
+  /** The sun `t` seconds of RACING into the run. One minute of racing is an
+   * hour of sun, so a thirty-second run is half an hour of sky. */
+  const sunAfter = (t: number) => {
+    if (!found) throw new Error(`no such level: ${BENCHMARK.levelId}`);
+    return sunAt(
+      BENCHMARK.hour + t / SUN_SECONDS_PER_HOUR,
+      found.level.season,
+      found.location.biome,
+    );
+  };
+
+  /** The whole run, warm-up included: the countdown the clock is already
+   * ticking through, then every measured frame. */
+  const RUN = BENCHMARK.frames * BENCHMARK.step;
+
+  it("names a stage the campaign actually has", () => {
+    expect(found).toBeDefined();
+  });
+
+  it("has the lamps lit on the first frame and the last", () => {
+    for (const t of [0, RUN / 2, RUN]) {
+      expect(sunAfter(t).elevation).toBeLessThan(LAMPS_UNDER);
+    }
+  });
+
+  it("never reaches night, so the stage stays there to be drawn", () => {
+    // The point of dusk over dark: every lever that draws WORLD still has
+    // world to draw, and the one being bought is the beams on top of it.
+    for (const t of [0, RUN / 4, RUN / 2, (3 * RUN) / 4, RUN]) {
+      expect(sunAfter(t).elevation).toBeGreaterThan(NIGHT_BELOW);
+    }
+  });
+
+  it("sits inside the dusk band with room at both ends", () => {
+    // Not ON either threshold. The clock runs through the countdown as well
+    // as the measured frames, and the run is half an hour of sky wide, so
+    // an hour that only just clears a threshold at one end is an hour that
+    // crosses it before the last frame — which would change the workload
+    // under the stopwatch, the one thing a fixed race may not do.
+    const MARGIN = 0.5 * (Math.PI / 180);
+    expect(sunAfter(0).elevation).toBeLessThan(LAMPS_UNDER - MARGIN);
+    expect(sunAfter(RUN).elevation).toBeGreaterThan(NIGHT_BELOW + MARGIN);
+    // And well under plain day at the green: an hour that started there
+    // would be a plan that had drifted back off the point of pinning one.
+    expect(sunAfter(0).elevation).toBeLessThan(DAY_ABOVE);
   });
 });

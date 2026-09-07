@@ -25,7 +25,8 @@
 
 import { useState } from "react";
 
-import { BENCHMARK, type BenchmarkStatus } from "./benchmark.ts";
+import { BENCHMARK } from "./benchmark-plan.ts";
+import { type BenchmarkStatus } from "./benchmark.ts";
 import { INDEX_REAL, benchPlot, fpsOfIndex, type BenchPlot } from "./benchmark-index.ts";
 import {
   LOCATIONS,

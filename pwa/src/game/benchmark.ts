@@ -67,99 +67,13 @@
 // the establishing shot is thrown away the way a driver throws it away, and
 // the countdown behind it is the warm-up.
 
-import {
-  TUNING,
-  botInput,
-  skipIntro,
-  step,
-  type Difficulty,
-  type GameEvent,
-  type GameState,
-  type GearboxMode,
-} from "@engine";
+import { TUNING, botInput, skipIntro, step, type GameEvent, type GameState } from "@engine";
 
-import {
-  advanceField,
-  rubRivals,
-  stepField,
-  type FieldPlan,
-  type RivalField,
-} from "./standings.ts";
+import { advanceField, rubRivals, stepField, type RivalField } from "./standings.ts";
+import { BENCHMARK } from "./benchmark-plan.ts";
 import { SAMPLE_EVERY, benchIndex, type BenchSample } from "./benchmark-index.ts";
 import { MIRROR_TIERS } from "./mirror-pace.ts";
 import type { GameRenderer } from "./renderer.ts";
-import type { PlayCamera } from "./settings.ts";
-
-/** WHAT THE BENCHMARK RUNS. Every one of these is pinned rather than read
- * off the player's own settings: a measurement that moved with whichever car
- * somebody last drove, or whichever gearbox they prefer, would be a number
- * that only compares to itself. The one thing deliberately left alone is
- * OPTIONS ▸ VIDEO — the whole point of running this twice is to find out
- * what a resolution or a draw distance costs. */
-export type BenchmarkPlan = {
-  /** THE STAGE, and it is chosen rather than convenient: it has to be one
-   * where every row of OPTIONS ▸ VIDEO can move the number, or the tool
-   * cannot answer the question anybody runs it to ask.
-   *
-   * The campaign's first stage — short, open, on every install — was the
-   * obvious pick and the wrong one. Metered headlessly at the fog's two
-   * ends (draw calls a frame at DISTANCE NEAR vs FAR, bot driving, same
-   * stage time):
-   *
-   *   taiga-1  Loggers' Run     203 → 229   +13%
-   *   desert-1 Bajada           174 → 183    +5%
-   *   desert-2 Creosote Flats   222 → 365   +64%
-   *
-   * On a tree-lined sprint the whole row is worth 13% of what is submitted,
-   * which disappears under the ten per cent two runs of the same build
-   * differ by — so a player could walk DISTANCE end to end and read the
-   * same score three times, and conclude the row does nothing. It is not
-   * that the row does nothing; it is that a stage with nothing far away to
-   * cull cannot show it. An OPEN stage is not the answer either, and
-   * Bajada is the proof: the flats have long sight lines and almost
-   * nothing standing in them, so the fog reaches further and finds less.
-   *
-   * What is needed is DEPTH WITH THINGS IN IT — a stage that is open enough
-   * to see a long way and dense enough that seeing further costs something.
-   * Creosote Flats is that, and by a distance: the row is worth two thirds
-   * of the frame's draw calls and half its triangles there. */
-  levelId: string;
-  /** The car the benchmark is driven in. */
-  carId: string;
-  /** …and its box, which is a different CAR and not a preference: the two
-   * modes scale the gear tops and the per-gear drive (`gearedSpec`), and a
-   * manual shift costs a cut the auto box does not pay. */
-  gearbox: GearboxMode;
-  /** The view it is drawn from. The cameras cost different amounts — a
-   * cockpit draws an interior, a chase view draws the car and more road — so
-   * the benchmark states one instead of inheriting one. */
-  camera: PlayCamera;
-  /** The field: everybody, on one green, so the cars are ON SCREEN rather
-   * than spread a rally interval apart down the road. `createField` clamps
-   * the count to what the start apron actually holds, and the result card
-   * prints what was standing there. */
-  field: FieldPlan;
-  /** Seconds of game each rendered frame advances. A sixtieth divides the
-   * engine's step exactly (`TUNING.physicsHz`), so a frame is a whole number
-   * of steps with nothing left over — the race is the same race every time
-   * it is run. */
-  step: number;
-  /** Frames MEASURED, after the warm-up. Thirty seconds of racing at the
-   * step above: long enough to cover the grid, the run to the first corner
-   * and a real stretch of stage, short enough that the machine being
-   * measured is not tied up for a minute. */
-  frames: number;
-};
-
-export const BENCHMARK: BenchmarkPlan = {
-  levelId: "desert-2",
-  carId: "compact",
-  gearbox: "auto",
-  camera: "chase",
-  field: { difficulty: "medium" as Difficulty, cars: 15, massStart: true, contact: true },
-  step: 1 / 60,
-  frames: 1800,
-};
 
 /** Engine steps per rendered frame. Exact by construction (see `step`), so
  * no accumulator is carried between frames and nothing drifts. */

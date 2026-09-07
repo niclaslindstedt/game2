@@ -62,7 +62,8 @@ import {
 
 import { cacheIdForBase } from "./app-pwa.ts";
 import { shellHost } from "./shell-host.ts";
-import { BENCHMARK, runBenchmark, type BenchmarkStatus } from "./game/benchmark.ts";
+import { BENCHMARK } from "./game/benchmark-plan.ts";
+import { runBenchmark, type BenchmarkStatus } from "./game/benchmark.ts";
 import { hourOfWord, parseHour } from "./game/daylight.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
@@ -2125,7 +2126,12 @@ export function App() {
       knobs: campaignKnobs(level),
       carId: BENCHMARK.carId,
       gearbox: BENCHMARK.gearbox,
-      hour: level.hour,
+      // The stage's own clock is NOT used: the benchmark pins one, so the
+      // car's lamps are lit and the LIGHTING row has something to cost
+      // (see `BenchmarkPlan.hour`). The weather and the season stay the
+      // level's — both are already clear, and both change the fog the
+      // DISTANCE row is a multiplier on.
+      hour: BENCHMARK.hour,
       weather: level.weather,
       season: level.season,
       skipCountdown: false,
