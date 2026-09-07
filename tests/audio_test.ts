@@ -22,7 +22,7 @@
 // No DOM: the synth is replaced with a recorder, which is also the only way
 // to assert what a sound actually asked the instrument for.
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { TUNING, createGame, standSolid, step, type GameEvent, type GameState } from "@engine";
 
@@ -66,7 +66,13 @@ import { POLAR_TRACK } from "../pwa/src/game/audio/scores/polar.ts";
 import { SPRUCE_TRACK } from "../pwa/src/game/audio/scores/spruce.ts";
 import { TAIGA_TRACK } from "../pwa/src/game/audio/scores/taiga.ts";
 import type { SoundBank } from "../pwa/src/game/audio/types.ts";
-import { flattenTrack, noteFrequency, trackSeconds, type Track } from "../pwa/src/lib/tracker.ts";
+import {
+  createTrackPlayer,
+  flattenTrack,
+  noteFrequency,
+  trackSeconds,
+  type Track,
+} from "../pwa/src/lib/tracker.ts";
 import {
   MAX_CUTOFF_RATIO,
   MIN_ATTACK_MS,
@@ -630,6 +636,181 @@ describe("the sequencer", () => {
         order: ["p"],
       }),
     ).toThrow(/does not divide/);
+  });
+});
+
+// A HOLE IS A STRETCH OF SCORE WITH NOTHING BOOKED UNDER IT, and a run of them
+// is what a player reports as the music skipping. The scheduler books ahead on
+// a JS interval, so it opens one whenever a tick lands later than the horizon
+// it last booked to — a garbage collection, a phone under load, and above all
+// the first seconds after an iOS PWA comes back from the background, where the
+// page is re-laying itself out and a hidden page's timers are still being let
+// back up to speed.
+//
+// Nothing here needs a browser: the player is handed a synth that records the
+// time of every note it is asked for, and both clocks — the AudioContext's and
+// the interval the scheduler ticks on — are driven by hand.
+describe("the sequencer's clock", () => {
+  const BPM = 120;
+  const STEPS_PER_BEAT = 4;
+  const STEP_S = 60 / BPM / STEPS_PER_BEAT;
+  const TRACK: Track = {
+    bpm: BPM,
+    stepsPerBeat: STEPS_PER_BEAT,
+    instruments: { a: { wave: "square", volume: 0.05 } },
+    patterns: { p: { a: Array.from({ length: 64 }, (_, i) => `C${1 + (i % 6)}`) } },
+    order: ["p"],
+  };
+
+  // The scheduler's interval, taken off the event loop and put in a variable
+  // the test pumps. A real one would fire between the tests rather than inside
+  // them, against a clock nobody is moving.
+  let inbox: (() => void) | null = null;
+  const timers = globalThis as unknown as { setInterval: unknown; clearInterval: unknown };
+  const realSet = globalThis.setInterval;
+  const realClear = globalThis.clearInterval;
+  beforeEach(() => {
+    timers.setInterval = (fn: () => void) => {
+      inbox = fn;
+      return 1;
+    };
+    timers.clearInterval = () => {
+      inbox = null;
+    };
+  });
+  afterEach(() => {
+    timers.setInterval = realSet;
+    timers.clearInterval = realClear;
+    inbox = null;
+  });
+
+  /** A player on a hand-driven pair of clocks, started and playing. */
+  function rig() {
+    const booked: number[] = [];
+    let clock = 0;
+    let running = true;
+    const synth: Synth = {
+      unlock: () => {},
+      autostart: () => {},
+      resume: () => {},
+      now: () => (running ? clock : null),
+      tone: (o) => void booked.push(o.at as number),
+      noise: () => {},
+      layer: () => null,
+    };
+    const player = createTrackPlayer(synth);
+    player.play(TRACK);
+    const pump = inbox;
+    return {
+      player,
+      booked,
+      /** The context went away under the score (a suspend, an iOS
+       * interruption): the clock reads as unavailable and stops moving. */
+      suspend: () => {
+        running = false;
+      },
+      wake: () => {
+        running = true;
+      },
+      /** The iOS zombie replacement — a fresh context's clock starts near
+       * zero, which strands an anchor booked against the old one. */
+      rebuild: () => {
+        clock = 0.01;
+      },
+      /** Run `wallS` seconds of wall time with a tick every `tickS`. `rate`
+       * is how fast the audio clock moves against the wall — 0 is a context
+       * frozen by a suspend, 1 a live one. */
+      run(wallS: number, tickS: number, rate = 1) {
+        for (let t = 0; t < wallS; t += tickS) {
+          clock += tickS * rate;
+          pump?.();
+        }
+      },
+      now: () => clock,
+      /** Gaps between consecutive booked notes longer than a step — the
+       * holes, and the worst of them. */
+      holes(): { count: number; worst: number } {
+        const times = [...booked].sort((x, y) => x - y);
+        let count = 0;
+        let worst = 0;
+        for (let i = 1; i < times.length; i++) {
+          const gap = (times[i] as number) - (times[i - 1] as number);
+          if (gap > STEP_S * 1.5) {
+            count++;
+            worst = Math.max(worst, gap);
+          }
+        }
+        return { count, worst };
+      },
+      /** How far ahead of the clock the furthest booked note sits — what a
+       * `stop()` right now would have to play out before the score is gone. */
+      overhang: () => Math.max(...booked) - clock,
+    };
+  }
+
+  it("books an unbroken score off a punctual clock", () => {
+    const r = rig();
+    r.run(6, 0.09);
+    expect(r.booked.length).toBeGreaterThan(40);
+    expect(r.holes().count).toBe(0);
+  });
+
+  it("stops punching holes once it has seen how late the ticks are", () => {
+    const r = rig();
+    r.run(2, 0.09);
+    // Four hundred milliseconds a tick, which is past the punctual horizon:
+    // the first one costs a hole, and the horizon that buys has to cover
+    // every one after it.
+    const before = r.booked.length;
+    r.run(6, 0.4);
+    expect(r.booked.length).toBeGreaterThan(before + 30);
+    expect(r.holes().count).toBeLessThanOrEqual(1);
+  });
+
+  it("gives the horizon back when the clock comes good, so a stop stays tight", () => {
+    const r = rig();
+    r.run(2, 0.4); // a stall, which buys a wide horizon
+    const stalled = r.overhang();
+    expect(stalled).toBeGreaterThan(0.5);
+    r.run(4, 0.09); // …and a stretch of punctual ticks to give it back
+    expect(r.overhang()).toBeLessThan(0.4);
+  });
+
+  it("never books a note in the past, however late the tick", () => {
+    const r = rig();
+    // A note booked behind the clock does not wait its turn, it sounds the
+    // instant it is handed over — so a scheduler crawling up from behind
+    // empties its backlog into one instant, and half a bar arrives as a chord.
+    for (const tick of [0.09, 0.09, 1.4, 0.09, 0.6, 0.09, 0.09, 3.2, 0.09]) {
+      const before = r.booked.length;
+      r.run(tick, tick);
+      for (const at of r.booked.slice(before)) expect(at).toBeGreaterThanOrEqual(r.now());
+    }
+  });
+
+  it("comes back from a backgrounded app without a hole behind it", () => {
+    const r = rig();
+    r.run(2, 0.09);
+    // Away: the context is suspended, its clock frozen, and the interval
+    // throttled to the once a second a hidden page is allowed.
+    r.suspend();
+    r.run(20, 1, 0);
+    r.wake();
+    // …and back, onto a main thread still busy enough to miss the tick.
+    r.run(2, 0.3);
+    r.run(4, 0.09);
+    expect(r.holes().count).toBe(0);
+  });
+
+  it("re-anchors onto a rebuilt context rather than stranding the score", () => {
+    const r = rig();
+    r.run(20, 0.09);
+    const before = r.booked.length;
+    r.rebuild();
+    r.run(2, 0.09);
+    const after = r.booked.slice(before);
+    expect(after.length).toBeGreaterThan(10);
+    for (const at of after) expect(at).toBeLessThan(3);
   });
 });
 

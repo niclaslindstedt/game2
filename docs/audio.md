@@ -204,6 +204,15 @@ gesture can revive, which is why the unlock hangs off real gestures only and
 the menu theme's autostart is a deliberate no-op anywhere the browser cannot
 say it is allowed.
 
+The app going away is also an outage the BEDS are told about directly, and not
+left to the suspend: the frame loop is what feeds them and it stops with the
+page, so `RunAudio.silence()` is called on `visibilitychange` and `pagehide`
+exactly as it is on a lost GPU context. Without it a run left mid-corner has
+the engine, the tyres and the wind holding their last targets for the whole
+absence — and where iOS interrupted the session on the way out, `suspend()`
+declines to act and that held note plays out loud from behind whatever the
+player switched to. The first frame back rebuilds and re-steers them.
+
 ## What the engine is made of
 
 `RPM_PER_HZ = 30`, because a four-cylinder four-stroke fires twice per
@@ -381,6 +390,22 @@ on the offbeats, an arpeggio) and the patches (a kick, a snare, a hat under
 7 kHz by construction, a pad that holds) every score reaches for, so a score
 file is its decisions and its tunes. Each one is behind its own `import()`, so
 a score is never on the startup path.
+
+**How far ahead the sequencer books is bought with the tick's own
+punctuality.** The score is the one thing in the audio that books ahead at all
+— a bed is a steered layer and books nothing — and a booking horizon is a bet
+on the next tick arriving before the last note runs out. Lose the bet and the
+scheduler re-anchors, which leaves a HOLE: a stretch of score with nothing
+under it, and a run of holes is what a player reports as the music skipping.
+A punctual clock needs 0.28 s and stays there, so leaving the music stops it
+promptly; a tick that lands late widens the horizon to span that gap twice
+over (to a 1.5 s ceiling) and it decays back as the ticks come good. The bet
+is lost on a phone routinely — a garbage collection, a world being built, and
+above all the first seconds after an iOS PWA returns from the background, with
+the page re-laying itself out and a hidden page's timers still coming back up
+to speed. What is never done is crawling up from behind one step at a time:
+WebAudio sounds a note whose time has passed the instant it is handed over, so
+a backlog arrives as one chord rather than as a bar.
 
 **The one thing this sequencer does that a chip tracker cannot is `hold`.**
 Every voice decays exponentially across its own length, so a whole note written

@@ -2482,6 +2482,32 @@ export function App() {
     setAudioVolumes(optionsRef.current.audio);
   }, []);
 
+  // THE APP GOING AWAY IS AN OUTAGE THE BEDS HAVE TO BE TOLD ABOUT, the same
+  // one a lost GPU context is. The frame loop is what feeds them and it stops
+  // with the page, so a run left mid-corner leaves the engine, the tyres and
+  // the wind holding whatever they were last steered to for the whole of the
+  // player's absence. Suspending the context is meant to cover that, and on
+  // iOS routinely does not: the audio session is interrupted on the way out,
+  // which leaves the context in a state `suspend()` declines to act on, and a
+  // bed left standing in it is one note played out loud from behind whatever
+  // the player switched to. Nothing is lost by hushing — the beds are rebuilt
+  // and re-steered by the first frame back, which is the frame the picture
+  // returns on.
+  useEffect(() => {
+    const hush = (): void => audioRef.current?.silence();
+    const onVisibility = (): void => {
+      if (document.hidden) hush();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    // A page frozen, bfcached or navigated away does not always announce
+    // itself through visibilitychange.
+    window.addEventListener("pagehide", hush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", hush);
+    };
+  }, []);
+
   // WHICH THEME IS PLAYING IS A FUNCTION OF WHERE THE PLAYER IS, and nothing
   // else. Keyed on whether a menu is up rather than on which page, so walking
   // from the root to Options to Roam never restarts the music. `armMenuMusic`
