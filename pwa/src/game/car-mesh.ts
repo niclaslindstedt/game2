@@ -214,6 +214,10 @@ export type CarVisual = {
    * simply gone — the video options' call, pushed by whoever built the car
    * (`LOOSE_WHEELS` in settings.ts). */
   setLooseWheels: (on: boolean) => void;
+  /** Whether this car may SHED A WHEEL when the ledger says one is gone —
+   * the video options' call, per car (`WHEELS_LOST` in settings.ts). The
+   * row above (`setLooseWheels`) says what a wheel that HAS come off does. */
+  setWheelLoss: (on: boolean) => void;
   /** Whether this car's PANELS fold into the shape of what it hit — the
    * video options' call, per car, pushed by whoever built it (`CRUMPLE_SEEN`
    * in settings.ts). What comes OFF the car is not on this row. */
@@ -734,6 +738,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     setRearView,
     onEvents: damage.onEvents,
     setLooseWheels: damage.setLooseWheels,
+    setWheelLoss: damage.setWheelLoss,
     setCrumple: damage.setCrumple,
     setBrakeLights,
     setLights,

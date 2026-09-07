@@ -36,7 +36,15 @@ import {
   type Weather,
 } from "@engine";
 
-import { daylightOf, litAt, moonAt, sunAt, type Daylight, type SunPlace } from "./daylight.ts";
+import {
+  daylightOf,
+  LAMPS_UNDER,
+  litAt,
+  moonAt,
+  sunAt,
+  type Daylight,
+  type SunPlace,
+} from "./daylight.ts";
 import { CASTS, LOOKS, TAIGA_LOOKS } from "./sky-looks.ts";
 import { coverOf } from "./weather.ts";
 
@@ -435,11 +443,6 @@ const MOON_TAKES_OVER = { from: -3, to: -9 };
  * horizon still lights the world from the side, and one under it would
  * light nothing at all. */
 const KEY_FLOOR = 2 * DEG;
-
-/** Under this the car has its lights on — the sun's own rule; the weather
- * has its own (`WeatherLook.lampsAt`). Four degrees: the golden hour is
- * driven on daylight, the sunset on lamps. */
-const LAMPS_UNDER = 4 * DEG;
 
 function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;

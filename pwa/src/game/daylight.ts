@@ -57,6 +57,17 @@ export const DECLINATION: Record<Season, number> = {
 export const NIGHT_BELOW = -6 * DEG;
 export const DAY_ABOVE = 10 * DEG;
 
+/** Under this elevation a car has its lights on — the SUN's own rule; the
+ * weather has its own beside it (`WeatherLook.lampsAt`). Four degrees: the
+ * golden hour is driven on daylight, the sunset on lamps.
+ *
+ * Here rather than in sky.ts, with the two thresholds above it, because it
+ * is the same KIND of fact — what a sun at a given height means — and
+ * because sky.ts reaches for three.js, which puts the number out of reach
+ * of anything that wants to ask the question without a renderer. The
+ * benchmark's own clock is chosen against it (game/benchmark.ts). */
+export const LAMPS_UNDER = 4 * DEG;
+
 export type SunPlace = {
   /** Radians above the horizon; negative under it. */
   elevation: number;
