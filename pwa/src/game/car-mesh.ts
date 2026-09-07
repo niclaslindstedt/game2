@@ -53,7 +53,13 @@ import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
 import { glowTexture } from "./textures.ts";
 
 /** A lamp's own light: a bloom laid over each cluster so the lamp reads as
- * SWITCHED ON rather than as a coloured panel. The car is fullbright and
+ * SWITCHED ON rather than as a coloured panel.
+ *
+ * At night it is not a hint, it is THE BRIGHTEST THING IN THE FRAME. In a
+ * photograph of a car's tail on an unlit road the body is a silhouette, and
+ * what the eye actually gets is a saturated red halo a lamp-width wide
+ * around a core so hot it has gone white. A cluster that reads as a red
+ * rectangle is a cluster that is not switched on. The car is fullbright and
  * takes the time of day as a tint (renderer.ts), which is right for paint and
  * wrong for a lamp — a lamp is the one thing on the body that gets brighter
  * as the light goes, not darker. Additive over the lens, and exempt from the
@@ -64,14 +70,29 @@ import { glowTexture } from "./textures.ts";
  * material for the same reason. The bloom is the light escaping the lamp;
  * the bowl is the lamp. Neither alone reads as lit. */
 const LAMP_GLOW = 0xff2a14;
+/** ...and the hotter tone the same lenses take with the pedal down. The
+ * bloom is ADDITIVE, so once a marker burns near the top of the scale there
+ * is no opacity left to say "brighter" with — a brake light steps up in
+ * COLOUR instead, which is what it does in life: a filament run harder goes
+ * whiter at the core before it goes wider. */
+const BRAKE_GLOW = 0xff7a52;
 /** ...and the warm white at the other end. A headlamp is pointed AWAY from
  * the chase camera, so what shows is spill around the rim rather than the
  * beam — which is why it is a paler, tighter bloom than the tail's. */
 const HEAD_GLOW = 0xffe6b4;
 /** The name that exempts it — matched in the renderer's `applyTint`. */
 export const LAMP_MATERIAL = "car-lamp";
+/** How far off the lamp's own face the bloom sits, m — and it is a HAND'S
+ * WIDTH, not a film. The anchor is the lens, but the housing around it is a
+ * box standing proud of the cap on every side (`buildCluster`), and a quad
+ * tucked in tight against the lens is inside that box: depth-tested away,
+ * every frame, on every car. A lamp with no glow at all looks exactly like a
+ * lamp that is switched off, which is how this hid. Floating it clear costs
+ * nothing — the quad is most of a metre across and the parallax at any range
+ * the car is seen from is a pixel. */
+const BLOOM_STANDOFF = 0.12;
 /** How far the bloom spreads past the lens, as a multiple of the lens size. */
-const LAMP_SPREAD = 3.4;
+const LAMP_SPREAD = 4.2;
 const HEAD_SPREAD = 2.6;
 /** WHAT THE TAIL CLUSTER IS WORTH WITH THE PEDAL DOWN, with the lights off
  * (daylight) and on (dusk, night) — the FULL figure, because a brake light
@@ -88,7 +109,7 @@ const HEAD_SPREAD = 2.6;
  * and the pool on the road behind (environment.ts) is what carries the
  * distance instead. */
 const BRAKE_DAY = 0.45;
-const BRAKE_NIGHT = 0.55;
+const BRAKE_NIGHT = 1;
 /** ...and the MARKER under it, at half of the night figure and at NOTHING at
  * all by day. Half, because a tail lamp that is not a brake light says only
  * that there is a car there, which does not need much light — and holding it
@@ -101,7 +122,7 @@ const BRAKE_NIGHT = 0.55;
  * than no signal at all, because it makes the real one unreadable. The lens
  * itself is still drawn under it (`LENS_DARK`), so an unlit cluster is what
  * it should be: red plastic. */
-const MARKER_SHARE = 0.5;
+const MARKER_SHARE = 0.8;
 const LAMP_DAY = 0;
 const LAMP_NIGHT = BRAKE_NIGHT * MARKER_SHARE;
 /** The headlamps' pair, at each stop of the switch. Nothing in daylight — a
@@ -124,9 +145,17 @@ const LAMP_GRIME = 0.6;
  * around it, and never so little that the glass goes to mud. Lit, they go
  * to full — the authored colour, whatever the stage is doing. */
 const LENS_DARK = 0.42;
-/** Full brightness, as the lerp target for the above and the colour a lit
- * lens is multiplied by — the authored vertex colours, untouched. */
+/** Full brightness, as the lerp target for an UNLIT lens — the authored
+ * vertex colours, untouched. */
 const WHITE = new THREE.Color(1, 1, 1);
+/** ...and what a LIT one is multiplied by, which is past white on purpose.
+ * A bowl is painted in the lens colour with the bulb's hot spot on its floor
+ * (`glassTone`, car/lamps.ts); at the authored value that reads as red
+ * plastic in daylight — correct — and as red plastic at midnight, which is
+ * not. Driving it over one saturates the cells toward the white core a
+ * burning lamp shows, and leaves the bloom around it to be the light
+ * escaping. */
+const LENS_LIT = 1.55;
 
 /** The glass, per frame. `GLINT` is how much opacity a fully glancing view
  * adds to a clean pane — the baked sky at the top of every window is already
@@ -373,6 +402,10 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       opacity: opacity * fade,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      // Not culled: the quad is a glow standing off the lamp's face, and
+      // which way its winding happens to face is not a fact worth losing a
+      // halo to.
+      side: THREE.DoubleSide,
     });
   const lampMat = bloomMat(LAMP_MATERIAL, LAMP_GLOW, LAMP_DAY);
   const headMat = bloomMat(LAMP_MATERIAL, HEAD_GLOW, HEAD_DAY);
@@ -401,7 +434,12 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     for (const lamp of anchors) {
       const w = (lamp.width * spread) / 2;
       const h = (lamp.height * spread * 1.5) / 2;
-      const z = lamp.z + dir * 0.05;
+      // Clear of the housing: the anchor is already the lamp's FACE, and
+      // this is the film of air over it. A quad any deeper than the bowl it
+      // covers is drawn inside a solid and depth-tested away — which is a
+      // lamp with no glow at all, and looks exactly like a lamp that is
+      // switched off.
+      const z = lamp.z + dir * BLOOM_STANDOFF;
       // Corners counter-clockwise seen from outside the cap: mirroring
       // across z reverses the winding, so the tail runs the cycle backwards.
       const corner = (u: number, v: number): number[] => [
@@ -502,12 +540,13 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     const lit = lamps !== "off";
     const tail = braked ? (lit ? BRAKE_NIGHT : BRAKE_DAY) : lit ? LAMP_NIGHT : LAMP_DAY;
     lampMat.opacity = tail * clean * fade;
+    lampMat.color.set(braked ? BRAKE_GLOW : LAMP_GLOW);
     // The nose walks all three stops: dark glass, a lit lens with a modest
     // halo round it, then the driving lamps' full bloom.
     const head = lamps === "main" ? HEAD_NIGHT : lamps === "dipped" ? HEAD_DIPPED : HEAD_DAY;
     headMat.opacity = head * clean * fade;
     if (lensMat) {
-      if (lit) lensMat.color.setRGB(1, 1, 1);
+      if (lit) lensMat.color.setScalar(LENS_LIT);
       else lensMat.color.copy(worldLight).lerp(WHITE, LENS_DARK);
     }
     // The cabin: the world's light, taken down again by how much of it gets

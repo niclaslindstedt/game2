@@ -123,8 +123,18 @@ export function disc(
   ring(b, cx, cy, r0, z, r1, z, color, facing, facets);
 }
 
-/** One lamp cluster's place on the car, in car space. */
+/** One lamp cluster's place on the car, in car space. `z` is the lamp's own
+ * FACE — the rim of the bowl, not the cap it is bolted to — because a lamp
+ * stands proud of the panel (`buildCluster`'s `stand`) and everything that
+ * reads an anchor wants the plane the light actually leaves from. Put the
+ * cap's z here instead and the bloom over the cluster is laid INSIDE the
+ * housing that surrounds it, where the depth test quietly eats it. */
 export type LampAnchor = { x: number; y: number; z: number; width: number; height: number };
+
+/** The default bowl depths `buildFront`/`buildRear` fall back to, so an
+ * anchor can find the lamp's face without rebuilding it. */
+const HEAD_DEPTH = 0.05;
+const TAIL_DEPTH = 0.038;
 
 /** Where a car's lamp clusters sit, one per side — the same numbers the
  * lenses below are laid on. The bloom over each pair (car-mesh.ts) and the
@@ -140,10 +150,11 @@ export function frontLampAnchors(spec: CarBodySpec): LampAnchor[] {
   const outer = l.pairGap === undefined ? l.x : l.x + l.pairGap;
   const outerSize = l.pairGap === undefined ? l.size : (l.pairSize ?? l.size);
   const span = Math.abs(outer - l.x) + l.size + outerSize;
+  const face = spec.profile[0].z + PROUD + (l.depth ?? HEAD_DEPTH);
   return [-1, 1].map((side) => ({
     x: (side * (l.x + outer)) / 2,
     y: l.y,
-    z: spec.profile[0].z,
+    z: face,
     width: span,
     height: (l.kind === "round" ? l.size : (l.height ?? l.size)) * 2,
   }));
@@ -153,10 +164,11 @@ export function frontLampAnchors(spec: CarBodySpec): LampAnchor[] {
 export function rearLampAnchors(spec: CarBodySpec): LampAnchor[] {
   const l = spec.rear?.lights;
   if (!l) return [];
+  const face = spec.profile[spec.profile.length - 1].z - PROUD - (l.depth ?? TAIL_DEPTH);
   return [-1, 1].map((side) => ({
     x: side * l.x,
     y: l.y,
-    z: spec.profile[spec.profile.length - 1].z,
+    z: face,
     width: l.width,
     height: l.height,
   }));

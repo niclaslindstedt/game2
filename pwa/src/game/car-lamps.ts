@@ -30,7 +30,7 @@ import * as THREE from "three";
 import type { LampSource } from "./car/lamps.ts";
 import { BRAKE_DUST } from "./dust-light.ts";
 import { LAMP_BEAMS, type VideoSettings } from "./settings.ts";
-import { beamReach, dipFor, dippedOf, headShareAt } from "./car-beams.ts";
+import { beamReach, dipFor, dippedOf, headShareAt, mainOf } from "./car-beams.ts";
 import type { LampStage } from "./daylight.ts";
 import { clamp } from "../lib/util.ts";
 
@@ -53,7 +53,7 @@ const TAIL_GRIME = 0.6;
  * it exists to be seen, not to see by, and the road behind a car at night has
  * to go red without ever becoming somewhere a driver could reverse into a
  * corner by. */
-const HEAD_LIGHT = 300;
+const HEAD_LIGHT = 800;
 const TAIL_LIGHT = 21;
 
 /** ...AND THE BRAKE LIGHTS, which are a light of their own rather than the
@@ -245,7 +245,7 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
    * a flood is broad and short, and neither changes while the car is the car
    * it is. */
   const applyLamps = (): void => {
-    headBeams = stage === "dipped" ? dippedOf(headPlan) : headPlan;
+    headBeams = stage === "dipped" ? dippedOf(headPlan) : mainOf(headPlan);
     // Off `headBeams`, not off the plan: dipping does not only change the
     // optics, it puts the driving lamps OUT, so a pod car throws fewer beams
     // on dipped than the LIGHTING row would pay for.

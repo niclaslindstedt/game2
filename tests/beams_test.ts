@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { beamReach, dipFor, dippedOf, headShareAt } from "../pwa/src/game/car-beams.ts";
+import { beamReach, dipFor, dippedOf, headShareAt, mainOf } from "../pwa/src/game/car-beams.ts";
 import { headLampSources } from "../pwa/src/game/car/lamps.ts";
 import { CAR_BODIES } from "../pwa/src/game/car-styles.ts";
 import type { LampSource } from "../pwa/src/game/car/lamps.ts";
@@ -38,20 +38,27 @@ describe("what a dipped beam is", () => {
     expect(dipped.every((lamp) => lamp.role === "main")).toBe(true);
   });
 
-  it("is shorter, wider and worth less light than the beam it came off", () => {
+  it("is shorter, wider and worth less light than the main beam", () => {
+    // Both stops are shapes laid on the same bowl, so the rule is between
+    // THEM — not between one of them and the authored optics neither uses.
     const { plan } = withDrivingLamps();
-    const low = plan.find((lamp) => lamp.role === "main")!;
-    const dipped = dippedOf(plan).find((lamp) => lamp.role === "main")!;
-    // The one a driver feels: where the light stops. A real low beam shows
-    // an obstacle at about 60 m against a main beam's 120.
-    expect(dipped.reach).toBeLessThan(low.reach * 0.75);
-    // ...and it is the WIDER of the two, which is the way round that gets
-    // guessed wrong: a broad wash across the near road, not a corridor.
-    expect(dipped.cone).toBeGreaterThan(low.cone);
-    // ...aimed no higher than the beam it replaces — a low beam points at
-    // the road, which is the whole reason it does not dazzle.
-    expect(dipped.tilt).toBeGreaterThanOrEqual(low.tilt);
-    expect(headShareAt("dipped")).toBeLessThan(headShareAt("main"));
+    const beam = (of: readonly LampSource[]) => of.find((lamp) => lamp.role === "main")!;
+    const main = beam(mainOf(plan));
+    const dipped = beam(dippedOf(plan));
+    // The one a driver feels: where the light stops. The isolux plot puts
+    // the same contour at twice the distance on main beam — at 10 lux
+    // (82 m against 41) and again at 1 lux (260 against 131).
+    expect(dipped.reach).toBeCloseTo(main.reach / 2, 5);
+    // ...and the low beam is the WIDER of the two, which is the way round
+    // that gets guessed wrong: a broad wash across the near road, not a
+    // corridor down it.
+    expect(dipped.cone).toBeGreaterThan(main.cone);
+    // ...aimed lower, so its hot spot lands nearer: a low beam points at the
+    // road you are on, which is the whole reason it does not dazzle.
+    expect(dipped.tilt).toBeGreaterThan(main.tilt);
+    expect(dipped.y / dipped.tilt).toBeLessThan(main.y / main.tilt);
+    // A quarter of the light, off the plot's 27.5 lux against 109.
+    expect(headShareAt("dipped")).toBeCloseTo(headShareAt("main") / 4, 2);
     expect(headShareAt("off")).toBe(0);
   });
 

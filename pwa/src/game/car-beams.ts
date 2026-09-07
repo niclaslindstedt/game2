@@ -21,25 +21,58 @@ import type { LampStage } from "./daylight.ts";
  * when the road finally opens out. */
 const LOW_BEAM: LampRole = "main";
 
-/** WHAT A LOW BEAM IS, against the full-beam picture the body's own optics
- * are authored for. Three ratios, off the real photometry:
+/** THE TWO STOPS AS SHAPES, both written against the optics `car/lamps.ts`
+ * authors for a bowl — and both taken off a real lamp's isolux plot rather
+ * than guessed at. The plot's contours, high beam over low:
  *
- *   REACH   a low beam shows an obstacle at about 60 m where a main beam
- *           shows one at 120 — half the road, and the number a driver
- *           actually feels, because it is where the light stops.
- *   LIGHT   the hot spot runs some 20–36 kcd against a main beam's 40–75
- *           (FMVSS 108 caps the upper beam at 75 000 cd at H-V), so a bit
- *           under half.
- *   CONE    and it is the WIDER of the two, which is the way round most
- *           people guess wrong: a low beam is a short broad wash across the
- *           near road, a main beam a narrow corridor down it.
+ *              109 lx      10 lx      1 lx
+ *   HIGH        25 m        82 m      260 m
+ *   LOW      27.5 lx@25 m   41 m      131 m
  *
- * The AIM barely moves, and deliberately. A real low beam sits 1.0–1.5%
- * below the horizontal against a main beam's nothing at all (ECE R48's
- * initial inclination), which is half a degree — nothing next to how far the
- * light reaches. The nudge here is the same sign and the same order: the low
- * beam is the one pointed at the road. */
-const DIPPED = { light: 0.45, reach: 0.5, cone: 1.2, tilt: 1.25 };
+ * Three numbers come straight out of that, and each is a RATIO, which is
+ * why they survive a car whose bowls are authored differently:
+ *
+ *   LIGHT  27.5 against 109 at the same 25 m — a low beam is a QUARTER of a
+ *          main beam, not the half a reading of the regulations suggests.
+ *   REACH  the same lux contour stands at twice the distance on high beam,
+ *          at 10 lx (82/41) and again at 1 lx (260/131). Twice, exactly.
+ *   CONE   and they are opposite shapes: the high beam's envelope closes to
+ *          a pencil inside ±10°, where the low beam holds ±30° the whole way
+ *          out. A low beam is a broad wash across the near road; a main beam
+ *          is a corridor down it. Most people guess this the wrong way round.
+ *
+ * THE AIM is the one that decides whether any of the rest is visible, and
+ * it is the one a bowl's authored `tilt` gets wrong by an order of
+ * magnitude. `tilt` is a SLOPE, so a lamp 0.68 m up aimed at 0.072 puts its
+ * axis into the road 9 m past the bumper — and everything past that is lit
+ * by the thin upper edge of the cone at a grazing angle, which on a Lambert
+ * road is nothing at all. That is a puddle in front of the car, not a beam,
+ * and no amount of intensity fixes it: turning it up makes a brighter
+ * puddle with the same black road behind it.
+ *
+ * A real lamp is aimed nearly LEVEL — ECE R48 sets a low beam 1.0–1.5%
+ * below the horizontal and a main beam at essentially nothing — and the
+ * plot shows what that buys: a core out at 25 m with light running to 82 and
+ * beyond, because the axis meets the road far enough away that the whole
+ * near stretch sits inside the cone at a usable angle. So both stops are
+ * flattened hard, main beam furthest: its axis reaches the road around 35 m
+ * out, the low beam's around 20, which is the half-degree of real aim
+ * difference expressed where it can actually be seen. */
+const MAIN = { light: 1, reach: 1.4, cone: 0.85, tilt: 0.28 };
+const DIPPED = { light: 0.25, reach: 0.7, cone: 1.7, tilt: 0.5 };
+
+/** One stop's shape laid on a set of lamps. */
+function shaped(
+  plan: readonly LampSource[],
+  by: { reach: number; cone: number; tilt: number },
+): readonly LampSource[] {
+  return plan.map((lamp) => ({
+    ...lamp,
+    reach: lamp.reach * by.reach,
+    cone: lamp.cone * by.cone,
+    tilt: lamp.tilt * by.tilt,
+  }));
+}
 
 /** How far a car that made this one dip has to draw clear again before the
  * beams go back up, as a multiple of the reach they dipped at. A car sitting
@@ -53,12 +86,26 @@ const DIP_BACK_AT = 1.25;
  * car with no lights is not. */
 export function dippedOf(plan: readonly LampSource[]): readonly LampSource[] {
   const low = plan.filter((lamp) => lamp.role === LOW_BEAM);
-  return (low.length > 0 ? low : plan).map((lamp) => ({
-    ...lamp,
-    reach: lamp.reach * DIPPED.reach,
-    cone: lamp.cone * DIPPED.cone,
-    tilt: lamp.tilt * DIPPED.tilt,
-  }));
+  return shaped(low.length > 0 ? low : plan, DIPPED);
+}
+
+/** The nose as MAIN BEAM throws it: the low beams FIRST, then the driving
+ * lamps and the pods behind them.
+ *
+ * The order is what the LIGHTING row spends its cap on, and it has to start
+ * with the low beams for the same reason a real car keeps them lit on main
+ * beam — they are the lamps that light the road you are ON, where a driving
+ * lamp lights the one you are coming to. Taken strongest-first instead (the
+ * order `car/lamps.ts` ranks a plan in), a car whose pods out-gather its
+ * headlamps spends a two-beam budget on two narrow pencils aimed a hundred
+ * metres out and leaves the near road black — which is MAIN BEAM LOOKING
+ * DIMMER THAN DIPPED, the one thing the two stops may never do.
+ *
+ * That is also the invariant worth stating: whatever the row is paying for,
+ * the lamps lit on main are a superset of the lamps lit on dipped. */
+export function mainOf(plan: readonly LampSource[]): readonly LampSource[] {
+  const low = plan.filter((lamp) => lamp.role === LOW_BEAM);
+  return shaped([...low, ...plan.filter((lamp) => lamp.role !== LOW_BEAM)], MAIN);
 }
 
 /** WHAT A CAR'S NOSE IS WORTH at a given stop of the switch, as a share of
@@ -69,7 +116,7 @@ export function dippedOf(plan: readonly LampSource[]): readonly LampSource[] {
  * lighting a cloud harder than the car being driven does. */
 export function headShareAt(stage: LampStage): number {
   if (stage === "off") return 0;
-  return stage === "dipped" ? DIPPED.light : 1;
+  return stage === "dipped" ? DIPPED.light : MAIN.light;
 }
 
 /** HOW FAR A CAR'S MAIN BEAM THROWS, m — the longest of the lamps it would
