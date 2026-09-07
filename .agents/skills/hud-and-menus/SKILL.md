@@ -97,6 +97,9 @@ Everything above is under `pwa/src/game/` unless a path says otherwise.
 
 ```sh
 make build
+# The whole suite is dozens of shots and the better part of an hour. Name the
+# SCENES instead — bare-word filters, matched as substrings of the shot name:
+CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/screenshot.mjs menu-options
 CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots   # every surface
 make glyphs                                                 # the menu's marks
 make health                                                 # the condition schematic

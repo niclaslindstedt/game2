@@ -528,13 +528,13 @@ clouds carry their own two-term lighting instead
   part the chase camera is looking straight through. The player is always on
   the register; the nearest of the field fill what is left, so a rival ahead
   of you in the dark is a red glow inside its own dust before it is a car.
-  How many of the field get on it is the LIGHTING lever of the DETAIL row
-  (`DUST_LAMP_CARS`): every particle runs the register in its vertex
-  shader, so LOW keeps it to the player's own pair. The same lever is what
-  the beams on the GROUND cost — one headlamp beam on LOW, one per end on
-  MEDIUM, the car's own splayed four on HIGH (`LAMP_BEAMS`), because a
-  spotlight is paid for on every lit pixel in the frame whether the beam
-  reaches it or not. `shot-night-plume` is the acceptance test.
+  How many of the field get on it is the LIGHTING row (`DUST_LAMP_CARS`):
+  every particle runs the register in its vertex shader, so LEAN keeps it
+  to the player's own pair. The same row is what the beams on the GROUND
+  cost — one headlamp beam on LEAN, one per end on NORMAL, the car's own
+  splayed four on FULL (`LAMP_BEAMS`), because a spotlight is paid for on
+  every lit pixel in the frame whether the beam reaches it or not.
+  `shot-night-plume` is the acceptance test.
 
 Off the road it does not come up at all over turf. Grass is what BINDS a
 surface, so a field has no loose dry dust to lift, and a green cloud is a

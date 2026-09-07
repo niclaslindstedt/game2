@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The player's options as the menu offers them: two HUD switches spread
-// over the whole panel, thirteen video levers on four independent picture rows,
+// over the whole panel, thirteen video levers on five independent picture rows,
 // and a stored blob from an older build landing on something the page can
 // still show.
 
@@ -25,6 +25,7 @@ import {
   detailOf,
   hudShow,
   LAMP_BEAMS,
+  LIGHTING_STOPS,
   loadSettings,
   LOOSE_WHEELS,
   MIN_FOG_FAR,
@@ -124,20 +125,22 @@ describe("the HUD's three switches", () => {
   });
 });
 
-describe("the four picture rows", () => {
+describe("the five picture rows", () => {
   it("name every set of levers DETAIL defines", () => {
     for (const id of ["low", "medium", "high"] as const) {
       expect(detailOf(DETAIL_PRESETS[id])).toBe(id);
     }
   });
 
-  // The three rows do NOT ship on the same stop, and that is the point of
+  // The rows do NOT ship on the same stop, and that is the point of
   // splitting them: the picture is bought sharp and near rather than soft
-  // and far, with DETAIL left on the number the game was tuned on.
+  // and far, with DETAIL and LIGHTING left on the numbers the game was
+  // tuned on.
   it("ship the picture sharp, tuned and near", () => {
     expect(DEFAULT_SETTINGS.video).toEqual(DEFAULT_VIDEO);
     expect(DEFAULT_SETTINGS.video.resolution).toBe("high");
     expect(detailOf(DEFAULT_SETTINGS.video)).toBe("medium");
+    expect(DEFAULT_SETTINGS.video.lighting).toBe("normal");
     expect(DEFAULT_SETTINGS.video.drawDistance).toBe("near");
   });
 
@@ -150,12 +153,21 @@ describe("the four picture rows", () => {
     expect(RESOLUTION_SCALE.low).toBe(RESOLUTION_SCALE.high / 4);
   });
 
-  // The whole point of the split: RESOLUTION and DISTANCE are separate
-  // costs, so neither one may decide what DETAIL reads as.
-  it("read DETAIL off its own four levers and nothing else", () => {
-    const soft = { ...DEFAULT_VIDEO, resolution: "low", drawDistance: "far" } as const;
+  // The whole point of the split: RESOLUTION, DISTANCE, LIGHTING and SKY
+  // are separate costs, so none of them may decide what DETAIL reads as.
+  it("read DETAIL off its own levers and nothing else", () => {
+    const soft = {
+      ...DEFAULT_VIDEO,
+      resolution: "low",
+      drawDistance: "far",
+      lighting: "lean",
+      sky: "simple",
+    } as const;
     expect(detailOf(soft)).toBe("medium");
     expect(detailOf({ ...DETAIL_PRESETS.low, resolution: "high" })).toBe("low");
+    // A player who has taken the lamps off a rich picture still has a rich
+    // picture — which is the whole reason LIGHTING left this row.
+    expect(detailOf({ ...DETAIL_PRESETS.high, lighting: "lean" })).toBe("high");
   });
 
   // A blob standing between two stops lands on the one it most resembles,
@@ -199,22 +211,45 @@ describe("the four picture rows", () => {
     localStorage.clear();
   });
 
-  // The regression this whole change exists to prevent: the loader used to
-  // put the six levers back on ONE preset, so a sharp-but-cheap picture was
-  // a picture the player could set and never load again. The sky is in the
-  // blob deliberately off the stop the rest of it resembles: it is its own
-  // row now, and a row that came back snapped to the picture beside it
-  // would be the same bug in a new place.
+  // A picture the player can set and never load again is the bug the
+  // row-by-row loader exists to prevent. The sky and the lamps are in this
+  // blob deliberately off the stop the rest of it resembles: each is its own
+  // row, and a row that came back snapped to the picture beside it would be
+  // that same bug in a new place.
   it("keep a mixed picture across a save and a load", () => {
     const mixed = {
       ...DETAIL_PRESETS.low,
       resolution: "high",
       renderHeight: NATIVE_HEIGHT,
       drawDistance: "near",
+      lighting: "full",
       sky: "full",
     } as const;
     stored({ video: mixed });
     expect(loadSettings().video).toEqual(mixed);
+    localStorage.clear();
+  });
+
+  // The migration LIGHTING's own row owes: a blob written while the lamps
+  // were the tenth lever on DETAIL carries the stop that player chose, and
+  // reading it on its own is what keeps it. Read off the preset instead,
+  // everybody who had ever moved DETAIL would come back to lamps they never
+  // picked — here, the four beams of a HIGH picture on a phone that had
+  // asked for one.
+  it("keep the lamps a blob from the DETAIL-row build was carrying", () => {
+    stored({ video: { ...DEFAULT_VIDEO, ...DETAIL_PRESETS.low, lighting: "lean" } });
+    expect(loadSettings().video.lighting).toBe("lean");
+    localStorage.clear();
+  });
+
+  // ...and a blob from before the row existed at all has no opinion about
+  // it, so it lands on the default rather than on an undefined knob the
+  // renderer would read as no lamps at all.
+  it("give a blob with no lamps in it the default lighting", () => {
+    const before = { ...DEFAULT_VIDEO, ...DETAIL_PRESETS.high } as Record<string, unknown>;
+    delete before.lighting;
+    stored({ video: before });
+    expect(loadSettings().video.lighting).toBe(DEFAULT_VIDEO.lighting);
     localStorage.clear();
   });
 
@@ -525,15 +560,20 @@ describe("whose windows can be seen through at each DETAIL stop", () => {
   });
 });
 
-// The LIGHTING row is the one lever on DETAIL that is paid for on every
-// pixel rather than per thing drawn: a spotlight is evaluated by every lit
-// surface in the frame whether the beam reaches it or not, and the sun's
-// shadow is a pass plus a lookup on all of the ground. So what each stop
-// throws is worth holding: the ladder has to come down from the tail lamp
-// first, and never leave a night stage with no light on the road at all.
-describe("what the car's lamps throw at each DETAIL stop", () => {
-  it("throws the car's whole complement on HIGH, and lights the field", () => {
-    expect(LAMP_BEAMS[DETAIL_PRESETS.high.lighting]).toEqual({
+// The LIGHTING row is paid for on every pixel rather than per thing drawn:
+// a spotlight is evaluated by every lit surface in the frame whether the
+// beam reaches it or not, and the sun's shadow is a pass plus a lookup on
+// all of the ground. That is a different currency from the DETAIL row it
+// sits beside, which is why it is a row of its own — and it is why what
+// each stop throws is worth holding: the ladder has to come down from the
+// tail lamp first, and never leave a night stage with no light on the road.
+describe("what the car's lamps throw at each LIGHTING stop", () => {
+  it("offers three stops, cheapest first", () => {
+    expect(LIGHTING_STOPS.map((stop) => stop.id)).toEqual(["lean", "normal", "full"]);
+  });
+
+  it("throws the car's whole complement on FULL, and lights the field", () => {
+    expect(LAMP_BEAMS.full).toEqual({
       head: 4,
       tail: 2,
       brakes: true,
@@ -541,8 +581,8 @@ describe("what the car's lamps throw at each DETAIL stop", () => {
     });
   });
 
-  it("throws one pair per end on MEDIUM, and nobody else's lamps", () => {
-    expect(LAMP_BEAMS[DETAIL_PRESETS.medium.lighting]).toEqual({
+  it("throws one pair per end on NORMAL, and nobody else's lamps", () => {
+    expect(LAMP_BEAMS.normal).toEqual({
       head: 2,
       tail: 2,
       brakes: true,
@@ -550,8 +590,8 @@ describe("what the car's lamps throw at each DETAIL stop", () => {
     });
   });
 
-  it("keeps one headlamp beam and no tail beam at all on LOW", () => {
-    expect(LAMP_BEAMS[DETAIL_PRESETS.low.lighting]).toEqual({
+  it("keeps one headlamp beam and no tail beam at all on LEAN", () => {
+    expect(LAMP_BEAMS.lean).toEqual({
       head: 1,
       tail: 0,
       brakes: false,
@@ -585,7 +625,7 @@ describe("what the car's lamps throw at each DETAIL stop", () => {
   });
 
   it("walks both ladders monotonically, cheapest first", () => {
-    const stops = (["low", "medium", "high"] as const).map((id) => DETAIL_PRESETS[id].lighting);
+    const stops = LIGHTING_STOPS.map((stop) => stop.id);
     for (let i = 1; i < stops.length; i++) {
       const cheaper = LAMP_BEAMS[stops[i - 1]];
       const richer = LAMP_BEAMS[stops[i]];
@@ -603,6 +643,19 @@ describe("what the car's lamps throw at each DETAIL stop", () => {
     for (const stop of Object.keys(LAMP_BEAMS) as (keyof typeof LAMP_BEAMS)[]) {
       if (LAMP_BEAMS[stop].field) expect(DUST_LAMP_CARS[stop]).toBeGreaterThan(1);
       else expect(DUST_LAMP_CARS[stop]).toBe(1);
+    }
+  });
+
+  it("ships the design point, a stop short of everything", () => {
+    expect(DEFAULT_VIDEO.lighting).toBe("normal");
+  });
+
+  // The DETAIL row must not carry the lamps any more, or the two rows would
+  // fight: moving DETAIL would silently undo a lighting stop the player
+  // picked, which is the whole thing this row was split out to stop.
+  it("is nobody else's lever", () => {
+    for (const preset of Object.values(DETAIL_PRESETS)) {
+      expect(preset).not.toHaveProperty("lighting");
     }
   });
 });
@@ -737,18 +790,19 @@ describe("the two keys a run can be given up on", () => {
   });
 });
 
-// WHAT THE PICTURE IS SET TO, as one line of three cells — the benchmark's
-// card prints it under a score so a screenshot carries the conditions that
+// WHAT THE PICTURE IS SET TO, as one line of cells — the benchmark's card
+// prints it under a score so a screenshot carries the conditions that
 // produced it (game/menu-dev.tsx). Held here because the whole point of the
 // function is that it takes its words off the SAME stop lists the options
 // page walks: a card that said "MED" where the menu says "MEDIUM" would be
 // a score nobody could map back onto the row that made it.
 describe("the picture, reported", () => {
-  it("names the three rows the options page names", () => {
+  it("names the rows the options page names", () => {
     expect(pictureRows(DEFAULT_VIDEO, false).map((r) => r.label)).toEqual([
       PICTURE_ROWS.resolution,
       PICTURE_ROWS.detail,
       PICTURE_ROWS.distance,
+      PICTURE_ROWS.lighting,
       PICTURE_ROWS.sky,
     ]);
   });
@@ -758,19 +812,26 @@ describe("the picture, reported", () => {
       "HIGH",
       "MEDIUM",
       "NEAR",
+      "NORMAL",
       "LAYERED",
     ]);
   });
 
-  it("reports the SKY row off its own lever, not off DETAIL", () => {
-    // The two rows are independent now, so every combination has to read
-    // back as itself: a sky picked on one DETAIL stop must survive a move
-    // of the other row.
+  it("reports the SKY and LIGHTING rows off their own levers, not off DETAIL", () => {
+    // The rows are independent, so every combination has to read back as
+    // itself: a sky or a set of lamps picked on one DETAIL stop must
+    // survive a move of the other row.
     for (const detail of ["low", "medium", "high"] as const) {
       for (const sky of ["simple", "layered", "full"] as const) {
-        const rows = pictureRows({ ...DEFAULT_VIDEO, ...DETAIL_PRESETS[detail], sky }, false);
-        expect(rows[1].value).toBe(detail.toUpperCase());
-        expect(rows[3].value).toBe(sky.toUpperCase());
+        for (const lighting of ["lean", "normal", "full"] as const) {
+          const rows = pictureRows(
+            { ...DEFAULT_VIDEO, ...DETAIL_PRESETS[detail], sky, lighting },
+            false,
+          );
+          expect(rows[1].value).toBe(detail.toUpperCase());
+          expect(rows[3].value).toBe(lighting.toUpperCase());
+          expect(rows[4].value).toBe(sky.toUpperCase());
+        }
       }
     }
   });

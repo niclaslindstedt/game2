@@ -40,7 +40,7 @@
 // WORKLOAD IS FIXED ACROSS RUNS BUT NOT FLAT ACROSS ONE. The race starts
 // with the whole field inside a hundred metres of each other and ends with
 // it strung out, so the frame gets steadily cheaper as the run goes on —
-// metered headlessly at DETAIL HIGH it falls from about 515 draw calls a
+// metered headlessly at DETAIL HIGH under LIGHTING FULL it falls from about 515 draw calls a
 // frame over the first tenth to about 365 over the last, a third of the
 // work gone, with the triangle count following it down.
 //

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// OPTIONS — one page, twelve rows, reached from the front door only.
+// OPTIONS — one page of knobs, reached from the front door only.
 //
-//   PICTURE   — how sharp, how much and how far, as three rows.
+//   PICTURE   — how sharp, how much, how far, how lit and what the air over
+//               it is made of, as five rows.
 //   SOUND     — the two faders.
 //   HUD       — the instrument panel on or off, the rear-view glass, and
 //               the frame rate under the map.
@@ -44,6 +45,7 @@ import {
   DETAIL_STOPS,
   DISTANCE_STOPS,
   KEY_ACTIONS,
+  LIGHTING_STOPS,
   PAD_ACTIONS,
   PICTURE_ROWS,
   PLAY_CAMERAS,
@@ -185,19 +187,19 @@ function MainPage({
     <div className="menu-card menu-card-options">
       <MenuHead back={onBack} backLabel="MENU" title="OPTIONS" />
       {/* Two columns on anything wide enough, packed by ROW COUNT rather
-          than by subject order — five on the left, seven on the right once
+          than by subject order — seven on the left, eight on the right once
           the controller's rows are there — so a laptop holds the whole page
           without scrolling and neither column ends short. */}
       <div className="knob-groups">
         <div className="knob-col">
-          {/* Four rows, not one, because they are four different costs:
-              how many pixels, how much world, how far away, and what the
-              air over it is made of. A machine can be short of one and rich
-              in another — a dense phone screen that wants every pixel and
-              would rather lose the far ridges is the ordinary case, not the
-              exotic one, and a phone that is bound by how many things it
-              can submit gets nothing at all from a thinner forest and a
-              great deal from a flat sky. */}
+          {/* Five rows, not one, because they are five different costs:
+              how many pixels, how much world, how much of it is lit, how
+              far away, and what the air over it is made of. A machine can
+              be short of one and rich in another — a dense phone screen
+              that wants every pixel and would rather lose the far ridges is
+              the ordinary case, not the exotic one, and a phone that is
+              bound by how many things it can submit gets nothing at all
+              from a thinner forest and a great deal from a flat sky. */}
           <KnobGroup title="PICTURE">
             {desktop ? (
               // THE SAME ROW, ASKED IN PIXELS. The desktop app owns its
@@ -231,6 +233,19 @@ function MainPage({
               stops={DISTANCE_STOPS}
               value={settings.video.drawDistance}
               onPick={(drawDistance) => set({ video: { ...settings.video, drawDistance } })}
+            />
+            {/* Its own row rather than a share of DETAIL for the reason SKY
+                is one: a beam is charged to every LIT pixel whether it
+                reaches it or not, so nothing the row above does makes it
+                cheaper. And it is the lever a player is likeliest to have a
+                separate opinion about — the lamps and the shadows are most
+                of what a night stage looks like, and giving them up is a
+                different sacrifice from a bare verge. */}
+            <StepRow
+              label={PICTURE_ROWS.lighting}
+              stops={LIGHTING_STOPS}
+              value={settings.video.lighting}
+              onPick={(lighting) => set({ video: { ...settings.video, lighting } })}
             />
             {/* Its own row rather than a share of DETAIL because it is the
                 one lever here paid PER SKY PIXEL — every octave of cloud
