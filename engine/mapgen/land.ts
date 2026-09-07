@@ -25,10 +25,9 @@
 // painted) asks that.
 
 import { icyCountry, waterFrozen, type Climate } from "../game/climate.ts";
-import { biomeRules } from "./biomes.ts";
 import { createGeology, type GeologyField } from "./geology.ts";
 import { createWaterField, SEA, type WaterField } from "./water.ts";
-import { STAGE_RULES as R, type StageKnobs } from "./rules.ts";
+import { STAGE_RULES as R, landOf, type StageKnobs } from "./rules.ts";
 
 /** The sea's own table, m. The name the rest of the generator has always
  * known it by; `SEA` is where it is defined and what the pour treats as
@@ -132,7 +131,7 @@ export function createLandField(
   climate?: Climate,
 ): LandField {
   const cold = climate === undefined ? "" : `${climate.season}|${climate.temperature}`;
-  const key = `${seed}|${knobs.biome}|${knobs.elevation}|${knobs.steepness}|${knobs.water}|${knobs.trees}|${knobs.asphalt}|${knobs.width}|${knobs.challenge}|${knobs.peaks}|${cold}`;
+  const key = `${seed}|${knobs.biome}|${knobs.elevation}|${knobs.steepness}|${knobs.water}|${knobs.trees}|${knobs.asphalt}|${knobs.width}|${knobs.challenge}|${knobs.peaks}|${knobs.altitude}|${cold}`;
   const had = memo.find((entry) => entry.key === key);
   if (had) return had.land;
   const land = buildLandField(seed, knobs, climate);
@@ -151,7 +150,7 @@ function buildLandField(seed: number, knobs: StageKnobs, climate?: Climate): Lan
   // paid for a callback and a second block lookup per step measured a
   // fifth again on the plan phase of `make analyze`, to answer "no" a
   // million times.
-  const icy = climate !== undefined && icyCountry(climate, biomeRules(knobs.biome).land.zones);
+  const icy = climate !== undefined && icyCountry(climate, landOf(knobs).zones);
   const frozen = icy
     ? (level: number) => waterFrozen(climate as Climate, level)
     : (): boolean => false;

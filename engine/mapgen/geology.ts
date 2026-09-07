@@ -59,7 +59,15 @@
 import { smooth, valueNoise } from "../lib/noise.ts";
 import { createRng } from "../lib/prng.ts";
 import { biomeRules } from "./biomes.ts";
-import { STAGE_RULES as R, challengeMul, knobScale, reliefOf, type StageKnobs } from "./rules.ts";
+import {
+  STAGE_RULES as R,
+  altitudeScale,
+  challengeMul,
+  knobScale,
+  landOf,
+  reliefOf,
+  type StageKnobs,
+} from "./rules.ts";
 
 /** The water table: ground below this stands under open water — the lakes
  * and the sea. It is where the groundwater surfaces at the map's own base
@@ -83,6 +91,14 @@ const PAN_KNEE = 8;
 const DUNE_FIELD_FROM = 0.3;
 const DUNE_FIELD_SPAN = 0.25;
 
+/** R47 — how much of the climb from the valley floor to the crest is spent
+ * getting there, once the ALTITUDE dial has cut a shelf across the top: the
+ * rest of it is the ledge. A fifth, which on a six-thousand-metre mountain
+ * is a couple of hundred metres of near-level ground along the ridge — room
+ * for a road and its verges and not much else, so the drop is at the edge
+ * of the stage rather than a kilometre out across a plateau. */
+const MASSIF_SHELF = 0.8;
+
 /** R47 — the massif's two further octaves of ridge, as divisors of its
  * scale: the side ridges that run down off a main crest, and the gullies
  * between them. */
@@ -99,10 +115,25 @@ const MASSIF_OCTAVE_GRADE = 1.5;
  * is how far above the snowline the grid may stand before height stops
  * counting for it: a stage starts BESIDE the snow, with the peaks over it
  * and the whole descent under it, not on the summit where every way down
- * is a wall and the first two kilometres are white. */
+ * is a wall and the first two kilometres are white.
+ *
+ * R47 — the SPREAD is the tuned country's and stays absolute: a start grid
+ * has to be level enough to hold a field whatever the country around it is
+ * doing. What the ALTITUDE dial moves is the two things it is COMPARED
+ * against — the height on offer (`massif.altitude.siting`) and the snowline
+ * the ceiling is measured from (`altitudeScale.bands`).
+ *
+ * ...and `SHOULDER_OVER_CREST` is the OTHER ceiling, as a share of the
+ * mountain's own crest, taken whenever it stands higher than the snow one.
+ * On the country the alpine's row describes the snow ceiling is the higher
+ * of the two and this changes nothing; on a mountain standing kilometres
+ * over its own snowline, "beside the snow" IS the valley floor, and holding
+ * the start to it put four seeds in six down at the bottom with the
+ * mountain they were meant to come down standing beside them. */
 const SHOULDER_SPREAD = 60;
 const SHOULDER_PENALTY = 1.5;
 const SHOULDER_OVER_SNOW = 30;
+const SHOULDER_OVER_CREST = 1;
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
@@ -169,7 +200,9 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   // the sun, has worn it, whether its hollows hold water, and whether the
   // wind has piled sand across it.
   const B = biomeRules(knobs.biome);
-  const L = B.land;
+  // R47 — the country AT THIS ALTITUDE, not the row it was written from:
+  // the massif's height and the ground it stands on are the dial's.
+  const L = landOf(knobs);
   // How hard the country's own relief is turned up, and how much of it
   // stands under water — the `elevation` and `water` dials reach the world
   // beside the road here, exactly as they reach the road itself. A dry
@@ -219,6 +252,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   // R47 — the `peaks` dial: how far apart the crests stand and how much of
   // the country between them is floor. One mountain in a plain at one
   // end, a range at the other.
+  const altitude = altitudeScale(knobs);
   const massifScale = M ? M.scale * challengeMul(knobs.peaks, R.massif.peaks.scale) : 0;
   const massifValley = M
     ? Math.min(0.85, M.valley * challengeMul(knobs.peaks, R.massif.peaks.valley))
@@ -353,7 +387,20 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
       // The floor: everything under `valley` is the valley, flat at zero,
       // and the rest is stretched to climb the whole height.
       const ridgeSum = clamp01((folded - massifValley) / (1 - massifValley));
-      const shaped = Math.pow(ridgeSum, M.sharp);
+      // R47 — THE SHELF. The row's own flank runs to a point: gentle at
+      // the foot, steepest under the crest, and nothing on top of it a
+      // road could be laid along. That is a mountain at 340 m and a wall
+      // at six thousand, so as the ALTITUDE dial raises it the profile is
+      // blended toward a LEDGE — steep the whole way up and then flat over
+      // the last `MASSIF_SHELF` of the climb, which is the shape a pass
+      // road is blasted into and the thing this level is about. The
+      // parabola is what keeps it a curve: it arrives at the crest with no
+      // slope left, so the ledge meets the flank without a crease on the
+      // lattice, the way `rounded` does for the taiga's own chains.
+      const onShelf = Math.min(1, ridgeSum / MASSIF_SHELF);
+      const ledge = onShelf * (2 - onShelf);
+      const point = Math.pow(ridgeSum, M.sharp);
+      const shaped = point + (ledge - point) * altitude.shelf;
       massif = shaped * massifPeak;
       const grade =
         massifPeak *
@@ -614,6 +661,17 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
    * only the window onto it moves. */
   const site = ((): { x: number; z: number } => {
     const S = G.siting;
+    // R47 — HOW FAR THE ORIGIN MAY WALK TO FIND ITS SITE, scaled with the
+    // spacing of the country's own features (`altitudeScale.ground`). The
+    // walk's job is to be able to leave whatever it started in — a basin,
+    // or on a mountain the valley between two ridges — and a fixed 2.6 km
+    // cannot do that in a country whose ridges stand six kilometres apart:
+    // the high shoulder R35 is looking for is simply outside the spiral,
+    // and four seeds in six started in the valley with the mountain they
+    // were meant to come down beside them. The STEP is scaled with it, so
+    // the walk costs the same number of probes at every altitude.
+    const siteStep = S.step * altitude.ground;
+    const siteFar = S.far * altitude.ground;
     /** How far the WORST point of the footprint stands clear of the water
      * under it, m — negative anywhere wet — and the footprint's height:
      * its mean, and the spread between its highest and lowest point. */
@@ -650,22 +708,34 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     if (L.startHigh) {
       let best = { x: 0, z: 0 };
       let bestScore = -Infinity;
-      const ceiling = L.zones.snow === null ? Infinity : L.zones.snow + SHOULDER_OVER_SNOW;
+      const snowCeiling =
+        L.zones.snow === null ? Infinity : L.zones.snow + SHOULDER_OVER_SNOW * altitude.bands;
+      const ceiling = Math.max(snowCeiling, (L.massif?.height ?? 0) * SHOULDER_OVER_CREST);
+      const allowance = SHOULDER_SPREAD;
+      // A metre of height buys the same amount of unlevel ground it always
+      // did: the height counts at the crest's scale and the spread at the
+      // flank's, so the penalty carries the difference between them.
+      // R47 — ...and what a metre of it COSTS, against the height it is
+      // being traded for. It climbs faster than the mountain does
+      // (`massif.altitude.siting`): the taller the country, the more
+      // height there is to tempt the site up onto a face, and a start on a
+      // face is a stage the search then has to lay down off one.
+      const penalty = SHOULDER_PENALTY * Math.pow(altitude.height, R.massif.altitude.siting);
       const consider = (ox: number, oz: number): void => {
         const f = footprint(ox, oz);
         if (f.clear < 0) return;
         // Height counts up to the ceiling and against past it, so the
         // best shoulder is the one nearest the snowline from below.
         const height = f.mean <= ceiling ? f.mean : ceiling - (f.mean - ceiling);
-        const score = height - SHOULDER_PENALTY * Math.max(0, f.spread - SHOULDER_SPREAD);
+        const score = height - penalty * Math.max(0, f.spread - allowance);
         if (score > bestScore) {
           bestScore = score;
           best = { x: ox, z: oz };
         }
       };
       consider(0, 0);
-      for (let radius = S.step; radius <= S.far; radius += S.step) {
-        const points = Math.max(6, Math.round((2 * Math.PI * radius) / S.step));
+      for (let radius = siteStep; radius <= siteFar; radius += siteStep) {
+        const points = Math.max(6, Math.round((2 * Math.PI * radius) / siteStep));
         for (let a = 0; a < points; a++) {
           const angle = (a / points) * Math.PI * 2;
           consider(radius * Math.cos(angle), radius * Math.sin(angle));
@@ -679,8 +749,8 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     // A spiral of whole steps: rings of increasing radius, each walked in
     // the same fixed order, so the first site that passes is a property of
     // the country alone.
-    for (let radius = S.step; radius <= S.far; radius += S.step) {
-      const points = Math.max(6, Math.round((2 * Math.PI * radius) / S.step));
+    for (let radius = siteStep; radius <= siteFar; radius += siteStep) {
+      const points = Math.max(6, Math.round((2 * Math.PI * radius) / siteStep));
       for (let a = 0; a < points; a++) {
         const angle = (a / points) * Math.PI * 2;
         const ox = radius * Math.cos(angle);

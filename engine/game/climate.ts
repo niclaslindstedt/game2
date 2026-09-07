@@ -23,12 +23,24 @@
 // are drawn onto a ground whose temperature is already known.
 
 import { biomeRules, type BiomeId, type BiomeLand } from "../mapgen/biomes.ts";
+import { lapseOf, type StageKnobs } from "../mapgen/rules.ts";
 import type { Season, Weather } from "./state.ts";
 
 export type Climate = {
   season: Season;
   /** Air temperature at the datum (y = 0), °C. */
   temperature: number;
+  /** R47 — how fast this country's air cools with height, °C per metre.
+   * `CLIMATE.lapse` unless the ALTITUDE dial has built a taller country
+   * than the biome's row describes, in which case the rate comes down
+   * with the same factor its elevation bands went up (`lapseOf`) — the
+   * freezing line is a height like the treeline and the snowline, and the
+   * three only mean anything against each other.
+   *
+   * Optional, and the constant when it is missing: a climate stated by
+   * hand — a test, a preview tool, a stage from a build that had no dial
+   * — is the tuned country's, which is the country it was written for. */
+  lapse?: number;
 };
 
 /** What a caller may leave unsaid: the season defaults to summer, and the
@@ -124,30 +136,35 @@ export function defaultTemperature(biome: BiomeId | string | undefined, season: 
 }
 
 /** A whole climate from what was chosen: the season named or summer, the
- * temperature named or the season's own in this country. */
-export function resolveClimate(
-  choice: ClimateChoice | undefined,
-  biome: BiomeId | string | undefined,
-): Climate {
+ * temperature named or the season's own in this country, and the country's
+ * own lapse rate at the altitude its dials build it at. */
+export function resolveClimate(choice: ClimateChoice | undefined, knobs: StageKnobs): Climate {
   const season = choice?.season ?? "summer";
   const named = choice?.temperature;
   const temperature =
     named !== null && named !== undefined && Number.isFinite(named)
       ? named
-      : defaultTemperature(biome, season);
-  return { season, temperature };
+      : defaultTemperature(knobs.biome, season);
+  return { season, temperature, lapse: lapseOf(knobs, CLIMATE.lapse) };
+}
+
+/** How fast the air cools with height under this climate, °C per metre —
+ * the country's own where it carries one, and the tuned rate otherwise.
+ * Stated once because all three readings below take it. */
+function lapse(climate: Climate): number {
+  return climate.lapse ?? CLIMATE.lapse;
 }
 
 /** The air at a height, °C. */
 export function temperatureAt(climate: Climate, y: number): number {
-  return climate.temperature - CLIMATE.lapse * y;
+  return climate.temperature - lapse(climate) * y;
 }
 
 /** The height the air freezes at, m — every height above it is at or
  * under `CLIMATE.freeze`. Below the whole country when the datum itself
  * is frozen. */
 export function frostLine(climate: Climate): number {
-  return (climate.temperature - CLIMATE.freeze) / CLIMATE.lapse;
+  return (climate.temperature - CLIMATE.freeze) / lapse(climate);
 }
 
 /** WHERE THE SNOW LIES: the country's own permanent line, or the frost
@@ -222,7 +239,7 @@ export function waterFrozen(climate: Climate, level: number): boolean {
  * ice entirely, never to conclude that a particular body is frozen; that
  * is `waterFrozen`'s answer and it needs the body's own level. */
 export function icyCountry(climate: Climate, zones: BiomeLand["zones"]): boolean {
-  return (climate.temperature - CLIMATE.ice) / CLIMATE.lapse < zones.rock.to;
+  return (climate.temperature - CLIMATE.ice) / lapse(climate) < zones.rock.to;
 }
 
 /** Whether this country's rain is WET in this season: its row's own word,

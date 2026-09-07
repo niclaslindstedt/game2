@@ -20,9 +20,16 @@ import {
   type StageKnobs,
   type StageShape,
 } from "./rules.ts";
-import { challengeMul, followGradeOf, knobScale, resolveKnobs, roadWidthOf } from "./rules.ts";
+import {
+  altitudeScale,
+  challengeMul,
+  followGradeOf,
+  knobScale,
+  landOf,
+  resolveKnobs,
+  roadWidthOf,
+} from "./rules.ts";
 import type { Climate } from "../game/climate.ts";
-import { biomeRules } from "./biomes.ts";
 import { generateCircuit } from "./circuit.ts";
 import { buildableAt, createLandField, landUnder, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
@@ -173,7 +180,21 @@ function tryGenerateStage(
    * how hard the search reads the land when it picks which way a corner
    * turns, and whether a deep cut is bored through. */
   const grade = followGradeOf(knobs);
-  const country = biomeRules(knobs.biome).land;
+  const country = landOf(knobs);
+  /** R47 — how much deeper the road may be CUT in this country than the
+   * hillsides R34 measured its cap on: the flank's own grade against the
+   * tuned country's (`altitudeScale`). A shelf on a face is blasted, and
+   * held to a forest road's twenty-four metres the search draws a line
+   * across a mountain, is refused it, and walks the pocket until its
+   * iterations run out — every candidate on a steep flank asks for a cut
+   * because the flank falls away faster than any road may.
+   *
+   * The FILL side is untouched on purpose, and the asymmetry is the point:
+   * the same cap that reads as a blasted face on the uphill side reads as
+   * a hundred-metre mesa on the downhill one, and the drop off the edge of
+   * it is a wall rather than the mountain the stage is supposed to fall
+   * down. */
+  const cutScale = altitudeScale(knobs).grade;
   /** R24 in height — the start's own ground, for the arm that comes back
    * past its apron (`entersStart`). */
   const start: StartGround = { y: profile.y, shelfEnd };
@@ -427,7 +448,19 @@ function tryGenerateStage(
    * only take by standing twenty-odd metres off the country is refused
    * here, where another line can still be drawn, rather than left to the
    * terrain — which has no good answer to it. */
+  /** R34/R47 — ...and BEFORE that, whether there is ground here a road
+   * could be benched into at all: the bare land's own grade at the probe,
+   * against `maxLandGrade`. Differenced over the road's own clearance
+   * rather than a fine step, because what the rule is about is the ground
+   * a whole corridor has to sit on, not a lattice cell's facet. */
+  const standsOnGround = (p: Cursor): boolean => {
+    const h = clear / 2;
+    const dx = (land.heightAt(p.x + h, p.z) - land.heightAt(p.x - h, p.z)) / clear;
+    const dz = (land.heightAt(p.x, p.z + h) - land.heightAt(p.x, p.z - h)) / clear;
+    return Math.hypot(dx, dz) <= R.elevation.maxLandGrade;
+  };
   const sitsOnTheLand = (p: Cursor): boolean => {
+    if (!standsOnGround(p)) return false;
     if (p.y === undefined || p.rollS === undefined || fillScale <= 0) return true;
     // The BASE against the land — the road's own roll rides on top of it
     // either way, and the caps were measured on the base: held against the
@@ -435,7 +468,7 @@ function tryGenerateStage(
     // search refused thirty times the candidates for it.
     const off = offLand(p);
     const scale = fillScale * country.earthworks;
-    return off <= R.elevation.maxFill * scale && -off <= R.elevation.maxCut * scale;
+    return off <= R.elevation.maxFill * scale && -off <= R.elevation.maxCut * scale * cutScale;
   };
   /** R47 — ...except INSIDE A BORE, where the country standing over the
    * road is the whole point. Everything outside the bore on the same

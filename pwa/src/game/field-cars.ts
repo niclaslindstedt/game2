@@ -527,13 +527,13 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
             state.track.knobs.biome,
             state.surface,
             wetGround,
-            () => rockAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome),
+            () => rockAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs),
             () =>
               snowAt(
                 state.terrain.groundAt,
                 state.car.x,
                 state.car.z,
-                state.track.knobs.biome,
+                state.track.knobs,
                 state.track.climate,
               ),
           ),

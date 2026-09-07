@@ -13,6 +13,8 @@
 // button in the way of the driving.
 
 import {
+  altitudeOf,
+  biomeRules,
   defaultTemperature,
   fallsAsSnow,
   weathersIn,
@@ -450,6 +452,23 @@ export function temperatureAir(temperature: number | null, biome: BiomeId, seaso
 
 /** What the fader READS as: the air, signed, so a glance says which side of
  * freezing the stage is on. */
+/** R47 — WHAT THE ALTITUDE ROW READS: how high the mountain this seed
+ * builds stands over its valley floor, in metres (`altitudeOf`). The dial
+ * itself is a 0..1 position like every other knob; the metres are what it
+ * MEANS, and they are the only thing worth putting on the row — "0.62" is
+ * not a mountain and nobody can picture one. */
+export function altitudeLabel(knobs: StageKnobs, altitude: number): string {
+  return `${Math.round(altitudeOf({ ...knobs, altitude }))} M`;
+}
+
+/** ...and whether this country has an altitude to dial at all: R47's row
+ * is only offered where there is a mountain for it to move. Asked of the
+ * country rather than of its name, so a second mountain country would be
+ * offered it without anybody having to remember to come here. */
+export function hasAltitude(biome: BiomeId | string | undefined): boolean {
+  return biomeRules(biome).land.massif !== null;
+}
+
 export function temperatureLabel(air: number): string {
   return `${air > 0 ? "+" : ""}${air}°C`;
 }

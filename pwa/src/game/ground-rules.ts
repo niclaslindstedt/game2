@@ -17,10 +17,12 @@ import {
   CLIMATE,
   LAKE_Y,
   biomeRules,
+  landOf,
   snowCoverAt,
   snowlineOf,
   type BiomeLand,
   type Climate,
+  type StageKnobs,
 } from "@engine";
 
 function clamp01(t: number): number {
@@ -29,10 +31,14 @@ function clamp01(t: number): number {
 
 export type Zones = BiomeLand["zones"];
 
-/** The zones of a country by id; unnamed, the taiga's, exactly as the
- * engine resolves an id it does not know. */
-export function zonesOf(biome: string | undefined): Zones {
-  return biomeRules(biome).land.zones;
+/** The zones of the country a stage's dials build (R47, `landOf`) — the
+ * bands climb with the ALTITUDE dial, so a mountain drawn six thousand
+ * metres high carries its treeline and its snowline where a mountain that
+ * high carries them, rather than where a three-hundred-metre one does.
+ * Unnamed dials are the taiga's row, exactly as the engine resolves a
+ * country it does not know. */
+export function zonesOf(knobs: StageKnobs | undefined): Zones {
+  return knobs ? landOf(knobs).zones : biomeRules(undefined).land.zones;
 }
 
 /** The ground lattice's cell, m — the step the slope is read over. Restated
@@ -76,8 +82,8 @@ export function zonesUnder(climate: Climate, zones: Zones): Zones {
 
 /** Whether the ground at a height is under a winter's snow — where the
  * ground cover is not planted, because it is under the blanket. */
-export function frozenAt(biome: string | undefined, climate: Climate, y: number): boolean {
-  return snowCoverAt(climate, zonesOf(biome), y) > 0.5;
+export function frozenAt(knobs: StageKnobs | undefined, climate: Climate, y: number): boolean {
+  return snowCoverAt(climate, zonesOf(knobs), y) > 0.5;
 }
 
 /** How much bare rock the ground shows, 0..1: steep flanks first (mountain
@@ -117,19 +123,19 @@ export function rockAt(
   groundAt: (x: number, z: number) => number,
   x: number,
   z: number,
-  biome?: string,
+  knobs?: StageKnobs,
 ): number {
-  return bareRock(groundAt(x, z), normalAt(groundAt, x, z), zonesOf(biome));
+  return bareRock(groundAt(x, z), normalAt(groundAt, x, z), zonesOf(knobs));
 }
 
 export function snowAt(
   groundAt: (x: number, z: number) => number,
   x: number,
   z: number,
-  biome?: string,
+  knobs?: StageKnobs,
   climate?: Climate,
 ): number {
-  const zones = climate ? zonesUnder(climate, zonesOf(biome)) : zonesOf(biome);
+  const zones = climate ? zonesUnder(climate, zonesOf(knobs)) : zonesOf(knobs);
   return snowLie(groundAt(x, z), normalAt(groundAt, x, z), zones);
 }
 
@@ -146,13 +152,13 @@ export type PlantZone = "shore" | "snow" | "riparian" | "highland" | "community"
  * so the flora and the ground always tell the same story about how high
  * up this is: the highland takes over where the paint starts going to
  * rock, and over the snowline nothing is planted at all. */
-export function plantZone(biome: string, y: number, riparian: boolean): PlantZone {
-  const rules = biomeRules(biome);
+export function plantZone(knobs: StageKnobs, y: number, riparian: boolean): PlantZone {
+  const rules = biomeRules(knobs.biome);
   // R40 — a country with no water has no shoreline, however low its pans
   // lie: the height test is only a shoreline where there is water to
   // stand at.
   if (rules.water && y < LAKE_Y + 4) return "shore";
-  const { rock, snow } = rules.land.zones;
+  const { rock, snow } = zonesOf(knobs);
   if (snow !== null && y > snow) return "snow";
   if (riparian) return "riparian";
   if (y > rock.from) return "highland";
