@@ -60,12 +60,19 @@
 // while the work goes down with it, and the same run drawn on something
 // that cannot throttle holds its score flat from end to end.
 //
-// THE WARM-UP. The first frames of any run are the expensive ones: shaders
-// compile, geometry and textures go up to the card, and the first of each
-// kind of effect allocates its pool. That is a real cost and it is not what
-// this is measuring, so the clock does not start until the lights go out —
-// the establishing shot is thrown away the way a driver throws it away, and
-// the countdown behind it is the warm-up.
+// THE WARM-UP, AND WHERE IT IS PAID FOR. The first frames of any run are the
+// expensive ones: shaders compile, geometry and textures go up to the card,
+// and the first of each kind of effect allocates its pool. That is a real
+// cost and it is not what this is measuring, and it is also a WAIT — so it is
+// paid for BEHIND THE LOADING CARD, as the last step of the load that stands
+// the stage up (`warmBenchmark`, wired into the load in App.tsx). The
+// establishing shot is thrown away the way a driver throws it away and the
+// countdown is drawn out frame by frame under the game's own loader, which is
+// what a loader is for: a wait with the mark being laid over it and a bar
+// counting it out.
+//
+// So the card lifts on a race that is already at green, and every frame this
+// module draws is a frame it is timing.
 
 import { TUNING, botInput, skipIntro, step, type GameEvent, type GameState } from "@engine";
 
@@ -94,9 +101,10 @@ const STEPS_PER_FRAME = Math.max(1, Math.round(BENCHMARK.step / TUNING.dt));
 
 /** Where the benchmark is, and what it has to say about itself. */
 export type BenchmarkStatus = {
-  /** `warmup` is the countdown, drawn but not timed; `running` is the
-   * measured stretch; `done` is the answer. */
-  phase: "warmup" | "running" | "done";
+  /** `running` is the measured stretch — every frame of it, because the
+   * warm-up happened behind the loading card (`warmBenchmark`); `done` is
+   * the answer. */
+  phase: "running" | "done";
   /** Measured frames drawn so far, of `BENCHMARK.frames`. */
   frames: number;
   /** Wall clock since the lights went out, seconds — what is measured. */
@@ -121,13 +129,20 @@ export type BenchmarkStatus = {
   height: number;
 };
 
-export type BenchmarkOpts = {
+/** The race, and what draws it. The same four for the warm-up and for the
+ * measured run, because they are the same race: the frames drawn under the
+ * loading card have to be the frames that come after it, or the warm-up has
+ * warmed something else. */
+export type BenchmarkRace = {
   /** The player's own game — driven by the bot here, like everything else on
    * the road. */
   state: GameState;
   field: RivalField;
   renderer: GameRenderer;
   canvas: HTMLCanvasElement;
+};
+
+export type BenchmarkOpts = BenchmarkRace & {
   onStatus: (status: BenchmarkStatus) => void;
 };
 
@@ -146,9 +161,98 @@ function gpuFence(canvas: HTMLCanvasElement): () => void {
   };
 }
 
-/** Drive the whole benchmark. Returns the way to stop it early — the pump
- * outlives any one frame, so somebody who walks away from it has to be able
- * to take it off the machine. */
+/** ONE FRAME OF THE RACE, drawn and waited for. The warm-up and the measured
+ * run share it because they have to: a warm-up that stepped the road any
+ * differently would be warming a different frame from the one about to be
+ * timed. */
+function benchFrame(
+  state: GameState,
+  field: RivalField,
+  renderer: GameRenderer,
+  fence: () => void,
+): void {
+  for (let i = 0; i < STEPS_PER_FRAME; i++) {
+    // The field takes the tick first, then the player, then the one place
+    // two cars can be at once — the same order the game's own loop uses,
+    // because a benchmark that steps the road differently is measuring a
+    // different game.
+    stepField(field, state, renderer.field.events);
+    const events = step(state, botInput(state));
+    if (events.length > 0) renderer.onEvents(state, events);
+    const mine: GameEvent[] = rubRivals(field, state, (run, theirs) =>
+      renderer.field.events(run, theirs),
+    );
+    if (mine.length > 0) renderer.onEvents(state, mine);
+  }
+  renderer.render(state, BENCHMARK.step);
+  fence();
+}
+
+/** THE COUNTDOWN, IN FRAMES — the whole of the warm-up, and what its bar on
+ * the loading card is drawn against. Read off the engine's own start control
+ * rather than stated: a longer countdown is a longer warm-up, and neither
+ * this nor the card should have to be told twice. */
+const WARM_FRAMES = Math.max(1, Math.round(TUNING.countdown / BENCHMARK.step));
+
+/** The warm-up, cut into slices a loading card can be drawn between. */
+export type BenchmarkWarmup = {
+  /** Draw warm-up frames while `budget` allows, and say whether there are
+   * more to draw — the shape a load step is asked in (`race-loader.ts`). */
+  run: (budget: () => boolean) => boolean;
+  /** How far through the countdown it is, 0–1, for the card's bar. */
+  progress: () => number;
+};
+
+/** WARM THE MACHINE UP ON THE RACE IT IS ABOUT TO BE TIMED ON, behind the
+ * loading card. Every frame here is a frame the measurement will not have to
+ * pay for: the shaders compile, the geometry and the textures go up to the
+ * card, and each kind of effect allocates its pool.
+ *
+ * It draws the COUNTDOWN and nothing more — the establishing shot is thrown
+ * away on the first frame, and the last frame is the one the lights go out
+ * on — so what comes back is a race standing at green with a warm machine
+ * behind it, which is exactly what `runBenchmark` wants handed to it.
+ *
+ * THE FENCE IS THE POINT OF DOING IT FRAME BY FRAME. Without it these frames
+ * would only be POSTED to the graphics card, and the work would land in the
+ * measured run behind them; with it every one is waited for, so the load is
+ * as long as the warm-up really is and the card is over all of it. */
+export function warmBenchmark({ state, field, renderer, canvas }: BenchmarkRace): BenchmarkWarmup {
+  const fence = gpuFence(canvas);
+  // Pinned HERE and not at the green, for the same reason the frames are
+  // drawn here at all: the mirror pass is the most expensive thing in a
+  // frame (mirror-pace.ts), and warming a mirror the run will not draw warms
+  // the wrong frame. `runBenchmark` pins the same rung again and is what
+  // hands it back — it always follows, since it is what this is for.
+  renderer.pinMirrorPace(MIRROR_TIERS[0].hz);
+  let drawn = 0;
+  const lights = (): boolean => state.phase === "intro" || state.phase === "countdown";
+  return {
+    progress: () => Math.min(1, drawn / WARM_FRAMES),
+    run: (budget) => {
+      do {
+        // The establishing shot, thrown away exactly the way a driver throws
+        // it away: the camera is told first so it flies the rest of the shot
+        // rather than cutting, and the whole grid jumps the same beat
+        // (`advanceField`) or the field is racing a stagger nobody drove.
+        if (state.phase === "intro") {
+          renderer.skipIntroShot();
+          advanceField(field, skipIntro(state));
+        }
+        benchFrame(state, field, renderer, fence);
+        drawn += 1;
+      } while (lights() && budget());
+      return lights();
+    },
+  };
+}
+
+/** Drive the measured run. THE RACE IS ALREADY AT GREEN when this is called —
+ * `warmBenchmark` drove the countdown out behind the loading card — so the
+ * clock starts on the first frame and there is no untimed stretch here at
+ * all. Returns the way to stop it early: the pump outlives any one frame, so
+ * somebody who walks away from it has to be able to take it off the
+ * machine. */
 export function runBenchmark({
   state,
   field,
@@ -165,15 +269,16 @@ export function runBenchmark({
   // stopwatch, which is the one thing a fixed workload may not do. Every
   // frame here is fed the same `step` whatever it cost, so the ladder would
   // be reading a rate nobody achieved anyway.
+  //
+  // Pinned AGAIN rather than for the first time: the warm-up drew its frames
+  // on this same rung, and this is the call that owns handing it back.
   renderer.pinMirrorPace(MIRROR_TIERS[0].hz);
   const channel = new MessageChannel();
   let stopped = false;
-  /** Frames drawn since the green — the measured ones. */
+  /** Frames drawn, all of them measured. */
   let frames = 0;
-  /** …and frames drawn at all, which is what the card is told off: during
-   * the warm-up `frames` is still zero and would report on every one. */
-  let drawn = 0;
-  /** When the green was, ms on the page's clock; 0 while warming up. */
+  /** When the first of them started, ms on the page's clock; 0 until it
+   * has. */
   let green = 0;
   let elapsed = 0;
   /** When the LAST frame ended, ms on the same clock — so a reading can
@@ -221,49 +326,25 @@ export function runBenchmark({
 
   const tick = (): void => {
     if (stopped) return;
-    // The establishing shot, thrown away exactly the way a driver throws it
-    // away: the camera is told first so it flies the rest of the shot rather
-    // than cutting, and the whole grid jumps the same beat (`advanceField`)
-    // or the field is racing a stagger nobody drove.
-    if (state.phase === "intro") {
-      renderer.skipIntroShot();
-      advanceField(field, skipIntro(state));
-    }
-    if (green === 0 && state.phase === "racing") {
+    // Read BEFORE the frame it starts, not after: the first frame is one of
+    // the measured ones and its own cost belongs inside the clock.
+    if (green === 0) {
       green = performance.now();
       framed = green;
     }
-    for (let i = 0; i < STEPS_PER_FRAME; i++) {
-      // The field takes the tick first, then the player, then the one place
-      // two cars can be at once — the same order the game's own loop uses,
-      // because a benchmark that steps the road differently is measuring a
-      // different game.
-      stepField(field, state, renderer.field.events);
-      const events = step(state, botInput(state));
-      if (events.length > 0) renderer.onEvents(state, events);
-      const mine: GameEvent[] = rubRivals(field, state, (run, theirs) =>
-        renderer.field.events(run, theirs),
-      );
-      if (mine.length > 0) renderer.onEvents(state, mine);
-    }
-    renderer.render(state, BENCHMARK.step);
-    fence();
-    drawn += 1;
+    benchFrame(state, field, renderer, fence);
     const now = performance.now();
+    frames += 1;
+    elapsed = now - green;
     /** This frame alone, as a rate. */
-    let fps = 0;
-    if (green !== 0) {
-      frames += 1;
-      elapsed = now - green;
-      fps = now > framed ? 1000 / (now - framed) : 0;
-    }
+    const fps = now > framed ? 1000 / (now - framed) : 0;
     framed = now;
     const finished = frames >= BENCHMARK.frames;
     // The last frame is a reading whatever it lands on, so the line's end IS
     // the answer on the card rather than a point short of it. It happens to
     // land on the cadence too — but a run length that stopped dividing by it
     // would otherwise draw a graph that never quite reaches its own score.
-    if (green !== 0 && (finished || frames % SAMPLE_EVERY === 0)) {
+    if (finished || frames % SAMPLE_EVERY === 0) {
       samples.push({
         frame: frames,
         index: benchIndex(frames * BENCHMARK.step, elapsed / 1000),
@@ -281,17 +362,15 @@ export function runBenchmark({
       report("done");
       return;
     }
-    // Warming up there are no measured frames to count, so the countdown is
-    // reported off the frames drawn instead — the card is alive from the
-    // first one, and the graph stays empty until there is a score to draw.
-    if (green === 0) {
-      if (drawn % SAMPLE_EVERY === 0) report("warmup");
-    } else if (frames % SAMPLE_EVERY === 0) report("running");
+    if (frames % SAMPLE_EVERY === 0) report("running");
     channel.port2.postMessage(0);
   };
 
   channel.port1.onmessage = tick;
-  report("warmup");
+  // The card is alive from before the first frame, with an empty graph on it:
+  // there is no score until there are readings, and a run that put nothing on
+  // screen until the first one would open on a race with nothing over it.
+  report("running");
   channel.port2.postMessage(0);
   return (): void => {
     stopped = true;

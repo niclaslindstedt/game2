@@ -81,11 +81,9 @@ const LABEL_GAP = 12;
  * has a feel for. */
 function BenchmarkPlot({
   plot,
-  warming,
   full,
 }: {
   plot: BenchPlot;
-  warming: boolean;
   /** Drawn as the whole screen rather than as a panel on the card. Same
    * viewBox and therefore the same picture — only bigger, which is the
    * whole point: the readings are a hundred and twenty points wide and on a
@@ -219,16 +217,6 @@ function BenchmarkPlot({
           {Math.round(plot.index)}
         </text>
       )}
-      {warming && (
-        <text
-          className="bench-plot-wait"
-          x={PLOT.w / 2}
-          y={(PLOT.y0 + PLOT.y1) / 2}
-          textAnchor="middle"
-        >
-          WARMING UP
-        </text>
-      )}
     </svg>
   );
 }
@@ -320,7 +308,7 @@ export function BenchmarkFull({
         </span>
         <CopyGlyphButton label="Copy debug report" text={report} />
       </div>
-      <BenchmarkPlot plot={plot} warming={false} full />
+      <BenchmarkPlot plot={plot} full />
     </div>
   );
 }
@@ -448,11 +436,11 @@ export function BenchmarkCard({
             }}
             title="See the whole run full screen"
           >
-            <BenchmarkPlot plot={plot} warming={false} />
+            <BenchmarkPlot plot={plot} />
             <span className="bench-plot-more">TAP TO ENLARGE</span>
           </button>
         ) : (
-          <BenchmarkPlot plot={plot} warming={status.phase === "warmup"} />
+          <BenchmarkPlot plot={plot} />
         )}
         {done && <BenchmarkVideo video={video} />}
         {/* A browser stops drawing a page nobody is looking at, and a clock
