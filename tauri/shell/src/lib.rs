@@ -8,6 +8,7 @@
 //! | Module           | Answers                                     |
 //! | ---------------- | ------------------------------------------- |
 //! | [`config`]       | where the app points itself, and its names  |
+//! | [`menu`]         | every row of the macOS menu bar             |
 //! | [`output`]       | where a diagnostic line goes                |
 //! | [`webroot`]      | which file one request path is             |
 //! | [`window_state`] | where the window opens                      |
@@ -19,6 +20,7 @@
 
 pub mod config;
 pub mod display;
+pub mod menu;
 pub mod output;
 pub mod webroot;
 pub mod window_state;

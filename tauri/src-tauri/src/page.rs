@@ -10,6 +10,11 @@
 //! here — the bundle is the update — and holds the other half of the
 //! conversation there too, behind the FULLSCREEN row in the game's options.
 //!
+//! One thing crosses the other way with no script at all: when a macOS menu
+//! row is chosen, the shell PRESSES one of the game's own buttons by name
+//! ([`press`], on `SHELL_COMMAND`). Told rather than asked, and nothing comes
+//! back — a menu bar is a second way to reach buttons the page already has.
+//!
 //! **The page never sees Tauri.** `withGlobalTauri` is off,
 //! `capabilities/default.json` grants the window almost nothing, and the one
 //! command it may reach is looked up at CALL time inside `send` rather than
@@ -41,6 +46,25 @@ pub fn announce_fullscreen(window: &WebviewWindow, on: bool) {
     let script = format!(
         "window.dispatchEvent(new CustomEvent({SHELL_FULLSCREEN_STATE:?}, \
          {{ detail: {{ on: {on} }} }}))"
+    );
+    let _ = window.eval(script.as_str());
+}
+
+/// Press one of the game's own buttons, by name.
+///
+/// The menu bar's whole channel into the page, and the only thing this shell
+/// says without being asked first. A word on an event and nothing back: a
+/// command the game cannot serve where it stands is a command it ignores, and
+/// a page that has torn down hears nothing at all.
+///
+/// The word goes through `{:?}` rather than being quoted by hand, like every
+/// other value in this file: the format string is a JavaScript PROGRAM, and
+/// Rust's debug spelling of a `&str` is a quoted, escaped JavaScript string
+/// literal. There is no other escaping in here, and there must not need to be.
+pub fn press(window: &WebviewWindow, event: &str, command: &str) {
+    let script = format!(
+        "window.dispatchEvent(new CustomEvent({event:?}, \
+         {{ detail: {{ command: {command:?} }} }}))"
     );
     let _ = window.eval(script.as_str());
 }

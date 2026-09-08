@@ -1,6 +1,6 @@
 ---
 name: platform-shells
-description: "Use when working on the DESKTOP app (`tauri/`) or the STORE app (`native/`) — the window, the private `game://` scheme, the bundled webroot, the ACL, packaging a download, the Expo WebView, the audio session, a native bridge, or anything the page needs to know about the shell it is running in. Owns the decision/effect split in the two Rust crates, the frozen `__SF_SHELL__` global, the names that restate `identity.ts` and cannot import it, and the rule that a feature the shells need is a feature the WEBSITE needs first. Both trees live outside the npm workspace, so `make lint` and `make test` do not reach them."
+description: "Use when working on the DESKTOP app (`tauri/`) or the STORE app (`native/`) — the window, the macOS MENU BAR, the private `game://` scheme, the bundled webroot, the ACL, packaging a download or a Mac App Store build, the Expo WebView, the audio session, a native bridge, or anything the page needs to know about the shell it is running in. Owns the decision/effect split in the two Rust crates, the frozen `__SF_SHELL__` global, the names that restate `identity.ts` and cannot import it, and the rule that a feature the shells need is a feature the WEBSITE needs first. Both trees live outside the npm workspace, so `make lint` and `make test` do not reach them."
 ---
 
 # The platform shells: the desktop app and the store app
@@ -35,8 +35,8 @@ design:**
   this crate is the review comment.**
 - **`src-tauri/` is every EFFECT** — the process and its builder, the window
   and its geometry, answering `game://` off the bundled `webroot/`, the
-  initialization script that is the page's whole view of the shell, and the
-  one command. What the page may reach is the ACL in
+  initialization script that is the page's whole view of the shell, the menu
+  bar it builds out of `shell/src/menu.rs`, and the one command. What the page may reach is the ACL in
   `src-tauri/capabilities/`, which denies by default.
 
 Bundling, icons and packaging are `tauri/scripts/{bundle-web,icons,package}.mjs`
@@ -46,12 +46,46 @@ checks on every push that touches the tree, and `release.yml`'s `desktop`
 matrix packages it onto every release. → `tauri/README.md`.
 
 ```sh
-make tauri        # bundle the site into tauri/webroot/, compile, launch (needs Rust)
-make tauri-test   # the decision layer's suite — Rust toolchain only, NOT on `make test`'s path
-make tauri-lint   # clippy at zero warnings over both crates (needs the webview dev libraries)
-make tauri-fmt    # rustfmt in place
-make desktop      # package this machine's downloads into tauri/release/
+make tauri         # bundle the site into tauri/webroot/, compile, launch (needs Rust)
+make tauri-test    # the decision layer's suite — Rust toolchain only, NOT on `make test`'s path
+make tauri-lint    # clippy at zero warnings over both crates (needs the webview dev libraries)
+make tauri-fmt     # rustfmt in place
+make desktop       # package this machine's downloads into tauri/release/
+make mac-appstore  # the Mac App Store build's entitlements + config overlay
 ```
+
+### The macOS menu bar
+
+`shell/src/menu.rs` is every row as DATA — the title, the label, the
+accelerator, and who serves it; `src-tauri/src/menu.rs` turns that into a real
+`tauri::menu::Menu` and spends the events. Four rules, each of which the Rust
+suite enforces:
+
+- **Every row presses a button the game already has.** A menu bar is a second
+  way to reach the website's own buttons, never a place a feature lives. The
+  words travel on `SHELL_COMMAND` and are spelled again in
+  `pwa/src/shell-host.ts`; `tests/tauri_test.ts` holds the two lists together,
+  so a word added on one side alone fails rather than silently doing nothing.
+- **RACE, not File.** There are no files — a run is not a document. Naming the
+  second menu File and leaving it empty is the tell of a port.
+- **Every accelerator carries ⌘.** A menu accelerator is served BEFORE the page
+  sees the key, so a row bound to a bare key takes that key away from the car
+  for the life of the window — silently, and only on macOS.
+- **Edit is not decoration.** Without it the responder chain never offers
+  Cut/Copy/Paste, and the high-score board asks the player to TYPE a name.
+
+**macOS only, and the check is a runtime `if` inside `install` rather than a
+`#[cfg]` around the module** — `make tauri-lint` runs on Linux, so a `cfg` would
+mean the file was only ever typechecked on a machine CI does not have.
+
+### The Mac App Store
+
+The Mac build is this shell, not the Expo one — so its store assets live under
+`tauri/` beside Steam's, and `tauri/store/MAC_APP_STORE.md` is the whole
+submission. Four things separate it from the notarized download: the App
+Sandbox (mandatory, and the strongest sentence the review notes have), two
+different certificates, a `.pkg` rather than a `.dmg`, and a layered `.icon`
+for macOS 26 beside the `.icns`. The `store-listing` skill owns its words.
 
 ## `native/` — the App Store / Play Store app
 
@@ -89,13 +123,17 @@ every build and drops anything set by hand in Xcode.
 page's half behind a probe the browser answers too — never a line in `engine/`
 or `pwa/`.
 
-## The two things stated twice
+## The three things stated twice
 
 - **The shell's word.** `pwa/src/shell-host.ts` holds one frozen global with
   one word per shell; the desktop app writes `"tauri"` from
   `src-tauri/src/page.rs`, the store app writes `"native"` from
   `native/src/injected.ts`. `tests/tauri_test.ts` holds the global's name to
   the Rust constant.
+- **The website's address.** `SITE_URL` in `shell/src/config.rs` is
+  `identity.ts`'s spelled again — the Help menu is the one part of the shell
+  that points OUT, and its Privacy and Support rows are the same two pages the
+  store listing has to name. `tests/tauri_test.ts` holds it.
 - **The names.** The desktop app cannot import `identity.ts`, so
   `productName` and `longDescription` in `tauri/src-tauri/tauri.conf.json` and
   `WINDOW_TITLE` in `tauri/shell/src/config.rs` are `APP_NAME` /
@@ -108,6 +146,7 @@ or `pwa/`.
 
 A change to the desktop app's tree or its environment variables updates
 `tauri/README.md`, `docs/configuration.md` (the launch environment) and
-`docs/platforms.md`. A native bridge or build knob updates `native/README.md`
+`docs/platforms.md`. A change to the menu bar, the macOS icon or the Mac App
+Store build updates `tauri/store/MAC_APP_STORE.md` as well. A native bridge or build knob updates `native/README.md`
 and `docs/configuration.md` (the `EXPO_*` rows). Shell and platform plans live
 in `docs/platforms.md`.

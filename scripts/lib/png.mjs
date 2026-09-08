@@ -45,6 +45,35 @@ export function encodePng(width, height, rgb) {
   ]);
 }
 
+/**
+ * Encode an RGBA pixel buffer (width*height*4 bytes) as a PNG file.
+ *
+ * The RGB encoder above is what every raster in this repo wants — an icon, an
+ * OG card and a track preview are all opaque rectangles. The ONE thing that
+ * needs an alpha channel is a LAYER: Apple's Icon Composer composites a
+ * foreground over a background itself, so the foreground has to arrive with
+ * the background cut out of it rather than painted behind it.
+ */
+export function encodeRgbaPng(width, height, rgba) {
+  const stride = width * 4;
+  const raw = Buffer.alloc(height * (stride + 1));
+  for (let y = 0; y < height; y++) {
+    raw[y * (stride + 1)] = 0; // filter: none
+    rgba.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // color type: RGBA
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(raw, { level: 9 })),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
 /** A simple RGB canvas with pixel and disk painters, for the generators. */
 export function createCanvas(width, height, bg = [0, 0, 0]) {
   const rgb = Buffer.alloc(width * height * 3);

@@ -57,6 +57,16 @@ native/store/screenshots/
 native/fastlane/metadata/
 tauri/store/steam-listing.md
 tauri/store/screenshots/
+tauri/store/mac.config.json
+tauri/fastlane/metadata/
+# The Mac App Store's icon layers, and the sandbox declaration that names the
+# team. The layers are `make icons` output like every other raster here; the
+# entitlements are generated because they carry APPLE_TEAM_ID, which identifies
+# a specific developer account and never goes in a public repository.
+tauri/store/icon-layers/
+tauri/src-tauri/Entitlements.plist
+tauri/src-tauri/embedded.provisionprofile
+tauri/src-tauri/tauri.appstore.conf.json
 
 # The App Store Connect API key, and any Play service-account JSON. Credentials,
 # and this repository is public. `native/.env` is already covered above.

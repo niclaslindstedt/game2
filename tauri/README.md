@@ -14,31 +14,42 @@ own, which is what keeps the download a few megabytes over the site itself.
 What is added around the page is the short list a browser tab cannot give a
 game and nothing more: one stable origin, a window that remembers itself, a
 fullscreen the game's own options can reach (and a key for it), a RESOLUTION
-row that names real pixels, links out that open in the browser, and a launch
-log.
+row that names real pixels, links out that open in the browser, a launch log,
+and — on macOS — a **real menu bar**, whose every row presses a button the game
+already has.
+
+This is also the tree the **Mac App Store** build comes from: a Mac app is a
+desktop app, so the store app under `native/` (iPhone and Android) does not
+build one. [`store/MAC_APP_STORE.md`](store/MAC_APP_STORE.md) is that
+submission.
 
 ---
 
 ## Layout — TWO crates, and the split is the design
 
-| Path                        | What it is                                                                          |
-| --------------------------- | ----------------------------------------------------------------------------------- |
-| `shell/`                    | **Every decision.** No Tauri, no GUI, no window                                     |
-| `shell/src/config.rs`       | The scheme, the host, the names, and what the window may navigate to                |
-| `shell/src/webroot.rs`      | Which file one request path is — the containment check                              |
-| `shell/src/window_state.rs` | Where the window opens, validated against the monitors attached                     |
-| `shell/src/output.rs`       | Where a diagnostic line goes: stdout, and the launch log                            |
-| `shell/src/display.rs`      | Whether there is anywhere to put a window, and what a panic should say              |
-| `shell/tests/`              | Its whole test suite — runs anywhere a Rust toolchain does                          |
-| `src-tauri/src/main.rs`     | The process: the builder, the one command, the lifecycle                            |
-| `src-tauri/src/window.rs`   | The window, its geometry, and pinning it to our own origin                          |
-| `src-tauri/src/protocol.rs` | Answering `game://` off the bundled `webroot/`                                      |
-| `src-tauri/src/page.rs`     | The initialization script — the page's whole view of the shell                      |
-| `src-tauri/capabilities/`   | **Tauri's own ACL** — what the window may reach. Deny by default                    |
-| `src-tauri/tauri.conf.json` | The static half of the bundle's shape; `scripts/package.mjs` computes the rest      |
-| `scripts/bundle-web.mjs`    | Builds the site and copies it to `webroot/` (gitignored)                            |
-| `scripts/icons.mjs`         | Re-encodes `pwa/public/icons/`'s mark to the RGBA Tauri insists on, plus the `.ico` |
-| `scripts/package.mjs`       | Packaging — this platform's downloads, into `release/`                              |
+| Path                        | What it is                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| `shell/`                    | **Every decision.** No Tauri, no GUI, no window                                   |
+| `shell/src/config.rs`       | The scheme, the host, the names, and what the window may navigate to              |
+| `shell/src/webroot.rs`      | Which file one request path is — the containment check                            |
+| `shell/src/window_state.rs` | Where the window opens, validated against the monitors attached                   |
+| `shell/src/output.rs`       | Where a diagnostic line goes: stdout, and the launch log                          |
+| `shell/src/display.rs`      | Whether there is anywhere to put a window, and what a panic should say            |
+| `shell/src/menu.rs`         | **The macOS menu bar, as data** — every row, its binding, and who serves it       |
+| `shell/tests/`              | Its whole test suite — runs anywhere a Rust toolchain does                        |
+| `src-tauri/src/main.rs`     | The process: the builder, the one command, the lifecycle                          |
+| `src-tauri/src/window.rs`   | The window, its geometry, and pinning it to our own origin                        |
+| `src-tauri/src/protocol.rs` | Answering `game://` off the bundled `webroot/`                                    |
+| `src-tauri/src/page.rs`     | The initialization script — the page's whole view of the shell                    |
+| `src-tauri/src/menu.rs`     | Building that bar, and spending its events                                        |
+| `src-tauri/capabilities/`   | **Tauri's own ACL** — what the window may reach. Deny by default                  |
+| `src-tauri/tauri.conf.json` | The static half of the bundle's shape; `scripts/package.mjs` computes the rest    |
+| `scripts/bundle-web.mjs`    | Builds the site and copies it to `webroot/` (gitignored)                          |
+| `scripts/icons.mjs`         | Re-encodes the mark to the RGBA Tauri insists on, plus the `.ico` and the `.icns` |
+| `scripts/lib/mac-icon.mjs`  | **The macOS icon** — the squircle, the inset, the lighting, the `.icns` ladder    |
+| `scripts/mac-appstore.mjs`  | The Mac App Store build's sandbox entitlements and config overlay                 |
+| `scripts/package.mjs`       | Packaging — this platform's downloads, into `release/`                            |
+| `store/MAC_APP_STORE.md`    | **The Mac App Store submission**, end to end                                      |
 
 `cargo test -p scanflick-shell` therefore runs the entire decision layer on a
 machine with **no GUI libraries installed at all**, which is what makes this

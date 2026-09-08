@@ -1,6 +1,6 @@
 ---
 name: store-shots
-description: "Use when regenerating the App Store / Play Store / Steam screenshot set, changing what it stages, or writing the listing copy that ships beside it — after an art pass, a HUD change, new cars or countries, a rebalance that changes what a race looks like, or a rewrite of the marketing captions. Drives the real game to staged moments at Apple's and Valve's exact rasters, captions them in the game's own type, and holds the result to a bar before it reaches a store listing."
+description: "Use when regenerating the App Store / Mac App Store / Play Store / Steam screenshot set, changing what it stages, or writing the listing copy that ships beside it — after an art pass, a HUD change, new cars or countries, a rebalance that changes what a race looks like, or a rewrite of the marketing captions. Drives the real game to staged moments at Apple's and Valve's exact rasters, captions them in the game's own type, and holds the result to a bar before it reaches a store listing."
 ---
 
 # Store screenshots and the listing
@@ -161,9 +161,15 @@ grid, a corner, a vista — is immune, because it is still true a second later.
 
 Two more consequences worth planning around:
 
-- **A full three-raster set is an hour or more on a machine with no GPU.** Shoot
+- **A full FOUR-raster set is well over an hour on a machine with no GPU.** Shoot
   one raster while iterating (`--only iphone`), and the full set when the recipes
   are settled.
+- **Two of the four are DESKTOP frames** — `mac-2880` (the Mac App Store, at
+  1440×900 @2×) and `steam-1080`. Both are `bleed` and neither carries the touch
+  controls, and both land under `tauri/store/screenshots/` rather than the phone
+  app's upload directory, because that is the shell that submits them. A phone
+  frame upscaled into a Mac listing is the fastest way to look like a port, and
+  a 16:9 desktop frame in the iPhone set is rejected at upload.
 - **`PATIENCE` is ten minutes per wait on purpose.** A recipe placed a corner too
   early does not become a slow frame, it becomes a timeout.
 

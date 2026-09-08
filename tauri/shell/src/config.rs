@@ -31,6 +31,30 @@ pub const APP_SCHEME: &str = "game";
 /// changing this word later orphans every save on the machine.
 pub const APP_HOST: &str = "localhost";
 
+/// The website this game is published at — `SITE_URL` in
+/// `pwa/src/identity.ts`, which `tests/tauri_test.ts` holds it to.
+///
+/// The window never goes there: it serves the copy bundled inside the app. It
+/// is here because the HELP menu has to send a stuck player somewhere, and
+/// every one of its rows opens in the player's own browser
+/// (`menu::Target::Link`).
+pub const SITE_URL: &str = "https://game2.niclaslindstedt.se";
+
+/// One page of the website, as an absolute URL. `path` is rooted (`"/"`,
+/// `"/privacy/"`), so the domain is spelled once.
+pub fn site_link(path: &str) -> String {
+    format!("{}{path}", SITE_URL.trim_end_matches('/'))
+}
+
+/// THE MENU BAR SPEAKING TO THE PAGE — the event a menu row's word arrives on.
+///
+/// The third and last thing that crosses between this shell and the game, and
+/// the only one the SHELL starts: a macOS menu row presses one of the game's
+/// own buttons by name. The word list is `menu::Target::Page`'s and is spelled
+/// again in `pwa/src/shell-host.ts`; `tests/tauri_test.ts` holds the event
+/// name and the whole list together.
+pub const SHELL_COMMAND: &str = "sf-shell-command";
+
 /// The page inside the bundle that the window opens on.
 pub const APP_ENTRY: &str = "index.html";
 

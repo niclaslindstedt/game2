@@ -29,9 +29,17 @@
 //
 // Compiled by `make store-metadata` (scripts/generate-store-metadata.mjs) into
 // the files the upload tools read: native/store/store.config.json for
-// `eas metadata:push`, the fastlane metadata tree for `fastlane deliver`, and
-// tauri/store/steam-listing.md for the Steamworks store page. All three are
-// gitignored build output — never edit them.
+// `eas metadata:push`, the fastlane metadata tree for `fastlane deliver`,
+// tauri/fastlane/metadata/ for the MAC App Store's own `deliver`, and
+// tauri/store/steam-listing.md for the Steamworks store page. All of it is
+// gitignored build output — never edit it.
+//
+// THREE STOREFRONTS, TWO SHELLS. The App Store's phone app is `native/` (Expo
+// over a WebView); the Mac App Store's app and Steam's download are both
+// `tauri/` (the desktop shell), because a Mac app is a desktop app and the
+// Expo shell does not build one. Each store's assets sit beside the shell that
+// submits them; the words are authored once, here and in `copy.mts`, because
+// they describe one game.
 //
 // A TypeScript module rather than a YAML catalog, for the reason the rest of
 // this repo's small fixed catalogs are (docs/spec-conformance.md, §24): the
@@ -97,6 +105,35 @@ export type StoreRules = {
     contact: Omit<AppleReview, "notes">;
     release: { automaticRelease: boolean; phasedRelease: boolean };
   };
+  /** THE MAC APP STORE. Apple's second storefront, a different binary, and
+   * the same questionnaire — `apple.advisory` and `apple.contact` are shared,
+   * because the age rating and the review contact are claims about the GAME
+   * rather than about a build. */
+  mac: {
+    /** App Store Connect's own category ids, shared across platforms. */
+    categories: (string | string[])[];
+    /** The oldest macOS the build runs on. RESTATED from
+     * `tauri/src-tauri/tauri.conf.json`, which cannot import this file, and
+     * checked against it by the generator: a listing that promises Catalina
+     * and a binary that refuses to launch on it is a refund. */
+    minimumSystemVersion: string;
+    /** Every entitlement the submitted build declares.
+     *
+     * The App Sandbox is not optional on the Mac App Store, and its presence
+     * is the load-bearing half of what the review notes claim about this app:
+     * a sandboxed process that never asks for the network is a very short
+     * argument that nothing leaves the device. Anything ADDED here is a new
+     * claim to defend, so the list stays as short as the game can stand. */
+    entitlements: string[];
+    /** Whether the Mac app is sold as ONE PURCHASE with the iPhone app.
+     *
+     * Apple's universal purchase needs both apps to carry the SAME bundle id,
+     * and it can only be turned on before either has shipped — after that the
+     * two are separate products for good. The generator checks the two
+     * identifiers agree when this is on, and says which files disagree. */
+    universalPurchase: boolean;
+  };
+
   steam: {
     /** The store page's genres, most representative first. */
     genres: string[];
@@ -159,6 +196,32 @@ export const RULES: StoreRules = {
       automaticRelease: false,
       phasedRelease: false,
     },
+  },
+
+  mac: {
+    // The same shelf as the phone app: it is the same game, and a buyer who
+    // finds it on one should recognise it on the other.
+    categories: [["GAMES", "GAMES_RACING", "GAMES_SIMULATION"], "SPORTS"],
+
+    // Catalina, which is what the desktop shell already declares. The webview
+    // this app is a window onto is the SYSTEM's, so the floor is really "a
+    // WKWebView new enough to run the game" rather than anything the shell
+    // itself needs.
+    minimumSystemVersion: "10.15",
+
+    // The sandbox, and NOTHING ELSE. Every capability this game could plausibly
+    // want it deliberately does not have: no network (the whole site is inside
+    // the binary and served from a private scheme in-process), no file access
+    // (the player's settings, scores, ghosts and pictures are the webview's own
+    // origin-keyed storage), no camera, no location. The one thing it opens is
+    // a URL in the player's browser, which the system does on its behalf.
+    entitlements: ["com.apple.security.app-sandbox"],
+
+    // ONE PURCHASE ACROSS THE IPHONE AND THE MAC. Off until the two bundle ids
+    // are made to agree — see the generator's check, which names both files.
+    // This is a decision with a deadline: it can only be turned on while
+    // NEITHER app has shipped.
+    universalPurchase: false,
   },
 
   steam: {

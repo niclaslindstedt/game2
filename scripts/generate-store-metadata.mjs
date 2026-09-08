@@ -7,7 +7,14 @@
 //
 //   native/store/store.config.json     `eas metadata:push` (text only)
 //   native/fastlane/metadata/**        `fastlane deliver`  (text + screenshots)
+//   tauri/store/mac.config.json        the MAC App Store's listing, compiled
+//   tauri/fastlane/metadata/**         `fastlane deliver --platform osx`
 //   tauri/store/steam-listing.md       the Steamworks store page, to paste
+//
+// THREE STOREFRONTS, TWO SHELLS: the phone app under `native/`, and the Mac
+// App Store app and the Steam download both under `tauri/`, which is why the
+// Mac outputs land over there. Each store's assets sit beside the shell that
+// submits them.
 //
 // Three jobs the authored module cannot do for itself:
 //
@@ -207,6 +214,67 @@ for (const required of ["firstName", "lastName", "email"]) {
 }
 
 // ---------------------------------------------------------------------------
+// THE MAC APP STORE. Compiled only when the copy module actually carries Mac
+// words, and SKIPPED rather than filled in from the phone listing when it does
+// not.
+//
+// Filling in would be the tempting behaviour and it is the wrong one: the two
+// pages describe two binaries, and the review notes are the field that decides
+// whether either ships. The phone's notes say the game is served by a local
+// HTTP server on the device — true there, false here, and false in a field a
+// reviewer checks. A skipped storefront is a line in `make store-preflight`; a
+// wrong one is a rejection with the reason in writing.
+// ---------------------------------------------------------------------------
+const macInfoAuthored = copy.MAC_INFO ?? null;
+const macNotes = copy.MAC_REVIEW_NOTES ?? null;
+const macListed = Boolean(macInfoAuthored && macNotes);
+if (!macListed) {
+  warn(
+    "no Mac App Store copy — the Mac listing is SKIPPED. Export MAC_INFO and " +
+      "MAC_REVIEW_NOTES from native/store/copy.mts (copy.example.mts has the shape) " +
+      "and load the `store-listing` skill: the Mac page is a separate piece of " +
+      "writing, because the phone's review notes describe a different binary.",
+  );
+}
+
+const macInfo = {};
+if (macListed) {
+  for (const [locale, authored] of Object.entries(macInfoAuthored)) {
+    macInfo[locale] = {
+      title: identity.APP_TITLE,
+      marketingUrl: MARKETING_URL,
+      privacyPolicyUrl: PRIVACY_URL,
+      ...authored,
+    };
+    const m = macInfo[locale];
+    const field = (name) => `mac.info.${locale}.${name}`;
+    for (const name of [
+      "title",
+      "subtitle",
+      "description",
+      "promoText",
+      "releaseNotes",
+      "supportUrl",
+      "marketingUrl",
+      "privacyPolicyUrl",
+    ]) {
+      checkLength(field(name), m[name], LIMITS[name]);
+    }
+    const keywords = m.keywords ?? [];
+    if (!Array.isArray(keywords) || keywords.length === 0) {
+      fail(`${field("keywords")}: at least one keyword is required`);
+    } else {
+      checkLength(
+        `${field("keywords")} (joined "${keywords.join(",")}")`,
+        keywords.join(","),
+        LIMITS.keywordsJoined,
+      );
+    }
+  }
+  checkLength("mac.review.notes", macNotes, LIMITS.reviewNotes);
+}
+
+// ---------------------------------------------------------------------------
 // Cross-check the listing against the app it describes.
 //
 // The review notes are not decoration: they are the argument that this app is
@@ -273,6 +341,84 @@ if (!/^https:\/\//.test(support)) {
 }
 if (support.includes("github.com")) {
   fail("apple.info.en-US.supportUrl points at the source repository — it needs a support page");
+}
+
+// ---------------------------------------------------------------------------
+// Cross-check the MAC listing against the DESKTOP shell, which is a different
+// binary from the one above and makes a different argument.
+//
+// The phone app's answer to guideline 4.2 is "a local HTTP server serves a
+// zip inside the bundle". The Mac app's is stronger and completely different:
+// the site is a bundled RESOURCE served in-process from a private scheme, in a
+// SANDBOXED process that asks for no network at all. Every one of those is a
+// fact about `tauri/`, so every one of them is checked against `tauri/`.
+// ---------------------------------------------------------------------------
+const tauriConfig = JSON.parse(readFileSync(at("tauri", "src-tauri", "tauri.conf.json"), "utf8"));
+const macRules = RULES.mac ?? {};
+
+// THE CLAIM: "the whole game is inside the app". The desktop shell says so by
+// bundling the built site as a resource; without that line the app is an empty
+// window that has to be pointed somewhere, and the notes are false.
+if (!tauriConfig.bundle?.resources?.["../webroot"]) {
+  fail(
+    "tauri.conf.json no longer bundles ../webroot as a resource — the Mac review " +
+      "notes claim the whole game ships inside the app, and without this it does not.",
+  );
+}
+
+// THE CLAIM: a version floor a buyer can act on. Two files, neither able to
+// import the other, and the one that is WRONG is the listing — a store page
+// promising a macOS the binary refuses to launch on is a refund.
+const shellFloor = tauriConfig.bundle?.macOS?.minimumSystemVersion;
+if (macRules.minimumSystemVersion && shellFloor !== macRules.minimumSystemVersion) {
+  fail(
+    `mac.minimumSystemVersion (${macRules.minimumSystemVersion}) and ` +
+      `tauri.conf.json's bundle.macOS.minimumSystemVersion (${shellFloor}) disagree`,
+  );
+}
+
+// THE SANDBOX. Not optional on the Mac App Store, and the shortest true
+// sentence the review notes have — so a list that has lost it is a submission
+// that will be rejected before anybody reads a word.
+if (!(macRules.entitlements ?? []).includes("com.apple.security.app-sandbox")) {
+  fail(
+    "mac.entitlements does not include com.apple.security.app-sandbox — the Mac " +
+      "App Store requires it, and the review notes are written around it.",
+  );
+}
+// Anything BEYOND the sandbox is a capability somebody has to defend. Warned
+// rather than failed, because the day the game genuinely needs one, this line
+// is the reminder to say so in the notes.
+const extraEntitlements = (macRules.entitlements ?? []).filter(
+  (name) => name !== "com.apple.security.app-sandbox",
+);
+if (extraEntitlements.length) {
+  warn(
+    `mac.entitlements asks for more than the sandbox (${extraEntitlements.join(", ")}) — ` +
+      "each one is a claim the review notes now have to make and a reviewer can check.",
+  );
+}
+
+// ONE PURCHASE, OR TWO PRODUCTS — and the answer can only be given ONCE.
+// Apple's universal purchase needs the Mac app and the iPhone app to carry the
+// same bundle id, and it cannot be turned on after either has shipped. So the
+// disagreement is reported every single run until somebody decides.
+const macBundleId = tauriConfig.identifier;
+if (macRules.universalPurchase) {
+  if (macBundleId !== bundleId) {
+    fail(
+      `mac.universalPurchase is on, but the two bundle ids differ: ` +
+        `tauri.conf.json says ${macBundleId} and native/app.config.js says ${bundleId}. ` +
+        "Apple sells them as one app only when the identifier is the same.",
+    );
+  }
+} else if (macBundleId !== bundleId) {
+  warn(
+    `the Mac app (${macBundleId}) and the iPhone app (${bundleId}) are different ` +
+      "products, so a player buys the game twice. Universal purchase would make it " +
+      "one, and it can only be turned on while NEITHER has shipped — set " +
+      "tauri.conf.json's identifier to the phone's and flip mac.universalPurchase.",
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -357,12 +503,16 @@ function categoryFiles(categories) {
  * deliver reads one plain-text file per field: a MISSING file means "leave that
  * field alone in App Store Connect", which is why only what the listing
  * actually declares gets written.
+ *
+ * Written twice, into two trees: `native/fastlane/` for the phone app and
+ * `tauri/fastlane/` for the Mac app. `deliver` is told which platform by its
+ * own `--platform` flag, and the two apps are two records with two sets of
+ * words, so nothing about the tree itself differs.
  */
-function writeFastlaneTree() {
-  const treeRoot = at("native", "fastlane", "metadata");
+function writeFastlaneTree(treeRoot, locales, review, categories) {
   rmSync(treeRoot, { recursive: true, force: true });
 
-  for (const [locale, i] of Object.entries(info)) {
+  for (const [locale, i] of Object.entries(locales)) {
     const dir = join(treeRoot, locale);
     mkdirSync(dir, { recursive: true });
     const files = {
@@ -384,13 +534,13 @@ function writeFastlaneTree() {
   }
 
   writeFileSync(join(treeRoot, "copyright.txt"), `${copyright}\n`);
-  for (const [file, value] of Object.entries(categoryFiles(RULES.apple.categories))) {
+  for (const [file, value] of Object.entries(categoryFiles(categories))) {
     writeFileSync(join(treeRoot, `${file}.txt`), `${value}\n`);
   }
 
   const dir = join(treeRoot, "review_information");
   mkdirSync(dir, { recursive: true });
-  const r = config.apple.review;
+  const r = review;
   for (const [file, value] of Object.entries({
     "first_name.txt": r.firstName,
     "last_name.txt": r.lastName,
@@ -403,6 +553,42 @@ function writeFastlaneTree() {
   }
 
   return treeRoot;
+}
+
+/**
+ * THE MAC APP STORE'S COMPILED LISTING, beside the shell that submits it.
+ *
+ * Its own file rather than a second section of `store.config.json`, because
+ * the two are two App Store Connect RECORDS: a different app id, a different
+ * build, its own screenshots and its own words. What they share — the age
+ * rating, the review contact, the release policy — is copied in from the same
+ * rules module, so the two can never answer Apple's questionnaire differently
+ * about one game.
+ */
+function writeMacConfig(macReview) {
+  const out = at("tauri", "store", "mac.config.json");
+  const macConfig = {
+    configVersion: RULES.configVersion ?? 0,
+    version: pkg.version,
+    copyright,
+    apple: {
+      platform: "MAC_OS",
+      bundleId: macBundleId,
+      minimumSystemVersion: macRules.minimumSystemVersion,
+      entitlements: macRules.entitlements,
+      universalPurchase: Boolean(macRules.universalPurchase),
+      info: macInfo,
+      categories: macRules.categories,
+      // The SAME answers as the phone app's. An age rating is a claim about
+      // the game, and this game is one game.
+      advisory: RULES.apple.advisory,
+      review: macReview,
+      release: RULES.apple.release,
+    },
+  };
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, `${JSON.stringify(macConfig, null, 2)}\n`);
+  return out;
 }
 
 /**
@@ -473,7 +659,24 @@ if (process.argv.includes("--check")) {
   const configFile = at("native", "store", "store.config.json");
   mkdirSync(dirname(configFile), { recursive: true });
   writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
-  const fastlane = writeFastlaneTree();
+  const fastlane = writeFastlaneTree(
+    at("native", "fastlane", "metadata"),
+    info,
+    config.apple.review,
+    RULES.apple.categories,
+  );
+  let macFastlane = null;
+  let macConfigFile = null;
+  if (macListed) {
+    const macReview = { ...RULES.apple.contact, notes: macNotes, ...(phone ? { phone } : {}) };
+    macConfigFile = writeMacConfig(macReview);
+    macFastlane = writeFastlaneTree(
+      at("tauri", "fastlane", "metadata"),
+      macInfo,
+      macReview,
+      macRules.categories,
+    );
+  }
   const steamPage = writeSteamPage();
   console.log(
     [
@@ -489,6 +692,10 @@ if (process.argv.includes("--check")) {
       `  privacy    ${en.privacyPolicyUrl}`,
       `  copy       native/store/${copyFile}${onSkeleton ? "  ← THE SKELETON" : ""}`,
       `  fastlane   ${rel(fastlane)}`,
+      macListed
+        ? `  mac        ${rel(macConfigFile)} + ${rel(macFastlane)}` +
+          ` (subtitle ${budget(macInfo["en-US"].subtitle, 30)})`
+        : "  mac        SKIPPED — no MAC_INFO / MAC_REVIEW_NOTES in the copy module",
       `  steam      ${rel(steamPage)} (short ${budget(steam.shortDescription, STEAM_SHORT_MAX)})`,
     ].join("\n"),
   );

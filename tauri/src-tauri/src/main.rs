@@ -22,6 +22,7 @@
 //! (`capabilities/default.json`), one command to reach the shell by, and a
 //! window pinned to our own origin (`window::navigation_guard`).
 
+mod menu;
 mod page;
 mod protocol;
 mod window;
@@ -138,6 +139,9 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![shell_fullscreen])
+        // Every menu row this app declared, spent by `scanflick_shell::menu`'s
+        // table.
+        .on_menu_event(|app, event| menu::pressed(app, event.id().as_ref()))
         .register_uri_scheme_protocol(APP_SCHEME, |ctx, request| {
             // `try_state`: a request cannot arrive before the window is built,
             // and the window is built after the state is managed — but a 404
@@ -177,6 +181,15 @@ fn main() {
                     ),
                 );
                 return Ok(());
+            }
+
+            // THE MENU BAR, BEFORE THE WINDOW. On macOS it belongs to the
+            // process rather than to any window, and one built afterwards
+            // leaves the game's first frames under Tauri's bare default.
+            // Not fatal: a game with a wrong menu is still a game, and a
+            // launch that died over one would be the worse bug.
+            if let Err(err) = menu::install(&handle) {
+                output::warn(&format!("the menu bar could not be built — {err}"));
             }
 
             app.manage(Shell { user_data, webroot });

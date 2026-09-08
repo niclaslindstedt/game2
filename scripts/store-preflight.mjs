@@ -51,6 +51,7 @@ const nowOnly = process.argv.includes("--now");
 // ---------------------------------------------------------------------------
 const GATES = {
   apple: { short: "needs the App Store Connect record", hint: "native/RELEASING.md §1" },
+  mac: { short: "needs the Mac App Store record", hint: "tauri/store/MAC_APP_STORE.md" },
   steam: { short: "needs the Steamworks app", hint: "tauri/store/README.md" },
 };
 
@@ -187,6 +188,16 @@ else
     "no App Store screenshots have been captured",
     "`make store-shots`. Apple requires at least one per device family, and " +
       "fastlane uploads text only without them.",
+  );
+
+const macShots = pngCount(at("tauri", "store", "screenshots", "mac-2880"));
+if (macShots > 0) ok(`${macShots} Mac App Store screenshots staged`);
+else
+  warn(
+    "no Mac App Store screenshots have been captured",
+    '`make store-shots ARGS="--only mac-2880"`. Apple wants at least one, at one of ' +
+      "its four Mac rasters, and they are DESKTOP frames — a phone screenshot " +
+      "upscaled is the fastest way to look like a port.",
   );
 
 const steamShots = pngCount(at("tauri", "store", "screenshots"));
@@ -341,7 +352,66 @@ warn(
 );
 
 // ---------------------------------------------------------------------------
-// 6. STEAM. The desktop shell ships to a second storefront, and everything
+// 6. THE MAC APP STORE. The desktop shell's OTHER storefront, and the one
+//    whose gates are least like the phone app's: a second app record, a
+//    sandbox, a provisioning profile, and a package format `tauri build` does
+//    not produce on its own.
+// ---------------------------------------------------------------------------
+section("MAC APP STORE");
+
+const macConfig = at("tauri", "store", "mac.config.json");
+if (existsSync(macConfig)) {
+  ok(`the Mac listing is compiled (${rel(macConfig)})`);
+} else {
+  warn(
+    "the Mac listing has not been compiled",
+    "`make store-metadata`. If it says SKIPPED, the copy module has no MAC_INFO / " +
+      "MAC_REVIEW_NOTES — the Mac page is a separate piece of writing, because the " +
+      "phone's review notes describe a different binary. See the `store-listing` skill.",
+  );
+}
+
+// THE ICON THE DOCK DRAWS. Not one of the PNGs: a macOS bundle reads
+// `icon.icns` and nothing else, and a build without one ships the blank
+// generic icon — which is both a rejection and the first thing anybody sees.
+const icns = at("tauri", "src-tauri", "icons", "icon.icns");
+if (existsSync(icns)) ok(`the macOS .icns is generated (${rel(icns)})`);
+else warn("no macOS .icns", "`npm --prefix tauri run icons`; `make tauri` runs it too.");
+
+// The Tahoe half. Optional today and dated tomorrow: without a layered icon
+// the Dock shows a flat square beside neighbours that pick up the glass.
+const layers = pngCount(at("tauri", "store", "icon-layers"));
+if (layers >= 2) ok(`${layers} Icon Composer layers for the macOS 26 icon`);
+else warn("no Icon Composer layers", "`make icons`; tauri/store/MAC_APP_STORE.md has the rest.");
+
+// EVERYTHING BELOW NEEDS A MAC, and says so rather than failing on Linux: the
+// entitlements name a team, the profile is issued to that team, and both are
+// gitignored because this repository is public.
+const entitlements = at("tauri", "src-tauri", "Entitlements.plist");
+if (existsSync(entitlements)) {
+  ok(`the sandbox entitlements are generated (${rel(entitlements)})`);
+} else {
+  warn(
+    "no Entitlements.plist — the Mac App Store requires the App Sandbox",
+    "`npm --prefix tauri run mac:appstore` writes it from APPLE_TEAM_ID in " +
+      "native/.env. Generated rather than committed because it names a specific " +
+      "developer account, and this repository is public.",
+    "mac",
+  );
+}
+
+const profile = at("tauri", "src-tauri", "embedded.provisionprofile");
+if (existsSync(profile)) ok("a Mac App Store provisioning profile is in place");
+else
+  warn(
+    "no embedded.provisionprofile",
+    "download a Mac App Store profile for the app id in the developer portal and " +
+      "save it as tauri/src-tauri/embedded.provisionprofile (gitignored).",
+    "mac",
+  );
+
+// ---------------------------------------------------------------------------
+// 7. STEAM. The desktop shell ships to a second storefront, and everything
 //    above is Apple's. The build side of it — packaging, signing, the upload
 //    — belongs to `make tauri-package`; these are the STORE-PAGE facts, which
 //    are true or false from a cold checkout.
