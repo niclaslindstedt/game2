@@ -29,6 +29,7 @@ export const GLYPH_NAMES = [
   "roam",
   "cone",
   "camera",
+  "replay",
   "sliders",
   "standings",
   "terminal",
@@ -148,6 +149,15 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
       <rect x="2.6" y="7.4" width="18.8" height="12.4" rx="2.4" />
       <path d="M8.4 7.4 9.9 5h4.2l1.5 2.4" />
       <circle cx="12" cy="13.6" r="3.6" />
+    </>
+  ),
+  // A screen with a play mark in it: a run that was recorded, watched again.
+  // Deliberately not the movie camera above — that mark is the SHUTTER, the
+  // press that takes a picture, and this one is the picture being played.
+  replay: (
+    <>
+      <rect x="2.6" y="4.8" width="18.8" height="14.4" rx="2.2" />
+      <path d="M10 9.4 15.4 12 10 14.6Z" />
     </>
   ),
   // Three faders: the settings, as a mixing desk rather than a list.

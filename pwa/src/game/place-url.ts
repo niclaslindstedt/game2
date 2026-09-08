@@ -12,9 +12,11 @@
 
 import type { RetireReason, RunMoment } from "@engine";
 
-/** The disciplines a link may open a run in. The same words as the menu's
- * `PlayMode`, restated here rather than imported because the menu is a
- * Preact module and this file is read by the DOM-free suite. */
+/** The disciplines a link may open a run in. The menu's `PlayMode` less
+ * `replay`, which is not a discipline a URL can name: a replay is a recorded
+ * TAPE put back on the road (`game/replay.ts`), and a link carries no tape.
+ * Restated here rather than imported because the menu is a Preact module and
+ * this file is read by the DOM-free suite. */
 export const PLACE_MODES = ["campaign", "timetrial", "headsup", "roam", "training"] as const;
 export type PlaceMode = (typeof PLACE_MODES)[number];
 

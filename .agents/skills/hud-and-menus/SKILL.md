@@ -31,6 +31,7 @@ a drift's drama) load `game-feel`; for the developer surfaces, `debug-tools`.
 | The rear-view mirror, folded away and back | `hud-mirror.tsx` — the glass as a switch; the menu option is still the only way to be rid of it. The glass itself is `mirror.ts`, and how often it is redrawn and how far it sees is `mirror-pace.ts` — the ladder the frame rate walks it down, DOM-free so `tests/mirror_test.ts` reads it |
 | How WIDE the mirror looks, and how far up the window | `car/mirror-fit.ts` — the widest frame that lands entirely on the body's own backlight, tilted as high in it as it will go; the CURVE in the glass is `GLASS` in `mirror.ts`, on the EFFECTS row (`MIRROR_GLASS`) |
 | Watching the run-out once your run is over | `spectate.ts` (the feed) + `hud-spectate.tsx` |
+| Watching a RECORDED run again | `hud-replay.tsx` — the strip along the bottom, and the disk that keeps one; the recording itself is `replay.ts` |
 | The quickest this machine has been between two boards | `split-records.ts` — one book per stage, banked as the board goes by; never shown as a number, it IS the NEW RECORD! beside a split |
 
 ## The controls
@@ -69,6 +70,7 @@ a drift's drama) load `game-feel`; for the developer surfaces, `debug-tools`.
 | Getting the HUD into a picture | `shot-hud.ts` — serialize at the press, rasterize later — over `hudLayerSvg` / `stampLift` in `shot-plan.ts` |
 | The roll of pictures, and sending one on | `pwa/src/lib/shot-store.ts` over `shot-roll.ts`; the share/copy/save probes in `pwa/src/lib/share-image.ts` |
 | The gallery | `menu-gallery.tsx` |
+| The replays a player kept | `menu-replays.tsx` over `replay.ts` (the listing, DOM-free) and `replay-store.ts` (the roll, IndexedDB); a row is one press from `App.tsx`'s `startReplay` |
 | The studio card / boot cover | `splash.ts` (policy) + `splash-screen.tsx` |
 | A figure that COUNTS to its new value | `pwa/src/lib/count.ts` — the easing only; the caller owns the clock, which is what keeps it testable |
 
