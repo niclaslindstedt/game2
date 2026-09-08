@@ -76,17 +76,27 @@ describe("R47 — the alpine row", () => {
     expect(Z.rock.from).toBeLessThan(Z.rock.to);
     expect(Z.snow).not.toBeNull();
     expect(Z.snow as number).toBeGreaterThan(Z.rock.from);
-    // ...and the other two countries carry none of it, which is what keeps
-    // their seeds where they were.
+    // ...and the other two countries carry none of the MOUNTAIN: no massif
+    // to stand up, no contour to steer along, nothing to bore through, no
+    // summit to start on and no snow line to climb to.
     for (const id of ["taiga", "desert"] as const) {
       const L = BIOMES[id].land;
       expect(L.massif).toBeNull();
       expect(L.steer).toBe(0);
       expect(L.tunnels).toBe(false);
-      expect(L.grade).toBe(1);
       expect(L.startHigh).toBe(false);
       expect(L.zones.snow).toBeNull();
     }
+    // The ROAD-BUILDING pair is not part of that, and is asserted of the
+    // taiga alone. `grade` and `lag` say how a road is laid on whatever
+    // country it is in, so a flat country can hold either of them off 1
+    // for a reason of its own — the desert does, because a sand road rides
+    // the dunes rather than cutting through them (R40) — and only the
+    // taiga is the reference every rule was written against.
+    expect(BIOMES.taiga.land.grade).toBe(1);
+    expect(BIOMES.taiga.land.lag).toBe(1);
+    expect(BIOMES.desert.land.grade).toBeGreaterThan(1);
+    expect(BIOMES.desert.land.lag).toBeLessThan(1);
   });
 
   it("has a snow surface that is loose, softer and slipperier than gravel", () => {

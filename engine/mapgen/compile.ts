@@ -20,6 +20,7 @@ import {
   SAMPLE_STEP,
   STAGE_RULES as R,
   followGradeOf,
+  followLagOf,
   knobScale,
   landOf,
   resolveKnobs,
@@ -946,11 +947,19 @@ function createCompiler(
    *
    * Exponential rather than linear so the response length means the same
    * thing whatever the step is, and clamped after rather than before, so
-   * the clamp is a property of the ROAD and the lag a property of the
-   * builder — two rules, not one number doing both jobs badly. */
+   * the clamp is a property of the ROAD and the lag a property of the eye
+   * — two rules, not one number doing both jobs badly.
+   *
+   * R40 — and BOTH are the country's (`followLagOf`, `followGradeOf`),
+   * because the eye is a different man in a different country: a surveyor
+   * running a graded line across the taiga, a bulldozer following the sand
+   * across the desert. They move together, and `BiomeLand.lag` says why. */
   const F = R.elevation.follow;
-  /** R47 — the steepest the road runs in this country. */
+  /** R40/R47 — the steepest the road runs in this country, and how far
+   * behind the country it may run: the pair that decides whether it rides
+   * the landscape or is planed through it. */
   const grade = followGradeOf(track.knobs);
+  const lag = followLagOf(track.knobs);
   /** R47 — the country's zones, for the snowline the road goes under —
    * and the line itself, which the climate may bring down (climate.ts). */
   const zones = landOf(track.knobs).zones;
@@ -972,7 +981,7 @@ function createCompiler(
     if (!followsLand) return { base, slope: 0 };
     const ground = bored ? base : buildable(x, z, roll);
     const cap = bored ? R.tunnel.level : grade;
-    const want = base + (ground - base) * (1 - Math.exp(-step / F.lag));
+    const want = base + (ground - base) * (1 - Math.exp(-step / lag));
     // The gradient the road would like to be on here, then the two clamps:
     // how steep it may be, and how fast that may CHANGE. The second is what
     // rounds a hilltop off into a crest instead of leaving the brow the
@@ -3286,6 +3295,7 @@ function planCountry(
   // track the real road's rather than the bare hillside's.
   const F = R.elevation.follow;
   const grade = followGradeOf(knobs);
+  const lag = followLagOf(knobs);
   let base = buildableAt(land, 0, 0, rolling(0));
   let slope = 0;
   for (const plan of plans) {
@@ -3311,7 +3321,7 @@ function planCountry(
       const bored = bore !== null && boredAt(bore, s, x, z, base);
       const ground = bored ? base : buildableAt(land, x, z, roll);
       const cap = bored ? R.tunnel.level : grade;
-      const want = base + (ground - base) * (1 - Math.exp(-step / F.lag));
+      const want = base + (ground - base) * (1 - Math.exp(-step / lag));
       let next = (want - base) / step;
       const swing = F.crest * step;
       if (next > slope + swing) next = slope + swing;

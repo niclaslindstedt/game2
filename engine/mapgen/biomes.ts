@@ -145,8 +145,32 @@ export type BiomeLand = {
   tunnels: boolean;
   /** Multiplier on the grade a road may follow the country at
    * (`elevation.follow.grade`). A mountain pass is built steeper than a
-   * forest road because it has further to climb. */
+   * forest road because it has further to climb, and a sand road steeper
+   * again because it does not cut. */
   grade: number;
+  /** Multiplier on how far the road LAGS the country it is laid along
+   * (`elevation.follow.lag`, `followLagOf`) — and the number that decides
+   * whether a road RIDES the landscape or is planed through it.
+   *
+   * The road's height is a first-order filter on the ground under it, so
+   * the lag is a smoothing window: anything shorter than it is levelled
+   * away, and the gradient the road can reach is set by how far behind the
+   * country it has been allowed to fall. A forest road is surveyed, cut
+   * and filled, so it holds a long steady line through the hills — that is
+   * the taiga's 140 m. A road bladed across a dune field is not: there is
+   * nothing to blast and nothing to bridge, and sand will not hold a
+   * cutting anyway (it slumps to its own repose and blows back in), so the
+   * blade FOLLOWS THE SAND and the road goes over what it meets.
+   *
+   * Measured over six desert seeds, on the stretches where the road is
+   * actually on a dune flank: at the taiga's lag the road takes 27% of the
+   * sand's rise and stands ±11 m off it; at 0.3 of it, with the grade
+   * doubled to let the gradient the shorter lag asks for actually happen,
+   * it takes 66% and stands ±7 m off. The two move TOGETHER — a short lag
+   * under the taiga's grade cap just clips at the cap (0.53 and a road
+   * pinned at 8%), and a raised cap under the taiga's lag does nothing at
+   * all, because the lag never asks for the gradient the cap was blocking. */
+  lag: number;
   /** Multiplier on how far a road may stand OFF the country (R34's
    * `maxFill` and `maxCut`). A mountain road is built on bigger
    * earthworks than a forest road — a retaining wall under it, a face
@@ -346,6 +370,7 @@ export const TAIGA: BiomeRules = {
     steer: 0,
     tunnels: false,
     grade: 1,
+    lag: 1,
     earthworks: 1,
     startHigh: false,
   },
@@ -513,7 +538,28 @@ export const DESERT: BiomeRules = {
     zones: { treeline: 46, rock: { from: 26, to: 52 }, snow: null },
     steer: 0,
     tunnels: false,
-    grade: 1,
+    // A SAND ROAD RIDES THE SAND. Nothing out here is blasted and nothing
+    // is bridged, and a cutting through a dune is one that slumps to repose
+    // and fills back in on the first wind — so the road goes OVER what it
+    // meets, at the grade the dune stands at.
+    //
+    // The two numbers are ONE decision (see `BiomeLand.lag`), and the grade
+    // is the half with a ceiling on it: past about half again the taiga's,
+    // the road stops gaining any more of the sand and only gets steeper.
+    // Measured over six seeds at this lag — the share of the road the
+    // drivability budget calls hard work (`ANALYSIS.drive.grade.warn`, 13%)
+    // against how much of the sand's rise the road takes:
+    //
+    //   ×1.0  ride 0.27   3.7‰ over warn      ×1.6  ride 0.64  11.6‰
+    //   ×1.4  ride 0.61   6.7‰                ×1.8  ride 0.66  26.9‰
+    //                                          ×2.0  ride 0.66  28.8‰
+    //
+    // 1.4 is where that curve turns: nine tenths of the ride for a quarter
+    // of the warnings. Nothing here moves the share of road the budget
+    // calls UNDRIVABLE, which sits at 1.2‰ at every setting including the
+    // taiga's — those are the jump ramps, and they are not this rule's.
+    grade: 1.4,
+    lag: 0.3,
     earthworks: 1,
     startHigh: false,
   },
@@ -705,6 +751,10 @@ export const ALPINE: BiomeRules = {
     // is held to seven and a half, and stands a third again as far off
     // the country on its walls and in its cuts.
     grade: 1.2,
+    // A pass is SURVEYED — cut into the flank, carried on walls, held on a
+    // long steady line the whole way up. It reads the country further ahead
+    // than a forest road, not less.
+    lag: 1,
     earthworks: 1.3,
     startHigh: true,
   },
