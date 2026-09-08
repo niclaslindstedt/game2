@@ -543,6 +543,81 @@ describe("the two shots the game is driven from", () => {
   });
 });
 
+/** THE DRIFT AS THE FRAMING SHOWS IT, deg: how far the shot's own forward
+ * has come away from where the car's nose points. The camera builds its
+ * yaw as (sin, cos), so the lens's world yaw comes straight back off its
+ * quaternion and the gap against `car.heading` IS the angle the car lies
+ * across the frame. */
+function framedDrift(cam: ReturnType<typeof createGameCamera>, state: GameState): number {
+  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.camera.quaternion);
+  const yaw = Math.atan2(fwd.x, fwd.z);
+  let gap = yaw - state.car.heading;
+  while (gap > Math.PI) gap -= Math.PI * 2;
+  while (gap < -Math.PI) gap += Math.PI * 2;
+  return (gap * 180) / Math.PI;
+}
+
+/** Hold the car at `slipDeg` of slip at pace and let the framing settle
+ * there, then read what the shot shows. Scripted straight onto the car
+ * rather than driven: the question is what the CAMERA does with a slip
+ * angle, and a physics model that will only give one car forty degrees is
+ * the wrong instrument for asking it. */
+function framedAt(mode: CameraMode, slipDeg: number, opts: { airborne?: boolean } = {}): number {
+  const state = game();
+  const cam = createGameCamera(1600, 900);
+  cam.setMode(mode);
+  const speed = 35;
+  const slip = (slipDeg * Math.PI) / 180;
+  state.car.u = speed * Math.cos(slip);
+  state.car.w = speed * Math.sin(slip);
+  state.car.airborne = opts.airborne ?? false;
+  // Long enough that the drift offset has wound all the way on: it eases at
+  // the rig's own follow rate, which is a few tenths of a second.
+  for (let f = 0; f < 300; f++) cam.update(state, FRAME);
+  return framedDrift(cam, state);
+}
+
+/** THE SLIP ANGLES THE ROSTER ACTUALLY REACHES, deg — the peak off a
+ * Scandinavian flick into a soft left, per car, as `npm run drift -- --table`
+ * measures it. They are what the ceiling exists for: three layouts that go
+ * sideways by very different amounts on purpose. */
+const ROSTER_PEAKS = { compact: 29.6, coupe: 24.3, classic: 40.7 };
+
+describe("the drift in the framing", () => {
+  it("carries an ordinary slide at its full weight", () => {
+    // Well under the ceiling the share is the rig's `driftWeight` and
+    // nothing else — a ten-degree slide is filmed as a ten-degree slide, so
+    // the car that rarely goes past that is filmed exactly as it was.
+    expect(Math.abs(framedAt("chase", 10))).toBeGreaterThan(10 * 0.8 * 0.9);
+    expect(Math.abs(framedAt("chase", 10))).toBeLessThan(10 * 0.8 * 1.02);
+  });
+
+  it("never lays the car across the shot, however deep the slide", () => {
+    for (const mode of ["close", "chase", "far"] as const) {
+      // Twice the deepest angle in the roster, which is more than the
+      // physics will give any car: the ceiling is a ceiling.
+      expect(Math.abs(framedAt(mode, 80))).toBeLessThan(19);
+    }
+  });
+
+  it("frames the three layouts' deepest slides alike", () => {
+    const framed = Object.values(ROSTER_PEAKS).map((slip) => Math.abs(framedAt("chase", slip)));
+    // Straight off `driftWeight` the three would be filmed 1.7:1 apart, as
+    // their peaks are — a sixteen-degree gap between the front-driver's
+    // deepest slide and the rear-driver's, which is the whole complaint.
+    // Softened onto the ceiling they land inside a couple of degrees of
+    // each other: the cars drive differently and are filmed the same.
+    expect(Math.max(...framed) - Math.min(...framed)).toBeLessThan(2.5);
+  });
+
+  it("follows the travel whole in the air", () => {
+    // Nothing capped: a car that left the lip crossed up is going where its
+    // travel points, and the shot's job for those two seconds is the
+    // landing.
+    expect(Math.abs(framedAt("chase", 40, { airborne: true }))).toBeGreaterThan(36);
+  });
+});
+
 describe("the hood camera's road grain", () => {
   it("shakes the seat without shaking the picture apart", () => {
     const hood = steady(createGameCamera(1600, 900), "hood");
