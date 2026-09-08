@@ -48,6 +48,7 @@ This project is tuned by measuring and LOOKING, not guessing. Each lab below is 
 | Anything rendered            | `profile`                               | `write-code`                  |
 | A bug that arrived as a shot | `debug-shot`                            | `debug-tools`                 |
 | The desktop or store app     | `tauri*`, `native-*`, `desktop`         | `platform-shells`             |
+| A store listing or its shots | `store-preflight`, `store-shots`        | `store-shots`                 |
 
 Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale dist photographs and meters the last change rather than this one, and the picture that comes back is wrong in a way that reads as a bug in the code. In Claude web sessions Chromium is preinstalled — prefix the browser-driven ones with `CHROMIUM_PATH=/opt/pw-browsers/chromium`.
 
@@ -128,6 +129,8 @@ By area first. Each row's skill owns the file-by-file map inside that area — g
 | A piece of music                       | `pwa/src/game/audio/scores/`           | `soundtrack`         |
 | The developer tools and the overlay    | `pwa/src/game/debug-*`                 | `debug-tools`        |
 | The desktop or store app               | `tauri/`, `native/`                    | `platform-shells`    |
+| A STOREFRONT's screenshots             | `scripts/store-shots/`                 | `store-shots`        |
+| A STOREFRONT's words and rules         | `native/store/`, `tauri/store/`        | `store-listing`      |
 
 And the pieces that belong to no skill in particular:
 
@@ -184,6 +187,8 @@ Each of these is the one place an answer is written down. Anything that needs it
 | App identity, domain, deploy slots    | `identity.ts`, README, `docs/configuration.md`, `pwa/public/*` |
 | Cars, controls, install flow          | README (What/Usage) + `docs/getting-started.md`                |
 | Shell/platform plans                  | `docs/platforms.md`, `tauri/README.md`, `native/README.md`     |
+| The listing's WORDS, for either store | `native/store/copy.mts` — GITIGNORED, one source for both; the `store-listing` skill is the craft |
+| An age rating, a category, a Steam tag | `native/store/listing.mts` — the rules half, committed; then `make store-metadata` |
 | A spec chapter, or a verdict under one | `docs/spec-conformance.md` — `sync-game-spec` re-dates it      |
 
 The campaign menu's routes and biome banners are generator OUTPUT, so every rule change re-rolls them: a re-seeded, re-banded or re-lit level otherwise leaves a picture of a stage that no longer exists. Editing the first level of a location, or adding a location, re-shoots that country's banner.
@@ -193,6 +198,8 @@ The campaign menu's routes and biome banners are generator OUTPUT, so every rule
 Places where one idea is deliberately written in two files that cannot import each other. Each is a live trap: change one, change both.
 
 - `pwa/src/identity.ts` is the identity source of truth; `pwa/public/icons/icon.svg`, `scripts/generate-icons.mjs` and `pwa/src/game/app-mark.ts` encode the same mark geometry — the asset the stores read, the arc centres the raster icons are drawn from, and the two tracks as data for the app to lay at runtime. None can import either of the others, so change one and change all three, then `make icons`. `tests/app_mark_test.ts` reads the SVG and holds the data module to it.
+- **The store listing's COPY IS NOT IN THIS REPOSITORY, and its RULES are.** The game is paid on the App Store and open source here, and the listing's prose is the one thing those two pull apart — so `native/store/copy.mts` is gitignored, `copy.example.mts` is a committed skeleton, and the `store-listing` skill carries the craft. Never move a sentence of copy into a committed file, and never improve the skeleton's placeholder prose.
+- **The store listing's REVIEW NOTES are claims about the build, and they are checked.** `native/store/copy.mts` tells Apple that the whole game ships inside the binary, that nothing is sold, and that nothing leaves the device — the argument that this is not a browser pointed at a website (guideline 4.2). `make store-metadata` and `tests/store_listing_test.ts` hold each claim against the tree: an `extra.gameUrl` in `app.config.js`, a purchase library in `native/package.json`, or a missing `pwa/public/privacy/` page each make a note false and fail. The BUILD half of each is checked on every runner; the half that asks whether the notes say so is skipped where only the skeleton exists. The bundle id is stated in `app.config.js` and restated in `native/fastlane/Appfile`, which is Ruby and cannot import it.
 - The desktop app's names restate `identity.ts` and cannot import it (`tauri.conf.json`, `tauri/shell/src/config.rs`); `tests/tauri_test.ts` holds all four — see `platform-shells`.
 - `engine/version.ts` and the root and workspace `package.json` versions move together — only via `scripts/update-versions.sh` (the release workflow runs it).
 - The service worker contract (cache id, emitted files) is shared between `pwa/pwa-plugin.ts` and `pwa/src/app-pwa.ts` — keep them agreeing.
@@ -230,6 +237,8 @@ Skills live in `.agents/skills/` (`.claude/skills` symlinks there) — each a `S
 - **`bot-improvement`** — the bot driver, the difficulty budgets, the rivals and the field.
 - **`simulate-run`** — measuring balance with `make sim`; owns reading the table.
 - **`platform-shells`** — the desktop app and the store app.
+- **`store-shots`** — the App Store / Play Store / Steam SCREENSHOT set. Owns the one rule that set obeys (put the FIELD in the frame — a rally frame of one car on an empty road sells a screensaver) and the sweep loop that chooses each frame's moment.
+- **`store-listing`** — the WORDS a storefront shows a buyer, for both stores, plus the map of where every store file lives. **The knowledge is in the repository and the copy is not**: `native/store/copy.mts` is gitignored, because the game is paid on the App Store and open source here.
 - **`debug-game`** / **`test-scenario`** / **`debug-tools`** — deterministic repros; staging exact situations; and the in-game developer tools for when a problem arrives as a picture.
 - **`playtest`** / **`ui-review`** — looking at the real game; the HUD fit-and-finish sweep.
 

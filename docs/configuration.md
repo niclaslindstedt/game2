@@ -51,6 +51,37 @@ Read by the Expo app's own build (`native/`, see [platforms.md](platforms.md)), 
 | `EXPO_TOKEN`           | An Expo access token for non-interactive EAS builds; the `native` workflow reads it from a repository secret of the same name. A laptop uses `eas login` instead.                                                               |
 | `APPLE_TEAM_ID`        | The Apple team a LOCAL iPhone build (`make native-iphone`) signs with, overriding the publisher's team pinned in `native/app.config.js`. EAS builds ignore it and use the credentials on the Expo project.                      |
 
+## The store submission environment
+
+Read by the listing and submission tooling (`make store-metadata`,
+`make store-preflight`, `fastlane deliver`, `eas submit`) and by nothing that
+builds or runs the game. All of it lives in `native/.env`, which is gitignored,
+and `native/.env.example` documents where each value comes from and what shape
+it is.
+
+**These are here rather than in the committed listing because this repository is
+public.** One of them is a personal detail Apple actually rings and the rest are
+credentials. Neither is in any authored file: `native/store/copy.mts` carries
+the listing's words (and is itself gitignored, for a different reason — see the
+`store-listing` skill) and `listing.mts` carries its rules, and nothing in
+either identifies a person or authorizes an upload. A value still equal to the one in
+`.env.example` counts as unset, so a copied template does not read as filled in
+(`scripts/lib/store-env.mjs`).
+
+| Variable                    | Meaning                                                                                                                                                                                                                |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ASC_REVIEW_PHONE`          | The number App Store review CALLS. E.164 with the country code. The metadata generator leaves the field out of the upload rather than hand review a number that rings nobody, and the preflight fails until it is set. |
+| `ASC_KEY_ID`                | The App Store Connect API key's id — the one in the `AuthKey_<ID>.p8` filename. A key rather than an Apple ID, because a `.p8` carries no 2FA session to expire mid-upload.                                            |
+| `ASC_ISSUER_ID`             | That key's issuer, one per team.                                                                                                                                                                                       |
+| `ASC_KEY_PATH`              | The `.p8` itself, as a path relative to `native/` (where the fastlane lanes run). Set exactly one of this and `ASC_KEY_CONTENT`.                                                                                       |
+| `ASC_KEY_CONTENT`           | The same key base64-encoded, for CI, where there is no file to point at.                                                                                                                                               |
+| `PLAY_SERVICE_ACCOUNT_PATH` | The Google Play service-account JSON `eas submit` uploads an AAB with.                                                                                                                                                 |
+| `SF_STEAM_APP_ID`           | Overrides `tauri/store/steam.json`'s app id, so CI can build against a different app without editing a committed file.                                                                                                 |
+
+`eas submit` reads the **process** environment and fastlane reads the file, so
+export the three `ASC_*` key values before a non-interactive submit — `eas.json`
+already references them as `$VAR`.
+
 ## The deploy slots
 
 `pages.yml` builds three whole sites and merges them into one Pages artifact served at `game2.niclaslindstedt.se` (the custom domain in `pwa/public/CNAME`; DNS is a CNAME on `niclaslindstedt.github.io`, and the repo's Pages settings must say "GitHub Actions" + that domain):

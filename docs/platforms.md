@@ -40,9 +40,44 @@ The haptics are the shape every later bridge takes, and they are a feature of th
 
 That is the whole of it for now. What the sibling's shell grew on top — cloud save, Game Center achievements and leaderboards (the engine's `RunStats` and event stream are the data source), the share sheet for the gallery's pictures, the store listing pipeline — each arrives as its own bridge module under `native/src/` with a flag on the WebView message channel, and the page's half behind a probe a browser answers too. Builds are manual (`.github/workflows/native.yml`, dispatch-only — EAS minutes are paid for) and never on push, and a store build is submitted by hand from that workflow rather than cut alongside a tag.
 
+## Shipping to the stores
+
+The two storefronts are fed from **one authored source**, because they describe
+one game. The WORDS are `native/store/copy.mts`, which is **gitignored** —
+the game is paid on the App Store and open source here, and a listing's prose
+is the one thing those two facts pull apart — while the RULES (categories, the
+age-rating answers, the Steam tags, what the page may not claim) are committed
+in [`native/store/listing.mts`](../native/store/listing.mts). `make
+store-metadata` compiles the pair into whatever each upload tool reads —
+App Store Connect's `store.config.json`, the fastlane metadata tree, and
+`tauri/store/steam-listing.md` to paste into Steamworks. It validates every
+store's field limits and **fails rather than truncates**, because App Store
+Connect truncates silently.
+
+`make store-shots` captures the screenshot set at Apple's and Valve's exact
+rasters, driving the real game to staged moments; `make store-sweep` is how each
+frame's moment is chosen rather than guessed. `make store-preflight` answers
+"are we ready to ship" for both storefronts at once, and marks which of the
+remaining items wait on a store account nobody in this checkout can conjure.
+
+The `store-listing` skill carries the craft and a map of every store file, and
+the `store-shots` skill the pictures. Two documents own the rest:
+[`native/store/README.md`](../native/store/README.md)
+is the submission package and [`native/RELEASING.md`](../native/RELEASING.md) the
+Apple/Play run-through; [`tauri/store/README.md`](../tauri/store/README.md) is
+the Steam half. The `store-shots` skill owns the craft.
+
+**The desktop shell has a Steam store page and no Steam INTEGRATION, and the
+listing is built to keep those two straight.** `steam.notYetShipped` in the
+listing names every feature the shell deliberately does not have — cloud save,
+achievements, leaderboards, Workshop, multiplayer — and the generator **refuses
+to emit a page whose copy mentions one**, because Valve reviews the page and the
+build together. As the shell grows a feature, its row comes off that list and the
+copy is free to say so.
+
 ## Deliberate differences from the sibling repo
 
-- **One desktop shell, not two.** The sibling carries an Electron wrapper beside its Tauri one and measures the two against each other; this repo starts with the platform-webview shell alone, and there is no Steam edition, so the shell carries no capability stamp and no platform seams. If a store build ever wants them, the sibling's three-file seam shape (bridge → provider → platform) is the template.
+- **One desktop shell, not two.** The sibling carries an Electron wrapper beside its Tauri one and measures the two against each other; this repo starts with the platform-webview shell alone. It has a Steam STORE PAGE and its downloads (`tauri/store/`, `make desktop`), but no Steam INTEGRATION: no capability stamp and no platform seams, so nothing in the page may claim one (see above). If a store build ever wants them, the sibling's three-file seam shape (bridge → provider → platform) is the template.
 - **No modding seam.** The sibling ships a data-authored mod SDK; Scandinavian Flick keeps content as typed data in `engine/game/defs/` for now. If content authoring outgrows TypeScript rows, the path is the sibling's: YAML catalogs in `content/` compiled by a script — the defs modules are already the seam.
 - **No multiplayer/server.** Stages are deterministic by seed, so the natural first social feature is asynchronous: shared daily seed (already in), then ghost times — no server shell until then.
 

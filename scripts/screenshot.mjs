@@ -17,45 +17,24 @@
 // The menu captures pass ?menu=1 to force the menu back, and ?splash=1 to
 // see the card itself.
 import { mkdirSync } from "node:fs";
-import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { extname, join, dirname } from "node:path";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
+
+import { serveDir } from "./lib/serve-dist.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "pwa", "dist");
 const outDir = join(root, "previews");
 mkdirSync(outDir, { recursive: true });
 
-const MIME = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".css": "text/css",
-  ".json": "application/json",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".webmanifest": "application/manifest+json",
-  ".ico": "image/x-icon",
-  ".txt": "text/plain",
-  ".xml": "application/xml",
-};
-
-const server = createServer(async (req, res) => {
-  const path = (req.url ?? "/").split("?")[0];
-  const file = join(dist, path === "/" ? "index.html" : path.slice(1));
-  try {
-    const body = await readFile(file);
-    res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
-    res.end(body);
-  } catch {
-    res.writeHead(404);
-    res.end("not found");
-  }
-});
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const port = server.address().port;
-const url = `http://127.0.0.1:${port}/`;
+// The built site on a real origin — an HTTP server rather than `file://`,
+// because the service worker, the manifest and `localStorage` all behave
+// differently or not at all off an opaque origin. Shared with the store
+// screenshot harness (`scripts/lib/serve-dist.mjs`), which needs the same
+// thing for the same reason.
+const site = await serveDir(dist);
+const url = site.url;
 
 const { chromium } = await import("playwright-core");
 const executablePath = process.env.CHROMIUM_PATH;
@@ -2479,4 +2458,4 @@ if (only.length === 0 || only.some((f) => "shot-campaign shot-start".includes(f)
 }
 
 await browser.close();
-server.close();
+await site.close();

@@ -380,6 +380,10 @@ export function takeSnapshot(
     shiftUp: shiftLightOn(state),
     shift: shiftWindow(state),
     airborne: state.car.airborne,
+    // The engine's own verdict that the car is sideways at pace — the same
+    // switch the dust and the run's drift stats hang off, so the HUD root and
+    // the rooster tail can never disagree about whether this is a slide.
+    drifting: state.car.drifting,
     // The trip counter's own metres — the engine's ground accumulator, which
     // is reset with the stage, so the lower window on the dial reads this
     // level and nothing before it.

@@ -5,4 +5,17 @@
     <lastmod>2026-08-26</lastmod>
     <changefreq>weekly</changefreq>
   </url>
+  <!-- The two pages the store listings name (native/store/listing.ts). They are
+       static HTML under pwa/public/ rather than app routes, because Apple and
+       the Play Console both fetch them without running any JavaScript. -->
+  <url>
+    <loc>https://game2.niclaslindstedt.se/privacy/</loc>
+    <lastmod>2026-09-08</lastmod>
+    <changefreq>yearly</changefreq>
+  </url>
+  <url>
+    <loc>https://game2.niclaslindstedt.se/support/</loc>
+    <lastmod>2026-09-08</lastmod>
+    <changefreq>yearly</changefreq>
+  </url>
 </urlset>

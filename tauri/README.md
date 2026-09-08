@@ -189,3 +189,19 @@ downloads are on it. `desktop-tauri.yml`'s dispatch does the same for one
 platform without cutting a version, with the identical signing and
 notarization environment, so a certificate can be proved before a version is
 tagged rather than after.
+
+## The Steam store page
+
+This shell's downloads are what a Steam build would ship, and
+[`store/README.md`](store/README.md) is that half of the submission: the store
+page (compiled from the same authored listing the phone app uses), the
+screenshots at Valve's raster, the capsule art, and the app and depot ids.
+
+**A store page and no Steam integration are two different things, and the
+listing keeps them straight.** This shell has no cloud save, no achievements, no
+leaderboards, no Workshop and no multiplayer, so `steam.notYetShipped` in
+`listing.mts`'s `notYetShipped` names all of it and `make store-metadata` refuses to
+emit a page whose copy mentions any of it — Valve reviews the page and the build
+together. As the shell grows a feature, drop its row and the copy may say so.
+
+`make store-preflight` reports the Steam half beside the phone stores'.

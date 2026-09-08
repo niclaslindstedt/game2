@@ -83,6 +83,13 @@ export type HudSnapshot = {
    * harness can wait for a car in the air without the debug overlay in the
    * frame. */
   airborne: boolean;
+  /** SIDEWAYS AT PACE — `CarState.drifting`, the engine's own verdict rather
+   * than a slip threshold restated here. Nothing is DRAWN from it either: it
+   * goes on the HUD root as `data-drift`, so a harness that wants the frame
+   * where the car is actually at an angle can WAIT for one instead of
+   * guessing a delay after the co-driver's call. The store screenshots time
+   * their drift frames off it (`scripts/store-shots/`). */
+  drifting: boolean;
   /** The route, the car on it, and how far through the stage the run is —
    * the top bar has no progress pill; the minimap's frame is the gauge. */
   minimap: HudMinimap;
@@ -561,6 +568,7 @@ export function Hud({
       data-off={snap.offRoad ? "1" : undefined}
       data-night={snap.night ? "1" : undefined}
       data-air={snap.airborne && snap.phase === "racing" ? "1" : undefined}
+      data-drift={snap.drifting && snap.phase === "racing" ? "1" : undefined}
       data-glass={glass === "off" ? undefined : "1"}
       data-seated={seated ? "1" : undefined}
     >

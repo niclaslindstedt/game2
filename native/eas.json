@@ -20,5 +20,38 @@
     "production": {
       "autoIncrement": true
     }
+  },
+  "submit": {
+    "$comment": [
+      "WHAT `eas submit` UPLOADS A BUILD TO. Nothing here can be filled in before",
+      "the store records exist: App Store Connect assigns ascAppId when the app is",
+      "created, and appleTeamId comes off the developer portal's Membership page.",
+      "`make store-preflight` names both while they are missing.",
+      "",
+      "THE THREE ascApiKey* FIELDS ARE `$VAR` REFERENCES, AND THAT IS THE POINT.",
+      "EAS interpolates the process environment into exactly those three iOS submit",
+      "fields, so the credential stays out of a public tree while a",
+      "--non-interactive submit still works. It reads the PROCESS environment and",
+      "not native/.env, so export them (or set them as CI secrets) first — fastlane",
+      "loads the file on its own, `eas submit` does not.",
+      "",
+      "The other two ids are committed literals because EAS does NOT interpolate",
+      "them and there is no CLI flag for either. Both are public: an Apple app id",
+      "is in the App Store URL and a team id is on every app the team ships."
+    ],
+    "production": {
+      "ios": {
+        "ascAppId": "",
+        "appleTeamId": "",
+        "ascApiKeyPath": "$ASC_KEY_PATH",
+        "ascApiKeyId": "$ASC_KEY_ID",
+        "ascApiKeyIssuerId": "$ASC_ISSUER_ID"
+      },
+      "android": {
+        "$comment": "A Play service-account JSON, out of band like the .p8 above.",
+        "serviceAccountKeyPath": "$PLAY_SERVICE_ACCOUNT_PATH",
+        "track": "internal"
+      }
+    }
   }
 }
