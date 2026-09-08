@@ -11,7 +11,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { encodePng } from "./lib/png.mjs";
+import { encodePng, encodeRgbaPng } from "./lib/png.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const iconsDir = join(root, "pwa", "public", "icons");
@@ -124,6 +124,15 @@ function markAt(x, y) {
   return null;
 }
 
+/** Where inside a pixel the renderers sample — a 2x2 supersample, for edges
+ * that are soft rather than staircased. */
+const SAMPLES = [
+  [0.25, 0.25],
+  [0.75, 0.25],
+  [0.25, 0.75],
+  [0.75, 0.75],
+];
+
 /** Render the mark at `size`, with the geometry scaled by `inset` toward the
  * center (maskable icons keep the mark inside the safe zone). */
 function renderIcon(size, inset = 1) {
@@ -134,12 +143,7 @@ function renderIcon(size, inset = 1) {
       let r = 0;
       let g = 0;
       let b = 0;
-      for (const [ox, oy] of [
-        [0.25, 0.25],
-        [0.75, 0.25],
-        [0.25, 0.75],
-        [0.75, 0.75],
-      ]) {
+      for (const [ox, oy] of SAMPLES) {
         const u = ((x + ox) / size - 0.5) / inset + 0.5;
         const v = ((y + oy) / size - 0.5) / inset + 0.5;
         const px = u * 512;
@@ -157,6 +161,68 @@ function renderIcon(size, inset = 1) {
     }
   }
   return encodePng(size, size, rgb);
+}
+
+/**
+ * THE MARK IN TWO LAYERS, for Apple's Icon Composer — the sky on its own, and
+ * the tracks and car on transparency.
+ *
+ * macOS 26 draws an app icon rather than displaying one: a layered `.icon`
+ * is composited by the system with its own parallax, blur and specular
+ * highlight, and re-lit for the dark, clear and tinted appearances the player
+ * can choose in the Dock. That treatment is the whole point, and it can only
+ * be applied to layers that arrive SEPARATE — a flattened square gets shown
+ * as-is and looks like an app that has not been touched since Sequoia.
+ *
+ * Splitting is free here and nowhere else: `markAt` already answers "the mark,
+ * or nothing" per sample, so the foreground is the same render with `null`
+ * spelled as a transparent pixel instead of as the sky behind it. Anything
+ * downstream would have to guess the sky back out of the flattened pixels.
+ *
+ * The layers are FULL BLEED, with no inset and no rounding: the system owns
+ * the mask on macOS 26, and shipping a rounded corner inside a layer it is
+ * about to round again is the one mistake that cannot be undone later.
+ */
+function renderIconLayers(size) {
+  const sky = Buffer.alloc(size * size * 3);
+  const mark = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      for (const [ox, oy] of SAMPLES) {
+        const u = (x + ox) / size;
+        const v = (y + oy) / size;
+        const hit = markAt(u * 512, v * 512);
+        if (hit) {
+          r += hit[0];
+          g += hit[1];
+          b += hit[2];
+          a += 255;
+        }
+      }
+      const skyHere = skyAt((y + 0.5) / size);
+      const o3 = (y * size + x) * 3;
+      sky[o3] = skyHere[0];
+      sky[o3 + 1] = skyHere[1];
+      sky[o3 + 2] = skyHere[2];
+
+      // Straight (unpremultiplied) alpha, which is what a PNG carries and what
+      // Icon Composer reads: the colour of a partly covered pixel is the
+      // mark's own, not the mark faded toward a background that is not there.
+      const o4 = (y * size + x) * 4;
+      const covered = a / 255; // how many of the samples the mark actually hit
+      if (covered > 0) {
+        mark[o4] = r / covered;
+        mark[o4 + 1] = g / covered;
+        mark[o4 + 2] = b / covered;
+        mark[o4 + 3] = a / SAMPLES.length;
+      }
+    }
+  }
+  return { background: encodePng(size, size, sky), foreground: encodeRgbaPng(size, size, mark) };
 }
 
 /** The OG image: the mark on the right, speed stripes on the left. */
@@ -208,6 +274,13 @@ function pngToIco(png, size) {
   return Buffer.concat([header, png]);
 }
 
+// THE MASTER RASTER — the mark at the largest size any store asks for, and
+// the one file the SHELLS derive their own icon sets from. Neither shell may
+// read the other's assets (a shell imports the core, never another shell), so
+// the full-resolution mark lives here, in the website's own icon directory,
+// where both of them already look. Not in the manifest: nothing serves it to a
+// browser, and an install icon above 512 buys nothing.
+writeFileSync(join(iconsDir, "icon-1024.png"), renderIcon(1024));
 writeFileSync(join(iconsDir, "pwa-192.png"), renderIcon(192));
 writeFileSync(join(iconsDir, "pwa-512.png"), renderIcon(512));
 writeFileSync(join(iconsDir, "pwa-512-maskable.png"), renderIcon(512, 0.78));
@@ -223,7 +296,21 @@ mkdirSync(nativeDir, { recursive: true });
 writeFileSync(join(nativeDir, "icon.png"), renderIcon(1024));
 writeFileSync(join(nativeDir, "splash-icon.png"), renderIcon(1024));
 writeFileSync(join(nativeDir, "favicon.png"), renderIcon(48));
+
+// THE MAC APP STORE'S LAYERS (tauri/store/icon-layers/) — the two halves of
+// the mark, for Icon Composer to build a macOS 26 `.icon` out of on a Mac.
+// They sit beside the SHELL THAT SUBMITS THEM, like every other store asset in
+// this repo, and they are written from here because this is the only module
+// that knows the mark's geometry; `tauri/scripts/` may not import a top-level
+// script. `tauri/store/README.md` has the actool step that turns them into an
+// Assets.car, and the `platform-shells` skill has the why.
+const macLayerDir = join(root, "tauri", "store", "icon-layers");
+mkdirSync(macLayerDir, { recursive: true });
+const layers = renderIconLayers(1024);
+writeFileSync(join(macLayerDir, "background.png"), layers.background);
+writeFileSync(join(macLayerDir, "foreground.png"), layers.foreground);
+
 console.log(
-  "icons: pwa-192, pwa-512, pwa-512-maskable, apple-touch-180, favicon.ico, og.png, " +
-    "native/assets/{icon,splash-icon,favicon}.png",
+  "icons: icon-1024, pwa-192, pwa-512, pwa-512-maskable, apple-touch-180, favicon.ico, og.png, " +
+    "native/assets/{icon,splash-icon,favicon}.png, tauri/store/icon-layers/{background,foreground}.png",
 );

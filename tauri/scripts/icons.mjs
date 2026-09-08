@@ -18,6 +18,12 @@
 // — which matters on the packaging runners, where `sharp` would be a second
 // platform-specific download.
 //
+// THE MACOS SET IS THE ONE EXCEPTION to "nothing here is a design decision".
+// A Dock icon is not the mark in a square — it is a rounded square floating on
+// its own shadow, inset inside its canvas — so the macOS ladder is RE-SHAPED
+// as well as re-encoded, by `lib/mac-icon.mjs`, which carries the geometry and
+// the reasoning. The mark itself is still untouched.
+//
 // Usage:
 //   node scripts/icons.mjs            # write tauri/src-tauri/icons/
 //   node scripts/icons.mjs --check    # fail if they are missing or stale
@@ -25,14 +31,22 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deflateSync, inflateSync } from "node:zlib";
+
+import { ICNS_LADDER, icnsFile } from "./lib/mac-icon.mjs";
+import { decodePng, encodeRgbaPng, resize } from "./lib/png.mjs";
 
 const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_DIR = resolve(APP_DIR, "..");
 
-/** The one raster everything else is derived from — the manifest's own
- * 512-pixel install icon. */
-const SOURCE = join(REPO_DIR, "pwa", "public", "icons", "pwa-512.png");
+/** The one raster everything else is derived from — the app mark at the
+ * largest size anything asks for, written by `make icons`.
+ *
+ * A THOUSAND-PIXEL SOURCE RATHER THAN THE INSTALL ICON, because macOS asks for
+ * `ic10` at 1024 and an icon upscaled from 512 is soft in exactly the place a
+ * Retina Dock shows it largest. Everything below 512 is a downscale of this
+ * one file, which is also what keeps the whole ladder identical to the mark
+ * instead of diverging per size. */
+const SOURCE = join(REPO_DIR, "pwa", "public", "icons", "icon-1024.png");
 const OUT_DIR = join(APP_DIR, "src-tauri", "icons");
 
 /** The sizes `tauri.conf.json` lists, and nothing beyond them: an icon nobody
@@ -52,164 +66,16 @@ const SIZES = [32, 128, 256, 512];
 const ICO_PATH = join(OUT_DIR, "icon.ico");
 const ICO_SIZES = [16, 32, 48, 256];
 
+/** MACOS NEEDS AN `.icns`, AND IT IS NOT ONE OF THE PNGs EITHER.
+ *
+ * `tauri.conf.json`'s icon list feeds the Windows resource and the Linux
+ * desktop entry; a macOS bundle reads `Contents/Resources/icon.icns` and
+ * nothing else, so a `.app` built without one ships with the blank generic
+ * document icon in the Dock. The whole ladder inside it is `lib/mac-icon.mjs`.
+ */
+const ICNS_PATH = join(OUT_DIR, "icon.icns");
+
 const check = process.argv.includes("--check");
-
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-const CRC_TABLE = new Int32Array(256).map((_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c;
-});
-
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body));
-  return Buffer.concat([len, body, crc]);
-}
-
-/**
- * Decode the source PNG to an RGBA pixel buffer.
- *
- * Only the shape the icon generator writes is understood — 8 bits per
- * channel, RGB or RGBA, no interlace — and anything else is refused by name
- * rather than mis-decoded, because a wrong icon compiles fine and ships.
- */
-function decodePng(file) {
-  if (!file.subarray(0, 8).equals(PNG_SIGNATURE)) fail(`${SOURCE} is not a PNG`);
-  let width = 0;
-  let height = 0;
-  let channels = 0;
-  const idat = [];
-  for (let at = 8; at < file.length;) {
-    const length = file.readUInt32BE(at);
-    const type = file.toString("ascii", at + 4, at + 8);
-    const data = file.subarray(at + 8, at + 8 + length);
-    if (type === "IHDR") {
-      width = data.readUInt32BE(0);
-      height = data.readUInt32BE(4);
-      const depth = data[8];
-      const colour = data[9];
-      const interlace = data[12];
-      if (depth !== 8 || interlace !== 0 || (colour !== 2 && colour !== 6)) {
-        fail(
-          `${SOURCE} is not an 8-bit non-interlaced RGB/RGBA PNG (depth ${depth}, ` +
-            `colour type ${colour}, interlace ${interlace}) — regenerate it with \`make icons\``,
-        );
-      }
-      channels = colour === 6 ? 4 : 3;
-    } else if (type === "IDAT") {
-      idat.push(data);
-    } else if (type === "IEND") {
-      break;
-    }
-    at += 12 + length;
-  }
-  if (!width || !channels) fail(`${SOURCE} has no IHDR`);
-
-  // Every scanline is one filter byte followed by the pixels, and each filter
-  // is undone against the line above it (PNG filters 0–4).
-  const raw = inflateSync(Buffer.concat(idat));
-  const stride = width * channels;
-  const rgba = Buffer.alloc(width * height * 4);
-  let previous = Buffer.alloc(stride);
-  for (let y = 0; y < height; y++) {
-    const filter = raw[y * (stride + 1)];
-    const line = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)));
-    for (let i = 0; i < stride; i++) {
-      const left = i >= channels ? line[i - channels] : 0;
-      const up = previous[i];
-      const upLeft = i >= channels ? previous[i - channels] : 0;
-      let predictor = 0;
-      if (filter === 1) predictor = left;
-      else if (filter === 2) predictor = up;
-      else if (filter === 3) predictor = (left + up) >> 1;
-      else if (filter === 4) predictor = paeth(left, up, upLeft);
-      else if (filter !== 0) fail(`${SOURCE} uses PNG filter ${filter}`);
-      line[i] = (line[i] + predictor) & 0xff;
-    }
-    for (let x = 0; x < width; x++) {
-      const from = x * channels;
-      const to = (y * width + x) * 4;
-      rgba[to] = line[from];
-      rgba[to + 1] = line[from + 1];
-      rgba[to + 2] = line[from + 2];
-      rgba[to + 3] = channels === 4 ? line[from + 3] : 255;
-    }
-    previous = line;
-  }
-  return { width, height, rgba };
-}
-
-function paeth(a, b, c) {
-  const p = a + b - c;
-  const pa = Math.abs(p - a);
-  const pb = Math.abs(p - b);
-  const pc = Math.abs(p - c);
-  if (pa <= pb && pa <= pc) return a;
-  return pb <= pc ? b : c;
-}
-
-/**
- * Resize by averaging every source pixel that falls under each output pixel.
- *
- * A box filter rather than nearest-neighbour, because the mark is thin yellow
- * tracks on blue and nearest sampling at a sixteenth of the size drops whole
- * tracks between the samples it keeps.
- */
-function resize(source, size) {
-  const { width, height, rgba } = source;
-  const out = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y++) {
-    const y0 = Math.floor((y * height) / size);
-    const y1 = Math.max(y0 + 1, Math.floor(((y + 1) * height) / size));
-    for (let x = 0; x < size; x++) {
-      const x0 = Math.floor((x * width) / size);
-      const x1 = Math.max(x0 + 1, Math.floor(((x + 1) * width) / size));
-      const sum = [0, 0, 0, 0];
-      for (let sy = y0; sy < y1; sy++) {
-        for (let sx = x0; sx < x1; sx++) {
-          const at = (sy * width + sx) * 4;
-          for (let c = 0; c < 4; c++) sum[c] += rgba[at + c];
-        }
-      }
-      const count = (y1 - y0) * (x1 - x0);
-      const to = (y * size + x) * 4;
-      for (let c = 0; c < 4; c++) out[to + c] = Math.round(sum[c] / count);
-    }
-  }
-  return out;
-}
-
-/** Encode an RGBA pixel buffer as the 8-bit RGBA PNG Tauri wants. */
-function encodeRgbaPng(size, rgba) {
-  const stride = size * 4;
-  const raw = Buffer.alloc(size * (stride + 1));
-  for (let y = 0; y < size; y++) {
-    raw[y * (stride + 1)] = 0; // filter: none
-    rgba.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
-  }
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // colour type: RGBA — the whole point of this script
-  return Buffer.concat([
-    PNG_SIGNATURE,
-    chunk("IHDR", ihdr),
-    chunk("IDAT", deflateSync(raw, { level: 9 })),
-    chunk("IEND", Buffer.alloc(0)),
-  ]);
-}
 
 /**
  * One icon directory entry, as a classic DIB (the BMP-in-ICO format).
@@ -284,26 +150,39 @@ function newerThanSource(path) {
   }
 }
 
+/** Say what is wrong and stop. The decoder throws rather than exiting, so
+ * every refusal it makes arrives here and is printed the same way. */
 function fail(message) {
   console.error(`✗ ${message}`);
   process.exit(1);
 }
 
 if (check) {
-  const stale = [...outputs(), { path: ICO_PATH }].filter(({ path }) => !newerThanSource(path));
+  const stale = [...outputs(), { path: ICO_PATH }, { path: ICNS_PATH }].filter(
+    ({ path }) => !newerThanSource(path),
+  );
   if (stale.length) {
     fail(
       `${stale.length} icon(s) missing or older than ${SOURCE}. Run ` +
         "`npm --prefix tauri run icons`.",
     );
   }
-  console.log(`✓ ${SIZES.length} icons and the Windows .ico are current`);
+  console.log(`✓ ${SIZES.length} icons, the Windows .ico and the macOS .icns are current`);
 } else {
-  const source = decodePng(readFileSync(SOURCE));
+  let source;
+  try {
+    source = decodePng(readFileSync(SOURCE), SOURCE);
+  } catch (error) {
+    fail(error.message);
+  }
   mkdirSync(OUT_DIR, { recursive: true });
   for (const { size, path } of outputs()) {
     writeFileSync(path, encodeRgbaPng(size, resize(source, size)));
   }
   writeFileSync(ICO_PATH, icoFile(source));
-  console.log(`✓ ${SIZES.length} icons and a ${ICO_SIZES.length}-size .ico → ${OUT_DIR}`);
+  writeFileSync(ICNS_PATH, icnsFile(source));
+  console.log(
+    `✓ ${SIZES.length} icons, a ${ICO_SIZES.length}-size .ico and a ` +
+      `${ICNS_LADDER.length}-entry .icns → ${OUT_DIR}`,
+  );
 }

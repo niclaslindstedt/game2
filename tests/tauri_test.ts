@@ -18,8 +18,10 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { APP_DESCRIPTION, APP_NAME } from "../pwa/src/identity.ts";
+import { APP_DESCRIPTION, APP_NAME, SITE_URL } from "../pwa/src/identity.ts";
 import {
+  SHELL_COMMAND,
+  SHELL_COMMANDS,
   SHELL_FULLSCREEN_ASK,
   SHELL_FULLSCREEN_STATE,
   SHELL_GLOBAL,
@@ -34,7 +36,12 @@ const config = JSON.parse(
   productName: string;
   mainBinaryName: string;
   identifier: string;
-  bundle: { longDescription: string; macOS: Record<string, unknown>; icon: string[] };
+  bundle: {
+    longDescription: string;
+    macOS: Record<string, unknown>;
+    icon: string[];
+    category: string;
+  };
 };
 const rustConfig = readFileSync(path.join(TAURI, "shell", "src", "config.rs"), "utf8");
 const rustPage = readFileSync(path.join(TAURI, "src-tauri", "src", "page.rs"), "utf8");
@@ -116,15 +123,58 @@ describe("the static Tauri config", () => {
   it("lists only icons scripts/icons.mjs writes", () => {
     // `tauri-build` refuses a missing icon outright, so an entry here that
     // the script does not produce is a tree that will not compile.
-    const written = readFileSync(path.join(TAURI, "scripts", "icons.mjs"), "utf8").match(
-      /const SIZES = \[([^\]]*)\]/,
-    );
+    const iconScript = readFileSync(path.join(TAURI, "scripts", "icons.mjs"), "utf8");
+    const written = iconScript.match(/const SIZES = \[([^\]]*)\]/);
     if (!written) throw new Error("icons.mjs no longer declares SIZES");
     const sizes = written[1].split(",").map((size) => size.trim());
     for (const icon of config.bundle.icon) {
+      // The two CONTAINER formats: Windows reads an .ico out of the embedded
+      // resource, and a macOS bundle reads icon.icns and nothing else. Neither
+      // is one of the PNGs, and a build missing either is a blank icon rather
+      // than an error.
+      if (icon === "icons/icon.ico") {
+        expect(iconScript).toContain("ICO_PATH");
+        continue;
+      }
+      if (icon === "icons/icon.icns") {
+        expect(iconScript).toContain("ICNS_PATH");
+        continue;
+      }
       const size = icon.match(/^icons\/(\d+)x\1\.png$/)?.[1];
       expect(size, `${icon} is not a square PNG under icons/`).toBeTruthy();
       expect(sizes).toContain(size);
     }
+  });
+
+  it("declares the App Store category the Mac shelf is picked from", () => {
+    // `bundle.category` becomes LSApplicationCategoryType, which is what the
+    // Mac App Store files the app under. Absent, the upload is rejected.
+    expect(config.bundle.category).toBeTruthy();
+  });
+});
+
+describe("the macOS menu bar", () => {
+  // The bar is `tauri/shell/src/menu.rs`, and every row that reaches the game
+  // does it by sending a WORD the page has to be listening for. Neither side
+  // can import the other, so this is where the two lists are held together —
+  // a word added on one side alone is a menu row that silently does nothing.
+  const rustMenu = readFileSync(path.join(TAURI, "shell", "src", "menu.rs"), "utf8");
+
+  it("presses the game's buttons on the event shell-host.ts listens on", () => {
+    expect(rustConst(rustConfig, "SHELL_COMMAND")).toBe(SHELL_COMMAND);
+  });
+
+  it("sends only words the page answers, and every word it answers", () => {
+    const sent = [...rustMenu.matchAll(/Target::Page\("([^"]+)"\)/g)].map((m) => m[1]);
+    expect(sent.length).toBeGreaterThan(0);
+    expect([...sent].sort()).toEqual([...SHELL_COMMANDS].sort());
+  });
+
+  it("sends the player to the same website identity.ts names", () => {
+    // The Help menu is the one part of the shell that points OUT, and the two
+    // pages it offers are the two the store listing has to name as well.
+    expect(rustConst(rustConfig, "SITE_URL")).toBe(SITE_URL.replace(/\/$/, ""));
+    expect(rustMenu).toContain('Target::Link("/privacy/")');
+    expect(rustMenu).toContain('Target::Link("/support/")');
   });
 });

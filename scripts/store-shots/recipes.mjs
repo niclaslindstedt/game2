@@ -75,6 +75,21 @@ export const DEVICES = [
     raster: { width: 2752, height: 2064 },
   },
   {
+    // THE MAC APP STORE. Apple takes any one of four rasters and this is the
+    // largest — 1440×900 at 2×, which is a Retina MacBook's own window. A
+    // DESKTOP frame, like Steam's and unlike the phone's: no touch controls,
+    // no band above a phone-shaped picture, and the stage read wide, which is
+    // most of what buying it on a Mac rather than a phone actually gets you.
+    name: "mac-2880",
+    label: "Mac App Store 2880×1800",
+    css: { width: 1440, height: 900 },
+    scale: 2,
+    raster: { width: 2880, height: 1800 },
+    out: "tauri/store/screenshots",
+    touch: false,
+    layout: "bleed",
+  },
+  {
     name: "steam-1080",
     label: "Steam 1920×1080",
     css: { width: 1920, height: 1080 },

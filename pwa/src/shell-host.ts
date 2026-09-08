@@ -5,9 +5,10 @@
 // scripts run, and this is the only place that reads it. What differs in a
 // shell is small and stated here in full: the bundle IS the update, so the
 // PWA update lifecycle stays off; the desktop window has a fullscreen a
-// browser tab keeps for itself, so the page may ask for it; and a phone has
-// haptics a WebView cannot reach, so the page may ask for a pulse (both
-// below).
+// browser tab keeps for itself, so the page may ask for it; a phone has
+// haptics a WebView cannot reach, so the page may ask for a pulse; and a Mac
+// window has a MENU BAR, so the shell may press the game's own buttons by
+// name (all three below).
 //
 // DOM-free where it can be: the probe goes through `globalThis`, which Node
 // has too, and the fullscreen bridge below guards every DOM call it makes —
@@ -78,6 +79,62 @@ export function askShellRumble(ms: number, strength: number): void {
   const target = globalThis as { dispatchEvent?: (event: Event) => boolean };
   if (typeof CustomEvent !== "function" || typeof target.dispatchEvent !== "function") return;
   target.dispatchEvent(new CustomEvent(SHELL_RUMBLE, { detail: { ms, strength } }));
+}
+
+/** A MENU ROW, PRESSED — the fourth thing the page may know about a shell,
+ * and the only one where the shell speaks first.
+ *
+ * A macOS app has a menu bar whether or not it wants one: with no menu of its
+ * own the window gets a bare default, which on the Mac App Store reads as an
+ * app that was ported rather than written. So the desktop shell draws a real
+ * one — and a menu bar is only worth drawing if its rows DO something, which
+ * means the shell needs a way to press the game's own buttons.
+ *
+ * It presses them by NAME, on one event, and the names are the whole
+ * protocol: `tauri/shell/src/menu.rs` spells the same words and
+ * `tests/tauri_test.ts` holds the two lists together. Nothing is handed over
+ * and nothing is returned — a command the game cannot serve right now (a
+ * GALLERY row pressed mid-race) is a command that does nothing, exactly as a
+ * button that is not on screen does nothing.
+ *
+ * EVERY ROW IS A THING THE WEBSITE ALREADY DOES. The menu is a second way to
+ * reach the game's own buttons, never a place a feature lives — a shell-only
+ * feature is the one thing the shells may not have. */
+export const SHELL_COMMAND = "sf-shell-command";
+
+/** What a menu row may ask the game to do. Every word is a button the player
+ * can already press without a menu bar. */
+export type ShellCommand =
+  "restart" | "pause" | "menu" | "photo" | "gallery" | "settings" | "controls";
+
+/** The words above, as a value, so the shell's list can be held to them. */
+export const SHELL_COMMANDS: readonly ShellCommand[] = [
+  "restart",
+  "pause",
+  "menu",
+  "photo",
+  "gallery",
+  "settings",
+  "controls",
+];
+
+/** Hear every menu row the shell presses, until the hand-back is called. A
+ * no-op in a browser, where no menu bar exists to press one. */
+export function onShellCommand(told: (command: ShellCommand) => void): () => void {
+  const target = globalThis as {
+    addEventListener?: (type: string, listener: (event: Event) => void) => void;
+    removeEventListener?: (type: string, listener: (event: Event) => void) => void;
+  };
+  if (typeof target.addEventListener !== "function") return () => {};
+  const listen = (event: Event): void => {
+    const detail = (event as CustomEvent<{ command?: unknown }>).detail;
+    const command = detail?.command;
+    if (typeof command === "string" && (SHELL_COMMANDS as readonly string[]).includes(command)) {
+      told(command as ShellCommand);
+    }
+  };
+  target.addEventListener(SHELL_COMMAND, listen);
+  return () => target.removeEventListener?.(SHELL_COMMAND, listen);
 }
 
 /** Hear every answer, until the returned hand-back is called. */

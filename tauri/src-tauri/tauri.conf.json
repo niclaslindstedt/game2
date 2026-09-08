@@ -17,12 +17,19 @@
   "bundle": {
     "active": true,
     "targets": ["deb", "appimage", "app", "dmg", "nsis"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/256x256.png", "icons/512x512.png"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/256x256.png",
+      "icons/512x512.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "resources": {
       "../webroot": "webroot"
     },
     "externalBin": [],
-    "category": "Game",
+    "category": "Racing Game",
     "shortDescription": "A drift-first arcade rally game",
     "longDescription": "A drift-first arcade rally game that runs in your browser. Low-poly 3D stages generated fresh every day — hairpins, jumps, fords — playable on your phone or desktop, offline once loaded. No account, no download.",
     "copyright": "Copyright © Niclas Lindstedt",

@@ -42,8 +42,11 @@ That is the whole of it for now. What the sibling's shell grew on top — cloud 
 
 ## Shipping to the stores
 
-The two storefronts are fed from **one authored source**, because they describe
-one game. The WORDS are `native/store/copy.mts`, which is **gitignored** —
+**Three storefronts, two shells.** The App Store ships the phone app
+(`native/`); the **Mac App Store** and Steam both ship the desktop app
+(`tauri/`), because a Mac app is a desktop app and the Expo shell does not build
+one. Each store's assets sit beside the shell that submits them, and all three
+are fed from **one authored source**, because they describe one game. The WORDS are `native/store/copy.mts`, which is **gitignored** —
 the game is paid on the App Store and open source here, and a listing's prose
 is the one thing those two facts pull apart — while the RULES (categories, the
 age-rating answers, the Steam tags, what the page may not claim) are committed
@@ -53,6 +56,36 @@ App Store Connect's `store.config.json`, the fastlane metadata tree, and
 `tauri/store/steam-listing.md` to paste into Steamworks. It validates every
 store's field limits and **fails rather than truncates**, because App Store
 Connect truncates silently.
+
+### The Mac App Store
+
+The same binary as the Steam download, wrapped differently, and four things
+separate it: the **App Sandbox** (mandatory on the store, and the strongest
+claim any of this repo's review notes can make — a process with no network
+entitlement cannot send anything anywhere), the **3rd Party Mac Developer**
+certificates rather than Developer ID, a **`.pkg`** rather than a notarized
+`.dmg`, and a **macOS icon that is not the app mark in a square**.
+
+That last one is two icons. Up to macOS 15 the app supplies a finished picture
+— `icon.icns`, masked to Apple's continuous-corner squircle, inset to 824/1024
+of its canvas, lit and shadowed, written by `npm --prefix tauri run icons`. On
+macOS 26 the system _draws_ the icon instead, from layers, and re-lights it for
+the light, dark, clear and tinted appearances a player picks in the Dock; `make
+icons` writes those layers to `tauri/store/icon-layers/` and Icon Composer turns
+them into a `.icon` on a Mac. Both ship: Tahoe prefers the layered one and every
+older system reads only the `.icns`.
+
+The desktop shell also draws a **real macOS menu bar**
+(`tauri/shell/src/menu.rs` is every row) — App, Race, Edit, View, Window and
+Help. It matters most here: an app that declares no menu still gets a bare one
+carrying its name and a Quit, and that is what a reviewer sees first. Every row
+presses a button the game already has, on one event (`SHELL_COMMAND`), and the
+one whose absence would be a bug rather than a rough edge is Edit — without it
+⌘C and ⌘V do nothing in the high-score board's name field.
+
+[`tauri/store/MAC_APP_STORE.md`](../tauri/store/MAC_APP_STORE.md) is the whole
+submission, `make mac-appstore` writes the two generated files, and
+`make mac-appstore ARGS="--steps"` prints the half that needs a Mac.
 
 `make store-shots` captures the screenshot set at Apple's and Valve's exact
 rasters, driving the real game to staged moments; `make store-sweep` is how each

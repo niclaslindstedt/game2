@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
 
 build:
 	npm run build
@@ -421,6 +421,15 @@ tauri-lint:
 # rustfmt in place, the peer of `make fmt`.
 tauri-fmt:
 	npm run tauri:fmt
+
+# THE MAC APP STORE's two generated files: the App Sandbox entitlements (which
+# name the Apple team, so they are generated from APPLE_TEAM_ID rather than
+# committed to a public repo) and the config overlay `tauri build --config`
+# reads. `make mac-appstore ARGS="--steps"` also prints the run-through for the
+# half that needs a Mac — the two certificates, productbuild and the upload.
+# tauri/store/MAC_APP_STORE.md is the whole submission.
+mac-appstore:
+	npm --prefix tauri run mac:appstore -- $(ARGS)
 
 # Package this machine's desktop downloads into tauri/release/ — the release
 # workflow's per-platform job, runnable by hand. `ARGS="--target <triple>"`

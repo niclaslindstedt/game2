@@ -79,6 +79,20 @@ const authored = copy !== skeleton;
  */
 const itAuthored = authored ? it : it.skip;
 
+/**
+ * A case about the MAC listing, which may not exist yet.
+ *
+ * `MAC_INFO` and `MAC_REVIEW_NOTES` are OPTIONAL in a real `copy.mts`: the Mac
+ * page is a separate piece of writing, and the generator skips that storefront
+ * rather than filling it in from the phone's words. So a checkout that has the
+ * real listing but has not written the Mac half yet is a normal state, and the
+ * cases that read those fields have to say so — otherwise this suite passes on
+ * every clone (where the skeleton HAS them) and throws on the one machine that
+ * actually submits.
+ */
+const macListed = Boolean(copy.MAC_INFO && copy.MAC_REVIEW_NOTES);
+const itMac = macListed ? it : it.skip;
+
 describe("the App Store listing fits Apple's fields", () => {
   it("has a title between 2 and 30 characters", () => {
     // Composed from identity.ts rather than authored, so this is really an
@@ -215,16 +229,104 @@ describe("the screenshot rasters", () => {
     expect(() => assertRasters(DEVICES)).not.toThrow();
   });
 
-  it("keeps Steam's frames out of the App Store upload directory", () => {
+  it("keeps the DESKTOP frames out of the phone App Store's upload directory", () => {
     // The fastlane upload ships everything it finds under
-    // native/store/screenshots to App Store Connect, and a 16:9 desktop frame
-    // is not a valid iPhone screenshot.
-    const steam = DEVICES.find((d) => d.name.startsWith("steam"));
-    expect(steam?.out).toBe("tauri/store/screenshots");
+    // native/store/screenshots to the phone app's App Store Connect record,
+    // and a 16:9 desktop frame is not a valid iPhone screenshot. Both desktop
+    // sets — Steam's and the Mac App Store's — therefore land beside the shell
+    // that submits them, and only the touch devices take the default.
     for (const device of DEVICES) {
-      if (device === steam) continue;
-      expect(device.out).toBeUndefined();
+      const desktop = device.touch === false;
+      if (desktop) expect(device.out).toBe("tauri/store/screenshots");
+      else expect(device.out).toBeUndefined();
     }
+    expect(DEVICES.filter((d) => d.touch === false).map((d) => d.name)).toEqual([
+      "mac-2880",
+      "steam-1080",
+    ]);
+  });
+
+  it("shoots the Mac App Store at one of Apple's four rasters", () => {
+    // Apple takes 1280×800, 1440×900, 2560×1600 or 2880×1800 and nothing
+    // else — a set at any other size is refused at upload, after the shoot.
+    const mac = DEVICES.find((d) => d.name === "mac-2880");
+    const allowed = [
+      [1280, 800],
+      [1440, 900],
+      [2560, 1600],
+      [2880, 1800],
+    ];
+    expect(allowed).toContainEqual([mac?.raster.width, mac?.raster.height]);
+  });
+});
+
+describe("the Mac App Store listing", () => {
+  it("is a second Apple storefront with its own words", () => {
+    // NEVER the phone listing with a different icon over it: the description
+    // is read at a desk, and the review notes describe a different binary.
+    // The generator SKIPS the Mac page rather than filling either in.
+    expect(skeleton.MAC_INFO["en-US"]).toBeTruthy();
+    expect(skeleton.MAC_REVIEW_NOTES).toBeTruthy();
+    expect(skeleton.MAC_INFO["en-US"].description).not.toBe(
+      skeleton.APPLE_INFO["en-US"].description,
+    );
+    expect(skeleton.MAC_REVIEW_NOTES).not.toBe(skeleton.APPLE_REVIEW_NOTES);
+  });
+
+  itMac("fits the same Apple fields the phone listing does", () => {
+    const mac = copy.MAC_INFO["en-US"];
+    expect(mac.subtitle.length).toBeLessThanOrEqual(30);
+    expect(mac.promoText.length).toBeLessThanOrEqual(170);
+    expect(mac.description.length).toBeGreaterThanOrEqual(10);
+    expect(mac.description.length).toBeLessThanOrEqual(4000);
+    expect(mac.keywords.join(",").length).toBeLessThanOrEqual(100);
+    expect(copy.MAC_REVIEW_NOTES.length).toBeLessThanOrEqual(4000);
+    expect(mac.supportUrl).toMatch(/^https:\/\//);
+  });
+
+  it("asks for the sandbox and nothing else", () => {
+    // The App Sandbox is mandatory on the Mac App Store, and it is also the
+    // shortest true sentence the review notes have: a sandboxed process with
+    // no network entitlement cannot send anything anywhere. Anything added to
+    // this list is a claim somebody has to defend to a reviewer.
+    expect(RULES.mac.entitlements).toContain("com.apple.security.app-sandbox");
+    expect(RULES.mac.entitlements).toHaveLength(1);
+  });
+
+  it("promises the same oldest macOS the desktop shell declares", () => {
+    // Two files that cannot import each other, and the one that is WRONG is
+    // the listing: a store page promising a macOS the binary refuses to launch
+    // on is a refund.
+    const config = JSON.parse(read("tauri", "src-tauri", "tauri.conf.json")) as {
+      bundle: { macOS: { minimumSystemVersion: string }; category: string; icon: string[] };
+    };
+    expect(config.bundle.macOS.minimumSystemVersion).toBe(RULES.mac.minimumSystemVersion);
+  });
+
+  it("ships the icon a macOS bundle actually reads", () => {
+    // A `.app` reads Contents/Resources/icon.icns and nothing else: without it
+    // in the bundler's list the Dock shows the blank generic icon, which is
+    // both a rejection and the first thing anybody sees.
+    const config = JSON.parse(read("tauri", "src-tauri", "tauri.conf.json")) as {
+      bundle: { icon: string[]; category: string };
+    };
+    expect(config.bundle.icon).toContain("icons/icon.icns");
+    // LSApplicationCategoryType comes from here, and the store shelf from it.
+    expect(config.bundle.category).toContain("Game");
+  });
+
+  it("says whether the Mac and the iPhone app are one purchase", () => {
+    // Apple sells them as one app only when the bundle ids match, and the
+    // answer can only be given while NEITHER has shipped — so the rules module
+    // states it rather than leaving it to whoever runs the upload.
+    const macId = (
+      JSON.parse(read("tauri", "src-tauri", "tauri.conf.json")) as {
+        identifier: string;
+      }
+    ).identifier;
+    const phoneId = /const BUNDLE_ID = "([^"]+)"/.exec(read("native", "app.config.js"))?.[1];
+    expect(typeof RULES.mac.universalPurchase).toBe("boolean");
+    if (RULES.mac.universalPurchase) expect(macId).toBe(phoneId);
   });
 
   it("stages every frame with the field on the road", () => {

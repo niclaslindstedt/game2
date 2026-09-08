@@ -62,7 +62,7 @@ import {
 } from "@engine";
 
 import { cacheIdForBase } from "./app-pwa.ts";
-import { shellHost } from "./shell-host.ts";
+import { onShellCommand, shellHost } from "./shell-host.ts";
 import { BENCHMARK } from "./game/benchmark-plan.ts";
 import {
   runBenchmark,
@@ -2663,6 +2663,57 @@ export function App() {
     setAudioVolumes(optionsRef.current.audio);
     setRumble(optionsRef.current.rumble);
   }, []);
+
+  // THE DESKTOP APP'S MENU BAR, pressing the game's own buttons.
+  //
+  // A Mac window has a menu bar whether the app draws one or not, so the
+  // desktop shell draws a real one (`tauri/shell/src/menu.rs`) — and every row
+  // in it reaches a button that is already on screen somewhere. This is the
+  // one place those words are spent, and each one is spent through the SAME
+  // handler the button uses, so a menu row and a press can never drift apart.
+  //
+  // A row the game cannot serve where it stands does NOTHING, and that is the
+  // design rather than a gap: GALLERY mid-race would throw away the run to
+  // open a photo roll, and no menu row should be able to do that by accident.
+  // In a browser nothing dispatches these at all.
+  useEffect(
+    () =>
+      onShellCommand((command) => {
+        const inMenu = menuRef.current !== null;
+        switch (command) {
+          case "restart":
+            actionsRef.current.restart();
+            return;
+          case "menu":
+            actionsRef.current.menu();
+            return;
+          case "pause":
+            // Only over a run, and a toggle, because the row is one row: a
+            // menu bar that offers PAUSE while the main menu is up is offering
+            // to freeze a drone shot.
+            if (!inMenu) setPaused((was) => !was);
+            return;
+          case "photo":
+            takeShotRef.current();
+            return;
+          case "gallery":
+            if (inMenu) setMenu({ page: "gallery" });
+            return;
+          case "settings":
+            // Mid-run the settings live on the PAUSE CARD, which is where the
+            // player reaches them without a menu bar too — so the row does
+            // what the player would: it stops the car first.
+            if (inMenu) setMenu({ page: "options" });
+            else setPaused(true);
+            return;
+          case "controls":
+            if (inMenu) setMenu({ page: "options", sub: "keyboard" });
+            else setPaused(true);
+            return;
+        }
+      }),
+    [],
+  );
 
   // NO LOUPE, ANYWHERE. iOS reads a press-and-hold as "put the caret here"
   // and answers it with a magnifying lens — over the road, taking the thumb

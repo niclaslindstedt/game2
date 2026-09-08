@@ -1,6 +1,6 @@
 ---
 name: store-listing
-description: "Use when writing or rewriting the words a storefront shows a buyer — the App Store subtitle, description, promotional text, keywords and release notes, the review notes, the age-rating answers, or the Steam store page. Carries the craft and every limit; the words themselves live in a gitignored file, because the game is paid on the App Store and open source on GitHub. Load it before touching `native/store/copy.mts`, and load `store-shots` for the pictures that go beside it."
+description: "Use when writing or rewriting the words a storefront shows a buyer — the App Store or MAC App Store subtitle, description, promotional text, keywords and release notes, the review notes, the age-rating answers, or the Steam store page. Carries the craft and every limit for all THREE storefronts; the words themselves live in a gitignored file, because the game is paid on the App Store and open source on GitHub. Load it before touching `native/store/copy.mts`, and load `store-shots` for the pictures that go beside it."
 ---
 
 # Writing the store listing
@@ -38,18 +38,27 @@ touches. Load **`skill-reflection`** at both ends of the session.
 
 ## Where everything is
 
-Two storefronts, one authored source, because they describe one game. **The App
-Store side lives under `native/`** (the Expo shell that ships the phone app) and
-**the Steam side under `tauri/`** (the desktop shell that ships the download) —
-each store's assets sit beside the shell that submits them, and the copy they
-share is authored once.
+**THREE storefronts, TWO shells, one authored source**, because they describe one
+game:
+
+| Storefront | Ships | Assets live under |
+| --- | --- | --- |
+| App Store | the phone app (`native/`, Expo over a WebView) | `native/` |
+| **Mac App Store** | the desktop app (`tauri/`) | **`tauri/`** |
+| Steam | the same desktop app, as a download | `tauri/` |
+
+Each store's assets sit beside the shell that submits them, and the copy they
+share is authored once. **A Mac app is a desktop app** — the Expo shell does not
+build one, so the Mac App Store and Steam ship the same binary with two
+different wrappers. [`tauri/store/MAC_APP_STORE.md`](../../../tauri/store/MAC_APP_STORE.md)
+is that submission end to end.
 
 ### What you edit
 
 | File | What it holds |
 | --- | --- |
-| `native/store/copy.mts` | **Every word both stores show.** Gitignored. This is the file you write. |
-| `native/store/listing.mts` | The rules: types, categories, age rating, contact, Steam tags, `notYetShipped` |
+| `native/store/copy.mts` | **Every word all three stores show.** Gitignored. This is the file you write. |
+| `native/store/listing.mts` | The rules: types, categories, age rating, contact, the `mac` block, Steam tags, `notYetShipped` |
 | `native/.env` | `ASC_REVIEW_PHONE` and the upload credentials. Gitignored. |
 | `pwa/src/identity.ts` | The name, the site URL, the palette — the COMPOSED fields come from here |
 | `pwa/public/privacy/index.html` | The privacy policy the listing names. Apple fetches it. |
@@ -61,9 +70,11 @@ share is authored once.
 | --- | --- |
 | `make store-metadata` | compiles the listing; validates every limit; says which copy module it used |
 | `make store-metadata ARGS="--check"` | validates without writing |
-| `make store-preflight` | what is still missing, BOTH storefronts, with store-gated items marked |
+| `make store-preflight` | what is still missing, ALL THREE storefronts, with store-gated items marked |
 | `make store-preflight ARGS="--now"` | …narrowed to what needs no store account |
-| `make store-shots` | the screenshot set for both stores (the `store-shots` skill owns it) |
+| `make store-shots` | the screenshot set for every store (the `store-shots` skill owns it) |
+| `make mac-appstore` | the Mac build's sandbox entitlements + config overlay, from `APPLE_TEAM_ID` |
+| `make mac-appstore ARGS="--steps"` | …and the Mac-only run-through, printed |
 | `npx vitest run tests/store_listing_test.ts` | the limits, and the claims the notes make about the build |
 
 ### What comes out — all of it gitignored build output, never hand-edited
@@ -73,6 +84,9 @@ share is authored once.
 | `native/store/store.config.json` | App Store | `eas metadata:push` (text only) |
 | `native/fastlane/metadata/**` | App Store | `fastlane deliver` (text + shots) |
 | `native/store/screenshots/<device>/` | App Store | `fastlane deliver`, or by hand |
+| `tauri/store/mac.config.json` | **Mac App Store** | the record's own fields |
+| `tauri/fastlane/metadata/**` | **Mac App Store** | `fastlane deliver --platform osx` |
+| `tauri/store/screenshots/mac-2880/` | **Mac App Store** | `fastlane deliver`, or by hand |
 | `tauri/store/steam-listing.md` | Steam | pasted into Steamworks by hand |
 | `tauri/store/screenshots/steam-1080/` | Steam | uploaded by hand |
 
@@ -80,22 +94,32 @@ share is authored once.
 
 `native/store/README.md` (the submission package), `native/RELEASING.md` (the
 Apple/Play run-through and what is gated on an enrolled account),
+`tauri/store/MAC_APP_STORE.md` (**the Mac half** — the sandbox, the two
+certificates, the `.pkg`, the icon and the menu bar),
 `tauri/store/README.md` (the Steam half, including the four capsule images
 Valve requires), `tauri/store/steam.json` (the app and depot ids — identifiers,
 not secrets), and `scripts/generate-store-metadata.mjs` (where every rule in
 this skill is actually enforced).
 
-### The two storefronts, side by side
+### The three storefronts, side by side
 
-|  | App Store (`native/`) | Steam (`tauri/`) |
-| --- | --- | --- |
-| Short pitch | `subtitle`, ≤ 30 | `STEAM_SHORT_DESCRIPTION`, ≤ 300 |
-| Long pitch | `description`, ≤ 4000, phone-shaped | `STEAM_ABOUT_BODY`, desktop, `[b]markup[/b]` |
-| Keywords | ≤ 100 chars JOINED | none — `tags`, weighted, in `listing.mts` |
-| Screenshot layout | `framed` (band above the frame) | `bleed` (band over a full-bleed frame) |
-| Reviewed against | guideline 4.2, via the review notes | the BUILD — hence `notYetShipped` |
-| What you cannot script | the privacy/rating questionnaires | the capsule art, and the depot upload |
-| Uploads with | `fastlane deliver` / `eas submit` | Steamworks by hand + `steamcmd` |
+|  | App Store (`native/`) | Mac App Store (`tauri/`) | Steam (`tauri/`) |
+| --- | --- | --- | --- |
+| Authored in | `APPLE_INFO` | `MAC_INFO` | `STEAM_*` |
+| Short pitch | `subtitle`, ≤ 30 | `subtitle`, ≤ 30 | `STEAM_SHORT_DESCRIPTION`, ≤ 300 |
+| Long pitch | `description`, ≤ 4000, phone-shaped | `description`, ≤ 4000, **desk-shaped** | `STEAM_ABOUT_BODY`, desktop, `[b]markup[/b]` |
+| Keywords | ≤ 100 chars JOINED | ≤ 100 chars JOINED | none — `tags`, weighted, in `listing.mts` |
+| Screenshots | `framed`, phone rasters | `bleed`, **2880×1800** | `bleed`, 1920×1080 |
+| Reviewed against | guideline 4.2, via the review notes | guideline 4.2 **and the sandbox** | the BUILD — hence `notYetShipped` |
+| What you cannot script | the privacy/rating questionnaires | the profile, the `.pkg`, the layered icon | the capsule art, and the depot upload |
+| Uploads with | `fastlane deliver` / `eas submit` | `productbuild` + `altool` | Steamworks by hand + `steamcmd` |
+
+**The Mac page is a SEPARATE PIECE OF WRITING, and the generator will not fill
+it in for you.** Leave `MAC_INFO` / `MAC_REVIEW_NOTES` out and the Mac
+storefront is skipped, with `make store-preflight` reporting it. That is
+deliberate: two of the fields would be lies. The description would talk about
+thumbs and about playing on a train to somebody sat at a desk, and the review
+notes describe a different binary — see below.
 
 ## Start here
 
@@ -193,6 +217,40 @@ read it, so the checks fail on:
 
 **If it is rejected under 4.2 anyway, do not argue — point at airplane mode.**
 
+### The MAC notes make a different, stronger argument
+
+Same guideline, different binary, and **none of the phone's sentences are true
+here**. The desktop shell has no local HTTP server: it serves the site as a
+bundled RESOURCE, in-process, from a private `game://` scheme. So the Mac notes
+say:
+
+- **The whole game is inside the app** — bundled as a resource
+  (`tauri.conf.json`'s `bundle.resources`), served in-process. Not a server, not
+  a zip. `make store-metadata` fails if that line ever leaves the config.
+- **The process is SANDBOXED and asks for nothing but the sandbox.** This is the
+  strongest sentence available anywhere in this repository's submissions, and a
+  reviewer can confirm it from the entitlements in thirty seconds. No network
+  entitlement means nothing *can* leave the device — a claim the phone app can
+  only make by describing its own code.
+- **The window cannot be steered onto the web.** It is pinned to its own origin;
+  the Help menu's links are handed to the player's browser.
+- **How to play with a keyboard AND a pad**, because this reviewer has neither
+  a touchscreen nor a thumb on a wheel.
+
+`mac.entitlements` in `listing.mts` is that argument's evidence, and the test
+holds it to exactly one entry. **Anything added to it is a claim you now have to
+defend**, so add nothing the game does not genuinely need.
+
+### The decision with a deadline: one purchase or two products
+
+Apple's **universal purchase** sells the Mac app and the iPhone app as one
+thing, and it needs both to carry the **same bundle id**. It can only be turned
+on while **neither has shipped**. The two currently differ, so `make
+store-metadata` warns on every run until somebody decides — do not silence that
+warning, it is a clock. `mac.universalPurchase` in `listing.mts` is the switch,
+and `tauri/store/MAC_APP_STORE.md` has the cost of flipping it late (the bundle
+id is what the WebView keys the player's saves to).
+
 ## The phone number is not copy
 
 Apple **rings** the review contact, and this repository is public. The number
@@ -262,7 +320,12 @@ what this game does.
 
 3. `make store-preflight` — it reports running on `copy.example.mts` as
    outstanding, because a submission built from the skeleton would ship
-   placeholder prose.
-4. **Read the description on a phone-width column**, not in an editor. The first
-   two lines are the listing.
-5. Back `copy.mts` up somewhere that is not this checkout.
+   placeholder prose. Read its MAC APP STORE section too: a skipped Mac listing
+   is reported there rather than failing anything.
+4. **Read the Mac budget line the generator prints.** `mac SKIPPED` means the
+   copy module has no `MAC_INFO` — which is fine while only the phone app is
+   shipping, and is the whole listing missing once the Mac one is.
+5. **Read the description on a phone-width column**, not in an editor. The first
+   two lines are the listing — and read the MAC one at a window's width, which
+   is a different shape and a different first impression.
+6. Back `copy.mts` up somewhere that is not this checkout.
