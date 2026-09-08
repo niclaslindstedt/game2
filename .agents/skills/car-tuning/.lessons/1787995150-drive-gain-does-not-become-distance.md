@@ -18,10 +18,10 @@ Measured (two identical cars flat out on a compiled straight, one with a
 fraction of the ideal `k·s`:
 
 | window | compact | classic | coupe |
-| ------ | ------- | ------- | ----- |
-| 80 m   | 0.75    | 0.67    | 0.90  |
-| 200 m  | 0.65    | 0.52    | 0.80  |
-| 300 m  | 0.51    | 0.49    | 0.76  |
+| --- | --- | --- | --- |
+| 80 m | 0.75 | 0.67 | 0.90 |
+| 200 m | 0.65 | 0.52 | 0.80 |
+| 300 m | 0.51 | 0.49 | 0.76 |
 
 The yield is FLAT in `k` (the model is linear in it) and falls with the
 window; the spread across the roster is the gearing, and the coupe converts

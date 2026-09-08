@@ -65,14 +65,14 @@ Corollaries, each learned by looking at a bad frame:
 Not six pretty moments — six DIFFERENT claims, each staged where its claim is
 legible. Two frames of a car on gravel from behind is one claim made twice.
 
-| Recipe    | The claim                        | How it is staged                                                       |
-| --------- | -------------------------------- | ---------------------------------------------------------------------- |
-| `grid`    | this is a race, not a time trial | fifteen cars on the apron, lights filling, every pipe smoking          |
-| `pack`    | the field is in the way          | driven from the grid to taiga-1's first two calls, still nose to tail  |
-| `drift`   | the drift IS the game            | placed before the stage's tightest corner, then driven sideways        |
-| `air`     | the jumps are real               | placed before Bajada's J1, shuttered off the wheels leaving the ground |
-| `country` | the roads are generated          | the helicopter over Switchbacks' hairpins, `drawdistance=far`          |
-| `weather` | the sky is not wallpaper         | Summit to Valley's own storm, at dusk, on wet tarmac                   |
+| Recipe | The claim | How it is staged |
+| --- | --- | --- |
+| `grid` | this is a race, not a time trial | fifteen cars on the apron, lights filling, every pipe smoking |
+| `pack` | the field is in the way | driven from the grid to taiga-1's first two calls, still nose to tail |
+| `drift` | the drift IS the game | placed before the stage's tightest corner, then driven sideways |
+| `air` | the jumps are real | placed before Bajada's J1, shuttered off the wheels leaving the ground |
+| `country` | the roads are generated | the helicopter over Switchbacks' hairpins, `drawdistance=far` |
+| `weather` | the sky is not wallpaper | Summit to Valley's own storm, at dusk, on wet tarmac |
 
 **The seventh, if Apple's ten slots are ever wanted, is `cockpit`** — the
 in-car view, which no other frame shows. It was cut from six because it is the
@@ -159,10 +159,10 @@ Two consequences worth planning around:
 **Never guess a capture offset.** A slide lasts a second and a half; a jump
 rather less.
 
-| Script                 | Job                                                          |
-| ---------------------- | ------------------------------------------------------------ |
+| Script | Job |
+| --- | --- |
 | `store-shot-sweep.mjs` | Reproduces one recipe at a matrix of offsets and sheets them |
-| `store-shots.mjs`      | Reproduces each recipe at its locked-in `captureAtS`         |
+| `store-shots.mjs` | Reproduces each recipe at its locked-in `captureAtS` |
 
 ```sh
 make build                                                  # ALWAYS first

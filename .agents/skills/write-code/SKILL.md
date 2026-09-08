@@ -51,15 +51,15 @@ prompted it, split it into its own commit so the real diff stays readable.
 
 ### The decision table
 
-| The comment says…                                                          | Do                                                                              |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| How the code works, why a number is that number, what a caller must not do | **KEEP** — this is the comment doing its job                                    |
-| What the code USED to be, and nothing else                                 | **DELETE**                                                                      |
-| A live rule, _justified by_ what it used to be                             | **REWRITE** — keep the rule, restate the reason in the present, cut the story   |
-| A rule bigger than this file (a seam, a budget, a trap in another module)  | **VALIDATE**, move it to a lesson fragment or the doc that owns it, then delete |
-| Commented-out code                                                         | **DELETE**                                                                      |
-| A restatement of the line below it (`// increment i`)                      | **DELETE**                                                                      |
-| A `TODO`/`FIXME` whose condition has already been met                      | **DELETE** — do the thing or drop the note                                      |
+| The comment says… | Do |
+| --- | --- |
+| How the code works, why a number is that number, what a caller must not do | **KEEP** — this is the comment doing its job |
+| What the code USED to be, and nothing else | **DELETE** |
+| A live rule, _justified by_ what it used to be | **REWRITE** — keep the rule, restate the reason in the present, cut the story |
+| A rule bigger than this file (a seam, a budget, a trap in another module) | **VALIDATE**, move it to a lesson fragment or the doc that owns it, then delete |
+| Commented-out code | **DELETE** |
+| A restatement of the line below it (`// increment i`) | **DELETE** |
+| A `TODO`/`FIXME` whose condition has already been met | **DELETE** — do the thing or drop the note |
 
 **The third row is the one that matters, and the one a careless pass gets
 wrong.** History is usually _welded to_ a real rule rather than standing alone,
@@ -158,11 +158,11 @@ and check once at the end of it.
 Inside that batch, when a specific answer is genuinely needed (a type you are
 unsure of, a test whose subject you just rewrote), check only what you touched:
 
-| Just edited                  | Run                                                           |
-| ---------------------------- | ------------------------------------------------------------- |
-| a `.ts`/`.tsx`/`.mjs` file   | `npx eslint <paths>`                                          |
-| anything type-bearing        | `npx tsc --noEmit -p tsconfig.json` (or `pwa/tsconfig.json`)  |
-| a test's subject             | `npx vitest run tests/<that-one>_test.ts`                     |
+| Just edited | Run |
+| --- | --- |
+| a `.ts`/`.tsx`/`.mjs` file | `npx eslint <paths>` |
+| anything type-bearing | `npx tsc --noEmit -p tsconfig.json` (or `pwa/tsconfig.json`) |
+| a test's subject | `npx vitest run tests/<that-one>_test.ts` |
 | handling / generator numbers | `npm run sim -- --seeds 1,2,3` — a slice, not the whole sweep |
 
 **Never run `prettier` or `make fmt` mid-loop.** Formatting is not information:

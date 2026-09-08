@@ -17,12 +17,12 @@ touches. Load **`skill-reflection`** at both ends of the session.
 
 ## Tooling
 
-| Piece                    | Role                                                                                                                                           |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Piece | Role |
+| --- | --- |
 | `scripts/screenshot.mjs` | The harness: serves the built app (`pwa/dist`), drives it headlessly with scripted keyboard input, captures scenes to `previews/` (gitignored) |
-| `make screenshots`       | Runs it. Needs `make build` first (it drives the BUILT app, not a dev server) and a Chromium                                                   |
-| `npm run dev`            | The headed loop — play your working copy in a browser for anything a still can't judge (feel, responsiveness, sound of the engine note)        |
-| `make track`             | The stage itself, top-down — when the question is the geometry rather than the rendering                                                       |
+| `make screenshots` | Runs it. Needs `make build` first (it drives the BUILT app, not a dev server) and a Chromium |
+| `npm run dev` | The headed loop — play your working copy in a browser for anything a still can't judge (feel, responsiveness, sound of the engine note) |
+| `make track` | The stage itself, top-down — when the question is the geometry rather than the rendering |
 
 ### Environment
 

@@ -19,22 +19,22 @@ change — it owns the craft rules (comments, file caps, the edit loop).
 
 ## Where the pieces go
 
-| Piece                                                                    | File                                                                                                            |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| Global feel tuning (drift, jump, grip, gearbox, respawn thresholds)      | `engine/game/defs/tuning.ts` — units in the comments (m, m/s, s, rad); never inline in the model                |
-| Per-car numbers, or a new car                                            | A data row in `engine/game/defs/cars.ts` — the model never branches per car                                     |
-| State shapes & events                                                    | `engine/game/state.ts` — `GameState`, `CarInput`, the `GameEvent` union                                         |
-| The handling model (grounded + airborne, drift state machine, gearboxes) | `engine/game/car.ts`                                                                                            |
-| Run orchestration (phases, progress, respawns, finish, event emission)   | `engine/game/step.ts` — `createGame` and the fixed 120 Hz `step`                                                |
-| Car-to-track queries (progress, lateral offset, surface, lips)           | `engine/game/track.ts`                                                                                          |
-| Stage generation rules / vocabulary                                      | `engine/mapgen/rules.ts` + `generate.ts` + `compile.ts` — the `mapgen-improvement` skill                        |
-| Bot behavior                                                             | `engine/sim/bot.ts` — the `bot-improvement` skill                                                               |
-| Generic helpers (any game could use)                                     | `engine/lib/` — the pool a later game keeps as-is                                                               |
-| Public surface                                                           | `engine/index.ts` — export new types/constants the app or tests need                                            |
-| Tests                                                                    | `tests/<topic>_test.ts` (vitest, `@engine` alias, synthetic tracks — see the `test-scenario` skill)             |
-| Anything drawn                                                           | `pwa/src/game/` (`renderer.ts`, `world.ts`, `car-mesh.ts`, `dust.ts`, `camera.ts`) — the `visual-effects` skill |
-| HUD / touch controls                                                     | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                                                   |
-| Input mapping                                                            | `pwa/src/game/input.ts`                                                                                         |
+| Piece | File |
+| --- | --- |
+| Global feel tuning (drift, jump, grip, gearbox, respawn thresholds) | `engine/game/defs/tuning.ts` — units in the comments (m, m/s, s, rad); never inline in the model |
+| Per-car numbers, or a new car | A data row in `engine/game/defs/cars.ts` — the model never branches per car |
+| State shapes & events | `engine/game/state.ts` — `GameState`, `CarInput`, the `GameEvent` union |
+| The handling model (grounded + airborne, drift state machine, gearboxes) | `engine/game/car.ts` |
+| Run orchestration (phases, progress, respawns, finish, event emission) | `engine/game/step.ts` — `createGame` and the fixed 120 Hz `step` |
+| Car-to-track queries (progress, lateral offset, surface, lips) | `engine/game/track.ts` |
+| Stage generation rules / vocabulary | `engine/mapgen/rules.ts` + `generate.ts` + `compile.ts` — the `mapgen-improvement` skill |
+| Bot behavior | `engine/sim/bot.ts` — the `bot-improvement` skill |
+| Generic helpers (any game could use) | `engine/lib/` — the pool a later game keeps as-is |
+| Public surface | `engine/index.ts` — export new types/constants the app or tests need |
+| Tests | `tests/<topic>_test.ts` (vitest, `@engine` alias, synthetic tracks — see the `test-scenario` skill) |
+| Anything drawn | `pwa/src/game/` (`renderer.ts`, `world.ts`, `car-mesh.ts`, `dust.ts`, `camera.ts`) — the `visual-effects` skill |
+| HUD / touch controls | `pwa/src/game/hud.tsx` + `pwa/src/styles.css` |
+| Input mapping | `pwa/src/game/input.ts` |
 
 ## Workflow
 

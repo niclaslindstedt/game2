@@ -14,11 +14,11 @@ produces a run, because the condition that trips it arrives in clusters.
 Measured against `createTrackPlayer` on hand-driven clocks, 0.28 s horizon,
 90 ms interval:
 
-| the ticks              | holes | worst gap |
-| ---------------------- | ----- | --------- |
-| punctual, and 300 ms   | 0     | —         |
-| 400 ms                 | 11    | 0.275 s   |
-| 1 s (a throttled page) | 20    | 0.875 s   |
+| the ticks | holes | worst gap |
+| --- | --- | --- |
+| punctual, and 300 ms | 0 | — |
+| 400 ms | 11 | 0.275 s |
+| 1 s (a throttled page) | 20 | 0.875 s |
 
 The cliff is exactly at the horizon: a shorter gap leaves the previous booking
 still covering the clock. Coming back to an iOS PWA lands past it, which is why

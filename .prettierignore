@@ -28,6 +28,15 @@ GEMINI.md
 .cursorrules
 .windsurfrules
 .github/copilot-instructions.md
+
+# The agent skills and the lesson fragments beside them (`.claude/skills` is a
+# symlink onto the same tree). Same wide tables as AGENTS.md, with a sharper
+# edge: every skill is edited by whatever session happens to be doing that
+# subject's work, so a re-pad of one column turns two parallel sessions' one-row
+# edits into a conflict over the whole block. Their tables are written in the
+# compact `| a | b |` form and stay that way.
+.agents/skills/
+.claude/skills/
 # Generated rasters.
 pwa/public/icons/*.png
 pwa/public/og.png

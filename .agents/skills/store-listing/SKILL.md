@@ -12,12 +12,12 @@ first screenshot, and reads the description only if those three survive.
 **THE KNOWLEDGE IS IN THIS REPOSITORY AND THE WORDS ARE NOT.** That is the one
 structural thing to understand before editing anything:
 
-| File                            | Holds                                             | Committed? |
-| ------------------------------- | ------------------------------------------------- | ---------- |
-| `native/store/listing.mts`      | types, limits, categories, age rating, the checks | yes        |
-| `native/store/copy.mts`         | **every word a buyer reads**                      | **no**     |
-| `native/store/copy.example.mts` | a skeleton naming what goes where                 | yes        |
-| this skill                      | how to write it, and what the traps are           | yes        |
+| File | Holds | Committed? |
+| --- | --- | --- |
+| `native/store/listing.mts` | types, limits, categories, age rating, the checks | yes |
+| `native/store/copy.mts` | **every word a buyer reads** | **no** |
+| `native/store/copy.example.mts` | a skeleton naming what goes where | yes |
+| this skill | how to write it, and what the traps are | yes |
 
 The game is **paid on the App Store** and **open source on GitHub**. Those two
 facts are only in tension for the listing's copy: a description, subtitle,
@@ -46,35 +46,35 @@ share is authored once.
 
 ### What you edit
 
-| File                            | What it holds                                                                  |
-| ------------------------------- | ------------------------------------------------------------------------------ |
-| `native/store/copy.mts`         | **Every word both stores show.** Gitignored. This is the file you write.       |
-| `native/store/listing.mts`      | The rules: types, categories, age rating, contact, Steam tags, `notYetShipped` |
-| `native/.env`                   | `ASC_REVIEW_PHONE` and the upload credentials. Gitignored.                     |
-| `pwa/src/identity.ts`           | The name, the site URL, the palette — the COMPOSED fields come from here       |
-| `pwa/public/privacy/index.html` | The privacy policy the listing names. Apple fetches it.                        |
-| `pwa/public/support/index.html` | The support page. Apple requires one and rejects a `mailto:`.                  |
+| File | What it holds |
+| --- | --- |
+| `native/store/copy.mts` | **Every word both stores show.** Gitignored. This is the file you write. |
+| `native/store/listing.mts` | The rules: types, categories, age rating, contact, Steam tags, `notYetShipped` |
+| `native/.env` | `ASC_REVIEW_PHONE` and the upload credentials. Gitignored. |
+| `pwa/src/identity.ts` | The name, the site URL, the palette — the COMPOSED fields come from here |
+| `pwa/public/privacy/index.html` | The privacy policy the listing names. Apple fetches it. |
+| `pwa/public/support/index.html` | The support page. Apple requires one and rejects a `mailto:`. |
 
 ### What runs
 
-| Command                                      | Does                                                                        |
-| -------------------------------------------- | --------------------------------------------------------------------------- |
-| `make store-metadata`                        | compiles the listing; validates every limit; says which copy module it used |
-| `make store-metadata ARGS="--check"`         | validates without writing                                                   |
-| `make store-preflight`                       | what is still missing, BOTH storefronts, with store-gated items marked      |
-| `make store-preflight ARGS="--now"`          | …narrowed to what needs no store account                                    |
-| `make store-shots`                           | the screenshot set for both stores (the `store-shots` skill owns it)        |
-| `npx vitest run tests/store_listing_test.ts` | the limits, and the claims the notes make about the build                   |
+| Command | Does |
+| --- | --- |
+| `make store-metadata` | compiles the listing; validates every limit; says which copy module it used |
+| `make store-metadata ARGS="--check"` | validates without writing |
+| `make store-preflight` | what is still missing, BOTH storefronts, with store-gated items marked |
+| `make store-preflight ARGS="--now"` | …narrowed to what needs no store account |
+| `make store-shots` | the screenshot set for both stores (the `store-shots` skill owns it) |
+| `npx vitest run tests/store_listing_test.ts` | the limits, and the claims the notes make about the build |
 
 ### What comes out — all of it gitignored build output, never hand-edited
 
-| Output                                | For       | Consumed by                       |
-| ------------------------------------- | --------- | --------------------------------- |
-| `native/store/store.config.json`      | App Store | `eas metadata:push` (text only)   |
-| `native/fastlane/metadata/**`         | App Store | `fastlane deliver` (text + shots) |
-| `native/store/screenshots/<device>/`  | App Store | `fastlane deliver`, or by hand    |
-| `tauri/store/steam-listing.md`        | Steam     | pasted into Steamworks by hand    |
-| `tauri/store/screenshots/steam-1080/` | Steam     | uploaded by hand                  |
+| Output | For | Consumed by |
+| --- | --- | --- |
+| `native/store/store.config.json` | App Store | `eas metadata:push` (text only) |
+| `native/fastlane/metadata/**` | App Store | `fastlane deliver` (text + shots) |
+| `native/store/screenshots/<device>/` | App Store | `fastlane deliver`, or by hand |
+| `tauri/store/steam-listing.md` | Steam | pasted into Steamworks by hand |
+| `tauri/store/screenshots/steam-1080/` | Steam | uploaded by hand |
 
 ### Committed alongside, and not yours to author
 
@@ -87,15 +87,15 @@ this skill is actually enforced).
 
 ### The two storefronts, side by side
 
-|                        | App Store (`native/`)               | Steam (`tauri/`)                             |
-| ---------------------- | ----------------------------------- | -------------------------------------------- |
-| Short pitch            | `subtitle`, ≤ 30                    | `STEAM_SHORT_DESCRIPTION`, ≤ 300             |
-| Long pitch             | `description`, ≤ 4000, phone-shaped | `STEAM_ABOUT_BODY`, desktop, `[b]markup[/b]` |
-| Keywords               | ≤ 100 chars JOINED                  | none — `tags`, weighted, in `listing.mts`    |
-| Screenshot layout      | `framed` (band above the frame)     | `bleed` (band over a full-bleed frame)       |
-| Reviewed against       | guideline 4.2, via the review notes | the BUILD — hence `notYetShipped`            |
-| What you cannot script | the privacy/rating questionnaires   | the capsule art, and the depot upload        |
-| Uploads with           | `fastlane deliver` / `eas submit`   | Steamworks by hand + `steamcmd`              |
+|  | App Store (`native/`) | Steam (`tauri/`) |
+| --- | --- | --- |
+| Short pitch | `subtitle`, ≤ 30 | `STEAM_SHORT_DESCRIPTION`, ≤ 300 |
+| Long pitch | `description`, ≤ 4000, phone-shaped | `STEAM_ABOUT_BODY`, desktop, `[b]markup[/b]` |
+| Keywords | ≤ 100 chars JOINED | none — `tags`, weighted, in `listing.mts` |
+| Screenshot layout | `framed` (band above the frame) | `bleed` (band over a full-bleed frame) |
+| Reviewed against | guideline 4.2, via the review notes | the BUILD — hence `notYetShipped` |
+| What you cannot script | the privacy/rating questionnaires | the capsule art, and the depot upload |
+| Uploads with | `fastlane deliver` / `eas submit` | Steamworks by hand + `steamcmd` |
 
 ## Start here
 
@@ -115,16 +115,16 @@ The generator enforces all of these and **fails rather than truncates**,
 because App Store Connect truncates silently and finding out from a live
 listing is the expensive path.
 
-| Field                    | Limit   | What to know                                      |
-| ------------------------ | ------- | ------------------------------------------------- |
-| `title`                  | 2–30    | COMPOSED from `identity.ts` — not yours to author |
-| `subtitle`               | ≤ 30    | indexed for search as well as read                |
-| `keywords`               | ≤ 100   | **the comma-JOINED string**, not each term        |
-| `promoText`              | ≤ 170   | the only field that changes without a build       |
-| `description`            | 10–4000 | only the first two lines show before "more"       |
-| `releaseNotes`           | ≤ 4000  | belongs to the version it ships beside            |
-| `review.notes`           | 2–4000  | the highest-leverage field in the submission      |
-| `steam.shortDescription` | ≤ 300   | Valve's own                                       |
+| Field | Limit | What to know |
+| --- | --- | --- |
+| `title` | 2–30 | COMPOSED from `identity.ts` — not yours to author |
+| `subtitle` | ≤ 30 | indexed for search as well as read |
+| `keywords` | ≤ 100 | **the comma-JOINED string**, not each term |
+| `promoText` | ≤ 170 | the only field that changes without a build |
+| `description` | 10–4000 | only the first two lines show before "more" |
+| `releaseNotes` | ≤ 4000 | belongs to the version it ships beside |
+| `review.notes` | 2–4000 | the highest-leverage field in the submission |
+| `steam.shortDescription` | ≤ 300 | Valve's own |
 
 **The keyword field is the one that surprises people.** The 100 characters are
 spent on the joined string — `drift,racing,offline,…` — commas included. Three

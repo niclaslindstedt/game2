@@ -20,14 +20,14 @@ ends of the session.
 
 ## Instruments
 
-| Instrument          | How                                                                                                                                                                                    |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Deterministic repro | `createGame({ seed, carId, skipCountdown: true })` + fixed `step()` loops in a scratch vitest file — or a synthetic track via the `test-scenario` skill                                |
-| Bot repro           | `simulateStage({ seed, carId })` (`engine/sim/simulate.ts`) — a whole botted run, headless, with the full event log and stats in the result                                            |
-| Determinism check   | The `digest` in `SimResult` — two runs of the same seed/car/profile must hash identically; a digest drift IS the bug report for nondeterminism                                         |
-| Engine log          | `engine/output.ts` — the semantic output module (`status/info/warn/error/debug`) with a pluggable sink; in the browser it feeds the framework log store via `pwa/src/output-bridge.ts` |
-| Stage geometry      | `make track` / `npm run track -- --seeds N` — render the stage the seed builds and LOOK at where the bug happened                                                                      |
-| The real renderer   | `make screenshots` (the `playtest` skill), or `npm run dev` headed — for anything only pixels can show                                                                                 |
+| Instrument | How |
+| --- | --- |
+| Deterministic repro | `createGame({ seed, carId, skipCountdown: true })` + fixed `step()` loops in a scratch vitest file — or a synthetic track via the `test-scenario` skill |
+| Bot repro | `simulateStage({ seed, carId })` (`engine/sim/simulate.ts`) — a whole botted run, headless, with the full event log and stats in the result |
+| Determinism check | The `digest` in `SimResult` — two runs of the same seed/car/profile must hash identically; a digest drift IS the bug report for nondeterminism |
+| Engine log | `engine/output.ts` — the semantic output module (`status/info/warn/error/debug`) with a pluggable sink; in the browser it feeds the framework log store via `pwa/src/output-bridge.ts` |
+| Stage geometry | `make track` / `npm run track -- --seeds N` — render the stage the seed builds and LOOK at where the bug happened |
+| The real renderer | `make screenshots` (the `playtest` skill), or `npm run dev` headed — for anything only pixels can show |
 
 ## Process
 

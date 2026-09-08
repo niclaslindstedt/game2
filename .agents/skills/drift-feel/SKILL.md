@@ -23,16 +23,16 @@ drama, the camera); this skill is the mechanism under it.
 
 ## The knobs, in the order a drift happens
 
-| Knob                     | What it decides                                                                  | Turn it up to…                                                        |
-| ------------------------ | -------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `entryAt`                | Where the slide starts, as a fraction of the tires' grip (`gripAccel`)           | …keep the car gripped longer; the drift moves to the top of the throw |
-| `entrySpread`            | How much further past that it takes to develop fully                             | …spread the hand-over over more of the wheel: smoother, later angle   |
-| `angleSpan`              | The slip angle a fully developed slide asks for — the DEPTH of a committed drift | …go more sideways at full lock (watch the speed cost)                 |
-| `angleBand`              | How far past that angle the deepening forces take to fade out                    | …let throttle and lift move the car around inside the drift more      |
-| `release`                | How fast a slide lets go once the wheel stops asking, 1/s                        | …drop the angle sooner when the lock comes off                        |
-| `releaseHang`            | How much the rotation outlives the lock, 0..1 — the OVERSHOOT                    | …make the exit swing further past centre and need a proper catch      |
-| `releaseSnap`            | How hard the rear pulls the nose back to the travel direction on the way out     | …gather the car up faster, and (with `hang`) overshoot harder         |
-| `enterSlip` / `exitSlip` | The angle at which the car READS as drifting — dust, HUD, stats                  | …make the readout stingier about calling something a drift            |
+| Knob | What it decides | Turn it up to… |
+| --- | --- | --- |
+| `entryAt` | Where the slide starts, as a fraction of the tires' grip (`gripAccel`) | …keep the car gripped longer; the drift moves to the top of the throw |
+| `entrySpread` | How much further past that it takes to develop fully | …spread the hand-over over more of the wheel: smoother, later angle |
+| `angleSpan` | The slip angle a fully developed slide asks for — the DEPTH of a committed drift | …go more sideways at full lock (watch the speed cost) |
+| `angleBand` | How far past that angle the deepening forces take to fade out | …let throttle and lift move the car around inside the drift more |
+| `release` | How fast a slide lets go once the wheel stops asking, 1/s | …drop the angle sooner when the lock comes off |
+| `releaseHang` | How much the rotation outlives the lock, 0..1 — the OVERSHOOT | …make the exit swing further past centre and need a proper catch |
+| `releaseSnap` | How hard the rear pulls the nose back to the travel direction on the way out | …gather the car up faster, and (with `hang`) overshoot harder |
+| `enterSlip` / `exitSlip` | The angle at which the car READS as drifting — dust, HUD, stats | …make the readout stingier about calling something a drift |
 
 ## ...and the SPIN, which is the far end of the same model
 
@@ -41,14 +41,14 @@ past the point the slide can be brought back, and its knobs sit in the same
 `TUNING.drift` group, read in the same `stepGrounded` block (`car.ts`, around
 `car.spun`). Anything about a car going round belongs here, not in `crash`.
 
-| Knob        | What it decides                                                                              |
-| ----------- | -------------------------------------------------------------------------------------------- |
-| `spinAt`    | The slip (×`breakaway`) at which the slide stops being a drift and becomes a spin            |
-| `spinBack`  | ...and where it comes back, meaningfully under it — the hysteresis                           |
-| `spinOut`   | The speed a spin needs on BOTH sides: under it a car is pointing the wrong way, not spinning |
-| `spinCarry` | The rate it goes on turning at once nothing is holding the tail                              |
-| `spinSteer` | How much of the wheel survives — never zero, or the spin is a cutscene                       |
-| `spinScrub` | ...and how much harder four dragged tyres scrub, ×`grip.scrub`                               |
+| Knob | What it decides |
+| --- | --- |
+| `spinAt` | The slip (×`breakaway`) at which the slide stops being a drift and becomes a spin |
+| `spinBack` | ...and where it comes back, meaningfully under it — the hysteresis |
+| `spinOut` | The speed a spin needs on BOTH sides: under it a car is pointing the wrong way, not spinning |
+| `spinCarry` | The rate it goes on turning at once nothing is holding the tail |
+| `spinSteer` | How much of the wheel survives — never zero, or the spin is a cutscene |
+| `spinScrub` | ...and how much harder four dragged tyres scrub, ×`grip.scrub` |
 
 Two traps, both of which have bitten:
 
@@ -69,13 +69,13 @@ layout does not find on the wheel alone comes from. Each lifts that layout's
 own `depth` toward the reference slide, so a move is worth most to the car
 with the least of its own:
 
-| Knob            | What it decides                                                           |
-| --------------- | ------------------------------------------------------------------------- |
-| `flickDepth`    | What a full weight throw is worth — the move the game is named after      |
-| `brakeDepth`    | ...and a trailed brake, ×`drivetrain[].brake` — the hatch's whole turn-in |
-| `leverDepth`    | ...and the handbrake, the last resort, which reaches deepest              |
-| `provokeFloor`  | How far a full provocation lowers the SPEED FLOOR — the lever's exception |
-| `provokeSettle` | How fast a provocation the driver has stopped making fades back out       |
+| Knob | What it decides |
+| --- | --- |
+| `flickDepth` | What a full weight throw is worth — the move the game is named after |
+| `brakeDepth` | ...and a trailed brake, ×`drivetrain[].brake` — the hatch's whole turn-in |
+| `leverDepth` | ...and the handbrake, the last resort, which reaches deepest |
+| `provokeFloor` | How far a full provocation lowers the SPEED FLOOR — the lever's exception |
+| `provokeSettle` | How fast a provocation the driver has stopped making fades back out |
 
 None of them ROTATES anything by itself: they open the slide, and
 `grip.flickYaw`, `grip.brakeYaw`, `grip.liftYaw` and `grip.handbrakeYaw` are

@@ -22,24 +22,24 @@ anything the car throws off, `visual-effects`; for how it all SOUNDS,
 
 The sun is decided first, everything else reads it.
 
-| File                              | Owns                                                                                                                                                                                                                                                    |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pwa/src/game/daylight.ts`        | WHERE THE SUN IS: the hour, the season and the country's latitude turned into an elevation and a bearing. The clock itself is the engine's `sunHourAt` — an hour of sun per minute of racing                                                            |
-| `pwa/src/game/sky.ts`             | What COLOUR the sky is: a ladder of rungs over the sun's elevation, plus the weather and season colour maths, over the tables in `sky-looks.ts`. Also `sunHardness` — how hard a shadow the light throws                                                |
-| `pwa/src/game/cloud-field.ts`     | What is IN the sky: the cloud chart's genera, their altitudes and coverage, decided per stage. `sky-shader.ts` draws them on the dome; `clouds.ts` is the LOW setting's ring of puffs and its mesh deck                                                 |
-| `pwa/src/game/starfield.ts`       | THE NIGHT SKY: where the sphere of stars has turned this hour and season (the pole is the country's latitude), the Milky Way's frame, band and rift, and the star grids — as GLSL for the dome and as the same arithmetic in TypeScript for the LOW sky |
-| `pwa/src/game/night-sky.ts`       | The LOW setting's answer to it: the field baked into points and the band into one additive strip                                                                                                                                                        |
-| `pwa/src/game/mist.ts`            | The rule for mist in the valleys — when it lies there and how deep                                                                                                                                                                                      |
-| `pwa/src/game/height-fog.ts`      | The fog chunk EVERY material carries: the mist, the sun in it, and the shadows in the air                                                                                                                                                               |
-| `pwa/src/game/mountain-shadow.ts` | The shadow the COUNTRY throws — a low sun stopped by a ridge, marched off the heightfield; read by `height-fog.ts` on the ground and `sky-shader.ts` on the cloud sea                                                                                   |
-| `pwa/src/game/horizon.ts`         | The ridge rings closing the view, and the sea gap in them; turned to the run's sunrise or sunset by `environment.ts`                                                                                                                                    |
-| `pwa/src/game/weather.ts`         | How heavy the weather is and how hard it is coming down — read off the wind, and DOM-free so the road bed can share it                                                                                                                                  |
-| `pwa/src/game/storm.ts`           | Lightning; the thunder behind it is `thunder_*` in `audio/bank.ts`                                                                                                                                                                                      |
-| `pwa/src/game/ambient-life.ts`    | The birds, and the aircraft crossing far above them                                                                                                                                                                                                     |
-| `pwa/src/game/sky-traffic.ts`     | How often an aircraft comes over and how its contrail ages — DOM-free                                                                                                                                                                                   |
-| `pwa/src/game/skein.ts`           | The birds that are GOING SOMEWHERE — geese, swans, the vee. What flies, which way and how high is the SEASON's answer (`passageFor`); the shape they hold is `formationOffset`, and the same season is heard in `audio/ambience.ts`                     |
-| `pwa/src/game/water-look.ts`      | What WATER looks like — one flat semi-transparent material for lakes, fords and streams alike; and `iceMaterial` over `iceTexture` (`textures.ts`) for a frozen one. The SHEETS themselves are cut in `terrain.ts` (`flushSheet`)                       |
-| `pwa/src/game/environment.ts`     | Hangs it all in the scene: the sky, the light, the horizon's orientation. The CAR's own beams and its brake pool are `car-lamps.ts`, which this only drives                                                                                             |
+| File | Owns |
+| --- | --- |
+| `pwa/src/game/daylight.ts` | WHERE THE SUN IS: the hour, the season and the country's latitude turned into an elevation and a bearing. The clock itself is the engine's `sunHourAt` — an hour of sun per minute of racing |
+| `pwa/src/game/sky.ts` | What COLOUR the sky is: a ladder of rungs over the sun's elevation, plus the weather and season colour maths, over the tables in `sky-looks.ts`. Also `sunHardness` — how hard a shadow the light throws |
+| `pwa/src/game/cloud-field.ts` | What is IN the sky: the cloud chart's genera, their altitudes and coverage, decided per stage. `sky-shader.ts` draws them on the dome; `clouds.ts` is the LOW setting's ring of puffs and its mesh deck |
+| `pwa/src/game/starfield.ts` | THE NIGHT SKY: where the sphere of stars has turned this hour and season (the pole is the country's latitude), the Milky Way's frame, band and rift, and the star grids — as GLSL for the dome and as the same arithmetic in TypeScript for the LOW sky |
+| `pwa/src/game/night-sky.ts` | The LOW setting's answer to it: the field baked into points and the band into one additive strip |
+| `pwa/src/game/mist.ts` | The rule for mist in the valleys — when it lies there and how deep |
+| `pwa/src/game/height-fog.ts` | The fog chunk EVERY material carries: the mist, the sun in it, and the shadows in the air |
+| `pwa/src/game/mountain-shadow.ts` | The shadow the COUNTRY throws — a low sun stopped by a ridge, marched off the heightfield; read by `height-fog.ts` on the ground and `sky-shader.ts` on the cloud sea |
+| `pwa/src/game/horizon.ts` | The ridge rings closing the view, and the sea gap in them; turned to the run's sunrise or sunset by `environment.ts` |
+| `pwa/src/game/weather.ts` | How heavy the weather is and how hard it is coming down — read off the wind, and DOM-free so the road bed can share it |
+| `pwa/src/game/storm.ts` | Lightning; the thunder behind it is `thunder_*` in `audio/bank.ts` |
+| `pwa/src/game/ambient-life.ts` | The birds, and the aircraft crossing far above them |
+| `pwa/src/game/sky-traffic.ts` | How often an aircraft comes over and how its contrail ages — DOM-free |
+| `pwa/src/game/skein.ts` | The birds that are GOING SOMEWHERE — geese, swans, the vee. What flies, which way and how high is the SEASON's answer (`passageFor`); the shape they hold is `formationOffset`, and the same season is heard in `audio/ambience.ts` |
+| `pwa/src/game/water-look.ts` | What WATER looks like — one flat semi-transparent material for lakes, fords and streams alike; and `iceMaterial` over `iceTexture` (`textures.ts`) for a frozen one. The SHEETS themselves are cut in `terrain.ts` (`flushSheet`) |
+| `pwa/src/game/environment.ts` | Hangs it all in the scene: the sky, the light, the horizon's orientation. The CAR's own beams and its brake pool are `car-lamps.ts`, which this only drives |
 
 WHETHER a lake is frozen at all is the engine's call, not this skill's:
 `CLIMATE.ice` + `waterFrozen` / `icyCountry` in `engine/game/climate.ts`, and

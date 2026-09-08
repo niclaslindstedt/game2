@@ -25,24 +25,24 @@ the same landscape, and **`collision`** for what hitting one of these costs.
 
 ## Where each thing lives
 
-| Thing                                               | Placed by (engine)                                                                                                  | Drawn by (`pwa/src/game/`)                                                                                         |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| A house off the stage, its drive and yard           | `mapgen/homesteads.ts` (R37)                                                                                        | `homestead.ts`, the building itself `house.ts` (from the engine's `HousePlan`)                                     |
-| What makes a homestead a FARM                       | `mapgen/farms.ts` (R37) — barn, paddock, field, gear                                                                | `barn.ts`, `paddock.ts`, `farm-gear.ts`                                                                            |
-| The cows and sheep grazing it                       | the paddock is the engine's                                                                                         | `livestock.ts` — where they MAY be is the engine's, where each STANDS is the renderer's (the crowd's pattern)      |
-| A town: where it stands, its lots                   | `mapgen/towns.ts` (R39), on borrowed tarmac or an abandoned arm                                                     | `town.ts`                                                                                                          |
-| What a BUILDING is — kind, plan, walls              | `mapgen/buildings.ts` — the plans both placers draw, and the footprint-to-solids walk                               | `building.ts` (flats, grocery, post, workshop) over the house's primitives                                         |
-| Where the crowd PARKED, the lane in, the trails     | `mapgen/carparks.ts` (R42) over `carpark-map.ts`, on the terrain field from the stands                              | `carpark.ts`                                                                                                       |
-| A car that only STANDS there                        | —                                                                                                                   | `parked-car.ts` — a dozen boxes from one roll; NEVER the catalog's builder, which is a thousand times the geometry |
-| A wind farm or a solar farm                         | `mapgen/energy.ts` (R43); numbers `STAGE_RULES.energy`, the country's say `BiomeRules.energy`                       | `wind-farm.ts` (reads `state.wind`), `solar-farm.ts` (one instanced mesh of tables per farm)                       |
-| The transmission line and its towers                | `mapgen/powerline.ts` (R45) surveys the line, spots the towers; numbers `STAGE_RULES.powerline`                     | `powerline.ts`                                                                                                     |
-| The railway, the crossing's ramp, the timetable     | `mapgen/railway.ts` (R41) over `highway.ts`'s `rail` line and `crossing.ts`'s solve; numbers `STAGE_RULES.rail`     | `train.ts` (the consist, posed off `trainCars`) + `railway.ts` (ballast, sleepers, rails, deck, boards)            |
-| Where the TRAFFIC drives, and its speed limit signs | `mapgen/traffic.ts` (R44) plans routes over the arms and car-park lanes; numbers `STAGE_RULES.traffic`              | `traffic.ts` (posed off `state.traffic` every frame)                                                               |
-| How a MOTORIST drives, and what hitting one costs   | `game/traffic.ts` — the fleet, stepped inside `step()`; the twenty vehicles and the knobs in `game/defs/traffic.ts` | `traffic-fleet.ts` — one merged mesh per body kind                                                                 |
-| A tunnel                                            | R47 in `mapgen/search.ts` decides where one is bored                                                                | `tunnel.ts` + `tunnel-lid.ts` (the mountain drawn back over the engine's trench, off `field.lidAt`)                |
-| The marking beside the road                         | `mapgen/kerbs.ts` places every marker (one of them is solid)                                                        | `kerbs.ts`                                                                                                         |
-| Where an abandoned branch is shut, and with what    | `placeBlock` in `mapgen/spurs.ts`                                                                                   | `blockade.ts`                                                                                                      |
-| A split board on the stage                          | `STAGE_RULES.checkpoint` + the placement in `mapgen/compile.ts` (R28)                                               | `split-board.ts` — a pair of flags at the line, planted in the cone field so a clipped one goes over               |
+| Thing | Placed by (engine) | Drawn by (`pwa/src/game/`) |
+| --- | --- | --- |
+| A house off the stage, its drive and yard | `mapgen/homesteads.ts` (R37) | `homestead.ts`, the building itself `house.ts` (from the engine's `HousePlan`) |
+| What makes a homestead a FARM | `mapgen/farms.ts` (R37) — barn, paddock, field, gear | `barn.ts`, `paddock.ts`, `farm-gear.ts` |
+| The cows and sheep grazing it | the paddock is the engine's | `livestock.ts` — where they MAY be is the engine's, where each STANDS is the renderer's (the crowd's pattern) |
+| A town: where it stands, its lots | `mapgen/towns.ts` (R39), on borrowed tarmac or an abandoned arm | `town.ts` |
+| What a BUILDING is — kind, plan, walls | `mapgen/buildings.ts` — the plans both placers draw, and the footprint-to-solids walk | `building.ts` (flats, grocery, post, workshop) over the house's primitives |
+| Where the crowd PARKED, the lane in, the trails | `mapgen/carparks.ts` (R42) over `carpark-map.ts`, on the terrain field from the stands | `carpark.ts` |
+| A car that only STANDS there | — | `parked-car.ts` — a dozen boxes from one roll; NEVER the catalog's builder, which is a thousand times the geometry |
+| A wind farm or a solar farm | `mapgen/energy.ts` (R43); numbers `STAGE_RULES.energy`, the country's say `BiomeRules.energy` | `wind-farm.ts` (reads `state.wind`), `solar-farm.ts` (one instanced mesh of tables per farm) |
+| The transmission line and its towers | `mapgen/powerline.ts` (R45) surveys the line, spots the towers; numbers `STAGE_RULES.powerline` | `powerline.ts` |
+| The railway, the crossing's ramp, the timetable | `mapgen/railway.ts` (R41) over `highway.ts`'s `rail` line and `crossing.ts`'s solve; numbers `STAGE_RULES.rail` | `train.ts` (the consist, posed off `trainCars`) + `railway.ts` (ballast, sleepers, rails, deck, boards) |
+| Where the TRAFFIC drives, and its speed limit signs | `mapgen/traffic.ts` (R44) plans routes over the arms and car-park lanes; numbers `STAGE_RULES.traffic` | `traffic.ts` (posed off `state.traffic` every frame) |
+| How a MOTORIST drives, and what hitting one costs | `game/traffic.ts` — the fleet, stepped inside `step()`; the twenty vehicles and the knobs in `game/defs/traffic.ts` | `traffic-fleet.ts` — one merged mesh per body kind |
+| A tunnel | R47 in `mapgen/search.ts` decides where one is bored | `tunnel.ts` + `tunnel-lid.ts` (the mountain drawn back over the engine's trench, off `field.lidAt`) |
+| The marking beside the road | `mapgen/kerbs.ts` places every marker (one of them is solid) | `kerbs.ts` |
+| Where an abandoned branch is shut, and with what | `placeBlock` in `mapgen/spurs.ts` | `blockade.ts` |
+| A split board on the stage | `STAGE_RULES.checkpoint` + the placement in `mapgen/compile.ts` (R28) | `split-board.ts` — a pair of flags at the line, planted in the cone field so a clipped one goes over |
 
 ## The two patterns everything here follows
 

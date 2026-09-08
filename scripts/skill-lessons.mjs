@@ -37,8 +37,8 @@ const SKILLS_DIR = path.join(REPO_ROOT, ".agents", "skills");
 // and cut what is stated twice) — see the `skill-reflection` skill.
 //
 // Words rather than lines: markdown wraps at whatever column the author chose,
-// and prettier leaves prose alone (`proseWrap: preserve`), so a line count says
-// more about the wrapping than about the reading.
+// and nothing re-wraps it (this whole tree is in `.prettierignore`), so a line
+// count says more about the wrapping than about the reading.
 const CONSOLIDATE_AT = 15; //   fragments on one skill
 const LESSON_WORDS = 350; //    words in one fragment's body
 const CORPUS_WORDS = 4000; //   words across a skill's whole lesson set

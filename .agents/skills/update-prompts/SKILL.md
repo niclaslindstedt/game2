@@ -65,12 +65,12 @@ commit.
 
 ## Mapping table
 
-| Source-of-truth change                                      | Prompt(s) to audit               | What to check                                                                             |
-| ----------------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------- |
-| A source doc/module whose text is embedded in a prompt body | every prompt that embeds it      | Embedded vocabulary and cross-references still match the source.                          |
-| A new rendering-context placeholder                         | the prompt's `## User` section   | Reference the new `{{ placeholder }}`; remove tokens the caller no longer fills.          |
-| A new enum / JSON-schema value in the code                  | prompts that describe the schema | Update the embedded JSON schema.                                                          |
-| A new prompt file under `prompts/<name>/`                   | the code that loads it           | Confirm the loader picks by name (not a pinned version) so the new file is auto-selected. |
+| Source-of-truth change | Prompt(s) to audit | What to check |
+| --- | --- | --- |
+| A source doc/module whose text is embedded in a prompt body | every prompt that embeds it | Embedded vocabulary and cross-references still match the source. |
+| A new rendering-context placeholder | the prompt's `## User` section | Reference the new `{{ placeholder }}`; remove tokens the caller no longer fills. |
+| A new enum / JSON-schema value in the code | prompts that describe the schema | Update the embedded JSON schema. |
+| A new prompt file under `prompts/<name>/` | the code that loads it | Confirm the loader picks by name (not a pinned version) so the new file is auto-selected. |
 
 Extend this table every time you discover a new drift path.
 
