@@ -152,11 +152,11 @@ The seam is the thing to know about a lapped road: its first sample and its last
 
 ## Pacenotes
 
-The compiler emits one co-driver call per turn — contiguous same-direction turns merge into a single call — carrying direction, the tightest severity in the run, and the summed angle (`track.pacenotes`). The HUD reads them ahead of the car and shows the rally-style calls (EASY/MEDIUM/HARD LEFT/RIGHT, LONG past ~100°). The strip is on a CLOCK, not a tape measure: what is left to the turn-in is metres, but what the call is timed on is the seconds those metres are worth at the speed the car is doing, so the sign goes up two seconds out whether that is forty metres or a hundred and twenty (`CALL_LEAD` in `pwa/src/game/snapshot.ts`; below ~54 km/h the reckoning is done at that speed, so a stopped car keeps its call instead of being an infinite number of seconds from every corner on the stage). The corner AFTER it is drawn faint underneath when it too lands inside four seconds — a combination the driver is already committing to on the way into the first. How far off the corner is, is the call's OPACITY rather than a printed number of metres — faint as the sign goes up, solid as the braking point arrives (never dimmer, however far out, than the next-corner plate behind it) — with a yellow countdown bar along the foot of the plate saying the same thing exactly: full width at two seconds, half at one, nothing left at the turn-in, and draining toward the side the corner turns to. It only ever runs DOWN (shedding speed genuinely puts a corner further away in seconds, and a bar that grew back under braking would pump), and it stops dead with the car. The sign itself stands until the corner is behind the car, so an empty bar under a plate is the corner being driven. The engine's positive direction reads as a LEFT turn on screen (the rendered world mirrors the engine's map view — the same one-flip rule as steering).
+The compiler emits one co-driver call per turn — contiguous same-direction turns merge into a single call — carrying direction, the tightest severity in the run, and the summed angle (`track.pacenotes`). The HUD reads them ahead of the car and draws each one as a SIGN with no words on it — the corner's own shape, its severity's colour, and a plate cut to a point on the side it turns toward; the rally-style wording (EASY/MEDIUM/HARD LEFT/RIGHT, LONG past ~100°) survives only as the plate's accessible label, for a reader who cannot see it. The strip is on a CLOCK, not a tape measure: what is left to the turn-in is metres, but what the call is timed on is the seconds those metres are worth at the speed the car is doing, so the sign goes up two seconds out whether that is forty metres or a hundred and twenty (`CALL_LEAD` in `pwa/src/game/snapshot.ts`; below ~54 km/h the reckoning is done at that speed, so a stopped car keeps its call instead of being an infinite number of seconds from every corner on the stage). The corner AFTER it is drawn faint underneath when it too lands inside four seconds — a combination the driver is already committing to on the way into the first. How far off the corner is, is the call's OPACITY rather than a printed number of metres — faint as the sign goes up, solid as the braking point arrives (never dimmer, however far out, than the next-corner plate behind it). That clock only ever runs DOWN: shedding speed genuinely puts a corner further away in seconds, and a call that faded back under braking would pump in the corner of an eye that is meant to be reading it. The sign itself stands until the thing being called is behind the car, and what it is doing in the meantime is filling (below). The engine's positive direction reads as a LEFT turn on screen (the rendered world mirrors the engine's map view — the same one-flip rule as steering).
 
 The sign beside the words is the CORNER, not a canned arrow per severity: `pwa/src/game/pace-shape.ts` walks the compiled centerline from the note's entry to its exit, squares the plan up on the entry so the road always arrives from the bottom of the box, smooths and resamples it, and fits it to the icon — so a double apex, a corner that tightens on the exit and a constant-radius sweep are three different pictures under one word. A corner past ~195° stops being drawn where it stops being one corner, and a note the compiled samples do not reach yet (an endless stage's streaming frontier) falls back to an ideal arc of its own angle. The PLATE points too: it is cut to a point on the side the corner turns toward and that point is filled solid in the severity's colour, so the direction reads before anything on the sign has been. And the sign FILLS as it is driven, in that same colour: it is laid down twice — once faint, which is the bend still to come, and once solid, cut back to how much of the note's arc is behind the car — so it comes up over exactly the road the note covers, and comes down at `endS`. `fillSign` splits that between the two shapes and measures the split off the sign itself: the road lights as far as the head's BASE, and then the head sweeps from that base to its point, so the arrow ends up whole rather than lit through the middle by the road running into it. The fill is spent over the note's first nine tenths, which leaves the exit showing the completed arrow — the call comes down at `endS`, so a fill that finished there would finish off screen.
 
-A JUMP is called too, and with the same nuance a corner gets: the strip says SMALL JUMP, JUMP or BIG JUMP, in the strip's own severity colours (the small one keeps the jumps' cyan — it is the one call that asks for nothing), with the ramp in the icon drawn steeper as the word gets bigger. The size is `jumpSize` in `engine/game/jump.ts`: plain ballistics off the ramp's grade where the road runs out, walked against the road's elevation profile until the ground is back under the car, at one reference pace of 37 m/s. Deliberately at a fixed pace rather than the car's own — a tier that answered to the driver's speed would drop a word the moment the lift it asked for worked, and flicker between two of them on the brakes. The two lines are the quartiles of the flight over the stages the generator actually builds (48 m and 60 m, about 1.3 s and 1.6 s of air), so roughly a quarter of the game's lips are called big and the ordinary one is not shouted about.
+A JUMP is called too, and with the same nuance a corner gets — SMALL JUMP, JUMP or BIG JUMP as the label, in the strip's own severity colours (the small one keeps the jumps' cyan; it is the one call that asks for nothing). Its sign is the lip's own ELEVATION where a corner's is the stage's plan: `jumpSign` walks the road's height profile from twenty metres before the lip to eighteen past the landing, arcs the ESTIMATED FLIGHT over it (`jumpArc`, the same ballistics at the same reference pace the word is read off, so the picture and the word can never describe different jumps), and washes the daylight between the two — the air itself, which is what the call is about. The flight is drawn BROKEN where the road either side of it is solid, because it is the one line on the strip that is a prediction rather than a survey. The vertical is stretched tenfold against the horizontal: a jump is a hundred metres of road with three to ten metres of height in it, and drawn honestly it is a flat line inside the stroke's own width. Fitted that way the stage's own lips land across the box rather than at one end of it, so a small lip is a shallow mark and a big one plunges. The size is `jumpSize` in `engine/game/jump.ts`: plain ballistics off the ramp's grade where the road runs out, walked against the road's elevation profile until the ground is back under the car, at one reference pace of 37 m/s. Deliberately at a fixed pace rather than the car's own — a tier that answered to the driver's speed would drop a word the moment the lift it asked for worked, and flicker between two of them on the brakes. The two lines are the quartiles of the flight over the stages the generator actually builds (48 m and 60 m, about 1.3 s and 1.6 s of air), so roughly a quarter of the game's lips are called big and the ordinary one is not shouted about. And the jump sign FILLS the way a corner's does, over the three parts the car is actually on — up the ramp, along the arc, away down the landing — so the call stands through the flight instead of coming down at the lip, and the broken estimate is replaced by a solid line over exactly the part of it that has been flown. The road beneath the flight never lights, because the car is never on it. The split between the three is measured in the STAGE's metres rather than the drawn line's, since the stretched vertical makes the drawn arc far longer than the road says it is.
 
 ## Checkpoint placement (R28)
 
@@ -383,6 +383,66 @@ Sparseness is why the bump check counts EVENTS rather than averaging: a road wit
 The score is a compass, not a grade — read the FINDINGS. A run that scores 92
 with an error in it needs the error fixed, not the score improved. The exit
 code is non-zero on any error, so a change can be gated on it.
+
+## Rating the output
+
+`make analyze` asks whether a stage is BROKEN. `make rate` asks whether it is
+any GOOD as a rally stage, and the two are genuinely different questions: the
+search only knows how to avoid breaking rules, and a seed that breaks none of
+them is where the interesting question starts. A stage can be flawless by
+`analyze` and be a scribble across a flat field.
+
+```sh
+make rate SEEDS=38 ARGS=--traits     # one seed, every trait, its band and its remarks
+make rate COUNT=64                   # a sweep to shortlist from
+make rate COUNT=120 ARGS=--stats     # the POPULATION — what the generator BUILDS
+make rate CAMPAIGN=1                 # the committed ladder, audited as a set
+make rate COUNT=200 ARGS="--pick 4"  # propose a ladder out of a sweep
+```
+
+Six facets, each a set of traits scored 0..1 and weighted into one number out
+of a hundred. **Every threshold is a BAND with a floor as well as a ceiling**,
+and that is the whole difference from `analyze`'s budgets: a road with no
+corners scores as badly as a road that is nothing but corners.
+
+| Facet      | What it measures                                                                                                                                                                                                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow`     | What the road asks of the hands: corners a kilometre and how many KINDS of corner there really are, the share that are hard ones, how often it changes direction, how much of it is not a corner, the longest stretch where nothing happens, how much of it is committed to BLIND, and how long it holds one character |
+| `pace`     | How fast and — the trait the facet exists for — how much the speed MOVES: the spread of the speed profile against its own mean, the slowest point, the braking zones, the share held flat out. A stage is fast because it was, a moment ago, slow                                                                      |
+| `relief`   | The vertical, read twice: as ground the stage crosses (climb, brows, the steepest sustained grade) and as what that does to the CORNERS (the share of corner metres on a slope, the share banked the wrong way) — plus how alive the road is under the car, as the vertical acceleration it puts through it at speed   |
+| `features` | The set pieces and, weighted above the counts, how many KINDS of them there are at all. Six jumps is one idea six times; a jump, a ford, a bore and a level crossing is a stage you can describe in a sentence                                                                                                         |
+| `scenery`  | The country the road runs through — on a generated stage that is as much of the level as the road is. How closed in it is, how much that CHANGES along the stage, what people built beside it, water in sight, how far the eye reaches, and how many kinds of ground it runs past                                      |
+| `risk`     | What a mistake costs: the ground falling away beside the road, solids within a road-width of the edge, how much of it is tight for the SPEED, and whether the hard corners' insides cost more than the corner                                                                                                          |
+
+Beside the score, three things that are not scores and are what a CAMPAIGN is
+built out of:
+
+- **`character`** — nine axes (tight, fast, vertical, airborne, sealed,
+  enclosed, exposed, slick, long), each 0..1, none better than another. Two
+  stages are held apart by these, not by their scores; the six best-scoring
+  seeds in any sweep are reliably six versions of the same road.
+- **`difficulty`** — what the road asks of the driver, and the number a ladder
+  is ORDERED on. Not the score: an opening stage should be easy AND good.
+- **`demand`** — which of the three cars the road is for, as three shares. An
+  invitation, not a verdict; `npm run sim -- --sweep` is what is right about
+  the game.
+
+`make rate CAMPAIGN=1` scores each location's six levels TOGETHER, on the
+things no single stage can be scored on: whether the ladder climbs (road AND
+conditions — a level's weather, season and hour are a third of what a rung
+asks for), how far it travels, whether there is a wall in the middle, how
+unlike each other the two most similar stages are, whether every rung leads
+the ladder on something, and whether the weather, the calendar and all three
+cars actually get used.
+
+Every band is data in `engine/rating/scales.ts`, with its measured population
+beside it, and several are borrowed from outside this project rather than
+chosen here — the pacenote radii a corner's severity is read on, the FIA's
+130 km/h average-speed indicator, arcade racing's ±30% speed-spread and
+on-camber rules, and the twenty-second floor under a section of stage. Those
+do not move to make the tool discriminate better. The `level-rating` skill
+owns the calibration loop, the campaign-curation loop, and reading a rules
+change as a distribution rather than as one seed.
 
 ## Extending the vocabulary
 

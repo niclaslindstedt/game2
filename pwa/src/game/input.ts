@@ -143,10 +143,10 @@ export type InputManager = {
    * and thumbs, and the mouse travel banked since the last read. Consuming:
    * the look and wheel deltas come out once. */
   flyMove: (dt: number) => FreeFlyMove;
-  /** True while ALT is held — the key that takes the HUD off the screen for
-   * a clean screenshot. Read rather than dispatched: it is a state the
-   * screen is in, not a press anything acts on. */
-  altHeld: () => boolean;
+  /** True while the game's own chrome should be off the screen — ALT held
+   * anywhere, or god mode's Z toggled. Read rather than dispatched: it is a
+   * state the screen is in, not a press anything acts on. */
+  hudHidden: () => boolean;
   dispose: () => void;
 };
 
@@ -154,17 +154,25 @@ export type InputManager = {
  * tool, and a scripted pass driving it headlessly has to know what the keys
  * ARE without reading anyone's local storage.
  *
- * Q and E shadow SPACE and CTRL on purpose. Ctrl+W is the browser's
- * close-tab chord and cannot be swallowed by a page, so descending while
- * flying forward needs a second way to say "down" — and Q/E is what every
- * level editor already means by it. */
+ * X and Q descend rather than CTRL: Ctrl+W is the browser's close-tab chord
+ * and cannot be swallowed by a page, so the obvious modifier throws the run
+ * away the moment somebody descends while flying forward. X sits under the
+ * same fingers as the letters that fly, and Q is what every level editor
+ * already means by "down".
+ *
+ * Z is the odd one out — not an axis at all, but a TOGGLE on the game's own
+ * chrome, which is what ALT does while it is HELD. A held modifier is the
+ * one thing a pair of hands already flying cannot spare, and Alt+letter is
+ * a chord the window manager wants for itself, so the frame with the HUD
+ * off is a press here instead. Claimed only while flying, which is what
+ * keeps it off the manual gearbox's downshift. */
 const FLY_KEYS = {
   forward: ["KeyW"],
   back: ["KeyS"],
   left: ["KeyA"],
   right: ["KeyD"],
   up: ["Space", "KeyE"],
-  down: ["ControlLeft", "ControlRight", "KeyQ"],
+  down: ["KeyX", "KeyQ"],
   fast: ["ShiftLeft", "ShiftRight"],
   lookLeft: ["ArrowLeft"],
   lookRight: ["ArrowRight"],
@@ -172,6 +180,7 @@ const FLY_KEYS = {
   lookDown: ["ArrowDown"],
   slower: ["Minus", "NumpadSubtract"],
   faster: ["Equal", "NumpadAdd"],
+  hud: ["KeyZ"],
 } as const;
 
 /** Every code god mode claims, so a flight can swallow the presses the
@@ -287,6 +296,10 @@ export function createInput(target: Window = window): InputManager {
   let mousePitch = 0;
   let speedSteps = 0;
   let altHeld = false;
+  /** God mode's chrome toggle (Z), beside the ALT that hides the HUD only
+   * while it is held. Dropped when the camera lands: a HUD left off by a
+   * tool that is no longer on is indistinguishable from one that broke. */
+  let hudOff = false;
 
   const touch = { steer: 0, throttle: false, brake: false, handbrake: false };
   const flyTouch = { forward: 0, right: 0, up: 0, fast: false, yaw: 0, pitch: 0, steps: 0 };
@@ -345,6 +358,11 @@ export function createInput(target: Window = window): InputManager {
       if ((FLY_KEYS.slower as readonly string[]).includes(e.code)) speedSteps -= KEY_SPEED_STEP;
       else if ((FLY_KEYS.faster as readonly string[]).includes(e.code)) {
         speedSteps += KEY_SPEED_STEP;
+      } else if (!e.repeat && (FLY_KEYS.hud as readonly string[]).includes(e.code)) {
+        // The chrome, on and off. NOT repeated, unlike the speed pair above:
+        // a held key would flick the HUD at the keyboard's repeat rate and
+        // leave it wherever the finger happened to come off.
+        hudOff = !hudOff;
       }
     }
     if (e.repeat) return;
@@ -616,6 +634,10 @@ export function createInput(target: Window = window): InputManager {
       flyTouch.yaw = 0;
       flyTouch.pitch = 0;
       flyTouch.steps = 0;
+      // The chrome comes back with the car. Z is god mode's key, and a HUD
+      // it took off would otherwise stay off with nothing on screen left to
+      // put it back.
+      hudOff = false;
     },
     flyTouch,
     flyMove: (dt) => {
@@ -657,7 +679,7 @@ export function createInput(target: Window = window): InputManager {
       flyTouch.steps = 0;
       return move;
     },
-    altHeld: () => altHeld,
+    hudHidden: () => altHeld || hudOff,
     dispose: () => {
       target.removeEventListener("keydown", onKeyDown);
       target.removeEventListener("keyup", onKeyUp);

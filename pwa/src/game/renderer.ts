@@ -1141,7 +1141,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // shot is holding belongs to where it was — so the rig is stood
         // around it rather than flown across the gap, and the blow is the
         // whole of what the player is shown moving.
-        chase.replant(state);
+        chase.replant();
         chase.kick(0.3, undefined, "reset");
       } else if (ev.type === "repair") {
         // THE CAR HANDED BACK WHOLE (step.ts). The body wears its damage in

@@ -41,27 +41,29 @@ something is the moment you are looking at it.
 | **The benchmark** | A fixed piece of racing — the first stage, fifteen cars off one green, a bot at every wheel — drawn as fast as the machine will draw it, timed with a stopwatch. The answer is an INDEX where 100 is drawing the race in the time it takes to drive, higher is better, and one score divides into another to give how many times faster: a frame rate is a number about one moment, and two of them from two machines are never about the same moment. The card is a live graph of it — the run's score so far, read every fifteen frames, settling onto the final number as it goes. Pins everything about the race and nothing about the picture, so what it compares is settings and machines. | `pwa/src/game/benchmark.ts` + `benchmark-index.ts`, card in `menu-dev.tsx` |
 | **The map's layers** | The stage's own layers painted over the MAP VIEWER's map — bedrock, groundwater, soil, foliage, roads — filling the screen, with COPY DEBUG INFO for what the generator built as text and a shutter that paints the same box into a picture. Reaches the campaign's own stages through SELECT LEVEL. Behind DEVELOPER → MAP VIEWER and nowhere else: Roam is a page for choosing a road to drive, and it has none of this. | `pwa/src/game/map-layers.ts` + `map-debug.ts`, the page in `menu-map-viewer.tsx` over `map-pane.tsx` |
 
-**ALT held hides the HUD and leaves the overlay up.** That is the shot to
-ask for when the game's own chrome is in the way of the thing being reported.
-The shutter's own receipt stays up with the overlay — a press that says
-nothing is indistinguishable from a key that did nothing — and none of it
-reaches the picture, which is read off the drawing buffer.
+**ALT held hides the HUD and leaves the overlay up — and while flying, Z
+toggles it.** That is the shot to ask for when the chrome is in the way of
+what is reported. The shutter's own receipt stays up with the overlay — a
+press that says nothing is indistinguishable from a key that did nothing —
+and none of it reaches the picture, which is read off the drawing buffer.
 
 ### Flying
 
 Fixed keys, not rebindable — a scripted pass has to know them without
-reading anyone's storage (`FLY_KEYS` in `pwa/src/game/input.ts`):
+anyone's storage (`FLY_KEYS` in `pwa/src/game/input.ts`):
 
 ```
 W A S D   forward / strafe          SPACE or E   up
-          (forward follows the      CTRL or Q    down
-           look, strafe stays        SHIFT       ×4 sprint
-           level)                    - and =     cruise speed down / up
-arrows    look                       mouse       look, after a click (pointer lock)
+          (forward follows the      X or Q       down
+           look, strafe stays       SHIFT        ×4 sprint
+           level)                   - and =      cruise speed down / up
+arrows    look                      Z            HUD off / on
+mouse     look, after a click (pointer lock)
 ```
 
-Q and E shadow SPACE and CTRL because **Ctrl+W closes the browser tab** and
-no page can swallow it. Descending while flying forward wants Q.
+X and Q descend rather than CTRL: **Ctrl+W closes the browser tab** and no
+page can swallow it. Z is claimed only while flying, which keeps it off the
+gearbox's downshift; the HUD returns when the camera lands.
 
 The other two surfaces fly the same rig, because the device the bug was
 found on is rarely the one with a keyboard on it:

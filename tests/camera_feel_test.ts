@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The outside camera as an INSTRUMENT (camera-feel.ts): grip read as
-// height, the car's attitude read as a degree or two of tilt, and pace past
-// the gears read as a tremor. Driven directly — the camera only ever reads
-// state, so a scripted car is the whole scenario and needs no physics.
+// height, the car's attitude read as a degree or two of tilt, the car's own
+// FLIGHT PATH read as the angle of the rod the lens stands on the end of,
+// and pace past the gears read as a tremor. Driven directly — the camera
+// only ever reads state, so a scripted car is the whole scenario and needs
+// no physics.
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
@@ -18,6 +20,7 @@ import {
 import {
   CAMERA_FEEL,
   bankWanted,
+  flightWanted,
   gripReading,
   hoverFor,
   pitchWanted,
@@ -288,6 +291,62 @@ describe("attitude as tilt", () => {
     const share = (on - off) / Math.atan(0.15);
     expect(share).toBeGreaterThan(CAMERA_FEEL.tilt.slope * 0.8);
     expect(share).toBeLessThan(CAMERA_FEEL.tilt.slope * 1.2);
+  });
+});
+
+describe("the flight as the rod's own angle", () => {
+  it("is nothing at all on the ground, whatever the car is doing", () => {
+    const state = game();
+    const car = state.car;
+    car.u = 40;
+    car.vy = -12;
+    expect(flightWanted(car)).toBe(0);
+  });
+
+  it("asks the rod under a climbing car and over a falling one", () => {
+    const state = game();
+    const car = state.car;
+    car.airborne = true;
+    car.u = 30;
+    car.vy = 6;
+    // A car climbing at 6 m/s over 30 of ground speed is on an 11° path —
+    // inside the climb's own ceiling — and the rod takes the knob's share
+    // of it.
+    const up = flightWanted(car);
+    expect(up).toBeGreaterThan(0);
+    expect(up).toBeCloseTo(Math.atan2(6, 30) * CAMERA_FEEL.flight.share, 9);
+    car.vy = -6;
+    expect(flightWanted(car)).toBeCloseTo(-up, 9);
+  });
+
+  it("reads the path and not the nose, so a tumbling car falls as hard as a flying one", () => {
+    const state = game();
+    const car = state.car;
+    car.airborne = true;
+    // The same velocity through the world, once along the nose and once
+    // spread across both body axes by a car that has been thrown sideways.
+    car.u = 30;
+    car.w = 0;
+    car.vy = -18;
+    const straight = flightWanted(car);
+    car.u = 30 * Math.cos(0.9);
+    car.w = 30 * Math.sin(0.9);
+    expect(flightWanted(car)).toBeCloseTo(straight, 9);
+  });
+
+  it("gives the climb a nod and the fall most of a right angle", () => {
+    const state = game();
+    const car = state.car;
+    car.airborne = true;
+    car.u = 1;
+    // Straight up and straight down are the two ends of the reading, and
+    // they are deliberately not the same number: dip the rod far under a
+    // climbing car and the lens is down at roof height looking at a flank.
+    car.vy = 400;
+    expect(flightWanted(car)).toBeCloseTo(CAMERA_FEEL.flight.up * DEG, 9);
+    car.vy = -400;
+    expect(flightWanted(car)).toBeCloseTo(-CAMERA_FEEL.flight.down * DEG, 9);
+    expect(CAMERA_FEEL.flight.down).toBeLessThan(90);
   });
 });
 

@@ -29,8 +29,28 @@ both ends of the session, and **`write-code`** beside this one.
    5. reflect on the ANALYSIS   was that a defect, or a check measuring wrong?
    6. iterate on this seed      until it comes up clean
    7. take a different seed     and do it all again
-   8. when several seeds hold   make sim, make track, then commit
+   8. when several seeds hold   make rate --stats (before AND after), make sim,
+                                make track, then commit
 ```
+
+Step 8's first half is the one that catches what this loop cannot. `analyze`
+asks whether a stage is BROKEN, one seed at a time, and a change can leave
+every seed legal while making all of them duller — a corner vocabulary that
+quietly collapses onto one radius, a feature that stops being placed, a
+country that stops varying. That is a change to a DISTRIBUTION, and
+`make rate COUNT=120 ARGS=--stats` is the only thing here that reads one:
+
+```sh
+make rate COUNT=120 ARGS=--stats > /tmp/before.txt   # on a clean tree, BEFORE
+… make the change …
+make rate COUNT=120 ARGS=--stats > /tmp/after.txt
+```
+
+Read it per trait rather than by the mean score. A median that moved is the
+change working; a tail that grew is a generator that has become less
+reliable; **a trait that stopped varying is a rule that has gone
+deterministic**, which is a regression whatever it did to the score. Load
+**`level-rating`** for the rest of that loop and for what every band means.
 
 The other three commands in the loop:
 

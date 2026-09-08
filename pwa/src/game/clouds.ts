@@ -23,7 +23,7 @@ import * as THREE from "three";
 
 import type { SkyDressing } from "./cloud-field.ts";
 import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
-import type { Preset } from "./sky.ts";
+import { deckToneAt, type Preset } from "./sky.ts";
 
 /** How far out the deck reaches, m. Past every ridge ring (which top out
  * around 552 m) so the mountains stand in FRONT of the ceiling, and inside
@@ -40,20 +40,6 @@ const DECK_SEGMENTS = 64;
  * `relief`. Enough that a storm ceiling has shape in it, never so much that
  * the underside folds through itself. */
 const DECK_LUMP = 0.14;
-
-/**
- * HOW HIGH THE LIT RIM REACHES, radians above the horizon.
- *
- * The gradient runs on the ELEVATION of the deck above the eye, not on how
- * far out the vertex is — and the difference is the whole look. A driver
- * looks along the road, so the sky they can see is a band a few degrees
- * high: read against distance, that band is all "nearly at the rim" and the
- * whole visible ceiling comes out the rim's colour, which is a light grey
- * sky in a thunderstorm. Read against elevation, the rim is what it
- * physically is — the last few degrees where the line of sight passes out
- * from under the base — and everything above it is the black underside.
- */
-const RIM_BAND = 0.16;
 
 const CLOUDS = 22;
 
@@ -154,8 +140,6 @@ export function createClouds(): Clouds {
   group.add(deck);
 
   const paintDeck = (d: NonNullable<Preset["deck"]>): void => {
-    const overhead = new THREE.Color(d.overhead);
-    const rim = new THREE.Color(d.rim);
     const c = new THREE.Color();
     for (let i = 0; i < deckVerts; i++) {
       const u = deckOut[i];
@@ -163,9 +147,7 @@ export function createClouds(): Clouds {
       deckPos[i * 3 + 1] = y;
       // How high this piece of ceiling sits in the sky, radians. The hub is
       // straight overhead and every ring falls toward the horizon.
-      const elevation = Math.atan2(y, Math.max(1, u * DECK_RADIUS));
-      const t = 1 - Math.min(1, elevation / RIM_BAND);
-      c.copy(overhead).lerp(rim, Math.pow(t, 1.5));
+      deckToneAt(d, Math.atan2(y, Math.max(1, u * DECK_RADIUS)), c);
       // …and the lumps shade themselves, which is the difference between a
       // ceiling and a painted disc.
       const shade = 1 + 0.22 * d.relief * deckLump[i];

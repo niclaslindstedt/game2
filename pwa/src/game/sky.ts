@@ -89,6 +89,41 @@ export type Deck = {
   relief: number;
 };
 
+/**
+ * HOW HIGH THE DECK'S LIT RIM REACHES, radians above the horizon.
+ *
+ * The gradient runs on the ELEVATION of the ceiling above the eye, not on
+ * how far out it is — and the difference is the whole look. A driver looks
+ * along the road, so the sky they can see is a band a few degrees high:
+ * read against distance, that band is all "nearly at the rim" and the whole
+ * visible ceiling comes out the rim's colour, which is a light grey sky in
+ * a thunderstorm. Read against elevation, the rim is what it physically is
+ * — the last few degrees where the line of sight passes out from under the
+ * base — and everything above it is the black underside.
+ *
+ * Stated here rather than in either sky, because BOTH draw the ceiling
+ * (clouds.ts's mesh and sky-shader.ts's dome, which interpolates the number
+ * into its GLSL) and the HORIZON reads it too: the ridge rings run from the
+ * skyline to about twenty degrees, so this ramp crosses the lower half of
+ * the chain and a ring shaded against one flat colour hangs in front of it.
+ */
+export const RIM_BAND = 0.16;
+
+/**
+ * WHAT THE CEILING LOOKS LIKE at `elevation` radians above the eye — its
+ * black underside overhead, its lit strip at the rim, and the ramp between
+ * them. Whatever is IN the sky at that height (relief lumps, a flash) is
+ * the caller's, which is why this takes a plain elevation and nothing else.
+ */
+export function deckToneAt(deck: Deck, elevation: number, out: THREE.Color): THREE.Color {
+  const rim = 1 - Math.min(1, Math.max(0, elevation) / RIM_BAND);
+  return out.set(deck.overhead).lerp(RIM_TONE.set(deck.rim), Math.pow(rim, 1.5));
+}
+
+/** Scratch for the mix above — both callers run it over hundreds of
+ * vertices a repaint, and neither wants an allocation apiece. */
+const RIM_TONE = new THREE.Color();
+
 export type Preset = {
   zenith: number;
   horizon: number;
@@ -613,6 +648,34 @@ function countried(p: Preset, biome: BiomeId): Preset {
   return p;
 }
 
+/**
+ * HOW MUCH DAY THERE IS IN THE AIR, 0..1 — the elevation, degrees, read as
+ * a ramp: one for any sun above the horizon, gone by nautical twilight.
+ *
+ * The colours of the AIR are all statements about sunlight in it — the
+ * weather's grey lid, the lit strip under a gust front, September's warm
+ * horizon band, winter's ice haze. Not one of them is a property of the air
+ * itself, and after dark there is no sun to make any of them, so each is
+ * shown in this proportion.
+ *
+ * The mixes it guards cannot simply be left at full strength after dark.
+ * `mixHex` mixes in LINEAR light, where a midnight sky sits four orders
+ * under a bright authored grey — so a fifth of the way toward one lands two
+ * thirds of the way up the sRGB ramp, and the far ridges, which take their
+ * colour from the fog and the zenith (horizon.ts), came out a mid-grey
+ * chain hanging in front of a ceiling drawn black.
+ *
+ * Keyed on the SUN rather than on the light there is, because neither of
+ * the two numbers for that can tell night from weather: `dayLight` is the
+ * key light and therefore the moon after dark, reading 0.10 at a clear
+ * midnight against 0.09 under a storm at noon, and `light` below is how lit
+ * the deck's own underside is, which a real morning has barely started to
+ * do at five degrees. The ladder can tell — its rungs ARE elevations.
+ */
+function daytime(elevation: number): number {
+  return clamp01((elevation / DEG + 10) / 8);
+}
+
 /** Weather sits on top of the hour. Clear leaves it alone; anything else
  * puts a lid on the sky, closes the air, and takes the sun away. `wet`
  * says the weather RAINS here (`rainsIn`, climate.ts): a desert in its wet
@@ -635,10 +698,19 @@ function weathered(
   // light going that takes the ceiling down with it.
   const light = smooth((dayLight(p) - 0.1) / 0.4);
   const look = (wet && !biomeRules(biome).rain ? TAIGA_LOOKS : LOOKS[biome])[weather];
+  const day = daytime(sun.elevation);
+  /** The lid's grey on one of the LIGHTS: taken whole, because a deck
+   * kilometres thick greys the moon as surely as it greys the sun. */
   const toward = (c: number): number => mixHex(c, look.grey, look.mix);
-  p.zenith = toward(p.zenith);
-  p.horizon = toward(p.horizon);
-  p.glow = toward(p.glow);
+  /** …and on one of the SKY's own colours, which is cloud with the DAY on
+   * it: a midnight lid is not grey, it is black, and the deck below says so
+   * (`overhead`). Left at full strength this was the whole of why a night
+   * storm had a daylight-grey horizon and a chain of grey ridges standing
+   * in front of a black ceiling. */
+  const greyed = (c: number): number => mixHex(c, look.grey, look.mix * day);
+  p.zenith = greyed(p.zenith);
+  p.horizon = greyed(p.horizon);
+  p.glow = greyed(p.glow);
   p.glowStrength *= 0.4;
   p.sun = toward(p.sun);
   p.sunIntensity *= lerp(look.dim[0], look.dim[1], cover);
@@ -656,7 +728,7 @@ function weathered(
   const under = dayLight(p);
   if (cover >= look.lampsAt || under <= LAMPS_DIM) p.lamps = brightestLamps(p.lamps, "dipped");
   if (under <= LAMPS_GLOOM) p.lamps = brightestLamps(p.lamps, "main");
-  p.fog = toward(p.fog);
+  p.fog = greyed(p.fog);
   p.fogNear *= lerp(look.fogNear[0], look.fogNear[1], cover);
   p.fogFar *= lerp(look.fogFar[0], look.fogFar[1], cover);
   // A lit sun behind a deck is a bright PATCH, never a disc with an edge —
@@ -675,8 +747,8 @@ function weathered(
   // The band goes first and goes further: it is a glow a shade over the
   // sky's own black, and the thinnest sheet of cloud is brighter than it.
   p.galaxy *= 0.06 * through;
-  p.cloud = toward(p.cloud);
-  p.cloudShade = toward(p.cloudShade);
+  p.cloud = greyed(p.cloud);
+  p.cloudShade = greyed(p.cloudShade);
   const overheadLit = mixHex(look.overhead[0], look.overhead[1], cover);
   const deck: Deck = {
     // The underside is lit from ABOVE, by whatever day there is: at night
@@ -684,8 +756,13 @@ function weathered(
     overhead: mixHex(0x06080c, overheadLit, 0.06 + 0.94 * light),
     // The rim is the hour's own horizon pulled toward the strip's tone, so
     // a midnight storm keeps a dark one and a noon storm gets the lit gap
-    // under the base.
-    rim: mixHex(p.horizon, look.rim, look.rimMix * (0.35 + 0.65 * light)),
+    // under the base. The strip IS daylight arriving under the base from
+    // outside the weather, so after dark there is none of it to arrive and
+    // the rim is the hour's horizon and nothing else — and the rim band is
+    // the band of sky the lower half of the ridge chain stands in
+    // (`RIM_BAND`), so a lit strip left under a night storm is a lit strip
+    // drawn exactly where the mountains are.
+    rim: mixHex(p.horizon, look.rim, look.rimMix * day),
     base: lerp(look.base[0], look.base[1], cover),
     relief: lerp(look.relief[0], look.relief[1], cover),
   };
@@ -694,8 +771,12 @@ function weathered(
   // rainy stage milk-white a hundred metres out and a stormy one to soot.
   p.fog = mixHex(p.fog, deck.overhead, look.fogDeck);
   p.rain = lerp(look.rain[0], look.rain[1], cover);
-  // The far ridges are seen against the CEILING rather than against a
-  // zenith nobody can see under it, so that is what they dissolve into.
+  // Nobody can SEE the zenith under a lid, so the blue behind it is pulled
+  // most of the way to the ceiling: what is left of it shows only where the
+  // deck does not quite reach (the dome's own gradient under the base) and
+  // as the colour the canvas is cleared to. The ridges used to dissolve
+  // into it and no longer do — they read the ceiling itself, at their own
+  // height (`deckToneAt`, horizon.ts).
   p.zenith = mixHex(p.zenith, deck.overhead, 0.55);
   p.thunder = lerp(look.thunder[0], look.thunder[1], cover);
   return p;
@@ -710,6 +791,13 @@ function weathered(
 
 function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number): Preset {
   if (season === "summer") return p;
+  const day = daytime(p.sunUp);
+  /** One of the season's colour casts, shown in proportion to the DAY
+   * (`daytime`): all of them are statements about sunlight in that air —
+   * September's warm horizon band, May's pollen milk, winter's ice haze —
+   * and what the season keeps after dark is how CLEAR the air is
+   * (`fogFar`), which is true at any hour. */
+  const cast = (c: number, to: number, t: number): number => mixHex(c, to, t * day);
   // WINTER is the one cast every country shares, because it is not a
   // colour of the ground so much as of the AIR: cold air holds almost no
   // water, so a clear winter sky is the deepest blue of the year and the
@@ -721,9 +809,9 @@ function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number
   if (season === "winter") {
     const cold = clamp01((CLIMATE.freeze - temperature) / 20);
     const frozen = temperature <= CLIMATE.freeze;
-    p.zenith = mixHex(p.zenith, 0x0d4f9e, 0.18 + 0.14 * cold);
-    p.horizon = mixHex(p.horizon, 0xd8e6f4, 0.22);
-    p.fog = mixHex(p.fog, 0xdfe8f0, 0.28);
+    p.zenith = cast(p.zenith, 0x0d4f9e, 0.18 + 0.14 * cold);
+    p.horizon = cast(p.horizon, 0xd8e6f4, 0.22);
+    p.fog = cast(p.fog, 0xdfe8f0, 0.28);
     p.fogFar *= frozen ? 1.1 - 0.25 * cold : 1.04;
     p.hemiIntensity *= 0.92;
     if (frozen && biomeRules(biome).land.zones.snow !== null) {
@@ -734,7 +822,7 @@ function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number
       // A wet-season desert, or a thaw: a damp ground bounces less.
       p.hemiGround = mixHex(p.hemiGround, 0x8a8478, 0.35);
     }
-    p.cloud = mixHex(p.cloud, 0xe8eef6, 0.2);
+    p.cloud = cast(p.cloud, 0xe8eef6, 0.2);
     return p;
   }
   // The colour casts below are the TAIGA's year — pollen haze in May, the
@@ -749,21 +837,21 @@ function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number
     // September air in the north is dry and clean — the humidity and the
     // pollen haze of high summer are gone — so the sky reads deeper and
     // the view opens out, while the low sun warms the horizon band.
-    p.zenith = mixHex(p.zenith, 0x0f5fb0, 0.22);
-    p.horizon = mixHex(p.horizon, 0xffd9a8, 0.2);
-    p.fog = mixHex(p.fog, 0xe8d3ac, 0.18);
+    p.zenith = cast(p.zenith, 0x0f5fb0, 0.22);
+    p.horizon = cast(p.horizon, 0xffd9a8, 0.2);
+    p.fog = cast(p.fog, 0xe8d3ac, 0.18);
     p.fogFar *= 1.08;
     // Skylight is the other half of the key, and there is less of it under
     // a low sun. The ground BOUNCES a different colour too: what comes back
     // up off a straw-and-bilberry landscape is warm, not green.
     p.hemiIntensity *= 0.88;
     p.hemiGround = mixHex(p.hemiGround, 0xa8843f, 0.5);
-    p.cloud = mixHex(p.cloud, 0xffe6cc, 0.15);
+    p.cloud = cast(p.cloud, 0xffe6cc, 0.15);
   } else {
     // May: the air still carries haze and birch pollen, so the sky is
     // milkier and the distance closes in a little.
-    p.zenith = mixHex(p.zenith, 0x8fb4dc, 0.16);
-    p.fog = mixHex(p.fog, 0xd8e2e8, 0.12);
+    p.zenith = cast(p.zenith, 0x8fb4dc, 0.16);
+    p.fog = cast(p.fog, 0xd8e2e8, 0.12);
     p.fogFar *= 0.94;
     p.hemiIntensity *= 0.97;
     p.hemiGround = mixHex(p.hemiGround, 0x9a9060, 0.35);

@@ -15,11 +15,14 @@ import { describe, expect, it } from "vitest";
 import type { RaceEnv } from "@engine";
 
 import { sunAt } from "../pwa/src/game/daylight.ts";
+import { createHorizon } from "../pwa/src/game/horizon.ts";
 import {
   NOON,
+  RIM_BAND,
   beamShareOf,
   carTintFor,
   dayLight,
+  deckToneAt,
   highLightFor,
   skyAt,
   skyFor,
@@ -193,6 +196,122 @@ describe("what the ladder does to the weather", () => {
       expect(storm.beam).toBe(0);
       expect(beamShareOf(storm)).toBe(0);
     }
+  });
+
+  // The grey a lid puts on the sky is cloud with the DAY on it, and so is
+  // every colour the season casts over the air. Both used to be mixed in at
+  // full strength whatever the hour — and because a mix is done in LINEAR
+  // light, a fifth of the way from a midnight sky toward a bright authored
+  // grey lands most of the way up the sRGB ramp. The sky came out a
+  // daylight grey with a ceiling drawn black over it.
+  it("leaves the air dark at midnight in every season and every weather", () => {
+    const clear = skyAt(conditions({ season: "summer" }), "taiga", 0);
+    const floor = { fog: lum(clear.fog), horizon: lum(clear.horizon) };
+    for (const season of ["spring", "summer", "autumn", "winter"] as const) {
+      for (const [weather, windSpeed] of [
+        ["clear", 1.5],
+        ["rain", 6.5],
+        ["storm", 11],
+      ] as const) {
+        const p = skyAt(conditions({ season, weather, windSpeed }), "taiga", 0);
+        const where = `${season} ${weather}`;
+        // A shade over the clear summer midnight for the weather in the
+        // air, never the several times over that a daylight grey is.
+        expect(lum(p.fog), where).toBeLessThan(floor.fog + 0.05);
+        expect(lum(p.horizon), where).toBeLessThan(floor.horizon + 0.05);
+      }
+    }
+  });
+});
+
+describe("the ridges on the horizon", () => {
+  /** What the sky shows at `elevation` radians up: the ceiling's own ramp
+   * where there is one, and the dome's gradient where there is not. */
+  function skyBehind(p: Preset, elevation: number): number {
+    if (p.deck) return deckToneAt(p.deck, elevation, new THREE.Color()).getHex();
+    const up = Math.max(0, Math.sin(elevation));
+    return new THREE.Color(p.horizon).lerp(new THREE.Color(p.zenith), Math.pow(up, 0.62)).getHex();
+  }
+
+  /** Every ridge vertex as the painter leaves it: its colour, how high up
+   * the sky it stands, and whether it is a SUMMIT — the columns are laid
+   * foot, snowline, summit, so only every third vertex can carry snow. */
+  function ridges(p: Preset): { lum: number; warmth: number; up: number; summit: boolean }[] {
+    const horizon = createHorizon();
+    horizon.setCountry("taiga");
+    horizon.paint(p);
+    const pos = horizon.mesh.geometry.getAttribute("position");
+    const col = horizon.mesh.geometry.getAttribute("color");
+    const out = [];
+    for (let i = 0; i < col.count; i++) {
+      const c = new THREE.Color(col.getX(i), col.getY(i), col.getZ(i));
+      out.push({
+        lum: lum(c.getHex()),
+        warmth: c.r - c.b,
+        up: Math.atan2(pos.getY(i) * horizon.mesh.scale.y, Math.hypot(pos.getX(i), pos.getZ(i))),
+        summit: i % 3 === 2,
+      });
+    }
+    horizon.dispose();
+    return out;
+  }
+
+  const SKIES = [
+    ["clear", 1.5],
+    ["rain", 6.5],
+    ["storm", 11],
+  ] as const;
+
+  // The one thing a chain of distant mountains may never do. Rock is seen
+  // THROUGH the air in front of it, so it can be at most as bright as the
+  // sky it stands against. Painted against one flat colour it broke that
+  // badly: the deck's underside ramps from a lit rim to black across the
+  // lower half of the chain, so a night storm hung a grey chain in front of
+  // a black ceiling at many times its luminance.
+  it("never stands brighter than the sky behind it", () => {
+    for (const hour of [0, 5, 6, 9, 12, 17, 19, 23]) {
+      for (const [weather, windSpeed] of SKIES) {
+        const p = skyAt(conditions({ weather, windSpeed }), "taiga", hour);
+        for (const v of ridges(p)) {
+          if (v.up <= 0 || v.summit) continue;
+          const where = `${weather} at ${hour}h, ${(v.up / DEG).toFixed(1)}°`;
+          expect(v.lum, where).toBeLessThan(lum(skyBehind(p, v.up)) * 1.35 + 0.01);
+        }
+      }
+    }
+  });
+
+  // The summits are the exception, and only in the one direction a real
+  // range is: snow lit by a low sun or a full moon is allowed to stand over
+  // the sky behind it. What it may never be is bright in ABSOLUTE terms
+  // after dark — a snowfield under a thunderstorm at midnight has no light
+  // on it at all.
+  it("keeps the whole chain dark at midnight", () => {
+    const ceiling = { clear: 0.15, rain: 0.12, storm: 0.05 };
+    for (const [weather, windSpeed] of SKIES) {
+      const p = skyAt(conditions({ weather, windSpeed }), "taiga", 0);
+      const brightest = Math.max(...ridges(p).map((v) => v.lum));
+      expect(brightest, weather).toBeLessThan(ceiling[weather]);
+    }
+  });
+
+  it("stands across the deck's rim band rather than inside or above it", () => {
+    const summit = Math.max(...ridges(skyFor(conditions({}), "taiga")).map((v) => v.up));
+    expect(summit).toBeGreaterThan(RIM_BAND);
+    expect(summit).toBeLessThan(RIM_BAND * 3);
+  });
+
+  // Snow is a WHITE surface, so it is the colour of the light on it — and
+  // it used to be the rock turned up by a multiply instead, which
+  // OVERFLOWS: a peak painted at 1.7x a sunset's peach clipped its red
+  // channel, lost the hue with it, and came back chalk-white against an
+  // orange sky.
+  it("takes the sunset onto the snow instead of washing it out", () => {
+    const dusk = skyAt(conditions({}), "taiga", 17.6);
+    expect(new THREE.Color(dusk.sun).r - new THREE.Color(dusk.sun).b).toBeGreaterThan(0.2);
+    const caps = ridges(dusk).filter((v) => v.summit && v.up > RIM_BAND);
+    expect(caps.length).toBeGreaterThan(0);
+    expect(Math.max(...caps.map((v) => v.warmth))).toBeGreaterThan(0.05);
   });
 });
 

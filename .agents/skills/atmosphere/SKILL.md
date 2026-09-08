@@ -64,6 +64,11 @@ the storm; `make traffic` before and after any change to the aircraft or their
 contrails. In web sessions Chromium is preinstalled —
 `CHROMIUM_PATH=/opt/pw-browsers/chromium make sky`.
 
+The whole sheet is the review. When a change is to ONE row and you are
+iterating on it, `node scripts/sky-preview.mjs --rows=storm,rain
+--hours=5,12,22` shoots that slice alone (rows match as substrings of the row
+name) — then shoot the whole sheet again before the commit.
+
 Read the sheet as a sheet: the failure mode of this subsystem is a change that
 looks right at noon in clear weather and wrong at every other cell. Check the
 low-sun rungs (dawn and dusk) and the heaviest weather column especially —

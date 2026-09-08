@@ -37,12 +37,14 @@ This project is tuned by measuring and LOOKING, not guessing. Each lab below is 
 | The ground under the car     | `verge`                                 | `crash`                       |
 | Damage: how it reads / draws | `health`, `wrecks`, `wheel`             | `collision`                   |
 | The stage generator          | `analyze`, `track`, `level`, `previews` | `mapgen-improvement`          |
+| Whether a stage is any GOOD  | `rate`                                  | `level-rating`                |
+| The campaign's ladder        | `rate CAMPAIGN=1`, `sim`, `previews`    | `level-rating`                |
 | Bot traffic or temper        | `heat`                                  | `bot-improvement`             |
 | Difficulty                   | `record`, `replay`                      | `bot-improvement`             |
 | A car's look                 | `cars`, `liveries`, `field`, `crew`     | `car-design`                  |
 | One prop or item             | `items`, `items-list`                   | `built-world`                 |
 | The sky, weather, aircraft   | `sky`, `traffic`                        | `atmosphere`                  |
-| The camera                   | `views`, `transit`, `rollcam`           | `game-feel`                   |
+| The camera                   | `views`, `transit`, `rollcam`, `aircam` | `game-feel`                   |
 | Anything heard               | `audition`                              | `sound-effects`, `soundtrack` |
 | The HUD or a menu            | `screenshots`, `glyphs`                 | `hud-and-menus`, `ui-review`  |
 | Anything rendered            | `profile`                               | `write-code`                  |
@@ -55,6 +57,12 @@ Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale 
 Two of these are worth knowing about even when they are not your subject:
 
 - **`make level LEVEL=1`** reasons about ONE stage without driving it — every call, jump, split, surface and roadside solid labelled by id, in a couple of seconds, no build and no browser. A claim about "the first jump on level 1" is a claim about `J1` there.
+- **`make rate SEEDS=38 ARGS=--traits`** asks whether a stage is any GOOD as a
+  rally stage, which is a different question from `make analyze`'s "is it
+  broken". Its thresholds are BANDS with a floor as well as a ceiling, and
+  `make rate COUNT=120 ARGS=--stats` reads the whole seed POPULATION — which
+  is how a generator change is judged, because a rules change moves a
+  distribution and one seed cannot show you that.
 - **`make profile`** counts what a real GPU sees (draw calls, triangles, binds). The fps beside them is software rasterization and means nothing off this machine; judge a change structurally — a new pass? a new material? or only an instance count? — before reading small movement as a regression.
 
 **When a report arrives as a `[STAGE] … [REPRO]` block**, that block is not context to read past: it is the repro, copied off the game's own debug overlay, and it exists so the frame in the picture can be stood in again. Never reason about such a report from the prose and the picture alone — paste the query string into `make debug-shot REPRO='?seed=38&…'`, check the overlay rows it prints against the block you were handed, and load `debug-tools`, which owns the rest of the loop.
@@ -114,7 +122,9 @@ By area first. Each row's skill owns the file-by-file map inside that area — g
 | Rolling, tripping, going over          | `engine/game/roll.ts`                  | `crash`              |
 | Hitting things, damage, the wreck      | `engine/game/collision.ts`             | `collision`          |
 | The stage generator and its ground     | `engine/mapgen/`                       | `mapgen-improvement` |
-| How a stage is scored                  | `engine/analysis/`                     | `mapgen-improvement` |
+| How a stage is scored for DEFECTS      | `engine/analysis/`                     | `mapgen-improvement` |
+| Whether a stage is a good RALLY stage  | `engine/rating/`                       | `level-rating`       |
+| Which stages become campaign levels    | `pwa/src/game/campaign.ts`             | `level-rating`       |
 | The bot, the field, the rivals         | `engine/sim/`                          | `bot-improvement`    |
 | A whole new gameplay system            | engine first, then `pwa/`              | `engine-system`      |
 | How a car looks, inside and out        | `pwa/src/game/car-styles.ts`, `car/`   | `car-design`         |
@@ -179,7 +189,7 @@ Each of these is the one place an answer is written down. Anything that needs it
 | ------------------------------------- | -------------------------------------------------------------- |
 | Handling model / tuning               | `docs/driving.md`                                              |
 | Generator rules (`mapgen/rules.ts`)   | `docs/track-generator.md` (verbatim), then `make previews`     |
-| A campaign level (`campaign.ts`)      | `make previews` — the boxes and banners are generator output   |
+| A campaign level (`campaign.ts`)      | `make previews` — the boxes and banners are generator output; re-audit with `make rate CAMPAIGN=1` and re-time with `npm run sim` |
 | Bot, sim harness, rival skill model   | `docs/simulation.md`                                           |
 | The sound bank, the beds, or a score  | `docs/audio.md`                                                |
 | The sky, weather, storm or aircraft   | `docs/architecture.md`, then `make sky` / `make traffic`       |
@@ -230,6 +240,7 @@ Skills live in `.agents/skills/` (`.claude/skills` symlinks there) — each a `S
 - **`car-tuning`** / **`car-design`** / **`car-creation`** — what separates one car from another; how a car LOOKS (body, interior, livery, crew); and a car remade after a real one from photographs.
 - **`engine-system`** — adding or changing a gameplay system, engine-first.
 - **`mapgen-improvement`** — the stage generator (rules/search/geometry, the R-rules, the training ground).
+- **`level-rating`** — whether a generated stage is any GOOD, and which six of them make a CAMPAIGN. Owns `make rate`, the trait bands (a floor as well as a ceiling, unlike `analysis/`'s budgets), the character fingerprint a ladder is built out of, and the three loops: calibrating a band from a measured population, curating the ladder, and reading a generator change as a distribution.
 - **`built-world`** — what people put beside the road: homesteads and farms, towns and buildings, car parks, energy and power lines, the railway and its train, public traffic, tunnels, kerbs and split boards.
 - **`nature`** — the biomes, trees and flora, ground cover, terrain paint: the world the road runs through.
 - **`atmosphere`** — the sky, the sun and its clock, clouds, mist, weather, lightning, the birds and aircraft, and what water and ice look like.
