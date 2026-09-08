@@ -1163,16 +1163,34 @@ every solid is a circle, and a hit does several things at once:
 - **Hard landings are impacts too**, and WHICH FACE arrives decides both
   what folds and what it costs. On its wheels it is the underside (the
   `belly`), and the suspension travels through `hardLandSpeed` of descent
-  for free. Past `air.rollLandLimit` of lean it is a flank; past three
+  for free — and the FLOOR of a car is a crowded place, so that fold
+  reaches the arms, the box and the shafts out of it, the lines and the
+  handbrake's own cable, and, lower than any of them, the sump
+  (`engineFromBelly`) and the steering rack (`steeringFromBelly`). Past
+  `air.rollLandLimit` of lean it is a flank; past three
   quarters of a turn it is the ROOF — its own ledger (`damage.roof`)
   rather than a ring zone, because the ring is a plan view and has no room
-  for the one face a roll spends most of its time on. A shell arrival has
+  for the one face a roll spends most of its time on. And past the car's
+  own APPROACH ANGLE (`structure.diveAngle`) it is an END of the car: a
+  body that went over an edge and settled nose-down reaches the ground
+  with its bumper, not its tyres, so a ring zone folds with the engine
+  right behind it. That is a hand-over rather than a switch — the springs
+  are worth less and less of the arrival across the band between the
+  approach angle and `attitude.pitchMax` (`diveShare`) — so a jump flown a
+  degree past the line costs what the same jump flown a degree short of it
+  did. Nothing on a stage gets near it: the steepest a bot's landing
+  arrives at over thirty-six runs is 17°.
+  A shell arrival has
   no suspension under it and gets only `air.roll.shellFree` for nothing,
   which is why a roll strips a car and a jump does not. Roof crush crazes
   every pane of glass at once and takes them first (a shell that has lost
   its shape cannot hold laminated glass in it), then shears the mirrors,
   then the lids; the renderer caves the greenhouse down and over from the
-  same ledger. A ground
+  same ledger. The FLOOR crazes the same glass from underneath, and for
+  the same reason, at a much deeper fold (`partAt.bellyGlass`): a stage
+  driven well folds three centimetres of floor in a whole run and leaves a
+  crack nobody can see, and a car that came down flat from a height has no
+  windows left. A ground
   arrival across a whole face feeds the wheels through `wheelFromSideLand`
   / `wheelFromRoof` only — the ring's own rates are a point impact's,
   where a solid reaches past the panel into the upright behind it, and the
@@ -1195,6 +1213,34 @@ every solid is a circle, and a hit does several things at once:
   (`faceScuff`, above the solids' `scuffSpeed`): a steep bank taken at
   50 km/h costs speed and paint, never the run, while a cliff at pace still
   folds the nose.
+- **WHAT A FALL DOES, and why it is not simply a very hard landing**
+  (`engine/game/mounts.ts`, `TUNING.collision.mounts`). Folding panels is
+  only half of an arrival: everything BOLTED to the car has to be brought
+  to a stop with the car, and a mount does that by pulling on the mass
+  behind it. The load is that mass times the deceleration, the
+  deceleration is the descent over how far the car travelled while it
+  stopped — the springs and the sidewalls when the wheels are under it,
+  plus whatever actually folded — and it is stated in g, because that is
+  the only form a mount rating can be checked in. Past its rating a mount
+  lets go, and the three ratings are ordered the way a car comes apart:
+  the uprights (`hubG`, about 130 g — some 30 m/s of arrival on the car's
+  own wheels, a 45 m drop), then the drive shafts through their own joints
+  (`driveG`, into `systems.gearbox`), then the engine off its mounts
+  (`engineG`), which goes on falling inside the shell until the bulkhead
+  stops it. Whatever leaves takes the structure it was bolted to with it
+  (`wearPerMount`), so a car that has shed all three is not a shape any
+  more whatever its panels read.
+  This is the whole difference between a wall and a cliff, and neither is
+  special-cased anywhere: a wall met at 100 km/h is stopped over half a
+  metre of crumple zone BUILT to take it and the car keeps all four
+  wheels, where the same car arriving at the foot of a mountain at its
+  terminal speed (`air.aero`, about 65 m/s) asks the same arms for ten
+  times the load. Nothing in the model knows how far the car fell, or that
+  it fell at all. What comes out of it: a 5 m drop is free, a 20 m drop
+  bends the front of the car, a 50 m drop is the engine and the run, and
+  anything past about 150 m puts all four wheels on the ground behind the
+  car and retires it where it stops (`beyondDriving`). The hardest landing
+  a bot takes on a stage pulls 50 g and costs nothing.
 - **The springs.** Every contact also loads them (`TUNING.suspension`):
   the wheels stop and the body does not, so the car rocks and the nose dips
   for a beat afterwards. See [Weight: the springs](#weight-the-springs).

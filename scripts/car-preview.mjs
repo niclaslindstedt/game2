@@ -153,6 +153,16 @@ if (has("crew")) {
     // whole of how a car that left its pipe on a crest is drawn, and the
     // only row on this sheet the driver never hit anything to reach.
     ["landed hard, flat", ledger({ belly: 0.16, wear: 0.16 * 2.4 })],
+    // OFF THE EDGE. Neither of these is a shape anybody drew: what takes a
+    // car apart in a fall is the LOAD (`engine/game/mounts.ts`) — the arms,
+    // the shafts and the engine mounts brought to a stop over a stroke they
+    // were never rated for — so all four wheels are off it whichever face
+    // met the ground, and the shell is spent by their leaving. The first is
+    // a car that went over with speed on and settled nose-down; the second
+    // fell far enough to lose the speed and came down flat on its floor,
+    // which is why it has no crease anywhere and no windows either.
+    ["off a cliff, nose first", ledger({ zones: { 0: 0.4 }, wear: 1, wheels: [1, 1, 1, 1] })],
+    ["off a mountain, flat", ledger({ belly: 0.37, wear: 1, wheels: [1, 1, 1, 1] })],
     [
       "rolled",
       ledger({

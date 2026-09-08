@@ -19,9 +19,11 @@ import { KERB_MARKER, type KerbMarker, type WildObstacle } from "../mapgen/index
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { climbSpeed } from "./limits.ts";
+import { arrestLoad, mountFailure } from "./mounts.ts";
 import {
   type CrushFace,
   crushCap,
+  diveShare,
   folded,
   landingFace,
   massRatio,
@@ -136,14 +138,15 @@ const ZONES_OF: readonly (readonly [number, number])[][] = FACING.map((zone) => 
  * leaves a mark in the corner of the glass, and the driver has to keep
  * looking through it for the rest of the stage.
  *
- * The ROOF is added to the ring's own sum because a shell that has lost
- * its shape cannot hold laminated glass in it, however square the fold
- * was. TEMPERED glass — the flanks and the backlight — crazes faster than
- * the laminated screen: it holds together for a moment and then it is
- * gravel, so it spends far less of its life cracked. */
+ * The ROOF and the FLOOR are added to the ring's own sum because a shell
+ * that has lost its shape cannot hold laminated glass in it, however
+ * square the fold was — from above or from underneath. TEMPERED glass —
+ * the flanks and the backlight — crazes faster than the laminated screen:
+ * it holds together for a moment and then it is gravel, so it spends far
+ * less of its life cracked. */
 export function glassCrack(damage: CarState["damage"], pane: number): number {
   const P = T.collision.partAt;
-  let sum = damage.roof / P.roofGlass;
+  let sum = damage.roof / P.roofGlass + damage.belly / P.bellyGlass;
   for (const [zone, share] of ZONES_OF[pane]) sum += (damage.zones[zone] * share) / P.glass;
   const G = T.collision.glass;
   const share = Math.min(1, sum * (pane === 0 ? 1 : G.tempered));
@@ -232,9 +235,15 @@ function dealSystems(car: CarState, face: CrushFace, crush: number, events: Game
     callDamage(key, was, sys[key], events);
   };
   if (face === "belly") {
+    // Everything the FLOOR of a car has under it: the arms and their
+    // mounts, the box and the shafts out of it, the lines and the
+    // handbrake's own cable running back along the tunnel — and, lower
+    // than any of them, the sump and the rack.
     deal("suspension", crush * S.suspensionFromBelly);
     deal("gearbox", crush * S.gearboxFromBelly);
     deal("brakes", crush * S.brakesFromBelly);
+    deal("engine", crush * S.engineFromBelly);
+    deal("steering", crush * S.steeringFromBelly);
     return;
   }
   if (face === "roof") {
@@ -361,18 +370,21 @@ function dealCrush(
   if (crush <= 0) return;
   dealSystems(car, face, crush, events);
   dealWheels(car, face, crush, flat, events);
+  // The GLASS is read off the crush rather than written, so its before is
+  // taken here — after the early returns that cannot craze anything, and
+  // before the fold that can. EVERY face can: the ring around the panes,
+  // the cage they are hung off, and the floor pulling the whole shell out
+  // of true from underneath.
+  readCracks(damage, WAS_GLASS);
   if (face === "belly") {
     damage.belly = before + crush;
+    shearGlass(damage, WAS_GLASS, events);
     for (const bolt of BELLY_BOLTS) {
       if (damage.belly < bolt.crushAt) continue;
       shear(damage, bolt.part, events);
     }
     return;
   }
-  // The GLASS is read off the crush rather than written, so its before is
-  // taken here — after the early returns that cannot craze anything, and
-  // before the fold that can.
-  readCracks(damage, WAS_GLASS);
   if (face === "roof") {
     damage.roof = before + crush;
     shearGlass(damage, WAS_GLASS, events);
@@ -427,28 +439,41 @@ function shear(damage: CarState["damage"], part: DamagePart, events: GameEvent[]
 
 /** The ground hitting back at touchdown. `slam` is the descent speed
  * relative to the ground, m/s; what the car cannot absorb folds whichever
- * face of it arrived (`landingFace`) — the underside on its wheels, a
- * flank on its side, the greenhouse on its roof.
+ * face of it arrived (`landingFace`) — the underside on its wheels, an END
+ * of it on a car that went over an edge nose-first, a flank on its side,
+ * the greenhouse on its roof. `pitch` is the attitude it arrived AT, and
+ * only a car falling out of the air has one worth reading: the other
+ * callers are on the ground and their pitch is the grade under the wheels.
  *
  * WHAT IS FREE depends on that face, and it is the difference between a
  * jump and a roll. A car on its tyres has the whole of its suspension
  * travel to swallow the arrival with, and `hardLandSpeed` is what that is
  * worth; a car on its shell has nothing under it at all, so almost every
- * contact of a roll folds something (`air.roll.shellFree`). */
+ * contact of a roll folds something (`air.roll.shellFree`). A nose-first
+ * arrival is the hand-over between the two (`diveShare`).
+ *
+ * The fold is not the whole account. Everything BOLTED to the car is
+ * brought to a stop over the same stroke, and past a point the arms and
+ * the engine mounts are not rated for what that asks of them — which is
+ * what a plunge does that a wall never does (`mountLoads`). */
 export function landingDamage(
   spec: CarSpec,
   car: CarState,
   slam: number,
   events: GameEvent[],
   stats: RunStats,
+  pitch = 0,
 ): void {
-  const face = landingFace(rollTilt(car.roll));
+  const face = landingFace(rollTilt(car.roll), pitch);
+  // How far out of the load path the springs are: none of the way on the
+  // tyres, all of the way on a flank or a roof, and somewhere between on a
+  // car that came down on an end of itself.
+  const onShell = face === "belly" ? 0 : face === 0 || face === 4 ? diveShare(pitch) : 1;
   // Shot dampers absorb less: suspension damage narrows what lands free.
-  const tolerance =
-    face === "belly"
-      ? T.collision.hardLandSpeed *
-        (1 - T.collision.systems.landTolerance * car.damage.systems.suspension)
-      : T.air.roll.shellFree;
+  const sprung =
+    T.collision.hardLandSpeed *
+    (1 - T.collision.systems.landTolerance * car.damage.systems.suspension);
+  const tolerance = sprung + (T.air.roll.shellFree - sprung) * onShell;
   const over = slam - tolerance;
   if (over <= 0) return;
   // ...and the ROOF is the cage: the same arrival folds it by less than it
@@ -457,17 +482,79 @@ export function landingDamage(
   // thrown by the contact where one coming down on its nose is stopped.
   const stiff = face === "roof" ? T.collision.structure.roofCrush : 1;
   const crush = T.collision.crushPerSpeed * over * massRatio(spec) * stiff;
+  // THE STROKE THE CAR ACTUALLY STOPPED OVER, m — read before the fold is
+  // dealt, because a face already at its cap folds no further and a car
+  // that cannot fold is a car that stops in no distance at all. That is
+  // the term the mounts answer to, and the reason the same descent taken
+  // on a folded nose is worse than the first one taken on a fresh one.
+  const room = Math.max(0, crushCap(face) - folded(car.damage, face));
+  const M = T.collision.mounts;
+  const springs = (T.suspension.travel + M.tyreSquash) * (1 - onShell);
+  const stroke = Math.min(crush * car.damageScale, room) + M.shellSquash + springs;
   if (typeof face !== "number") {
     dealCrush(car, face, crush, 0, slam, events, stats, true);
+    mountLoads(car, slam, stroke, events);
     return;
   }
-  dealCrush(car, face, crush, face === 2 ? Math.PI / 2 : -Math.PI / 2, slam, events, stats, true);
+  // Zone 0 is the nose and the indices grow clockwise, so a face's own
+  // bearing is a straight eighth of a turn apiece — the nose square on,
+  // each flank at a quarter.
+  const bearing = face * (Math.PI / 4);
+  dealCrush(
+    car,
+    face,
+    crush,
+    bearing > Math.PI ? bearing - Math.PI * 2 : bearing,
+    slam,
+    events,
+    stats,
+    true,
+  );
   // ...and the wheels on that side are what it came down on — the whole of
   // what the arrival reaches them with, since the ground folding a flank
-  // does not reach the uprights the way a solid driven into one does.
+  // does not reach the uprights the way a solid driven into one does. The
+  // nose and the tail reach no wheel at all: what a car that dived onto
+  // its bumper does to its arms is the load, below, and not the panel.
   const extra = crush * car.damageScale * T.collision.systems.wheelFromSideLand;
   for (const [wheel, share] of WHEELS_AT[face]) dealWheel(car, wheel, extra * share, events);
   if (extra > 0) car.damage.version += 1;
+  mountLoads(car, slam, stroke, events);
+}
+
+/** WHAT THE ARRIVAL ASKED OF THE BOLTS. The panels folding is the car
+ * being destroyed from the outside in; this is it coming apart from the
+ * inside, and it is the only reason a fall off a mountain is not simply a
+ * very hard landing.
+ *
+ * The load is `mounts.ts`'s arithmetic — the descent stopped over the
+ * stroke the car actually travelled, in g — and every mount rated under it
+ * lets go: the uprights first, taking their wheels with them, then the
+ * drive shafts through their own joints, and last the engine, which goes
+ * on falling inside the shell until the bulkhead stops it. Nothing here
+ * knows how far the car fell, or that it fell at all. */
+function mountLoads(car: CarState, slam: number, stroke: number, events: GameEvent[]): void {
+  const failed = mountFailure(arrestLoad(slam, stroke));
+  const hub = failed.hub * car.damageScale;
+  const shafts = failed.drive * car.damageScale;
+  const block = failed.engine * car.damageScale;
+  if (hub <= 0 && shafts <= 0 && block <= 0) return;
+  for (let wheel = 0; wheel < WHEEL_PARTS.length; wheel++) dealWheel(car, wheel, hub, events);
+  const sys = car.damage.systems;
+  const deal = (key: "gearbox" | "engine", amount: number): void => {
+    if (amount <= 0) return;
+    const was = sys[key];
+    sys[key] = Math.min(1, sys[key] + amount);
+    callDamage(key, was, sys[key], events);
+  };
+  deal("gearbox", shafts);
+  deal("engine", block);
+  // ...and the shell paid for all of it: nothing tears off a car without
+  // taking the structure it was bolted to with it.
+  const damage = car.damage;
+  const wasWear = damage.wear;
+  damage.wear = Math.min(1, damage.wear + (hub + shafts + block) * T.collision.mounts.wearPerMount);
+  callDamage("chassis", wasWear, damage.wear, events);
+  damage.version += 1;
 }
 
 /** WHAT THE THING ON THE OTHER SIDE DOES ABOUT IT. Returns `bite`: the

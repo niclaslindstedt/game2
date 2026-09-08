@@ -2831,6 +2831,28 @@ export const TUNING = {
        * cage is stiffer than any panel, so the same arrival dents it less —
        * and what it does not fold it passes on to the body (`fold.roof`). */
       roofCrush: 0.5,
+      /** THE NOSE ATTITUDE PAST WHICH A CAR ARRIVES ON AN END OF ITSELF
+       * rather than on its wheels, rad — the car's APPROACH ANGLE, and a
+       * measurement off the bodywork rather than a feel knob: the bumper
+       * hangs about 0.3 m off the ground at the end of about 0.7 m of front
+       * overhang, so past roughly 23° the bumper is what reaches the ground
+       * first and the tyres never get a say. Positive pitch lifts the nose,
+       * so past this nose-DOWN the nose folds (zone 0) and past it nose-UP
+       * the tail does (zone 4).
+       *
+       * It is a HAND-OVER and not a switch: at exactly this angle the
+       * bumper and the tyres touch together, and only by
+       * `attitude.pitchMax` — the steepest the body is ever allowed to
+       * stand — are the springs out of the load path altogether.
+       * `landingDamage` reads the two ends against each other, so a jump
+       * flown a degree past the line costs what the same jump flown a
+       * degree short of it did.
+       *
+       * The steepest a bot's landing arrives at over thirty-six stage runs
+       * is 17°, which is the margin this has to keep: an ordinary jump,
+       * however badly flown, is a belly arrival, and the nose folding is
+       * for a car that genuinely went over an edge. */
+      diveAngle: 0.4,
     },
     /** Fraction of the speed ALONG the surface kept through the contact —
      * a glancing blow scrubs paint and carries on. */
@@ -3098,6 +3120,17 @@ export const TUNING = {
        * lids let go last, when the folding has pulled far enough forward
        * and back to reach their hinges. */
       roofGlass: 0.04,
+      /** ...and what the FLOOR folding is worth to the same glass, m of
+       * `CarDamage.belly`. The argument is the roof's, from underneath: a
+       * shell pulled out of true cannot hold bonded glass in it, and a car
+       * that has folded its floorpan a hand's depth has moved its screen
+       * aperture. Far higher than the roof's, because the cage is what the
+       * glass is hung off and the floor is two feet away from it — a stage
+       * driven well folds 0.03 m of floor in a whole run and leaves a
+       * crack nobody can see (`crazeCurve` squares the share). A car that
+       * came down flat from a height has folded ten times that, and has no
+       * windows left. */
+      bellyGlass: 0.3,
       /** The mirrors are the widest thing on the car and hang off the
        * pillars the same fold takes, so they go with the glass. */
       roofMirror: 0.04,
@@ -3232,6 +3265,100 @@ export const TUNING = {
      * designed ramp jump comes down with, so the marks come from cliff
      * plunges and botched flights, not from every lip on the stage. */
     hardLandSpeed: 10,
+    /** WHAT THE CAR IS BOLTED TOGETHER WITH, and what those bolts are
+     * rated for. Folding panels is only half of an arrival: everything
+     * HANGING off the car has to be brought to a stop with it, and a mount
+     * does that by pulling on the mass behind it. The load is that mass
+     * times the deceleration, the deceleration is the arrival divided by
+     * how far the car travelled while it stopped, and past a point the
+     * mount is simply not rated for the answer. `game/mounts.ts` is the
+     * arithmetic; collision.ts writes what it costs.
+     *
+     * This is the whole difference between a wall and a cliff, and it is
+     * why neither one has to be special-cased. A car driven into a wall at
+     * 100 km/h stops over half a metre of crumple zone BUILT to take it
+     * and keeps all four wheels. The same car arriving at the foot of a
+     * mountain at its terminal speed (`air.aero` — about 65 m/s) asks the
+     * same arms for ten times the load, and they let go: the wheels leave,
+     * the engine goes on falling until the bulkhead stops it, and what
+     * reaches the ground is not a car any more. */
+    mounts: {
+      /** The sidewalls' own squash under a vertical arrival, m — the part
+       * of a WHEELS-first stroke that is not the springs
+       * (`suspension.travel`, which is the rest of it). */
+      tyreSquash: 0.045,
+      /** ...and what a face of the SHELL has instead: the skin's give
+       * before the structure behind it is what is folding, m. Small on
+       * purpose — a door is a panel, not a spring, and this is why the
+       * same descent taken on a flank pulls harder than one taken on the
+       * tyres. */
+      shellSquash: 0.02,
+      /** Floor under the stroke, m — a guard against an arrival that
+       * folded nothing dividing by nothing. */
+      minStroke: 0.03,
+      /** WHAT THE UPRIGHTS, THE ARMS AND THE BOLTS THROUGH THEM CARRY, in
+       * g of vertical load. A rally car's suspension is built for a few g
+       * of it all day and a big landing now and then; this is the line
+       * past which the arm bends and the hub leaves with the wheel on it.
+       *
+       * Read as a descent on the car's own wheels, which is the only form
+       * it can be judged in: 130 g is about 30 m/s of arrival — a 45 m
+       * drop — where the springs, the tyres and the floorpan folding
+       * together are still just enough. The hardest landing a bot takes on
+       * a stage is 13 m/s and pulls 50 g, so nothing the road does gets
+       * near it; a 150 m fall arrives at 60 and pulls three times it. */
+      hubG: 130,
+      /** ...and what ONE MULTIPLE past that rating spends of a wheel's
+       * ledger (`CarDamage.wheels`, gone at 1). A fall long enough to
+       * reach terminal speed is a bit over two multiples over on the
+       * tyres and three on the nose, so it takes every wheel off the car —
+       * which, with the engine below, is what `beyondDriving` ends the run
+       * on. Sized against the SOFTEST way down there is — flat on the
+       * floorpan, onto loose ground, with the springs still under the car
+       * and half a metre of floor to fold (`surfaces.give`): even that
+       * takes all four. */
+      hubPerOver: 1.3,
+      /** THE ENGINE MOUNTS, in g. Higher than the arms: the block sits on
+       * three or four mounts with steel through the rubber and a car is
+       * not designed to have its engine anywhere but where it is. Past it
+       * the block tears loose and goes on falling inside the shell until
+       * the bulkhead and the floorpan stop it — which is what actually
+       * destroys an engine in a fall, not the landing itself. */
+      engineG: 200,
+      /** ...and what the shell is spent by EVERY mount that lets go, per
+       * multiple over summed across the three. A hub does not leave
+       * cleanly: it tears its mounting points out of the floor on the way,
+       * and the block goes through the bulkhead behind it. So a car that
+       * has shed its arms, its shafts and its engine is not a shape any
+       * more (`CarDamage.wear`, wrecked at 1), whatever its panels read —
+       * which is the difference between a car folded by a wall, where only
+       * the struck face is spent, and one that arrived at the bottom of a
+       * mountain, where everything bolted to it left at once. */
+      wearPerMount: 0.15,
+      /** ...and what one multiple past THAT spends of the engine's ledger.
+       * At 1 the engine is dead and the run is over (`beyondDriving`), and
+       * a terminal-speed arrival is over a multiple past the rating: a
+       * car that falls off a mountain does not drive away from it. */
+      enginePerOver: 2,
+      /** THE DRIVE SHAFTS, in g — the half-shafts and the joints at either
+       * end of them, which are the part of the drivetrain a LANDING loads
+       * rather than a corner. A wheel slammed up its travel drives its
+       * shaft through the whole of its plunge and then past it, and a
+       * joint at the end of its plunge is a solid bar: what gives is the
+       * cage, the boot, or the shaft itself.
+       *
+       * Just above the arms (`hubG`) so the order reads right on the way
+       * up — the uprights are the first thing a fall takes, the shafts
+       * follow, and the engine leaves its mounts last. On the car's own
+       * wheels that is about 32 m/s of arrival, a 50 m drop. */
+      driveG: 150,
+      /** ...and what one multiple past that spends of the drivetrain's
+       * ledger (`systems.gearbox` — a box and the shafts out of it are one
+       * thing in this model). A bad landing costs a tenth of it; the
+       * bottom of a mountain finishes it, and the car that is dragged home
+       * is short its top two ratios (`damage.ts`, `gearsLost`). */
+      drivePerOver: 1.3,
+    },
 
     /** WHAT THE REST OF THE LEDGER DOES TO THE DRIVING. The systems below
      * are the machinery; these are the numbers for everything else the
@@ -3586,6 +3713,21 @@ export const TUNING = {
       /** Belly crush → suspension, plus a share to the gearbox sump. */
       suspensionFromBelly: 2.2,
       gearboxFromBelly: 0.8,
+      /** ...and to the ENGINE, through the sump. The oil pan and the
+       * bellhousing are the lowest parts of the motor and a floorpan
+       * folding up into them is how a rally car retires without ever
+       * hitting anything — but a crossmember and the pan's own bash plate
+       * stand between the ground and the casting, so this is a quarter of
+       * what the same fold on the NOSE is worth (`engineFromNose`, where
+       * the radiator is the first thing there): the floorpan folded to its
+       * cap is half an engine, not a dead one. A stage driven well folds
+       * 0.03 m of floor in a whole run and pays four hundredths of it. */
+      engineFromBelly: 1.2,
+      /** ...and to the STEERING, through the rack. It is bolted low and
+       * forward, ahead of the floorpan and behind the crossmember, so the
+       * ground finds it — later than it finds the sump, and with the
+       * subframe taking most of what reaches it. */
+      steeringFromBelly: 0.6,
       /** Corner and flank crush → the brakes (the lines and calipers live
        * in the wheel wells), and belly crush → the same, from underneath. */
       brakesFromCorner: 0.9,
