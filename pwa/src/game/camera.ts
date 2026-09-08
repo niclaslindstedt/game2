@@ -94,6 +94,7 @@ import type { GameState } from "@engine";
 import {
   NEUTRAL_TUNING,
   createEyeCamera,
+  soften,
   type CarEyes,
   type EyeTuning,
   type InCarCamera,
@@ -224,8 +225,17 @@ type ChaseRig = {
   height: number;
   /** How much of the drift's slip angle the framing carries, 0..1. At 1 the
    * camera aims down the car's TRAVEL and the whole slide shows across the
-   * frame; at 0 it follows the nose and the drift is invisible. */
+   * frame; at 0 it follows the nose and the drift is invisible.
+   *
+   * ...and the CEILING that share eases onto, deg — THE DRIFT'S CEILING in
+   * `updateChase`, which owns what it means. The two driving rigs hold the
+   * tightest one: they are the shots the road has to stay readable through.
+   * `far` stands back far enough that the same angle covers less of the
+   * frame, and the two that look DOWN on the car are given one nothing
+   * reaches, because from up there a slide across the frame hides nothing
+   * and is the whole appeal of the shot. */
   driftWeight: number;
+  driftMax: number;
   /** How briskly the camera answers the car, 1/s — the one knob for how
    * HEAVY the rig is, because a camera that snaps to everything the car
    * does has no weight at all. The nose-follow uses it directly; the drift
@@ -352,6 +362,7 @@ const CHASE_RIGS: Record<ChaseCamera, ChaseRig> = {
     surge: 1,
     height: 2.55,
     driftWeight: 0.85,
+    driftMax: 16,
     followRate: 5,
     fov: 60,
     fovPerSpeed: 0.4,
@@ -376,6 +387,7 @@ const CHASE_RIGS: Record<ChaseCamera, ChaseRig> = {
     surge: 1,
     height: 2.45,
     driftWeight: 0.8,
+    driftMax: 16,
     followRate: 5,
     fov: 58,
     fovPerSpeed: 0.38,
@@ -400,6 +412,7 @@ const CHASE_RIGS: Record<ChaseCamera, ChaseRig> = {
     surge: 0.9,
     height: 3.3,
     driftWeight: 0.75,
+    driftMax: 18,
     followRate: 3.8,
     fov: 56,
     fovPerSpeed: 0.3,
@@ -428,6 +441,7 @@ const CHASE_RIGS: Record<ChaseCamera, ChaseRig> = {
     surge: 0.6,
     height: 10,
     driftWeight: 0.9,
+    driftMax: 40,
     followRate: 2.4,
     fov: 50,
     fovPerSpeed: 0.16,
@@ -459,6 +473,7 @@ const CHASE_RIGS: Record<ChaseCamera, ChaseRig> = {
     surge: 0.4,
     height: 20,
     driftWeight: 1,
+    driftMax: 40,
     followRate: 2.8,
     fov: 68,
     fovPerSpeed: 0.12,
@@ -487,6 +502,9 @@ const CHASE_RIGS: Record<ChaseCamera, ChaseRig> = {
  * against. */
 const DRIFT_SETTLE = 0.36;
 const RIG_EASE = 0.67;
+
+/** Degrees to radians, for the table's angles. */
+const DEG = Math.PI / 180;
 
 /** Longest step the swing spring is integrated over, s. */
 const SPRING_STEP = 1 / 90;
@@ -739,12 +757,37 @@ export function createGameCamera(width: number, height: number): GameCamera {
     else if (car.planted) holding = false;
     // The Sega Rally read: the camera follows the ROAD, so a drift swings
     // the car across the frame while the road keeps flowing to the
-    // vanishing point. Airborne it follows the travel direction fully; the
-    // nose is doing its own thing.
+    // vanishing point.
+    //
+    // THE DRIFT'S CEILING. `driftWeight` alone is a straight line, and a
+    // straight line has no top: a slide twice as deep puts the car twice as
+    // far across the frame, so the angle that reads as drama at fifteen
+    // degrees is a flank filling the shot at forty. Past that the framing
+    // has stopped displaying the drift and started hiding the road, which is
+    // the one thing a driving camera may never do. So the share is SOFTENED
+    // onto the rig's `driftMax` rather than clamped at it (camera-eye.ts):
+    // linear well under the ceiling, easing onto it, never arriving.
+    //
+    // That shape is what lets ONE number do the job the three cars would
+    // otherwise each need their own of. The layouts reach very different
+    // angles on purpose, and under the ceiling every one of them is carried
+    // at its full weight — an ordinary slide reads as exactly as sideways as
+    // it is, whichever car is under it. Only the deep end converges: flicks
+    // peaking at forty degrees and at twenty-five are framed within a couple
+    // of degrees of each other, where the straight line filmed them sixteen
+    // apart. The cars go on driving differently and stop being filmed
+    // differently, and the camera never learns what a drivetrain is — a car
+    // added tomorrow is calibrated already.
+    //
+    // IN THE AIR NOTHING IS CAPPED, and the framing follows the travel whole:
+    // a car that left the lip crossed up is going where its travel points and
+    // nowhere else, its nose is doing its own thing, and the shot's whole job
+    // for those two seconds is to show the landing. Softened, it would aim
+    // off to the side of the ground the car is about to hit.
     if (!holding) {
       const speed = Math.hypot(car.u, car.w);
       const slip = speed > 3 ? Math.atan2(car.w, Math.max(0.001, car.u)) : 0;
-      const wantOff = slip * (car.airborne ? 1 : rig.driftWeight);
+      const wantOff = car.airborne ? slip : soften(slip * rig.driftWeight, rig.driftMax * DEG);
       // The drift arrives in the frame at full speed, but once the car has
       // settled the leftover angle unwinds gently: a camera that snaps back
       // to centre the instant the slide ends reads as the game grabbing the

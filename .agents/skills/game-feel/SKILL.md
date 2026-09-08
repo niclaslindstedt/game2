@@ -164,6 +164,16 @@ the car shrinking down the row.
    `tests/camera_feel_test.ts` reads the lens's own axes for a bank. Assert
    the rule, then look.
 
+   **Pick the column that can actually separate the two things being
+   compared** — every chase rig AIMS at the car, so heave, pitch and the car's
+   on-screen wander mostly read the terrain and put two rigs within a few
+   percent of each other however different they feel. What tells a rocky boom
+   from a steady one is the camera's LATERAL offset in the car's HEADING frame
+   (how far the world sloshes sideways), whose driver is the yaw-follow lag
+   times the standoff and not the swing spring. And report the TAIL (p99.9,
+   max) beside the RMS: a rare violent event and a continuous buzz are
+   different problems with different fixes.
+
    **A lens's CANT is the roll about its own view axis, never the angle
    between its up and the world's** — `lookAt` builds its basis against world
    up, so that second reading is mostly the rig's own pitch (`chase` reads
