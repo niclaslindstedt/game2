@@ -2777,19 +2777,29 @@ await capture(
 // off the outside rear thrown at the glass. Nothing is pressed here: the
 // director chose where to stand before the run started, the bot drives the
 // corner, and the shutter only waits for a car that is sideways, on the
-// ground and on the road at once. Shot in a race, so the gallery has more
-// than one car coming through it.
+// ground and on the road at once. Shot with rivals on the road, so the
+// gallery has more than one car coming through it.
 await capture(
   "shot-showcase-tvcam",
   SHOWCASE,
   async (page) => {
     await atCleanTime(page, 12);
-    await atDrifting(page, 22);
+    // Eighteen degrees rather than the twenty-two the desert asks for, and a
+    // handful of rivals rather than a grid. Both are about what this scene
+    // can AFFORD: it is the only one that pays for the depth-of-field pass on
+    // top of a software-rendered frame, so its sim advances at a fraction
+    // even of the others' — and a predicate that wants a deep angle, all four
+    // wheels down and the car on the road, all on one frame, is a rare frame
+    // to begin with. Asking for a rarer one on a slower run is how a scene
+    // spends ten minutes and comes back with a stack trace. Eighteen is still
+    // most of twice `TUNING.drift.enterSlip`, which is to say properly
+    // crossed up rather than merely loose.
+    await atDrifting(page, 18);
     await clean(page);
   },
   {
     ...CLEAN,
-    mode: "headsup",
+    rivals: "4",
     camera: "tv",
     bot: "1",
     seed: "38",
