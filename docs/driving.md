@@ -1239,6 +1239,20 @@ every solid is a circle, and a hit does several things at once:
   symmetric about one across the four corners, so the arrival is only ever
   redistributed and never inflated — a car that arrives level pays exactly
   what it always paid.
+  **The GLASS knows which kind it is.** Only ONE pane on the car leaves as
+  a sheet: the windscreen is LAMINATED — two sheets bonded to a layer of
+  plastic — so it comes out in one folded plate, carrying the web of cracks
+  that was across it, and falls. Every other window is TEMPERED, under
+  enough surface compression that a crack anywhere releases the whole pane
+  at once, and what leaves the frame is a windowful of blunt cubes: there
+  is no sheet in it, and it leaves as the burst alone (`GLASS_SHARDS` /
+  `GLASS_BURST` in renderer.ts). How much of that burst there is, and how
+  far it opens, is how hard the pane was let go of — a window popping out
+  of its seal drops gravel down the door, one let go by a car that came
+  down on it throws a windowful across the road.
+  `engine/game/state.ts`'s `LAMINATED_GLASS` is the one place the
+  difference is stated; `collision.glass.tempered` prices the same fact
+  into how fast each kind crazes on its way there.
   **And a wheel torn off is not dropped** (`shedSpeed`, `partBreak.shed`).
   It is trapped between the ground and its own arch as the car comes down
   on it, and what the structure cannot hold it against squeezes it out

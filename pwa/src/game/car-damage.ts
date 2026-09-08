@@ -44,6 +44,7 @@
 import * as THREE from "three";
 import {
   GLASS_PARTS,
+  LAMINATED_GLASS,
   TUNING,
   WHEEL_PARTS,
   glassCrack,
@@ -107,10 +108,15 @@ const BOND_SPEED = Math.sqrt((2 * PANE_BOND) / PANE_MASS);
  * across. Small: a screen popping out is thrown by the CAR, not by the
  * frame. */
 const PANE_POP = 2.4;
+/** ...and the most that is multiplied by when the pane was let go of hard
+ * (`partBreak.shed` against its own floor). */
+const PANE_POP_MAX = 2.5;
 const PANE_LIFT = 2.2;
-/** How fast a loose pane turns as it goes, rad/s either way — a plate this
- * light and this wide is turned by the air as much as by the hit. */
-const PANE_SPIN = 5;
+/** How fast a loose pane turns as it goes, rad/s either way. It is the ONE
+ * plate the game throws — the laminated screen — and it is heavy, wide and
+ * floppy: it leaves the frame and falls, where a fast turn on a shape that
+ * size reads as a frisbee and takes the whole crash into cartoon with it. */
+const PANE_SPIN = 2.2;
 /** How thick the plate is drawn, m — half of it is how far its centre ends
  * up over whatever it comes to rest on. */
 const PANE_HALF = 0.006;
@@ -530,7 +536,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
    * along the pane's normal: a screen goes out over the bonnet, a door
    * window goes out sideways, because the normal says which way each of
    * them faces without anything here having to know. */
-  const throwPane = (pane: GlassPane, state: GameState): void => {
+  const throwPane = (pane: GlassPane, state: GameState, shed: number): void => {
     const source = body.glassMesh;
     if (!source) return;
     const pos = source.geometry.getAttribute("position");
@@ -591,6 +597,11 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     // What the bond took out of it. A car crawling into a wall drops its
     // screen at its feet; one at rally pace throws it down the road.
     const carry = speed > BOND_SPEED ? (speed - BOND_SPEED) / speed : 0;
+    // ...and how hard the FRAME let go of it (`partBreak.shed`), against
+    // what a pane has always left with. Capped: a screen sprung out by a
+    // car that came down on its roof still has to fall out of the frame
+    // rather than be launched over it.
+    const pop = PANE_POP * Math.min(PANE_POP_MAX, shed / SHED_FLOOR);
     // The plate's own +z is its face now (the geometry was turned onto it),
     // so the world direction comes off the mesh rather than off `face` —
     // which is stated in the frame the turn has already left behind.
@@ -599,9 +610,9 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
       tumbleFrom(
         mesh,
         new THREE.Vector3(
-          vx * carry + out.x * PANE_POP,
-          c.vy * carry + out.y * PANE_POP + PANE_LIFT,
-          vz * carry + out.z * PANE_POP,
+          vx * carry + out.x * pop,
+          c.vy * carry + out.y * pop + PANE_LIFT,
+          vz * carry + out.z * pop,
         ),
         new THREE.Vector3(
           (Math.random() - 0.5) * PANE_SPIN,
@@ -617,11 +628,24 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
 
   /** A pane out of its frame: its triangles go to alpha zero and stay
    * there, the web that was across it goes with them, and so does the film
-   * the wipers were keeping over it. With `thrown`, the pane itself leaves
-   * as a plate first — the car was built with it already gone otherwise,
-   * and there is nothing to throw. */
-  const shatter = (pane: GlassPane, state: GameState, thrown: boolean): void => {
-    if (thrown) throwPane(pane, state);
+   * the wipers were keeping over it.
+   *
+   * WHETHER THERE IS A PLATE TO THROW depends on what the glass is made of,
+   * and the engine names the one pane it is true of (`LAMINATED_GLASS`). A
+   * windscreen is two sheets bonded to a layer of plastic and comes out in
+   * one folded piece, carrying the web that was across it — that is what
+   * the plastic is for. Every other window is TEMPERED: it is under enough
+   * surface compression that a crack anywhere releases the whole pane at
+   * once, and what leaves the frame is a windowful of blunt cubes. There is
+   * no plate in that, and drawing one — a door window sailing off as an
+   * intact sheet, turning over like a page — is the single most cartoon
+   * thing a crash here could do. It leaves as the burst the renderer throws
+   * out of the frame (`GLASS_SHARDS` in renderer.ts) and nothing else.
+   *
+   * With `thrown` false there is nothing to throw either way: the car was
+   * built with the pane already gone. */
+  const shatter = (pane: GlassPane, state: GameState, thrown: boolean, shed: number): void => {
+    if (thrown && pane === LAMINATED_GLASS) throwPane(pane, state, shed);
     if (glassCol) {
       for (const { start, count } of body.panes[pane]) {
         for (let i = start; i < start + count; i++) glassCol.setW(i, 0);
@@ -685,7 +709,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     }
     if (isGlass(part)) {
       detached.add(part);
-      shatter(part, state, thrown);
+      shatter(part, state, thrown, shed);
       return;
     }
     const mesh = body.breakables[part];

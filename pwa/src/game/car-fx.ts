@@ -25,6 +25,7 @@ import {
   type Dust,
   type DustTint,
   CRASH_GRIT,
+  GLASS_GRAINS,
 } from "./dust.ts";
 import { createDriftSpray, type DriftSpray } from "./drift-spray.ts";
 import { groundTint, plumeGround, type PlumeGround } from "./ground-tint.ts";
@@ -61,6 +62,15 @@ export type CarFx = {
    * wheel dust's, because a rollover throws more grit in two seconds than a
    * clean stage does in five minutes, and one cloud cannot be both. */
   crash: Dust;
+  /** ...and the GLASS a window leaves behind when it stops being one. Its
+   * own pool because it is the only translucent thing the car throws, and
+   * a grain of it drawn at grit's size and grit's opacity is a white
+   * square stuck to the screen (`GLASS_GRAINS`). Parked like the crash's
+   * and for the same reason — most runs never break a window, and a parked
+   * `THREE.Points` still costs a draw call every frame — so say
+   * `showGlass()` beside every `glass.spawn`. */
+  glass: Dust;
+  showGlass: () => void;
   /** Water the CAR throws, which is a different cloud from the sheet a
    * rolling wheel sprays: the column an entry displaces, and the froth it
    * leaves working on the surface afterwards. */
@@ -119,6 +129,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   const plume = createPlume();
   const gravel = createDriftSpray();
   const crash = createDust(CRASH_GRIT);
+  const glass = createDust(GLASS_GRAINS);
   const mud = createDust(MUD);
   mud.points.visible = false;
   // ...and so is the crash's, until a crash happens. A `THREE.Points` in
@@ -129,6 +140,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   // crash decides itself, so this one is switched on by its first spawn and
   // off again once the last grain has died (`showCrash`).
   crash.points.visible = false;
+  glass.points.visible = false;
   const spray = createDust(SPLASH_WATER);
   const foam = createDust(WATER_FOAM);
   const fumes = createFumes();
@@ -137,6 +149,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   scene.add(
     dust.points,
     crash.points,
+    glass.points,
     smoke.points,
     plume.points,
     gravel.points,
@@ -154,7 +167,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
     ceiling: number,
     high: THREE.Color,
   ): void => {
-    for (const pool of [dust, crash, smoke, plume, gravel, mud]) {
+    for (const pool of [dust, crash, glass, smoke, plume, gravel, mud]) {
       (pool.points.material as THREE.PointsMaterial).color.copy(dustLight);
     }
     (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
@@ -220,15 +233,26 @@ export function createCarFx(scene: THREE.Scene): CarFx {
    * one particle's whole life, after which the pool is provably empty and
    * the draw call is pure waste. Reset by every spawn. */
   let crashFor = 0;
+  let glassFor = 0;
   const showCrash = (): void => {
     crashFor = CRASH_THROW.life;
     crash.points.visible = true;
+  };
+
+  const showGlass = (): void => {
+    glassFor = GLASS_GRAINS.life.max;
+    glass.points.visible = true;
   };
 
   const step = (dt: number): void => {
     dust.update(dt);
     // Parked means EMPTY here — the countdown outlives the longest-lived
     // grain — so there is nothing to walk and no buffer to re-upload.
+    if (glassFor > 0) {
+      glass.update(dt);
+      glassFor -= dt;
+      if (glassFor <= 0) glass.points.visible = false;
+    }
     if (crashFor > 0) {
       crash.update(dt);
       crashFor -= dt;
@@ -242,7 +266,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   };
 
   const dispose = (): void => {
-    for (const pool of [dust, crash, smoke, mud, spray, foam]) pool.dispose();
+    for (const pool of [dust, crash, glass, smoke, mud, spray, foam]) pool.dispose();
     plume.dispose();
     gravel.dispose();
     fumes.dispose();
@@ -253,7 +277,9 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   return {
     dust,
     crash,
+    glass,
     showCrash,
+    showGlass,
     mud,
     smoke,
     plume,

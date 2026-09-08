@@ -111,6 +111,14 @@ export const REAR_LAMPS: readonly DamagePart[] = ["lampRL", "lampRR"];
  * is the right side) — the screen flips once, in the HUD. */
 export const WHEEL_PARTS: readonly DamagePart[] = ["wheelFL", "wheelFR", "wheelRL", "wheelRR"];
 
+/** The one pane on the car that is LAMINATED — two sheets bonded to a
+ * layer of plastic, which is what keeps a windscreen in one piece when it
+ * has stopped being a windscreen. Every other window is TEMPERED and dices
+ * into gravel the moment it lets go anywhere, which is the same fact
+ * `collision.glass.tempered` prices the crazing with: stated once, here,
+ * because the renderer has to draw the difference and must not restate it. */
+export const LAMINATED_GLASS: DamagePart = "glassF";
+
 /** The machinery under the panels. Each system takes damage from the crush
  * landing nearest to it and degrades ITS OWN job: the engine loses power
  * and, at the end of it, stops for good; the COOLING loses the coolant that
