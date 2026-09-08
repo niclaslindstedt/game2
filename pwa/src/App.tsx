@@ -257,6 +257,7 @@ import {
   stopMusic,
 } from "./game/audio/music.ts";
 import type { RunAudio } from "./game/audio/index.ts";
+import { runRumble, setRumble } from "./game/haptics.ts";
 import { armScreenshots, captureFrame, type Capture, type ShotNotes } from "./game/screenshots.ts";
 import { relaySharedTaps } from "./game/second-finger.ts";
 import { readHudLayer, type HudLayer } from "./game/shot-hud.ts";
@@ -2544,6 +2545,7 @@ export function App() {
     optionsRef.current = next;
     saveSettings(next);
     setAudioVolumes(next.audio);
+    setRumble(next.rumble);
     input.setKeys(next.keys);
     input.setPad(next.pad);
     rendererRef.current?.setVideo(next.video);
@@ -2654,9 +2656,12 @@ export function App() {
   }, [options.dev.debug]);
 
   // The volumes the player last chose, applied before anything can make a
-  // noise — including the theme the menu arms on its very first paint.
+  // noise — including the theme the menu arms on its very first paint. The
+  // vibration switch goes with them for the same reason: a player who turned
+  // the motor off should not be buzzed once before the setting lands.
   useEffect(() => {
     setAudioVolumes(optionsRef.current.audio);
+    setRumble(optionsRef.current.rumble);
   }, []);
 
   // NO LOUPE, ANYWHERE. iOS reads a press-and-hold as "put the caret here"
@@ -3241,6 +3246,10 @@ export function App() {
         // behind the card would be the loudest thing in it.
         const demo = menuRef.current !== null;
         if (!demo) audioRef.current?.events(events);
+        // ...and the same door for what is FELT: a bot crashing behind the
+        // menu card is not the player's crash, so it does not reach a hand
+        // any more than it reaches an ear.
+        if (!demo) runRumble.events(events);
         // THE LAMPS ARE FOUR AND THE NEWS IS ONE. A nose driven in square
         // takes both headlamps on the same step, and two lines saying half
         // of it each is two lines nobody reads. So the batch is scanned
@@ -3966,7 +3975,13 @@ export function App() {
         // stage is scenery under a theme, and an engine bed over the top of
         // that is two pieces of music at once.
         if (page) hushAudio();
-        else audioRef.current?.frame(state, dtFrame);
+        else {
+          audioRef.current?.frame(state, dtFrame);
+          // The drift's pulse train, on the frames the player is driving and
+          // nowhere else: a card over a held run is a run nobody has their
+          // hands on (game/rumble.ts).
+          runRumble.frame(state.car, dtFrame);
+        }
         renderer.render(state, dtFrame);
         servePendingShot();
         // Every frame, ahead of the throttled snapshot: the clock's

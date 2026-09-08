@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The native shell. It is deliberately thin: a full-bleed WebView over the copy
 // of the game bundled inside the app, so the app looks and plays exactly like
-// the website, plus the one thing a browser can't give iOS on its own — an
+// the website, plus the two things a browser can't give iOS on its own — an
 // audio session that lets the game's synthesized sound play through the
-// ringer switch. Platform services (haptics, cloud save, achievements, a
-// share sheet) are bridges to be added one at a time on top of this, each
-// as its own module under src/ and a flag on the message channel below.
+// ringer switch, and the phone's haptics under a game that already knows what
+// it wants felt (src/rumble.ts, src/haptics.ts). Further platform services
+// (cloud save, achievements, a share sheet) are bridges to be added one at a
+// time on top of this, each as its own module under src/ and a flag on the
+// message channel below.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -22,12 +24,14 @@ import { StatusBar } from "expo-status-bar";
 import { setAudioModeAsync } from "expo-audio";
 import * as SplashScreen from "expo-splash-screen";
 import { WebView } from "react-native-webview";
-import type { WebViewNavigation } from "react-native-webview";
+import type { WebViewMessageEvent, WebViewNavigation } from "react-native-webview";
 
 import { BRAND_BG, REMOTE_GAME_URL } from "./src/config";
-import { NATIVE_FLAG, VIEWPORT_HARDENING } from "./src/injected";
+import { playRumble } from "./src/haptics";
+import { NATIVE_FLAG, RUMBLE_BRIDGE, VIEWPORT_HARDENING } from "./src/injected";
 import { startLocalServer, type LocalServer } from "./src/local-server";
 import { isExternalUrl } from "./src/navigation";
+import { parseRumble } from "./src/rumble";
 
 // Keep the native splash up until the WebView paints its first frame, so the
 // player never sees a white flash or a half-loaded page.
@@ -109,6 +113,14 @@ export default function App() {
     [uri],
   );
 
+  // THE MESSAGE CHANNEL. One flag per bridge, and anything the shell has no
+  // bridge for is dropped where it lands — the page can post whatever it
+  // likes and none of it may reach the shell by accident.
+  const onMessage = useCallback((event: WebViewMessageEvent) => {
+    const pulse = parseRumble(event.nativeEvent.data);
+    if (pulse) playRumble(pulse);
+  }, []);
+
   const reveal = useCallback(() => {
     setLoaded(true);
     void SplashScreen.hideAsync().catch(() => {});
@@ -166,10 +178,12 @@ export default function App() {
           // score boards, the ghost, the options) across launches.
           domStorageEnabled
           javaScriptEnabled
-          // The shell flag must exist before the game's scripts read it; the
-          // hardening runs once the document is up.
-          injectedJavaScriptBeforeContentLoaded={NATIVE_FLAG}
+          // The shell flag must exist before the game's scripts read it, and
+          // the rumble listener before the first thing that could ask for a
+          // pulse; the hardening runs once the document is up.
+          injectedJavaScriptBeforeContentLoaded={`${NATIVE_FLAG}\n${RUMBLE_BRIDGE}`}
           injectedJavaScript={VIEWPORT_HARDENING}
+          onMessage={onMessage}
           onNavigationStateChange={onNavStateChange}
           onShouldStartLoadWithRequest={onShouldStartLoad}
           onLoadEnd={reveal}

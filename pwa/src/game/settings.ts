@@ -1510,6 +1510,13 @@ export type Settings = {
    * card writes back to it, so the box a player drove last time is the box
    * the next car is offered with, and nobody has to answer twice. */
   gearbox: GearboxMode;
+  /** Whether the device is allowed to VIBRATE — the hits, the drift and the
+   * gearbox (`game/rumble.ts`). On by default: on a phone it is most of what
+   * says the car just hit something, and the game is played with the sound
+   * off far more often than anybody admits. Offered only where there is a
+   * motor to switch (`canRumble` in `game/haptics.ts`), so a desktop player
+   * is never asked a question about hardware they do not have. */
+  rumble: boolean;
   /** Whether the SCREENSHOT bind takes pictures at all. On by default —
    * the feature is the point of having it — and off is for a player who
    * keeps hitting ENTER by accident, or who would rather their own device's
@@ -1579,6 +1586,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // The automatic: a player who has not chosen has not asked to be given
   // something else to manage while the road is coming at them.
   gearbox: "auto",
+  rumble: true,
   screenshots: true,
   copyShots: true,
   developer: false,
@@ -1675,6 +1683,7 @@ export function freshSettings(): Settings {
     touch: { ...DEFAULT_SETTINGS.touch },
     pad: clonePad(DEFAULT_PAD),
     gearbox: DEFAULT_SETTINGS.gearbox,
+    rumble: DEFAULT_SETTINGS.rumble,
     screenshots: DEFAULT_SETTINGS.screenshots,
     copyShots: DEFAULT_SETTINGS.copyShots,
     developer: false,
@@ -1748,6 +1757,7 @@ export function loadSettings(): Settings {
     migrateCameraKey(settings.keys);
     migratePedalDirs(settings.touch);
     if (parsed.gearbox === "manual") settings.gearbox = "manual";
+    if (parsed.rumble === false) settings.rumble = false;
     if (parsed.screenshots === false) settings.screenshots = false;
     if (parsed.copyShots === false) settings.copyShots = false;
     if (parsed.developer === true) settings.developer = true;
