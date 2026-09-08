@@ -12,10 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@niclaslindstedt/oss-framework": "^2.4.0",
     "preact": "^10.29.8",
-    "three": "^0.180.0",
-    "workbox-window": "^7.0.0"
+    "three": "^0.180.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",

@@ -20,8 +20,6 @@ on:
 
 permissions:
   contents: read
-  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
-  packages: read
 
 concurrency:
   # A second push to a PR makes the run in flight worthless, so PRs group by
@@ -66,8 +64,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - run: make test SHARD=${{ matrix.shard }}/10
 
   # One stable check name over a matrix whose width is an implementation
@@ -93,8 +89,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - run: make fmt-check
 
   # eslint plus the typecheck, kept together because `make lint` is the
@@ -106,8 +100,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - run: make lint
 
   # The production build (`tsc --noEmit` across both projects, then vite).
@@ -116,8 +108,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - run: make build
 
   # Bots must keep finishing what the generator builds — the simulation
@@ -128,8 +118,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - run: make sim
 
   shell-lint:

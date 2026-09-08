@@ -238,9 +238,9 @@ Make targets are the definition of green CI enforces).
   import `@engine`, nothing deeper.
 - **The app renders with Preact and still spells it `react`.** `react`,
   `react-dom` and `react-dom/client` are aliased to `preact/compat`
-  (`pwa/tsconfig.json` `paths` + the Vite preset), so components and the
-  oss-framework's typings keep working without `@types/react`. Do not install
-  React.
+  (`pwa/tsconfig.json` `paths` + the Vite preset), so components written
+  against the React hook API keep working without `@types/react`. Do not
+  install React.
 - **No TypeScript that a stripper cannot strip.** Everything under
   `scripts/` runs on `node --experimental-strip-types`, which erases types
   and refuses anything that EMITS code: parameter properties
@@ -250,11 +250,10 @@ Make targets are the definition of green CI enforces).
   `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` on an import three files from the
   change. Declare the field and assign it in the constructor body; use a
   union of string literals instead of an enum.
-- **`@niclaslindstedt/oss-framework` resolves from GitHub Packages**, which
-  needs a read token even for public reads — in web sessions
-  `.claude/hooks/session-start.sh` handles it; locally the token lives in
-  `~/.npmrc`. A fresh-environment `npm install` failure on a 401 is that, not
-  a broken lockfile.
+- **Every dependency comes from the public npm registry.** The repo commits
+  no `.npmrc` and `npm install` needs no token. A 401 from
+  `npm.pkg.github.com` is a stale line in your own `~/.npmrc` left over from
+  when the app depended on `@niclaslindstedt/oss-framework`.
 
 ---
 

@@ -20,7 +20,7 @@
 // overlay prints is exactly that set, so a screenshot reproduces as a URL.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
+import { usePwaUpdate } from "./lib/pwa-update.ts";
 import {
   weathersIn,
   CARS,

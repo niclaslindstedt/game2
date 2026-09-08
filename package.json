@@ -9,10 +9,6 @@
   "workspaces": [
     "pwa"
   ],
-  "overrides": {
-    "react": "npm:@preact/compat@^18.3.2",
-    "react-dom": "npm:@preact/compat@^18.3.2"
-  },
   "scripts": {
     "dev": "npm run dev --workspace pwa",
     "build": "npm run typecheck:only && npm run build --workspace pwa",

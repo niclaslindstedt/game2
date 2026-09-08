@@ -2,8 +2,8 @@
 // The central output module (OSS_SPEC §19.4): every diagnostic line the engine
 // emits goes through these semantic helpers rather than bare `console.*`
 // calls. The engine runs in two hosts — the browser app and the headless
-// Node simulator — so the sink is pluggable: the PWA routes lines into the
-// oss-framework log store (rendered by its LogViewer), the sim CLI prints to
+// Node simulator — so the sink is pluggable: the PWA routes lines into its
+// own debug log (copied out of the developer menu), the sim CLI prints to
 // stderr. The default sink buffers recent lines so early boot output is not
 // lost before a host attaches.
 

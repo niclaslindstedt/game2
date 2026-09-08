@@ -13,8 +13,6 @@ on:
 
 permissions:
   contents: read
-  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
-  packages: read
 
 jobs:
   lighthouse:
@@ -27,11 +25,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@niclaslindstedt"
       - run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm run build --workspace pwa
       - run: npm install --global @lhci/cli@0.14.x
       - run: lhci autorun --config=./.github/lighthouse/lighthouserc.json

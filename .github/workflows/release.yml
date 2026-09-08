@@ -49,8 +49,6 @@ jobs:
     # contents: write — this job pushes the release commit and the tag.
     permissions:
       contents: write
-      # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
-      packages: read
     outputs:
       version: ${{ steps.bump.outputs.version }}
       tag: ${{ steps.bump.outputs.tag }}
@@ -62,11 +60,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@niclaslindstedt"
       - run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify clean working tree
         run: |
@@ -227,7 +221,6 @@ jobs:
     # contents: write — the downloads are uploaded onto the GitHub Release.
     permissions:
       contents: write
-      packages: read
     env:
       # The release commit is on the tag, so the build is made from exactly
       # what was tagged rather than from whatever main looks like by now.
@@ -248,8 +241,6 @@ jobs:
       # The website build lives in the root workspace; the shell copies its
       # output and packages around it.
       - uses: ./.github/actions/setup
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -348,12 +339,10 @@ jobs:
     permissions:
       # pages.yml declares `contents: write` at the top level because its
       # assemble job force-pushes the /branch/ slot to the `branch-deploy`
-      # orphan branch, and `packages: read` because its npm ci resolves the
-      # framework from GitHub Packages. A reusable workflow can't be granted
-      # fewer permissions than it requests, so these must match or the whole
-      # release run fails at startup before any job runs.
+      # orphan branch. A reusable workflow can't be granted fewer permissions
+      # than it requests, so these must match or the whole release run fails
+      # at startup before any job runs.
       contents: write
       pages: write
       id-token: write
-      packages: read
     secrets: inherit

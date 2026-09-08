@@ -7,8 +7,8 @@ import { App } from "./App.tsx";
 // In dev no worker registers (`usePwaUpdate` runs disabled), but a worker
 // installed by a previous `vite preview` on this origin would keep serving
 // stale bytes — unregister any so the dev server always wins. The production
-// registration is owned by the framework's `usePwaUpdate` (workbox-window),
-// against the worker `pwa-plugin.ts` emits.
+// registration is owned by `lib/pwa-update.ts`, against the worker
+// `pwa-plugin.ts` emits.
 if (import.meta.env.DEV && "serviceWorker" in navigator) {
   void navigator.serviceWorker
     .getRegistrations()

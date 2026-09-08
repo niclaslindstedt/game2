@@ -47,8 +47,8 @@ if (!skipBuild) {
     // The build's own output is already on the terminal; a stack trace out
     // of `execFileSync` under it would say nothing it has not said.
     console.error(
-      "✗ the website build failed — see above. From a fresh clone, `npm install` " +
-        "at the repo root first (it needs a GitHub Packages token; see docs/configuration.md).",
+      "✗ the website build failed — see above. From a fresh clone, run `npm install` " +
+        "at the repo root first.",
     );
     process.exit(1);
   }

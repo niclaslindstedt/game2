@@ -9,7 +9,7 @@ This repository conforms to [`OSS_SPEC.md`](OSS_SPEC.md) (the committed copy is 
 ## Build and test commands
 
 ```sh
-npm install       # needs a GitHub Packages read token — see below
+npm install       # everything resolves from the public npm registry
 make build        # typecheck + production build (pwa/dist/)
 make test         # vitest over the engine (SHARD=i/N slices it; CI runs ten)
 make lint         # eslint + typecheck, zero warnings
@@ -20,8 +20,6 @@ make check-seo    # build + structural SEO/PWA/bundle assertions
 ```
 
 That is the everyday set. **The full list — every lab, every preview tool, what each one prints — is the README's Usage table, and the `Makefile` is the authority.** The table below says which of them a given change OWES.
-
-`@niclaslindstedt/oss-framework` resolves from GitHub Packages, which requires auth even for public reads. Web sessions: `.claude/hooks/session-start.sh` writes the token from the environment (`GITHUB_PAT` et al.) into `~/.npmrc` and installs dependencies automatically. Locally: add `//npm.pkg.github.com/:_authToken=<token>` to your own `~/.npmrc`.
 
 **Scope the linter, never the typechecker, and leave the suite to CI.** `npx eslint <changed files>` is 2 s where the whole repo is 24; `npx tsc --noEmit` is 3 s and must stay whole-program, because it checks a PROGRAM (naming files makes it ignore `tsconfig.json`) and because a changed signature breaks its CALLERS — the files you did not touch.
 
