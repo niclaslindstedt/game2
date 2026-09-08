@@ -13,7 +13,7 @@ artifact whenever a project ships LLM-driven behaviour).
 Every LLM-driven step is defined by a versioned prompt under
 `prompts/<name>/<major>_<minor>_<patch>.md` with a required YAML front matter
 block (`name`, `description`, `version` matching the filename) and
-`## System` / `## User` sections — see §13.5 of `OSS_SPEC.md` and
+`## System` / `## User` sections — see §13.2 of `OSS_GAME_SPEC.md` and
 `prompts/README.md`. Prompt files are **immutable once committed**: every
 change lands as a new file at a new semver (patch for wording, minor for
 additive changes, major for breaking rewrites). Prompts drift whenever the

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// Structural SEO assertions (OSS_SPEC §11.3) over the built site in
+// Structural SEO assertions (OSS_GAME_SPEC §11.3) over the built site in
 // pwa/dist/. Errors exit 1 and block CI; run with `npm run check:seo` after
 // a build. Pattern copied from the sibling contacts app.
 import { existsSync, readFileSync, statSync } from "node:fs";

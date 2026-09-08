@@ -1,7 +1,7 @@
 name: lighthouse
 
 # Scheduled measured Lighthouse audit against the built app, with thresholds
-# enforced via `.github/lighthouse/lighthouserc.json` (OSS_SPEC §11.3.10 /
+# enforced via `.github/lighthouse/lighthouserc.json` (OSS_GAME_SPEC §11.3.9 /
 # §11.4.7). The measured signals are advisory because shared-runner variance
 # makes them unsuitable as PR gates; deterministic SEO and bundle-budget
 # failures remain in `seo.yml`.
