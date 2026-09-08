@@ -644,8 +644,19 @@ export type Dust = {
  * from the EYE, which is `mvPosition` and exists only inside the vertex
  * shader. It is what fades a cloud out of the lens as the camera runs into
  * it.
+ *
+ * Exported because the EXHAUST is made of the same matter and keeps its own
+ * pool (fumes.ts): a puff off a tailpipe wants a life, a birth size and a
+ * swell that a STYLE cannot state, because in cold air the same pipe throws
+ * a billowing white plume and in warm air a small dark wisp. The shader is
+ * the one part of that neither cloud should own twice.
  */
-function graftDust(mat: THREE.PointsMaterial, puffy: boolean, near: number, cap: number): void {
+export function graftDust(
+  mat: THREE.PointsMaterial,
+  puffy: boolean,
+  near: number,
+  cap: number,
+): void {
   mat.onBeforeCompile = (shader) => {
     // Assigned by REFERENCE, so every dust material in the scene shares one
     // set of arrays and the register is written once a frame rather than

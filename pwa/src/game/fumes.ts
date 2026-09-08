@@ -2,167 +2,72 @@
 // Exhaust fumes: a pooled puff cloud off the tailpipe. Puffs inherit a
 // little of the car's wake, then the WIND owns them — idling fumes drift
 // downwind, a storm rips them sideways. Same recycled-in-place Points
-// architecture as dust.ts; presentation only.
+// architecture as dust.ts, and the same shader graft (`graftDust`), so a
+// puff off a pipe gets its own size, its own turn and its own opacity.
+// Presentation only.
+//
+// WHAT a pipe is putting out at any moment is not here — it is exhaust.ts,
+// DOM-free beside this, because it is arithmetic about water and soot and
+// nothing about drawing. This module is what that arithmetic LOOKS like: a
+// warm pipe off the throttle is a wisp the air swallows, and the same pipe
+// at ten below is a white plume rolling off the back of the car.
 //
 // TWO CLOUDS COME OUT OF HERE and they are pooled differently. The player's
 // car has one to itself (car-fx.ts), sized for the hardest one pipe ever
 // works. The FIELD shares a second between every crew on the road
 // (field-cars.ts) — a grid of eight cars blipping is eight pipes at once,
 // and eight private pools would be eight draw calls for a cloud that reads
-// as one. `pipeWork` below is what keeps them telling the same story: how
-// hard a pipe is working is a function of the engine, not of whose car it
-// is bolted to.
+// as one. `pipeWork` is what keeps them telling the same story: how hard a
+// pipe is working is a function of the engine and the weather, not of whose
+// car it is bolted to.
 
 import * as THREE from "three";
-import type { GameState } from "@engine";
 
-import { puffTexture } from "./textures.ts";
+import { graftDust } from "./dust.ts";
+import { EXHAUST, type PipeLook } from "./exhaust.ts";
+import { billowTexture } from "./textures.ts";
 
-/** Big enough to hold a full second of the hardest the pipe ever works —
- * the grid's redline burst — without recycling a puff that is still on
- * screen, which would show up as the cloud tearing holes in itself at
- * exactly the moment it is thickest. */
-const POOL = 384;
-
-/**
- * WHAT THE PIPE DOES WITH THE THROTTLE. Fuel burned is fumes made, so the
- * exhaust answers the ENGINE and not the speedometer — which is why the
- * grid, where the car is going nowhere at all, is not the quietest place on
- * the stage.
- */
-export const EXHAUST = {
-  /** Seconds between puffs: sitting at idle, and rolling. */
-  every: { idle: 0.12, rolling: 0.045 },
-  /** How sooty the cloud is, 0 pale .. 1 black. `base` is a cold idle,
-   * darkening by `pace` as road speed comes up to `paceAt` m/s. */
-  shade: { base: 0.35, pace: 0.4, paceAt: 30 },
-  /** REVVING ON THE GRID: the throttle blipped against a car that cannot
-   * move. None of the fuel it drinks becomes road speed, so all of it
-   * leaves through the pipe — the one moment the exhaust is the loudest
-   * thing on screen. Below `from` on the rev counter the engine is merely
-   * idling and none of this applies; at the redline the puffs come `every`
-   * seconds, `puffs` at a time so a blip reads as a BURST rather than a
-   * tick, at `shade` soot. `blast` is what pushes
-   * them out of the pipe, m/s, in place of a car pulling away from them:
-   * gentle, because a stationary car's cloud has to BILLOW and hang around
-   * the back of it — anything jetted hard streams straight past the chase
-   * camera and leaves the start line looking clean. */
-  rev: { from: 0.12, every: 0.016, puffs: 4, shade: 0.85, blast: 1.4 },
-  /** THE PIPE TORN OFF BY THE GROUND (`DamagePart` "exhaust"). What is
-   * left is an open port under the floor: nothing silencing it, and
-   * nothing between the combustion chamber and the daylight, so what the
-   * engine failed to burn leaves as soot instead of being finished on the
-   * way out. `every` scales the interval between bursts — under 1 the car
-   * smokes harder than any intact pipe ever does — `puffs` is the extra
-   * each burst carries, and `shade` is the floor the soot is held above,
-   * so a broken car is black at idle and stays black at pace rather than
-   * darkening toward it. `blast` is what the unsilenced port throws them
-   * out with. */
-  broken: { every: 0.5, puffs: 2, shade: 0.9, blast: 1.1 },
-};
-
-/** How hard a pipe is working this instant. */
-export type PipeWork = {
-  /** Seconds between bursts. */
-  every: number;
-  /** Puffs in one of them — a blip has to read as a BURST rather than a
-   * tick, so a worked engine spends its fuel on several at once. */
-  puffs: number;
-  /** Soot, 0 pale .. 1 black. */
-  shade: number;
-  /** What pushes them out of the pipe, m/s, on top of the wake. */
-  blast: number;
-};
-
-/** Read the pipe off the engine. `rev` is the rev counter and `u` the road
- * speed, and the PHASE is what says which of the two the revs mean: in the
- * start control nothing is geared and `rev` is the pedal itself, so none of
- * the fuel it drinks becomes road speed and all of it leaves through the
- * pipe. Everywhere else `rev` is gearing plus speed, and a car at pace
- * smokes less than one going nowhere loudly.
- *
- * `fx` is the transient-FX budget; `car` is what this particular car brings
- * to it:
- *
- *   `thickness` — how much of a pipe it gets: 1 for the car being driven,
- *   less for a rival, which is the same bargain the field's dust makes
- *   (`FIELD_PLUME`). A cloud seen across a start line does not need the
- *   density of the one coming off your own bumper, and eight of them at
- *   full rate would spend the shared pool in a third of a second.
- *
- *   `pipes` — HOW MANY EXITS IT HAS, and the answer is a share rather than
- *   a multiplier: an engine burns the fuel it burns whichever way out the
- *   gas leaves, so a twin-exit car fires each of its pipes half as often
- *   and puts the same amount of smoke behind itself as a single. Left as a
- *   multiplier the works sedan would ask its cloud for twice the pool it
- *   holds at the limiter, and the answer to that is not more smoke, it is
- *   a cloud tearing holes in itself at the moment it is thickest. Each
- *   burst keeps its full `puffs`, because that is what makes a blip read
- *   as a burst rather than a tick, and it is per pipe.
- *
- *   `broken` — the pipework torn off by the ground, which is the one thing
- *   here that is not a fact about the throttle. It goes on top of whatever
- *   the engine was doing rather than replacing it, so a wrecked car still
- *   blips blacker on the grid than it idles; and it holds the soot up from
- *   below rather than setting it, so a broken car cannot come out PALER
- *   than the intact one it was a moment ago. */
-export function pipeWork(
-  rev: number,
-  u: number,
-  phase: GameState["phase"],
-  fx: number,
-  car: { thickness?: number; pipes?: number; broken?: boolean } = {},
-): PipeWork {
-  const X = EXHAUST;
-  const thickness = car.thickness ?? 1;
-  const pipes = Math.max(1, car.pipes ?? 1);
-  const gone = car.broken ? X.broken : null;
-  const blipping = phase === "intro" || phase === "countdown";
-  const worked = blipping ? Math.max(0, (rev - X.rev.from) / (1 - X.rev.from)) : 0;
-  const idling = u > 1 ? X.every.rolling : X.every.idle;
-  const rolling = X.shade.base + X.shade.pace * Math.min(1, u / X.shade.paceAt);
-  return {
-    every:
-      (pipes * (gone?.every ?? 1) * (idling + (X.rev.every - idling) * worked)) /
-      (Math.max(0.2, fx) * thickness),
-    puffs: (gone ? gone.puffs : 0) + 1 + Math.round((X.rev.puffs - 1) * worked * thickness),
-    shade: Math.max(gone?.shade ?? 0, rolling + (X.rev.shade - rolling) * worked),
-    blast: (gone?.blast ?? 0) + u * 0.15 + X.rev.blast * worked,
-  };
-}
-
-/** The most bursts one frame may make good on. A pipe at the limiter fires
- * sixty-odd times a second, which no frame rate answers one burst at a time
- * — so a pipe carries its remainder (`pipeBursts`) and a slow frame pays
- * several at once. The cap is what stops a frame that arrived LATE — a stage
- * built, a tab woken, a lockup — from emptying the whole pool into one spot
- * in a single position. Eight covers a pipe at full rate down to about eight
- * frames a second, which is well under anything the game is played at. */
-const BURST_CAP = 8;
-
-/** How many bursts a pipe with `clock` seconds banked owes at a rate of one
- * every `every` seconds. The caller adds the frame's `dt` to its own clock
- * and takes `bursts * every` back off it, so the REMAINDER survives the
- * frame.
- *
- * That remainder is the whole point. A clock reset to zero on every burst
- * makes at most one burst per frame however hard the engine is working, and
- * the exhaust's thickness stops being a fact about the engine and becomes a
- * fact about the frame rate — the same car smokes half as much on a 30 fps
- * phone as on a 60 fps desktop, and not at all under a headless renderer.
- * This is the same bargain the dust plume strikes with its `debts`. */
-export function pipeBursts(clock: number, every: number): number {
-  return Math.min(BURST_CAP, Math.floor(clock / every));
-}
+/** Big enough to hold the hardest the pipe ever works — a winter grid on
+ * the limiter, whose puffs are also the longest-lived the cloud makes —
+ * without recycling a puff that is still on screen, which would show up as
+ * the cloud tearing holes in itself at exactly the moment it is thickest.
+ * That worst case is `EXHAUST.every.worked` against `EXHAUST.look.life`: a
+ * third of a second's bursts of four, each hanging for two seconds, is
+ * about 260 alive — and this carries a burst-capped late frame on top of
+ * it with room to spare. */
+const POOL = 640;
 
 export type Fumes = {
   points: THREE.Points;
   /** One puff at the pipe. `vx`/`vz` seed the base velocity (wake + wind);
-   * `shade` 0–1 picks idle-pale → redline-dark soot. */
-  spawn: (x: number, y: number, z: number, vx: number, vz: number, shade: number) => void;
+   * `look` is what the pipe is making of it this instant — the whole of
+   * what separates a winter plume from a summer wisp. */
+  spawn: (x: number, y: number, z: number, vx: number, vz: number, look: PipeLook) => void;
   update: (dt: number) => void;
   dispose: () => void;
 };
+
+/** How close to the eye a puff is gone entirely, m — coming back to full
+ * over the next couple of metres. Without it the winter plume is a grey wash
+ * over the whole frame the moment the car slows down: it leaves the pipe
+ * pointing BACKWARDS, which on a stationary car is straight at the chase
+ * camera.
+ *
+ * Much tighter than the towed cloud's (`GROUND_CLOUD.nearFade`), and that is
+ * the whole difference between the two effects rather than a number that
+ * wants raising. A plume is left behind on the road and the camera drives
+ * INTO it, so it has to be gone well before the glass; an exhaust is the car
+ * you are sitting behind, and the gap between its bumper and the lens is the
+ * only place it is ever seen from the seat. Faded out over that gap there is
+ * no exhaust in the game at all. */
+const NEAR_FADE = 1.1;
+
+/** The base point size, world metres — what a puff with no water in it is
+ * born a fraction of and a full winter one a little over. Past 0.6 a sprite
+ * needs the chunkier mask (`billowTexture`) rather than the small one, for
+ * the reason dust.ts picks between them: at this size the puff's own
+ * silhouette is what the eye reads. */
+const PUFF_SIZE = 0.62;
 
 /** A cloud. `pool` is how many puffs it may have alive at once — the default
  * is one pipe's worth; a cloud several cars are feeding needs its own
@@ -173,33 +78,55 @@ export function createFumes(pool: number = POOL): Fumes {
   const colors = new Float32Array(pool * 3);
   const velocities = new Float32Array(pool * 3);
   const life = new Float32Array(pool);
+  /** Parallel to `life`: how long each puff was given (so its age can be
+   * read as a fraction), the size it was born at, how far it swells, how
+   * opaque it ever gets, how fast it turns — and the three the shader
+   * actually reads. */
+  const span = new Float32Array(pool);
+  const birth = new Float32Array(pool);
+  const swell = new Float32Array(pool);
+  const peak = new Float32Array(pool);
+  const spins = new Float32Array(pool);
+  const scales = new Float32Array(pool);
+  const fades = new Float32Array(pool);
+  const angles = new Float32Array(pool);
   let cursor = 0;
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  // Exhaust is SMOKE, not grit, so it takes the same answer tire smoke does
-  // to the low chase cam: a puff big enough to read gets a lumpy MASK
-  // (textures.ts) rather than being shrunk into a speck. Shrinking is what
-  // grains want; a smoke sprite made small enough not to look like a square
-  // just stops looking like smoke, and a whole pipe's worth of them
-  // disappears against the road.
-  const map = puffTexture();
+  geo.setAttribute("aScale", new THREE.BufferAttribute(scales, 1));
+  geo.setAttribute("aFade", new THREE.BufferAttribute(fades, 1));
+  geo.setAttribute("aSpin", new THREE.BufferAttribute(angles, 1));
   const mat = new THREE.PointsMaterial({
-    size: 0.55,
-    map,
+    size: PUFF_SIZE,
+    map: billowTexture(),
     vertexColors: true,
     transparent: true,
-    opacity: 0.45,
+    // Thin, because the density is meant to come from the OVERLAP: a plume
+    // you can pick single puffs out of is a plume made of sprites, and one
+    // you cannot see the road through has stopped being an effect — and a
+    // winter idle is exactly where that second failure lives, since the car
+    // is stationary and the chase camera is parked in its own cloud.
+    opacity: 0.34,
     depthWrite: false,
   });
+  graftDust(mat, true, NEAR_FADE, 0);
   const points = new THREE.Points(geo, mat);
   points.frustumCulled = false;
-  const pale = new THREE.Color(0x9aa0a8);
-  const soot = new THREE.Color(0x3c4046);
+  /** The three anchors the colour is mixed from: a warm pipe's own light
+   * grey, the near-white of condensing water, and soot. The pale end is
+   * deliberately high — clean exhaust is barely darker than the air, and
+   * what makes it readable is the water in it and the pedal, not a grey
+   * that was drawn dark to be seen at all. */
+  const pale = new THREE.Color(0xb9c0c6);
+  const steam = new THREE.Color(0xe8edf0);
+  const soot = new THREE.Color(0x3a3e44);
   const tint = new THREE.Color();
 
-  const spawn = (x: number, y: number, z: number, vx: number, vz: number, shade: number): void => {
+  const spawn = (x: number, y: number, z: number, vx: number, vz: number, look: PipeLook): void => {
+    const L = EXHAUST.look;
+    const bloom = look.bloom;
     const i = cursor;
     cursor = (cursor + 1) % pool;
     positions[i * 3] = x + (Math.random() - 0.5) * 0.2;
@@ -208,14 +135,28 @@ export function createFumes(pool: number = POOL): Fumes {
     // A wide scatter, so a burst of puffs made in the same millisecond at
     // the same pipe FANS rather than travelling out as one rope.
     velocities[i * 3] = vx + (Math.random() - 0.5) * 0.9;
-    velocities[i * 3 + 1] = 0.6 + Math.random() * 0.6; // warm smoke rises
+    velocities[i * 3 + 1] = L.rise.base + L.rise.wet * bloom + Math.random() * L.rise.vary; // warm smoke rises
     velocities[i * 3 + 2] = vz + (Math.random() - 0.5) * 0.9;
-    tint.copy(pale).lerp(soot, shade);
+    // Pale → white with the water in it, then down toward soot with the
+    // carbon. In that order: the water is what the carbon is suspended IN,
+    // so a cold sooty plume comes out mid grey rather than black.
+    tint.copy(pale).lerp(steam, bloom).lerp(soot, look.shade);
     const v = 0.85 + Math.random() * 0.3;
     colors[i * 3] = tint.r * v;
     colors[i * 3 + 1] = tint.g * v;
     colors[i * 3 + 2] = tint.b * v;
-    life[i] = 0.8 + Math.random() * 0.6;
+    span[i] = (L.life.dry + (L.life.wet - L.life.dry) * bloom) * (1 - L.life.vary * Math.random());
+    life[i] = span[i] as number;
+    // Born somewhere inside its own size band, at a random angle, turning
+    // either way — three draws that cost nothing and are the whole reason a
+    // hundred copies of one mask do not read as one mask.
+    birth[i] = (L.dry.size + (L.wet.size - L.dry.size) * bloom) * (0.75 + Math.random() * 0.25);
+    swell[i] = L.dry.grow + (L.wet.grow - L.dry.grow) * bloom;
+    peak[i] = look.body;
+    spins[i] = (Math.random() * 2 - 1) * 0.7;
+    angles[i] = Math.random() * Math.PI * 2;
+    scales[i] = birth[i] as number;
+    fades[i] = 0;
   };
 
   const update = (dt: number): void => {
@@ -228,10 +169,24 @@ export function createFumes(pool: number = POOL): Fumes {
       positions[i * 3] += velocities[i * 3] * dt;
       positions[i * 3 + 1] += velocities[i * 3 + 1] * dt;
       positions[i * 3 + 2] += velocities[i * 3 + 2] * dt;
+      // Age as a fraction of what this puff was given. The SWELL is eased
+      // out — a puff does most of its growing in the first moment and then
+      // hangs there widening slowly. The thinning is the other way round:
+      // it holds most of its opacity through the middle of its life and
+      // gives the rest up at the end, so a plume dissolves instead of
+      // dimming from the moment it leaves the pipe.
+      const t = span[i] > 0 ? Math.min(1, 1 - (life[i] as number) / (span[i] as number)) : 1;
+      const eased = 1 - (1 - t) * (1 - t);
+      scales[i] = (birth[i] as number) * (1 + ((swell[i] as number) - 1) * eased);
+      angles[i] = (angles[i] as number) + (spins[i] as number) * dt;
+      fades[i] = life[i] > 0 ? Math.min(1, t / 0.1) * (1 - t * t) * (peak[i] as number) : 0;
       if (life[i] <= 0) positions[i * 3 + 1] = -50;
     }
     geo.attributes.position.needsUpdate = true;
     geo.attributes.color.needsUpdate = true;
+    geo.attributes.aScale.needsUpdate = true;
+    geo.attributes.aFade.needsUpdate = true;
+    geo.attributes.aSpin.needsUpdate = true;
   };
 
   const dispose = (): void => {

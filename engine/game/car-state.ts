@@ -77,6 +77,7 @@ export function freshCar(): CarState {
     thrown: 0,
     gear: 0,
     rev: 0,
+    pedal: 0,
     gearbox: "auto",
     shiftCutUntil: 0,
     steer: 0,

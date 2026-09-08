@@ -461,6 +461,24 @@ export type CarState = {
    * tachometer and the engine bed read it here. HUD and audio readout — the
    * handling never reads it back. */
   rev: number;
+  /** THE PEDAL THE ENGINE IS ACTUALLY BEING GIVEN this step, 0..1 — the
+   * throttle after the run has had its say: what the driver asked for while
+   * the car is being driven, what the blip asks for on the grid, and zero
+   * everywhere nobody is driving it (the roll-out, a drowning, a car on its
+   * roof).
+   *
+   * `rev` is not this and cannot stand in for it: the two agree on the grid
+   * and part company the moment a gear is engaged, where the needle is road
+   * speed through the gearing and says nothing at all about whether there
+   * is any fuel going in. A car coasting into a hairpin at 6,000 rpm and one
+   * dragging itself out of one at the same revs are the same needle and
+   * opposite engines.
+   *
+   * Presentation readout: what the EXHAUST is made of is fuel burned
+   * (`pipeWork`, pwa/src/game/fumes.ts), and fuel burned is the pedal and
+   * the revs together. The handling never reads it back — it is written
+   * from the same input the step has already spent. */
+  pedal: number;
   /** Which box this car is being driven with for the run. A player SETTING,
    * not a property of the car: every car in the roster can be handed over
    * either way, and the choice belongs to whoever is driving it. */
