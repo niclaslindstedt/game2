@@ -18,6 +18,7 @@ import {
   latCeiling,
   slideFloor,
   surfaceBreakawayFor,
+  driveBiteOf,
   surfaceGripFor,
 } from "./limits.ts";
 import { damageEffects } from "./damage.ts";
@@ -126,6 +127,13 @@ export function stepGrounded(
   // ceiling and the driven axle's bite all go light together, which is why
   // a landing unsticks the car instead of playing an animation at it.
   const surfaceGrip = surfaceGripFor(spec, ctx.surface) * ctx.hold * tyreLoad(car);
+  /** ...and WHAT THE DRIVEN WHEELS CAN HAND THE GROUND out of that, which is
+   * a different question and the one that separates the layouts
+   * (`driveBiteOf`). It reads the GRADE the car is standing on, so a climb
+   * takes the weight off a front-driver's driven axle and puts it on a
+   * rear-driver's — and leaves a four-wheel drive, which has all of it
+   * either way, to simply go up the hill. */
+  const driveBite = driveBiteOf(spec, surfaceGrip, ctx.slope);
   const surfaceDrag = T.surfaces.drag[ctx.surface];
   const surfacePower = T.surfaces.power[ctx.surface] * wildPull(ctx.surface, car.u);
   // Everything the crashes have done, as the multipliers the rest of this
@@ -701,7 +709,7 @@ export function stepGrounded(
   // How much of the pedal the tyres are refusing to take. Settled BEFORE the
   // torque is asked for, so the spin a stab of throttle lights costs that
   // same stab its shove rather than the next one's.
-  settleLaunchSpin(spec, car, surfaceGrip, input.throttle * shiftCut, dt);
+  settleLaunchSpin(spec, car, driveBite, input.throttle * shiftCut, dt);
   // A folded radiator starves the engine, and past the misfire threshold the
   // ignition drops beats outright: a badly hurt car lurches up the road
   // instead of pulling up it. It limps — right up until the engine is dead,
@@ -709,7 +717,7 @@ export function stepGrounded(
   // has coasted to a stop).
   const damagePower = hurt.power * hurt.firing;
   const accel =
-    engineAccel(spec, car, surfaceGrip) *
+    engineAccel(spec, car, driveBite) *
     input.throttle *
     surfacePower *
     shiftCut *
@@ -1028,5 +1036,5 @@ export function stepGrounded(
   // started from, a step that accelerated hard would leave the wheels
   // turning faster than their own engine could turn them. An engaging shift
   // takes the pedal away, and with it the spin.
-  settleWheelspin(spec, car, wheelspinShare(spec, car, surfaceGrip, input.throttle * shiftCut), dt);
+  settleWheelspin(spec, car, wheelspinShare(spec, car, driveBite, input.throttle * shiftCut), dt);
 }

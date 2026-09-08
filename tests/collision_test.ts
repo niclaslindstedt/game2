@@ -480,11 +480,18 @@ describe("a spent chassis and the panels left on the road", () => {
   };
 
   it("a worn-out shell drags: the same engine reaches a lower top end", () => {
+    // Two and a half per cent, not five. What a top gear settles against is
+    // the fade at its own ceiling (`engine.taper`) rather than the air:
+    // every ladder in the roster ends in an overdrive, and the engine has
+    // more than enough left to push a car up against the limiter, so extra
+    // drag moves where that happens by very little. It is still a real loss
+    // and still the right sign — it is not the gear-drop cliff a flat
+    // ladder used to turn it into.
     const sound = runTo(30, () => {});
     const spent = runTo(30, (state) => {
       state.car.damage.wear = 1;
     });
-    expect(spent).toBeLessThan(sound * 0.95);
+    expect(spent).toBeLessThan(sound * 0.98);
   });
 
   it("panels left on the road cost pace — a missing bonnet is a hole in the car", () => {
@@ -1610,11 +1617,20 @@ describe("the air through the holes a crash leaves", () => {
     const sound = topSpeed([]);
     // A mirror is a mirror: a couple of tenths of a per cent, felt nowhere.
     expect(topSpeed(["mirrorL"])).toBeGreaterThan(sound * 0.995);
-    // The whole greenhouse and both lids is a car that tops out a gear
-    // down — the cliff is the gearbox's, and it is the honest shape of it.
+    // The whole greenhouse and both lids is worth several km/h of top end
+    // — ten times the mirror, and all of it at the top, which is the shape
+    // the assertions above are really about.
+    //
+    // It used to be worth a GEAR, and that is gone with the flat ladders it
+    // came from: a real ladder ends in an overdrive the engine can lean on,
+    // so a car sits against its last gear's own fade (`engine.taper`) and
+    // not against the air, and a hole in the front of it moves that by a
+    // few per cent rather than dropping the car out of top. Getting the
+    // gear-drop back means widening the fade, and measured, that costs
+    // every car a gear's worth of top speed to buy it — see `engine.taper`.
     const stripped = topSpeed(["hood", "hatch", "glassF", "glassB", "doorL", "doorR"]);
-    expect(stripped).toBeLessThan(sound * 0.85);
-    expect(stripped).toBeGreaterThan(sound * 0.7);
+    expect(stripped).toBeLessThan(sound * 0.98);
+    expect(sound - stripped).toBeGreaterThan(10 * (sound - topSpeed(["mirrorL"])));
   });
 
   it("the wing is the one loss the straight likes", () => {

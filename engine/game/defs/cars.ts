@@ -70,10 +70,12 @@ export type CarSpec = {
    * already an acceleration, so making mass divide it twice would just
    * make the heavy car slow. */
   mass: number;
-  /** WHERE THAT MASS SITS, which is what separates the cars once they are
-   * OVER (`roll-hull.ts`, through `massSpread`). Neither touches the
-   * handling model: a car on its springs is kept flat on purpose, and the
-   * load transfer the tyres feel is the drivetrain table's business.
+  /** WHERE THAT MASS SITS. Two jobs: what separates the cars once they are
+   * OVER (`roll-hull.ts`, through `massSpread`), and — through
+   * `driveLoadOf` — HOW MUCH OF THE CAR IS STANDING ON THE WHEELS THAT
+   * DRIVE IT, which is what separates the three layouts' traction and how
+   * a hill moves it. A car on its springs is still kept flat on purpose;
+   * what these two feed is the LOAD, not the lean.
    *
    * The share of the weight over the FRONT axle, 0..1. An engine ahead of
    * the front wheels puts it well past half; a rear-driver with its engine
@@ -177,8 +179,9 @@ export const CARS: CarSpec[] = [
     // THE HATCH — an upright late-70s two-box, front-driven, on road
     // rubber. Small peaky engine that makes everything it has at the top of
     // the gear: keep it in the band and it flies, bog it out of a hairpin
-    // and it is nowhere. The shortest gearing and nearly the lowest top
-    // speed in the roster, paid back as the most lateral grip on a sealed
+    // and it is nowhere. A hot hatch's close-ratio five-speed under it, so
+    // the shortest first gear here and the second-lowest top speed, paid back
+    // as the most lateral grip on a sealed
     // surface and the sharpest turn-in of the three. It understeers up to
     // the limit and pulls itself straight again the moment the power goes
     // down, so it is rotated on the LIFT, never on the throttle. The
@@ -193,10 +196,20 @@ export const CARS: CarSpec[] = [
     // soft springs: the most nose-heavy and the highest weight of the three.
     balance: 0.63,
     centreHeight: 0.54,
-    gearTop: [12, 20, 28, 38, 49, 62],
-    // gearAccel[4] holds clear headroom over drag at 0.94·gearTop[4], or
-    // the auto box parks just under its own upshift threshold forever.
-    gearAccel: [11.8, 10.4, 8.8, 6.8, 5.2, 3.2],
+    // A hot hatch's close-ratio FIVE-SPEED — 3.45 / 2.12 / 1.44 / 1.13 /
+    // 0.91 on a 3.94 final drive, 175/70 R13 (1.807 m round), taken to
+    // 6500 rpm. Every figure is that arithmetic and nothing else:
+    // rpm/60 × circumference ÷ (gear × final). Fifth's 54.6 m/s is
+    // 197 km/h on paper and an overdrive in fact — the car runs out of
+    // breath at 183, which is what a period road test would have printed.
+    gearTop: [14.4, 23.4, 34.5, 44.0, 54.6],
+    // ...and the pull is the same ratios read the other way round: torque
+    // × gear × final ÷ (wheel radius × mass), one scale for the roster.
+    // Every gear multiplies the engine less than the one below it, so the
+    // ladder falls away steeply — which is the whole reason the top of a
+    // gear feels like the top of a gear, and why `gearbox.upAt` has to
+    // take the next one before the taper has eaten this one.
+    gearAccel: [11.8, 7.25, 4.93, 3.86, 3.11],
     torque: 0.85,
     traction: 1.05,
     brake: 19.5,
@@ -217,10 +230,10 @@ export const CARS: CarSpec[] = [
   },
   {
     // THE WORKS SEDAN — a four-door Group A turbo car with drive to all of
-    // it. Heaviest, most powerful, tallest-geared and
-    // the only car that puts its torque down whatever it is standing on, so
-    // the long open stage, the climb and the wet one are all its. What it
-    // pays is agility: the mass and the composure that keep it calm at
+    // it. Heaviest, most powerful, tallest-geared and the only car that
+    // puts its torque down whatever it is standing on, so the long open
+    // stage, the climb and the wet one are all its. What it pays is
+    // agility: the mass and the composure that keep it calm at
     // 230 km/h make it lazy to turn in, and a stage of hairpins belongs to
     // the two lighter cars. It slides neutrally when asked and gathers
     // itself up on its own — never as playful as the rear-driver, never as
@@ -235,8 +248,15 @@ export const CARS: CarSpec[] = [
     // behind it: nose-heavy, but a low, wide four-door carries it lowest.
     balance: 0.58,
     centreHeight: 0.49,
-    gearTop: [13, 22, 31, 42, 55, 72],
-    gearAccel: [10.8, 9.4, 9.4, 9.6, 8.2, 5.6],
+    // A Group A turbo four-door's FIVE-SPEED — 3.62 / 2.08 / 1.36 / 1.00 /
+    // 0.83 on a 3.62 final drive, geared to 22.24 mph per 1000 rpm in
+    // fifth and taken to 6500. The longest ladder here by a distance, and
+    // the only one whose top gear is a top speed rather than an overdrive.
+    gearTop: [14.8, 25.8, 39.4, 53.6, 64.6],
+    // Half again the torque of anything else here, through the tallest
+    // gearing: the biggest first-gear shove in the roster and, five gears
+    // later, still the most left at the far end of the road.
+    gearAccel: [14.26, 8.19, 5.36, 3.94, 3.27],
     torque: 0.9,
     traction: 1.12,
     brake: 20,
@@ -256,9 +276,10 @@ export const CARS: CarSpec[] = [
   },
   {
     // THE SALOON — a light three-box 1600 from the end of the sixties,
-    // rear-driven, on skinny tires. The least powerful and the lowest-geared
-    // car here, and it does not care: the engine is flexible enough to
-    // light the rear axle up at walking pace, so it is the one car that
+    // rear-driven, on skinny tires. The least powerful car here and the
+    // slowest flat out, on the only FOUR-speed in the roster — and it does
+    // not care: the engine is flexible enough to light the rear axle up at
+    // walking pace, so it is the one car that
     // will hang its tail out at 10 km/h and the one that turns a tight
     // gravel stage into a series of drifts. What it pays is grip and
     // composure — it has the least of both, it spins its wheels off the
@@ -274,8 +295,16 @@ export const CARS: CarSpec[] = [
     // roster, carried at a sixties saloon's height.
     balance: 0.53,
     centreHeight: 0.51,
-    gearTop: [11, 18, 26, 35, 45, 57],
-    gearAccel: [15.0, 13.0, 11.0, 9.2, 6.2, 3.0],
+    // A sixties saloon's FOUR-SPEED — 2.972 / 2.010 / 1.397 / 1.000 direct
+    // top on a 3.777 axle, 175/70 R13, taken to 6500 rpm. Four gears where
+    // the other two have five, so every one of them is a long one and the
+    // box is never the thing the driver is busy with.
+    gearTop: [17.4, 25.8, 37.1, 51.8],
+    // The least torque in the roster through the lowest-multiplying box,
+    // so the least shove anywhere: what this car has instead of pace is
+    // rotation, and the tail is lit by the rear axle's own share of the
+    // grip rather than by an engine that out-muscles it.
+    gearAccel: [9.34, 6.31, 4.39, 3.14],
     torque: 1.12,
     traction: 0.85,
     brake: 18.5,
@@ -323,6 +352,20 @@ export function gearedSpec(spec: CarSpec, gearbox: GearboxMode): CarSpec {
   return {
     ...spec,
     gearTop: spec.gearTop.map((top) => top * box.gearing),
-    gearAccel: spec.gearAccel.map((accel) => accel * box.power),
+    // A TALLER GEAR PULLS LESS, and the box does not get that for nothing:
+    // the ratio that carries each gear `gearing` further multiplies the
+    // engine by exactly that much less on the way, so the thrust at any
+    // given speed comes down by the same factor the ceiling went up. What
+    // the racing set gives back is `power` — a dry clutch where the road
+    // box has a converter slurring the bottom of every gear away — and it
+    // is deliberately a percent short of the gearing, so the manual is a
+    // TRADE: six per cent more road at the top of each gear, one per cent
+    // less shove everywhere, and a cut of throttle at every change.
+    //
+    // Left as `× power` alone this was six per cent of free thrust, and on
+    // a catalog whose ladders fall away with their own ratios that made
+    // the racing set quicker to 100 km/h as well as faster flat out — a
+    // box with no downside, which is not a choice.
+    gearAccel: spec.gearAccel.map((accel) => (accel * box.power) / box.gearing),
   };
 }

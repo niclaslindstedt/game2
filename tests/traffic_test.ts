@@ -284,6 +284,14 @@ function overtake(aggression: number, overtake: number) {
     return { ...drive, throttle: s.car.u < 30 ? 0.85 : 0, brake: 0, handbrake: false };
   };
   for (let i = 0; i < 600; i++) step(held, cruise(held));
+  // Both cars STOOD AT their pace rather than left to build it. What is
+  // being measured is the temper of a pass, and how long a car takes to
+  // reach 36 m/s from rest is a fact about its gearbox: let it accelerate
+  // there and the whole overtake happens at a different closing speed on a
+  // different stretch of road, so the scenario moves whenever the catalog
+  // does.
+  chaser.car.u = 36;
+  chaser.car.gear = chaser.spec.gearTop.findIndex((top) => top > 36);
 
   const profile = { ...RALLY_BOT, aggression, overtake };
   const line = held.lateral;

@@ -125,10 +125,16 @@ describe("cars and gearboxes", () => {
     const box = TUNING.gearbox.set;
     for (const car of CARS) {
       const geared = gearedSpec(car, "manual");
-      // Every gear is taller and pulls harder; nothing else about the car
-      // moves, so the roster's spread is the roster's.
+      // Every gear is taller, and a taller gear multiplies the engine by
+      // exactly that much less — so the thrust at a given speed is the
+      // racing set's 5% read AGAINST the 6%, and comes out a percent DOWN.
+      // That is the trade; nothing else about the car moves, so the
+      // roster's spread is the roster's.
       expect(geared.gearTop).toEqual(car.gearTop.map((top) => top * box.manual.gearing));
-      expect(geared.gearAccel).toEqual(car.gearAccel.map((a) => a * box.manual.power));
+      expect(geared.gearAccel).toEqual(
+        car.gearAccel.map((a) => (a * box.manual.power) / box.manual.gearing),
+      );
+      expect(geared.gearAccel[0]).toBeLessThan(car.gearAccel[0]);
       expect(geared.gripAccel).toBe(car.gripAccel);
       expect(geared.brake).toBe(car.brake);
       // The automatic drives the catalog as authored.
@@ -144,12 +150,20 @@ describe("cars and gearboxes", () => {
   });
 
   it("a driver who takes the gears themselves is rewarded with real speed", () => {
-    // 35 s flat out down a runway: long enough for either box to settle
-    // against drag in its top gear. The manual's whole payment — a cut at
-    // every shift — is inside the same run.
+    // Two minutes flat out down a runway: long enough for either box to
+    // settle against drag in its top gear, which is what is being compared.
+    // The manual's whole payment — a cut at every shift, and a percent off
+    // the thrust in every one of them — is inside the same run.
+    //
+    // It takes two minutes because the ladders fall away with their own
+    // ratios: the last gear of a real box has a fraction of first's shove
+    // and spends a long while creeping up on its own equilibrium. Thirty-
+    // five seconds used to reach it and now measures who is quicker to
+    // 130 km/h, which is a different question and one the ACCELERATION bar
+    // already answers.
     for (const car of CARS) {
-      const auto = peakSpeed(car.id, "auto", 35);
-      const manual = peakSpeed(car.id, "manual", 35);
+      const auto = peakSpeed(car.id, "auto", 120);
+      const manual = peakSpeed(car.id, "manual", 120);
       expect(manual).toBeGreaterThan(auto * 1.04);
       expect(manual).toBeLessThan(auto * 1.09);
     }

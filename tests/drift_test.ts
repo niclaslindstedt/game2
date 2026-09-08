@@ -297,9 +297,22 @@ describe("turning at pace", () => {
 describe("rear-wheel drive", () => {
   const rwd = (): GameState => game("classic");
 
-  /** Build speed, then hold a full-lock power slide for a second. */
+  /** Build speed, then hold a full-lock power slide for a second.
+   *
+   * The entry speed is STATED rather than left to a clock: how far a
+   * dropped wheel carries the car round is a fact about the radius it is
+   * on, so a corner entered eight km/h slower rotates measurably more for
+   * reasons that have nothing to do with the tyres. Eight seconds of
+   * throttle used to be 42 m/s in this car and is not any more — the
+   * ladder under it is a real one now — and a scenario that moves with the
+   * catalog is measuring the catalog. */
+  const ENTRY = 42;
+
   function enterDrift(state: GameState): void {
-    upToSpeed(state, 8);
+    for (let i = 0; state.car.u < ENTRY && i < TUNING.physicsHz * 40; i++) {
+      run(state, { throttle: 1 }, TUNING.dt);
+    }
+    expect(state.car.u).toBeGreaterThan(ENTRY - 1);
     run(state, { throttle: 1, steer: 1 }, 1);
     expect(state.car.drifting).toBe(true);
   }
@@ -569,9 +582,15 @@ describe("one drift after another", () => {
       step(state, { ...NEUTRAL_INPUT, steer: side, throttle: 0, handbrake: i < 25 });
       peak = Math.max(peak, Math.abs(state.car.slip));
     }
+    // The straight is a DURATION and the speed match is a pedal rule inside
+    // it: throttle while the car is under its entry speed, coast once it is
+    // back. Stopping the loop at the speed instead made the straight as long
+    // as the car needed it to be — so the quicker the car, the shorter its
+    // rest — and a rest is the one thing this is trying to measure.
     const back = Math.round(rest / TUNING.dt);
-    for (let i = 0; i < back && Math.hypot(state.car.u, state.car.w) < entry; i++) {
-      step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    for (let i = 0; i < back; i++) {
+      const under = Math.hypot(state.car.u, state.car.w) < entry;
+      step(state, { ...NEUTRAL_INPUT, throttle: under ? 1 : 0 });
     }
     return peak;
   }
@@ -597,7 +616,12 @@ describe("one drift after another", () => {
 
     const rested = game("coupe");
     upToSpeed(rested, 6);
-    bout(rested, 1, 8);
+    // A straight long enough to be one. `bout` gives the road back the
+    // moment the car is at its entry speed again, so this is a ceiling
+    // rather than a duration — and it has to clear what the car actually
+    // needs to rebuild sixty km/h through a real ladder, not what it needed
+    // through a flat one.
+    bout(rested, 1, 20);
     const after = bout(rested, -1, 0.7);
     // Same car, same two provocations — the only difference is the road
     // between them, and that is what a cooling chain has to be worth.

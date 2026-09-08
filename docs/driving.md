@@ -1618,6 +1618,37 @@ between the three in the roster.
 
 What the layout decides:
 
+- **HOW MUCH OF THE CAR IS STANDING ON THE WHEELS THAT DRIVE IT**, which is the
+  only one of these that is not a matter of taste. A tyre pulls what the
+  friction under it and the load on it allow, so what a layout can put down is
+  the surface's grip times the share of the car pressing its DRIVEN tyres into
+  the ground (`driveLoadOf` in `limits.ts`, off the car's own `balance`). Four
+  driven wheels have all of it; a front-driver has whatever sits over its nose
+  and a rear-driver whatever sits over its tail — which is why four-wheel drive
+  is worth roughly twice a two-wheel drive off the line. None of it is true of
+  CORNERING or BRAKING: every car uses all four tyres for those, whatever
+  drives them. The layout's own `bite` is then just the driveline between the
+  engine and that axle, and the four-wheel drive's is the LOWEST of the three,
+  because a transfer case, a second prop shaft and a third differential all
+  take their cut on the way.
+- **AND HOW THE HILL MOVES IT.** Standing on a grade, gravity pitches weight
+  off the downhill axle and onto the uphill one by `centreHeight / wheelbase`
+  per unit of grade: climbing, the nose goes light and the tail digs in. So a
+  rear-driver climbs better than it does on the flat, a front-driver claws at a
+  hill it was fine on, and a four-wheel drive does not care, because what it
+  lost off one axle it gained on the other. On top of that, HOLDING STATION ON
+  A GRADE IS ITSELF A COST (`drivetrain.climbCost`): the car needs that much of
+  gravity supplied by its driven tyres before it moves at all, out of the same
+  friction budget the pedal wants. That is the half that makes the advantage
+  visible — off a hill a four-wheel drive's bite is over 1 and clamped, so it
+  already loses nothing and cannot be given less to lose. It charges HALF a
+  grade rather than a whole one, because the bite it comes out of is a hook-up
+  number and not a coefficient in gs — at a whole grade a front-driver cannot
+  climb a 1-in-5 bank, which is not poor traction but a broken car. Measured on
+  sand from a standstill, peak wheelspin runs 0.10 for the four-wheel drive
+  against 2.53 and 4.72 for the two-wheel drives on the flat, and 0.22 against
+  2.70 and 4.78 at a 35% grade — and the FRONT-driver is the one the hill costs
+  most.
 - **What the throttle does mid-slide.** A driven rear axle feeds the slide
   (`powerYaw`). Driven front wheels pull the car toward where they point, so
   the throttle pulls it STRAIGHT out of one (`pullStraight`) — ungated by
@@ -1791,14 +1822,16 @@ ANSWERS to the same stage rather than three points on one scale:
 
 - **Vireo GT (FWD)** — an upright two-box hatch on road rubber. The most
   lateral grip in the roster on a sealed surface and the sharpest turn-in,
-  a peaky engine that has to be kept in the band, and the second-shortest
-  gearing. It understeers up to the limit and straightens itself on the
-  power, so it is rotated on the lift or on a flick. Owns the tarmac stage;
-  worst of the three on loose.
+  a peaky engine that has to be kept in the band, and a hot hatch's
+  close-ratio five-speed: the shortest first gear here and the
+  second-lowest top speed.
+  It understeers up to the limit and straightens itself on the power, so it
+  is rotated on the lift or on a flick. Owns the tarmac stage; worst of the
+  three on loose.
 - **Sable 1600 (RWD)** — a light three-box saloon on gravel rubber. The
-  least powerful and lowest-geared car here, with the most low-gear shove
-  and the most rotation: it will hang its tail out at 10 km/h and it turns a
-  loose stage into a series of drifts. It spins its wheels off the line on
+  least powerful car here and the slowest flat out, on the roster's only
+  four-speed, with the most rotation of the three: it will hang its tail
+  out at 10 km/h and it turns a loose stage into a series of drifts. It spins its wheels off the line on
   anything slippery and has nothing to lean on when the road is sealed.
   Owns dry gravel; worst of the three on tarmac.
 - **Kestrel RS (AWD)** — a four-door turbo sedan of the Group A years, with
@@ -1808,7 +1841,38 @@ ANSWERS to the same stage rather than three points on one scale:
   surface is mixed, the road climbs, or there is water in it. Never worst at
   anything.
 
-Nominal gear tops overshoot what surface drag lets a car hold; the real
+**Every ladder is a real gearbox's, both ways up.** A gear's ceiling is the
+shift rpm through that ratio and the final drive on that tyre — rpm/60 ×
+rolling circumference ÷ (gear × final) — and a gear's pull is the same total
+ratio multiplying the engine's torque, over the wheel's radius and the car's
+mass, on one scale for the roster. So the ladders differ in LENGTH and in
+COUNT as well as in spacing, and the pull falls away steeply through them,
+because a taller gear multiplies the engine by exactly that much less.
+
+| Car        | Box        | Ratios                           | Final | Ladder, km/h              |
+| ---------- | ---------- | -------------------------------- | ----- | ------------------------- |
+| Vireo GT   | five-speed | 3.45 / 2.12 / 1.44 / 1.13 / 0.91 | 3.94  | 52 · 84 · 124 · 158 · 197 |
+| Kestrel RS | five-speed | 3.62 / 2.08 / 1.36 / 1.00 / 0.83 | 3.62  | 53 · 93 · 142 · 193 · 233 |
+| Sable 1600 | four-speed | 2.972 / 2.010 / 1.397 / 1.000    | 3.777 | 63 · 93 · 134 · 186       |
+
+Two things follow from a ladder that falls away with its own ratios, and both
+were hidden by a flat one:
+
+- **A gear's top is an approach, not an arrival**, because the pull is faded
+  to nothing there. So `gearbox.upAt` has to take the next gear BEFORE the
+  taper has eaten this one — at 0.94 both five-speeds settled in fourth
+  within a percent of their own shift point and stayed there, capped at a
+  speed nobody chose. It is 0.92, about 6000 rpm of a 6500 shift point.
+- **The racing set is a real trade.** Its gears are 6% taller, which costs 6%
+  of the thrust at any speed, and it hands 5% back by not slurring the bottom
+  of the gear through a converter — so it is a percent DOWN on shove
+  everywhere, 6% up on top speed, and a cut of throttle at every change.
+  Multiplied on top of the gearing rather than against it, as it was, the
+  taller box was quicker to 100 km/h as well as faster flat out, which is a
+  box with no downside.
+
+Nominal gear tops overshoot what the taper and surface drag let a car hold —
+the Vireo's fifth is an overdrive it settles 13 km/h under. The real
 equilibria rank the same way the gearing does, and `tests/explore_test.ts`
 pins both the ranking and the spread.
 
@@ -1821,12 +1885,12 @@ simulated fairly (see [simulation.md](simulation.md)).
 
 **The box is a TRADE, and it has numbers on it** (`TUNING.gearbox.set`). The
 automatic is the road box: the catalog's ratios, taken for you, never
-fluffed. The manual is the racing set — every gear 6% taller and pulling 5%
-harder, worth about **+6% top speed in any car** (204 → 216 km/h in the
-Vireo, 242 → 256 in the Kestrel) — paid for with `shiftCut` (0.1 s of
-throttle) at every shift the driver now has to take themselves. Off the line
-the two are within a tenth of each other to 100 km/h, and which way depends
-on how many shifts the car needs to get there.
+fluffed. The manual is the racing set — every gear 6% taller, handing 5% of
+the engine back against it, worth about **+6% top speed in any car**
+(184 → 194 km/h in the Vireo, 216 → 229 in the Kestrel) — paid for with a
+percent off the shove in every gear and `shiftCut` (0.1 s of throttle) at
+every change the driver now has to take themselves. Off the line the
+automatic is the quicker of the two in every car.
 
 `gearedSpec(spec, gearbox)` (`defs/cars.ts`) folds the box into the run's
 `GameState.spec` once, at `createGame`. Everything downstream — the shift

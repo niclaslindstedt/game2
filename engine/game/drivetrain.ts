@@ -11,7 +11,7 @@
 // `car.ts` owns the step that calls this; the numbers are in `defs/`.
 
 import { clamp } from "../lib/math.ts";
-import { surfaceGripFor } from "./limits.ts";
+import { driveBiteOf, surfaceGripFor } from "./limits.ts";
 import type { DamageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
@@ -46,21 +46,16 @@ export function revs(spec: CarSpec, car: CarState, speed: number): number {
  * renderer needs the same number: wheels that are drawn spinning while the
  * engine believes they are hooked up would be a lie the picture tells about
  * the physics. `CarState.wheelspin` carries it out, normalized. */
-function wheelspinLoss(spec: CarSpec, car: CarState, surfaceGrip: number, rev: number): number {
-  const bite = clamp(spec.traction * T.drivetrain[spec.drive].bite * surfaceGrip, 0, 1);
-  const standing = (1 - bite) * T.engine.wheelspin * spec.torque * (1 - rev);
+function wheelspinLoss(spec: CarSpec, car: CarState, bite: number, rev: number): number {
+  const standing = (1 - clamp(bite, 0, 1)) * T.engine.wheelspin * spec.torque * (1 - rev);
   return clamp(standing + T.engine.spinLoss * car.launchSpin, 0, 1);
 }
 
 /** How much pedal the driven axle will take before the tyres start spinning
  * rather than gripping, 0..1. Over 1 on a four-wheel-drive standing on
  * gravel, which is exactly what a four-wheel-drive is for. */
-function pedalHold(spec: CarSpec, surfaceGrip: number): number {
-  return clamp(
-    spec.traction * T.drivetrain[spec.drive].bite * surfaceGrip * T.engine.pedalHold,
-    0,
-    1,
-  );
+function pedalHold(bite: number): number {
+  return clamp(bite * T.engine.pedalHold, 0, 1);
 }
 
 /** ...and how far past that a given demand is asking, 0..1 — the spin the
@@ -68,9 +63,9 @@ function pedalHold(spec: CarSpec, surfaceGrip: number): number {
  * torque at the tyres. Faded out by the revs for the same reason the
  * standing loss is: at the top of a gear there is road speed under the wheel
  * and nothing left to spin it with. */
-function spinAsk(spec: CarSpec, car: CarState, surfaceGrip: number, demand: number): number {
+function spinAsk(spec: CarSpec, car: CarState, bite: number, demand: number): number {
   const rev = revs(spec, car, car.u);
-  return clamp(demand - pedalHold(spec, surfaceGrip), 0, 1) * (1 - rev);
+  return clamp(demand - pedalHold(bite), 0, 1) * (1 - rev);
 }
 
 /** ...and what a PEDAL alone can light, which is only a fraction of it. A
@@ -81,8 +76,8 @@ function spinAsk(spec: CarSpec, car: CarState, surfaceGrip: number, demand: numb
  * stops the start-line rule from quietly becoming a corner-exit rule as
  * well, and it is why a rear-driver still puts its power down worse than a
  * front-driver everywhere the launch is not the question. */
-function pedalSpin(spec: CarSpec, car: CarState, surfaceGrip: number, throttle: number): number {
-  return T.engine.pedalSpin * spinAsk(spec, car, surfaceGrip, throttle);
+function pedalSpin(spec: CarSpec, car: CarState, bite: number, throttle: number): number {
+  return T.engine.pedalSpin * spinAsk(spec, car, bite, throttle);
 }
 
 /** THE CLUTCH COMING OUT, 0..1 — how lit the tyres are the instant the
@@ -99,7 +94,14 @@ export function clutchDump(spec: CarSpec, car: CarState, surface: Underfoot): nu
   // a few frames anyway, since the spin decays to whatever the pedal is
   // actually asking for.
   if (held <= 0) return 0;
-  return spinAsk(spec, car, surfaceGripFor(spec, surface), 1 + T.engine.dumpSpin * held);
+  // A start control is a graded apron, so the grid is level under the car
+  // and the launch is the layout's own load and nothing else's.
+  return spinAsk(
+    spec,
+    car,
+    driveBiteOf(spec, surfaceGripFor(spec, surface), 0),
+    1 + T.engine.dumpSpin * held,
+  );
 }
 
 /** Move the launch's own spin toward what the pedal is asking for. It lights
@@ -109,11 +111,11 @@ export function clutchDump(spec: CarSpec, car: CarState, surface: Underfoot): nu
 export function settleLaunchSpin(
   spec: CarSpec,
   car: CarState,
-  surfaceGrip: number,
+  bite: number,
   throttle: number,
   dt: number,
 ): void {
-  const ask = pedalSpin(spec, car, surfaceGrip, throttle);
+  const ask = pedalSpin(spec, car, bite, throttle);
   const rate =
     ask > car.launchSpin
       ? T.engine.spinLight
@@ -129,10 +131,10 @@ export function settleLaunchSpin(
 export function wheelspinShare(
   spec: CarSpec,
   car: CarState,
-  surfaceGrip: number,
+  bite: number,
   throttle: number,
 ): number {
-  const loss = wheelspinLoss(spec, car, surfaceGrip, revs(spec, car, car.u));
+  const loss = wheelspinLoss(spec, car, bite, revs(spec, car, car.u));
   const lit = clamp(loss / T.engine.wheelspin, 0, 1);
   return clamp(lit + T.engine.slideSpin * car.slide, 0, 1) * throttle;
 }
@@ -168,13 +170,12 @@ export function settleWheelspin(spec: CarSpec, car: CarState, share: number, dt:
   car.wheelspin = clamp(car.wheelspin, 0, room);
 }
 
-export function engineAccel(spec: CarSpec, car: CarState, surfaceGrip: number): number {
+export function engineAccel(spec: CarSpec, car: CarState, bite: number): number {
   // Full torque through most of the gear, smoothly tapering to zero at the
-  // gear's top speed. The taper starts late (last ~18%) so the equilibrium
-  // against rolling drag sits close to gearTop and the shift-up threshold
-  // is actually reachable — a long asymptotic curve would stall below it.
+  // gear's top speed (`engine.taper` — the rev limiter as this model sees
+  // it, and in the LAST gear the thing the top speed is settled against).
   const top = spec.gearTop[car.gear];
-  const headroom = clamp((top - car.u) / (top * 0.18), 0, 1);
+  const headroom = clamp((top - car.u) / (top * T.engine.taper), 0, 1);
   const taper = headroom * headroom * (3 - 2 * headroom);
   const rev = revs(spec, car, car.u);
   // The torque curve, pivoting around mid-gear: a torquey engine shoves off
@@ -184,9 +185,7 @@ export function engineAccel(spec: CarSpec, car: CarState, surfaceGrip: number): 
   // different routes, and which route suits the stage is the point.
   const curve = clamp(1 + T.engine.torqueSpan * (spec.torque - 1) * (1 - 2 * rev), 0.2, 2);
   // ...and how much of it reaches the ground.
-  return (
-    spec.gearAccel[car.gear] * taper * curve * (1 - wheelspinLoss(spec, car, surfaceGrip, rev))
-  );
+  return spec.gearAccel[car.gear] * taper * curve * (1 - wheelspinLoss(spec, car, bite, rev));
 }
 
 export function stepGearbox(

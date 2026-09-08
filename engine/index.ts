@@ -150,6 +150,8 @@ export {
   slideCap,
   slideFloor,
   surfaceBreakawayFor,
+  driveBiteOf,
+  driveLoadOf,
   surfaceGripFor,
   wheelSlide,
 } from "./game/limits.ts";

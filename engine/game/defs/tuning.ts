@@ -480,6 +480,40 @@ export const TUNING = {
   /** THE ENGINE — how the torque a car's `gearAccel` promises actually
    * arrives inside a gear, and how much of it ever reaches the ground. */
   engine: {
+    /** THE TOP OF A GEAR, as the share of the gear's ceiling the pull is
+     * faded to nothing across (`engineAccel`, smoothstepped). It is the rev
+     * limiter as the handling model sees it: torque does not vanish at the
+     * top of a real gear, the limiter simply stops asking for more, and this
+     * is how sharply that arrives.
+     *
+     * IT IS ALSO WHAT DECIDES A TOP GEAR'S TOP SPEED, and the reason it is
+     * a knob rather than a constant. In every gear but the last the car
+     * shifts out long before the fade matters. In the LAST one there is
+     * nowhere to shift to, so the car settles where the fade meets the drag
+     * — and the narrower this band, the steeper that wall and the less any
+     * drag matters against it. Taken too narrow, a car with its bonnet, its
+     * screens and both doors torn off tops out three per cent under a sound
+     * one, because the thing holding it back is arithmetic rather than the
+     * hole in the front of it. Wide enough and the last gear is a real
+     * equilibrium against the air again.
+     *
+     * The floor under it is the SHIFT POINT: a car has to be able to reach
+     * `gearbox.upAt` of a gear's ceiling to leave that gear, and the fade
+     * is what stands in the way. Measured together, and re-measure them
+     * together — a wider band wants a lower shift point, and the pair of
+     * them decides every car's top speed.
+     *
+     * MEASURED, and this is where it came out. Widening it does make the
+     * last gear a drag equilibrium again, and it costs more than it buys:
+     * at 0.32 with the shift point dropped to 0.88 to match, every car
+     * still walks its box up, and the roster tops out at 175 / 204 / 165
+     * km/h against the 183 / 216 / 174 it reads here — a gear's worth of
+     * top end given away across the board to make the air matter at the
+     * very top of it. Wider again and gears start going unreachable on
+     * gravel. So the top gear stays rev-limited, and what a hole in the
+     * bodywork costs is a few per cent of the top end rather than the
+     * gear-drop cliff it used to cost when the ladders were flat. */
+    taper: 0.18,
     /** How far a car's `torque` tilts the in-gear curve, as a fraction at
      * each end of the gear. The curve PIVOTS around mid-gear, so torque
      * says where the shove lives and never how much of it there is —
@@ -585,6 +619,53 @@ export const TUNING = {
    * rear-driver that steps out on the throttle at any speed at all, and a
    * four-wheel-drive that simply goes. */
   drivetrain: {
+    /** THE WHEELBASE the load transfer is measured over, m — the arm that
+     * turns a grade into weight moving off one axle and onto the other
+     * (`driveLoadOf`, with the car's own `centreHeight` as the height).
+     *
+     * One number for the roster rather than one per car, because the
+     * roster has no room for a second: every body is within a few
+     * centimetres of `collision.halfLength × 2` long
+     * (`tests/car_geometry_test.ts` holds them there), and 2.5 m is the
+     * wheelbase under a four-metre body. It is a RATIO with
+     * `centreHeight` and nothing else reads it, so what matters is that
+     * the pair comes out near the real 0.2: a tall car on a short
+     * wheelbase pitches its weight about harder, and that is the whole
+     * effect. */
+    wheelbase: 2.5,
+    /** ...and the least of the car a driven axle is ever credited with
+     * carrying, 0..1. Physics says a wheel with nothing on it pulls
+     * nothing, and physics is right — but a car whose traction has reached
+     * zero is one the player cannot drive out of anything, and a cliff
+     * that steep is a bug however true it is. It sits far below anything a
+     * drivable grade reaches (a front-driver would need a grade over two
+     * to find it), so it is a floor under the arithmetic rather than a
+     * number the game plays against. */
+    loadFloor: 0.12,
+    /** HOW MUCH OF THE DRIVEN AXLE'S BUDGET A UNIT OF GRADE EATS
+     * (`driveBiteOf`). Holding station on a grade `g` needs `g` of gravity
+     * out of the tyres before the car moves at all, and the friction that
+     * supplies it is the same friction the pedal wants — so 1 is the
+     * physically natural figure and this is the calibration around it,
+     * because the bite it is subtracted from is a hook-up number rather
+     * than a coefficient in gs.
+     *
+     * It is the number that makes a four-wheel drive worth its transfer
+     * case. Off a hill its bite is over 1 and clamped, so it loses nothing
+     * and cannot be given less to lose; charge every layout for the grade
+     * and what is left on a 25% sand climb is 1.01 against 0.53 and 0.43 —
+     * the difference between driving up a dune and digging into it.
+     *
+     * HALF A GRADE RATHER THAN A WHOLE ONE, and the bar is an ordinary car
+     * getting up an ordinary bank. The bite this is taken out of is a
+     * hook-up number rather than a coefficient in gs, so a full grade
+     * over-charges it: at 1 the front-driver cannot climb the 1-in-5 the
+     * explore suite drives up — it scrabbles, trips the stuck-respawn and
+     * is put back on the road, which is not a car with poor traction, it is
+     * a car that has stopped working. Measured up that ramp, everything at
+     * 0.7 and under climbs it; 0.5 leaves the margin, and the layouts still
+     * separate 2.4 to 1 between four driven wheels and two. */
+    climbCost: 0.5,
     fwd: {
       /** Power oversteer from the driven axle, ×`grip.powerYaw`. A car with
        * no driven rear has none: what it gets instead is the two lines
@@ -664,10 +745,18 @@ export const TUNING = {
        * up, overshoots to nearly straight and then builds a second slide on
        * its own is a car arguing with the driver rather than answering. */
       snap: 0.9,
-      /** Forward bite: how much torque reaches the ground, ×the car's own
-       * `traction`, against the surface's grip. Two driven wheels with the
-       * engine sat on top of them hook up well. */
-      bite: 0.95,
+      /** Forward bite: THE DRIVELINE's share of how much torque reaches the
+       * ground, ×the car's own `traction`, ×the load its driven wheels are
+       * actually carrying (`driveLoadOf`), against the surface's grip.
+       *
+       * It is the driveline and no longer the whole story, because the
+       * bigger half of the story is now derived rather than asserted: a
+       * front-driver puts down what is standing on its nose, and this row
+       * says only how well the shafts and the diff between the engine and
+       * that nose hand it over. The two-wheel-drive layouts are alike here
+       * — one axle, one diff, a short path — and what separates them is the
+       * weight over the axle, which is the car's business. */
+      bite: 1.5,
       /** THE SPEED FLOOR under the whole slide, ×`drift.slideFrom`. The
        * game's floor is a rule the player is told — it will not drift under
        * 70 — so a layout only moves off 1 when it genuinely behaves
@@ -741,7 +830,11 @@ export const TUNING = {
       // through the next two corners on its own.
       release: 1.05,
       snap: 0.85,
-      bite: 0.7,
+      // The same short driveline as the front-driver's — one axle, one diff
+      // — so the same number. That a rear-driver puts its power down worse
+      // is not the shafts, it is that less of the car is sitting on the
+      // wheels doing it (`driveLoadOf`), and on a CLIMB that reverses.
+      bite: 1.5,
       // THE ONE EXCEPTION to the game's 70 km/h floor, and the reason it is
       // a per-layout number at all: a rear axle with torque under it steps
       // the tail out at walking pace, which is a real thing a rear-driver
@@ -813,6 +906,13 @@ export const TUNING = {
       cap: 0.96,
       release: 1.2,
       snap: 1,
+      // FOUR DRIVEN WHEELS PAY FOR THE PRIVILEGE. The load they carry is
+      // the whole car — twice a two-wheel drive's, which is where the
+      // advantage comes from — so this number is the transfer case, the
+      // second prop shaft and the third differential taking their cut on
+      // the way. Under the others on purpose: the layout is worth what it
+      // is worth because of what is standing on it, not because its
+      // driveline is any better.
       bite: 1.2,
       driftFloor: 1,
       flick: 0.7,
@@ -3549,8 +3649,21 @@ export const TUNING = {
   },
 
   gearbox: {
-    /** Auto shifts up at this fraction of the gear's top speed... */
-    upAt: 0.94,
+    /** Auto shifts up at this fraction of the gear's top speed — about
+     * 6000 rpm of a 6500 shift point, which is where a full-throttle box
+     * takes the next gear.
+     *
+     * IT HAS TO SIT CLEAR OF WHERE THE TAPER BITES. A gear's pull is faded
+     * to nothing at its own ceiling (`engineAccel`), so a car left to
+     * settle in a gear stops a little short of that ceiling whatever the
+     * engine is worth — and if the shift point is ABOVE where it stops,
+     * the box never takes the gear at all and the car is capped, at a
+     * speed nobody chose, by arithmetic rather than by drag. Every gear a
+     * real ladder ends in is an overdrive the car cannot pull out, which
+     * is exactly the case this lands on: at 0.94 both five-speeds settle
+     * in fourth within a percent of their own shift point and stay there.
+     */
+    upAt: 0.92,
     /** ...and down below this fraction of the previous gear's top. */
     downAt: 0.55,
     /** Throttle cut while a manual shift engages, seconds. Short enough to
@@ -3581,13 +3694,17 @@ export const TUNING = {
       manual: {
         /** 6% taller everywhere: the same engine pulls each gear further,
          * which is where the top end comes from. It is paid for at the
-         * bottom of every gear, and by `shiftCut` on each of the five
-         * shifts a driver now has to take themselves. */
+         * bottom of every gear — a ratio that carries the car further
+         * multiplies the engine by exactly that much less — and by
+         * `shiftCut` on every shift a driver now has to take themselves. */
         gearing: 1.06,
-        /** ...and 5% more of it arrives, with no converter slurring the
-         * bottom of the gear away. Slightly under the gearing so the
-         * headroom over drag at `upAt × gearTop` (see cars.ts) is the
-         * catalog's, less a percent, rather than a new floor. */
+        /** ...and 5% of the engine handed back, with no converter slurring
+         * the bottom of the gear away. Read AGAINST the gearing rather than
+         * on top of it (`gearedSpec`): a gear stretched 6% multiplies the
+         * engine 6% less, so what the driver actually holds is 1.05/1.06 of
+         * the catalog's thrust at any speed. Deliberately the short side of
+         * the gearing — the racing set has to cost something at the bottom
+         * of the gear or it is not a choice. */
         power: 1.05,
       },
     },
