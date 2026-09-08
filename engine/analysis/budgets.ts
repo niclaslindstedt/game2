@@ -732,8 +732,19 @@ export const ANALYSIS = {
         /** Most of a massif above its treeline is rock. */
         rock: { min: 0.05, max: 0.9 },
         /** ...and much of a flank is steeper than a car can climb: the
-         * road is the way down, not the hillside. */
-        cliff: { max: 0.65 },
+         * road is the way down, not the hillside.
+         *
+         * R47 — this is also the check that says a massif is a MOUNTAIN
+         * and not a wall, which is what it was too loose to do. At 0.65 it
+         * accepted a country where two thirds of the ground stood steeper
+         * than 1:1 — and that is exactly what the ALTITUDE dial built
+         * before the relief was capped, because it grew the crest 13-fold
+         * while growing the ground under it 2.2-fold. MEASURED over seeds
+         * 1,3,4,7,11,17 at the top of the dial: 0.123-0.513 with the
+         * uncapped relief, 0.014-0.125 with the mountain the row now
+         * builds. The ceiling sits between the two, so the spike fails on
+         * most seeds and a real mountain passes on all of them. */
+        cliff: { max: 0.2 },
       },
     },
     /** ...and the share past which it is not a wet stage but a SEASCAPE: the
@@ -775,6 +786,32 @@ export const ANALYSIS = {
      * all of its points — the slack `within` scores against. */
     slack: 0.3,
     reliefSlack: 140,
+
+    /** R47 — IS THE HIGH GROUND A SUMMIT, OR A TABLELAND? Asked only where
+     * the biome row carries a massif; `summitShare` in ground.ts says how
+     * it is measured.
+     *
+     * The companion question — is the mountain a mountain or a WALL — is
+     * `country.cliff` above, which already had the right shape and only
+     * needed its ceiling brought down to where it could answer.
+     *
+     * `near` — how close to the summit counts as summit, as a share of the
+     * country's own spread. A twentieth: on a 1,000 m massif that is the
+     * top 50 m, which is a summit ridge and not a shoulder. */
+    summit: {
+      near: 0.05,
+      /** Share of the box standing that close to the top, MEASURED over
+       * alpine seeds 1,3,4,7,11,17 on a 96-cell grid. The tuned country
+       * reads 0.1-0.6% and the dialled one 0.2-0.8%, so the band is
+       * generous either way and still fails a tableland by a mile: before
+       * the summit ledge was cut back to the top of the climb, the flat
+       * spread over 20-75% of the box on every seed at the top of the dial
+       * and NOTHING in this metric reported it — the mesa scored 97.5.
+       * Held against the shape deliberately: a wide ledge measures 0.600
+       * here and scores zero. The floor is the opposite failure — a
+       * country with no ground near its own summit is a spike. */
+      share: { min: 0.0004, max: 0.06 },
+    },
 
     /** THE CORRIDOR — the country the road actually runs THROUGH, as
      * against `relief`, which is the country the stage is set in.

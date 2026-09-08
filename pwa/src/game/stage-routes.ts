@@ -88,23 +88,23 @@ export const STAGE_ROUTES: Record<string, StageRoute> = {
     spec: { seed: 23, length: "long", shape: "circuit" },
   },
   "alpine-1": {
-    d: "AP4AzgPGCcETvC+0OLBTjVeLXYpsi3aPeJN2l3ebgqKHp4erhbGGtIq3lLyZwJjElMh/znfTddZ12nfdfOGH5ZXn6uj55f3i/9/+3PzZ7tHozObG6b3muNy0w668q7int6O7m7qXtpOrjKiHrGaoYJ5ahFR5TwwA",
-    aspect: 0.3867,
+    d: "AP4AqgKeBpUNjxSNQJtDmkWVRIRHeU5zXXFibmZlZlVoTm1IdUV6P3w1eiJ+F4EThRGPEpUQmgygA6UAqACsArMKtxW5K7wxwTbHNs0y0SvUHdcW3A/iDeYN6hDxHvsm/i7/Nf490MQ=",
+    aspect: 1.6203,
     spec: { seed: 17, length: "short", shape: "sprint" },
   },
   "alpine-2": {
-    d: "/zT/Ef0M9gH0APAB5wjjCN0G2AnWENod3SHkJecp6i/pNOc33zzSVMtZxlvAWrtXtlKyUKRTn1adXaF2qHuqf6aQopWdl5mWlI6Rjo6PjJOLoYmjhKKAnH2beZt1nnSrda95sn+yg7OIu4i+edZ43Xvneux372X7Y/tg+l7vW+xX6lHrS+5H8kH9PP80/Sr2H/Yc9BrwGuwc6SLkKd1B1UjQTs5Ry1LIUcVLwEm8VKFSmVKQT4tIiUCOOo41iy+AK38ofwCo",
-    aspect: 1.0347,
+    d: "vzq/FcAOxAnIBcwEzwTWCNoI7gDxAvIH5CDkKOct7jHyOfs+/0X+TfdT9F3wYeth5F7cX8dYw1rAX793wX/Ehc2Nz5jTn9er3rLgtt/H28zYztXNzMbIwcW4wbS9tLe2sLOttKe6orqeuZexka6Oooughp+DnX6Qeo52jnKQb5ZtmWqZY5demVejUadOq0u3R71FwkbURNhA2z7fQOZH7Ef0RfhB+zX/MPsu9CntJeMa3xPWC9UH0wLOAMgBwwPALJ4=",
+    aspect: 1.2791,
     spec: { seed: 27, length: "medium", shape: "sprint" },
   },
   "alpine-3": {
-    d: "OrA6lUeFRYM8fTx7QHhBdTlrOWc6YzlfJ1IiUR1SA2MAZwJsBm4ObhJyFoMUhRGIEIoTkBWVGJchmyWiKaUrpyqrLK8rsiW3JbsjvRu/GMEWxBfLEc4Q0Rv9Hf8h/yb8LfUt8yftJusp5zDkMt452z/VTdVR01PQVMxTxVa/VrpStUqySa5Lqk+oYqpop2qkaaFmnl2bXJhdlmOUa5V0kneTfZiFmZGXlZOVkJSOiYmEgnh6dnd1cG9sa2dlY2NRZU5rS3lLfk2BUX1XfluEYIdmjGiQbJNtoGqrbbFstmq8YsdeylvLWMlVwU/CR7pBtDaxNqs5pTmhN50xlS+SLJEpkSCMGo4XkxSVEZQNkAiRA5YBnQCjAaoFrgWzBbgBuwHNDM4PwyDJJc0t1zPaPeBF5EfqRu5E/x0=",
-    aspect: 0.7273,
+    d: "9Lb0ofae/5f+lPuR+o/6jf6K/4j7gv17/Hj6dvJ05WflYutb6lfnVd9S3lDeS9I9ukK3QbM9qj2mOac0ry6yKbsnviS+HsIawhfAFLoRuQ++B74FugOxBK0GqwupDJ0LlQ+QEIgMfgx5CXMJbgdkCV4JWQZWAVIASAM7ADYDKzItMzEyNTI+OUs2UDpZO2E+ZEFlRGNJY0xpUGxVclh2W3xqe212cnV4bXxsgW+DdYV7in2Rf5SDlYiWi5iLm4SggqWEqIqsjbuJvoC+e8B6w3zIfMt5zXHPcNdo2mPfX99Z3FTbTttK3UjhS+dE70X2Qvk++jb5Lvok+CD6Hf4a/w7+CvsK+AzzFPAW7hfrEeYR4BDeDdwG3ALZAdYDzwDJAccExgvHD8Yavhq6HbdJsQ==",
+    aspect: 0.7543,
     spec: { seed: 30, length: "long", shape: "sprint" },
   },
   "alpine-4": {
-    d: "1RzUCc4BygHDBLsDtwW2CLkPwxbFGcQcvSCyLa4wpTCbK40tizGOP5NBlESRTo1QilGHT4VMgUt+Tn1VfFd4V3VTclJuU2xVbFttXXBfd197ZG9yb3Zxe3B+YIZchFyAWn5UfUx/RoZDhz2HNoQygx+IHIocjxOVEZoVnh2dIZ8lrCSuIrAashK4DrgJtgW1AbcAugXICMkQyBjLH8wgziDSItUr2C/bMN0u4S7jMOU05jnkQeRF4ULYRtFGz0TMP8k+xz/DRL9FvEK5PLg7tUCpQ6hHqE+tWa5hsmuzc7p0vXO/cMFmv2HBYcVm0mzTd9F614TaiN+N4o/hkN+T3Z3fzv7T/9b92Pnc9Nvy1+/W683oy+PI4cXhv+O74rnguNuuz6bMocaXxJG5krSPsI+tkauWqJihnKGjpKmjrKG1lbmUvJe8ncGexKDHrs21zbjKu8q+z8DXvei+6sLwxv/h",
-    aspect: 0.7297,
+    d: "piemFacQsAeyCbIRtBK3Er0NvQK/AMQCxQjLEdAT0RnTHNUd2h3fIuoh6yPqKO4s8CzyJ/wi/iL/Jfoz+DT0M/A17DHgNtEzzzXPONM71D7TRdBIzkfHPcY5xzTGMsIxvjS5NbY4tkCvQ61HqkmpTKpQr1SxYbZkt2m0bKltoXScc5h1lHKOZI9bjViGW4RlgGl5ZnNncWVvX2lfaGNqaWZuZnJpdW52cHptg2mGY4NjfFt1W3NecF5tXGlYZVlfV1xRW0xSSU9GTzxRO1M7VUBYQlw7aTlqN2o0YjJhMGEpZihvI3MkfCuCKI8mkCONII4dmRSgDa0LrQapBKoCrQO0ALwBwgPDCcMTzRjMGs4b0xfbHuIj4yPpJewn7CvpL+wy7DTqNuU64z3kQudH5kzoT+dR4lThV+RZ7Wz/",
+    aspect: 1.2014,
     spec: { seed: 27, length: "xlong", shape: "sprint" },
   },
   "alpine-5": {

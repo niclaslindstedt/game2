@@ -19,6 +19,7 @@ import {
   TUNING,
   altitudeMul,
   altitudeOf,
+  altitudeScale,
   NEUTRAL_INPUT,
   compileStage,
   createGame,
@@ -138,8 +139,17 @@ describe("R47 — how high the race is", () => {
         summit = Math.max(summit, geology.surfaceAt(x, z));
       }
     }
-    expect(summit).toBeGreaterThan(0.9 * altitudeOf(at(1)));
-    expect(summit).toBeLessThan(1.15 * altitudeOf(at(1)));
+    // R47 — the country's own datum plus the mountain standing on it. Past
+    // the relief cap the dial lifts the whole country rather than growing
+    // the crest, so what the slider prints is the SUM, and the ground the
+    // stage is driven on carries only the crest.
+    const base = altitudeScale(at(1)).base;
+    expect(base + summit).toBeGreaterThan(0.9 * altitudeOf(at(1)));
+    expect(base + summit).toBeLessThan(1.15 * altitudeOf(at(1)));
+    // ...and the relief itself stays a size a stage's box can hold a real
+    // mountain at, which is the whole reason the travel splits.
+    expect(summit).toBeGreaterThan(700);
+    expect(summit).toBeLessThan(1600);
     expect(altitudeOf(at(0.5))).toBeGreaterThan(altitudeOf(at(0.35)));
     // ...and the DEFAULT is exactly the country the alpine's row describes,
     // multiplier 1 and nothing touched, which is what makes every seed the
@@ -191,32 +201,58 @@ describe("R47 — how high the race is", () => {
       // Higher is STEEPER, at every step of the travel — the whole promise
       // of the dial, and the one an exponent in `massif.altitude` can undo
       // without any other check noticing.
+      // Higher is steeper only while the dial is still buying RELIEF; past
+      // the cap it buys height above the sea instead, and the mountain's
+      // own shape stops moving. Steeper-or-equal, and strictly steeper
+      // wherever the base has not started rising yet.
       const grade = steepness(knobs);
-      expect(grade).toBeGreaterThan(steeper);
+      if (altitudeScale(knobs).base === 0) expect(grade).toBeGreaterThan(steeper);
+      else expect(grade).toBeGreaterThanOrEqual(steeper - 1e-9);
       steeper = grade;
       // ...and the floor stays where it always was: the mountain COMES
       // DOWN to the country the lakes and the villages are in, whatever it
       // does above.
       expect(landOf(knobs).floor).toBe(BIOMES.alpine.land.floor);
     }
-    // A six-thousand-metre country stands ground the tuned one never does.
-    expect(steepness(at(1))).toBeGreaterThan(5 * steepness(at(DEFAULT_KNOBS.altitude)));
+    // A dialled-up country stands ground the tuned one never does — half
+    // again as steep, and NOT the wall it used to be: at 0.3 of ground
+    // spread the top of the dial measured a 99th-percentile grade of 16.5,
+    // which `ground.cliff` now refuses as a spike rather than a mountain.
+    expect(steepness(at(1))).toBeGreaterThan(1.5 * steepness(at(DEFAULT_KNOBS.altitude)));
+    expect(steepness(at(1))).toBeLessThan(3 * steepness(at(DEFAULT_KNOBS.altitude)));
+    // ...and past the relief cap it is the COUNTRY that rises, not the crest.
+    expect(altitudeScale(at(1)).base).toBeGreaterThan(altitudeScale(at(0.85)).base);
+    expect(altitudeScale(at(DEFAULT_KNOBS.altitude)).base).toBe(0);
   });
 
   it("climbs its bands more slowly than its crest, onto the real range's own lines", () => {
     const tuned = BIOMES.alpine.land.zones;
     const top = landOf(at(1)).zones;
+    // R47 — a band is an ABSOLUTE line: a snowline is a height above the
+    // sea, not above whatever valley happens to lie under it. `landOf`
+    // hands back each line in the STAGE's own coordinates, so the absolute
+    // one is the line plus the country's base.
+    const base = altitudeScale(at(1)).base;
+    const absolute = {
+      treeline: top.treeline + base,
+      snow: (top.snow as number) + base,
+      rockTo: top.rock.to + base,
+    };
     // Slower than the height, so a taller mountain has more of itself above
     // the treeline rather than being a taller picture of a smaller one.
-    expect(top.treeline / tuned.treeline).toBeLessThan(altitudeMul(1));
-    expect(top.treeline).toBeGreaterThan(tuned.treeline);
+    expect(absolute.treeline / tuned.treeline).toBeLessThan(altitudeMul(1));
+    expect(absolute.treeline).toBeGreaterThan(tuned.treeline);
     // ...and where that lands at the top of the dial is not arbitrary: it
     // is where a real range carries them.
-    expect(top.treeline).toBeGreaterThan(1400);
-    expect(top.treeline).toBeLessThan(1900);
-    expect(top.snow as number).toBeGreaterThan(2600);
-    expect(top.snow as number).toBeLessThan(3200);
-    expect(top.rock.to).toBeLessThan(top.snow as number);
+    expect(absolute.treeline).toBeGreaterThan(1400);
+    expect(absolute.treeline).toBeLessThan(1900);
+    expect(absolute.snow).toBeGreaterThan(2600);
+    expect(absolute.snow).toBeLessThan(3200);
+    expect(absolute.rockTo).toBeLessThan(absolute.snow);
+    // A country standing two kilometres over its own snowline is white from
+    // its valley floor up, and says so by handing back a NEGATIVE line.
+    expect(top.snow as number).toBeLessThan(0);
+    expect(top.treeline).toBeLessThan(0);
     // The air's lapse rate comes down with them, so a cold dial means the
     // same thing at every position of this one (climate.ts).
     expect(lapseOf(at(1), CLIMATE.lapse)).toBeLessThan(CLIMATE.lapse);
@@ -243,11 +279,20 @@ describe("R47 — how high the race is", () => {
           high = Math.max(high, y);
         }
       }
-      // The start stands in the top tenth of the country around it...
-      expect(origin.elevation).toBeGreaterThan(low + 0.9 * (high - low));
+      // The start stands in the top quarter of the country around it —
+      // MEASURED at 0.79 to 0.94 of the way up over seeds 3, 4 and 6. It is
+      // a shoulder near the summit and not the summit itself, because the
+      // ledge is only as wide as a start's own footprint needs and no
+      // wider: an earlier shape bought a perfect 1.0 here by spreading the
+      // summit over most of the box, which is a mesa, not a mountain.
+      expect(origin.elevation).toBeGreaterThan(low + 0.75 * (high - low));
       // ...and the valley under it runs all the way back to the lake table.
-      expect(low).toBeLessThan(LAKE_Y + 40);
-      expect(origin.elevation - low).toBeGreaterThan(3000);
+      expect(low).toBeLessThan(LAKE_Y + 180);
+      // ...with hundreds of metres of mountain under the start line to come
+      // down. Not thousands: the relief is capped at a size a stage's box
+      // can hold a real mountain at, and the rest of the dial's travel is
+      // height above the sea (`altitudeScale.base`).
+      expect(origin.elevation - low).toBeGreaterThan(500);
     }
   });
 
@@ -344,8 +389,13 @@ describe("R47 — how high the race is", () => {
       deepest = Math.max(deepest, pitch.y - floor);
       longest = Math.max(longest, flight);
     }
-    // Kilometres of fall, and seconds of it with nothing under the wheels.
-    expect(deepest).toBeGreaterThan(800);
+    // Hundreds of metres of fall, and seconds of it with nothing under the
+    // wheels. Not the kilometres it used to be: the relief inside a stage's
+    // box is capped at a size a real mountain fits it at, and the rest of
+    // the ALTITUDE dial's travel is height above the sea. The claim this
+    // test is really making — that the drop off the side is REAL and not a
+    // painted backdrop — is the same one.
+    expect(deepest).toBeGreaterThan(250);
     expect(longest).toBeGreaterThan(3);
   });
 });
@@ -364,7 +414,13 @@ describe("R47 — the stage is made to fit the mountain", () => {
       const { track } = stage(seed);
       const start = track.samples[0].elevation;
       expect(start).toBeGreaterThan(snow - 90);
-      expect(start).toBeLessThan(snow + 70);
+      // R47 — a little more room over the line than there was. The shoulder
+      // search's crest ceiling used to read the massif's row amplitude as
+      // though it were the mountain's summit, which sits a third of the way
+      // down the real one; reading the ground's own crest lets the start
+      // stand where the country actually tops out, and on the tuned country
+      // that is a few tens of metres higher than it was.
+      expect(start).toBeLessThan(snow + 110);
       expect(start).toBeGreaterThan(LAKE_Y + 100);
       const end = track.samples[track.samples.length - 1].elevation;
       if (end < start - 40) down++;
@@ -394,7 +450,12 @@ describe("R47 — the stage is made to fit the mountain", () => {
   it("bores a tunnel through a shoulder: level inside, the country over it, walls beside it", () => {
     const T = STAGE_RULES.tunnel;
     let tunnels = 0;
-    for (const seed of SEEDS) {
+    // Seeds that actually bore one at the dial's default. A tunnel is cut
+    // where a shoulder is in the way, so which seeds get one is a property
+    // of the country and moves whenever the massif's shape does — 4 of the
+    // first 20 seeds bore at the default, and 12 of them at the top of the
+    // ALTITUDE dial, where there is more mountain to be in the way.
+    for (const seed of [2, 5, 8]) {
       const { track, terrain } = stage(seed);
       for (const plan of track.segments) {
         if (plan.feature !== "tunnel") continue;

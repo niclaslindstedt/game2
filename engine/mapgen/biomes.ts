@@ -686,9 +686,20 @@ export const ALPINE: BiomeRules = {
     // The zones, as heights over a valley floor that stands near 0 m: the
     // forest gives out about two-fifths of the way up a full-height
     // crest, the meadow goes over to rock above that, and the tops carry
-    // snow on anything but a face.
+    // snow on anything but a face. R47 — the ALTITUDE dial reads them as
+    // ABSOLUTE lines and subtracts the country's own base off them
+    // (`landOf`), so a country standing above its snowline gets a negative
+    // one and is white from its valley floor up, which is what a country
+    // five kilometres up is.
     zones: { treeline: 190, rock: { from: 220, to: 320 }, snow: 340 },
-    steer: 0.85,
+    // R47 — the land is read on EVERY corner. The mirror is only taken
+    // when it fits the country better by `massif.contour.margin`, so the
+    // dice still have every corner the land has no opinion about; what
+    // holding this under 1 bought was corners drawn blind INTO a flank,
+    // and the stage contouring instead of coming down. MEASURED over seeds
+    // 1,3,4,7,11,17 at the top of the dial: 0.85 descends 152 m a stage,
+    // 0.95 descends 164, and 1 descends 190 at 5.5% mean grade.
+    steer: 1,
     tunnels: true,
     // A mountain road climbs at up to nine per cent where a forest road
     // is held to seven and a half, and stands a third again as far off
