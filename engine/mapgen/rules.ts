@@ -366,7 +366,11 @@
 //       surfaces, no basin that fills, no crossing on the route and no
 //       river traced through one; its hollows flatten into pans instead,
 //       its ranges are low, and the wind has piled its sand into dune
-//       fields the road rides as a run of crests. HOW HIGH THAT SAND
+//       fields THE ROAD ACTUALLY RIDES: a sand road is bladed rather than
+//       surveyed, so it follows the country at 0.3 of the taiga's lag and
+//       1.4 times its grade (`BiomeLand.lag`, `BiomeLand.grade`), which
+//       takes it from a quarter of the sand's rise to two thirds of it and
+//       halves the cut and fill it stands on. HOW HIGH THAT SAND
 //       STANDS IS A DIAL (`knobs.dunes`, `STAGE_RULES.dunes`, 0-100 m
 //       through `duneHeightOf`): a MAXIMUM, reached where the erg is
 //       deepest and nowhere else, and one that builds a BIGGER dune field
@@ -3940,6 +3944,21 @@ export function lapseOf(knobs: StageKnobs, base: number): number {
  * on. */
 export function followGradeOf(knobs: StageKnobs): number {
   return STAGE_RULES.elevation.follow.grade * biomeRules(knobs.biome).land.grade;
+}
+
+/** R34/R40 — ...and HOW FAR BEHIND THE COUNTRY the road is allowed to run
+ * in it, m (`BiomeLand.lag`). Stated beside the grade and read by the same
+ * two walks for the same reason: the road the search judges and the road
+ * the compiler builds have to be one road, and a trial that smooths the
+ * country over a different window from the build is a trial that accepts
+ * lines the build cannot lay.
+ *
+ * It is the lag rather than the grade that decides whether a road RIDES a
+ * landscape — the filter levels away anything shorter than its window, so
+ * a country whose shape is finer than the lag arrives at the road as a
+ * flat. The two are tuned together (`BiomeLand.lag`). */
+export function followLagOf(knobs: StageKnobs): number {
+  return STAGE_RULES.elevation.follow.lag * biomeRules(knobs.biome).land.lag;
 }
 
 /** R22 — the band ONE LAP of a circuit is searched inside: the sprint band
