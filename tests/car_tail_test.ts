@@ -308,10 +308,10 @@ describe("the tailpipes, and the smoke that has to come out of them", () => {
     const anchors = pipeAnchors(spec);
     expect(anchors).toHaveLength(pipeSides(spec.rear?.exhaust).length);
     for (const at of anchors) {
-      expect(at.back).toBeCloseTo(-tip, 6);
+      expect(at.along).toBeCloseTo(tip, 6);
       expect(at.up).toBeCloseTo(spec.rear!.exhaust!.y, 6);
     }
-    expect(anchors.map((a) => a.side)).toEqual(pipeSides(spec.rear?.exhaust));
+    expect(anchors.map((a) => a.across)).toEqual(pipeSides(spec.rear?.exhaust));
     geo.dispose();
   });
 
@@ -321,7 +321,7 @@ describe("the tailpipes, and the smoke that has to come out of them", () => {
     // `bodyHalfLength` counts it, and the tip has to sit inside what that
     // number promises rather than hanging out the back of the car the
     // physics believes in.
-    const back = Math.max(...pipeAnchors(spec).map((a) => a.back));
+    const back = Math.max(...pipeAnchors(spec).map((a) => -a.along));
     expect(back).toBeLessThanOrEqual(bodyHalfLength(spec) + 1e-9);
     expect(back).toBeLessThanOrEqual(TUNING.collision.halfLength);
   });
@@ -334,7 +334,7 @@ describe("the tailpipes, and the smoke that has to come out of them", () => {
     const whole = pipeAnchors(spec);
     const stub = pipeAnchors(spec, true);
     expect(stub).toHaveLength(1);
-    for (const at of whole) expect(stub[0].back).toBeLessThan(at.back);
+    for (const at of whole) expect(stub[0].along).toBeGreaterThan(at.along);
     expect(stub[0].up).toBeCloseTo(spec.floorY, 6);
   });
 

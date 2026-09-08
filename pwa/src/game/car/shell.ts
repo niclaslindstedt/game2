@@ -10,6 +10,7 @@
 // without it the flanks run straight to the ground and the wheels look
 // bolted to a slab.
 
+import type { BodyPoint } from "../car-anchor.ts";
 import type { CarBodySpec, ProfilePoint } from "./spec.ts";
 import type { MeshBuilder, V3 } from "./builder.ts";
 
@@ -671,9 +672,12 @@ export function pipeSides(e: NonNullable<CarBodySpec["rear"]>["exhaust"]): numbe
   return e.pair ? [e.x, -e.x] : [e.x];
 }
 
-/** WHERE A CAR'S EXHAUST LEAVES IT, in the car's own axes: back from the
- * body's origin, out to the side (signed, +x is the car's right), and up
- * off the road. Metres.
+/** WHERE A CAR'S EXHAUST LEAVES IT, as a point on the shell in the car's own
+ * axes (`car-anchor.ts`): negative `along` is back from the body's origin,
+ * `across` is out to the side (signed, +x is the car's right) and `up` is off
+ * the road. Metres. The car's axes and not the world's, so the fumes turn
+ * with the body — a pipe on a car that is over is not where its heading
+ * alone would put it.
  *
  * `broken` is the same car with the pipework torn off by the ground
  * (`DamagePart` "exhaust"). Then there is one plume rather than two and it
@@ -683,12 +687,16 @@ export function pipeSides(e: NonNullable<CarBodySpec["rear"]>["exhaust"]): numbe
  *
  * A spec with no exhaust authored on it gets no entries and makes no
  * smoke, which is the honest answer: no pipe, no plume. */
-export type PipeAnchor = { back: number; side: number; up: number };
+export type PipeAnchor = BodyPoint;
+
+/** ...and WHICH WAY IT POINTS: straight back along the car, as a unit body
+ * point so the aim turns with the shell exactly as the mouth does. */
+export const PIPE_AXIS: BodyPoint = { along: -1, across: 0, up: 0 };
 
 export function pipeAnchors(spec: CarBodySpec, broken = false): PipeAnchor[] {
   const e = spec.rear?.exhaust;
   if (!e) return [];
   const tail = spec.profile[spec.profile.length - 1].z;
-  if (broken) return [{ back: -tail, side: e.x * 0.5, up: spec.floorY }];
-  return pipeSides(e).map((x) => ({ back: -(tail - (e.out ?? EXHAUST_OUT)), side: x, up: e.y }));
+  if (broken) return [{ along: tail, across: e.x * 0.5, up: spec.floorY }];
+  return pipeSides(e).map((x) => ({ along: tail - (e.out ?? EXHAUST_OUT), across: x, up: e.y }));
 }
