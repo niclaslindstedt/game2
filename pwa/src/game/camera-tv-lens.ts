@@ -31,11 +31,11 @@ export const TV_LENS = {
   /** How much defocus a fully out-of-focus subject gets, as a share of the
    * FRAME HEIGHT rather than in pixels: the blur has to look the same on a
    * phone and on a desktop, and a radius in pixels does not. */
-  spread: 0.012,
+  spread: 0.006,
   /** The ceiling on that, same units. A disc wider than this stops reading as
    * a lens and starts reading as a smear — and every tap of it is a texture
    * read, so it is the cost ceiling too. */
-  maxSpread: 0.02,
+  maxSpread: 0.012,
   /** Taps per pixel. A golden-angle spiral, so the disc fills evenly at any
    * count and there is no ring to see; sixteen is where a moving frame stops
    * showing the individual samples. */
@@ -44,7 +44,7 @@ export const TV_LENS = {
    * that distance. Without it the car itself is the only thing in focus and
    * the wheels at the near end of it are already soft, which reads as a
    * mis-focus rather than as depth. */
-  hold: 0.12,
+  hold: 0.16,
 };
 
 /** A full-screen triangle's worth of quad, and the camera that draws it. */
@@ -96,30 +96,36 @@ float coc(vec2 uv, float height) {
 void main() {
   float height = 1.0 / texel.y;
   float radius = coc(vUv, height);
-  vec3 sharp = texture2D(tColor, vUv).rgb;
-  // Under a pixel of disc there is nothing to gather: the in-focus band is
-  // the one place this pass can be free, and on a long lens it is the car,
-  // which is the thing being looked at.
-  if (radius < 1.0) {
-    gl_FragColor = vec4(sharp, 1.0);
-    return;
-  }
-  vec3 sum = sharp;
+  vec3 sum = texture2D(tColor, vUv).rgb;
   float weight = 1.0;
-  for (int i = 0; i < TAPS; i++) {
-    float t = (float(i) + 0.5) / float(TAPS);
-    float r = sqrt(t);
-    float a = float(i) * GOLDEN;
-    vec2 at = vUv + vec2(cos(a), sin(a)) * r * radius * texel;
-    // A tap only counts toward a disc it is itself blurry enough to belong
-    // in. Without this the sharp car bleeds outward into the soft country
-    // behind it and wears a halo — the one artefact that makes a gather look
-    // like a bug rather than like a lens.
-    float w = step(r * radius - 1.0, coc(at, height));
-    sum += texture2D(tColor, at).rgb * w;
-    weight += w;
+  // Under a pixel of disc there is nothing to gather: the in-focus band is
+  // the one place this pass is free, and on a long lens it is the car, which
+  // is the thing being looked at.
+  if (radius >= 1.0) {
+    for (int i = 0; i < TAPS; i++) {
+      float t = (float(i) + 0.5) / float(TAPS);
+      float r = sqrt(t);
+      float a = float(i) * GOLDEN;
+      vec2 at = vUv + vec2(cos(a), sin(a)) * r * radius * texel;
+      // A tap only counts toward a disc it is itself blurry enough to belong
+      // in. Without this the sharp car bleeds outward into the soft country
+      // behind it and wears a halo — the one artefact that makes a gather
+      // look like a bug rather than like a lens.
+      float w = step(r * radius - 1.0, coc(at, height));
+      sum += texture2D(tColor, at).rgb * w;
+      weight += w;
+    }
   }
   gl_FragColor = vec4(sum / weight, 1.0);
+  // THE LAST LINE, AND THE ONE THAT IS NOT OPTIONAL. Drawing the scene into a
+  // render target instead of onto the canvas moves this pass in front of the
+  // one thing three.js does for free at the end of a frame: the conversion
+  // out of the working colour space into the canvas's. Tone mapping already
+  // happened — it lives in each material's own shader, so it went into the
+  // target with the pixels — but the encode did not, and a linear frame
+  // written to an sRGB canvas is a frame that comes out visibly DARK. It is
+  // not subtle and it is not a lighting bug: it is this line missing.
+  #include <colorspace_fragment>
 }
 `;
 
