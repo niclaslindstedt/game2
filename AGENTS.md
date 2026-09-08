@@ -137,6 +137,7 @@ And the pieces that belong to no skill in particular:
 | Track geometry / compilation                      | `engine/mapgen/compile.ts`                                                                                                                     |
 | What a surface does to the car                    | `TUNING.surfaces`; a country's loose surface is `BiomeRules.loose`                                                                             |
 | Anything drawn, with no better home               | `pwa/src/game/` (`renderer.ts` and friends)                                                                                                    |
+| What the player FEELS — the device's vibration    | `pwa/src/game/rumble.ts` (the whole table, DOM-free) → `haptics.ts`, the only module that buzzes; a phone's own haptics are `platform-shells` |
 | What a RACE COSTS TO STAND UP, and its card       | `pwa/src/game/race-loader.ts` (the steps and the frame budget, DOM-free) + `loading-screen.tsx`; the steps are `App.tsx`'s `beginLoad` |
 | The APP MARK, wherever the app draws one          | `pwa/src/game/app-mark.ts` (the two tracks as data) → `mark-tracks.tsx` (laid, once or over and over); `tests/app_mark_test.ts` holds it |
 | App identity (name, palette, URLs)                | `pwa/src/identity.ts` — the single source                                                                                                      |
