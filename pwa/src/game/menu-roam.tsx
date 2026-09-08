@@ -54,7 +54,11 @@ import {
   STAGE_SHAPES,
   SEASONS,
   altitudeLabel,
+  duneLabel,
   hasAltitude,
+  hasDunes,
+  hasSandstorms,
+  sandstormLabel,
   TEMPERATURE_RANGE,
   challengeGlyph,
   challengeWord,
@@ -389,6 +393,31 @@ export function RoamPage({
                   settle
                   onChange={(air) => onRace({ ...race, temperature: air })}
                 />
+                {/* R40 — HOW OFTEN THE SAND COMES. Only over a country whose
+                    wind picks the ground up and carries it, which today is
+                    the desert and nowhere else — a gale through a rooted
+                    forest is a gale and nothing more.
+
+                    It reads as a PERIOD rather than as a position, because
+                    "every three minutes" is a thing a player can weigh
+                    against a stage length and "0.62" is not; and the bottom
+                    of the travel reads OFF rather than a very long period,
+                    because it is off. It does NOT settle, unlike the two
+                    rows above it: the fronts blow across a road the seed
+                    already built, so moving this rebuilds nothing. */}
+                {hasSandstorms(race.knobs.biome) && (
+                  <FadeRow
+                    label="SANDSTORMS"
+                    glyph="sandstorm"
+                    value={race.sandstorms}
+                    step={0.01}
+                    nudge={0.05}
+                    read={(sandstorms) => sandstormLabel(race.knobs.biome, sandstorms)}
+                    less="rarer"
+                    more="oftener"
+                    onChange={(sandstorms) => onRace({ ...race, sandstorms })}
+                  />
+                )}
               </KnobGroup>
             </div>
 
@@ -443,6 +472,31 @@ export function RoamPage({
                     more="higher"
                     settle
                     onChange={(altitude) => onRace({ ...race, knobs: { ...race.knobs, altitude } })}
+                  />
+                )}
+                {/* R40 — HOW HIGH THE SAND STANDS, and the LAND column's
+                    other measurement row. Only over a country the wind has
+                    piled any (`BiomeLand.dunes`).
+
+                    Metres, and a MAXIMUM: what a full-grown dune stands
+                    over the trough beside it where the erg is deepest, with
+                    most of the country lower and the pans between the ergs
+                    carrying none. The bottom of the travel is a desert
+                    stripped to its rock; the top is the Empty Quarter. It
+                    SETTLES, because every position of it is a different
+                    country and a drag across the track would build fifty. */}
+                {hasDunes(race.knobs.biome) && (
+                  <FadeRow
+                    label="DUNES"
+                    glyph="dune"
+                    value={race.knobs.dunes}
+                    step={0.01}
+                    nudge={0.05}
+                    read={(dunes) => duneLabel(race.knobs, dunes)}
+                    less="lower"
+                    more="higher"
+                    settle
+                    onChange={(dunes) => onRace({ ...race, knobs: { ...race.knobs, dunes } })}
                   />
                 )}
                 {STAGE_DIALS.filter((dial) => !dial.biome || dial.biome === race.knobs.biome).map(

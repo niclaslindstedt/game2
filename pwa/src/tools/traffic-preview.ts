@@ -128,6 +128,9 @@ async function main(): Promise<void> {
       windDir: 0.7,
       windSpeed: row.windSpeed,
       gustPhase: 0,
+      sand: false,
+      sandstorms: 0,
+      sandSeed: 0,
     };
     state.env = env;
     environment.apply(env);

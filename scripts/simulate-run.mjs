@@ -13,6 +13,7 @@
 //   npm run sim -- --shape circuit       # race a closed lap circuit (R22)
 //   npm run sim -- --shape circuit --laps 5
 //   npm run sim -- --weather storm       # race in rain/storm wind
+//   npm run sim -- --biome desert --sandstorms 0   # the desert road with no front on it
 //   npm run sim -- --season winter       # the climate (climate.ts): a frozen
 //   npm run sim -- --temperature -15     # country is snow roads and a blanket
 //   npm run sim -- --asphalt 0.8         # generator dials, each 0..1:
@@ -61,6 +62,12 @@ const seeds = flag("seeds")
   : Array.from({ length: Number(flag("count") ?? 8) }, (_, i) => i + 1);
 const cars = flag("car") ? [flag("car")] : CARS.map((c) => c.id);
 const weather = flag("weather") ?? "clear";
+// How often the desert's sandstorms come (game/sandstorm.ts). Left alone it
+// is the game's own default, so a desert sweep measures the weather a
+// desert run actually gets; `--sandstorms 0` measures the road without it,
+// which is the comparison worth having when the question is what a front
+// COSTS.
+const sandstorms = flag("sandstorms") === undefined ? undefined : Number(flag("sandstorms"));
 const season = flag("season") ?? "summer";
 const temperature = flag("temperature") !== undefined ? Number(flag("temperature")) : null;
 // The generator's dials — anything not passed keeps its default position.
@@ -131,6 +138,7 @@ for (const seed of seeds) {
       weather,
       season,
       temperature,
+      sandstorms,
       knobs,
     });
     rows.push(r);
@@ -334,7 +342,16 @@ if (args.includes("--field")) {
   const reference = new Map();
   for (const seed of pool) {
     for (const carId of CARS.map((c) => c.id)) {
-      const r = simulateStage({ seed, carId, gearbox, length, maxTime, weather, knobs });
+      const r = simulateStage({
+        seed,
+        carId,
+        gearbox,
+        length,
+        maxTime,
+        weather,
+        sandstorms,
+        knobs,
+      });
       reference.set(`${seed}/${carId}`, r.finished ? r.time : maxTime);
     }
   }

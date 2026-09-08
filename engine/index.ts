@@ -23,6 +23,7 @@ export {
 // The simulation.
 export {
   DEFAULT_HOUR,
+  DEFAULT_SANDSTORMS,
   createGame,
   skipIntro,
   startsIn,
@@ -84,6 +85,18 @@ export {
   type Weather,
 } from "./game/state.ts";
 export { SUN_SECONDS_PER_HOUR, sunHourAt } from "./game/state.ts";
+// THE SANDSTORM (game/sandstorm.ts) — what the desert's weather is doing
+// right now. The renderer reads the visibility and the wall's approach off
+// `GameState.sand`; the menus read the period to say how often the fronts
+// come.
+export {
+  calmSand,
+  sandAt,
+  sandPeriodOf,
+  sandVisibility,
+  sandWindSpeed,
+  type SandState,
+} from "./game/sandstorm.ts";
 export {
   CLIMATE,
   SEASONS,
@@ -196,6 +209,7 @@ export {
   landOf,
   altitudeScale,
   altitudeOf,
+  duneHeightOf,
   lapseOf,
   roadWidthOf,
   type NumericKnob,

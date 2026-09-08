@@ -12,6 +12,7 @@ export {
   landOf,
   altitudeScale,
   altitudeOf,
+  duneHeightOf,
   lapseOf,
   roadWidthOf,
   type NumericKnob,

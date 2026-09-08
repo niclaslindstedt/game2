@@ -91,6 +91,11 @@ const PAN_KNEE = 8;
 const DUNE_FIELD_FROM = 0.3;
 const DUNE_FIELD_SPAN = 0.25;
 
+/** R40 — how much sharper a dune's crest is than the rounded fold of the
+ * ridged noise (`STAGE_RULES.dunes.crest`), lifted out of the rule book
+ * once because `duneAt` is on the per-ground-cell path. */
+const DUNE_CREST = R.dunes.crest;
+
 /** R47 — how much of the climb from the valley floor to the crest is spent
  * getting there, once the ALTITUDE dial has cut a shelf across the top: the
  * rest of it is the ledge. A fifth, which on a six-thousand-metre mountain
@@ -290,8 +295,12 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     const across = -x * duneSin + z * duneCos;
     const n = valueNoise(along / D.stretch, across, D.scale, noiseSeed + 67);
     // Ridged: the fold of the noise is the crest, and the smoothstep rounds
-    // the slip face off into something a car can take at speed.
-    return mask * D.amp * smooth(1 - Math.abs(2 * n - 1));
+    // the slip face off into something a car can take at speed. Raised to
+    // `dunes.crest`, which presses the low ground FLAT and leaves the sand
+    // standing in separate dunes with interdune corridors between them —
+    // the bare fold is a corrugation with every metre of it on a slope,
+    // which is a washboard rather than a sand sea.
+    return mask * D.amp * Math.pow(smooth(1 - Math.abs(2 * n - 1)), DUNE_CREST);
   };
 
   /** R40 — THE PANS. A country with no water has hollows that never fill;

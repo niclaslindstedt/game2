@@ -42,6 +42,11 @@ export type SimOptions = {
    * one has to ask for it. */
   season?: Season;
   temperature?: number | null;
+  /** How often the SANDSTORMS come, 0..1 (`game/sandstorm.ts`) — read only
+   * in a country whose wind lifts the ground. Defaults to the game's own,
+   * so a desert sweep measures the weather a desert run actually gets;
+   * pass 0 to measure the road without it. */
+  sandstorms?: number;
   /** The generator's dials for the stage (rules.ts). Defaults to the
    * middle of every one. */
   knobs?: Partial<StageKnobs>;
@@ -101,6 +106,7 @@ export function simulateStage(options: SimOptions): SimResult {
       weather: options.weather ?? "clear",
       season: options.season,
       temperature: options.temperature,
+      sandstorms: options.sandstorms,
     },
     knobs: options.knobs,
   });

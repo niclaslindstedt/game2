@@ -624,11 +624,39 @@ export function stepGrounded(
   // the car's travel read as a torque, and a spun tyre has let go.
   const hold = spun ? D.spinHold : 1;
   const straighten = car.slip * D.releaseSnap * DR.snap * releasing * speedFactor * hold;
+  // THE CROSSWIND, and it is a TURN and not only a shove. A car is a sail
+  // with its centre of pressure ahead of its centre of mass, so a gust
+  // from the side does not merely move it downwind, it POINTS it downwind
+  // — and the driver holds a correction into the wind for as long as it
+  // blows. That correction is the whole reason a sandstorm is hard to
+  // drive rather than merely hard to see, and it is what the work on
+  // crosswinds and desert highways measures: at the wind speeds a haboob's
+  // leading edge blows at, both the sideways displacement and the yaw
+  // angle are large enough to put a car off its line.
+  //
+  // It is the SANDSTORM'S term rather than the wind's in general
+  // (`ctx.sand` is 0 outside a front, in every country but the desert),
+  // because the ambient wind's hold on the car is already modelled — the
+  // push down a straight and the carry off a jump — and every stage the
+  // game has ever built was tuned and digested with those two and no
+  // third. A storm brings the third with it.
+  const windYaw =
+    ctx.sand > 0
+      ? // Forward is (sin h, cos h) and RIGHT is (cos h, −sin h), so this is
+        // the wind's component to the car's right — and a positive yaw rate
+        // turns the nose that way, which is the nose going DOWNWIND, which
+        // is where a side force acting ahead of the mass sends it.
+        (ctx.windX * Math.cos(car.heading) - ctx.windZ * Math.sin(car.heading)) *
+        T.sand.yaw *
+        ctx.sand *
+        speedFactor
+      : 0;
   // Saturation gates EVERYTHING that deepens the slide except the power's
   // own oversteer; counter-steer keeps full authority, because it always
   // has somewhere to go.
   const yawTarget =
     (deepening ? steerTerm * sat : steerTerm) +
+    windYaw +
     handbrakeYaw * sat +
     flickYaw +
     pullIn +
