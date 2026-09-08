@@ -5,17 +5,20 @@
 // more (lost in a field, or turned round on the road).
 //
 // IT CARRIES NO WORDS — not even a number of metres. A call is a SIGN: the
-// corner's own shape drawn off the stage, on a plate coloured by how much the
-// bend is going to ask and cut to a point on the side it turns toward, fading
-// up over the two seconds before the turn-in and then INKING ITSELF IN along
-// its own line as the corner is driven — solid at the exit, and gone the
-// instant the car is past it. Every one of those is read out of the
-// corner of an eye that never leaves the road, which is the only way a call
-// is ever read at rally pace — lettering it adds
-// nothing a glance already has and asks for the one thing there is no room
-// for. The words survive as each plate's LABEL, for a reader who cannot see
-// it. The two calls that are instructions rather than corners keep theirs on
-// screen, because a sentence has no shape to be drawn as.
+// road's own shape drawn off the stage, on a plate coloured by how much it is
+// going to ask, fading up over the two seconds before the car commits and
+// then INKING ITSELF IN along its own line as the thing is driven — solid at
+// the exit, and gone the instant the car is past it. A corner is drawn as the
+// stage's PLAN of that turn, cut to a point on the side it bends toward; a
+// jump is drawn as its ELEVATION — the ramp, the estimated flight over the
+// ground that falls away, and the landing — and fills up the ramp and through
+// the air the same way. Every one of those is read out of the corner of an
+// eye that never leaves the road, which is the only way a call is ever read
+// at rally pace — lettering it adds nothing a glance already has and asks for
+// the one thing there is no room for. The words survive as each plate's
+// LABEL, for a reader who cannot see it. The two calls that are instructions
+// rather than corners keep theirs on screen, because a sentence has no shape
+// to be drawn as.
 //
 // WHERE the strip hangs is not its own to decide: `--pace-top` in styles.css
 // stacks it under the mirror and under the split's band, off one number the
@@ -23,7 +26,7 @@
 
 import type { JumpSize, TurnSeverity } from "@engine";
 
-import { fillSign, type PacePoint, type PaceSign } from "./pace-shape.ts";
+import { fillJump, fillSign, type JumpSign, type PacePoint, type PaceSign } from "./pace-shape.ts";
 import { clamp } from "../lib/util.ts";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
@@ -54,6 +57,14 @@ export type HudPacenote =
       size: JumpSize;
       /** Seconds from the car to the takeoff lip, at the speed it is doing. */
       eta: number;
+      /** How much of the jump is behind the car: 0 on the approach, 1 off
+       * the end of the landing. The sign inks itself in along this — up the
+       * ramp, then through the air (snapshot.ts). */
+      fill: number;
+      /** The lip's own shape, ready to draw in the sign's 100x100 box: the
+       * ramp, the estimated flight over it, and the ground it lands on
+       * (pace-shape.ts). */
+      sign: JumpSign;
     };
 
 /** The pacenote sign: the corner's own shape, drawn like a rally note board.
@@ -109,6 +120,64 @@ function points(shape: readonly PacePoint[]): string {
   return shape.map((p) => p.join(",")).join(" ");
 }
 
+/** A polyline as a path's `d`. */
+function poly(line: readonly PacePoint[]): string {
+  return `M ${line.map((p) => p.join(" ")).join(" L ")}`;
+}
+
+/** The dash that hides the part of a line the car has not reached. */
+function dash(span: { span: number; lit: number }): Record<string, string> {
+  return { strokeDasharray: `${span.span}`, strokeDashoffset: `${span.span - span.lit}` };
+}
+
+/** THE JUMP SIGN: the lip seen FROM THE SIDE — the road climbing the ramp,
+ * the estimated flight arcing over the ground that drops away beneath it, and
+ * the landing it comes back down to. Where a corner call is the stage's plan
+ * view, a jump call is its elevation, and the two are told apart before either
+ * is read: one is a bend, the other is a leap.
+ *
+ * THE ESTIMATE IS DRAWN AS AN ESTIMATE. The flight is a broken line — the
+ * projection idiom off a trajectory diagram — where the road either side of
+ * it is solid ground. So the sign says what it knows and what it is only
+ * predicting, without a word on it.
+ *
+ * ...AND IT BECOMES FACT AS IT IS FLOWN. The same three parts the car is
+ * actually on light in turn as the jump is taken: up the ramp, then along the
+ * arc — solid now, over its own dashed estimate — then away down the landing.
+ * The road UNDER the flight never lights, because the car is never on it, and
+ * the daylight between the two is the jump. `fillJump` owns the split and
+ * measures it off the stage's own metres.
+ *
+ * That daylight is also WASHED, under everything else. Two thin lines and the
+ * space between them is a fine drawing at full size and nothing at all in the
+ * strip's second slot, where the plate is dimmed by half and scaled to under
+ * two thirds; the air as an AREA survives both, and how much of it there is
+ * reads without being measured. */
+export function JumpArrow({ sign, fill }: { sign: JumpSign; fill: number }) {
+  // The ramp, the road under the flight and the landing meet end to end, so
+  // the ground goes down as ONE line: three subpaths would put a round cap on
+  // each joint and bead the road where it is meant to run on.
+  const ground = poly([...sign.ramp, ...sign.gap.slice(1), ...sign.landing.slice(1)]);
+  const flight = poly(sign.flight);
+  const lit = fillJump(sign, fill);
+  return (
+    <svg className="hud-pace-arrow hud-pace-lip" viewBox="0 0 100 100" aria-hidden="true">
+      <polygon className="hud-pace-airspace" points={points(sign.air)} />
+      <g className="hud-pace-road">
+        <path d={ground} />
+        <path className="hud-pace-air" d={flight} />
+      </g>
+      {fill > 0 && (
+        <g className="hud-pace-fill">
+          <path d={poly(sign.ramp)} style={dash(lit.ramp)} />
+          <path className="hud-pace-air" d={flight} style={dash(lit.flight)} />
+          <path d={poly(sign.landing)} style={dash(lit.landing)} />
+        </g>
+      )}
+    </svg>
+  );
+}
+
 /** The co-driver's word for each severity. Nothing on the strip is lettered
  * — these are what the plate is LABELLED, for a reader who cannot see it. */
 const SEVERITY_WORD: Record<TurnSeverity, string> = {
@@ -128,29 +197,19 @@ const JUMP_WORD: Record<JumpSize, string> = {
 };
 
 /** THE CALL IN WORDS, for a reader who cannot see the sign — the plate's
- * accessible name, and the only place the vocabulary is spelled out. */
+ * accessible name, and the only place the vocabulary is spelled out.
+ *
+ * A jump's ESTIMATED LENGTH is quoted here and nowhere else. The sign draws
+ * it — a longer flight is a longer arc over more fallen-away road — and a
+ * driver reads that shape a great deal faster than they read a number. The
+ * metres are for the reader the shape never reaches. */
 function pacenoteText(note: HudPacenote): string {
-  if (note.kind === "jump") return JUMP_WORD[note.size];
+  if (note.kind === "jump") return `${JUMP_WORD[note.size]}, ${Math.round(note.sign.length)} M`;
   return `${note.long ? "LONG " : ""}${SEVERITY_WORD[note.severity]} ${note.dir.toUpperCase()}`;
 }
 
-/** How high the ramp throws the arrow in the icon's 100x100 box, per size.
- * The road under it stays at 72 and the arrow always leaves at the same x,
- * so a bigger jump is drawn as a STEEPER ramp. The shape is the whole call —
- * there is no word beside it — and it is read at a glance from the corner of
- * an eye that is on the road. */
-const JUMP_LAUNCH: Record<JumpSize, number> = { small: 52, medium: 35, big: 20 };
-
 function PacenoteIcon({ note }: { note: HudPacenote }) {
-  if (note.kind === "jump") {
-    const top = JUMP_LAUNCH[note.size];
-    return (
-      <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
-        <path d={`M 15 72 L 39 72 L 55 ${top} L 77 ${top}`} />
-        <polygon points={`76,${top - 18} 96,${top} 76,${top + 18}`} />
-      </svg>
-    );
-  }
+  if (note.kind === "jump") return <JumpArrow sign={note.sign} fill={note.fill} />;
   return <PacenoteArrow sign={note.sign} fill={note.fill} />;
 }
 
