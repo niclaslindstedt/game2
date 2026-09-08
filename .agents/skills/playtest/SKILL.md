@@ -97,6 +97,44 @@ script directly with a fragment of the scene's name.
 screenshot, not on source. Watch the harness's `[pageerror]` lines too: a
 clean screenshot over a page error is a lie.
 
+### The sim runs at a fraction of wall time — and it decides how scenes are written
+
+Under software rendering the run advances about **one second per eighteen of
+wall clock** (measured: `t 13.64 s` on the debug overlay after four minutes).
+Two consequences, and nearly every scene that goes wrong goes wrong on one of
+them:
+
+- **Wait on the RUN's clock, never the wall's.** This is already the rule for
+  the shutter, and it applies just as hard to scripted INPUT: a key sequence
+  written with `waitForTimeout(700)` holds the handbrake for about forty
+  milliseconds of sim, which is a tap. The same sequence written against the
+  race clock is a real pull on the lever, and behaves completely differently.
+- **Never DRIVE to a moment you can stand at.** `?at=racing&s=` (engine's
+  `place.ts`) puts the run where the shot wants it. Driving there instead is
+  minutes per attempt — which is what turns a wrong guess into a ten-minute
+  wrong guess, several times over.
+
+### MEASURE the moment before writing a predicate for it
+
+A scene that waits for a condition the stage never produces times out at the
+full patience and tells you nothing about why. Before tuning a threshold —
+and certainly before tuning it twice — write a throwaway probe: same URL, a
+cheap camera (the car does not care which camera is watching), and a loop that
+prints what the debug overlay's `data-k` rows actually say. It costs a couple
+of minutes against ten for a blind attempt, and it answers questions guessing
+cannot:
+
+- the bot's slip peaked at **7°** on one taiga stretch and **9.8°** on a
+  desert one — both UNDER `TUNING.drift.enterSlip`, so no drift threshold was
+  ever going to fire there;
+- a hand-staged slide reached 45° but was OFF THE ROAD for all of it, which a
+  grounded-and-on-road predicate rightly refuses;
+- and the one setting that "worked" had caught the two frames before the car
+  left the road, which is a coin toss wearing a number.
+
+The general shape: when a predicate times out, the question is not "is the
+threshold too high" but "does this moment exist on this stage at all".
+
 ### Two traps
 
 - **The countdown eats the first seconds.** Scenes wait ~3.2 s before
