@@ -608,6 +608,37 @@ export {
   type StageReport,
 } from "./analysis/index.ts";
 
+// ...and the RALLY RATING beside it: the same stage asked whether it is any
+// GOOD, which is where the scoreboard stops. Dev-time only, exactly like
+// the analysis — what it picks is a table of seeds somebody committed.
+export {
+  RATING,
+  rateSeed,
+  rateTrack,
+  rateLadder,
+  rateCampaign,
+  stepDemand,
+  walkStage,
+  characterDistance,
+  CHARACTER_AXES,
+  type Band,
+  type CampaignReport,
+  type Character,
+  type CharacterAxis,
+  type Corner,
+  type Demand,
+  type Facet,
+  type LadderReport,
+  type LadderStep,
+  type Note,
+  type RateOptions,
+  type StageConditions,
+  type StageRating,
+  type Trait,
+  type Verdict,
+  type Walk,
+} from "./rating/index.ts";
+
 // Deterministic utilities shared with tooling.
 export { createRng, type Rng } from "./lib/prng.ts";
 export { hash2, smooth, valueNoise } from "./lib/noise.ts";

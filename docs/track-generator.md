@@ -384,6 +384,66 @@ The score is a compass, not a grade — read the FINDINGS. A run that scores 92
 with an error in it needs the error fixed, not the score improved. The exit
 code is non-zero on any error, so a change can be gated on it.
 
+## Rating the output
+
+`make analyze` asks whether a stage is BROKEN. `make rate` asks whether it is
+any GOOD as a rally stage, and the two are genuinely different questions: the
+search only knows how to avoid breaking rules, and a seed that breaks none of
+them is where the interesting question starts. A stage can be flawless by
+`analyze` and be a scribble across a flat field.
+
+```sh
+make rate SEEDS=38 ARGS=--traits     # one seed, every trait, its band and its remarks
+make rate COUNT=64                   # a sweep to shortlist from
+make rate COUNT=120 ARGS=--stats     # the POPULATION — what the generator BUILDS
+make rate CAMPAIGN=1                 # the committed ladder, audited as a set
+make rate COUNT=200 ARGS="--pick 4"  # propose a ladder out of a sweep
+```
+
+Six facets, each a set of traits scored 0..1 and weighted into one number out
+of a hundred. **Every threshold is a BAND with a floor as well as a ceiling**,
+and that is the whole difference from `analyze`'s budgets: a road with no
+corners scores as badly as a road that is nothing but corners.
+
+| Facet      | What it measures                                                                                                                                                                                                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow`     | What the road asks of the hands: corners a kilometre and how many KINDS of corner there really are, the share that are hard ones, how often it changes direction, how much of it is not a corner, the longest stretch where nothing happens, how much of it is committed to BLIND, and how long it holds one character |
+| `pace`     | How fast and — the trait the facet exists for — how much the speed MOVES: the spread of the speed profile against its own mean, the slowest point, the braking zones, the share held flat out. A stage is fast because it was, a moment ago, slow                                                                      |
+| `relief`   | The vertical, read twice: as ground the stage crosses (climb, brows, the steepest sustained grade) and as what that does to the CORNERS (the share of corner metres on a slope, the share banked the wrong way) — plus how alive the road is under the car, as the vertical acceleration it puts through it at speed   |
+| `features` | The set pieces and, weighted above the counts, how many KINDS of them there are at all. Six jumps is one idea six times; a jump, a ford, a bore and a level crossing is a stage you can describe in a sentence                                                                                                         |
+| `scenery`  | The country the road runs through — on a generated stage that is as much of the level as the road is. How closed in it is, how much that CHANGES along the stage, what people built beside it, water in sight, how far the eye reaches, and how many kinds of ground it runs past                                      |
+| `risk`     | What a mistake costs: the ground falling away beside the road, solids within a road-width of the edge, how much of it is tight for the SPEED, and whether the hard corners' insides cost more than the corner                                                                                                          |
+
+Beside the score, three things that are not scores and are what a CAMPAIGN is
+built out of:
+
+- **`character`** — nine axes (tight, fast, vertical, airborne, sealed,
+  enclosed, exposed, slick, long), each 0..1, none better than another. Two
+  stages are held apart by these, not by their scores; the six best-scoring
+  seeds in any sweep are reliably six versions of the same road.
+- **`difficulty`** — what the road asks of the driver, and the number a ladder
+  is ORDERED on. Not the score: an opening stage should be easy AND good.
+- **`demand`** — which of the three cars the road is for, as three shares. An
+  invitation, not a verdict; `npm run sim -- --sweep` is what is right about
+  the game.
+
+`make rate CAMPAIGN=1` scores each location's six levels TOGETHER, on the
+things no single stage can be scored on: whether the ladder climbs (road AND
+conditions — a level's weather, season and hour are a third of what a rung
+asks for), how far it travels, whether there is a wall in the middle, how
+unlike each other the two most similar stages are, whether every rung leads
+the ladder on something, and whether the weather, the calendar and all three
+cars actually get used.
+
+Every band is data in `engine/rating/scales.ts`, with its measured population
+beside it, and several are borrowed from outside this project rather than
+chosen here — the pacenote radii a corner's severity is read on, the FIA's
+130 km/h average-speed indicator, arcade racing's ±30% speed-spread and
+on-camber rules, and the twenty-second floor under a section of stage. Those
+do not move to make the tool discriminate better. The `level-rating` skill
+owns the calibration loop, the campaign-curation loop, and reading a rules
+change as a distribution rather than as one seed.
+
 ## Extending the vocabulary
 
 New content kinds (say, tunnels or level crossings) follow the pattern: a feature enum value + placement rules in `rules.ts`, placement logic in `assignFeature`, geometry in `compile.ts`, an R-rule stated in prose in both files and this document, and an invariant test in `tests/mapgen_test.ts`. The renderer picks the feature up from the samples.

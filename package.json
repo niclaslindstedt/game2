@@ -29,6 +29,7 @@
     "routes": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/stage-routes.mjs",
     "biomes": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/biome-preview.mjs",
     "analyze": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/analyze-stage.mjs",
+    "rate": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/rate-stage.mjs",
     "drift": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/drift-lab.mjs",
     "roll": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/roll-lab.mjs",
     "crash": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/crash-lab.mjs",
