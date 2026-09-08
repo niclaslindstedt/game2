@@ -45,7 +45,7 @@ const DEG = Math.PI / 180;
  * chase table drives (CHASE_RIGS in camera.ts). Restated rather than
  * exported: a test that read the list off the module could not catch the
  * module moving a camera from one family to the other. */
-const OUTSIDE: CameraMode[] = ["close", "chase", "far", "heli", "top"];
+const OUTSIDE: CameraMode[] = ["close", "chase", "far", "heli", "top", "tv"];
 
 function game(): GameState {
   return createGame({
@@ -202,7 +202,15 @@ describe("chase camera over a cliff", () => {
     // The one thing no camera may do is let the car fall out of it. The
     // outside rigs turn their rod by their own share of the read; the seats
     // inside the car cannot lose it at all.
-    for (const mode of PLAY_MODES) {
+    //
+    // Stated over the views hung off the CAR, because the quantity here is a
+    // RANGE to it: the TV cam's tripods are planted in the world and stay
+    // there (camera-tv.ts), so a car going over a cliff is a car getting
+    // several hundred metres further away, which is the camera doing its
+    // job rather than losing the car. That it does not lose it is the next
+    // test's rule, in the terms that actually apply to a fixed lens — the
+    // FRAME.
+    for (const mode of RIDING_MODES) {
       const { level, fall, fallen } = freefall(mode);
       expect(fallen).toBeGreaterThan(40);
       const settled = level.ranges[level.ranges.length - 1];
