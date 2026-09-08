@@ -1197,15 +1197,26 @@ export const STAGE_RULES = {
      * so a corner turning twenty metres downhill was credited thirty-two
      * against it and the search went on contouring. MEASURED over seeds
      * 1,3,4,7,11,17 at the top of the dial, the stage's net descent goes
-     * 88 m at 1.6, 112 m at 4 and 142 m at 9, and stops moving above that
-     * — so 9 is where the lever runs out rather than a number chosen for
-     * its own sake. What is left holding the road back is R23 in HEIGHT
+     * 88 m at 1.6, 112 m at 4 and 142 m at 9, and stops moving on that
+     * sweep above it.
+     *
+     * It is 20 rather than 9 because a MEDIUM seed sweep is the wrong
+     * place to read this: the shorter a stage is, the fewer corners the
+     * charge gets to act on, so a short one goes on contouring long after
+     * a medium one has committed. The campaign's own stages say it plainly
+     * — at 9 the short `alpine-1` descends 29 m over 1.75 km (1.7%, with
+     * 164 m of mountain under its start), and at 20 it descends 81 m,
+     * while `alpine-2` goes 115 m to 210 and `alpine-4` 217 m to 346.
+     * Tune this against the campaign's four sprint lengths, never against
+     * one of them.
+     *
+     * What is left holding the road back is R23 in HEIGHT
      * (`armSeparation`): two legs of a switchback stacked twenty metres
      * apart need eighty-four metres of horizontal room, because the ground
      * between them has to be climbable, and a real hairpin stack holds it
      * with a retaining wall the terrain does not build. That is the next
      * thing to move, and it is a terrain feature before it is a number. */
-    contour: { margin: 1, climb: 9 },
+    contour: { margin: 1, climb: 20 },
     /** What the `peaks` dial does to a massif: MULTIPLIERS on its ridge
      * period (`massif.scale`) and on the share of the folded noise that is
      * VALLEY FLOOR (`massif.valley`), read the way the difficulty dial

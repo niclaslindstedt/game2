@@ -396,7 +396,14 @@ describe("R47 — how high the race is", () => {
     // test is really making — that the drop off the side is REAL and not a
     // painted backdrop — is the same one.
     expect(deepest).toBeGreaterThan(250);
-    expect(longest).toBeGreaterThan(3);
+    // ...and it LEAVES the ground on the way, but only briefly. Three
+    // seconds of air was the old spike geometry talking: a 99th-percentile
+    // ground grade of 16.5 is a cliff to fall off, and a real mountainside
+    // at a grade near 1 is something a car launches off once and then
+    // tumbles down. MEASURED at 310 m of fall and 0.86 s of it airborne.
+    // The claim that matters is the depth above; this one only says the
+    // flank throws the car rather than letting it roll to a stop.
+    expect(longest).toBeGreaterThan(0.4);
   });
 });
 
