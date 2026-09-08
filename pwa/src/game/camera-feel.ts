@@ -27,6 +27,27 @@
 //   is a degree or two: the horizon must never read as the game rolling the
 //   world, only as the picture having weight.
 //
+//   THE FLIGHT AS THE BOOM'S OWN ANGLE. The boom is a rod standing behind
+//   the car, and on the ground the car's path is horizontal, so the rod is
+//   too. Off the ground it is not: a car that has left a lip is climbing,
+//   one coming back down is descending, and one that has gone off the side
+//   of a mountain is going straight down. The rod follows that path — it
+//   swings UNDER a climbing car so the shot looks up the arc against the
+//   sky, and OVER a falling one so the shot looks down the fall at the
+//   ground coming up — and the aim swings with it, so the car sits in the
+//   same place in the frame the whole way and never falls out of the bottom
+//   of it. Its LENGTH never changes, which is what keeps the car the same
+//   size through the biggest moment on the stage.
+//
+//   It is asymmetric, because the two ends are not the same shot: the rod
+//   only dips a little under a climbing car (past that the lens is down at
+//   roof height looking at a flank) and comes most of the way over a
+//   falling one. And it is carried on a SPRING rather than an ease, so it
+//   winds on with the weight of something being swung and, when the wheels
+//   are back down and the car is level again, it BOUNCES once through the
+//   horizontal before it settles — the bigger the fall, the bigger the
+//   bounce.
+//
 //   SURGE AS STANDOFF. The boom is not a rigid rod: a lens with mass on the
 //   end of one FALLS BEHIND a car that is pulling away from it and SWINGS
 //   FORWARD over one that is stopping under it. So the standoff is given a
@@ -43,11 +64,11 @@
 //   own gears is the fov's job (`fovPerSpeed` in the rigs) and this is not
 //   allowed to fight it.
 //
-// ALL FOUR ARE READINGS OF A CAR SOMEBODY IS DRIVING, and that is a real
-// condition rather than a figure of speech: a car going over is a body being
-// thrown, and its slip, its yaw rate, its tyre loads and its speed stop
+// FOUR OF THE FIVE ARE READINGS OF A CAR SOMEBODY IS DRIVING, and that is a
+// real condition rather than a figure of speech: a car going over is a body
+// being thrown, and its slip, its yaw rate, its tyre loads and its speed stop
 // describing anything a driver did. So the caller says whether the car is
-// being driven (`driven`), and an accident splits the four in two. The ones
+// being driven (`driven`), and an accident splits them in two. The ones
 // that are POSITIONS in the framing — the height the grip read stands the
 // lens at, the metres the surge has the boom out to — are HELD exactly where
 // the crash found them, with the standoff and the yaw the rig is holding
@@ -57,6 +78,13 @@
 // crash makes into noise. What is left is the frame holding still and level
 // while the world turns over inside it.
 //
+// THE FLIGHT IS THE ONE THAT IS NOT. Where the car is GOING is a fact about
+// its path through the world, not about anything a driver asked for, and a
+// car that has gone over a cliff sideways is falling exactly as hard as one
+// that drove off it straight. So the rod's angle is read through an accident
+// too — it is the same reading the hold already keeps making when it goes on
+// tracking the car's position from the framing it froze.
+//
 // Plain arithmetic, no three.js and no DOM, so the tests read the numbers
 // without standing up a renderer. Every number lives in CAMERA_FEEL; the
 // rigs (CHASE_RIGS in camera.ts) only scale them.
@@ -64,6 +92,7 @@
 import { surfaceGripFor, tyreLoad, type CarState, type GameState } from "@engine";
 
 import { clamp } from "../lib/angles.ts";
+import { createSprung } from "../lib/sprung.ts";
 
 const DEG = Math.PI / 180;
 
@@ -125,6 +154,41 @@ export const CAMERA_FEEL = {
     bankMax: 1.25,
     /** How briskly the tilts are followed, 1/s. */
     rate: 6,
+  },
+
+  /** THE FLIGHT AS THE BOOM'S OWN ANGLE — how far the rod behind the car
+   * swings out of the horizontal to lie along the car's own path through
+   * the air. Degrees, and the spring that carries them. */
+  flight: {
+    master: 1,
+    /** Share of the car's flight path angle the rod takes. Short of 1 for
+     * two reasons and both matter: a rod exactly along the path puts the
+     * lens, the car and the aim on one line, and a rod standing STRAIGHT UP
+     * over a car falling straight down leaves `lookAt` nothing to build a
+     * frame from but the world's up vector, which is the axis it is looking
+     * along — the shot tumbles. Leaving a share of the angle on the table
+     * keeps a run of road in the bottom of the frame all the way down. */
+    share: 0.85,
+    /** ...and the two ceilings, deg, which are not the same number because
+     * the two ends are not the same shot. Coming UP off a lip the rod dips
+     * under the car, and a rig's height is only a couple of metres: dip far
+     * and the lens is down at roof height looking at a flank, so the climb
+     * gets a nod and no more. Going DOWN the rod comes most of the way over
+     * — that is the shot of a car falling away underneath you, and it is
+     * the whole point of the reading. */
+    up: 14,
+    down: 68,
+    /** The spring the angle is carried on: natural frequency in Hz and the
+     * damping ratio. The frequency is what makes a designed jump read as "a
+     * bit" of tilt and a mountainside read as all of it — a second of air
+     * only gets part of the way to the angle it is asking for, and a fall
+     * that goes on gets there and stays. The damping is under 1 on purpose:
+     * the wheels come down, the car levels, the angle it is asking for goes
+     * to nothing, and the rod swings THROUGH the horizontal and settles
+     * back — the bounce at the end of the gesture, and proportional to the
+     * gesture, because it is a share of whatever the rod had wound on to. */
+    freq: 1.1,
+    damping: 0.5,
   },
 
   /** SURGE AS STANDOFF. Metres on and off the rig's own boom length. */
@@ -222,6 +286,24 @@ export function pitchWanted(grade: number, car: CarState): number {
   return (slope + car.pitchLoad * T.dive) * T.master;
 }
 
+/** The angle the car's own path through the air is asking the rod for, rad
+ * — positive is CLIMBING, which dips the boom under the car and looks up
+ * the arc; negative is falling, which brings it over and looks down.
+ *
+ * It is the flight path angle: the vertical speed against the speed over
+ * the ground. That makes it frame-independent — as true of a car tumbling
+ * end over end as of one flying straight, which is why it is the one
+ * reading here that is taken whether or not anybody is driving.
+ *
+ * Zero on the ground, where the car's path IS the road and the rig's own
+ * `dropLift` and `climbDuck` own the hill. */
+export function flightWanted(car: CarState): number {
+  const F = CAMERA_FEEL.flight;
+  if (!car.airborne) return 0;
+  const path = Math.atan2(car.vy, Math.hypot(car.u, car.w)) * F.share;
+  return clamp(path, -F.down * DEG, F.up * DEG) * F.master;
+}
+
 /** How far an acceleration stands the lens off the rig's boom length, m —
  * positive is BACK, which is a car pulling away from the camera; negative is
  * the lens carrying forward over a car that is stopping under it. Zero for a
@@ -272,6 +354,11 @@ export type FeelFrame = {
   reach: number;
   bank: number;
   pitch: number;
+  /** Radians the rig's whole ROD — the boom behind the car and the aim
+   * point ahead of it — is turned out of the horizontal, positive climbing.
+   * Unlike everything else here this one moves where the camera STANDS, so
+   * the rig applies it before it places the lens (camera.ts). */
+  flight: number;
   x: number;
   y: number;
 };
@@ -282,6 +369,7 @@ export type FeelScales = {
   hover: number;
   shake: number;
   surge: number;
+  flight: number;
 };
 
 /** The eased readings an outside rig carries from frame to frame. */
@@ -293,13 +381,15 @@ export type CameraFeel = {
    * its own scales, `t` the camera's clock.
    *
    * `driven` is whether anybody is DRIVING the car this frame. Every reading
-   * here is a reading of a car being steered — the grip its tyres are
-   * finding, the lean of a corner it is being placed in, the surge of a
-   * pedal, the pace of a gear — and a car going over is giving none of them:
-   * its slip angle is a body being thrown, its yaw rate is a tumble, its
-   * speed is a fall. So an accident hands this `false`: the height and the
-   * standoff HOLD where they were, and the bank, the pitch and the tremor
-   * ease out to a level, still frame (see the head of this file). */
+   * here BUT THE ROD'S ANGLE is a reading of a car being steered — the grip
+   * its tyres are finding, the lean of a corner it is being placed in, the
+   * surge of a pedal, the pace of a gear — and a car going over is giving
+   * none of them: its slip angle is a body being thrown, its yaw rate is a
+   * tumble, its speed is a fall. So an accident hands this `false`: the
+   * height and the standoff HOLD where they were, and the bank, the pitch
+   * and the tremor ease out to a level, still frame. The rod goes on
+   * reading the car's path either way, because a car falling off a
+   * mountain sideways is falling (see the head of this file). */
   step: (
     state: GameState,
     grade: number,
@@ -314,6 +404,10 @@ export function createCameraFeel(): CameraFeel {
   let grip = 1;
   let bank = 0;
   let pitch = 0;
+  /** The rod's angle, on its own mass. `snap` is past any angle the reading
+   * can produce, because a rig picked up and put down somewhere else says
+   * so through `drop` — there is no reading big enough to be a teleport. */
+  const flightSpring = createSprung({ damping: CAMERA_FEEL.flight.damping, snap: 100 });
   /** The car's longitudinal acceleration as the boom reads it, m/s², and the
    * speed it was read against last frame. NaN until a first frame has been
    * seen, because one sample is not a rate — and a car that has been picked
@@ -327,6 +421,7 @@ export function createCameraFeel(): CameraFeel {
       bank = 0;
       pitch = 0;
       accel = 0;
+      flightSpring.drop();
       wasU = state.car.u;
     },
     step: (state, grade, rig, t, dt, driven = true) => {
@@ -354,11 +449,15 @@ export function createCameraFeel(): CameraFeel {
       if (driven) accel += (clamp(raw, -S.accelMax, S.accelMax) - accel) * clamp(S.rate * dt, 0, 1);
       const speed = driven ? Math.hypot(car.u, car.w, car.vy) : 0;
       const tremor = tremorAt(t, tremorAmount(speed), rig.shake);
+      // Read through an accident as well: where the car is GOING is not
+      // something a driver is doing (see the head of this file).
+      const flight = flightSpring.step(flightWanted(car), CAMERA_FEEL.flight.freq, dt);
       return {
         lift: hoverFor(grip, rig.hover),
         reach: surgeWanted(accel) * rig.surge,
         bank: bank + tremor.tilt,
         pitch: pitch + tremor.nod,
+        flight: flight * rig.flight,
         x: tremor.x,
         y: tremor.y,
       };

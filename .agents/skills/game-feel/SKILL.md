@@ -102,8 +102,9 @@ The camera is this skill's own subsystem. One row per question:
 | Question | Where |
 | --- | --- |
 | Where the camera stands OUTSIDE the car | `CHASE_RIGS` in `pwa/src/game/camera.ts` — one row per angle |
-| What the outside camera CONVEYS (grip, attitude, pace) | `CAMERA_FEEL` in `camera-feel.ts` — DOM-free: grip as height (`hover` per rig), a degree or two of tilt, a tremor past the gears |
-| What an outside rig may STAND on (floor, play, cliff) | `camera-ground.ts` — read over a footprint, sunk at a bounded rate; the menu's backdrop is `camera-drone.ts` |
+| What the outside camera CONVEYS (grip, attitude, flight, pace) | `CAMERA_FEEL` in `camera-feel.ts` — DOM-free: grip as height (`hover` per rig), a degree or two of tilt, the flight path as the ROD's own angle (`flight` per rig), a tremor past the gears |
+| What the outside camera does while the car is IN THE AIR | the ROD turns (`flight` in `camera-feel.ts`) — it lies along the car's own path, dipping under a climbing car and swinging over a falling one, and the AIM turns with it. Its LENGTH never changes, so the car is the same size off a cliff as on the road. Sprung and under-damped, so it winds on with weight and bounces once through level at the landing. `make aircam` photographs it |
+| What an outside rig may STAND on (floor, play) | `camera-ground.ts` — read over a footprint, sunk at a bounded rate, except under a car in free fall, which may always outrun the ceiling |
 | How an IN-CAR camera sits, moves and takes a hit | `camera-eye.ts` (`EYE_RIGS`) |
 | What the DRIVER'S head does while the car goes over | `bolted` in `camera-eye.ts` — the neck hands over to a bolt and the gaze takes the body's own basis one for one |
 | Going from one VIEW to the next on the ladder | `camera-change.ts` — a FLOWN move, never a cut; `tests/camera_test.ts` measures it |
@@ -112,7 +113,17 @@ The camera is this skill's own subsystem. One row per question:
 | WHEN the outside rig follows the car's direction again | `car.planted` — four tyres carrying and the body inside its springs; not the frame `rolling` goes false, and a respawn drops the hold |
 | How much a BLOW shakes the picture, and which do | `camera-shake.ts` — DOM-free; a contact shakes the CAR, never an outside rig |
 
-Three contact sheets, all needing `make build` first. **They are slow** — a
+**A reading that moves where the camera STANDS is stepped BEFORE the lens is
+placed.** `camX`/`camZ`, the ground under them and the floor snap are all
+sampled AT the lens, so a boom moved after that sample is a lens standing over
+ground read half a metre away — on steep terrain, metres of vertical error and
+a shot that pumps. Step it with `climb` ahead of `camX`/`camZ` and build the
+pose from `dist + felt.reach`; readings that only offset an already-placed lens
+(the bank, the tremor) can stay where they are. Never fold one into `wantDist`
+instead: it then eases twice, on its own clock and again on the rig's
+`RIG_EASE`, which turns a lag into a rumour of one.
+
+Four contact sheets, all needing `make build` first. **They are slow** — a
 web session's software rasterizer takes ~20 minutes over `rollcam`'s 1120
 frames — so take the BEFORE sheet before the first edit, and let the harness's
 own vite build finish before editing sources (after that the served bundle is
@@ -122,7 +133,18 @@ on disk and the run is safe from further edits):
 make views     # THE CAMERA KEY: every step of the ladder, six consecutive frames each
 make transit   # the camera going from the finish line to a crew still out, frame by frame
 make rollcam   # the camera WHILE THE CAR GOES OVER — one roll, frame by frame, from two seats (held outside rig, bolted seat)
+make aircam    # the camera WHILE THE CAR IS FLYING — a designed jump and a hundred metres off an alpine ledge, from two seats
 ```
+
+`aircam` is the cheap one of the four (~1500 rendered frames, a few minutes
+under SwiftShader): the bot's run-in to each staging point is stepped without
+being drawn. Its two throws were both chosen by MEASURING — a throw that
+looks reasonable mostly buys a car that lands on the shoulder, rolls down it
+and is put back by the respawn, which photographs three events and none of
+them the one under test. The column that reads the whole sheet is how far
+away the car is: a rod that turns instead of stretching holds it near the
+standoff the car was driven at, and a shot that stays up at the lip reads as
+the car shrinking down the row.
 
 ## The workflow
 
@@ -141,6 +163,16 @@ make rollcam   # the camera WHILE THE CAR GOES OVER — one roll, frame by frame
    `blowRun` what a kick does from a settled datum, and
    `tests/camera_feel_test.ts` reads the lens's own axes for a bank. Assert
    the rule, then look.
+
+   **A lens's CANT is the roll about its own view axis, never the angle
+   between its up and the world's** — `lookAt` builds its basis against world
+   up, so that second reading is mostly the rig's own pitch (`chase` reads
+   6.8° with zero roll in it) and a test written on it fails at any sane
+   tolerance while saying nothing. Use `driveAcross`'s form:
+   `Math.atan2(up.x * dir.z - up.z * dir.x, up.y)` with `dir =
+   cam.getWorldDirection()`. It reads ~0 for a level rig at any pitch and past
+   1 rad for a cockpit going over, which is what lets one assertion state the
+   outside/in-car split.
 5. **LOOK**: `make screenshots` (in web sessions
    `CHROMIUM_PATH=/opt/pw-browsers/chromium`), plus a staged run for the
    specific moment (`test-scenario` / `playtest` own the tooling). Put the

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
 
 build:
 	npm run build
@@ -353,6 +353,18 @@ transit:
 # `screenshots`.
 rollcam:
 	npm run rollcam
+
+# Photograph THE CAMERA WHILE THE CAR IS FLYING (previews/aircam.png) —
+# consecutive frames of a designed jump and of a car thrown off the ledge of
+# an ALPINE stage at the top of the altitude dial — a hundred metres of free
+# fall at sixty metres a second — from a rig down behind the car
+# and one flown well over it, with how far the lens moved, how far away the
+# car is and where the lens is pointing under each. REQUIRED before/after any
+# change to what the camera does off the ground (the flight read in
+# camera-feel.ts, the floor and the rod in camera.ts). `OUT=` names the
+# sheet. Same Chromium requirements as `screenshots`.
+aircam:
+	npm run aircam
 
 # THE WHEEL LAB — photograph A WHEEL COMING OFF (previews/wheel.png): the
 # throw, the bounce off the tyre, the landing that turns into a roll and the

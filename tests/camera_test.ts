@@ -2,11 +2,12 @@
 // The chase camera at a cliff. Two rules meet there and both used to fail:
 // the ground the camera stands on may fall away in ONE STEP (a terrain
 // lattice kinks, a shoreline swaps ground for water, two fields meet at a
-// seam), and the camera must fly down that rather than cut to it; and while
-// the car is falling the camera must NOT ride it down, because two metres
-// over the roof is what a twenty-five metre drop looks like when nothing at
-// all is happening. Driven directly — the camera only ever reads state, so a
-// scripted fall is the whole scenario and needs no physics.
+// seam), and the camera must fly down that rather than cut to it; and the
+// camera must COME WITH the falling car rather than watch it leave, on a
+// rod that turns over to lie along the car's own path (`flight` in
+// camera-feel.ts) so the fall reads as a fall without the car shrinking to
+// a dot. Driven directly — the camera only ever reads state, so a scripted
+// fall is the whole scenario and needs no physics.
 //
 // ...and, at the bottom, the TRANSIT between two cars (camera-sweep.ts): a
 // spectator changing crew is a jump of hundreds of metres over country that
@@ -33,6 +34,13 @@ import type { ShakeSource } from "../pwa/src/game/camera-shake.ts";
 const FLAT: SegmentPlan[] = [{ kind: "straight", length: 600, feature: "none" }];
 
 const FRAME = 1 / 60;
+const DEG = Math.PI / 180;
+
+/** The rigs that STAND somewhere rather than being sat in — the five the one
+ * chase table drives (CHASE_RIGS in camera.ts). Restated rather than
+ * exported: a test that read the list off the module could not catch the
+ * module moving a camera from one family to the other. */
+const OUTSIDE: CameraMode[] = ["close", "chase", "far", "heli", "top"];
 
 function game(): GameState {
   return createGame({
@@ -61,9 +69,22 @@ function run(
   cam: ReturnType<typeof createGameCamera>,
   frames: number,
   drive: (state: GameState) => void,
-): { worstStep: number; heights: number[]; overs: number[] } {
+): {
+  worstStep: number;
+  heights: number[];
+  overs: number[];
+  /** How far the lens is from the car, m — the standoff the rod's own
+   * length sets, which is what says whether the car is being followed or
+   * being left behind. */
+  ranges: number[];
+  /** ...and how far below the horizontal it is pointing, rad. */
+  pitches: number[];
+} {
   const heights: number[] = [];
   const overs: number[] = [];
+  const ranges: number[] = [];
+  const pitches: number[] = [];
+  const dir = new THREE.Vector3();
   let worstStep = 0;
   let prev: number | null = null;
   for (let f = 0; f < frames; f++) {
@@ -76,8 +97,12 @@ function run(
     prev = y;
     heights.push(y);
     overs.push(y - state.car.y);
+    const car = state.car;
+    ranges.push(cam.camera.position.distanceTo(new THREE.Vector3(car.x, car.y, car.z)));
+    cam.camera.getWorldDirection(dir);
+    pitches.push(Math.atan2(dir.y, Math.hypot(dir.x, dir.z)));
   }
-  return { worstStep, heights, overs };
+  return { worstStep, heights, overs, ranges, pitches };
 }
 
 describe("chase camera over a cliff", () => {
@@ -105,39 +130,159 @@ describe("chase camera over a cliff", () => {
     expect(worstStep).toBeLessThan(0.5);
   });
 
-  it("holds above the top while the car falls away", () => {
+  /** A car driven off a lip into free fall, and everything the shot does
+   * about it. `low` is the ground under the whole world: far below by
+   * default, so what is measured is the rig and never the floor. */
+  function freefall(mode: CameraMode, frames = 180, low = -500) {
     const state = game();
     const car = state.car;
-    // Ground far below everything: the floor can never be what holds the
-    // camera up here, so what is measured is the hold and nothing else.
-    cliffGround(state, car.z - 1e6, -500, -500);
+    cliffGround(state, car.z - 1e6, low, low);
     const cam = createGameCamera(1600, 900);
-    cam.setMode("chase");
+    cam.setMode(mode);
     car.heading = 0;
     car.u = 24;
     const top = car.y;
+    // Two seconds on the flat first, so what the fall changes is measured
+    // against a settled shot rather than against a rig still standing up.
+    const level = run(state, cam, 120, (s) => {
+      s.car.z += 24 * FRAME;
+    });
     let vy = 0;
-    const { heights } = run(state, cam, 180, (s) => {
+    const fall = run(state, cam, frames, (s) => {
       s.car.airborne = true;
       vy -= 9.81 * FRAME;
       s.car.vy = vy;
       s.car.y += vy * FRAME;
       s.car.z += 24 * FRAME;
     });
-    const fallen = top - car.y;
-    expect(fallen).toBeGreaterThan(25);
-    // The chase rig rides 2 m over the roof. After a fall that long the car
-    // is metres further down the frame than that, and the camera is still
-    // near the height it had at the lip.
-    const over = heights[heights.length - 1] - car.y;
-    expect(over).toBeGreaterThan(7);
-    expect(top - heights[heights.length - 1]).toBeLessThan(fallen * 0.75);
-    // And it gets there smoothly: no frame moves it more than a hand's
-    // width more than the frame before it.
-    for (let f = 2; f < heights.length; f++) {
-      const jerk = Math.abs(heights[f] - 2 * heights[f - 1] + heights[f - 2]);
+    return { state, car, cam, top, level, fall, fallen: top - car.y };
+  }
+
+  it("comes down with the car instead of watching it leave", () => {
+    const { top, level, fall, fallen } = freefall("chase");
+    expect(fallen).toBeGreaterThan(40);
+    // THE RULE. The rod TURNS to lie along the car's path rather than
+    // stretching: the lens swings over the falling car, so it ends up
+    // higher above it than the rig's own 2.45 m — but no further AWAY from
+    // it than a rod that length can reach. A camera left on the clifftop
+    // would be tens of metres off; this one is within a couple of the
+    // standoff it was driving with.
+    const settled = level.ranges[level.ranges.length - 1];
+    expect(Math.max(...fall.ranges)).toBeLessThan(settled + 2.5);
+    // ...and it really did travel: most of the whole fall, not a fraction,
+    // and what it is short by is the rod standing it over the car rather
+    // than any part of it left behind at the top.
+    expect(top - fall.heights[fall.heights.length - 1]).toBeGreaterThan(fallen * 0.8);
+    expect(fall.overs[fall.overs.length - 1]).toBeLessThan(10);
+  });
+
+  it("pitches over after it, and does it smoothly", () => {
+    const { level, fall } = freefall("chase");
+    // The settled shot looks a few degrees down at the car; by the bottom
+    // of the fall it is looking down the fall itself.
+    expect(level.pitches[level.pitches.length - 1]).toBeGreaterThan(-15 * DEG);
+    expect(fall.pitches[fall.pitches.length - 1]).toBeLessThan(-45 * DEG);
+    // And it gets there smoothly: no frame moves the lens more than a
+    // hand's width more than the frame before it, and no frame turns it
+    // more than a fraction of a degree more than the frame before it.
+    for (let f = 2; f < fall.heights.length; f++) {
+      const jerk = Math.abs(fall.heights[f] - 2 * fall.heights[f - 1] + fall.heights[f - 2]);
       expect(jerk).toBeLessThan(0.1);
+      const turn = Math.abs(fall.pitches[f] - 2 * fall.pitches[f - 1] + fall.pitches[f - 2]);
+      expect(turn).toBeLessThan(0.5 * DEG);
     }
+  });
+
+  it("does it from every seat the game is driven from", () => {
+    // The one thing no camera may do is let the car fall out of it. The
+    // outside rigs turn their rod by their own share of the read; the seats
+    // inside the car cannot lose it at all.
+    for (const mode of PLAY_MODES) {
+      const { level, fall, fallen } = freefall(mode);
+      expect(fallen).toBeGreaterThan(40);
+      const settled = level.ranges[level.ranges.length - 1];
+      expect(Math.max(...fall.ranges), mode).toBeLessThan(settled + 7);
+    }
+  });
+
+  it("keeps the car inside the frame the whole way down, in landscape and in portrait", () => {
+    // THE RULE THE WHOLE SHEET IS FOR, stated as the frame rather than as the
+    // geometry: whatever the OUTSIDE rig, whatever the aspect, a car that has
+    // gone over may not leave the picture. Portrait is checked because the
+    // fov is VERTICAL — the hor+ rule (`verticalFovFor`) raises it on a phone
+    // held upright, so the two aspects frame a steep shot differently and a
+    // landscape screenshot cannot answer for both.
+    //
+    // The three seats INSIDE the car are not in it, and cannot be: they are
+    // bolted to the body, so the car's own middle is around the lens rather
+    // than in front of it and projects nowhere meaningful. They also cannot
+    // fail the rule — a camera cannot lose a car it is sitting in.
+    const point = new THREE.Vector3();
+    for (const [w, h] of [
+      [1600, 900],
+      [390, 844],
+    ]) {
+      for (const mode of OUTSIDE) {
+        const state = game();
+        const car = state.car;
+        cliffGround(state, car.z - 1e6, -500, -500);
+        const cam = createGameCamera(w, h);
+        cam.setMode(mode);
+        car.heading = 0;
+        car.u = 24;
+        for (let f = 0; f < 120; f++) {
+          car.z += 24 * FRAME;
+          cam.update(state, FRAME);
+        }
+        let vy = 0;
+        let worst = 0;
+        for (let f = 0; f < 240; f++) {
+          car.airborne = true;
+          vy -= 9.81 * FRAME;
+          car.vy = vy;
+          car.y += vy * FRAME;
+          car.z += 24 * FRAME;
+          cam.update(state, FRAME);
+          // The car's own middle, in normalised device coordinates: inside
+          // ±1 on both axes is inside the picture.
+          point.set(car.x, car.y, car.z).project(cam.camera);
+          worst = Math.max(worst, Math.abs(point.x), Math.abs(point.y));
+        }
+        expect(worst, `${mode} at ${w}x${h}`).toBeLessThan(0.8);
+      }
+    }
+  });
+
+  it("comes off a real lip too, however slowly the car goes over it", () => {
+    // The alpine case, and the one the floor could plausibly break: real
+    // ground level with the car right up to the edge and a sheer drop past
+    // it, crawled off rather than driven off. The slower the car goes over,
+    // the longer the lens is still standing on the clifftop with solid
+    // ground under it — and the floor may never hold it there while the car
+    // is on its way to the valley.
+    const state = game();
+    const car = state.car;
+    const top = car.y;
+    const edge = car.z + 10;
+    cliffGround(state, edge, top, top - 300);
+    const cam = createGameCamera(1600, 900);
+    cam.setMode("chase");
+    car.heading = 0;
+    car.u = 4;
+    let vy = 0;
+    const { heights, ranges } = run(state, cam, 300, (s) => {
+      s.car.z += 4 * FRAME;
+      if (s.car.z <= edge) return;
+      s.car.airborne = true;
+      vy -= 9.81 * FRAME;
+      s.car.vy = vy;
+      s.car.y += vy * FRAME;
+    });
+    expect(top - car.y).toBeGreaterThan(30);
+    const over = heights[heights.length - 1] - car.y;
+    expect(over).toBeGreaterThan(2.45);
+    expect(over).toBeLessThan(10);
+    expect(ranges[ranges.length - 1]).toBeLessThan(ranges[0] + 4);
   });
 
   it("holds its standoff over an ordinary jump and rises to its hover", () => {
@@ -152,7 +297,7 @@ describe("chase camera over a cliff", () => {
     // Up over a 2 m lip and back down to the same ground: a designed jump,
     // and the frame it is watched in must not change for it.
     let vy = 7;
-    const { overs } = run(state, cam, 90, (s) => {
+    const { overs, ranges } = run(state, cam, 90, (s) => {
       vy -= 9.81 * FRAME;
       s.car.y += vy * FRAME;
       if (s.car.y <= lip) {
@@ -163,17 +308,62 @@ describe("chase camera over a cliff", () => {
       s.car.vy = vy;
       s.car.z += 28 * FRAME;
     });
-    // The STANDOFF holds; the height reads the grip. In the air there is
-    // none, so the lens stands at the top of the rig's hover over its ride
-    // height (camera-feel.ts, `hover` in CHASE_RIGS — 0.8 m over 2.45),
-    // plus its own descent lift (`dropLift`) on the way down and the frame
-    // or two the camera takes to settle onto the landed car (HEIGHT_SPRING
-    // — in the air the spring is stiff enough to sit on the arc, on the
-    // ground it is a mass that has to be got moving). The cliff hold
-    // contributes none of it: a designed jump is not a cliff.
-    const peak = Math.max(...overs.slice(4));
-    expect(peak).toBeGreaterThan(2.45 + 0.4);
-    expect(peak).toBeLessThan(2.45 + 0.8 + 0.7);
+    // The STANDOFF holds — which is now the length of a rod that TURNS, so
+    // the test of it is the range to the car and not the lens's height. The
+    // rod dips under the climbing car and comes over the descending one, so
+    // the height does move: what may not move is how big the car is in the
+    // frame. A designed jump is watched from the same distance it was
+    // driven at.
+    const settled = ranges[3];
+    expect(Math.min(...ranges.slice(4))).toBeGreaterThan(settled - 0.6);
+    expect(Math.max(...ranges.slice(4))).toBeLessThan(settled + 1.4);
+    // The height reads the grip. In the air there is none, so the lens
+    // stands at the top of the rig's hover over its ride height
+    // (camera-feel.ts, `hover` in CHASE_RIGS — 0.8 m over 2.45), and the
+    // rod's own turn puts it higher again on the way down.
+    expect(Math.max(...overs.slice(4))).toBeGreaterThan(2.45 + 0.4);
+  });
+
+  it("tips up off the lip, over as the car comes down, and bounces level again", () => {
+    const state = game();
+    const car = state.car;
+    cliffGround(state, car.z - 1e6, -500, -500);
+    const cam = createGameCamera(1600, 900);
+    cam.setMode("chase");
+    car.heading = 0;
+    car.u = 28;
+    const lip = car.y;
+    let vy = 7;
+    let landed = 0;
+    const { pitches } = run(state, cam, 240, (s) => {
+      vy -= 9.81 * FRAME;
+      s.car.y += vy * FRAME;
+      if (s.car.y <= lip) {
+        s.car.y = lip;
+        vy = 0;
+      }
+      s.car.airborne = s.car.y > lip;
+      if (!s.car.airborne && landed === 0) landed = 1;
+      s.car.vy = vy;
+      s.car.z += 28 * FRAME;
+    });
+    // Where the shot points with the car on the ground, at either end.
+    const rest = pitches[pitches.length - 1];
+    const climbing = pitches.slice(2, 20);
+    const falling = pitches.slice(70, 86);
+    // Off the lip the rod dips under the car and the shot looks UP the arc
+    // — several degrees above where it sits on the road...
+    expect(Math.max(...climbing)).toBeGreaterThan(rest + 10 * DEG);
+    // ...and coming back down it comes over and looks along the descent.
+    expect(Math.min(...falling)).toBeLessThan(rest - 10 * DEG);
+    // Then the wheels are down, the car is level, and the rod swings back
+    // through the horizontal and settles — a bounce, not an arrival.
+    const after = pitches.slice(90);
+    expect(Math.max(...after)).toBeGreaterThan(rest + 0.5 * DEG);
+    expect(Math.max(...after)).toBeLessThan(rest + 4 * DEG);
+    expect(Math.abs(pitches[pitches.length - 1] - pitches[pitches.length - 30])).toBeLessThan(
+      0.2 * DEG,
+    );
   });
 });
 
@@ -930,7 +1120,7 @@ describe("the car going over", () => {
     car.heading = 0;
     car.roll = 0;
     car.z += 400;
-    cam.replant(state);
+    cam.replant();
     cam.update(state, FRAME);
     expect(apart(boom(cam.camera.position, car), car.heading + Math.PI)).toBeLessThan(0.1);
     expect(cam.camera.position.distanceTo(new THREE.Vector3(car.x, car.y, car.z))).toBeLessThan(20);
@@ -1462,7 +1652,7 @@ function respawnDrive(view: CameraMode, frames: number): Frame[] {
   car.z = 100;
   car.heading = 0;
   car.u = TUNING.offTrack.respawnSpeed;
-  cam.replant(state);
+  cam.replant();
   const out: Frame[] = [];
   for (let f = 0; f < frames; f++) {
     cam.update(state, FRAME);

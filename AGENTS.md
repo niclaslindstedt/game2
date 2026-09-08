@@ -44,7 +44,7 @@ This project is tuned by measuring and LOOKING, not guessing. Each lab below is 
 | A car's look                 | `cars`, `liveries`, `field`, `crew`     | `car-design`                  |
 | One prop or item             | `items`, `items-list`                   | `built-world`                 |
 | The sky, weather, aircraft   | `sky`, `traffic`                        | `atmosphere`                  |
-| The camera                   | `views`, `transit`, `rollcam`           | `game-feel`                   |
+| The camera                   | `views`, `transit`, `rollcam`, `aircam` | `game-feel`                   |
 | Anything heard               | `audition`                              | `sound-effects`, `soundtrack` |
 | The HUD or a menu            | `screenshots`, `glyphs`                 | `hud-and-menus`, `ui-review`  |
 | Anything rendered            | `profile`                               | `write-code`                  |
