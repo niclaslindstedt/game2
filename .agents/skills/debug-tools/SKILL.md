@@ -43,6 +43,9 @@ something is the moment you are looking at it.
 
 **ALT held hides the HUD and leaves the overlay up.** That is the shot to
 ask for when the game's own chrome is in the way of the thing being reported.
+The shutter's own receipt stays up with the overlay — a press that says
+nothing is indistinguishable from a key that did nothing — and none of it
+reaches the picture, which is read off the drawing buffer.
 
 ### Flying
 
@@ -251,7 +254,10 @@ it is a number.
   screenshot taken IN the game says less than one taken with the operating
   system's own key. Every picture also lands on the CLIPBOARD as it is
   taken (the `copyShots` switch in settings.ts, on by default), so what a
-  reporter has to do is press one key and paste.
+  reporter has to do is press one key and paste. A picture taken with the
+  overlay up is UNSIGNED: the app's mark says where a shared frame came
+  from, and this frame is evidence — so the corner belongs to the repro
+  line instead.
 - **COPY DEBUG INFO, in the bottom corner, while god mode flies with the
   overlay OFF.** Flying to LOOK at something is the case where four panels
   of numbers are four panels over the subject — so the numbers get a button

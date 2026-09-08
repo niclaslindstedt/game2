@@ -91,6 +91,7 @@ import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./g
 import type { GameRenderer } from "./game/renderer.ts";
 import {
   Hud,
+  HudFlashes,
   damageCall,
   lampCalls,
   overheatCall,
@@ -261,7 +262,7 @@ import { runRumble, setRumble } from "./game/haptics.ts";
 import { armScreenshots, captureFrame, type Capture, type ShotNotes } from "./game/screenshots.ts";
 import { relaySharedTaps } from "./game/second-finger.ts";
 import { readHudLayer, type HudLayer } from "./game/shot-hud.ts";
-import { beginImageCopy } from "./lib/share-image.ts";
+import { beginImageCopy, copiedWithin } from "./lib/share-image.ts";
 import { splashSkipped } from "./game/splash.ts";
 import { SplashScreen } from "./game/splash-screen.tsx";
 import { guardTextInteraction } from "./game/text-interaction.ts";
@@ -1380,6 +1381,12 @@ export function App() {
   const shotRef = useRef<{
     label: string;
     notes: ShotNotes | null;
+    /** Whether the app's MARK goes in the corner (screenshots.ts). Off for
+     * a developer's picture: the mark is there to say where a shared frame
+     * came from, and a debug capture is evidence — it is read for the boxes
+     * and the repro line, and a badge over the bottom-right corner is one
+     * more thing sitting on the subject. */
+    sign: boolean;
     hud: HudLayer | null;
     done?: (capture: Capture | null) => void;
   } | null>(null);
@@ -1474,9 +1481,18 @@ export function App() {
    * inside the press and the picture is handed over afterwards
    * (lib/share-image.ts). */
   const takeShot = (): void => {
-    if (!optionsRef.current.screenshots) return;
+    // A press always gets an answer. The switch is in OPTIONS and the key is
+    // not, so a shutter that has been turned off is a key that does nothing
+    // at all — and the one press nobody can afford to guess about is the one
+    // that was meant to record something.
+    if (!optionsRef.current.screenshots) {
+      flash("SCREENSHOTS ARE OFF · OPTIONS", "bad");
+      return;
+    }
     // Not behind the menu: that frame is the drone circling a stage nobody
-    // is driving, with a card over half of it.
+    // is driving, with a card over half of it. Nothing is said, because
+    // nothing would be seen — the news column is the HUD's, and the HUD is
+    // down under a card.
     if (menuRef.current !== null) return;
     // The shutter answers the PRESS, not the encode. A camera noise that
     // arrived a beat after the button would read as lag rather than as a
@@ -1487,6 +1503,7 @@ export function App() {
     shotRef.current = {
       label: shotLabel(),
       notes: read ? { boxes: read.boxes, repro: read.repro } : null,
+      sign: !debugRef.current,
       hud: readHudLayer(),
       done: (capture) => {
         if (!copy) {
@@ -1494,11 +1511,13 @@ export function App() {
           return;
         }
         copy.settle(capture?.blob ?? null);
-        // ONE receipt, and it waits for the clipboard: a picture the player
-        // meant to paste is not saved until it is pasteable, and two flashes
-        // for one press is the HUD talking to itself. The wait is the write,
-        // not the encode — the blob is already in hand by here.
-        void copy.done.then((copied) => {
+        // ONE receipt, and it waits for the clipboard — but not forever
+        // (`copiedWithin`): a picture the player meant to paste is not saved
+        // until it is pasteable, and two flashes for one press is the HUD
+        // talking to itself, but a write that never answers must not be able
+        // to swallow the whole reply. The wait is the write, not the encode —
+        // the blob is already in hand by here.
+        void copiedWithin(copy).then((copied) => {
           if (!capture) flash("PICTURE FAILED", "bad");
           else flash(copied ? "PICTURE SAVED · COPIED" : "PICTURE SAVED", "good");
         });
@@ -2461,6 +2480,7 @@ export function App() {
         // Null every time in practice — the map is a menu page and the
         // driving HUD is not up over one — and asked anyway, so the two
         // shutters never disagree about what a picture is.
+        sign: false,
         hud: readHudLayer(),
         done: (capture) => {
           if (!copy) {
@@ -2468,7 +2488,7 @@ export function App() {
             return;
           }
           copy.settle(capture?.blob ?? null);
-          void copy.done.then((copied) => resolve({ saved: capture !== null, copied }));
+          void copiedWithin(copy).then((copied) => resolve({ saved: capture !== null, copied }));
         },
       };
     });
@@ -3603,14 +3623,16 @@ export function App() {
         const wanted = shotRef.current;
         if (wanted === null) return;
         shotRef.current = null;
-        void captureFrame(canvas, wanted.label, wanted.notes, wanted.hud).then((capture) => {
-          // Whoever asked says what happened: the shutter flashes it on the
-          // HUD, a menu's button says it on its own face. This is also the
-          // one place the finished picture exists, which is why the whole
-          // capture goes back rather than a yes or no.
-          if (wanted.done) wanted.done(capture);
-          else flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
-        });
+        void captureFrame(canvas, wanted.label, wanted.notes, wanted.hud, wanted.sign).then(
+          (capture) => {
+            // Whoever asked says what happened: the shutter flashes it on the
+            // HUD, a menu's button says it on its own face. This is also the
+            // one place the finished picture exists, which is why the whole
+            // capture goes back rather than a yes or no.
+            if (wanted.done) wanted.done(capture);
+            else flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
+          },
+        );
       };
       /** R30 — THE CARD'S OWN BACKDROP. A few seconds past the line the
        * player's own car is a small thing receding down the run-out, and
@@ -4280,6 +4302,17 @@ export function App() {
           void (e.currentTarget as HTMLCanvasElement).requestPointerLock?.();
         }}
       />
+      {/* ALT hides the chrome so the frame under it can be photographed, and
+          takes the news column with it — including the shutter's own receipt,
+          which is the one line somebody holding ALT is most likely to be
+          waiting for. So the column stands on its own while the rest is down.
+          None of it reaches the picture: the capture is read off the drawing
+          buffer and this is DOM over it. */}
+      {snap && !menu && hudHidden && !bench && (
+        <div className="hud pointer-events-none absolute inset-0 select-none">
+          <HudFlashes flashes={flashes} />
+        </div>
+      )}
       {snap && !menu && !hudHidden && !bench && (
         <Hud
           // WHOSE CAR THE INSTRUMENTS ARE READING. The player's, until a
