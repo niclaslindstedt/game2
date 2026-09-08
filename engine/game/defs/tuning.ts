@@ -480,6 +480,40 @@ export const TUNING = {
   /** THE ENGINE — how the torque a car's `gearAccel` promises actually
    * arrives inside a gear, and how much of it ever reaches the ground. */
   engine: {
+    /** THE TOP OF A GEAR, as the share of the gear's ceiling the pull is
+     * faded to nothing across (`engineAccel`, smoothstepped). It is the rev
+     * limiter as the handling model sees it: torque does not vanish at the
+     * top of a real gear, the limiter simply stops asking for more, and this
+     * is how sharply that arrives.
+     *
+     * IT IS ALSO WHAT DECIDES A TOP GEAR'S TOP SPEED, and the reason it is
+     * a knob rather than a constant. In every gear but the last the car
+     * shifts out long before the fade matters. In the LAST one there is
+     * nowhere to shift to, so the car settles where the fade meets the drag
+     * — and the narrower this band, the steeper that wall and the less any
+     * drag matters against it. Taken too narrow, a car with its bonnet, its
+     * screens and both doors torn off tops out three per cent under a sound
+     * one, because the thing holding it back is arithmetic rather than the
+     * hole in the front of it. Wide enough and the last gear is a real
+     * equilibrium against the air again.
+     *
+     * The floor under it is the SHIFT POINT: a car has to be able to reach
+     * `gearbox.upAt` of a gear's ceiling to leave that gear, and the fade
+     * is what stands in the way. Measured together, and re-measure them
+     * together — a wider band wants a lower shift point, and the pair of
+     * them decides every car's top speed.
+     *
+     * MEASURED, and this is where it came out. Widening it does make the
+     * last gear a drag equilibrium again, and it costs more than it buys:
+     * at 0.32 with the shift point dropped to 0.88 to match, every car
+     * still walks its box up, and the roster tops out at 175 / 204 / 165
+     * km/h against the 183 / 216 / 174 it reads here — a gear's worth of
+     * top end given away across the board to make the air matter at the
+     * very top of it. Wider again and gears start going unreachable on
+     * gravel. So the top gear stays rev-limited, and what a hole in the
+     * bodywork costs is a few per cent of the top end rather than the
+     * gear-drop cliff it used to cost when the ladders were flat. */
+    taper: 0.18,
     /** How far a car's `torque` tilts the in-gear curve, as a fraction at
      * each end of the gear. The curve PIVOTS around mid-gear, so torque
      * says where the shove lives and never how much of it there is —

@@ -172,11 +172,10 @@ export function settleWheelspin(spec: CarSpec, car: CarState, share: number, dt:
 
 export function engineAccel(spec: CarSpec, car: CarState, bite: number): number {
   // Full torque through most of the gear, smoothly tapering to zero at the
-  // gear's top speed. The taper starts late (last ~18%) so the equilibrium
-  // against rolling drag sits close to gearTop and the shift-up threshold
-  // is actually reachable — a long asymptotic curve would stall below it.
+  // gear's top speed (`engine.taper` — the rev limiter as this model sees
+  // it, and in the LAST gear the thing the top speed is settled against).
   const top = spec.gearTop[car.gear];
-  const headroom = clamp((top - car.u) / (top * 0.18), 0, 1);
+  const headroom = clamp((top - car.u) / (top * T.engine.taper), 0, 1);
   const taper = headroom * headroom * (3 - 2 * headroom);
   const rev = revs(spec, car, car.u);
   // The torque curve, pivoting around mid-gear: a torquey engine shoves off

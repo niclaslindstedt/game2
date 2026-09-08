@@ -271,6 +271,10 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
     // as readily as with the roads. The names behind it are the rest of
     // that handful, so a road (or a roster) that moves under the leader
     // costs one more plunge rather than a scan of the tail.
+    // 8 leads on the lock below, which is the pair the search stops at
+    // first today; 219 led it before the roster's ladders became real ones
+    // and the drive that finds the water changed length under them.
+    8,
     219,
     73,
     5,
@@ -350,7 +354,7 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
    * walks it as well and the space is a couple of hundred times wider for
    * one more loop. */
   type Approach = [seed: number, steer: number];
-  const APPROACHES: Approach[] = [-0.75, -1, -0.5, -0.35].flatMap((steer) =>
+  const APPROACHES: Approach[] = [-1, -0.75, -0.5, -0.35].flatMap((steer) =>
     SHORE_SEEDS.map((seed): Approach => [seed, steer]),
   );
 
