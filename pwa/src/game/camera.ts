@@ -496,6 +496,10 @@ export type { MapPose };
 export type GameCamera = {
   camera: THREE.PerspectiveCamera;
   mode: () => CameraMode;
+  /** How far the TV cam's live tripod is from the car, m — the distance its
+   * shot is focused at, for the one pass in the game that has a focal plane
+   * (camera-tv-lens.ts). Meaningless, and never read, in any other mode. */
+  tvFocus: () => number;
   /** THE MAP VIEW (camera-map.ts): the whole stage from the sky, and the
    * handles the Roam page steers it by — turn, tilt, zoom, pan, and the
    * framing a link can park it on. Exposed one method at a time rather than
@@ -1055,6 +1059,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
   return {
     camera,
     mode: () => mode,
+    tvFocus: tv.focus,
     mapRange: map.range,
     free,
     freeMove,

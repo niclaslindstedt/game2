@@ -38,6 +38,7 @@ import {
   WHEELS_LOST,
   MIRROR_GLASS,
   SCREEN_GRIME,
+  TV_BOKEH,
   FLORA_SCALE,
   GROUND_SCALE,
   RESOLUTION_SCALE,
@@ -45,6 +46,7 @@ import {
   type VideoSettings,
   type ViewSettings,
 } from "./settings.ts";
+import { createTvLens, type TvLens } from "./camera-tv-lens.ts";
 import type { FrameCost, SceneShare } from "./benchmark-report.ts";
 import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
@@ -393,6 +395,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   /** …and whether the WATER ON THE WINDSCREEN gets its own pass this frame:
    * the camera is in the car, and there is rain on the glass to draw. */
   let glassRain = false;
+  /** The TV cam's depth-of-field pass, or null while nothing is looking
+   * through it. Built on demand rather than up front: a full-size colour and
+   * depth pair is real memory, and most runs never take the camera. */
+  let tvLens: TvLens | null = null;
   /** ...and how far it is allowed to see when it does, as a fraction of the
    * forward view's fog. Settled in `render` and read in `drawScene`, so both
    * halves of one frame pull the air in by the same amount. */
@@ -1856,7 +1862,19 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       }
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, w, h);
-      renderer.render(scene, chase.camera);
+      // THE TV CAM'S LENS, and the only place the world is not drawn straight
+      // to the canvas. It is stood up on the first frame the camera is up and
+      // given back the moment it is not, so every other view costs nothing —
+      // not the pass, not the target (`camera-tv-lens.ts`).
+      const bokeh = chase.mode() === "tv" && TV_BOKEH[quality.effects];
+      if (bokeh) {
+        tvLens ??= createTvLens();
+        tvLens.draw(renderer, scene, chase.camera, chase.tvFocus(), w, h);
+      } else {
+        tvLens?.dispose();
+        tvLens = null;
+        renderer.render(scene, chase.camera);
+      }
       // THE RAIN ON THE GLASS GOES ON AFTER THE WORLD, because every drop on
       // it is a lens showing the world BENT — so the world has to have been
       // drawn before there is anything to bend. It reads the frame that is

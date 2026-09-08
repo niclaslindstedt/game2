@@ -117,15 +117,40 @@ export const TV = {
   pan: 5.5,
   /** How far over the car's own height the aim sits, m. */
   aimUp: 0.9,
-  /** The width of world the lens tries to cover at the car, m, and the
-   * band it may solve that within, deg. `frame` is what makes the zoom a
-   * decision about the CAR's size in shot rather than about distance. */
-  frame: 34,
-  fovMin: 24,
-  fovMax: 62,
-  /** How fast the lens works, 1/s. Slower than the pan: a zoom that kept up
-   * with the closing rate of a rally car would be a rubber band. */
-  zoom: 2.6,
+  /** THE ZOOM, which is most of what makes this camera read as television.
+   *
+   * `frame` is the width of world the lens tries to cover at the car, m, and
+   * everything else follows from holding it: far away the shot is a long
+   * lens, and as the car closes the operator has to open right up to keep it
+   * in — then goes long again behind it. That whole gesture is one number
+   * and a range, and it costs nothing to compute.
+   *
+   * The width is a decision about the CAR's size in shot, so it is sized to
+   * the car: about four times a rally car's length, which puts it a quarter
+   * of the frame across at the distance the operator is holding. Sized to
+   * the ROAD instead — a comfortable thirty-odd metres — a car a hundred
+   * metres up the stage is four pixels and the shot is a picture of a
+   * valley.
+   *
+   * `fovMin` is what lets the long end actually be long. It is the ceiling
+   * on the zoom, not a safety rail: at 24° a car two hundred metres out is
+   * still a speck, and the whole drama of a trackside shot is a dot on the
+   * horizon that becomes a car. `fovMax` is the other end, and it is wide
+   * enough that a car passing six metres away is still inside the frame
+   * rather than cropped to a wheel arch. */
+  frame: 18,
+  fovMin: 9,
+  fovMax: 66,
+  /** How fast the lens works, 1/s.
+   *
+   * Slower than the pan, and deliberately not fast enough to keep up. A car
+   * closing at thirty metres a second walks the solved fov faster than any
+   * hand on a barrel, so the lens is always a little behind: it is still
+   * long as the car arrives, which is what makes the arrival read as sudden,
+   * and it is still wide for a beat after the car has gone, which is the
+   * operator catching up. A zoom that tracked the solve exactly would be a
+   * rubber band with a car in it. */
+  zoom: 3.2,
 };
 
 /** One tripod. Fixed for the life of the stage — nothing here moves. */
@@ -284,6 +309,12 @@ export type TvCamera = {
   /** Stand the gallery for this frame and cut to whichever tripod owns the
    * car. Returns the design fov (horizontal reference) the shot wants. */
   update: (camera: THREE.PerspectiveCamera, state: GameState, dt: number) => number;
+  /** How far the live stand is from the car, m — the distance the shot is
+   * FOCUSED at (camera-tv-lens.ts). Stated here rather than measured again
+   * by the renderer because this is the range the lens already solved its
+   * own zoom from, and a focus worked out from a slightly different point
+   * would put the sharp plane somewhere the operator did not choose. */
+  focus: () => number;
 };
 
 export function createTvCamera(): TvCamera {
@@ -300,8 +331,12 @@ export function createTvCamera(): TvCamera {
   let live = -1;
   const aim = new THREE.Vector3();
   let fov = TV.fovMax;
+  /** The range the last frame was solved at, m — the zoom's input and the
+   * lens's focal distance, which are the same number by construction. */
+  let range = 50;
 
   return {
+    focus: () => range,
     update: (camera, state, dt) => {
       const track = state.track;
       if (track !== plannedFor) {
@@ -357,7 +392,7 @@ export function createTvCamera(): TvCamera {
       const dx = targetX - stand.x;
       const dy = targetY - stand.y;
       const dz = targetZ - stand.z;
-      const range = Math.max(4, Math.hypot(dx, dy, dz));
+      range = Math.max(4, Math.hypot(dx, dy, dz));
       const want = clamp(
         (2 * Math.atan(TV.frame / (2 * range)) * 180) / Math.PI,
         TV.fovMin,

@@ -724,6 +724,24 @@ export const GLASS_RAIN: Record<VideoSettings["effects"], boolean> = {
   full: true,
 };
 
+/** Whether the TV CAM HAS A FOCAL PLANE (camera-tv-lens.ts) — depth of field
+ * under the one camera in the game that has any business with it.
+ *
+ * Every other view is a few metres off the car with everything worth looking
+ * at at the same distance, where a pinhole lens is not a lie. A trackside
+ * tripod is looking two hundred metres up the road on a long lens, and a long
+ * lens has a focal plane you can see: the grass in front and the ridge behind
+ * go soft and the car is the one sharp thing in the world.
+ *
+ * It is a copy of the frame and a gather over it, so it rides here with the
+ * rest of the transients — and unlike them it is charged for only while the
+ * TV cam is up. Any other camera pays nothing, target included. */
+export const TV_BOKEH: Record<VideoSettings["effects"], boolean> = {
+  off: false,
+  low: false,
+  full: true,
+};
+
 /** Whether the REAR-VIEW GLASS IS CURVED (mirror.ts) rather than a flat
  * pane — the bend across a real mirror that draws the middle of the strip
  * at something like its true size and squeezes the ends in. It is a second
