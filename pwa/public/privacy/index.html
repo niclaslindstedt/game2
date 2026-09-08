@@ -1,0 +1,170 @@
+<!doctype html>
+<!--
+  SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+  THE PRIVACY POLICY. A static page under `pwa/public/`, so it is copied into
+  every deploy slot verbatim and needs neither the app's bundle nor a route:
+  the store listings name this URL, and Apple checks that it resolves before
+  review opens the app at all. A page behind the game's own JavaScript would be
+  a page a crawler, a rating board and a Play Console form all fail to read.
+
+  IT SAYS ONE THING, AND IT IS TRUE OF THE BUILD: nothing leaves the device.
+  Keep it that way — if the game ever gains an account, a leaderboard server,
+  an analytics call or an advertising SDK, this page and the App Store review
+  notes (native/store/listing.mts) both become false in the same commit, and
+  `make store-metadata` cross-checks the pair.
+
+  The colours are `PALETTE` from pwa/src/identity.ts, restated because a
+  static page cannot import a TypeScript module. There is no third copy: this
+  is a leaf, not a source of truth.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy — Scandinavian Flick</title>
+    <meta
+      name="description"
+      content="Scandinavian Flick collects no data. Everything the game remembers stays on your own device."
+    />
+    <link rel="canonical" href="https://game2.niclaslindstedt.se/privacy/" />
+    <meta name="robots" content="index, follow" />
+    <link rel="icon" href="/favicon.ico" />
+    <style>
+      :root {
+        --sky: #3fa9f5;
+        --sky-high: #1f7fe0;
+        --ink: #10243d;
+        --ink-dim: #4a5f78;
+        --paper: #f6f9fc;
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(160deg, var(--sky) 0%, var(--sky-high) 100%);
+        color: var(--ink);
+        font-family:
+          "Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+        font-size: 17px;
+        line-height: 1.55;
+        padding: 4vh 5vw 12vh;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+        background: var(--paper);
+        border-radius: 14px;
+        padding: clamp(1.5rem, 4vw, 3rem);
+        box-shadow: 0 18px 50px rgb(8 32 60 / 35%);
+      }
+      h1 {
+        font-size: clamp(1.8rem, 5vw, 2.6rem);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        margin: 0 0 0.2em;
+      }
+      h2 {
+        font-size: 1.15rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin: 2.2em 0 0.5em;
+        color: var(--sky-high);
+      }
+      .lede {
+        font-size: 1.2rem;
+        margin: 0 0 1.5em;
+      }
+      .updated {
+        color: var(--ink-dim);
+        font-size: 0.95rem;
+        margin: 0 0 2em;
+      }
+      ul {
+        padding-left: 1.2em;
+      }
+      li {
+        margin-bottom: 0.4em;
+      }
+      a {
+        color: var(--sky-high);
+      }
+      footer {
+        margin-top: 3em;
+        padding-top: 1.5em;
+        border-top: 1px solid rgb(16 36 61 / 15%);
+        color: var(--ink-dim);
+        font-size: 0.95rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Privacy Policy</h1>
+      <p class="lede">
+        <strong>Scandinavian Flick collects nothing.</strong> There is no account, no sign-in, no
+        analytics, no advertising, and no server of ours anywhere that knows you played.
+      </p>
+      <p class="updated">
+        Applies to the web game, the desktop app, and the mobile app. Last updated 2026-09-08.
+      </p>
+
+      <h2>What the game stores</h2>
+      <p>
+        The game remembers a few things so that it is still the game you left. All of it is held by
+        your own browser or app, on your own device, in ordinary local storage:
+      </p>
+      <ul>
+        <li>Your settings — camera, controls, sound, picture quality.</li>
+        <li>Campaign progress and which stages you have opened.</li>
+        <li>Your stage times, the score boards, and the ghost of your own best run.</li>
+        <li>Photographs you take with the in-game camera.</li>
+      </ul>
+      <p>
+        None of it is transmitted. Clearing the site data in your browser, or deleting the app,
+        deletes all of it, and there is no copy elsewhere to restore it from.
+      </p>
+
+      <h2>What the game sends</h2>
+      <p>
+        Nothing. The mobile and desktop apps ship the whole game inside the download and serve it
+        locally, so they run in airplane mode from the first launch and make no network request in
+        order to play. The web version loads the game's own files from its own address once, then
+        runs offline.
+      </p>
+      <p>
+        The only connection you can cause is a link you press yourself — the source repository, or a
+        credit — which opens in your own browser and is then between you and that site.
+      </p>
+
+      <h2>Children</h2>
+      <p>
+        The game is suitable for a general audience and collects no personal information from
+        anybody, of any age. There is nothing to buy inside it and no way to communicate with
+        another player through it.
+      </p>
+
+      <h2>Hosting</h2>
+      <p>
+        The web version is served by GitHub Pages. Like any web server, it sees the requests that
+        fetch the page. We neither receive nor keep those logs, and we run no other service that the
+        game talks to.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        If a future version of the game ever gains something that does leave your device, this page
+        changes in the same release that adds it, and the store listing says so too.
+      </p>
+
+      <footer>
+        <p>
+          Questions: <a href="mailto:niclas@agilator.se">niclas@agilator.se</a> ·
+          <a href="/support/">Support</a> · <a href="/">Play the game</a>
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

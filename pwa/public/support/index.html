@@ -1,0 +1,131 @@
+<!doctype html>
+<!--
+  SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+  THE SUPPORT PAGE, because Apple requires one and rejects the two obvious
+  substitutes: a `mailto:` (not an http URL) and a source-code repository
+  (which tells a player who bought a game to open a pull request). A static
+  page under `pwa/public/` for the same reason as the privacy policy beside
+  it — the listing names the URL and review checks that it resolves.
+
+  It is deliberately thin. What a player actually needs is somewhere to write
+  to and the two answers that account for most of the mail: the game does not
+  need the internet, and their progress lives on their own device.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Support — Scandinavian Flick</title>
+    <meta
+      name="description"
+      content="Help with Scandinavian Flick: where progress is stored, what to do if the game will not start, and where to write."
+    />
+    <link rel="canonical" href="https://game2.niclaslindstedt.se/support/" />
+    <link rel="icon" href="/favicon.ico" />
+    <style>
+      :root {
+        --sky: #3fa9f5;
+        --sky-high: #1f7fe0;
+        --ink: #10243d;
+        --ink-dim: #4a5f78;
+        --paper: #f6f9fc;
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(160deg, var(--sky) 0%, var(--sky-high) 100%);
+        color: var(--ink);
+        font-family:
+          "Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+        font-size: 17px;
+        line-height: 1.55;
+        padding: 4vh 5vw 12vh;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+        background: var(--paper);
+        border-radius: 14px;
+        padding: clamp(1.5rem, 4vw, 3rem);
+        box-shadow: 0 18px 50px rgb(8 32 60 / 35%);
+      }
+      h1 {
+        font-size: clamp(1.8rem, 5vw, 2.6rem);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        margin: 0 0 0.2em;
+      }
+      h2 {
+        font-size: 1.15rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin: 2.2em 0 0.5em;
+        color: var(--sky-high);
+      }
+      .lede {
+        font-size: 1.2rem;
+        margin: 0 0 1.5em;
+      }
+      a {
+        color: var(--sky-high);
+      }
+      footer {
+        margin-top: 3em;
+        padding-top: 1.5em;
+        border-top: 1px solid rgb(16 36 61 / 15%);
+        color: var(--ink-dim);
+        font-size: 0.95rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Support</h1>
+      <p class="lede">
+        Write to <a href="mailto:niclas@agilator.se">niclas@agilator.se</a>. Say which device you
+        are on and what the game did; if it is about one stage, the seed on the pause card is enough
+        to reproduce it exactly.
+      </p>
+
+      <h2>The game will not start</h2>
+      <p>
+        Building a stage takes a few seconds on a phone, and longer the first time. If it never gets
+        past the loading screen, the usual cause is a browser with WebGL turned off or a very old
+        graphics driver. On the web version, try
+        <a href="/">reloading</a> once — the game keeps a copy of itself for offline play, and a
+        reload replaces a half-downloaded one.
+      </p>
+
+      <h2>Where my times and settings live</h2>
+      <p>
+        On your own device, in the browser's or the app's local storage. Nothing is on a server, so
+        clearing site data or deleting the app deletes them, and there is no copy anywhere to
+        restore. See the <a href="/privacy/">privacy policy</a>.
+      </p>
+
+      <h2>Does it need the internet?</h2>
+      <p>
+        No. The mobile and desktop apps carry the whole game inside the download. The web version
+        needs one visit to load, and plays offline afterwards.
+      </p>
+
+      <h2>A stage that is broken, or a corner that is not fair</h2>
+      <p>
+        Every stage is generated from a seed, so it can be rebuilt exactly. Send the seed and
+        roughly where on the stage it happened, and it can be stood in front of and looked at.
+      </p>
+
+      <footer>
+        <p>
+          <a href="/privacy/">Privacy policy</a> ·
+          <a href="https://github.com/niclaslindstedt/game2">Source code</a> ·
+          <a href="/">Play the game</a>
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

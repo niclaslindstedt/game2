@@ -1,0 +1,26 @@
+{
+  "$comment": [
+    "The Steamworks app and depot ids, which the packaging and upload steps write",
+    "into their VDF. Fill them in from the partner site once the app exists:",
+    "App Admin → the number in the URL is the appId; App Admin → Depots for the",
+    "rest, one per platform the desktop shell ships.",
+    "",
+    "COMMITTED rather than gitignored, because these are identifiers and not",
+    "secrets — every machine that builds a release needs the same values, and",
+    "they are visible in any store URL. The CREDENTIAL half (a Steamworks login",
+    "and its build account) never comes near this file.",
+    "",
+    "480 IS NOT A DEFAULT — it is Spacewar, Valve's shared test app. Everything",
+    "works against it: the build uploads, the page renders, into a sandbox every",
+    "developer on Steam shares. `make store-preflight` fails on it by name,",
+    "because it is the quietest failure in the whole submission.",
+    "",
+    "CI can override with SF_STEAM_APP_ID."
+  ],
+  "appId": null,
+  "depots": {
+    "windows": null,
+    "macos": null,
+    "linux": null
+  }
+}

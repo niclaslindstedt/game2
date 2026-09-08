@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -65,6 +65,46 @@ native-iphone:
 
 native-android:
 	npm run native:android
+
+# ---------------------------------------------------------------------------
+# SHIPPING TO THE STORES (native/store/, tauri/store/)
+# ---------------------------------------------------------------------------
+#
+# One authored listing (native/store/listing.mts) and one screenshot harness
+# feed BOTH storefronts, because they describe one game. `native/store/README.md`
+# is the submission package, `native/RELEASING.md` the run-through for Apple and
+# Play, and `tauri/store/README.md` the Steam half.
+
+# Is this checkout actually wired up to ship? Walks the app records, the
+# credentials, the listing, the build inputs and the Steam page, and names what
+# is missing and where to get it. `make store-preflight ARGS="--now"` narrows it
+# to the items that wait on no store account — the work doable today.
+store-preflight:
+	@node --experimental-strip-types --disable-warning=ExperimentalWarning \
+		scripts/store-preflight.mjs $(ARGS)
+
+# Compile the listing into what the upload tools read: store.config.json for
+# `eas metadata:push`, the fastlane metadata tree, and the Steam store page —
+# validating every Apple length limit on the way, and failing rather than
+# truncating.
+store-metadata:
+	node --experimental-strip-types --disable-warning=ExperimentalWarning \
+		scripts/generate-store-metadata.mjs $(ARGS)
+
+# Capture the screenshot set — the real game, staged at fixed moments and shot
+# at App Store Connect's and Valve's exact rasters, captioned in the game's own
+# type. Needs a build to serve and a Chromium; same requirements as
+# `make screenshots`. `ARGS="--only iphone"` narrows to one raster,
+# `ARGS="--shot drift"` to one frame.
+store-shots:
+	node scripts/store-shots.mjs $(ARGS)
+
+# ...and how each frame's MOMENT is chosen rather than guessed: reproduce one
+# recipe at a matrix of offsets and contact-sheet them, then LOOK.
+# `make store-sweep ARGS="--shot drift"`, then narrow with
+# `ARGS="--shot drift --around 0.4 --span 0.6"`. See the `store-shots` skill.
+store-sweep:
+	node scripts/store-shot-sweep.mjs $(ARGS)
 
 check-seo:
 	npm run build && npm run check:seo
