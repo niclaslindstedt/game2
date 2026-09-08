@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
 
 build:
 	npm run build
@@ -238,6 +238,21 @@ biomes:
 analyze:
 	npm run analyze -- $(if $(SEEDS),--seeds $(SEEDS),) $(if $(COUNT),--count $(COUNT),) \
 		$(if $(LENGTH),--length $(LENGTH),) $(if $(SHAPE),--shape $(SHAPE),) $(ARGS)
+
+# RATE generated stages as RALLY STAGES — is this road any GOOD, which is
+# where `make analyze` (is it BROKEN?) stops. Flow, pace, relief, features,
+# the country around it and what a mistake costs, each as a band a stage has
+# to land inside rather than a ceiling it has to stay under.
+# Four jobs: one seed with its traits, a sweep to shortlist from, the
+# POPULATION (what the generator builds — how a band is calibrated and how a
+# rules change is judged), and the committed CAMPAIGN audited as a set.
+# `make rate SEEDS=38 ARGS=--traits` · `make rate COUNT=64`
+# `make rate COUNT=120 ARGS=--stats` · `make rate CAMPAIGN=1`
+# `make rate COUNT=200 ARGS="--pick 4"` · `make rate BIOME=desert LENGTH=long`
+rate:
+	npm run rate -- $(if $(SEEDS),--seeds $(SEEDS),) $(if $(COUNT),--count $(COUNT),) \
+		$(if $(LENGTH),--length $(LENGTH),) $(if $(SHAPE),--shape $(SHAPE),) \
+		$(if $(BIOME),--biome $(BIOME),) $(if $(CAMPAIGN),--campaign,) $(ARGS)
 
 # Render the car models to a labeled contact sheet (previews/cars.png):
 # the chase-cam gaming angle plus turntable views, for the car-design
