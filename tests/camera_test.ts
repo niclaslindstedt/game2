@@ -28,7 +28,12 @@ import {
 
 import { clamp } from "../pwa/src/lib/angles.ts";
 
-import { PLAY_MODES, createGameCamera, type CameraMode } from "../pwa/src/game/camera.ts";
+import {
+  PLAY_MODES,
+  RIDING_MODES,
+  createGameCamera,
+  type CameraMode,
+} from "../pwa/src/game/camera.ts";
 import type { ShakeSource } from "../pwa/src/game/camera-shake.ts";
 
 const FLAT: SegmentPlan[] = [{ kind: "straight", length: 600, feature: "none" }];
@@ -1592,11 +1597,21 @@ describe("changing view", () => {
     // path drawn between two WORLD points strands the lens in a field behind
     // it. Both ends ride the car: the lens never falls further back than the
     // two rigs themselves stand.
+    //
+    // "Both ends ride the car" is the condition, not decoration, so the steps
+    // on and off the TV cam are not held to it: one end of those is a tripod
+    // planted in a field, which is exactly a lens left standing, and is the
+    // whole of what that camera is (camera-tv.ts).
     const kept = (frames: Frame[]): boolean => {
       const behind = frames.map((f) => Math.hypot(f.at.x, f.at.z));
       return Math.max(...behind) <= Math.max(behind[0], behind[behind.length - 1]) + 0.5;
     };
-    expect(stepsFailing(kept, 90)).toEqual([]);
+    const rides = ([from, to]: [CameraMode, CameraMode]): boolean =>
+      RIDING_MODES.includes(from) && RIDING_MODES.includes(to);
+    const failing = LADDER.filter(rides)
+      .filter(([from, to]) => !kept(walkTo(from, to, 90)))
+      .map(([from, to]) => `${from}->${to}`);
+    expect(failing).toEqual([]);
   });
 
   it("arrives, and then STAYS — the rig it lands on is already stood up", () => {
@@ -1677,7 +1692,11 @@ describe("the crew put back at the last board", () => {
     // rig that eased out of the old heading would still be swinging a
     // second later, and half a metre of travel in the car's own frame is
     // far less than the four the boom would cover going round.
-    const drifting = PLAY_MODES.filter((view) => {
+    // Every reading here is taken in the CAR'S frame, so it is the views hung
+    // off the car that are held to it: a TV tripod is planted in the world
+    // and the car drives away from it, which reads as several metres of
+    // travel a frame and is the camera doing its job.
+    const drifting = RIDING_MODES.filter((view) => {
       const frames = respawnDrive(view, 90);
       return frames[0].at.distanceTo(frames[frames.length - 1].at) > 0.5;
     });
@@ -1697,7 +1716,7 @@ describe("the crew put back at the last board", () => {
     // The frame-to-frame movement of a stood shot is the car creeping
     // forward under it at walking pace and nothing else. A boom unwinding
     // half a turn crosses metres per frame at the start of it.
-    const swinging = PLAY_MODES.filter((view) => {
+    const swinging = RIDING_MODES.filter((view) => {
       const frames = respawnDrive(view, 90);
       let worst = 0;
       for (let i = 1; i < frames.length; i++) {

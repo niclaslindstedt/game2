@@ -42,7 +42,8 @@ import { NATIVE_HEIGHT, renderHeightOf, renderHeightStops } from "./desktop-vide
  * not offered here. The geometry behind each name lives in camera.ts (the
  * three inside the car in camera-eye.ts); this is the vocabulary the
  * player picks from. */
-export type PlayCamera = "bumper" | "hood" | "cockpit" | "close" | "chase" | "far" | "heli" | "top";
+export type PlayCamera =
+  "bumper" | "hood" | "cockpit" | "close" | "chase" | "far" | "heli" | "top" | "tv";
 
 /** No hints, like every ladder the options page walks: a camera describes
  * itself the moment it is picked, because picking it MOVES the one behind
@@ -56,6 +57,10 @@ export const PLAY_CAMERAS: { id: PlayCamera; label: string }[] = [
   { id: "far", label: "FAR" },
   { id: "heli", label: "HELI" },
   { id: "top", label: "TOP" },
+  // The one view that is not hung off the car at all: a gallery of fixed
+  // trackside tripods the director cuts between (camera-tv.ts). Last on the
+  // ladder because it is the furthest thing from sitting in the car.
+  { id: "tv", label: "TV" },
 ];
 
 /** The three views taken from inside the car — the ones the seat, lens and

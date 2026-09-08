@@ -83,8 +83,8 @@ async function racing(page) {
  * rendering the sim advances at a fraction of wall time, so a fixed
  * `waitForTimeout` lands at a different place on the stage on every machine;
  * the HUD timer is the only honest cursor into how far the drive has got. */
-async function atStageTime(page, seconds) {
-  await page.waitForFunction(`${READ_CLOCK} >= ${seconds}`, null, { timeout: 180000 });
+async function atStageTime(page, seconds, timeout = 180000) {
+  await page.waitForFunction(`${READ_CLOCK} >= ${seconds}`, null, { timeout });
 }
 
 /** Wait until the car has slowed past `kmh`. The finish's two moments are
@@ -2458,6 +2458,284 @@ if (only.length === 0 || only.some((f) => "shot-campaign shot-start".includes(f)
   }
   await page.close();
 }
+
+// ── THE SHOWCASE SET ────────────────────────────────────────────────────
+//
+// The five above the fold. Everything else in this file audits a surface;
+// these are the pictures the game is SHOWN with — a README, a post, the head
+// of a store listing — so the subject is the WORLD and the racing in it
+// rather than a panel being checked for clipping. Three rules they all obey
+// and the diagnostic scenes do not:
+//
+//   THE FIELD IS IN THE FRAME. A rally frame of one car alone on an empty
+//   road sells a screensaver. Every scene here that can have other cars in
+//   it enters a race to get them, and waits for the moment they are close.
+//
+//   THEY ARE SHOT WIDE. `SHOWCASE` below, because these are the only frames
+//   in the file that get looked at full size by somebody who is not
+//   debugging — and no wider, because every one of these scenes has to DRIVE
+//   to its moment under software rendering, and the sim advances at a
+//   fraction of wall time in inverse proportion to how many pixels the
+//   renderer is filling. Wider than this and the scenes with a field in
+//   them run out of patience before the car has reached its moment.
+//
+//   THE MOMENT IS FOUND, NOT COUNTED. Under software rendering a wall-clock
+//   wait lands somewhere different on every machine, so each one waits on
+//   the run's own clock and then on the thing it is a picture of — a slide,
+//   a corner, a bunched grid.
+
+/** The raster the whole set is shot at, and how long a showcase scene may
+ * take to DRIVE to its moment. The patience is not padding: these are the
+ * biggest frames in the file and several of them have a full field in them,
+ * so the sim advances at a small fraction of wall time and the same scene
+ * has taken 40 s and 200 s on the same machine an hour apart. Every wait
+ * here is on the run's own clock, so a generous ceiling costs nothing on the
+ * run that is quick and is the difference between a picture and a stack
+ * trace on the run that is not. */
+const SHOWCASE = { width: 1600, height: 900 };
+const SHOWCASE_PATIENCE = 600000;
+
+/** A CLEAN FRAME that can still be steered to — the two halves of the same
+ * problem, solved by two query keys.
+ *
+ * `?hud=0` is the switch a picture of the WORLD wants: the instrument panel,
+ * the rear-view glass and the name plates floating over the other crews all
+ * go down together. Two of those could not have been removed any other way.
+ * The mirror is a second RENDER of the world rather than an element over it,
+ * and the plates are drawn IN the world (name-tag.ts), so nothing laid on
+ * the page afterwards touches either.
+ *
+ * What `?hud=0` also takes away is every cursor this file steers by — the
+ * race clock, the pace call, the drift flag are all read off the panel it
+ * just switched off. `?debug=1` puts them back somewhere else: the developer
+ * overlay carries the run's own numbers as DOM rows keyed by `data-k`,
+ * which debug-hud.tsx states in as many words is so a headless pass can read
+ * one. Unlike the HUD it is not part of the picture, so it comes off at the
+ * shutter with a style rule (`clean`) instead of from the URL. */
+const CLEAN = { hud: "0", debug: "1" };
+
+/** One value off the developer overlay, as page-side source. Written as a
+ * string like every other page-side read here, because this file lints as
+ * Node and `document` does not exist in it. */
+const debugRow = (key) =>
+  `document.querySelector('.debug-row[data-k="${key}"] .debug-row-v')?.textContent ?? ""`;
+
+/** The run's own clock off the overlay's `run` row, seconds — 0 before it
+ * starts. Wanted as a VALUE by any scene that stands the run partway down
+ * the stage (`?at=racing&s=`), because that writes a clock from the road it
+ * skipped: a run put down a kilometre in opens at nearly a minute, and a
+ * scene asking to reach 14 s of it is asking for a moment already gone. */
+async function cleanTime(page) {
+  return (await page.evaluate(`Number(/t ([0-9.]+) s/.exec(${debugRow("run")})?.[1] ?? 0)`)) ?? 0;
+}
+
+/** Wait until the car is back within `metres` of the centreline, off the
+ * overlay's `off-road` row. A wide shot of the country is spoiled by a car
+ * that is in a field rather than on the road, and a bot on an alpine stage
+ * spends real seconds out there. */
+async function atOnRoad(page, metres) {
+  await page.waitForFunction(
+    `Number(/^([0-9.]+) m/.exec(${debugRow("off-road")})?.[1] ?? 999) <= ${metres}`,
+    null,
+    { timeout: SHOWCASE_PATIENCE },
+  );
+}
+
+/** The run's own clock off the overlay's `run` row — `atStageTime`'s answer
+ * for a scene with no HUD to read it from. */
+async function atCleanTime(page, seconds) {
+  await page.waitForFunction(
+    `Number(/t ([0-9.]+) s/.exec(${debugRow("run")})?.[1] ?? 0) >= ${seconds}`,
+    null,
+    { timeout: SHOWCASE_PATIENCE },
+  );
+}
+
+/** Wait until the car is actually sideways, by the SLIP ANGLE the overlay
+ * quotes rather than by the HUD's drift flag: the flag is the game's own
+ * threshold for calling a slide a drift, and a picture wants a bigger angle
+ * than the smallest one the game will admit to. Degrees. */
+async function atSlip(page, degrees) {
+  await page.waitForFunction(
+    `Math.abs(Number(/^(-?[0-9.]+)/.exec(${debugRow("slip")})?.[1] ?? 0)) >= ${degrees}`,
+    null,
+    { timeout: SHOWCASE_PATIENCE },
+  );
+}
+
+/** Take the last two layers off for the shutter: whatever the HUD still
+ * draws with the panel switched off (the pause chip, the lights, a call to
+ * get a lost car home) and the developer overlay this scene steered by. */
+async function clean(page) {
+  await page.addStyleTag({
+    content: ".hud, .debug-hud { display: none !important; }",
+  });
+}
+
+// 1 — THE START, from the side of the road, with no HUD and no mirror over
+// it. A mass start is the only moment in the game where fifteen cars are
+// close enough to touch, and it lasts about four seconds: the grid rolls
+// through the gate as one bunch, everybody arrives at the first corner at
+// once, and what comes out the far side is a queue. This is shot inside that
+// window.
+//
+// On the TV cam, and the two facts that make it work belong to the gallery
+// and to the grid. The gallery always opens with a stand at the start line — the
+// road there earns nothing, so the gap filler plants one (camera-tv.ts) —
+// and it holds that stand until the car is `hold` metres past it, which at
+// three and a half seconds off the line it is not. The grid puts the PLAYER
+// on the back row, and the TV cam aims at the player: so the lens is at the
+// roadside with the whole field between it and the horizon, looking up the
+// road through fifteen cars fighting for the same two ruts. From the boom
+// the cars behind are behind the lens; from overhead they are a diagram.
+await capture(
+  "shot-showcase-start",
+  SHOWCASE,
+  async (page) => {
+    // `racing` reads the HUD's clock, which this scene has switched off, so
+    // the whole wait is on the overlay instead: a `run` row quoting a race
+    // time at all is a run that is ticking.
+    await atCleanTime(page, 3.5);
+    await clean(page);
+  },
+  { ...CLEAN, mode: "headsup", camera: "tv", bot: "1", length: "short", seed: "38" },
+);
+
+// 2 — ROAM, which is the generator's own shop window: a seed on the left as
+// an island of real country with the route drawn over it, and on the right
+// every dial that built it. The page is the argument that the stages are
+// made rather than drawn, so it is shot at a seed with RELIEF in it — an
+// alpine winter, rugged, where the land does something the eye can read at
+// map size. The long wall-clock wait after the page arrives is the one in
+// this set that cannot be anything else: the player's Roam page carries no
+// readiness flag (the `data-ready` one belongs to the developer's full-screen
+// viewer), and the ground streams in a few tiles a frame, so a map shot on
+// arrival is a picture of half an island.
+await capture(
+  "shot-showcase-roam",
+  SHOWCASE,
+  async (page) => {
+    await page.waitForSelector(".roam", { timeout: 120000 });
+    await page.waitForTimeout(16000);
+  },
+  {
+    menu: "1",
+    roam: "1",
+    seed: "20704",
+    biome: "alpine",
+    season: "winter",
+    length: "short",
+    // The generator's own dial names (NUMERIC_KNOBS in mapgen/rules.ts), not
+    // the words the page prints beside them: HILLS is `elevation` and TERRAIN
+    // is `steepness`, and a link that spells them the way the row does sets
+    // nothing at all and photographs the defaults.
+    elevation: "1",
+    steepness: "0.85",
+    peaks: "1",
+    altitude: "0.7",
+  },
+);
+
+// 3 — THE DESERT, in the four-wheel-drive car, sideways past somebody. Three
+// things have to be in this frame at once and only one of them can be asked
+// for directly, so it is staged in that order: the race puts a rival on the
+// road, the run's clock puts the field far enough in to be racing rather
+// than launching, and the slip angle waits for the car to be properly
+// crossed up rather than merely loose. Sand is the surface that shows a
+// slide best — the plume is the colour of the ground and it hangs.
+await capture(
+  "shot-showcase-desert",
+  SHOWCASE,
+  async (page) => {
+    await atCleanTime(page, 16);
+    await atSlip(page, 22);
+    await clean(page);
+  },
+  {
+    ...CLEAN,
+    mode: "headsup",
+    biome: "desert",
+    car: "coupe",
+    // The LONG boom rather than the one the game is driven from: at 22° of
+    // slip the chase rig is close enough that the car's own flank fills the
+    // bottom of the frame and goes off the edge of it, and what a shot of a
+    // slide has to show is the whole car at an angle to the road it is on.
+    camera: "far",
+    bot: "1",
+    seed: "27",
+  },
+);
+
+// 4 — THE ALPS: the one country where the shot is the COUNTRY, so the car is
+// small in it and the frame is mostly mountain, on the longest lens on the
+// boom. Three things this scene needs that no other one does:
+//
+//   IT IS STOOD IN THE MOUNTAINS RATHER THAN DRIVEN TO THEM. `?at=racing&s=`
+//   puts the run down a kilometre and a half in (engine's place.ts) instead
+//   of paying for the whole climb under software rendering. That writes the
+//   race clock from the road it skipped, which is why the wait below is an
+//   OFFSET off `cleanTime` and not an absolute — a placed run opens at
+//   nearly a minute and every fixed target is already behind it.
+//
+//   IT ASKS TO SEE. The fog is tuned for a driver's eye a metre and a half
+//   off the road; on the stored default an alpine skyline is fog colour, and
+//   a picture of the Alps with no mountains in it is a picture of a field.
+//   `?drawdistance=far` is the setting a player with a good machine has.
+//
+//   IT WAITS FOR THE CAR TO BE ON THE ROAD. `atOpenRoad` is what every other
+//   country would use for a wide shot — no call in the co-driver's window
+//   means no corner inside its lead — but the Alps never clear that call:
+//   the stage is hairpin into hairpin for its whole length, so a scene that
+//   waited for open road here would wait forever. What it can ask for
+//   instead is that the car is not in a field when the shutter goes.
+await capture(
+  "shot-showcase-alpine",
+  SHOWCASE,
+  async (page) => {
+    const placed = await cleanTime(page);
+    await atCleanTime(page, placed + 6);
+    await atOnRoad(page, 2.5);
+    await clean(page);
+  },
+  {
+    ...CLEAN,
+    biome: "alpine",
+    season: "winter",
+    camera: "far",
+    bot: "1",
+    seed: "20704",
+    length: "medium",
+    at: "racing",
+    s: "1500",
+    hour: "10",
+    weather: "clear",
+    drawdistance: "far",
+    // The same dials the Roam shot names, for the same reason: a country
+    // asked for by name still arrives on the default relief.
+    elevation: "1",
+    steepness: "0.85",
+    peaks: "1",
+    altitude: "0.7",
+  },
+);
+
+// 5 — THE TV CAM (camera-tv.ts), which is the shot the camera was built for:
+// a tripod planted just inside the turn-in of a corner, on the OUTSIDE of
+// the bend, and a car arriving at it sideways with the rooster tail off the
+// outside rear coming at the lens. Nothing is pressed here — the director
+// has already chosen where to stand, the bot drives the corner, and the only
+// thing the shutter does is wait for the slide. Shot in a race so the
+// gallery has more than one car going through it.
+await capture(
+  "shot-showcase-tvcam",
+  SHOWCASE,
+  async (page) => {
+    await atCleanTime(page, 12);
+    await atSlip(page, 22);
+    await clean(page);
+  },
+  { ...CLEAN, mode: "headsup", camera: "tv", bot: "1", seed: "38", length: "short" },
+);
 
 await browser.close();
 await site.close();

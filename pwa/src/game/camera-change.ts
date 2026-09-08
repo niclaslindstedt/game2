@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE VIEW CHANGE — the camera going from one seat to the next.
 //
-// The camera key walks a ladder of eight (PLAY_CAMERAS in settings.ts), and
+// The camera key walks a ladder of nine (PLAY_CAMERAS in settings.ts), and
 // four of its steps cross between families — over the roof to the nose, the
 // nose to the scuttle, the scuttle to the seat, and the seat back out onto
 // the boom. A CUT is the one edit that tells the player nothing there. Both

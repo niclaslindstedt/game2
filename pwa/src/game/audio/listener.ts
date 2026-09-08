@@ -156,6 +156,24 @@ export const LISTENERS: Record<PlayCamera, Listener> = {
     events: 0.85,
     muffle: 0.9,
   },
+  // THE TRACKSIDE TRIPOD (camera-tv.ts) — the one seat in the game that is
+  // not moving. No wind, because nothing is travelling through the air; the
+  // exhaust and the scrub carry the shot, because what this camera is for is
+  // a car arriving sideways a few metres away; and the country is loud,
+  // because the ear is standing in it rather than being flown over it.
+  tv: {
+    engine: 0.7,
+    exhaust: 1.15,
+    tone: 0.95,
+    tyres: 1,
+    scrub: 1.25,
+    wind: 0.3,
+    weather: 0.95,
+    world: 1.2,
+    wipers: 0,
+    events: 1,
+    muffle: 0.95,
+  },
 };
 
 /** The mix for a camera, or the chase view's for anything that is not on
