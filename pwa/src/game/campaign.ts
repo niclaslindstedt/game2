@@ -156,33 +156,70 @@ function levelKnobs(biome: BiomeId, level: CampaignLevel): StageKnobs {
   return resolveKnobs({ ...DEFAULT_KNOBS, ...level.knobs, biome });
 }
 
-/** The Taiga ladder. The four seeds were chosen by scoring every seed in
- * 1..40 per length band on what actually makes a stage hard — hairpins
- * heaviest, then jumps, fords and crests, plus the mean curvature that says
- * how relentlessly the road bends — and then confirming the pick with the
- * bot sim, which climbs the way the ladder promises:
+/** THE RUNG ORDER, and it is the same in all three countries: a sprint, a
+ * loop, a sprint, a loop, a sprint, and the long one.
  *
- *   seed 38 short  1.8 km   66 s   99 km/h   12 drifts   1.1 s air   1 hit
- *   seed 19 medium 4.7 km  179 s   95 km/h   26 drifts   0.9 s air   0 hits
- *   seed 21 long   7.9 km  309 s   94 km/h   55 drifts   8.1 s air   6 hits
- *   seed  5 xlong 11.5 km  450 s   94 km/h   96 drifts   9.4 s air   6 hits
+ *   1  short  sprint     2  medium circuit    3  medium sprint
+ *   4  long   circuit    5  long   sprint     6  xlong  sprint
  *
- * Conditions darken down the ladder for the same reason the geometry
- * tightens: the last stage should ask for everything at once.
+ * The circuits are INSIDE the climb rather than bolted onto the end of it.
+ * Four sprints up the length bands and then two loops is the arrangement
+ * this campaign shipped with, and it is the one thing `make rate CAMPAIGN=1`
+ * refused every country for: a 1.7 km ring after an eleven-kilometre finale
+ * is a rung the ladder steps DOWN, and all three countries did it in the
+ * same place. Interleaved, every rung asks more than the one before it in
+ * all three — and the player meets the second discipline (R22: three laps
+ * of a road that comes back to its own start line, learnable, the clock the
+ * whole opponent) second rather than seventh.
  *
- * The last two are a different discipline: CIRCUITS (R22), raced over three
- * laps of a road that comes back to its own start line, where the stage is
- * learnable and the clock is the whole opponent. Their seeds were picked
- * the same way — scored on hairpins and features, then confirmed with the
- * bot sim over the full three laps:
+ * WHAT A RUNG ASKS FOR IS THE ROAD AND THE SKY TOGETHER, about two thirds
+ * and one third (`RATING.ladder.conditionShare`). That is why the seeds
+ * below are not simply sorted by how hard the geometry is: an hour, a
+ * weather and a season are the cheapest levers the game has, they cost
+ * nothing that has to be re-verified, and used properly they carry a third
+ * of the climb. Each country runs all four seasons, all three day-parts and
+ * every weather its own sky offers — the desert has no rain (biomes.ts), so
+ * it has the other two.
  *
- *   seed 3 medium circuit 1.70 km × 3  214 s, best lap 71 s
- *   seed 6 long   circuit 2.52 km × 3  best lap 106 s
+ * HOW THE SEEDS WERE PICKED. A sweep of 1..48 per country per slot, rated
+ * (`engine/rating/`) and analyzed (`engine/analysis/`), then searched for
+ * the SET of six that scores best as a ladder rather than the six best
+ * stages — which are reliably the same road six times. The brief the search
+ * was held to, beyond the ladder scorer's own bands:
  *
- * (The laps and times are the bot's on the compact, re-run whenever the
- * generator moves — the routes re-roll with it, and so do the turn counts
- * these once carried; `npm run sim -- --shape circuit --seeds N` says what
- * they are today.)
+ *   * every rung asks MORE than the one under it, by enough to feel (0.035)
+ *     and not so much it is a wall (0.14)
+ *   * no seed twice in a country, and no two rungs under the same sky
+ *   * every car the right car somewhere, every season, every day-part
+ *   * as few `make analyze` errors as the slot allows
+ *
+ * That last one is not a tiebreak. An earlier pass of this ladder, chosen
+ * on the rating alone, put a road carrying EIGHTY-ONE R-rule violations
+ * into the alpine long sprint; it rated 84. Every CIRCUIT in the game
+ * carries a few — the analyzer reads a lap rejoining its own start line as
+ * two roads too close together (R23) and as a corner too near the grid —
+ * so the count separates circuits from each other, never from sprints.
+ *
+ * The bot drives all eighteen clean on the compact: no respawn, no roll, no
+ * damage worth a number, and the pace falls down each ladder as the roads
+ * tighten. The times below are its own, and they move whenever the
+ * generator does — `npm run sim -- --seeds N --length L` says what they are
+ * today. Note the clock is NOT the order: a three-lap circuit takes longer
+ * than the sprint above it in the same band, because a lap is a slower road
+ * than a run through the country, and the ladder is ordered on what a stage
+ * ASKS rather than on how long the bot is out there.
+ */
+
+/** The Taiga ladder — the first country, and the game's opening hour.
+ * Gravel through spruce, a village with tarmac through it, and water that
+ * is a ford in the spring and something you drive over in January.
+ *
+ *   seed 28 short   sprint   1.71 km   78 s   79 km/h   a bridge, a village, a crest
+ *   seed 19 medium  circuit  1.63×3   216 s   81 km/h   a ford, set solid
+ *   seed 12 medium  sprint   4.52 km  201 s   81 km/h   38 bends, 8 of them hard
+ *   seed 46 long    circuit  2.75×3   372 s   80 km/h   28 bends a lap, 28% sealed
+ *   seed 45 long    sprint   7.68 km  377 s   73 km/h   23 hard bends, 5 crests
+ *   seed 40 xlong   sprint  10.71 km  538 s   72 km/h   96 bends in the dark
  */
 const TAIGA: CampaignLocation = {
   id: "taiga",
@@ -192,91 +229,83 @@ const TAIGA: CampaignLocation = {
   levels: [
     {
       id: "taiga-1",
-      name: "Loggers' Run",
-      seed: 38,
+      name: "Mill Bridge",
+      seed: 28,
       length: "short",
       hour: 13,
       weather: "clear",
       season: "summer",
-      blurb: "Open forest road, one jump",
+      blurb: "Over the bridge, past the village, one blind crest",
     },
     {
       id: "taiga-2",
-      name: "Cold Water",
+      name: "Frozen Ford",
       seed: 19,
       length: "medium",
-      hour: 5,
+      shape: "circuit",
+      hour: 11,
       weather: "clear",
-      season: "spring",
-      blurb: "Fords and blind crests",
+      season: "winter",
+      blurb: "Three laps over water the winter has set solid",
     },
     {
       id: "taiga-3",
-      name: "Granite Ridge",
-      seed: 21,
-      length: "long",
-      hour: 17,
+      name: "Turbine Road",
+      seed: 12,
+      length: "medium",
+      hour: 17.5,
       weather: "rain",
-      season: "autumn",
-      blurb: "Hairpins over seven jumps",
+      season: "spring",
+      blurb: "Thirty-eight bends under the turbines, in the wet",
     },
     {
       id: "taiga-4",
-      name: "The Long Dark",
-      seed: 5,
-      length: "xlong",
-      hour: 23,
+      name: "Village Loop",
+      seed: 46,
+      length: "long",
+      shape: "circuit",
+      hour: 19,
       weather: "storm",
-      season: "autumn",
-      blurb: "Everything, in the dark",
+      season: "summer",
+      blurb: "Three laps through the village, a storm coming over",
     },
     {
       id: "taiga-5",
-      name: "Spruce Ring",
-      seed: 3,
-      length: "medium",
-      shape: "circuit",
-      hour: 5,
-      weather: "clear",
-      season: "spring",
-      blurb: "Three laps, gravel into tarmac",
+      name: "Hunter's Line",
+      seed: 45,
+      length: "long",
+      hour: 22,
+      weather: "rain",
+      season: "autumn",
+      blurb: "Twenty-three hard corners and five blind crests, in the rain",
     },
     {
       id: "taiga-6",
-      name: "Marten Loop",
-      seed: 6,
-      length: "long",
-      shape: "circuit",
-      hour: 17,
-      weather: "rain",
-      season: "autumn",
-      blurb: "Three laps, two jumps, no rest",
+      name: "The Long Dark",
+      seed: 40,
+      length: "xlong",
+      hour: 23,
+      weather: "storm",
+      season: "winter",
+      blurb: "Eleven kilometres of frozen forest, in the dark",
     },
   ],
 };
 
 /** The Desert ladder — the second country (R40), opened by winning the
- * taiga's table. The same six rungs in the same order: four sprints up the
- * length bands, then two circuits. Its seeds were picked the way the
- * taiga's were — every seed in 1..40 per band scored on hairpins, jumps,
- * crests and mean curvature, in the DESERT (a seed is a different road in
- * a different country), then confirmed with the bot sim on the sand, which
- * is slower than the taiga's gravel by about a tenth everywhere:
+ * taiga's table. Sand off the mountain, one length of real blacktop, and a
+ * sky with two weathers in it: clear, and the dust coming across.
  *
- *   seed 16 short   1.75 km   84 s   75 km/h    3 hard turns  1 jump   1.1 s drift
- *   seed 13 medium  4.58 km  226 s   73 km/h    9 hard turns  2 jumps  4.3 s drift
- *   seed 11 long    7.59 km  355 s   77 km/h   14 hard turns  6 jumps  5.5 s air
- *   seed 30 xlong  11.65 km  560 s   75 km/h   21 hard turns  3 jumps  12 s drift
+ *   seed 33 short   sprint   1.73 km   83 s   75 km/h   one jump off the fan
+ *   seed 43 medium  circuit  1.60×3   192 s   90 km/h   half of it sealed
+ *   seed 16 medium  sprint   4.80 km  226 s   76 km/h   five jumps
+ *   seed  4 long    circuit  2.75×3   436 s   68 km/h   25 bends a lap, none soft
+ *   seed 11 long    sprint   7.92 km  393 s   72 km/h   68 bends in the dust
+ *   seed 23 xlong   sprint  10.63 km  583 s   66 km/h   102 bends, no tarmac at all
  *
- * The circuits were picked the same way and sat the same three laps; the
- * bot is a poor judge of a circuit in either country, so the two chosen
- * are the ones it FINISHES, and the rest of the scoring did the ordering:
- *
- *   seed 27 medium circuit  1.68 km × 3  209 s  4 hard  1 jump   17% tarmac
- *   seed 23 long   circuit  2.60 km × 3  274 s  4 hard  1 jump   the most bend per metre of any
- *
- * There is no rain here: the conditions run from a clear noon down through
- * dusk into the dust storm, which is the desert's own bad weather. */
+ * The desert's winter is its WET season (climate.ts), which is why the
+ * fourth rung is the one before dawn in January and not the one at noon in
+ * July. */
 const DESERT: CampaignLocation = {
   id: "desert",
   name: "Desert",
@@ -286,89 +315,83 @@ const DESERT: CampaignLocation = {
     {
       id: "desert-1",
       name: "Bajada",
-      seed: 16,
+      seed: 33,
       length: "short",
       hour: 12,
       weather: "clear",
       season: "summer",
-      blurb: "Sand under the saguaros, two jumps",
+      blurb: "Sand off the mountain, one jump",
     },
     {
       id: "desert-2",
-      name: "Creosote Flats",
-      seed: 13,
+      name: "Blacktop Ring",
+      seed: 43,
       length: "medium",
-      hour: 6,
+      shape: "circuit",
+      hour: 22,
       weather: "clear",
-      season: "spring",
-      blurb: "Fast, open, and further than it looks",
+      season: "autumn",
+      blurb: "Three laps, half of them on real road, after dark",
     },
     {
       id: "desert-3",
-      name: "Dune Sea",
-      seed: 11,
-      length: "long",
+      name: "Arroyo",
+      seed: 16,
+      length: "medium",
       hour: 17.5,
       weather: "clear",
-      season: "autumn",
-      blurb: "Crests you cannot see over",
+      season: "spring",
+      blurb: "Five jumps in five kilometres, into a low sun",
     },
     {
       id: "desert-4",
+      name: "Cold Dawn",
+      seed: 4,
+      length: "long",
+      shape: "circuit",
+      hour: 4,
+      weather: "clear",
+      season: "winter",
+      blurb: "Three laps before sunrise, in the desert's one wet month",
+    },
+    {
+      id: "desert-5",
       name: "Haboob",
-      seed: 30,
+      seed: 11,
+      length: "long",
+      hour: 18,
+      weather: "storm",
+      season: "autumn",
+      blurb: "Eight kilometres with the dust coming across",
+    },
+    {
+      id: "desert-6",
+      name: "Dune Sea",
+      seed: 23,
       length: "xlong",
       hour: 23,
       weather: "storm",
       season: "summer",
-      blurb: "The whole desert, in a wall of sand",
-    },
-    {
-      id: "desert-5",
-      name: "Joshua Ring",
-      seed: 27,
-      length: "medium",
-      shape: "circuit",
-      hour: 11,
-      weather: "clear",
-      season: "spring",
-      blurb: "Three laps between the Joshua trees",
-    },
-    {
-      id: "desert-6",
-      name: "Salt Pan Loop",
-      seed: 23,
-      length: "long",
-      shape: "circuit",
-      hour: 17.5,
-      weather: "storm",
-      season: "autumn",
-      blurb: "Three laps, the dust coming in",
+      blurb: "Ten kilometres of sand, not a metre of tarmac, at night",
     },
   ],
 };
 
 /** The Alpine ladder — the third country (R47), opened by winning the
- * desert's table. The same six rungs in the same order. Its seeds were
- * picked from a sweep of 1..40 per band at the knobs every level here
- * carries (`elevation` and `steepness` at 0.6, `asphalt` at 0.5: a high
- * massif, a pass sealed to halfway up the rock band), scored on how far the
- * stage comes DOWN, its hairpins and its tunnels, then confirmed with the
- * bot sim — every car finishes every one, no respawns, at about 90 km/h:
+ * desert's table. Every stage of it starts beside the snow, and every
+ * sprint COMES DOWN — which is the country's whole character and is
+ * test-enforced (`tests/campaign_test.ts`). The circuits close on
+ * themselves and so stay up on the shoulder they start on.
  *
- *   seed 17 short    1.87 km   drop  55 m  1 hairpin   1 tunnel    57% snow
- *   seed 27 medium   5.40 km   drop 218 m  4 hairpins  2 tunnels   36% tarmac
- *   seed 30 long     7.69 km   drop 240 m  4 hairpins  2 tunnels   80% tarmac
- *   seed 27 xlong   10.70 km   drop 362 m  7 hairpins  3 tunnels   the valley floor
+ *   seed 17 short   sprint   1.56 km   72 s   78 km/h   97 m down in a mile
+ *   seed 30 medium  circuit  1.72×3   222 s   84 km/h   three laps on the shoulder
+ *   seed 27 medium  sprint   5.12 km  209 s   88 km/h   225 m down, 64% sealed
+ *   seed 41 long    circuit  2.55×3   469 s   59 km/h   three jumps a lap
+ *   seed  3 long    sprint   7.48 km  361 s   75 km/h   259 m down, half of it sealed
+ *   seed 38 xlong   sprint  10.96 km  594 s   66 km/h   306 m down, two tunnels
  *
- * The circuits close on themselves and so stay up on the shoulder they
- * start on — which makes the first of them an ICE RING, three laps on snow:
- *
- *   seed 34 medium circuit  1.69 km × 3  3 hairpins  99% snow
- *   seed 35 long   circuit  2.77 km × 3  3 hairpins  38% snow, a tunnel-less pass
- *
- * The conditions come down the mountain with the road: clear on the pass,
- * the cloud on the flanks by the long stage, a storm on the finale. */
+ * Its dials are the country rather than the level: a high massif, and a
+ * pass sealed to halfway up the rock band. */
 const ALPINE_KNOBS = { elevation: 0.6, steepness: 0.6, asphalt: 0.5 };
 const ALPINE: CampaignLocation = {
   id: "alpine",
@@ -385,64 +408,64 @@ const ALPINE: CampaignLocation = {
       hour: 12,
       weather: "clear",
       season: "summer",
-      blurb: "Snow on the road, a tunnel through the shoulder",
+      blurb: "Off the pass and down, ninety metres in a mile",
     },
     {
       id: "alpine-2",
+      name: "First Light",
+      seed: 30,
+      length: "medium",
+      shape: "circuit",
+      knobs: ALPINE_KNOBS,
+      hour: 4,
+      weather: "clear",
+      season: "spring",
+      blurb: "Three laps on the shoulder, before the sun clears the ridge",
+    },
+    {
+      id: "alpine-3",
       name: "Switchbacks",
       seed: 27,
       length: "medium",
       knobs: ALPINE_KNOBS,
-      hour: 5.5,
-      weather: "clear",
-      season: "spring",
-      blurb: "Four hairpins down a face, then the tarmac",
-    },
-    {
-      id: "alpine-3",
-      name: "Cloud Line",
-      seed: 30,
-      length: "long",
-      knobs: ALPINE_KNOBS,
-      hour: 17.5,
+      hour: 23,
       weather: "rain",
-      season: "autumn",
-      blurb: "The pass in the cloud, the lake somewhere below",
+      season: "spring",
+      blurb: "Two hundred metres down wet tarmac, into the town",
     },
     {
       id: "alpine-4",
-      name: "Summit to Valley",
-      seed: 27,
-      length: "xlong",
-      knobs: ALPINE_KNOBS,
-      hour: 19,
-      weather: "storm",
-      season: "summer",
-      blurb: "Three hundred and sixty metres down, in a storm",
-    },
-    {
-      id: "alpine-5",
-      name: "Ice Ring",
-      seed: 34,
-      length: "medium",
-      shape: "circuit",
-      knobs: ALPINE_KNOBS,
-      hour: 13,
-      weather: "clear",
-      season: "spring",
-      blurb: "Three laps on packed snow",
-    },
-    {
-      id: "alpine-6",
-      name: "Alp Circuit",
-      seed: 35,
+      name: "Ridge Ring",
+      seed: 41,
       length: "long",
       shape: "circuit",
       knobs: ALPINE_KNOBS,
       hour: 17.5,
       weather: "clear",
       season: "autumn",
-      blurb: "Three laps off the snow and back up to it",
+      blurb: "Three laps high up, with three jumps on each of them",
+    },
+    {
+      id: "alpine-5",
+      name: "Cloud Line",
+      seed: 3,
+      length: "long",
+      knobs: ALPINE_KNOBS,
+      hour: 21,
+      weather: "storm",
+      season: "autumn",
+      blurb: "Two hundred and sixty metres down, half of it sealed, in a storm",
+    },
+    {
+      id: "alpine-6",
+      name: "Summit to Valley",
+      seed: 38,
+      length: "xlong",
+      knobs: ALPINE_KNOBS,
+      hour: 23,
+      weather: "storm",
+      season: "winter",
+      blurb: "Three hundred metres down and through two tunnels, in a blizzard",
     },
   ],
 };

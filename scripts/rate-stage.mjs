@@ -40,6 +40,7 @@
 //   npm run rate -- --count 64 --stats    # the population
 //   npm run rate -- --length long --shape circuit
 //   npm run rate -- --biome desert --count 40
+//   npm run rate -- --season winter        # the road the cold builds (R48)
 //   npm run rate -- --campaign            # the committed ladder
 //   npm run rate -- --count 200 --pick 4  # propose a ladder
 //   npm run rate -- --json out.json
@@ -69,6 +70,7 @@ const shape = flag("shape") ?? "sprint";
 const floor = Number(flag("floor") ?? 0);
 const maxNotes = Number(flag("notes") ?? 6);
 const pick = flag("pick") ? Number(flag("pick")) : 0;
+const season = flag("season");
 const knobs = {};
 for (const dial of NUMERIC_KNOBS) {
   const value = flag(dial);
@@ -105,6 +107,9 @@ if (has("campaign")) {
         length: level.length,
         shape: level.shape ?? "sprint",
         knobs: campaignKnobs(level),
+        // R48 — a winter level is a different road from the same seed, so
+        // the audit has to build the one the player actually drives.
+        climate: { season: level.season },
       }),
       conditions: {
         hour: level.hour,
@@ -182,7 +187,7 @@ console.log(
 );
 
 for (const seed of seeds) {
-  const rating = rateSeed(seed, { length, shape, knobs });
+  const rating = rateSeed(seed, { length, shape, knobs, climate: season ? { season } : undefined });
   ratings.push(rating);
   const byId = new Map(rating.facets.map((f) => [f.id, f]));
   console.log(

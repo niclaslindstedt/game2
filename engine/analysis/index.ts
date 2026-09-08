@@ -25,6 +25,7 @@
 // of the difference between two runs, and no single number can tell you a
 // stage is good. The findings are what you act on.
 
+import type { ClimateChoice } from "../game/climate.ts";
 import { compileStage, type Track } from "../mapgen/compile.ts";
 import { createTerrain, type TerrainField } from "../mapgen/terrain.ts";
 import type { FiniteStageLength, StageKnobs, StageShape } from "../mapgen/rules.ts";
@@ -54,6 +55,10 @@ export type AnalyzeOptions = {
    * question is "did my change cost anything" and pure overhead when it is
    * "does this seed hold water". */
   perf?: boolean;
+  /** R48 — the cold the stage is built under. Below `CLIMATE.ice` the lakes
+   * freeze and the route may cross them, so a winter stage is a different
+   * road with different defects. Defaults to summer. */
+  climate?: ClimateChoice;
 };
 
 /** Analyze a track that has already been built, with a terrain field over
@@ -112,7 +117,7 @@ export function analyzeTrack(
 /** Build a stage from a seed and analyze it — the whole loop in one call. */
 export function analyzeSeed(seed: number, options: AnalyzeOptions = {}): StageReport {
   const length = options.length ?? "medium";
-  const track = compileStage(seed, length, options.knobs, options.shape);
+  const track = compileStage(seed, length, options.knobs, options.shape, options.climate);
   const terrain = createTerrain(track);
   // The field builds its streams, guards, stands and props lazily as the
   // road is synced. Nothing is analyzable until it has caught up with the

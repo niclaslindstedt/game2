@@ -35,25 +35,27 @@ export type BenchmarkPlan = {
    * The campaign's first stage — short, open, on every install — was the
    * obvious pick and the wrong one. Metered headlessly at the fog's two
    * ends (draw calls a frame at DISTANCE NEAR vs FAR, bot driving, same
-   * stage time):
+   * stage time, 1280x720):
    *
-   *   taiga-1  Loggers' Run     203 → 229   +13%
-   *   desert-1 Bajada           174 → 183    +5%
-   *   desert-2 Creosote Flats   222 → 365   +64%
+   *   taiga-1  Mill Bridge   503 → 665   +32%   (tris +26%)
+   *   desert-1 Bajada        484 → 486     0%   (tris  +2%)
+   *   desert-3 Arroyo        495 → 719   +45%   (tris +68%)
    *
-   * On a tree-lined sprint the whole row is worth 13% of what is submitted,
-   * which disappears under the ten per cent two runs of the same build
-   * differ by — so a player could walk DISTANCE end to end and read the
-   * same score three times, and conclude the row does nothing. It is not
-   * that the row does nothing; it is that a stage with nothing far away to
-   * cull cannot show it. An OPEN stage is not the answer either, and
-   * Bajada is the proof: the flats have long sight lines and almost
-   * nothing standing in them, so the fog reaches further and finds less.
+   * A stage with nothing far away to cull cannot show the row: Bajada is
+   * the proof, and it is an OPEN stage rather than a shut one — the flats
+   * have long sight lines and almost nothing standing in them, so the fog
+   * reaches further and finds less, and the whole ladder from NEAR to FAR
+   * moves the score by nothing at all. A player could walk it end to end,
+   * read the same number three times, and conclude the row is broken.
    *
-   * What is needed is DEPTH WITH THINGS IN IT — a stage that is open enough
-   * to see a long way and dense enough that seeing further costs something.
-   * Creosote Flats is that, and by a distance: the row is worth two thirds
-   * of the frame's draw calls and half its triangles there. */
+   * What is needed is DEPTH WITH THINGS IN IT — a stage open enough to see
+   * a long way and dense enough that seeing further costs something. Arroyo
+   * is that, and by a distance: five kilometres of desert with the saguaro
+   * standing in it, where the row is worth nearly half the frame's draw
+   * calls and two thirds again of its triangles. The tree-lined taiga
+   * sprint lands between the two, which is the shape of the argument — the
+   * trees are dense but they are also close, so most of what the fog lets
+   * in was already being drawn. */
   levelId: string;
   /** The car the benchmark is driven in. */
   carId: string;
@@ -113,7 +115,7 @@ export type BenchmarkPlan = {
 };
 
 export const BENCHMARK: BenchmarkPlan = {
-  levelId: "desert-2",
+  levelId: "desert-3",
   carId: "compact",
   gearbox: "auto",
   camera: "chase",

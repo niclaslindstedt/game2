@@ -56,8 +56,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "pwa", "dist");
 aliasEngine(root);
 const engine = await import(join(root, "engine/index.ts"));
-const { DEFAULT_KNOBS, compileStage } = engine;
-const { LOCATIONS } = await import(join(root, "pwa/src/game/campaign.ts"));
+const { NUMERIC_KNOBS, compileStage } = engine;
+const { LOCATIONS, campaignKnobs } = await import(join(root, "pwa/src/game/campaign.ts"));
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -291,18 +291,17 @@ for (const location of LOCATIONS) {
   // The country's opening road — the one the ladder starts on.
   const level = location.levels[0];
   const shape = level.shape ?? "sprint";
-  const track = compileStage(
-    level.seed,
-    level.length,
-    { ...DEFAULT_KNOBS, biome: location.biome },
-    shape,
-  );
+  // The level's own dials and season, so the point the camera stands over
+  // is a point on the road the game is about to build (R40, R48).
+  const knobs = campaignKnobs(level);
+  const track = compileStage(level.seed, level.length, knobs, shape, { season: level.season });
   // Over the start line, looking the way the stage sets off. The road's
   // heading and the camera's yaw are the same convention — 0 down +z,
   // growing toward +x — so the opening sample's heading IS the yaw.
   const start = track.samples[0];
   const query =
     `?start=1&biome=${location.biome}&seed=${level.seed}&length=${level.length}` +
+    NUMERIC_KNOBS.map((dial) => `&${dial}=${knobs[dial]}`).join("") +
     `&shape=${shape}&hour=${level.hour}&weather=${level.weather}` +
     `&season=${level.season}&hud=0&air=${AIR}&god=1&freefov=${FOV.toFixed(2)}` +
     `&gx=${start.x.toFixed(1)}&gy=${LIFT}&gz=${start.z.toFixed(1)}` +

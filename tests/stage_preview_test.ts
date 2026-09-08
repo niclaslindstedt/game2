@@ -13,13 +13,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DEFAULT_KNOBS, compileStage } from "@engine";
+import { compileStage } from "@engine";
 import { describe, expect, it } from "vitest";
 
 // The very encoder the tool writes the committed routes with — a second
 // implementation here would test the copy rather than the shipped data.
 import { routeOf } from "../scripts/lib/stage-route.mjs";
-import { LOCATIONS } from "../pwa/src/game/campaign.ts";
+import { LOCATIONS, campaignKnobs } from "../pwa/src/game/campaign.ts";
 import { BIOME_SHOTS } from "../pwa/src/game/biome-shots.ts";
 import { STAGE_ROUTES } from "../pwa/src/game/stage-routes.ts";
 import { ROUTE_STROKE, biomeShot, routeShape } from "../pwa/src/game/stage-preview.ts";
@@ -60,6 +60,9 @@ describe("stage routes", () => {
           seed: level.seed,
           length: level.length,
           shape: level.shape ?? "sprint",
+          // R48 — the season is part of the road, not the dressing: below
+          // freezing the route may cross a lake that is water in summer.
+          season: level.season,
         });
       }
     }
@@ -106,8 +109,9 @@ describe("stage routes", () => {
       const track = compileStage(
         level.seed,
         level.length,
-        { ...DEFAULT_KNOBS, biome: location.biome },
+        campaignKnobs(level),
         level.shape ?? "sprint",
+        { season: level.season },
       );
       const stored = STAGE_ROUTES[level.id];
       expect(stored, level.id).toBeDefined();

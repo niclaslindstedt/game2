@@ -52,6 +52,7 @@ const shape = flag("shape") ?? "sprint";
 const floor = Number(flag("floor") ?? 0);
 const maxFindings = Number(flag("findings") ?? 8);
 const showChecks = has("checks");
+const season = flag("season");
 const perf = !has("no-perf");
 const knobs = {};
 for (const dial of NUMERIC_KNOBS) {
@@ -107,7 +108,13 @@ console.log(
 );
 
 for (const seed of seeds) {
-  const report = analyzeSeed(seed, { length, shape, knobs, perf });
+  const report = analyzeSeed(seed, {
+    length,
+    shape,
+    knobs,
+    perf,
+    climate: season ? { season } : undefined,
+  });
   reports.push(report);
   const byId = new Map(report.metrics.map((m) => [m.id, m]));
   console.log(

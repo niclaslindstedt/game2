@@ -38,8 +38,8 @@ import { routeOf } from "./lib/stage-route.mjs";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 aliasEngine(root);
 const engine = await import(join(root, "engine/index.ts"));
-const { DEFAULT_KNOBS, compileStage } = engine;
-const { LOCATIONS } = await import(join(root, "pwa/src/game/campaign.ts"));
+const { compileStage } = engine;
+const { LOCATIONS, campaignKnobs } = await import(join(root, "pwa/src/game/campaign.ts"));
 
 /** The generated module, written the way prettier would have written it so
  * that re-running this tool on a clean tree is a no-op.
@@ -55,7 +55,8 @@ function routesModule(rows) {
     .map(
       ({ id, route, spec }) =>
         `  "${id}": {\n    d: "${route.d}",\n    aspect: ${route.aspect},\n` +
-        `    spec: { seed: ${spec.seed}, length: "${spec.length}", shape: "${spec.shape}" },\n  },`,
+        `    spec: { seed: ${spec.seed}, length: "${spec.length}", shape: "${spec.shape}",` +
+        ` season: "${spec.season}" },\n  },`,
     )
     .join("\n");
   return `// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
@@ -83,7 +84,7 @@ export type StageRoute = {
    * \`make previews\` leaves a picture of the road that USED to be there,
    * under the name of the one that is — and that is invisible unless the
    * data says which road it drew. */
-  spec: { seed: number; length: string; shape: string };
+  spec: { seed: number; length: string; shape: string; season: string };
 };
 
 export const STAGE_ROUTES: Record<string, StageRoute> = {
@@ -94,13 +95,22 @@ ${entries}
 
 const routes = [];
 for (const location of LOCATIONS) {
-  const knobs = { ...DEFAULT_KNOBS, biome: location.biome };
   for (const level of location.levels) {
     const started = Date.now();
     const shape = level.shape ?? "sprint";
-    const track = compileStage(level.seed, level.length, knobs, shape);
+    // The level's OWN dials and the level's OWN season: a box that draws a
+    // road the player never drives is worse than no box. A location's dials
+    // are not the rule book's defaults (the alps are built high), and below
+    // freezing the lakes are solid ground the route may cross (R48).
+    const track = compileStage(level.seed, level.length, campaignKnobs(level), shape, {
+      season: level.season,
+    });
     const route = routeOf(track);
-    routes.push({ id: level.id, route, spec: { seed: level.seed, length: level.length, shape } });
+    routes.push({
+      id: level.id,
+      route,
+      spec: { seed: level.seed, length: level.length, shape, season: level.season },
+    });
     console.log(
       `  ${level.id.padEnd(10)} ${(track.length / 1000).toFixed(1).padStart(5)} km  ` +
         `${String(route.points).padStart(4)} points  ` +

@@ -546,7 +546,12 @@ describe("the alps (R47)", () => {
       const knobs = campaignKnobs(level);
       expect(knobs.biome).toBe("alpine");
       expect(offered).toContain(level.weather);
-      const track = compileStage(level.seed, level.length, knobs, level.shape ?? "sprint");
+      // R48 — under the level's own season, because that is the road the
+      // player drives: below freezing the lakes are solid and the route may
+      // cross them, so a winter level is a different stage from the seed.
+      const track = compileStage(level.seed, level.length, knobs, level.shape ?? "sprint", {
+        season: level.season,
+      });
       // Every stage starts beside the snow...
       expect(track.samples[0].elevation).toBeGreaterThan(snow - 90);
       // ...and every sprint ends well under where it started.
@@ -582,7 +587,9 @@ describe("the desert (R40)", () => {
       expect(offered).toContain(level.weather);
       // No water on any of them — the country guarantees it, and a level
       // is the country's stage and nothing else.
-      const track = compileStage(level.seed, level.length, knobs, level.shape ?? "sprint");
+      const track = compileStage(level.seed, level.length, knobs, level.shape ?? "sprint", {
+        season: level.season,
+      });
       expect(track.samples.some((s) => s.surface === "water" || s.deck !== null)).toBe(false);
       expect(track.samples.some((s) => s.surface === "sand")).toBe(true);
     }
