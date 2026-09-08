@@ -53,7 +53,7 @@ import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { createFloraShadows } from "./flora-shadow.ts";
 import { SHADOW_REACH } from "./car-shadow.ts";
 import { bodySpecFor, carEyes } from "./car-styles.ts";
-import { pipeAnchors, type PipeAnchor } from "./car/shell.ts";
+import { PIPE_AXIS, pipeAnchors, type PipeAnchor } from "./car/shell.ts";
 import {
   AXLE,
   WET_THROW,
@@ -69,6 +69,7 @@ import { SOOT, groundTints, sootySmoke, type PlumeGround } from "./ground-tint.t
 import { createCarFx } from "./car-fx.ts";
 import { createSnowMarks, drawnGround } from "./snow-marks.ts";
 import { CRASH_THROW, crashContact, crashBurst as burstCount, crashGrind } from "./crash-throw.ts";
+import { bodyOffset, type WorldVec } from "./car-anchor.ts";
 import { createEnvironment } from "./environment.ts";
 import type { LampStage } from "./daylight.ts";
 import { createFieldCars, type FieldCars } from "./field-cars.ts";
@@ -156,13 +157,13 @@ const GLASS_AT: Partial<Record<string, { fwd: number; side: number; up: number }
 /** ENGINE SMOKE, off the bonnet of a car whose engine the crash has
  * reached. `every` is seconds between puffs at the DAMAGED line and at a
  * dead engine; the colour runs from steam to soot between the same two;
- * `bay` is where the engine is, m along the nose and up; `rise` is how
- * fast a puff climbs off it, m/s. */
+ * `bay` is where the engine is, as a point on the shell (`car-anchor.ts`);
+ * `rise` is how fast a puff climbs off it, m/s. */
 const ENGINE_SMOKE = {
   every: { first: 0.16, dead: 0.03 },
   steam: new THREE.Color(0xd9dde2),
   soot: new THREE.Color(0x2b2c2e),
-  bay: { fwd: 1.25, up: 0.85 },
+  bay: { along: 1.25, across: 0, up: 0.85 },
   rise: 0.9,
 };
 
@@ -637,6 +638,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * which of them is in use changes the moment a landing shears the part. */
   let pipes: PipeAnchor[] = [];
   let pipeStub: PipeAnchor[] = [];
+  /** Scratch for placing what is bolted to the car (`car-anchor.ts`): where
+   * a pipe's mouth is, and which way it is pointing. Held here because both
+   * are read once per puff and a pipe on its limiter makes sixty a second. */
+  const pipeAt: WorldVec = { x: 0, y: 0, z: 0 };
+  const pipeAxis: WorldVec = { x: 0, y: 0, z: 0 };
+  const bayAt: WorldVec = { x: 0, y: 0, z: 0 };
   let smokeClock = 0;
   const smokeTint = new THREE.Color();
   /** HOW HOT THE TIRES ARE, 0..1 — the soot in the tarmac smoke rides on
@@ -1509,14 +1516,22 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     const bursts = smoking ? pipeBursts(fumeClock, pipe.every) : 0;
     if (bursts > 0) {
       fumeClock -= bursts * pipe.every;
+      // Off the car's WHOLE attitude and not just its heading, because the
+      // pipe is bolted to the shell: a car on its roof carries its pipes
+      // over its own floor, on the mirrored side, aimed at the sky
+      // (`car-anchor.ts`). The blast keeps only what the pipe is pointing
+      // along the ground — the puff's own buoyancy owns the vertical, and
+      // an exhaust cannot push smoke down through the road anyway.
+      bodyOffset(PIPE_AXIS, c.heading, c.roll, c.pitch, pipeAxis);
       for (const at of ports) {
+        bodyOffset(at, c.heading, c.roll, c.pitch, pipeAt);
         for (let i = 0; i < bursts * pipe.puffs; i++) {
           fumes.spawn(
-            c.x - fwdX * at.back + rightX * at.side,
-            c.y + at.up,
-            c.z - fwdZ * at.back + rightZ * at.side,
-            -fwdX * pipe.blast + state.wind.x * 0.85,
-            -fwdZ * pipe.blast + state.wind.z * 0.85,
+            c.x + pipeAt.x,
+            c.y + pipeAt.y,
+            c.z + pipeAt.z,
+            pipeAxis.x * pipe.blast + state.wind.x * 0.85,
+            pipeAxis.z * pipe.blast + state.wind.z * 0.85,
             pipe,
           );
         }
@@ -1551,12 +1566,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       if (puffs > 0) {
         smokeClock -= (puffs * every) / Math.max(0.2, fx);
         smokeTint.copy(ENGINE_SMOKE.steam).lerp(ENGINE_SMOKE.soot, bad);
+        // The bay travels with the shell the tailpipes do: on a car that has
+        // come to rest upside down the engine is under the road-facing
+        // floor, not a metre in the air over it.
+        bodyOffset(ENGINE_SMOKE.bay, c.heading, c.roll, c.pitch, bayAt);
         // A dead engine burns: three puffs a burst, so the cloud over a car
         // that has stopped for good is a cloud and not a wisp.
         smoke.spawn(
-          c.x + fwdX * ENGINE_SMOKE.bay.fwd,
-          c.y + ENGINE_SMOKE.bay.up,
-          c.z + fwdZ * ENGINE_SMOKE.bay.fwd,
+          c.x + bayAt.x,
+          c.y + bayAt.y,
+          c.z + bayAt.z,
           smokeTint.getHex(),
           puffs * (bad >= 1 ? 3 : 1),
           1.3,

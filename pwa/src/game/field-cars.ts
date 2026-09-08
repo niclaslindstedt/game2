@@ -62,7 +62,8 @@ import { crewLookFor } from "./car-crew.ts";
 import { liveryForCrew } from "./car-livery.ts";
 import { BRAKE_DUST, lightDust } from "./dust-light.ts";
 import { bodySpecFor } from "./car-styles.ts";
-import { pipeAnchors, type PipeAnchor } from "./car/shell.ts";
+import { PIPE_AXIS, pipeAnchors, type PipeAnchor } from "./car/shell.ts";
+import { bodyOffset, type WorldVec } from "./car-anchor.ts";
 import { pipeAir, pipeBursts, pipeWork } from "./exhaust.ts";
 import { createFumes } from "./fumes.ts";
 import { plumeGround } from "./ground-tint.ts";
@@ -354,6 +355,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   const fumes = createFumes(FUME_POOL);
   fumes.points.visible = false;
   scene.add(fumes.points);
+  /** Scratch for placing the field's pipes and aiming them — rewritten per
+   * car per frame rather than allocated, for `near`'s reason below. */
+  const pipeAt: WorldVec = { x: 0, y: 0, z: 0 };
+  const pipeAxis: WorldVec = { x: 0, y: 0, z: 0 };
   /** The crews within `DUST_RANGE` this frame, nearest first: who raises
    * dust, and whose lamps light it. Kept as one array and rewritten in
    * place, because this is a per-frame path and a fresh array a frame is
@@ -581,19 +586,20 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           const bursts = smoking ? pipeBursts(body.fumeClock, pipe.every) : 0;
           if (bursts === 0) continue;
           body.fumeClock -= bursts * pipe.every;
-          // Their own axes, not the viewer's: the field on a grid is not all
-          // pointing the same way as the player, and a pipe placed off the
-          // wrong heading smokes out of somebody's door.
-          const fwdX = Math.sin(car.heading);
-          const fwdZ = Math.cos(car.heading);
+          // Their own attitude, not the viewer's: the field on a grid is not
+          // all pointing the same way as the player, and a rival that has
+          // been over is not level. A pipe placed off a heading alone smokes
+          // out of somebody's door (`car-anchor.ts`).
+          bodyOffset(PIPE_AXIS, car.heading, car.roll, car.pitch, pipeAxis);
           for (const at of ports) {
+            bodyOffset(at, car.heading, car.roll, car.pitch, pipeAt);
             for (let puff = 0; puff < bursts * pipe.puffs; puff++) {
               fumes.spawn(
-                car.x - fwdX * at.back + fwdZ * at.side,
-                car.y + at.up,
-                car.z - fwdZ * at.back - fwdX * at.side,
-                -fwdX * pipe.blast + state.wind.x * 0.85,
-                -fwdZ * pipe.blast + state.wind.z * 0.85,
+                car.x + pipeAt.x,
+                car.y + pipeAt.y,
+                car.z + pipeAt.z,
+                pipeAxis.x * pipe.blast + state.wind.x * 0.85,
+                pipeAxis.z * pipe.blast + state.wind.z * 0.85,
                 pipe,
               );
             }
