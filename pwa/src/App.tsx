@@ -3587,7 +3587,7 @@ export function App() {
       let fpsSeconds = 0;
       let fps = 0;
       let traceClock = 0;
-      let altWas = false;
+      let hudOffWas = false;
       let padWas = false;
       /** The picture, if one was asked for.
        *
@@ -3834,12 +3834,13 @@ export function App() {
         const state = gameRef.current;
         if (!state) return;
         const page = menuRef.current;
-        // ALT is a HOLD on the chrome, read here rather than dispatched: it
-        // is a state the screen is in, and a press that fired an event would
-        // leave the HUD off for good on an alt-tab.
-        if (input.altHeld() !== altWas) {
-          altWas = input.altHeld();
-          setHudHidden(altWas);
+        // The chrome comes off two ways — ALT held, or god mode's Z — and
+        // both are read here rather than dispatched: what is on screen is a
+        // state, and a press that fired an event would leave the HUD off for
+        // good on an alt-tab.
+        if (input.hudHidden() !== hudOffWas) {
+          hudOffWas = input.hudHidden();
+          setHudHidden(hudOffWas);
         }
         // God mode flies before anything else can return early, and its
         // controls are DRAINED even when they cannot be used: mouse travel

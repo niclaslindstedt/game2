@@ -31,8 +31,9 @@ import { playUi } from "./audio/ui.ts";
 type DebugHudProps = {
   ctx: DebugContext;
   state: GameState;
-  /** True while ALT is hiding the game's own HUD — worth saying on screen,
-   * because a HUD that vanished and stayed vanished (a stuck modifier) is
+  /** True while the game's own HUD is hidden — ALT held, or god mode's Z
+   * toggled. Worth saying on screen, because a HUD that vanished and stayed
+   * vanished (a stuck modifier, or a toggle nobody remembers pressing) is
    * otherwise indistinguishable from one that broke. */
   hudHidden: boolean;
 };
@@ -68,7 +69,7 @@ export function DebugHud({ ctx, state, hudHidden }: DebugHudProps) {
   return (
     <div className="debug-hud pointer-events-none absolute inset-0 select-none">
       <div className="debug-boxes">
-        {hudHidden && <div className="debug-badge">HUD HIDDEN — RELEASE ALT</div>}
+        {hudHidden && <div className="debug-badge">HUD HIDDEN — ALT OR Z</div>}
         {boxes.map((box) => (
           <div key={box.title} className="debug-box">
             <div className="debug-box-title">{box.title}</div>
