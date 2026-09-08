@@ -14,7 +14,7 @@
 // Sets window.__done so the screenshot tool knows the sheet is on screen.
 
 import * as THREE from "three";
-import type { GameState, RaceEnv, Season, Weather } from "@engine";
+import { calmSand, type GameState, type RaceEnv, type Season, type Weather } from "@engine";
 
 import { createEnvironment } from "../game/environment.ts";
 import { hourLabel } from "../game/daylight.ts";
@@ -96,6 +96,29 @@ const ROWS: Row[] = [
  * golden hour, the sun on the horizon, dusk twilight, and night. */
 const HOURS = [5, 6, 6.75, 9, 12, 16.5, 17.75, 18.5, 22];
 
+/**
+ * WHICH CELLS TO SHOOT, off the page's own query string (`?rows=storm,rain`
+ * and `?hours=5,12,22`; the driver has a flag apiece). Empty is the whole
+ * sheet, which is what a review of the sky as a whole wants and what the
+ * Make target asks for.
+ *
+ * The subset exists because the full sheet is ninety-nine cells of warmed
+ * weather and a strike hunt on top, which is a minute on a GPU and past ten
+ * on the software rasterizer a headless container falls back to — long
+ * enough that a change to ONE row could not be looked at here at all. Rows
+ * are matched as substrings of the row's name, so `rows=storm` takes the
+ * squall, the anvil and the strike together.
+ */
+function chosen<T>(all: T[], param: string, key: (item: T) => string): T[] {
+  const want = new URLSearchParams(location.search).get(param);
+  if (!want) return all;
+  const parts = want
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return all.filter((item) => parts.some((part) => key(item).includes(part)));
+}
+
 const CELL_W = 400;
 const CELL_H = 260;
 
@@ -155,9 +178,11 @@ function plant(scene: THREE.Scene): void {
 }
 
 async function main(): Promise<void> {
+  const rows = chosen(ROWS, "rows", (row) => row.name.toLowerCase());
+  const hours = chosen(HOURS, "hours", (hour) => String(hour));
   const canvas = document.getElementById("stage") as HTMLCanvasElement;
-  const width = CELL_W * HOURS.length;
-  const height = CELL_H * ROWS.length;
+  const width = CELL_W * hours.length;
+  const height = CELL_H * rows.length;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setSize(width, height, true);
   renderer.setScissorTest(true);
@@ -197,17 +222,22 @@ async function main(): Promise<void> {
   environment.setLampsBroken(0, 0);
   environment.setGround({ floor: 0, peak: 30, heightAt });
 
-  /** The slice of `GameState` the atmosphere actually reads. */
+  /** The slice of `GameState` the atmosphere actually reads. The SAND has
+   * to be in it even though this sheet is a taiga one and never blows: the
+   * environment reads `state.sand` on every update to decide how far the
+   * view runs, so leaving it out is not a country with no sandstorms in it,
+   * it is a crash on the first cell. */
   const state = {
     t: 0,
     env: null as unknown as RaceEnv,
+    sand: calmSand(),
     wind: { x: 0, z: 0 },
     car: { x: 0, y: 0, z: 0, heading: 0 },
     track: { climate: { season: "autumn", temperature: 12 } },
   } as unknown as GameState;
 
-  ROWS.forEach((row, r) => {
-    HOURS.forEach((hour, c) => {
+  rows.forEach((row, r) => {
+    hours.forEach((hour, c) => {
       const season = row.season ?? "autumn";
       const env: RaceEnv = {
         hour,
