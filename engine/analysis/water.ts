@@ -192,13 +192,15 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
       // that is what a hillside is. Floating means the surface stands over
       // BOTH banks, which is water laid along the top of a ridge.
       //
-      // Measured on the BARE LAND, not on the finished terrain. The
-      // finished ground has the channel's own carve in it (which would make
-      // every river look like it was floating over the hole it dug) and the
-      // road's verge cone (which cuts the bank away wherever the two run
-      // near each other). Neither is the question. The question is whether
-      // the water is above the country it was traced against.
-      const land = terrain.geology.surfaceAt;
+      // Measured on THE GROUND THE WATER HAS (R18's `waterGroundAt`): the
+      // country with the road's cuttings taken out of it and the channel's
+      // own carve left out, which is neither the finished terrain (there
+      // every river floats over the hole it dug) nor the bare land. The bare land was the reading here, on the grounds that the
+      // verge cone cuts the bank away wherever a road and a course run
+      // near each other — but that cone is ground the world DOES take
+      // away, and excusing it is what let seed 19 ship a sheet of water
+      // standing five metres over a flank the corridor had cut.
+      const land = terrain.waterGroundAt;
       const ground = Math.max(land(point.x + nx, point.z + nz), land(point.x - nx, point.z - nz));
       const over = point.y - ground;
       if (over > W.float) {

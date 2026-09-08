@@ -278,6 +278,7 @@ export {
   type Checkpoint,
 } from "./compile.ts";
 export {
+  BANK as RIVER_BANK,
   traceRivers,
   type River,
   type RiverAnchor,
