@@ -618,10 +618,20 @@ export const TUNING = {
      *
      * It is the number that makes a four-wheel drive worth its transfer
      * case. Off a hill its bite is over 1 and clamped, so it loses nothing
-     * and cannot be given less to lose; charge every layout the same
-     * quarter-grade and what is left is 0.89 against 0.40 and 0.30, which
-     * is the difference between driving up a dune and digging into it. */
-    climbCost: 1,
+     * and cannot be given less to lose; charge every layout for the grade
+     * and what is left on a 25% sand climb is 1.01 against 0.53 and 0.43 —
+     * the difference between driving up a dune and digging into it.
+     *
+     * HALF A GRADE RATHER THAN A WHOLE ONE, and the bar is an ordinary car
+     * getting up an ordinary bank. The bite this is taken out of is a
+     * hook-up number rather than a coefficient in gs, so a full grade
+     * over-charges it: at 1 the front-driver cannot climb the 1-in-5 the
+     * explore suite drives up — it scrabbles, trips the stuck-respawn and
+     * is put back on the road, which is not a car with poor traction, it is
+     * a car that has stopped working. Measured up that ramp, everything at
+     * 0.7 and under climbs it; 0.5 leaves the margin, and the layouts still
+     * separate 2.4 to 1 between four driven wheels and two. */
+    climbCost: 0.5,
     fwd: {
       /** Power oversteer from the driven axle, ×`grip.powerYaw`. A car with
        * no driven rear has none: what it gets instead is the two lines

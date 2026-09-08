@@ -1641,10 +1641,14 @@ What the layout decides:
   gravity supplied by its driven tyres before it moves at all, out of the same
   friction budget the pedal wants. That is the half that makes the advantage
   visible — off a hill a four-wheel drive's bite is over 1 and clamped, so it
-  already loses nothing and cannot be given less to lose. Measured on sand from
-  a standstill, peak wheelspin runs 0.10 for the four-wheel drive against 2.53
-  and 4.72 for the two-wheel drives on the flat, and 0.89 against 2.88 and 4.88
-  at a 35% grade — and the FRONT-driver is the one the hill costs most.
+  already loses nothing and cannot be given less to lose. It charges HALF a
+  grade rather than a whole one, because the bite it comes out of is a hook-up
+  number and not a coefficient in gs — at a whole grade a front-driver cannot
+  climb a 1-in-5 bank, which is not poor traction but a broken car. Measured on
+  sand from a standstill, peak wheelspin runs 0.10 for the four-wheel drive
+  against 2.53 and 4.72 for the two-wheel drives on the flat, and 0.22 against
+  2.70 and 4.78 at a 35% grade — and the FRONT-driver is the one the hill costs
+  most.
 - **What the throttle does mid-slide.** A driven rear axle feeds the slide
   (`powerYaw`). Driven front wheels pull the car toward where they point, so
   the throttle pulls it STRAIGHT out of one (`pullStraight`) — ungated by
