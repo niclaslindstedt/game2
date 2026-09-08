@@ -96,19 +96,71 @@ const DUNE_FIELD_SPAN = 0.25;
  * once because `duneAt` is on the per-ground-cell path. */
 const DUNE_CREST = R.dunes.crest;
 
-/** R47 — how much of the climb from the valley floor to the crest is spent
- * getting there, once the ALTITUDE dial has cut a shelf across the top: the
- * rest of it is the ledge. A fifth, which on a six-thousand-metre mountain
- * is a couple of hundred metres of near-level ground along the ridge — room
- * for a road and its verges and not much else, so the drop is at the edge
- * of the stage rather than a kilometre out across a plateau. */
-const MASSIF_SHELF = 0.8;
+/** R47 — THE SUMMIT LEDGE, as shares of the ridge field: the ground stands
+ * level above `MASSIF_LEDGE`, rolls over into that level between
+ * `MASSIF_BROW` and it, and below `MASSIF_BROW` is exactly the flank the
+ * biome row describes — at every position of the ALTITUDE dial.
+ *
+ * That last clause is the whole of it. The ledge exists because R35 has to
+ * find somewhere level to put a start on a six-thousand-metre mountain, and
+ * because a road descends at `follow.grade` and no faster, so ground falling
+ * away faster than that is ground the compiler builds the road in the air
+ * over. What it must NOT do is flatten the mountain, and a shelf blended in
+ * as a downward parabola over the whole climb does exactly that: its slope
+ * is steepest at the valley floor and falls to nothing at the crest, so the
+ * summit spreads into a tableland. MEASURED over seeds 1-6 at the top of the
+ * dial, 20-71% of the box stood within 5% of the summit — against 0.2-0.3%
+ * at the dial's default, which is what a mountain with a peak on it reads
+ * as. The stage was on a mesa, and `ground.summit` is the check that now
+ * says so.
+ *
+ * So the ledge is a CAP on the top of the climb rather than a reshaping of
+ * it: the flank keeps the row's own profile — gentle over the talus at the
+ * foot, steepest under the crest — right up to the brow, and only the last
+ * stretch is rolled level. */
+const MASSIF_BROW = 0.88;
+const MASSIF_LEDGE = 0.97;
 
 /** R47 — the massif's two further octaves of ridge, as divisors of its
  * scale: the side ridges that run down off a main crest, and the gullies
- * between them. */
+ * between them, and what each is worth against the main crest's own fold.
+ * `MASSIF_GULLY_SHARE` is read against the row's `spurs`, so a country
+ * with no spurs has no gullies either. */
 const MASSIF_SPUR = 2.6;
 const MASSIF_GULLY = 6.5;
+const MASSIF_GULLY_SHARE = 0.4;
+
+/** R47 — THE SUMMIT LEDGE as a function of the ridge field: the identity
+ * below the brow, a cubic that arrives at the top of the climb with no
+ * slope left, and flat above the ledge line. Both joints are C1 — the
+ * cubic leaves the flank at exactly the flank's own slope and meets the
+ * ledge at zero — which is what keeps a rim off `ground.crease`, the same
+ * property the taiga's `rounded` crest is built for.
+ *
+ * `a` is how much of the room between the brow and the crest the roll-over
+ * is given; the rest is ledge. It is also the roll's opening slope
+ * relative to the flank's, so it must stay in (0, 1]: at 1 there is no
+ * ledge at all, only a rounded summit. */
+function ledgeCap(r: number): number {
+  if (r <= MASSIF_BROW) return r;
+  if (r >= MASSIF_LEDGE) return 1;
+  const a = (MASSIF_LEDGE - MASSIF_BROW) / (1 - MASSIF_BROW);
+  const s = (r - MASSIF_BROW) / (MASSIF_LEDGE - MASSIF_BROW);
+  return MASSIF_BROW + (1 - MASSIF_BROW) * (((a - 2) * s + (3 - 2 * a)) * s + a) * s;
+}
+
+/** `ledgeCap`'s own slope, for the free gradient the flank estimate is read
+ * off: 1 under the brow, 0 over the ledge, and the cubic's derivative
+ * between them. */
+function ledgeSlope(r: number): number {
+  if (r <= MASSIF_BROW) return 1;
+  if (r >= MASSIF_LEDGE) return 0;
+  const a = (MASSIF_LEDGE - MASSIF_BROW) / (1 - MASSIF_BROW);
+  const s = (r - MASSIF_BROW) / (MASSIF_LEDGE - MASSIF_BROW);
+  // d/dr, so the cubic's derivative in `s` over the width it is spread on
+  // — which is what makes this exactly 1 at the brow and 0 at the ledge.
+  return ((3 * (a - 2) * s + 2 * (3 - 2 * a)) * s + a) / a;
+}
 /** ...and how much steeper the folded noise runs per unit than a single
  * octave's quarter-period climb, once the spurs are folded in — the
  * factor the flank's free gradient estimate carries. */
@@ -389,39 +441,75 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     let massifCrest = 0;
     if (M) {
       const fold = (n: number): number => 1 - Math.abs(2 * n - 1);
+      // R47 — the three octaves are CARVED into one another, not stacked.
+      // A spur is a ridge running down off a bigger ridge, and a gully is
+      // cut between two spurs; neither is a thing that happens on its own
+      // in the middle of a valley floor. So each finer octave is admitted
+      // only in proportion to the one above it, and the grain lies on the
+      // flanks that already stand up and dies out on the floors the ice
+      // filled — which is both what a massif looks like and what keeps the
+      // valleys the stage comes down into smooth.
+      //
+      // Summing three independent folds instead — which is what this was —
+      // puts a crease every half-period of the FINEST octave across the
+      // whole country, valley floors included, each one carrying its full
+      // share of the mountain's height. At the top of the ALTITUDE dial
+      // that is a 600 m needle every 200 m, and it reads from a kilometre
+      // up as a bed of nails rather than as a range. `ground.summits`
+      // counts them.
+      //
+      // The gate is on the WEIGHTS and not on the sum, which is the part
+      // that has to be got right: multiplying the finer folds into the
+      // coarser one and dividing by the old normalizer drops the whole
+      // field's level, and since the valley floor is a fixed threshold
+      // under it, the mountain then vanishes — measured, seed 11 came out
+      // as a 25 m hummock where it had been a six-thousand-metre massif.
+      // Dividing by what is actually ADMITTED here instead leaves the
+      // level where the calibration expects it (mid-flank 0.484 against
+      // the old 0.5) and takes only the needles out of the valleys (0.281
+      // against 0.487, where the main ridge itself stands at 0.2).
       const f1 = fold(valueNoise(x, z, massifScale, noiseSeed + 71));
       const f2 = fold(valueNoise(x, z, massifScale / MASSIF_SPUR, noiseSeed + 73));
       const f3 = fold(valueNoise(x, z, massifScale / MASSIF_GULLY, noiseSeed + 79));
-      const folded = (f1 + M.spurs * f2 + M.spurs * 0.4 * f3) / (1 + M.spurs * 1.4);
+      const spur = M.spurs * f1;
+      const folded =
+        (f1 + spur * f2 + spur * MASSIF_GULLY_SHARE * f2 * f3) /
+        (1 + spur * (1 + MASSIF_GULLY_SHARE));
       // The floor: everything under `valley` is the valley, flat at zero,
       // and the rest is stretched to climb the whole height.
       const ridgeSum = clamp01((folded - massifValley) / (1 - massifValley));
-      // R47 — THE SHELF. The row's own flank runs to a point: gentle at
-      // the foot, steepest under the crest, and nothing on top of it a
-      // road could be laid along. That is a mountain at 340 m and a wall
-      // at six thousand, so as the ALTITUDE dial raises it the profile is
-      // blended toward a LEDGE — steep the whole way up and then flat over
-      // the last `MASSIF_SHELF` of the climb, which is the shape a pass
-      // road is blasted into and the thing this level is about. The
-      // parabola is what keeps it a curve: it arrives at the crest with no
-      // slope left, so the ledge meets the flank without a crease on the
-      // lattice, the way `rounded` does for the taiga's own chains.
-      const onShelf = Math.min(1, ridgeSum / MASSIF_SHELF);
-      const ledge = onShelf * (2 - onShelf);
+      // R47 — THE SHELF. The row's own flank runs to a point, and there is
+      // nothing on top of it a road could be laid along. That is a mountain
+      // at 340 m and a wall at six thousand, so as the ALTITUDE dial raises
+      // it, the top of the climb — and only the top — is blended toward a
+      // LEDGE: the shape a pass road is blasted into, and the thing this
+      // level is about. `ledgeCap` says where the brow is and why the flank
+      // below it is left exactly as the row wrote it.
       const point = Math.pow(ridgeSum, M.sharp);
+      const ledge = Math.pow(ledgeCap(ridgeSum), M.sharp);
       const shaped = point + (ledge - point) * altitude.shelf;
       massif = shaped * massifPeak;
+      // ...and how steep it is HERE, off the shaping function rather than
+      // differenced. The chain rule is taken through the SHAPED profile and
+      // not through the row's flank alone, because the ledge is the part
+      // that matters: read off `point`, a summit rolled level still reports
+      // as the steepest ground on the mountain, and `sheer` is what decides
+      // whether soil lies, water stands and props stand up. The ledge is
+      // ground, and it has to measure as ground.
+      const slope = (p: number, dp: number): number =>
+        M.sharp * Math.pow(Math.max(p, 1e-3), M.sharp - 1) * dp;
+      const dShaped =
+        slope(ridgeSum, 1) +
+        (slope(ledgeCap(ridgeSum), ledgeSlope(ridgeSum)) - slope(ridgeSum, 1)) * altitude.shelf;
       const grade =
-        massifPeak *
-        M.sharp *
-        Math.pow(Math.max(ridgeSum, 1e-3), M.sharp - 1) *
-        (4 / massifScale / (1 - massifValley)) *
-        MASSIF_OCTAVE_GRADE;
+        massifPeak * dShaped * (4 / massifScale / (1 - massifValley)) * MASSIF_OCTAVE_GRADE;
       massifFlank = clamp01(grade / M.flankRef);
       // A crest is where any of the three folds turns over, weighted by
       // how much of the height that fold carries; the eighth power keeps
-      // the mark to the band along the crease itself.
-      const nearCrest = Math.max(f1, f2 * (0.5 + 0.5 * M.spurs), f3 * 0.5 * M.spurs);
+      // the mark to the band along the crease itself. The finer folds are
+      // already carved by the ones above them, so this now dies out in the
+      // valleys with the creases it is marking.
+      const nearCrest = Math.max(f1, f1 * f2 * (0.5 + 0.5 * M.spurs), f1 * f2 * f3 * 0.5 * M.spurs);
       massifCrest = Math.pow(nearCrest, 8) * smooth(clamp01(shaped * 4));
     }
 
@@ -719,7 +807,16 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
       let bestScore = -Infinity;
       const snowCeiling =
         L.zones.snow === null ? Infinity : L.zones.snow + SHOULDER_OVER_SNOW * altitude.bands;
-      const ceiling = Math.max(snowCeiling, (L.massif?.height ?? 0) * SHOULDER_OVER_CREST);
+      // R47 — the crest ceiling is the ground's OWN summit, not the row's
+      // amplitude. `L.massif.height` is what the massif contributes before
+      // the country's relief and the steepness dial's rise multiply it, and
+      // the ground tops out `summit` higher again — so reading it as "the
+      // crest" set the ceiling a third of the way down the mountain, and
+      // since height counts AGAINST a site past the ceiling, the search was
+      // hunting for mid-flank and taking the valley floor when the flank
+      // was not level enough. `massifPeak` is the same number the rock is
+      // actually built from.
+      const ceiling = Math.max(snowCeiling, massifPeak * SHOULDER_OVER_CREST);
       const allowance = SHOULDER_SPREAD;
       // A metre of height buys the same amount of unlevel ground it always
       // did: the height counts at the crest's scale and the spread at the

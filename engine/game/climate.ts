@@ -23,7 +23,7 @@
 // are drawn onto a ground whose temperature is already known.
 
 import { biomeRules, type BiomeId, type BiomeLand } from "../mapgen/biomes.ts";
-import { lapseOf, type StageKnobs } from "../mapgen/rules.ts";
+import { altitudeScale, lapseOf, type StageKnobs } from "../mapgen/rules.ts";
 import type { Season, Weather } from "./state.ts";
 
 export type Climate = {
@@ -141,11 +141,19 @@ export function defaultTemperature(biome: BiomeId | string | undefined, season: 
 export function resolveClimate(choice: ClimateChoice | undefined, knobs: StageKnobs): Climate {
   const season = choice?.season ?? "summer";
   const named = choice?.temperature;
+  const lapse = lapseOf(knobs, CLIMATE.lapse);
+  // R47 — the datum is y = 0, and on a country the ALTITUDE dial has
+  // raised, y = 0 stands `base` metres above the sea. So the air there is
+  // the season's own temperature carried up that far and cooled by the
+  // country's own lapse rate — which is what puts the freezing line at the
+  // same absolute height as the snowline the bands were stretched to, and
+  // what makes a stage on a six-thousand-metre country cold on its valley
+  // floor rather than only on its summit. A temperature named by hand is
+  // the air at the datum and is taken as given.
+  const raised = defaultTemperature(knobs.biome, season) - lapse * altitudeScale(knobs).base;
   const temperature =
-    named !== null && named !== undefined && Number.isFinite(named)
-      ? named
-      : defaultTemperature(knobs.biome, season);
-  return { season, temperature, lapse: lapseOf(knobs, CLIMATE.lapse) };
+    named !== null && named !== undefined && Number.isFinite(named) ? named : raised;
+  return { season, temperature, lapse };
 }
 
 /** How fast the air cools with height under this climate, °C per metre —

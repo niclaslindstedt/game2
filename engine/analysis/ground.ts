@@ -327,6 +327,33 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
   return out;
 }
 
+/** R47 — IS THE HIGH GROUND A SUMMIT, OR A TABLELAND? The share of the box
+ * standing within `near` of its own summit, off the grid the country was
+ * swept on (row-major, `cells` square).
+ *
+ * A peak is a small share of its own country and a tableland is a large
+ * one, and nothing else in this metric can tell them apart: `relief` sees
+ * the same spread either way, so a mesa with a road laid along it scored
+ * 97.5 and reported nothing. `cliff` answers the companion question — is
+ * the mountain a mountain or a wall — so between them the two ends of
+ * "this is not a mountain" are both covered.
+ *
+ * It is a BAND, not a ceiling: no ground near the summit at all is a spike,
+ * which is the shape a country gets when its crest outgrows the ground it
+ * stands on. */
+function summitShare(grid: number[], near: number): number {
+  let summit = -Infinity;
+  let floor = Infinity;
+  for (const h of grid) {
+    if (h > summit) summit = h;
+    if (h < floor) floor = h;
+  }
+  const line = summit - near * Math.max(1, summit - floor);
+  let high = 0;
+  for (const h of grid) if (h > line) high++;
+  return high / Math.max(1, grid.length);
+}
+
 export function analyzeGround(track: Track, terrain: TerrainField): MetricReport {
   const started = Date.now();
   const findings: Finding[] = [];
@@ -515,6 +542,9 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
     });
   }
 
+  // R47 — read the summit share before the sort below, which is in place.
+  const summit = summitShare(heights, G.summit.near);
+
   heights.sort((a, c) => a - c);
   const relief = percentile(heights, 0.95) - percentile(heights, 0.05);
   const waterShare = flooded / Math.max(1, total);
@@ -612,6 +642,21 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       weight: 1.5,
       value: relief,
     },
+    // R47 — asked only of a country that HAS a mountain. The taiga's chains
+    // and the desert's ranges are a different shape with different right
+    // answers, and a band written for a massif would fail them on every
+    // seed.
+    ...(biome.land.massif === null
+      ? []
+      : [
+          {
+            id: "summit",
+            label: "the high ground is a summit and not a tableland",
+            score: within(summit, G.summit.share, G.slack),
+            weight: 2,
+            value: summit,
+          },
+        ]),
     {
       id: "cliffs",
       label: "the country is mostly ground a car could cross",
