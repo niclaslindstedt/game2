@@ -2687,7 +2687,12 @@ await capture(
   SHOWCASE,
   async (page) => {
     await atCleanTime(page, 16);
-    await atDrifting(page, 22);
+    // Sixteen degrees, and lower than anywhere else on purpose: this is the
+    // scene that names the FOUR-WHEEL-DRIVE car, and four-wheel drive is the
+    // layout that gives away the least angle of the three. Asking a coupe for
+    // the slip a rear-driven car finds on the same corner is asking for a
+    // moment its drivetrain does not have.
+    await atDrifting(page, 16);
     await clean(page);
   },
   {

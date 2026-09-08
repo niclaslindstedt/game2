@@ -34,8 +34,16 @@ export const TV_LENS = {
   spread: 0.006,
   /** The ceiling on that, same units. A disc wider than this stops reading as
    * a lens and starts reading as a smear — and every tap of it is a texture
-   * read, so it is the cost ceiling too. */
-  maxSpread: 0.012,
+   * read, so it is the cost ceiling too.
+   *
+   * It is the NEAR field this number is really for. Defocus is relative, so a
+   * background saturates at about one disc however far away it is, while the
+   * ground a few metres in front of a tripod is out of focus by multiples of
+   * its own distance and would take every pixel of ceiling on offer. That
+   * ground is the bottom third of a trackside frame, and blurred to the same
+   * degree as the sky it stops reading as depth and starts reading as a
+   * tilt-shift toy. */
+  maxSpread: 0.008,
   /** Taps per pixel. A golden-angle spiral, so the disc fills evenly at any
    * count and there is no ring to see; sixteen is where a moving frame stops
    * showing the individual samples. */
