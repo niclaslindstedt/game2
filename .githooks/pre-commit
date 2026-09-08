@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-commit hook (OSS_SPEC §16). Install once with `make hooks`.
+# Pre-commit hook (OSS_GAME_SPEC §16). Install once with `make hooks`.
 #
 # Fast checks only: formatting and the CHANGELOG guard. The full lint and
 # test suite stay in CI — a hook that takes a minute gets bypassed, and a

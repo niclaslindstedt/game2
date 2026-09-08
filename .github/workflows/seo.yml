@@ -1,6 +1,6 @@
 name: seo
 
-# Structural SEO assertions (OSS_SPEC §11.3). Runs `check-seo.mjs` against
+# Structural SEO assertions (OSS_GAME_SPEC §11.3). Runs `check-seo.mjs` against
 # the built app so the discoverability failure modes the spec calls out
 # (empty SPA shell, missing canonical, JSON-LD drift from og:image, sitemap
 # gaps, llms.txt missing, critical-path JS budget breach) cannot ship

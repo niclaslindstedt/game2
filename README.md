@@ -6,7 +6,7 @@
 [![seo](https://github.com/niclaslindstedt/game2/actions/workflows/seo.yml/badge.svg)](https://github.com/niclaslindstedt/game2/actions/workflows/seo.yml)
 [![release](https://github.com/niclaslindstedt/game2/actions/workflows/release.yml/badge.svg)](https://github.com/niclaslindstedt/game2/actions/workflows/release.yml)
 [![pages](https://github.com/niclaslindstedt/game2/actions/workflows/pages.yml/badge.svg)](https://github.com/niclaslindstedt/game2/actions/workflows/pages.yml)
-[![spec](https://img.shields.io/badge/OSS__SPEC-v2.9.0-blueviolet)](OSS_SPEC.md)
+[![spec](https://img.shields.io/badge/OSS__GAME__SPEC-v1.1.0-blueviolet)](OSS_GAME_SPEC.md)
 [![license](https://img.shields.io/badge/license-PolyForm--NC-blue.svg)](LICENSE)
 
 ## What
@@ -138,10 +138,11 @@ More in [docs/troubleshooting.md](docs/troubleshooting.md).
 - [Simulation & bots](docs/simulation.md) — the headless harness and the balance workflow
 - [Platforms](docs/platforms.md) — the web, the desktop app and the native (App Store / Play Store) shell
 - [Configuration](docs/configuration.md) · [Troubleshooting](docs/troubleshooting.md)
+- [Spec conformance](docs/spec-conformance.md) — where this repo stands against [OSS_GAME_SPEC.md](OSS_GAME_SPEC.md), chapter by chapter
 
 ## Contributing
 
-Bugs and feature requests go to [GitHub Issues](https://github.com/niclaslindstedt/game2/issues); questions to [Discussions](https://github.com/niclaslindstedt/game2/discussions). Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow (conventional commits, changeset fragments, the sim-before-and-after rule for handling changes). This repository conforms to [OSS_SPEC.md](OSS_SPEC.md).
+Bugs and feature requests go to [GitHub Issues](https://github.com/niclaslindstedt/game2/issues); questions to [Discussions](https://github.com/niclaslindstedt/game2/discussions). Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow (conventional commits, changeset fragments, the sim-before-and-after rule for handling changes). This repository conforms to [OSS_GAME_SPEC.md](OSS_GAME_SPEC.md).
 
 ## License
 

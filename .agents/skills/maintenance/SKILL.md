@@ -5,7 +5,7 @@ description: "Use when you want to bring every drift-prone artifact in the repo 
 
 # Maintenance
 
-This is the umbrella skill for game2, mandated by §21.6 of `OSS_SPEC.md`. It does no rewriting itself — it decides which sync skills are stale, runs each one, and reports a combined summary. Use it when you do not know which specific artifact is out of date, or when several have likely drifted at once (for example, after a large merge).
+This is the umbrella skill for game2, mandated by §21.6 of `OSS_GAME_SPEC.md`. It does no rewriting itself — it decides which sync skills are stale, runs each one, and reports a combined summary. Use it when you do not know which specific artifact is out of date, or when several have likely drifted at once (for example, after a large merge).
 
 ## When to run
 
@@ -24,11 +24,11 @@ The registry is the single source of truth for which sync skills exist in this r
 | `update-docs`    | `docs/*.md` vs. engine/app/tooling source of truth           | §11.1         | 1         |
 | `update-readme`  | `README.md` vs. current commands, cars, controls, URLs       | §3            | 2         |
 | `update-website` | SEO surfaces + identity-derived shell vs. `identity.ts`/docs | §11.2–§11.3   | 3         |
-| `update-prompts` | `prompts/` templates vs. their sources of truth (dormant)    | §13.5         | 4         |
+| `update-prompts` | `prompts/` templates vs. their sources of truth (dormant)    | §13.2         | 4         |
 
 Run order matters: `update-docs` runs before `update-readme` because the README links into docs pages and summarizes their content — a README synced against stale docs re-imports the staleness. `update-website` runs after both because the site's SEO copy describes what the README and docs claim; `update-prompts` runs last (currently dormant — no prompts shipped yet, so it usually just refreshes its baseline).
 
-After the registry, finish a full sweep with the `sync-oss-spec` skill — it catches residual conformance violations the per-artifact skills did not touch.
+After the registry, finish a full sweep with the `sync-game-spec` skill — it walks `OSS_GAME_SPEC.md` chapter by chapter, catches the residual conformance violations the per-artifact skills did not touch, and re-dates every row of `docs/spec-conformance.md`.
 
 ## Discovery process
 

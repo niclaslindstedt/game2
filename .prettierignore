@@ -15,7 +15,7 @@ tauri/src-tauri/icons/
 # style (and must never be hand-edited to satisfy it).
 CHANGELOG.md
 # Verbatim copy of the governing spec.
-OSS_SPEC.md
+OSS_GAME_SPEC.md
 # The agent router. It is mostly WIDE TABLES, and Prettier re-pads every row
 # in one whenever a single cell changes width — so a one-row edit arrives as
 # a diff over the whole table and the actual change is invisible in review.

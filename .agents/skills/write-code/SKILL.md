@@ -180,7 +180,7 @@ Make targets are the definition of green CI enforces).
 ## File size
 
 - Non-test source files stay under **1000 physical lines** (§20.5 of
-  `OSS_SPEC.md`). Past the cap, split by concern — sibling modules, extracted
+  `OSS_GAME_SPEC.md`). Past the cap, split by concern — sibling modules, extracted
   helpers — rather than relaxing it. A file that big is nearly always doing
   more than one thing.
 - Splitting a file is also the moment to prune it: an oversized module usually
@@ -192,7 +192,7 @@ Make targets are the definition of green CI enforces).
 
 - **Tests live in the root `tests/` directory, never inline in source.** One
   file per topic, named `<topic>_test.ts` — the `_test` suffix is mandated by
-  OSS_SPEC §20.2 and checked by the validator. Runner: vitest via `make test`;
+  OSS_GAME_SPEC §20.2. Runner: vitest via `make test`;
   the include pattern (`tests/**/*_test.ts`) is in `vitest.config.ts`.
 - **No DOM, no browser, plain Node** — that is the actual line, not "engine
   only". A renderer module whose whole import graph is DOM-free is fair game

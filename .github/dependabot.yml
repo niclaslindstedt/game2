@@ -1,4 +1,4 @@
-# Dependency hygiene (OSS_SPEC §14): one entry per ecosystem the repo
+# Dependency hygiene (OSS_GAME_SPEC §14): one entry per ecosystem the repo
 # actually uses. npm covers the root workspace and the pwa workspace (npm
 # workspaces resolve through the root lockfile); github-actions covers every
 # `uses:` in .github/workflows/.
