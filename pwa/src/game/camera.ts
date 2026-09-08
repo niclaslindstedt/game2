@@ -41,12 +41,17 @@
 // is actually driven from — `close` and `chase` — share one steady
 // character and differ only in where they stand: a boom is answered
 // briskly and settles without overshooting, at either length.
-// In the air the framing goes loose and pulls wide, which reads as flying.
+// In the air the framing goes loose and pulls wide, which reads as flying,
+// and the BOOM ITSELF TURNS: it is a rod behind the car, and off the ground
+// it lies along the car's own path rather than along the horizontal, so it
+// dips under a car coming off a lip and swings over one that is falling —
+// which is the difference between watching a jump and watching a car leave
+// (camera-feel.ts). It never lets go of the car, and never lets the car
+// get further from it than the length of the rod: a cliff on an alpine
+// stage is a shot pitching over with the car, not a lens left on the edge.
 // Landings and splashes leave a small decaying rattle; running into things
 // leaves the outside shot alone, because a boom did not hit the tree and the
 // car is right there in frame taking it on its own springs (camera-shake.ts).
-// Over a CLIFF they stay up at the top and let the car fall away below them,
-// which is the one thing a chase rig must not follow.
 //
 // The three IN-CAR cameras are their own table and their own update, in
 // camera-eye.ts, because none of them is standing anywhere: they are sat in
@@ -105,14 +110,7 @@ import { createViewChange } from "./camera-change.ts";
 import { createDroneCamera } from "./camera-drone.ts";
 import { createCameraFeel } from "./camera-feel.ts";
 import { createFinishCamera } from "./camera-finish.ts";
-import {
-  CHASE_CLEARANCE,
-  CLIFF,
-  FLOOR,
-  HEIGHT_SPRING,
-  SLACK,
-  groundOver,
-} from "./camera-ground.ts";
+import { CHASE_CLEARANCE, FLOOR, HEIGHT_SPRING, SLACK, groundOver } from "./camera-ground.ts";
 import {
   CAMERA_SHAKE,
   fadeShake,
@@ -261,17 +259,21 @@ type ChaseRig = {
    * a landing that shudders a bumper cam is barely a wobble from a hundred
    * feet up. */
   shake: number;
-  /** Share of the CLIFF hold this rig takes, 0..1 (see CLIFF). The low
-   * rigs take all of it — they are the ones the drop happens TO. The two
-   * that already fly a long way over the terrain take a fraction: from
-   * twenty metres up, holding another twelve only makes the car small. */
-  cliff: number;
   /** How far the camera HOVERS UP over its height when the car has no grip
    * at all, m — the top of the grip read (camera-feel.ts), which is where
    * it stands while the car is flying. Scaled to the rig's height: a metre
    * is a clear lift from six metres behind the car and nothing from twenty
    * above it. */
   hover: number;
+  /** Share of the FLIGHT read this rig's rod takes, 0..1 (camera-feel.ts)
+   * — how far the boom and the aim swing out of the horizontal to lie
+   * along the path of a car that is off the ground. The rigs down behind
+   * the car take all of it: they are the ones a fall happens TO, and their
+   * whole shot is the road the car is on. The two that already look down
+   * from a long way up are most of the way there before the car leaves the
+   * ground, so they take a fraction — swinging a lens that is already 20 m
+   * over the roof another 60° only points it at the car's own shadow. */
+  flight: number;
 };
 
 /** The ladder, in numbers. `chase` is the reference frame — proportions read
@@ -316,9 +318,13 @@ type ChaseRig = {
  * back for a jump makes the biggest moment in the stage read as small and
  * safe, and it is the one moment the camera should hold its nerve. What the
  * frame does do in the air is stand at the top of its `hover` — the grip
- * read (camera-feel.ts) has nothing to read — and it is the same lift a
- * brow or a landing's skitter buys a share of, which is what makes it a
- * reading rather than a jump animation. */
+ * read (camera-feel.ts) has nothing to read — and TURN THE ROD it is
+ * standing on the end of down the car's own flight path (`flight`). The
+ * rod's length is the standoff, and turning it does not change one: the car
+ * is exactly as big in the frame going over a cliff as it was on the road
+ * before it. Both are readings rather than a jump animation, which is why
+ * a brow, a landing's skitter and a mountainside are the same two numbers
+ * at three sizes. */
 const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
   close: {
     dist: 4.4,
@@ -341,8 +347,8 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     swingDamp: 1,
     heave: 0.45,
     shake: 1.15,
-    cliff: 1,
     hover: 0.6,
+    flight: 1,
   },
   chase: {
     dist: 5.8,
@@ -365,8 +371,8 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     swingDamp: 1,
     heave: 0.4,
     shake: 1,
-    cliff: 1,
     hover: 0.8,
+    flight: 1,
   },
   far: {
     dist: 9.8,
@@ -389,8 +395,8 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     swingDamp: 0.72,
     heave: 0.3,
     shake: 0.85,
-    cliff: 0.9,
     hover: 1.1,
+    flight: 0.95,
   },
   // Standoff and aim are a pair: 10 m up and 18 m back puts the car 29°
   // below the horizontal, and an aim 12 m ahead pitches the shot 17° down,
@@ -417,8 +423,8 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     swingDamp: 0.5,
     heave: 0,
     shake: 0.35,
-    cliff: 0.4,
     hover: 2.0,
+    flight: 0.6,
   },
   // Over the roof, tilted only far enough to see what is coming. The wide
   // fov is what buys that tilt: with the camera almost directly above the
@@ -448,8 +454,8 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
     swingDamp: 0.45,
     heave: 0,
     shake: 0.3,
-    cliff: 0.25,
     hover: 3.0,
+    flight: 0.35,
   },
 };
 
@@ -543,7 +549,7 @@ export type GameCamera = {
    * stage again — which is the game taking the camera away at the exact
    * moment the player asked for it back. So the readings are dropped and the
    * shot is STOOD where the car is, in the one frame the press cost. */
-  replant: (state: GameState) => void;
+  replant: () => void;
   update: (state: GameState, dt: number) => void;
   /** Hand the shot a blow. `dir` is the world direction it came FROM the
    * car's middle toward — the in-car views throw the driver's head along it
@@ -585,11 +591,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
   let floorX = 0;
   let floorZ = 0;
   let floored = false;
-  /** The cliff (CLIFF): the height the car left the ground at, and how far
-   * the camera is currently holding above where the rig would otherwise put
-   * it, m. */
-  let takeoff = 0;
-  let held = 0;
   /** Everything a chase rig carries from frame to frame — an angle, a
    * standoff, a spring and a floor — belongs to the road the lens was on.
    * When the camera is picked up and put down, on another crew's car
@@ -803,9 +804,27 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // surge is already eased on its own clock, and passing it through the
     // rig's ease as well would make it a rumour of a lag rather than one.
     const boom = Math.max(0.5, dist + felt.reach);
+    // THE ROD'S OWN ANGLE (camera-feel.ts). The boom behind the car and the
+    // aim point ahead of it are one rod through the car, and off the ground
+    // it lies along the car's own PATH rather than along the horizontal:
+    // under a climbing car so the shot looks up the arc, over a falling one
+    // so it looks down the fall. Turning the rod rather than moving the
+    // camera is what makes it safe at any angle — the boom's LENGTH is
+    // untouched, so the car is the same size in the frame at the bottom of
+    // a mountain as it was on the road at the top, and the aim turns with
+    // the boom, so the car sits in the same place in the frame the whole
+    // way down instead of sliding out of the bottom of it.
+    //
+    // The rig's `height` stays vertical through all of it: it is the metres
+    // the lens is held over the CAR, which is a framing decision and not
+    // part of the rod. Its only cost is that the lens ends up a little
+    // further out on a steep fall than on the flat, which is the shot
+    // standing back from a car that is going somewhere without it.
+    const tipCos = Math.cos(felt.flight);
+    const tipSin = Math.sin(felt.flight);
 
-    const camX = car.x - Math.sin(yaw) * boom + rightX * swing;
-    const camZ = car.z - Math.cos(yaw) * boom + rightZ * swing;
+    const camX = car.x - Math.sin(yaw) * boom * tipCos + rightX * swing;
+    const camZ = car.z - Math.cos(yaw) * boom * tipCos + rightZ * swing;
     // The floor is read where the CAMERA is: trailing a car down a hill
     // puts it inside the slope it just came over, and no amount of height
     // above the CAR fixes that. Water counts as ground here — a lake's
@@ -820,18 +839,19 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const standing = groundOver(state, camX, camZ) + CHASE_CLEARANCE;
     const gap = floor - standing;
     const jumped = !floored || Math.hypot(camX - floorX, camZ - floorZ) > FLOOR.snap;
+    // ...and the rate it may sink at never holds the lens above the car it
+    // is framing. A car in free fall is not a step in the terrain reading:
+    // it goes faster for as long as the fall lasts, and past sixteen metres
+    // a second it simply outruns the ceiling, which is the lens left up on
+    // the lip while the car goes to the valley floor without it. So while
+    // the car is off the ground the floor may always sink at least as fast
+    // as the car is falling (FLOOR).
+    const sinkMax = Math.max(FLOOR.sinkMax, car.airborne ? -car.vy : 0);
     if (jumped || gap <= 0) floor = standing;
-    else floor -= Math.min(gap, Math.min(gap * FLOOR.sink, FLOOR.sinkMax) * dt);
+    else floor -= Math.min(gap, Math.min(gap * FLOOR.sink, sinkMax) * dt);
     floorX = camX;
     floorZ = camZ;
     floored = true;
-
-    // How far the car has fallen below the ground it left, and the share of
-    // that the camera keeps for itself (CLIFF).
-    const fallen = car.airborne ? takeoff - car.y : 0;
-    const wantHold = clamp((fallen - CLIFF.slack) * CLIFF.gain, 0, CLIFF.max) * rig.cliff;
-    const holdRate = wantHold > held ? CLIFF.rise : CLIFF.settle;
-    held += (wantHold - held) * clamp(holdRate * dt, 0, 1);
 
     // The rattle a blow left behind: a decaying WAVE the shot rides, not a
     // fresh random offset per frame (camera-shake.ts). The body's own
@@ -842,7 +862,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const sx = rattle.x + felt.x * rightX;
     const sz = felt.x * rightZ;
     const sy = rattle.y + felt.y;
-    const ride = ground + height_ + car.ride * rig.heave * CAMERA_SHAKE.heave + held + felt.lift;
+    const ride =
+      ground + height_ - boom * tipSin + car.ride * rig.heave * CAMERA_SHAKE.heave + felt.lift;
     camera.position.set(camX + sx, Math.max(ride, floor) + sy, camZ + sz);
     // The drop from camera to aim point over the run between them IS the
     // pitch of the shot — a few degrees for the chase rigs, most of a right
@@ -850,9 +871,9 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // metres of aim height per unit of grade applied straight to the
     // lookAt, so the brow shows over the car.
     camera.lookAt(
-      car.x + Math.sin(yaw) * rig.aimAhead,
-      ground + rig.aimHeight + climb * rig.aimClimb + sy * 0.5,
-      car.z + Math.cos(yaw) * rig.aimAhead,
+      car.x + Math.sin(yaw) * rig.aimAhead * tipCos,
+      ground + rig.aimHeight + rig.aimAhead * tipSin + climb * rig.aimClimb + sy * 0.5,
+      car.z + Math.cos(yaw) * rig.aimAhead * tipCos,
     );
     // ...and the ATTITUDE on top of the aim, as local turns about the lens's
     // own axes: back over the brow, into the turn. A bank into a
@@ -943,10 +964,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
     shake = fadeShake(shake, dt);
     orbit += dt;
     drawnAround = state;
-    // The height the car last left the ground at, kept in every mode so a
-    // camera switched to mid-flight knows how far the fall already is
-    // (CLIFF). Grounded it tracks the car, which is the same thing.
-    if (!state.car.airborne) takeoff = state.car.y;
     // The finish owns the shot in every mode a player can drive from.
     // Overhead it does not: the drone is the menu's backdrop, where a bot
     // finishes a stage every couple of minutes and nobody is watching it
@@ -1074,15 +1091,13 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // rather than eased across the gap: an angle, a standoff, a floor and a
       // spring that all belonged to a different road.
       restand = true;
-      held = 0;
-      takeoff = state.car.y;
       // No time in it, so nothing eases: this writes the pose, it does not
       // fly to it.
       placeFor(IN_CAR.includes(mode as InCarCamera) ? (mode as InCarCamera) : null, state, 0);
     },
-    replant: (state) => {
+    replant: () => {
       // The framing an accident is being held with, a flight between two
-      // seats, a fall the cliff is still holding height for: all of them are
+      // seats, the angle a fall has turned the rod to: all of them are
       // readings off the piece of road the car has just been taken off, and
       // none of them survives the move. `restand` is the same drop the rig
       // takes when it is hung on another crew's car — the hold goes with it,
@@ -1093,8 +1108,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
       eye.reseat();
       restand = true;
       planted = false;
-      held = 0;
-      takeoff = state.car.y;
     },
     cycle: () => {
       // Genuinely a no-op from the overhead views: the drone and the map are
@@ -1114,7 +1127,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
       eye.setEyes(next);
       change.reset();
       restand = true;
-      held = 0;
     },
     setViewTuning: (next) => {
       tuning = next;

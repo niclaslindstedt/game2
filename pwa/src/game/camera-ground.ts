@@ -11,9 +11,23 @@
 // everything the terrain reading does under the LENS that the car never sees
 // — a lattice kink, a shoreline, the hill the camera is trailing into.
 //
-// So four rules stand between the two, and they are all here because they
+// So three rules stand between the two, and they are all here because they
 // are one subject: what is under the camera, and what it is allowed to do
 // about it.
+//
+// NONE OF THEM IS A CLIFF, and that is a decision rather than an omission.
+// The obvious answer to a car going over one is for the camera to decline to
+// come all the way down — hold part of the height it had at the top and let
+// the car sink away below the frame — because riding the car down on a level
+// boom holds the lens two metres over the roof for the whole plunge, and the
+// biggest thing on the stage then reads as nothing happening. The answer
+// here is the other one: the boom is not a level rod. It TURNS (`flight` in
+// camera-feel.ts), swinging over a falling car and taking the aim with it,
+// so the shot pitches over the edge and looks down the fall while the car
+// stays exactly as big in the frame as it was on the road. Holding height as
+// well would buy that gesture a second time, in the one currency a chase
+// shot cannot spend — the car shrinking until what the player is watching is
+// a dot.
 
 import type { GameState } from "@engine";
 
@@ -40,7 +54,19 @@ export const CHASE_CLEARANCE = 1.3;
  * the impact shake) cannot pump the camera up and down. And the floor may
  * rise at once — a camera inside a hill shows nothing at all — but only ever
  * SINKS at a bounded rate, so ground falling away under the camera is
- * something it flies down, never something it is cut to. */
+ * something it flies down, never something it is cut to.
+ *
+ * The bound has one exception, and it is what stops the second rule turning
+ * back into the first problem: a car in FREE FALL is not a kink in the
+ * terrain reading. It goes faster for as long as the fall lasts, and past
+ * the ceiling it simply outruns it — a car crawling off a mountain ledge
+ * and gone for a hundred metres leaves the lens holding station at sixteen
+ * a second, metres up in the air over nothing, because the ground it is
+ * reading is the lip it has not quite cleared yet. So while the car is off
+ * the ground the floor may always sink at least as fast as the car is
+ * falling (`sinkMax` in camera.ts's floor step). Everything the ceiling is
+ * actually for — the lattice crease, the shoreline, the seam between two
+ * fields — happens to a car that is ON the ground, and keeps it exactly. */
 export const FLOOR = {
   /** Radius of the footprint the ground is read over, m. */
   span: 1.8,
@@ -48,7 +74,7 @@ export const FLOOR = {
    * that, m/s. The rate is brisk enough that an ordinary descent — the
    * ground under a trailing camera drops some 8 m/s on a steep one — tracks
    * within a metre; the ceiling is what turns a cliff-sized step into a
-   * second of descent. */
+   * second of descent — and the ceiling a falling car is allowed past. */
   sink: 10,
   sinkMax: 16,
   /** A jump this big between frames is a respawn or a fresh stage, m: the
@@ -160,38 +186,3 @@ export const SLACK = {
  * takeoff and landing, which are real changes of movement rather than
  * bumps in it. */
 export const HEIGHT_SPRING = { ground: 1.6, flying: 4, damping: 1, lead: 2.5, snap: 6 };
-
-/** THE CLIFF. Driving off a cliff top is the one place the chase rig has
- * nothing sensible to follow. Riding the car down keeps it exactly two
- * metres over the roof for the whole plunge, so a twenty-five metre drop
- * reads as nothing happening; and the floor alone cannot save it, because
- * the camera clears the lip a fifth of a second after the car does and from
- * then on there is no ground under it either.
- *
- * So the camera simply declines to come all the way down. It holds part of
- * the height it had at the top and lets the car sink away below it — which
- * is what the moment actually is: the car is gone, nothing the driver does
- * matters now, and all that is left to do is watch it fall. The aim is
- * already at the car, so the shot pitches over the edge on its own.
- *
- * The hold is keyed to how far the car has fallen BELOW WHERE IT LEFT THE
- * GROUND, not to how long it has been in the air, so a lip, a crest and a
- * designed ramp jump — every one of which lands near the height it launched
- * from — never touch it. The frame does not change for a jump (CHASE_RIGS);
- * it changes for a fall. */
-export const CLIFF = {
-  /** How far the car has to be under its own takeoff before the camera
-   * starts holding back, m. A stage's jumps live well inside this. */
-  slack: 6,
-  /** Share of the drop past that the camera keeps, and the most it ever
-   * keeps, m. Half means a twenty-five metre cliff leaves the car ten
-   * metres further down the frame than the rig would ever put it. */
-  gain: 0.5,
-  max: 12,
-  /** How fast the hold winds on and comes back off, 1/s. Winding on is
-   * quick because the drop itself is the shape of the gesture; coming off
-   * is slow, so the camera settles back over the couple of seconds after
-   * the landing instead of dropping onto the car like a lift. */
-  rise: 5,
-  settle: 1.4,
-};
