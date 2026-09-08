@@ -30,42 +30,42 @@ because the game half leans on the baseline half:
 
 ### The OSS baseline (§1–§22)
 
-| Chapter | Checks                                                                                                     |
-| ------- | ---------------------------------------------------------------------------------------------------------- |
-| §3      | README structure (What/Why/Usage tables in sync with reality — overlap with `update-readme`)               |
-| §7.2    | `AGENTS.md` carries the four game sections: role map, content pipeline, the rules that bite, craft index   |
-| §8.5    | Every PR settles a fragment or the `no-changelog` label; `tests/changeset_test.ts` holds the vocabulary    |
-| §9.1    | One documented command per capability — content, assets, sim, playtest, bench                              |
-| §11     | `docs/` coverage, the page-is-the-product rules, SEO and PWA surfaces (`update-docs` / `update-website`)   |
-| §12     | Every tool reachable by one command, `--help`, non-zero on an unknown flag, prints its inputs and outputs  |
-| §13.1   | Examples are runnable and CI-exercised, not restatements of the README                                     |
-| §13.2   | `prompts/` versioning format (overlap with `update-prompts`)                                               |
-| §19.4   | The central output module — engine code prints through `engine/output.ts`, never bare `console.*`          |
-| §19.5   | Nothing logs per entity per frame; diagnostics never change the simulation; the in-build developer surface |
-| §20     | Test layout: root `tests/`, `_test.ts` suffix, no inline tests; §20.3's rule/content split; §20.5's cap    |
-| §21     | Every `update-*` in the `maintenance` registry, each with `SKILL.md` + `.last-updated`; §21.9 craft skills |
+| Chapter | Checks |
+| --- | --- |
+| §3 | README structure (What/Why/Usage tables in sync with reality — overlap with `update-readme`) |
+| §7.2 | `AGENTS.md` carries the four game sections: role map, content pipeline, the rules that bite, craft index |
+| §8.5 | Every PR settles a fragment or the `no-changelog` label; `tests/changeset_test.ts` holds the vocabulary |
+| §9.1 | One documented command per capability — content, assets, sim, playtest, bench |
+| §11 | `docs/` coverage, the page-is-the-product rules, SEO and PWA surfaces (`update-docs` / `update-website`) |
+| §12 | Every tool reachable by one command, `--help`, non-zero on an unknown flag, prints its inputs and outputs |
+| §13.1 | Examples are runnable and CI-exercised, not restatements of the README |
+| §13.2 | `prompts/` versioning format (overlap with `update-prompts`) |
+| §19.4 | The central output module — engine code prints through `engine/output.ts`, never bare `console.*` |
+| §19.5 | Nothing logs per entity per frame; diagnostics never change the simulation; the in-build developer surface |
+| §20 | Test layout: root `tests/`, `_test.ts` suffix, no inline tests; §20.3's rule/content split; §20.5's cap |
+| §21 | Every `update-*` in the `maintenance` registry, each with `SKILL.md` + `.last-updated`; §21.9 craft skills |
 
 ### The game shape (§23–§40)
 
-| Chapter | Checks                                                                                                       |
-| ------- | ------------------------------------------------------------------------------------------------------------ |
-| §23     | Core framework-free and headless; one entry surface (`engine/index.ts`); dependency direction; sequel test   |
-| §23.9   | The startup-path budget is named and gated (`scripts/check-seo.mjs`), and the gate is not raised to pass     |
-| §24     | Catalogs authored as data, schema-validated, generated output gitignored, drift guards, one ordered pipeline |
-| §25     | Seeded run-owned randomness, fixed step, deterministic iteration, no presentation draw, replay/digest guard  |
-| §26–§27 | The scripting seam and the mod surface, where they exist                                                     |
-| §28     | Interface authored as content, where it exists                                                               |
-| §29     | Every derived asset from one source; the style definition; the audio routing key; generated store rasters    |
-| §30–§31 | The narrative tiers, where there is narrative; the naming document and its four identity carriers            |
-| §32     | Headless simulator (scenario, progression, seed, A/B, verdict, no-rebuild tuning); automated player; bench   |
-| §33     | Shells add reach not rules; each shell's own build and checks; generated, drift-tested store metadata        |
-| §34     | Session service, where there is multiplayer                                                                  |
-| §35     | Reference device and viewport; perception rules; accessibility; the mature gate; one identity manifest       |
-| §36     | Save versioning, migration fixtures, namespaced storage identity, slots that do not share it                 |
-| §37     | Input sampled and consumed without loss; the clamped accumulator; focus loss; the wall clock is not a rule   |
-| §38     | A contained rule error; the crash report carries the repro; the running build says what it is                |
-| §39     | No user-visible string literal in source; layout survives the longest string; templates, not concatenation   |
-| §40     | Asset and dependency provenance; telemetry opt-in and personal-data-free; a claim is never shown as a fact   |
+| Chapter | Checks |
+| --- | --- |
+| §23 | Core framework-free and headless; one entry surface (`engine/index.ts`); dependency direction; sequel test |
+| §23.9 | The startup-path budget is named and gated (`scripts/check-seo.mjs`), and the gate is not raised to pass |
+| §24 | Catalogs authored as data, schema-validated, generated output gitignored, drift guards, one ordered pipeline |
+| §25 | Seeded run-owned randomness, fixed step, deterministic iteration, no presentation draw, replay/digest guard |
+| §26–§27 | The scripting seam and the mod surface, where they exist |
+| §28 | Interface authored as content, where it exists |
+| §29 | Every derived asset from one source; the style definition; the audio routing key; generated store rasters |
+| §30–§31 | The narrative tiers, where there is narrative; the naming document and its four identity carriers |
+| §32 | Headless simulator (scenario, progression, seed, A/B, verdict, no-rebuild tuning); automated player; bench |
+| §33 | Shells add reach not rules; each shell's own build and checks; generated, drift-tested store metadata |
+| §34 | Session service, where there is multiplayer |
+| §35 | Reference device and viewport; perception rules; accessibility; the mature gate; one identity manifest |
+| §36 | Save versioning, migration fixtures, namespaced storage identity, slots that do not share it |
+| §37 | Input sampled and consumed without loss; the clamped accumulator; focus loss; the wall clock is not a rule |
+| §38 | A contained rule error; the crash report carries the repro; the running build says what it is |
+| §39 | No user-visible string literal in source; layout survives the longest string; templates, not concatenation |
+| §40 | Asset and dependency provenance; telemetry opt-in and personal-data-free; a claim is never shown as a fact |
 
 Chapters that do not apply (no multiplayer, no narrative, no mature content)
 are recorded as **N/A with the reason**, not silently skipped — the reason is

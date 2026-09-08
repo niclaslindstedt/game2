@@ -15,13 +15,13 @@ The site is the game, deployed to GitHub Pages at the `siteUrl` in three slots
 identity-derived head, the manifest, the icons, and the hand-authored SEO
 files:
 
-| Surface                                          | Derived from                                               | By                                                                     |
-| ------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `index.html` head + `manifest.webmanifest`       | `pwa/src/identity.ts` (name, title, description, palette)  | `pwa/pwa-plugin.ts` at build time                                      |
-| Icons, favicon, `og.png`                         | `pwa/public/icons/icon.svg` + the palette                  | `make icons` (`scripts/generate-icons.mjs`) — never hand-edit the PNGs |
-| `robots.txt`, `sitemap.xml`, `llms.txt`, `CNAME` | hand-authored in `pwa/public/`, anchored to the `SITE_URL` | you — keep them agreeing with `identity.ts`                            |
-| SEO copy in `pwa/index.html`                     | `identity.ts` strings + README's framing                   | you — §11.2's no-double-authoring rule: same claims, one voice         |
-| Identity strings in app code                     | `pwa/src/identity.ts`                                      | never re-hardcode a brand string                                       |
+| Surface | Derived from | By |
+| --- | --- | --- |
+| `index.html` head + `manifest.webmanifest` | `pwa/src/identity.ts` (name, title, description, palette) | `pwa/pwa-plugin.ts` at build time |
+| Icons, favicon, `og.png` | `pwa/public/icons/icon.svg` + the palette | `make icons` (`scripts/generate-icons.mjs`) — never hand-edit the PNGs |
+| `robots.txt`, `sitemap.xml`, `llms.txt`, `CNAME` | hand-authored in `pwa/public/`, anchored to the `SITE_URL` | you — keep them agreeing with `identity.ts` |
+| SEO copy in `pwa/index.html` | `identity.ts` strings + README's framing | you — §11.2's no-double-authoring rule: same claims, one voice |
+| Identity strings in app code | `pwa/src/identity.ts` | never re-hardcode a brand string |
 
 Two parity rules from `AGENTS.md` ride along: `pwa/public/icons/icon.svg` and
 `scripts/generate-icons.mjs` encode the **same mark geometry** — change one,
@@ -54,14 +54,14 @@ commit.
 
 ## Mapping table
 
-| Changed file                                 | Effect on website                                                                                                                             |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity.ts` name/title/description         | `index.html` head + manifest pick it up at build — but the hand-written SEO copy in `pwa/index.html` and `llms.txt` must be re-synced by hand |
-| `identity.ts` `SITE_URL`                     | `sitemap.xml`, `robots.txt`, `CNAME`, canonical URLs — and the deploy-slot config in `pwa/pwa-plugin.ts` / `pages.yml` must still agree       |
-| `identity.ts` PALETTE                        | `make icons` — the icons and OG card render from it                                                                                           |
-| `pwa/public/icons/icon.svg`                  | `make icons`, and check `scripts/generate-icons.mjs` still encodes the same mark geometry                                                     |
-| README / docs feature claims                 | The SEO description and `llms.txt` describe the same game — re-read for drift (new cars, new features, new controls)                          |
-| `engine/version.ts` / `package.json` version | Move only via `scripts/update-versions.sh`; never hand-edit either                                                                            |
+| Changed file | Effect on website |
+| --- | --- |
+| `identity.ts` name/title/description | `index.html` head + manifest pick it up at build — but the hand-written SEO copy in `pwa/index.html` and `llms.txt` must be re-synced by hand |
+| `identity.ts` `SITE_URL` | `sitemap.xml`, `robots.txt`, `CNAME`, canonical URLs — and the deploy-slot config in `pwa/pwa-plugin.ts` / `pages.yml` must still agree |
+| `identity.ts` PALETTE | `make icons` — the icons and OG card render from it |
+| `pwa/public/icons/icon.svg` | `make icons`, and check `scripts/generate-icons.mjs` still encodes the same mark geometry |
+| README / docs feature claims | The SEO description and `llms.txt` describe the same game — re-read for drift (new cars, new features, new controls) |
+| `engine/version.ts` / `package.json` version | Move only via `scripts/update-versions.sh`; never hand-edit either |
 
 ## Update checklist
 

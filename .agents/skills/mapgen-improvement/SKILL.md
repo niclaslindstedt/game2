@@ -62,10 +62,10 @@ doing.** An analyzer is only as honest as its checks, and the fastest route to
 a hundred out of a hundred is to measure things that were never going to fail.
 Every time a finding comes up, ask which of three things it is:
 
-| The finding is…                                | Do                                                                              |
-| ---------------------------------------------- | ------------------------------------------------------------------------------- |
-| A real defect                                  | Fix the GENERATOR. This is the normal case and the point of the tool.           |
-| A check measuring the wrong thing              | Fix the CHECK, in `engine/analysis/`. Say why in the comment.                   |
+| The finding is… | Do |
+| --- | --- |
+| A real defect | Fix the GENERATOR. This is the normal case and the point of the tool. |
+| A check measuring the wrong thing | Fix the CHECK, in `engine/analysis/`. Say why in the comment. |
 | A real property of the game, scored as a fault | Move the threshold in `budgets.ts` — **and only with a MEASUREMENT behind it.** |
 
 Telling the first row from the second: **instruments agreeing on a LOCATION is
@@ -162,15 +162,15 @@ make analyze COUNT=24             # the sweep, with a tally of what is commonest
 npm run analyze -- --json out.json   # machine-readable
 ```
 
-| Metric    | Asks                                                                          |
-| --------- | ----------------------------------------------------------------------------- |
+| Metric | Asks |
+| --- | --- |
 | `rollers` | Is the SURFACE sound — steps, walls, hollows, solids in the road, water on it |
-| `water`   | Does the water obey nature — downhill, gathering, in the ground, ending       |
-| `roads`   | Does the NETWORK make sense — branches go somewhere, nothing doubles up       |
-| `drive`   | Can a modest car DRIVE it — grades, crests, camber, corners with no run-up    |
-| `jumps`   | How far, how high, how hard — and is the road there when it lands             |
-| `ends`    | Pass/fail: does the start hold the field, does the finish work                |
-| `perf`    | What it COST to build, and to query once built                                |
+| `water` | Does the water obey nature — downhill, gathering, in the ground, ending |
+| `roads` | Does the NETWORK make sense — branches go somewhere, nothing doubles up |
+| `drive` | Can a modest car DRIVE it — grades, crests, camber, corners with no run-up |
+| `jumps` | How far, how high, how hard — and is the road there when it lands |
+| `ends` | Pass/fail: does the start hold the field, does the finish work |
+| `perf` | What it COST to build, and to query once built |
 
 They answer different questions and they both lie on their own. The renderer
 shows you a river that floats; only the analyzer knows it floats on nineteen
@@ -211,20 +211,20 @@ hold water" rather than "did my change cost anything".
 
 ## The modules, and their jobs
 
-| File            | Job                                                                                                                                                                                                                                     |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rules.ts`      | **The rule book.** Every constraint and vocabulary number as DATA. Tuning the generator means editing this file.                                                                                                                        |
-| `biomes.ts`     | **The countries (R40).** The quilt, the water, the loose surface, the relief, the dunes and the sky per biome, as rows. `knobs.biome` picks one; nothing else in `mapgen/` names a country.                                             |
-| `generate.ts`   | **The search.** Draws candidates, validates against the rules, retries bounded, backtracks, rejects a whole attempt rather than ever shipping a violation.                                                                              |
-| `compile.ts`    | **The geometry.** Turns the plan into evenly spaced samples — the single geometric truth read by physics, renderer and bots alike.                                                                                                      |
-| `geology.ts`    | **The GROUND, in layers (R32)**, its numbers in `STAGE_RULES.geology`. Bedrock with its glacial smoothness, the groundwater table in it, the soil on top. Everything about the country that is not the road.                            |
-| `land.ts`       | The road builder's view of that ground: how high is it, can I build here.                                                                                                                                                               |
-| `road.ts`       | **The cross-section.** What a road is ACROSS its width. Read by renderer, terrain AND physics — change it once, all three move.                                                                                                         |
-| `spurs.ts`      | **The other roads.** The branch each junction abandons: real road that runs off the map.                                                                                                                                                |
+| File | Job |
+| --- | --- |
+| `rules.ts` | **The rule book.** Every constraint and vocabulary number as DATA. Tuning the generator means editing this file. |
+| `biomes.ts` | **The countries (R40).** The quilt, the water, the loose surface, the relief, the dunes and the sky per biome, as rows. `knobs.biome` picks one; nothing else in `mapgen/` names a country. |
+| `generate.ts` | **The search.** Draws candidates, validates against the rules, retries bounded, backtracks, rejects a whole attempt rather than ever shipping a violation. |
+| `compile.ts` | **The geometry.** Turns the plan into evenly spaced samples — the single geometric truth read by physics, renderer and bots alike. |
+| `geology.ts` | **The GROUND, in layers (R32)**, its numbers in `STAGE_RULES.geology`. Bedrock with its glacial smoothness, the groundwater table in it, the soil on top. Everything about the country that is not the road. |
+| `land.ts` | The road builder's view of that ground: how high is it, can I build here. |
+| `road.ts` | **The cross-section.** What a road is ACROSS its width. Read by renderer, terrain AND physics — change it once, all three move. |
+| `spurs.ts` | **The other roads.** The branch each junction abandons: real road that runs off the map. |
 | `homesteads.ts` | **The country somebody lives in (R37).** A house on a yard, a car or two, a lane of trees, and a dirt drive meeting the stage square. Its own list on the track, NOT a spur: the analysis judges a branch by whether it leaves the map. |
-| `guards.ts`     | **The corner guards (R14).**                                                                                                                                                                                                            |
-| `river.ts`      | **The water (R18).** One watercourse per valley, traced by the rules of nature.                                                                                                                                                         |
-| `terrain.ts`    | The field that shapes all of it around the road, and answers every query the game makes about the world.                                                                                                                                |
+| `guards.ts` | **The corner guards (R14).** |
+| `river.ts` | **The water (R18).** One watercourse per valley, traced by the rules of nature. |
+| `terrain.ts` | The field that shapes all of it around the road, and answers every query the game makes about the world. |
 
 | `crossing.ts` | How the rally gets PAST a public road (R36, square and free); how high the tarmac stands there is `STAGE_RULES.crossing` — `stand` is the step, `ramp` the gravel it happens over, and the jump is the two together |
 | `borrow.ts` | …or ONTO it (R17): a detour the `asphalt` dial pays for |
@@ -250,10 +250,10 @@ Two rules that live outside `mapgen/` but decide what it may build:
 
 And the scoreboard, which is NOT in `mapgen/` on purpose:
 
-| File                  | Job                                                                                                                                                                                       |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine/analysis/`    | One module per metric. It reads `mapgen`, `game` AND `sim`, so it sits above all three — a check about the start grid imports the real grid code rather than keeping a copy of the rules. |
-| `analysis/budgets.ts` | **Every threshold, as data.** `rules.ts`'s opposite number: that one says what may be BUILT, this one says what the result has to COME OUT like.                                          |
+| File | Job |
+| --- | --- |
+| `engine/analysis/` | One module per metric. It reads `mapgen`, `game` AND `sim`, so it sits above all three — a check about the start grid imports the real grid code rather than keeping a copy of the rules. |
+| `analysis/budgets.ts` | **Every threshold, as data.** `rules.ts`'s opposite number: that one says what may be BUILT, this one says what the result has to COME OUT like. |
 
 Keep the splits. A placement decision in `compile.ts`, a geometric fudge in
 `generate.ts`, or a bare threshold inside a check instead of in `budgets.ts`,

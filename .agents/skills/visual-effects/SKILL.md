@@ -13,10 +13,10 @@ events `step()` returns; it never mutates state and never steps physics.
 
 There are **two rendering surfaces**. Pick by what the effect is anchored to:
 
-| Surface                         | Use for                                                                                                                                            | Lives in                                                                       |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **The three.js scene**          | WORLD-anchored FX that sit in the world and pan with the camera: dust off the rear, spray from a ford, a landing puff, skid marks, gate flourishes | `pwa/src/game/` — `dust.ts` is the reference pattern; wired from `renderer.ts` |
-| **The HUD / CSS overlay layer** | SCREEN-space treatment: a speed vignette, a clean-drift flash, a finish wash — usually ONE instance at a time                                      | `pwa/src/game/hud.tsx` + keyframes in `pwa/src/styles.css`                     |
+| Surface | Use for | Lives in |
+| --- | --- | --- |
+| **The three.js scene** | WORLD-anchored FX that sit in the world and pan with the camera: dust off the rear, spray from a ford, a landing puff, skid marks, gate flourishes | `pwa/src/game/` — `dust.ts` is the reference pattern; wired from `renderer.ts` |
+| **The HUD / CSS overlay layer** | SCREEN-space treatment: a speed vignette, a clean-drift flash, a finish wash — usually ONE instance at a time | `pwa/src/game/hud.tsx` + keyframes in `pwa/src/styles.css` |
 
 Camera behavior (shake, FOV kick, drift-angle framing) is the camera's —
 `pwa/src/game/camera.ts` owns modes and their motion; an effect that wants
@@ -44,12 +44,12 @@ task touches. Load **`skill-reflection`** at both ends of the session.
 
 ## The modules
 
-| Effect                                                     | Where                                                                                                                                             |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A particle pool the car throws off, and how it is tinted   | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts`                                                                                |
-| The ROOSTER TAIL a slide throws sideways                   | `DRIFT_SPRAY` + `wheelThrow` in `pwa/src/game/drift-throw.ts` — DOM-free: the angle, the fan, the amount, which wheels; `drift-spray.ts` draws it |
-| Things the car knocks loose (cones, posts, torn-off parts) | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them                          |
-| A WHEEL off the car                                        | `pwa/src/game/loose-wheel.ts` — a rigid body, not an effect; the `collision` skill owns it (`make wheel`)                                         |
+| Effect | Where |
+| --- | --- |
+| A particle pool the car throws off, and how it is tinted | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts` |
+| The ROOSTER TAIL a slide throws sideways | `DRIFT_SPRAY` + `wheelThrow` in `pwa/src/game/drift-throw.ts` — DOM-free: the angle, the fan, the amount, which wheels; `drift-spray.ts` draws it |
+| Things the car knocks loose (cones, posts, torn-off parts) | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them |
+| A WHEEL off the car | `pwa/src/game/loose-wheel.ts` — a rigid body, not an effect; the `collision` skill owns it (`make wheel`) |
 
 ## The art direction — effects must sit inside it
 

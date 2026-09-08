@@ -33,18 +33,18 @@ The `docs/` pages describe the engine, the generator's rules, the sim harness, a
 
 ## Mapping table
 
-| Changed source                                                    | Page(s) to re-sync                           |
-| ----------------------------------------------------------------- | -------------------------------------------- |
-| `engine/game/car.ts`, `engine/game/defs/*`                        | `docs/driving.md`                            |
-| `engine/mapgen/rules.ts` (the R-rules are quoted verbatim)        | `docs/track-generator.md`                    |
-| `engine/mapgen/generate.ts`, `compile.ts`                         | `docs/track-generator.md`                    |
-| `engine/sim/*`, `scripts/simulate-run.mjs`                        | `docs/simulation.md`                         |
-| `engine/index.ts`, module moves under `engine/` or `pwa/src/`     | `docs/architecture.md`                       |
-| `pwa/src/game/input.ts`, `hud.tsx`                                | `docs/getting-started.md`                    |
+| Changed source | Page(s) to re-sync |
+| --- | --- |
+| `engine/game/car.ts`, `engine/game/defs/*` | `docs/driving.md` |
+| `engine/mapgen/rules.ts` (the R-rules are quoted verbatim) | `docs/track-generator.md` |
+| `engine/mapgen/generate.ts`, `compile.ts` | `docs/track-generator.md` |
+| `engine/sim/*`, `scripts/simulate-run.mjs` | `docs/simulation.md` |
+| `engine/index.ts`, module moves under `engine/` or `pwa/src/` | `docs/architecture.md` |
+| `pwa/src/game/input.ts`, `hud.tsx` | `docs/getting-started.md` |
 | `.github/workflows/pages.yml`, `release.yml`, `pwa/pwa-plugin.ts` | `docs/configuration.md`, `docs/platforms.md` |
-| `pwa/src/identity.ts`, `pwa/public/*`                             | `docs/configuration.md`                      |
-| New shells (`electron/`, `tauri/`, `native/`)                     | `docs/platforms.md`                          |
-| Error-shaped changes (new failure modes, new tooling)             | `docs/troubleshooting.md`                    |
+| `pwa/src/identity.ts`, `pwa/public/*` | `docs/configuration.md` |
+| New shells (`electron/`, `tauri/`, `native/`) | `docs/platforms.md` |
+| Error-shaped changes (new failure modes, new tooling) | `docs/troubleshooting.md` |
 
 ## Update checklist
 

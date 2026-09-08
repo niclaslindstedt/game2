@@ -39,17 +39,17 @@ description: "Use when README.md may be stale. Discovers commits since the last 
 
 ## Mapping table
 
-| Changed files / scope                         | README section(s) to update                  |
-| --------------------------------------------- | -------------------------------------------- |
-| `package.json` scripts, `Makefile` targets    | **Usage** table                              |
-| `engine/game/defs/cars.ts`                    | **What** (the car list)                      |
-| `pwa/src/game/input.ts`, `hud.tsx`            | **Quick start** (controls)                   |
-| `pwa/src/identity.ts`, `pwa/public/CNAME`     | Links, badges, **What**, **Usage** (install) |
-| `engine/mapgen/rules.ts`                      | **Why** (generator claims)                   |
-| `.github/workflows/*`                         | Badge row                                    |
-| `docs/*.md` added/renamed                     | **Documentation** link list                  |
-| Dependency/auth changes (`.npmrc`, framework) | **Prerequisites**, **Configuration**         |
-| `LICENSE`                                     | **License** section, badges                  |
+| Changed files / scope | README section(s) to update |
+| --- | --- |
+| `package.json` scripts, `Makefile` targets | **Usage** table |
+| `engine/game/defs/cars.ts` | **What** (the car list) |
+| `pwa/src/game/input.ts`, `hud.tsx` | **Quick start** (controls) |
+| `pwa/src/identity.ts`, `pwa/public/CNAME` | Links, badges, **What**, **Usage** (install) |
+| `engine/mapgen/rules.ts` | **Why** (generator claims) |
+| `.github/workflows/*` | Badge row |
+| `docs/*.md` added/renamed | **Documentation** link list |
+| Dependency/auth changes (`.npmrc`, framework) | **Prerequisites**, **Configuration** |
+| `LICENSE` | **License** section, badges |
 
 Extend this table every time you find a new source-of-truth file that feeds the README.
 

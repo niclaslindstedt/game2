@@ -18,11 +18,11 @@ is read from — widening only the samples leaves `state.offRoad` true and
 changes the measured radius by under 2 m. Measured on a compact at 0.45 lock,
 30 m/s, 2.5 s:
 
-| track / samples | radius | surfaces seen  |
-| --------------- | ------ | -------------- |
-| as compiled     | 63.6 m | gravel, nature |
-| samples 900     | 64.5 m | gravel, nature |
-| track 900       | 62.6 m | gravel         |
+| track / samples | radius | surfaces seen |
+| --- | --- | --- |
+| as compiled | 63.6 m | gravel, nature |
+| samples 900 | 64.5 m | gravel, nature |
+| track 900 | 62.6 m | gravel |
 
 Assert `state.offRoad === false` across the sample window rather than
 trusting a number that looks plausible — the contaminated readings are all

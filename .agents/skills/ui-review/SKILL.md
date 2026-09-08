@@ -23,13 +23,13 @@ touches. Load **`skill-reflection`** at both ends of the session.
 
 ## Tooling
 
-| Piece                    | Role                                                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `scripts/screenshot.mjs` | The capture harness — scenes at 1280×720 (desktop landscape) and 390×844 (phone portrait)                     |
-| `make screenshots`       | Runs it against the BUILT app (`make build` first); `CHROMIUM_PATH=/opt/pw-browsers/chromium` in web sessions |
-| Read tool on the PNGs    | The evaluation itself — every judgement is made on a screenshot, not on source                                |
-| `npm run dev`            | Headed spot-checks (hover states, the update toast's timing, touch behavior in devtools emulation)            |
-| `scripts/debug-shot.mjs` | ONE driving frame, any viewport — the cheap way to audit a single instrument's placement                      |
+| Piece | Role |
+| --- | --- |
+| `scripts/screenshot.mjs` | The capture harness — scenes at 1280×720 (desktop landscape) and 390×844 (phone portrait) |
+| `make screenshots` | Runs it against the BUILT app (`make build` first); `CHROMIUM_PATH=/opt/pw-browsers/chromium` in web sessions |
+| Read tool on the PNGs | The evaluation itself — every judgement is made on a screenshot, not on source |
+| `npm run dev` | Headed spot-checks (hover states, the update toast's timing, touch behavior in devtools emulation) |
+| `scripts/debug-shot.mjs` | ONE driving frame, any viewport — the cheap way to audit a single instrument's placement |
 
 The two shipped viewports are the floor, not the ceiling: when a change is
 layout-sensitive, add a capture at the tight cases — landscape phone

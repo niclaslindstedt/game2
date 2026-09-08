@@ -185,15 +185,15 @@ in instead. Do not "fix" that by re-racing it.
 
 The bot is one car; the RACE is a field of them. Where each piece is:
 
-| Piece                                                     | Where                                                                                                                                    |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| How GOOD a bot is (difficulty, skill budgets)             | `engine/sim/skill.ts`                                                                                                                    |
-| Who the campaign's rivals ARE (aliases, cars, characters) | `engine/sim/rivals.ts` — what each is PAINTED is `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` (`car-design`)                          |
-| The field on the road, and what place a run is in         | `engine/sim/field.ts`; `pwa/src/game/standings.ts` is the frame's half (+ `campaign.ts` for the podium rule)                             |
-| The mass-start GRID, and the only catch-up in the game    | `engine/sim/grid.ts` + `TUNING.massStart` — the zig-zag on the apron, and the drive a row back is owed                                   |
-| The run-out once the player's own run is over             | `watchField` in `engine/sim/field.ts` drives it at race speed; `pwa/src/game/spectate.ts` + `hud-spectate.tsx` show it (`hud-and-menus`) |
-| RECORDING a run and driving it again                      | `engine/sim/tape.ts` + `race.ts`, over `pwa/src/game/run-tape.ts`                                                                        |
-| The rival cars you can see and hit                        | `pwa/src/game/field-cars.ts`; the plate over each is `name-tag.ts` — a label, a colour and a point, which must NEVER learn what a bot is |
+| Piece | Where |
+| --- | --- |
+| How GOOD a bot is (difficulty, skill budgets) | `engine/sim/skill.ts` |
+| Who the campaign's rivals ARE (aliases, cars, characters) | `engine/sim/rivals.ts` — what each is PAINTED is `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` (`car-design`) |
+| The field on the road, and what place a run is in | `engine/sim/field.ts`; `pwa/src/game/standings.ts` is the frame's half (+ `campaign.ts` for the podium rule) |
+| The mass-start GRID, and the only catch-up in the game | `engine/sim/grid.ts` + `TUNING.massStart` — the zig-zag on the apron, and the drive a row back is owed |
+| The run-out once the player's own run is over | `watchField` in `engine/sim/field.ts` drives it at race speed; `pwa/src/game/spectate.ts` + `hud-spectate.tsx` show it (`hud-and-menus`) |
+| RECORDING a run and driving it again | `engine/sim/tape.ts` + `race.ts`, over `pwa/src/game/run-tape.ts` |
+| The rival cars you can see and hit | `pwa/src/game/field-cars.ts`; the plate over each is `name-tag.ts` — a label, a colour and a point, which must NEVER learn what a bot is |
 
 ```sh
 make record                     # record a bot run to a run tape (runs/*.jsonl)

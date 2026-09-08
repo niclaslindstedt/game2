@@ -18,11 +18,11 @@ job; load it at both ends of the session.
 
 ## The three steps, in the only order that works
 
-| Step | What                                          | Why it is not optional                      |
-| ---- | --------------------------------------------- | ------------------------------------------- |
-| 1    | `git branch -f backup/<branch>-premerge HEAD` | The seatbelt. Free, and it saves everything |
-| 2    | `git fetch origin main`                       | **The step that gets skipped**              |
-| 3    | `git rebase origin/main`                      | Onto the ref that was just fetched          |
+| Step | What | Why it is not optional |
+| --- | --- | --- |
+| 1 | `git branch -f backup/<branch>-premerge HEAD` | The seatbelt. Free, and it saves everything |
+| 2 | `git fetch origin main` | **The step that gets skipped** |
+| 3 | `git rebase origin/main` | Onto the ref that was just fetched |
 
 (Slashes in the branch name become dashes in the backup name:
 `backup/claude-fix-drift-premerge`.)
@@ -95,12 +95,12 @@ going elsewhere.
 
 ## Rebase or merge?
 
-| Situation                                                   | Do                       |
-| ----------------------------------------------------------- | ------------------------ |
-| Branch not pushed, or pushed and nobody else has it         | **rebase** (the default) |
-| Branch is on an open PR that a human is reviewing right now | **merge**                |
-| Branch has a merge commit in it you want to keep readable   | merge                    |
-| You were explicitly told to rebase                          | rebase                   |
+| Situation | Do |
+| --- | --- |
+| Branch not pushed, or pushed and nobody else has it | **rebase** (the default) |
+| Branch is on an open PR that a human is reviewing right now | **merge** |
+| Branch has a merge commit in it you want to keep readable | merge |
+| You were explicitly told to rebase | rebase |
 
 A rebase rewrites history, so it needs `--force-with-lease` to push afterwards.
 **Never plain `--force`** — with-lease refuses when the remote moved under you,
@@ -176,13 +176,13 @@ normal and it is not a sign anything is wrong.
 
 ## When it has already gone wrong
 
-| Symptom                                            | Do                                                               |
-| -------------------------------------------------- | ---------------------------------------------------------------- |
-| Resolution looks wrong, mid-conflict               | `git rebase --abort` (or `git merge --abort`)                    |
-| Abort did not restore what you expected            | `git reset --hard backup/<branch>-premerge`                      |
-| No backup was cut and work is missing              | `git reflog` — the commits are there for ~90 days                |
-| Rebase finished but the result is wrong            | `git reset --hard backup/<branch>-premerge`, start again         |
-| Pushed a bad rebase                                | reset to the backup, `git push --force-with-lease` again         |
+| Symptom | Do |
+| --- | --- |
+| Resolution looks wrong, mid-conflict | `git rebase --abort` (or `git merge --abort`) |
+| Abort did not restore what you expected | `git reset --hard backup/<branch>-premerge` |
+| No backup was cut and work is missing | `git reflog` — the commits are there for ~90 days |
+| Rebase finished but the result is wrong | `git reset --hard backup/<branch>-premerge`, start again |
+| Pushed a bad rebase | reset to the backup, `git push --force-with-lease` again |
 | PR says "un-mergeable" but merging says up-to-date | GitHub's mergeability is computed lazily — re-check after a push |
 
 ---

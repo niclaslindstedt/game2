@@ -42,13 +42,13 @@ and ASK for what is missing — one round of "could you find a straight
 side view" costs a minute; a body measured off a three-quarter shot costs
 the whole session and is still wrong.
 
-| Picture                                     | What it is FOR                                                                                                     | What it must be                                                                                                               |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Side elevation** (required)               | Every length and height: overhangs, cowl, pillars, roof, door lengths, belt, arch size, bumper heights, the wheel. | Dead side-on, telephoto (a long lens — the front and rear wheels the same size on the picture), wheels straight, unobstructed |
-| **Front** (wanted)                          | The LAYOUT of the face: lamp shape and count, grille width, pods, scoops, air dam, indicator position              | Straight on. It will be perspective — use it for what is where and how wide, never for heights                                |
-| **Rear** (wanted — the chase camera's view) | The layout of the tail: lamp band, plate position, bumper depth, valance, spoiler, exhaust side                    | Straight on, ideally of the same body — a road-car rear is fine for the layout, the rally car for the furniture               |
-| **Wheel close-up** (wanted)                 | Spoke count, spoke breadth, rim share of the tyre, hub size, colour                                                | Any angle that shows the whole face; the side elevation often serves                                                          |
-| The real car's dimensions                   | Length, wheelbase, width, height — to scale the picture and to know what has to be compressed                      | From memory or a spec sheet; state them in the spec's comment                                                                 |
+| Picture | What it is FOR | What it must be |
+| --- | --- | --- |
+| **Side elevation** (required) | Every length and height: overhangs, cowl, pillars, roof, door lengths, belt, arch size, bumper heights, the wheel. | Dead side-on, telephoto (a long lens — the front and rear wheels the same size on the picture), wheels straight, unobstructed |
+| **Front** (wanted) | The LAYOUT of the face: lamp shape and count, grille width, pods, scoops, air dam, indicator position | Straight on. It will be perspective — use it for what is where and how wide, never for heights |
+| **Rear** (wanted — the chase camera's view) | The layout of the tail: lamp band, plate position, bumper depth, valance, spoiler, exhaust side | Straight on, ideally of the same body — a road-car rear is fine for the layout, the rally car for the furniture |
+| **Wheel close-up** (wanted) | Spoke count, spoke breadth, rim share of the tyre, hub size, colour | Any angle that shows the whole face; the side elevation often serves |
+| The real car's dimensions | Length, wheelbase, width, height — to scale the picture and to know what has to be compressed | From memory or a spec sheet; state them in the spec's comment |
 
 A three-quarter view, a moving shot, a wide-angle shot from knee height:
 all reference for the FEEL, none of them measurable. Say so, and ask.

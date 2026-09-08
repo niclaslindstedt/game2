@@ -20,8 +20,8 @@ went from a clean seed 1 to twenty-one seconds in the trees, one respawn and
 `off`, not the angle:
 
 | `angleBand` | 0.31 | 0.34 | 0.36 | 0.38 | 0.42 |
-| ----------- | ---- | ---- | ---- | ---- | ---- |
-| off-road, s | 66   | 63   | 52   | 45   | 41   |
+| --- | --- | --- | --- | --- | --- |
+| off-road, s | 66 | 63 | 52 | 45 | 41 |
 
 0.38 and 0.42 are the same answer; everything under 0.36 is a car nobody can
 hold. Ending WIDER than `angleSpan` is fine and now correct — two of three

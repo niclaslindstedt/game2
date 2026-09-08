@@ -14,21 +14,21 @@ instrument, and **any change to `cars.ts` owes it, before and after.**
 **Read this skill's lessons first** —
 `node scripts/skill-lessons.mjs car-tuning --list`.
 
-| Load beside this one | For                                                  |
-| -------------------- | ---------------------------------------------------- |
-| `drift-feel`         | the SHARED slide model every car inherits            |
-| `simulate-run`       | reading the plain `make sim` table and its columns   |
-| `bot-improvement`    | when the bot cannot exploit what you just gave a car |
-| `car-design`         | how a car LOOKS — a different craft entirely         |
+| Load beside this one | For |
+| --- | --- |
+| `drift-feel` | the SHARED slide model every car inherits |
+| `simulate-run` | reading the plain `make sim` table and its columns |
+| `bot-improvement` | when the bot cannot exploit what you just gave a car |
+| `car-design` | how a car LOOKS — a different craft entirely |
 
 ## Where the numbers live
 
-| Layer                 | File                          | What it decides                                           |
-| --------------------- | ----------------------------- | --------------------------------------------------------- |
-| The catalog           | `engine/game/defs/cars.ts`    | how much of each thing THIS car has                       |
-| The layout's shape    | `TUNING.drivetrain`           | what driving those wheels DOES                            |
-| The magnitudes        | `TUNING.grip`, `TUNING.drift` | how strong each effect is, for everyone                   |
-| The engine's delivery | `TUNING.engine`               | where torque lives in a gear, and what reaches the ground |
+| Layer | File | What it decides |
+| --- | --- | --- |
+| The catalog | `engine/game/defs/cars.ts` | how much of each thing THIS car has |
+| The layout's shape | `TUNING.drivetrain` | what driving those wheels DOES |
+| The magnitudes | `TUNING.grip`, `TUNING.drift` | how strong each effect is, for everyone |
+| The engine's delivery | `TUNING.engine` | where torque lives in a gear, and what reaches the ground |
 
 `spec.drive` selects a `TUNING.drivetrain` row; that row scales the shared
 magnitudes. **Nothing in `car.ts` branches per car** — it reads the layout's
@@ -37,18 +37,18 @@ knob in the row, never an `if (spec.id === …)`.
 
 ## What each per-car knob buys
 
-| Knob                    | Moves                                                                                                                       |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `gearTop` / `gearAccel` | pace, and WHERE in the speed range the car is strong — the most powerful balance lever                                      |
-| `torque`                | where inside a gear the shove lives (pivots around mid-gear, area-neutral), and how readily the driven axle spins itself up |
-| `traction`              | how much torque reaches the ground, against the surface and `drivetrain.bite`                                               |
-| `tyres.sealed/.loose`   | grip per surface family — the knob that makes a surface a CHOICE                                                            |
-| `gripAccel`             | where the slide starts; also what the bot plans corners around                                                              |
-| `stability`             | how fast steering authority bleeds off with speed — fast sweepers vs hairpins                                               |
-| `gripLat` / `driftLat`  | how fast the velocity catches the nose up, gripped and sliding                                                              |
-| `driftYaw`              | rotation while sliding; the bot also trusts it with proportionally more hot entry                                           |
-| `brake`                 | braking distances — helps everywhere, so a poor differentiator                                                              |
-| `mass`                  | collision and suspension ONLY. It is not in the longitudinal model; it will not slow a car                                  |
+| Knob | Moves |
+| --- | --- |
+| `gearTop` / `gearAccel` | pace, and WHERE in the speed range the car is strong — the most powerful balance lever |
+| `torque` | where inside a gear the shove lives (pivots around mid-gear, area-neutral), and how readily the driven axle spins itself up |
+| `traction` | how much torque reaches the ground, against the surface and `drivetrain.bite` |
+| `tyres.sealed/.loose` | grip per surface family — the knob that makes a surface a CHOICE |
+| `gripAccel` | where the slide starts; also what the bot plans corners around |
+| `stability` | how fast steering authority bleeds off with speed — fast sweepers vs hairpins |
+| `gripLat` / `driftLat` | how fast the velocity catches the nose up, gripped and sliding |
+| `driftYaw` | rotation while sliding; the bot also trusts it with proportionally more hot entry |
+| `brake` | braking distances — helps everywhere, so a poor differentiator |
+| `mass` | collision and suspension ONLY. It is not in the longitudinal model; it will not slow a car |
 
 ### The drivetrain row
 

@@ -18,10 +18,10 @@ hit at 40% through the session is the trap the next session hits too.
 
 ## The two halves
 
-| When                                   | Do                                                                          |
-| -------------------------------------- | --------------------------------------------------------------------------- |
-| **OPEN** — right after loading a skill | Read its lessons, filtered to what this task touches. Costs seconds.        |
-| **CLOSE** — before the commit          | Record, prune, merge, promote, correct. Same PR as the work that taught it. |
+| When | Do |
+| --- | --- |
+| **OPEN** — right after loading a skill | Read its lessons, filtered to what this task touches. Costs seconds. |
+| **CLOSE** — before the commit | Record, prune, merge, promote, correct. Same PR as the work that taught it. |
 
 Both halves run against **every** skill the session loaded, not just the main
 one. A session that loaded `mapgen-improvement` and `simulate-run` owes two
@@ -82,12 +82,12 @@ NOT seen the pass that taught it. Name the files/commands involved and the
 failure it prevents.
 ```
 
-| Field      | Required | What it means                                                                                                                                        |
-| ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `title`    | yes      | The gist in one line. Written as a CLAIM, not a topic — "The bot's hot-entry margin is additive, a ratio overcooks hairpins", never "About the bot". |
-| `date`     | yes      | `YYYY-MM-DD`, the day it was learned. On a merge, keep the OLDEST source's date.                                                                     |
-| `scope`    | no       | Repo-relative paths (dirs or files) where the lesson applies. Comma-separated. **Omitted = global.**                                                 |
-| `concepts` | no       | Lower-case kebab tags, comma-separated or `[a, b]`. What the lesson is ABOUT, so a task can find it without knowing which pass wrote it.             |
+| Field | Required | What it means |
+| --- | --- | --- |
+| `title` | yes | The gist in one line. Written as a CLAIM, not a topic — "The bot's hot-entry margin is additive, a ratio overcooks hairpins", never "About the bot". |
+| `date` | yes | `YYYY-MM-DD`, the day it was learned. On a merge, keep the OLDEST source's date. |
+| `scope` | no | Repo-relative paths (dirs or files) where the lesson applies. Comma-separated. **Omitted = global.** |
+| `concepts` | no | Lower-case kebab tags, comma-separated or `[a, b]`. What the lesson is ABOUT, so a task can find it without knowing which pass wrote it. |
 
 - The filename timestamp is `$(date +%s)` at recording time (same scheme as
   `.changes/unreleased/`).
@@ -96,6 +96,11 @@ failure it prevents.
   sessions appending to one file conflict and separate fragments never do.
 - Keep the body a few sentences to a short paragraph — **under 350 words**, and
   the good ones are half that. See the size bars below.
+- **Prettier does not read this tree** — `.agents/skills/` is in
+  `.prettierignore`, because a re-pad of one table column turns two sessions'
+  one-row edits into a conflict over the whole block. Nothing re-wraps a
+  fragment and nothing tidies a table, so write tables in the compact
+  `| a | b |` form and keep the lines you meant.
 
 **Scoping honestly is what makes the filter worth having.** Scope to the
 NARROWEST path where the lesson stays true — the module, the defs file, the one
@@ -187,12 +192,12 @@ that hits a wall of text skims it. So size is a correctness property, not a
 tidiness one, and `skill-lessons.mjs` measures them (in WORDS — markdown line
 length says more about the author's wrapping than about the reading):
 
-| Bar                         | Limit          | What being over it means                                         |
-| --------------------------- | -------------- | ---------------------------------------------------------------- |
-| One fragment's body         | **350 words**  | It is two lessons, or one lesson wrapped in the session's story  |
-| A skill's whole lesson set  | **4000 words** | The set has outgrown reading; merge and promote                  |
-| Fragment count on one skill | **15**         | Same call, counted the other way                                 |
-| A `SKILL.md`                | **5000 words** | The playbook is repeating itself or has absorbed a reference doc |
+| Bar | Limit | What being over it means |
+| --- | --- | --- |
+| One fragment's body | **350 words** | It is two lessons, or one lesson wrapped in the session's story |
+| A skill's whole lesson set | **4000 words** | The set has outgrown reading; merge and promote |
+| Fragment count on one skill | **15** | Same call, counted the other way |
+| A `SKILL.md` | **5000 words** | The playbook is repeating itself or has absorbed a reference doc |
 
 Every mode of the tool reports them — the inventory, the printout's nudge, and
 `--check`:
@@ -241,13 +246,13 @@ subject, with AGENTS.md keeping at most a one-line pointer.
 
 When a session touched `AGENTS.md`, or noticed a section it never used, ask:
 
-| The content is…                                                            | Where it goes                                    |
-| -------------------------------------------------------------------------- | ------------------------------------------------ |
-| A rule only a certain KIND of task needs                                   | that task's skill; AGENTS.md keeps a pointer row |
-| A procedure with steps, commands or a checklist                            | a skill — AGENTS.md holds no procedures          |
-| A trap that bites BEFORE a skill is loaded (an import direction, a budget) | stays in AGENTS.md                               |
-| A pointer table (which doc, which skill, where new code goes)              | stays in AGENTS.md — that IS the router          |
-| Already stated in a skill                                                  | delete the AGENTS.md copy, keep the pointer      |
+| The content is… | Where it goes |
+| --- | --- |
+| A rule only a certain KIND of task needs | that task's skill; AGENTS.md keeps a pointer row |
+| A procedure with steps, commands or a checklist | a skill — AGENTS.md holds no procedures |
+| A trap that bites BEFORE a skill is loaded (an import direction, a budget) | stays in AGENTS.md |
+| A pointer table (which doc, which skill, where new code goes) | stays in AGENTS.md — that IS the router |
+| Already stated in a skill | delete the AGENTS.md copy, keep the pointer |
 
 **Move it into an EXISTING skill wherever one fits.** A new skill is its own
 overhead — the router grows a row, and a session has to know to load it. Only

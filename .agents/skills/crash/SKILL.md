@@ -63,25 +63,25 @@ It writes `previews/crash-<scenario>.png` and prints a frame table. **The
 table is what a claim gets made out of; the picture is what tells you which
 number to go and look at.** Three panels:
 
-| Panel       | The question it answers                                                                                                                      |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **PLAN**    | Where did it go, which way was it pointing, and what did it reach? Struck props are coloured.                                                |
-| **PROFILE** | Did it CARRY? Outlines walking away = a roll that travels; outlines stacking up = a car hitting glue.                                        |
-| **FRAMES**  | One cell per sample: the body from behind on its pivot, from above against the release heading, and every number that decides the next step. |
+| Panel | The question it answers |
+| --- | --- |
+| **PLAN** | Where did it go, which way was it pointing, and what did it reach? Struck props are coloured. |
+| **PROFILE** | Did it CARRY? Outlines walking away = a roll that travels; outlines stacking up = a car hitting glue. |
+| **FRAMES** | One cell per sample: the body from behind on its pivot, from above against the release heading, and every number that decides the next step. |
 
 The scenarios each isolate ONE mechanism, and adding a sixth is a row in
 `SCENARIOS` (`scripts/lib/crash-stage.mjs`):
 
-| Scenario | What it isolates                                                            |
-| -------- | --------------------------------------------------------------------------- |
-| `trip`   | A lip taken crossed up — the landing that goes over                         |
-| `carry`  | The same at pace with NOTHING to hit: the momentum question, on bare ground |
-| `debris` | ...and the same roll with a field of solids in the way                      |
-| `slide`  | Sliding into a low rail on the flat — the rally roll, no jump               |
-| `spin`   | A solid caught on the nose corner: yaw without going over                   |
-| `wall`   | Square into something rooted: the pure contact                              |
-| `cliff`  | On its ROOF, sliding over an EDGE — the ground runs out under one side      |
-| `bank`   | ...and on its roof on a plain steep bank, which it should just slide down   |
+| Scenario | What it isolates |
+| --- | --- |
+| `trip` | A lip taken crossed up — the landing that goes over |
+| `carry` | The same at pace with NOTHING to hit: the momentum question, on bare ground |
+| `debris` | ...and the same roll with a field of solids in the way |
+| `slide` | Sliding into a low rail on the flat — the rally roll, no jump |
+| `spin` | A solid caught on the nose corner: yaw without going over |
+| `wall` | Square into something rooted: the pure contact |
+| `cliff` | On its ROOF, sliding over an EDGE — the ground runs out under one side |
+| `bank` | ...and on its roof on a plain steep bank, which it should just slide down |
 
 ### The one number to read
 

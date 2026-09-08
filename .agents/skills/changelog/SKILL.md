@@ -17,10 +17,10 @@ the pre-commit hook blocks it.
 
 **A PR gets exactly one of these. Never both, never neither.**
 
-| The PR…                                 | Do this                         |
-| --------------------------------------- | ------------------------------- |
-| changes something a player would notice | add a fragment (below)          |
-| changes nothing a player would notice   | label the PR **`no-changelog`** |
+| The PR… | Do this |
+| --- | --- |
+| changes something a player would notice | add a fragment (below) |
+| changes nothing a player would notice | label the PR **`no-changelog`** |
 
 CI's `changeset` job (`scripts/release/check-changeset.mjs`) fails a PR that
 does neither. It re-runs on `labeled`/`unlabeled`, so applying the label
@@ -76,11 +76,11 @@ spawns a particle burst scaled by it. This also fixes the silent ford bug.
 
 ## What each type buys
 
-| `type`                                   | Bump  |
-| ---------------------------------------- | ----- |
+| `type` | Bump |
+| --- | --- |
 | `Added` `Changed` `Removed` `Deprecated` | minor |
-| `Fixed` `Security`                       | patch |
-| any type **+ `breaking: true`**          | major |
+| `Fixed` `Security` | patch |
+| any type **+ `breaking: true`** | major |
 
 The release takes the **highest** level across all fragments, so one
 `breaking: true` makes the whole release a major. Removing a feature is not by

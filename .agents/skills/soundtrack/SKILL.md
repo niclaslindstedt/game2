@@ -28,15 +28,15 @@ only the instrument they are played on.
 
 ## Files
 
-| File                                | Role                                                                                                                                                                                                                                                          |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pwa/src/game/audio/scores/<id>.ts` | **THE SCORE.** Its instruments, its patterns, its order, and the DECISIONS behind it in the header comment. This is where the work happens.                                                                                                                   |
-| `pwa/src/lib/tracker.ts`            | The sequencer: flattens patterns through the order and books each note on the synth with a lookahead. Also `bars()`, `noteFrequency()`, `trackSeconds()`.                                                                                                     |
-| `pwa/src/lib/voice.ts` / `synth.ts` | The instrument every note is played on, shared with the sound effects.                                                                                                                                                                                        |
-| `pwa/src/game/audio/scores/kit.ts`  | **THE KIT.** The figures (a chord held, a gallop, brass on the offbeats, an arpeggio) and the patches (a kick, a snare, a hat under 7 kHz, a pad that holds) every score is built from. A score file is its DECISIONS and its tunes; the plumbing lives here. |
-| `pwa/src/game/audio/music-pick.ts`  | **WHICH score a stage gets** — from its country, its sky and the shape of its road. DOM-free; the tests read it.                                                                                                                                              |
-| `pwa/src/game/audio/music.ts`       | The single player — play/stop/pause, which track is current, the per-track dynamic import, and `armMenuMusic`.                                                                                                                                                |
-| `scripts/audition.mjs`              | **THE REVIEW SURFACE** (`make audition`): every score under the real sequencer, with a per-voice mute. Its `SCORE_FILES` table carries each score's title.                                                                                                    |
+| File | Role |
+| --- | --- |
+| `pwa/src/game/audio/scores/<id>.ts` | **THE SCORE.** Its instruments, its patterns, its order, and the DECISIONS behind it in the header comment. This is where the work happens. |
+| `pwa/src/lib/tracker.ts` | The sequencer: flattens patterns through the order and books each note on the synth with a lookahead. Also `bars()`, `noteFrequency()`, `trackSeconds()`. |
+| `pwa/src/lib/voice.ts` / `synth.ts` | The instrument every note is played on, shared with the sound effects. |
+| `pwa/src/game/audio/scores/kit.ts` | **THE KIT.** The figures (a chord held, a gallop, brass on the offbeats, an arpeggio) and the patches (a kick, a snare, a hat under 7 kHz, a pad that holds) every score is built from. A score file is its DECISIONS and its tunes; the plumbing lives here. |
+| `pwa/src/game/audio/music-pick.ts` | **WHICH score a stage gets** — from its country, its sky and the shape of its road. DOM-free; the tests read it. |
+| `pwa/src/game/audio/music.ts` | The single player — play/stop/pause, which track is current, the per-track dynamic import, and `armMenuMusic`. |
+| `scripts/audition.mjs` | **THE REVIEW SURFACE** (`make audition`): every score under the real sequencer, with a per-voice mute. Its `SCORE_FILES` table carries each score's title. |
 
 ## THE ONE THING THIS SEQUENCER DOES THAT A CHIP TRACKER CANNOT
 
@@ -86,11 +86,11 @@ comes to be changed in two voices out of three.
 
 **Write to the length of the thing it plays under**, and that is three answers:
 
-| Score             | Loop             | Why                                                                                                        |
-| ----------------- | ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| The menu          | **~2 minutes**   | Roughly how long a player spends choosing a car and a stage.                                               |
-| A stage           | **~90 seconds**  | A stage lasts minutes, so the player hears it round two or three times; it has to have a real break in it. |
-| The endless stage | **~130 seconds** | Nothing to build toward and a player settling in — the one loop that can afford an eight-bar horizon.      |
+| Score | Loop | Why |
+| --- | --- | --- |
+| The menu | **~2 minutes** | Roughly how long a player spends choosing a car and a stage. |
+| A stage | **~90 seconds** | A stage lasts minutes, so the player hears it round two or three times; it has to have a real break in it. |
+| The endless stage | **~130 seconds** | Nothing to build toward and a player settling in — the one loop that can afford an eight-bar horizon. |
 
 `tests/audio_test.ts` holds every score between 70 and 150 s, requires at
 least four patterns and an order longer than the pattern list — so something
@@ -127,11 +127,11 @@ music against — both shipped scores do.
 `TrackId` in `pwa/src/game/audio/music-pick.ts`, with a loader beside it in
 `music.ts`. Then:
 
-| Who        | How                                                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------------------------------- |
-| The menu   | `armMenuMusic()` from `App.tsx` when a menu page is up                                                              |
-| A stage    | `playMusic(stageTrack(state))` — `App.tsx` asks `music-pick.ts` as the stage is applied, and again on every restart |
-| The finish | `stopMusic()` — the sting lands in quiet, and the menu re-arms its own theme                                        |
+| Who | How |
+| --- | --- |
+| The menu | `armMenuMusic()` from `App.tsx` when a menu page is up |
+| A stage | `playMusic(stageTrack(state))` — `App.tsx` asks `music-pick.ts` as the stage is applied, and again on every restart |
+| The finish | `stopMusic()` — the sting lands in quiet, and the menu re-arms its own theme |
 
 `trackFor` decides in this order: the SHAPE of the road (a circuit, an
 endless stage), then the COUNTRY (the desert has one score whatever the sky
@@ -173,15 +173,15 @@ hears.
 
 ## What to listen for
 
-| Fault                                       | What it sounds like                                                                                                                 |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **A pad that is really a pluck**            | The bed pumps at the bar line and is gone before the next one. Give the voice a `hold`.                                             |
-| **A melody that wobbles instead of moving** | The lead never leaves a two-note band. Range is not contour: a line can span an octave and a half and still not GO anywhere.        |
-| **A line that never breathes**              | No rest anywhere. A phrase needs somewhere to end or it cannot be a hook — and this one is heard on every launch of the game.       |
-| **Two voices in one octave**                | They mask each other whatever the volumes say. Mute one and hear the other appear.                                                  |
-| **A section that is not a section**         | Two patterns that sound the same. If `a` and `b` are one passing note apart, a fifty-six-bar loop has eight bars of material in it. |
-| **A loop with no arc**                      | Nothing gets thinner or busier anywhere. A break should be audibly emptier and a build audibly climbing.                            |
-| **A kit nobody wrote**                      | The same one-bar loop under everything, all track. Fine as a bed; fatal if it is the only rhythm.                                   |
+| Fault | What it sounds like |
+| --- | --- |
+| **A pad that is really a pluck** | The bed pumps at the bar line and is gone before the next one. Give the voice a `hold`. |
+| **A melody that wobbles instead of moving** | The lead never leaves a two-note band. Range is not contour: a line can span an octave and a half and still not GO anywhere. |
+| **A line that never breathes** | No rest anywhere. A phrase needs somewhere to end or it cannot be a hook — and this one is heard on every launch of the game. |
+| **Two voices in one octave** | They mask each other whatever the volumes say. Mute one and hear the other appear. |
+| **A section that is not a section** | Two patterns that sound the same. If `a` and `b` are one passing note apart, a fifty-six-bar loop has eight bars of material in it. |
+| **A loop with no arc** | Nothing gets thinner or busier anywhere. A break should be audibly emptier and a build audibly climbing. |
+| **A kit nobody wrote** | The same one-bar loop under everything, all track. Fine as a bed; fatal if it is the only rhythm. |
 
 ## When a track is allowed to START
 

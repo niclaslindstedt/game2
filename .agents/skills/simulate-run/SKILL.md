@@ -43,21 +43,21 @@ anyone reading the table.
 
 One row per seed × car:
 
-| Column       | Meaning                                           | Healthy movement                                                                   |
-| ------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `len`        | Stage length, m                                   | Inside the R11 band (~1200–2000)                                                   |
-| `time`       | Race time, s                                      | Tracks length; a blow-up means the bot got lost                                    |
-| `avg`        | Average pace, km/h                                | Rally territory — see the band `tests/simulation_test.ts` pins                     |
-| `drift`      | Drift count                                       | **> 0 on stages with hard corners** — a zero here means the flick or entry broke   |
-| `clean`      | Clean exits (drifts that held and paid the boost) | A healthy share of `drift`; collapsing to 0 means exits stopped paying             |
-| `dTime`      | Total seconds spent drifting                      | The sideways-time read — the game's whole point                                    |
-| `score`      | Drift score (`\|slip\| × speed × time`)           | Sideways AND fast; score falling while `dTime` holds means slides got slow         |
-| `jump`/`air` | Takeoffs and airborne seconds                     | **> 0 on stages with lips** — zero air on a jump stage means lips stopped throwing |
-| `ford`       | Splashes                                          | Present when the stage has water                                                   |
-| `off`        | Off-road seconds                                  | Small; growing means the bot (or the handling) stopped holding the road            |
-| `resp`       | Respawns                                          | **≈ 0** — the contract is at most one recovery per run                             |
-| `top`        | Top speed, km/h                                   | Differs by car (the manual's taller top should show)                               |
-| `fin`        | Finished                                          | **yes, every row** — a `NO` is a failure, full stop                                |
+| Column | Meaning | Healthy movement |
+| --- | --- | --- |
+| `len` | Stage length, m | Inside the R11 band (~1200–2000) |
+| `time` | Race time, s | Tracks length; a blow-up means the bot got lost |
+| `avg` | Average pace, km/h | Rally territory — see the band `tests/simulation_test.ts` pins |
+| `drift` | Drift count | **> 0 on stages with hard corners** — a zero here means the flick or entry broke |
+| `clean` | Clean exits (drifts that held and paid the boost) | A healthy share of `drift`; collapsing to 0 means exits stopped paying |
+| `dTime` | Total seconds spent drifting | The sideways-time read — the game's whole point |
+| `score` | Drift score (`\|slip\| × speed × time`) | Sideways AND fast; score falling while `dTime` holds means slides got slow |
+| `jump`/`air` | Takeoffs and airborne seconds | **> 0 on stages with lips** — zero air on a jump stage means lips stopped throwing |
+| `ford` | Splashes | Present when the stage has water |
+| `off` | Off-road seconds | Small; growing means the bot (or the handling) stopped holding the road |
+| `resp` | Respawns | **≈ 0** — the contract is at most one recovery per run |
+| `top` | Top speed, km/h | Differs by car (the manual's taller top should show) |
+| `fin` | Finished | **yes, every row** — a `NO` is a failure, full stop |
 
 The footer aggregates: finished count, average pace, average drift time,
 average air time, total respawns — the one-line before/after comparison.
