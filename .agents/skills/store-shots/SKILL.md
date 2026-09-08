@@ -146,7 +146,20 @@ So every offset in a recipe is `captureAtS`: seconds of the RUN's own clock
 observed — near 1 is a real GPU, near 10 is software rasterization, and it gets
 worse with the raster, because @3× is nine times the pixels to rasterize.
 
-Two consequences worth planning around:
+**AND THE SHUTTER ITSELF COSTS STAGE TIME, which the offset does not count.**
+Measured at 2868×1320 on a four-core runner: one capture is 25.3 wall seconds,
+during which the run advances **0.90 stage seconds** — longer than Bajada's jump
+is airborne (0.70 s). On that machine no `captureAtS` can reach the flight, and
+**zero is already too late**. Both drivers now measure it, mark such a frame `!`
+rather than `✓`, and say so; the sweep labels every late sample `+N.NN LATE` and
+tells you not to pick a winner off the sheet.
+
+So: **if two very different offsets give you the same frame, stop tuning the
+offset.** A moment shorter than about a second needs a machine where a
+full-raster screenshot costs about a second. Anything staged as a POSITION — the
+grid, a corner, a vista — is immune, because it is still true a second later.
+
+Two more consequences worth planning around:
 
 - **A full three-raster set is an hour or more on a machine with no GPU.** Shoot
   one raster while iterating (`--only iphone`), and the full set when the recipes

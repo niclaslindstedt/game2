@@ -44,8 +44,8 @@ import {
   COARSE_S,
   DEVICES,
   holdFor,
-  PATIENCE,
   prepareContext,
+  shoot,
   SHOTS,
   stageRun,
 } from "./store-shots/recipes.mjs";
@@ -132,6 +132,8 @@ const context = await browser.newContext({
 await prepareContext(context);
 
 const frames = [];
+/** Samples whose shutter cost more stage time than their own offset. */
+const lateBy = [];
 for (const offset of schedule) {
   const page = await context.newPage();
   page.on("pageerror", (error) => console.error(`  PAGE ERROR: ${error.message}`));
@@ -139,9 +141,16 @@ for (const offset of schedule) {
     await stageRun(page, shot, site.url);
     if (shot.trigger) await shot.trigger(page);
     await holdFor(page, offset);
-    const raw = await page.screenshot({ timeout: PATIENCE });
+    const shutter = await shoot(page, offset);
+    const raw = shutter.png;
+    if (!shutter.honest) lateBy.push(shutter.stageCost);
     frames.push({
-      label: `+${offset}s${offset === shot.captureAtS ? " (chosen)" : ""}`,
+      // The label carries the shutter's own cost when it outran the offset,
+      // because otherwise the sheet invites you to pick between nine frames
+      // that are all of the same too-late instant. See `shoot`.
+      label:
+        `+${offset}s${offset === shot.captureAtS ? " (chosen)" : ""}` +
+        (shutter.honest ? "" : ` +${shutter.stageCost.toFixed(2)} LATE`),
       png: await compose(composer, raw, device, captions ? shot.caption : null, device.layout),
     });
     console.log(`  ✓ +${offset}s`);
@@ -174,3 +183,18 @@ console.log(
     "LOOK at it, pick the frame, then write its offset into that recipe's " +
     "`captureAtS` in scripts/store-shots/recipes.mjs.",
 );
+
+// A sweep whose every sample was shot late is a sheet of one instant wearing
+// nine different labels — and picking a "winner" off it is how a wrong frame
+// becomes a chosen frame.
+if (lateBy.length) {
+  const worst = Math.max(...lateBy);
+  console.error(
+    `\n${lateBy.length} of ${frames.length} samples were SHOT LATE: the shutter itself\n` +
+      `cost up to ${worst.toFixed(2)}s of stage time, more than the offset it was measured\n` +
+      "from. Do not pick a winner off this sheet — the samples are all past the\n" +
+      "moment, and lowering the offset cannot help, because the cost is the\n" +
+      "shutter's. Sweep this recipe on a machine where a full-raster screenshot\n" +
+      "costs about a second.",
+  );
+}

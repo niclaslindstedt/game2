@@ -59,8 +59,8 @@ import {
   assertRasters,
   DEVICES,
   holdFor,
-  PATIENCE,
   prepareContext,
+  shoot,
   SHOTS,
   stageRun,
 } from "./store-shots/recipes.mjs";
@@ -132,6 +132,9 @@ const written = new Set();
 /** Wall seconds spent per stage second, per frame — see `holdFor`. Reported at
  * the end because it is the number that explains a slow or timing-out run. */
 const ratios = [];
+/** Frames whose SHUTTER cost more stage time than the offset it was measured
+ * from — see `shoot`. Those frames are not the moment the recipe asked for. */
+const missed = [];
 
 for (const device of devices) {
   const outDir = join(root, device.out ?? "native/store/screenshots", device.name);
@@ -184,7 +187,9 @@ for (const device of devices) {
       const ratio = await holdFor(page, shot.captureAtS);
       if (ratio > 0) ratios.push(ratio);
 
-      const raw = await page.screenshot({ timeout: PATIENCE });
+      const shutter = await shoot(page, shot.captureAtS);
+      const raw = shutter.png;
+      if (!shutter.honest) missed.push({ shot, shutter });
       const framed = await compose(composer, raw, device, captions ? shot.caption : null, layout);
 
       const size = pngSize(framed);
@@ -195,7 +200,11 @@ for (const device of devices) {
         );
       }
       writeFileSync(file, framed);
-      console.log(`  ✓ ${n}-${shot.id}.png  +${shot.captureAtS}s  "${shot.caption}"`);
+      console.log(
+        `  ${shutter.honest ? "✓" : "!"} ${n}-${shot.id}.png  +${shot.captureAtS}s  ` +
+          `"${shot.caption}"` +
+          (shutter.honest ? "" : `  — shutter cost ${shutter.stageCost.toFixed(2)}s of stage`),
+      );
       captured += 1;
     } catch (error) {
       console.error(`  ✗ ${n}-${shot.id}: ${error.message}`);
@@ -216,4 +225,26 @@ const pace = ratios.length
 console.log(
   `\nstore-shots: ${captured} captured, ${failed} failed → ${[...written].join(", ")}${pace}`,
 );
+
+// A frame whose shutter outran its own offset is worse than a missing one: it
+// is a plausible picture of the wrong instant, and it goes into a listing
+// looking like every other frame. Say so loudly, and name the arithmetic.
+if (missed.length) {
+  console.log(
+    `\n${missed.length} frame(s) SHOT LATE — the shutter itself cost more stage time\n` +
+      "than the offset it was measured from, so the captured instant is past the\n" +
+      "moment the recipe stages. This machine cannot hold a short moment:\n",
+  );
+  for (const { shot, shutter } of missed) {
+    console.log(
+      `  ${shot.id}: asked for +${shot.captureAtS}s, shutter spent ` +
+        `${shutter.stageCost.toFixed(2)}s of stage (${shutter.wall.toFixed(1)} wall s)`,
+    );
+  }
+  console.log(
+    "\nShoot these on a machine where a full-raster screenshot costs about a\n" +
+      "second. Lowering `captureAtS` will not help — the cost is the shutter's,\n" +
+      "not the offset's, and at zero it is already too late.",
+  );
+}
 if (failed) process.exitCode = 1;
