@@ -15,7 +15,7 @@ meant was "you are not measuring the cap".
 Two habits, both cheap:
 
 - **Anchor on something that is unique, and assert it.** `assert
-  s.count(old) == 1` before writing. Restore from a pristine copy each
+s.count(old) == 1` before writing. Restore from a pristine copy each
   iteration rather than editing the edited file.
 - **Before believing a null result, `git diff` the tree.** A scan whose
   answer is "nothing moves" is exactly the case where the patch is most
