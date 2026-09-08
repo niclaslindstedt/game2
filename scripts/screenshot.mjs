@@ -2594,14 +2594,19 @@ async function clean(page) {
 // window.
 //
 // On the TV cam, and the two facts that make it work belong to the gallery
-// and to the grid. The gallery always opens with a stand at the start line — the
-// road there earns nothing, so the gap filler plants one (camera-tv.ts) —
-// and it holds that stand until the car is `hold` metres past it, which at
-// three and a half seconds off the line it is not. The grid puts the PLAYER
-// on the back row, and the TV cam aims at the player: so the lens is at the
-// roadside with the whole field between it and the horizon, looking up the
-// road through fifteen cars fighting for the same two ruts. From the boom
-// the cars behind are behind the lens; from overhead they are a diagram.
+// and to the grid. The gallery opens with a stand a little way past the start
+// line — the gate keeps its own furniture clear and the run-up bends nowhere,
+// so the first camera is the gap filler's (camera-tv.ts).
+//
+// The grid puts the PLAYER on the back row and the TV cam aims at the player,
+// which decides the SECOND: the cars in this frame are the ones still between
+// the player and the lens, so the shot empties as the run goes on. The
+// leaders reach that first stand well before the player does and are past it
+// — behind the camera — by the time it is aiming anywhere near them. Four
+// seconds off the line is inside the window where the whole field is still up
+// the road, and on the long lens (`TV.frame`) that is a tight frame of cars
+// fighting for the same two ruts rather than a wide one of a valley. From the
+// boom the cars behind are behind the lens; from overhead they are a diagram.
 await capture(
   "shot-showcase-start",
   SHOWCASE,
@@ -2609,7 +2614,7 @@ await capture(
     // `racing` reads the HUD's clock, which this scene has switched off, so
     // the whole wait is on the overlay instead: a `run` row quoting a race
     // time at all is a run that is ticking.
-    await atCleanTime(page, 5.5);
+    await atCleanTime(page, 4);
     await clean(page);
   },
   {
