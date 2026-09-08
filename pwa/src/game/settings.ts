@@ -42,7 +42,8 @@ import { NATIVE_HEIGHT, renderHeightOf, renderHeightStops } from "./desktop-vide
  * not offered here. The geometry behind each name lives in camera.ts (the
  * three inside the car in camera-eye.ts); this is the vocabulary the
  * player picks from. */
-export type PlayCamera = "bumper" | "hood" | "cockpit" | "close" | "chase" | "far" | "heli" | "top";
+export type PlayCamera =
+  "bumper" | "hood" | "cockpit" | "close" | "chase" | "far" | "heli" | "top" | "tv";
 
 /** No hints, like every ladder the options page walks: a camera describes
  * itself the moment it is picked, because picking it MOVES the one behind
@@ -56,6 +57,10 @@ export const PLAY_CAMERAS: { id: PlayCamera; label: string }[] = [
   { id: "far", label: "FAR" },
   { id: "heli", label: "HELI" },
   { id: "top", label: "TOP" },
+  // The one view that is not hung off the car at all: a gallery of fixed
+  // trackside tripods the director cuts between (camera-tv.ts). Last on the
+  // ladder because it is the furthest thing from sitting in the car.
+  { id: "tv", label: "TV" },
 ];
 
 /** The three views taken from inside the car — the ones the seat, lens and
@@ -714,6 +719,24 @@ export const LOOSE_WHEELS: Record<VideoSettings["effects"], boolean> = {
  * draw (`SCREEN_GRIME`); this says whether the pass that draws it may run,
  * and it applies the instant it is set. */
 export const GLASS_RAIN: Record<VideoSettings["effects"], boolean> = {
+  off: false,
+  low: false,
+  full: true,
+};
+
+/** Whether the TV CAM HAS A FOCAL PLANE (camera-tv-lens.ts) — depth of field
+ * under the one camera in the game that has any business with it.
+ *
+ * Every other view is a few metres off the car with everything worth looking
+ * at at the same distance, where a pinhole lens is not a lie. A trackside
+ * tripod is looking two hundred metres up the road on a long lens, and a long
+ * lens has a focal plane you can see: the grass in front and the ridge behind
+ * go soft and the car is the one sharp thing in the world.
+ *
+ * It is a copy of the frame and a gather over it, so it rides here with the
+ * rest of the transients — and unlike them it is charged for only while the
+ * TV cam is up. Any other camera pays nothing, target included. */
+export const TV_BOKEH: Record<VideoSettings["effects"], boolean> = {
   off: false,
   low: false,
   full: true,

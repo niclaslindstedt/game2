@@ -121,6 +121,7 @@ import {
 } from "./camera-shake.ts";
 import { createMapCamera, type MapPose } from "./camera-map.ts";
 import { createStartCamera } from "./camera-start.ts";
+import { createTvCamera } from "./camera-tv.ts";
 import { createSweepCamera } from "./camera-sweep.ts";
 import { DEFAULT_SETTINGS, PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
 
@@ -133,9 +134,28 @@ export type CameraMode = PlayCamera | "drone" | "map" | "free";
  * nose-backwards ladder the options screen lists, so the key and the
  * setting never disagree about what "the next camera" means. */
 export const PLAY_MODES: CameraMode[] = PLAY_CAMERAS.map((cam) => cam.id);
+/** The play modes whose POSE IS HUNG OFF THE CAR — every one but the TV cam,
+ * whose tripods are planted in the world and stay there (camera-tv.ts).
+ *
+ * It is exported because it is the honest subject of a whole class of rule:
+ * that the lens is carried with the car through a view change, that a respawn
+ * costs the player no swing, that the shot is stood where the car is rather
+ * than flown round to it. Every one of those is measured in the CAR'S frame,
+ * and in the car's frame a camera standing still on a bank moves at the speed
+ * of the car — so stating any of them over `PLAY_MODES` asks a tripod to be a
+ * boom. Anything about the LADDER itself (the order, the wrap, that a step
+ * between two driveable views is a move and not a cut) is still every mode. */
+export const RIDING_MODES: CameraMode[] = PLAY_MODES.filter((mode) => mode !== "tv");
 
 /** The modes camera-eye.ts owns — the ones taken from inside the car. */
 const IN_CAR: InCarCamera[] = ["bumper", "hood", "cockpit"];
+
+/** The views hung off the BOOM behind the car — every play camera that is
+ * neither taken from a seat inside it nor stood on the ground beside the
+ * road. They are the ones CHASE_RIGS has a row for; `tv` is outside it
+ * because a tripod has no standoff, no swing and no floor to keep off
+ * (camera-tv.ts). */
+type ChaseCamera = Exclude<PlayCamera, InCarCamera | "tv">;
 
 /** Far plane while driving, m — comfortably past the widest fog ceiling. The
  * map view solves its own, along with its own near plane, because a stage is
@@ -325,7 +345,7 @@ type ChaseRig = {
  * before it. Both are readings rather than a jump animation, which is why
  * a brow, a landing's skitter and a mountainside are the same two numbers
  * at three sizes. */
-const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
+const CHASE_RIGS: Record<ChaseCamera, ChaseRig> = {
   close: {
     dist: 4.4,
     distPerSpeed: 0.022,
@@ -476,6 +496,10 @@ export type { MapPose };
 export type GameCamera = {
   camera: THREE.PerspectiveCamera;
   mode: () => CameraMode;
+  /** How far the TV cam's live tripod is from the car, m — the distance its
+   * shot is focused at, for the one pass in the game that has a focal plane
+   * (camera-tv-lens.ts). Meaningless, and never read, in any other mode. */
+  tvFocus: () => number;
   /** THE MAP VIEW (camera-map.ts): the whole stage from the sky, and the
    * handles the Roam page steers it by — turn, tilt, zoom, pan, and the
    * framing a link can park it on. Exposed one method at a time rather than
@@ -646,6 +670,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
   const sweepShot = createSweepCamera();
   /** The menu's backdrop, flown (camera-drone.ts). */
   const drone = createDroneCamera();
+  const tv = createTvCamera();
   /** What the outside rigs CONVEY of the car over their framing — grip as
    * height, attitude as tilt, speed as a tremor (camera-feel.ts). */
   const feel = createCameraFeel();
@@ -908,7 +933,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
     else if (mode === "drone") {
       fov = drone.update(camera, state, groundSlack(state.car.y, dt), orbit, dt);
     } else if (mode === "map") fov = map.update(camera, state, dt);
-    else updateChase(CHASE_RIGS[mode as Exclude<PlayCamera, InCarCamera>], state, dt);
+    else if (mode === "tv") fov = tv.update(camera, state, dt);
+    else updateChase(CHASE_RIGS[mode as ChaseCamera], state, dt);
   };
 
   /** What a view owns of the LENS rather than of the pose: the near plane the
@@ -936,7 +962,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * the ones that share a standoff, a height and a yaw, and therefore the
    * only ones that have anything to ease between. */
   const onBoom = (view: CameraMode): boolean =>
-    PLAY_MODES.includes(view) && !IN_CAR.includes(view as InCarCamera);
+    PLAY_MODES.includes(view) && !IN_CAR.includes(view as InCarCamera) && view !== "tv";
 
   /** Take a new view. A step between two cameras a player can DRIVE from is
    * flown (camera-change.ts); everything else is placed rather than walked
@@ -1033,6 +1059,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
   return {
     camera,
     mode: () => mode,
+    tvFocus: tv.focus,
     mapRange: map.range,
     free,
     freeMove,

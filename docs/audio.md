@@ -311,7 +311,11 @@ floor, the wind is a whisper at the seals, and the rain is ON THE SCREEN, so it
 is the loudest it ever is. Behind the car the exhaust is what you hear of the
 engine and the tyres are the surface being thrown at you. High above it the
 car is a small thing in a big country: the engine thin, the wind gone, and the
-world most of what there is. One-shots take the seat's `events` gain and its
+world most of what there is. Beside the road it is different again — the TV
+cam is the one seat that is not moving, so it has no wind of its own at all,
+the exhaust and the drift's scrub carry a shot whose whole subject is a car
+arriving sideways a few metres away, and the country is loud because the ear
+is standing in it rather than being flown over it. One-shots take the seat's `events` gain and its
 `muffle`, a pitch multiplier that moves every filter down with it — an impact
 heard through a cabin is a duller impact. The wipers are only audible from
 inside the glass.

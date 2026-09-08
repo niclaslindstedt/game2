@@ -2,7 +2,7 @@
 title: Applying `no-changelog` re-runs the whole workflow and cancels the one in flight — the `tests` rollup then reports a failure nobody caused
 date: 2026-09-08
 scope: .github/workflows/ci.yml, .changes/
-concepts: [no-changelog, label, ci, concurrency, false-alarm]
+concepts: [no-changelog, label, push, ci, concurrency, false-alarm]
 ---
 
 `ci.yml` lists `labeled` and `unlabeled` among its `pull_request` activity
