@@ -70,10 +70,12 @@ export type CarSpec = {
    * already an acceleration, so making mass divide it twice would just
    * make the heavy car slow. */
   mass: number;
-  /** WHERE THAT MASS SITS, which is what separates the cars once they are
-   * OVER (`roll-hull.ts`, through `massSpread`). Neither touches the
-   * handling model: a car on its springs is kept flat on purpose, and the
-   * load transfer the tyres feel is the drivetrain table's business.
+  /** WHERE THAT MASS SITS. Two jobs: what separates the cars once they are
+   * OVER (`roll-hull.ts`, through `massSpread`), and — through
+   * `driveLoadOf` — HOW MUCH OF THE CAR IS STANDING ON THE WHEELS THAT
+   * DRIVE IT, which is what separates the three layouts' traction and how
+   * a hill moves it. A car on its springs is still kept flat on purpose;
+   * what these two feed is the LOAD, not the lean.
    *
    * The share of the weight over the FRONT axle, 0..1. An engine ahead of
    * the front wheels puts it well past half; a rear-driver with its engine

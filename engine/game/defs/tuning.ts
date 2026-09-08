@@ -585,6 +585,43 @@ export const TUNING = {
    * rear-driver that steps out on the throttle at any speed at all, and a
    * four-wheel-drive that simply goes. */
   drivetrain: {
+    /** THE WHEELBASE the load transfer is measured over, m — the arm that
+     * turns a grade into weight moving off one axle and onto the other
+     * (`driveLoadOf`, with the car's own `centreHeight` as the height).
+     *
+     * One number for the roster rather than one per car, because the
+     * roster has no room for a second: every body is within a few
+     * centimetres of `collision.halfLength × 2` long
+     * (`tests/car_geometry_test.ts` holds them there), and 2.5 m is the
+     * wheelbase under a four-metre body. It is a RATIO with
+     * `centreHeight` and nothing else reads it, so what matters is that
+     * the pair comes out near the real 0.2: a tall car on a short
+     * wheelbase pitches its weight about harder, and that is the whole
+     * effect. */
+    wheelbase: 2.5,
+    /** ...and the least of the car a driven axle is ever credited with
+     * carrying, 0..1. Physics says a wheel with nothing on it pulls
+     * nothing, and physics is right — but a car whose traction has reached
+     * zero is one the player cannot drive out of anything, and a cliff
+     * that steep is a bug however true it is. It sits far below anything a
+     * drivable grade reaches (a front-driver would need a grade over two
+     * to find it), so it is a floor under the arithmetic rather than a
+     * number the game plays against. */
+    loadFloor: 0.12,
+    /** HOW MUCH OF THE DRIVEN AXLE'S BUDGET A UNIT OF GRADE EATS
+     * (`driveBiteOf`). Holding station on a grade `g` needs `g` of gravity
+     * out of the tyres before the car moves at all, and the friction that
+     * supplies it is the same friction the pedal wants — so 1 is the
+     * physically natural figure and this is the calibration around it,
+     * because the bite it is subtracted from is a hook-up number rather
+     * than a coefficient in gs.
+     *
+     * It is the number that makes a four-wheel drive worth its transfer
+     * case. Off a hill its bite is over 1 and clamped, so it loses nothing
+     * and cannot be given less to lose; charge every layout the same
+     * quarter-grade and what is left is 0.89 against 0.40 and 0.30, which
+     * is the difference between driving up a dune and digging into it. */
+    climbCost: 1,
     fwd: {
       /** Power oversteer from the driven axle, ×`grip.powerYaw`. A car with
        * no driven rear has none: what it gets instead is the two lines
@@ -664,10 +701,18 @@ export const TUNING = {
        * up, overshoots to nearly straight and then builds a second slide on
        * its own is a car arguing with the driver rather than answering. */
       snap: 0.9,
-      /** Forward bite: how much torque reaches the ground, ×the car's own
-       * `traction`, against the surface's grip. Two driven wheels with the
-       * engine sat on top of them hook up well. */
-      bite: 0.95,
+      /** Forward bite: THE DRIVELINE's share of how much torque reaches the
+       * ground, ×the car's own `traction`, ×the load its driven wheels are
+       * actually carrying (`driveLoadOf`), against the surface's grip.
+       *
+       * It is the driveline and no longer the whole story, because the
+       * bigger half of the story is now derived rather than asserted: a
+       * front-driver puts down what is standing on its nose, and this row
+       * says only how well the shafts and the diff between the engine and
+       * that nose hand it over. The two-wheel-drive layouts are alike here
+       * — one axle, one diff, a short path — and what separates them is the
+       * weight over the axle, which is the car's business. */
+      bite: 1.5,
       /** THE SPEED FLOOR under the whole slide, ×`drift.slideFrom`. The
        * game's floor is a rule the player is told — it will not drift under
        * 70 — so a layout only moves off 1 when it genuinely behaves
@@ -741,7 +786,11 @@ export const TUNING = {
       // through the next two corners on its own.
       release: 1.05,
       snap: 0.85,
-      bite: 0.7,
+      // The same short driveline as the front-driver's — one axle, one diff
+      // — so the same number. That a rear-driver puts its power down worse
+      // is not the shafts, it is that less of the car is sitting on the
+      // wheels doing it (`driveLoadOf`), and on a CLIMB that reverses.
+      bite: 1.5,
       // THE ONE EXCEPTION to the game's 70 km/h floor, and the reason it is
       // a per-layout number at all: a rear axle with torque under it steps
       // the tail out at walking pace, which is a real thing a rear-driver
@@ -813,6 +862,13 @@ export const TUNING = {
       cap: 0.96,
       release: 1.2,
       snap: 1,
+      // FOUR DRIVEN WHEELS PAY FOR THE PRIVILEGE. The load they carry is
+      // the whole car — twice a two-wheel drive's, which is where the
+      // advantage comes from — so this number is the transfer case, the
+      // second prop shaft and the third differential taking their cut on
+      // the way. Under the others on purpose: the layout is worth what it
+      // is worth because of what is standing on it, not because its
+      // driveline is any better.
       bite: 1.2,
       driftFloor: 1,
       flick: 0.7,

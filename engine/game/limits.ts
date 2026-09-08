@@ -50,6 +50,75 @@ export function surfaceGripFor(spec: CarSpec, surface: Underfoot): number {
   return (ground + shortfall * T.drivetrain[spec.drive].slipGrip) * tyre;
 }
 
+/** WHAT SHARE OF THE CAR'S WEIGHT IS STANDING ON THE DRIVEN WHEELS, 0..1 —
+ * the number that decides how much of the engine the tyres can actually put
+ * down, and the one thing separating the three layouts that is not a matter
+ * of taste.
+ *
+ * A tyre's tractive limit is the friction coefficient times the load ON IT,
+ * so what a layout can pull is the surface's grip times the share of the car
+ * pressing its DRIVEN tyres into the ground. Four driven wheels have all of
+ * it. A front-driver has whatever sits over its nose, a rear-driver whatever
+ * sits over its tail — which is why four-wheel drive is worth roughly twice
+ * a two-wheel drive off the line and why nothing about that is true of
+ * CORNERING or BRAKING, where every car uses all four tyres whatever drives
+ * them. `balance` and `centreHeight` in `defs/cars.ts` are the car's own
+ * halves of it.
+ *
+ * AND IT MOVES WITH THE HILL, which is the half that makes a stage read.
+ * Standing on a slope, gravity's component along the car pitches weight off
+ * the downhill axle and onto the uphill one by `centreHeight / wheelbase`
+ * per unit of grade: climbing, the nose goes light and the tail digs in. So
+ * a rear-driver CLIMBS BETTER than it does on the flat, a front-driver claws
+ * at a hill it was fine on, and a four-wheel drive does not care, because
+ * the weight it lost off one axle it gained on the other. On a loose surface
+ * where the budget is small to begin with, that is the difference between
+ * driving up a dune and digging into it.
+ *
+ * The floor is not physics — a wheel carrying nothing really does pull
+ * nothing — but a car whose traction reaches zero is one the player cannot
+ * drive out of anything, and a cliff that steep is a bug however true it is.
+ */
+export function driveLoadOf(spec: CarSpec, grade: number): number {
+  if (spec.drive === "awd") return 1;
+  const shift = (spec.centreHeight / T.drivetrain.wheelbase) * grade;
+  const front = spec.balance - shift;
+  return clamp(spec.drive === "fwd" ? front : 1 - front, T.drivetrain.loadFloor, 1);
+}
+
+/** ...and THE BITE ITSELF: how much torque this car can hand the ground
+ * here, before the pedal and the gear have their say (`drivetrain.ts` spends
+ * it). The car's own `traction`, the layout's driveline (`drivetrain.bite`),
+ * the share of the weight the driven wheels carry at this grade, and what
+ * the surface will take.
+ *
+ * Stated here rather than in `drivetrain.ts` because three functions there
+ * were each rebuilding it out of the same three factors, and a fourth
+ * factor added to two of them would have been a car that spins differently
+ * from the way it pulls. */
+export function driveBiteOf(spec: CarSpec, surfaceGrip: number, grade: number): number {
+  const axle =
+    spec.traction * T.drivetrain[spec.drive].bite * driveLoadOf(spec, grade) * surfaceGrip;
+  // ...LESS WHAT THE HILL IS ALREADY SPENDING. A car standing on a grade
+  // needs that much of gravity supplied by its driven tyres before it moves
+  // at all, and it comes out of the same friction budget everything else is
+  // paid from — so a climb does not merely cost speed, it costs BITE, and
+  // what is left is what the pedal may spend.
+  //
+  // This is the half that makes four driven wheels worth having, and
+  // without it the advantage is invisible: on anything but a hill a
+  // four-wheel drive's bite is over 1 and clamped, so it already loses
+  // nothing and cannot be given less to lose. Take a quarter-grade's worth
+  // out of every layout and the picture separates — on sand at 25% the
+  // four-wheel drive still has most of its budget and the two-wheel drives
+  // have spent well over half of theirs.
+  //
+  // Only a CLIMB charges. Rolling down a hill the tyres have budget to
+  // spare and nothing is asking them for it — what a descent costs is
+  // brakes, which is a different tyre and a different rule.
+  return axle - Math.max(0, grade) * T.drivetrain.climbCost;
+}
+
 /** ...and HOW FAR SIDEWAYS the pair will go before the tyres give up, as
  * the multiple of the slide's own angles (`TUNING.drift.angleSpan` and its
  * fade band) that every angle in the drift model is scaled by. The

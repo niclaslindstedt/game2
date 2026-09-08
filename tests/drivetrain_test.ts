@@ -13,6 +13,8 @@ import {
   TUNING,
   carById,
   compileTrack,
+  driveBiteOf,
+  driveLoadOf,
   createGame,
   step,
   surfaceBreakawayFor,
@@ -257,6 +259,116 @@ describe("the drivetrain", () => {
     for (const surface of ["gravel", "asphalt"] as const) {
       expect(asIf("awd", surface)).toBe(asIf("fwd", surface));
     }
+  });
+
+  it("stands the car's weight on the wheels that drive it, and moves it with the hill", () => {
+    // A tyre pulls what the friction under it and the load ON it allow, so
+    // what a layout can put down is the share of the car pressing its DRIVEN
+    // tyres into the ground. Four driven wheels have all of it; a
+    // two-wheel-drive has whatever sits over its one axle — which is why
+    // four-wheel drive is worth roughly twice a two-wheel drive off the
+    // line, and why none of it is true of cornering or braking.
+    const compact = carById("compact");
+    const coupe = carById("coupe");
+    const classic = carById("classic");
+    expect(driveLoadOf(coupe, 0)).toBe(1);
+    expect(driveLoadOf(compact, 0)).toBeCloseTo(compact.balance, 10);
+    expect(driveLoadOf(classic, 0)).toBeCloseTo(1 - classic.balance, 10);
+    expect(driveLoadOf(coupe, 0)).toBeGreaterThan(1.7 * driveLoadOf(classic, 0));
+
+    // ...AND IT MOVES WITH THE HILL. Climbing, gravity pitches weight off
+    // the nose and onto the tail: a front-driver's driven axle goes light on
+    // the one gradient it most needs the grip, a rear-driver's digs in, and
+    // a four-wheel drive neither gains nor loses because it already has all
+    // of it. This is the whole reason the three cars climb differently.
+    for (const grade of [0.08, 0.2, 0.35]) {
+      expect(driveLoadOf(compact, grade)).toBeLessThan(driveLoadOf(compact, 0));
+      expect(driveLoadOf(classic, grade)).toBeGreaterThan(driveLoadOf(classic, 0));
+      expect(driveLoadOf(coupe, grade)).toBe(1);
+    }
+    // A descent does not run it backwards into a front-driver's favour past
+    // what the model is tuned for; it is the same rule read the other way,
+    // and the floor is what stops either end reaching zero.
+    expect(driveLoadOf(compact, -3)).toBeLessThanOrEqual(1);
+    expect(driveLoadOf(classic, 3)).toBeLessThanOrEqual(1);
+    expect(driveLoadOf(classic, -3)).toBeGreaterThanOrEqual(TUNING.drivetrain.loadFloor);
+    expect(driveLoadOf(compact, 3)).toBeGreaterThanOrEqual(TUNING.drivetrain.loadFloor);
+  });
+
+  it("charges the climb against the same budget the pedal spends", () => {
+    // Holding station on a grade needs that much of gravity out of the
+    // driven tyres before the car moves at all, and it comes out of the
+    // friction everything else is paid from. Without it the advantage of
+    // four driven wheels is invisible: off a hill their bite is over 1 and
+    // clamped, so they already lose nothing and cannot be given less.
+    const sand = (id: string, grade: number): number => {
+      const spec = carById(id);
+      return driveBiteOf(spec, surfaceGripFor(spec, "sand"), grade);
+    };
+    for (const id of ["compact", "coupe", "classic"]) {
+      expect(sand(id, 0.25)).toBeLessThan(sand(id, 0));
+    }
+    // Level, the four-wheel drive is over the clamp and has nothing to
+    // prove; on a real climb it still has most of its budget where the
+    // two-wheel drives have spent well over half of theirs.
+    expect(sand("coupe", 0)).toBeGreaterThan(1);
+    expect(sand("coupe", 0.25)).toBeGreaterThan(2 * sand("classic", 0.25));
+    expect(sand("coupe", 0.25)).toBeGreaterThan(1.9 * sand("compact", 0.25));
+    // A DESCENT IS NOT CHARGED — what going down a hill costs is brakes,
+    // which is a different tyre and a different rule — but the weight still
+    // MOVES, and forwards this time. So a rear-driver has less on its driven
+    // axle going down than on the flat and a front-driver has more, which is
+    // the same rule read the other way round and not an exception to it.
+    const level = { rwd: sand("classic", 0), fwd: sand("compact", 0) };
+    expect(sand("classic", -0.25)).toBeLessThan(level.rwd);
+    expect(sand("compact", -0.25)).toBeGreaterThan(level.fwd);
+    // ...and neither is charged the climb's cut, so both stay above what
+    // the same gradient uphill leaves them.
+    expect(sand("classic", -0.25)).toBeGreaterThan(sand("classic", 0.25));
+    expect(sand("compact", -0.25)).toBeGreaterThan(sand("compact", 0.25));
+  });
+
+  it("digs a two-wheel drive into a climb and drives a four-wheel one up it", () => {
+    // The behaviour all of the above is for, measured on the real engine:
+    // full throttle from a standstill up a sand grade, how lit the driven
+    // axle gets. The four-wheel drive barely spins at any gradient a stage
+    // can build; both two-wheel drives spin from the start and spin WORSE
+    // the steeper it gets.
+    const dig = (carId: string, grade: number): number => {
+      const base = compileTrack(0, STRAIGHT);
+      const state = createGame({
+        seed: 0,
+        carId,
+        skipCountdown: true,
+        quiet: true,
+        track: {
+          ...base,
+          width: 400,
+          samples: base.samples.map((s) => ({
+            ...s,
+            surface: "sand" as const,
+            bank: 0,
+            elevation: s.s * grade,
+            slope: grade,
+          })),
+        },
+      });
+      let peak = 0;
+      for (let i = 0; i < Math.round(6 / TUNING.dt); i++) {
+        step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+        peak = Math.max(peak, state.car.wheelspin);
+      }
+      return peak;
+    };
+    for (const grade of [0, 0.25]) {
+      expect(dig("coupe", grade)).toBeLessThan(dig("compact", grade));
+      expect(dig("coupe", grade)).toBeLessThan(dig("classic", grade));
+    }
+    // The hill is what separates them: a front-driver loses more of its
+    // traction to a climb than a rear-driver does, because the weight it
+    // needs is leaving the axle that drives it.
+    const worse = (carId: string): number => dig(carId, 0.35) / dig(carId, 0);
+    expect(worse("compact")).toBeGreaterThan(worse("classic"));
   });
 
   it("puts the slide's speed floor where the layout can reach it", () => {

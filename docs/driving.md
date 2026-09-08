@@ -1618,6 +1618,33 @@ between the three in the roster.
 
 What the layout decides:
 
+- **HOW MUCH OF THE CAR IS STANDING ON THE WHEELS THAT DRIVE IT**, which is the
+  only one of these that is not a matter of taste. A tyre pulls what the
+  friction under it and the load on it allow, so what a layout can put down is
+  the surface's grip times the share of the car pressing its DRIVEN tyres into
+  the ground (`driveLoadOf` in `limits.ts`, off the car's own `balance`). Four
+  driven wheels have all of it; a front-driver has whatever sits over its nose
+  and a rear-driver whatever sits over its tail — which is why four-wheel drive
+  is worth roughly twice a two-wheel drive off the line. None of it is true of
+  CORNERING or BRAKING: every car uses all four tyres for those, whatever
+  drives them. The layout's own `bite` is then just the driveline between the
+  engine and that axle, and the four-wheel drive's is the LOWEST of the three,
+  because a transfer case, a second prop shaft and a third differential all
+  take their cut on the way.
+- **AND HOW THE HILL MOVES IT.** Standing on a grade, gravity pitches weight
+  off the downhill axle and onto the uphill one by `centreHeight / wheelbase`
+  per unit of grade: climbing, the nose goes light and the tail digs in. So a
+  rear-driver climbs better than it does on the flat, a front-driver claws at a
+  hill it was fine on, and a four-wheel drive does not care, because what it
+  lost off one axle it gained on the other. On top of that, HOLDING STATION ON
+  A GRADE IS ITSELF A COST (`drivetrain.climbCost`): the car needs that much of
+  gravity supplied by its driven tyres before it moves at all, out of the same
+  friction budget the pedal wants. That is the half that makes the advantage
+  visible — off a hill a four-wheel drive's bite is over 1 and clamped, so it
+  already loses nothing and cannot be given less to lose. Measured on sand from
+  a standstill, peak wheelspin runs 0.10 for the four-wheel drive against 2.53
+  and 4.72 for the two-wheel drives on the flat, and 0.89 against 2.88 and 4.88
+  at a 35% grade — and the FRONT-driver is the one the hill costs most.
 - **What the throttle does mid-slide.** A driven rear axle feeds the slide
   (`powerYaw`). Driven front wheels pull the car toward where they point, so
   the throttle pulls it STRAIGHT out of one (`pullStraight`) — ungated by
