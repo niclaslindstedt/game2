@@ -13,6 +13,7 @@ import {
   PARAPET_GAP,
   PARAPET_OUT,
   PARAPET_THICK,
+  RIVER_BANK,
   SOLID_PROP_HEIGHT,
   STAGE_RULES as R,
   TUNING,
@@ -260,6 +261,43 @@ describe("the river (R18)", () => {
       }
       // ...and the spring itself is in the gully, not on the spur.
       expect(Math.abs(source[0].x - head.x)).toBeLessThan(40);
+    }
+  });
+
+  it("lies in the ground the WORLD DRAWS, not in the country before the road", () => {
+    // R18's float check, on the field the water actually obeys
+    // (`waterGroundAt`): the bare land held under whatever the corridor cut
+    // out of it. Measured on the bare land alone it passes by construction
+    // — that is the field the tracer walks — and the defect it therefore
+    // could not see is a real one: seed 19's taiga ran a course down a
+    // flank the road had taken seven metres off, and the sheet stood five
+    // metres over the ground, a river hanging in the air forty metres off
+    // the road.
+    //
+    // The HIGHER bank, out past the channel's blend, exactly as
+    // `analyzeWater` measures it: a course running along a slope has ground
+    // under it on the downhill side by definition, and floating means the
+    // surface stands over BOTH banks.
+    for (const seed of SEEDS) {
+      const track = stageTrack(seed, "medium", { water: 0.8 });
+      const terrain = stageTerrain(track);
+      for (const river of terrain.rivers) {
+        const course = river.points;
+        for (let i = 0; i < course.length; i++) {
+          const p = course[i];
+          const next = course[Math.min(course.length - 1, i + 1)];
+          const prev = course[Math.max(0, i - 1)];
+          const len = Math.hypot(next.x - prev.x, next.z - prev.z) || 1;
+          const out = p.halfWidth + RIVER_BANK + 6;
+          const nx = (-(next.z - prev.z) / len) * out;
+          const nz = ((next.x - prev.x) / len) * out;
+          const bank = Math.max(
+            terrain.waterGroundAt(p.x + nx, p.z + nz),
+            terrain.waterGroundAt(p.x - nx, p.z - nz),
+          );
+          expect(p.y - bank).toBeLessThan(2);
+        }
+      }
     }
   });
 

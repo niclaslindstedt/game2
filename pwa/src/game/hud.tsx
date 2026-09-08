@@ -455,6 +455,35 @@ function PositionBoard({ standing }: { standing: HudStanding }) {
   );
 }
 
+/** THE NEWS COLUMN, in the bottom-right corner: what the car has just thrown
+ * off — a part gone, the temperature, a lamp, a missed split, a clean
+ * landing — and the shutter's own receipt. It stacks NEWEST AT THE BOTTOM,
+ * nearest the corner, because that is the line worth reading and the one
+ * place in the column that does not move when the line above it goes.
+ *
+ * It is out of the middle of the screen and small on purpose: the middle is
+ * where the road is, and a run that breaks something every corner would
+ * otherwise be reading its own damage report through the next one. Five lines
+ * stand, each for fifteen seconds — long enough that a driver who was busy at
+ * the moment can still find out what happened (App.tsx owns both numbers).
+ *
+ * Its own component because ALT takes the rest of the HUD down and this has
+ * to stay: the reason to hide the chrome is to photograph the frame under it,
+ * and a shutter that answers nothing is a key that did nothing. Nothing here
+ * lands in the picture either way — the column is DOM over the canvas, and a
+ * capture is read off the drawing buffer. */
+export function HudFlashes({ flashes }: { flashes: HudFlash[] }) {
+  return (
+    <div className="hud-flashes">
+      {flashes.map((f) => (
+        <div key={f.id} className={`hud-flash hud-flash-${f.tone}${f.out ? " hud-flash-out" : ""}`}>
+          {f.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Hud({
   snap,
   odoM,
@@ -737,30 +766,9 @@ export function Hud({
         </div>
       )}
 
-      {/* THE NEWS COLUMN, in the bottom-right corner: what the car has just
-          thrown off — a part gone, the temperature, a lamp, a missed split, a
-          clean landing. It stacks NEWEST AT THE BOTTOM, nearest the corner,
-          because that is the line worth reading and the one place in the
-          column that does not move when the line above it goes.
-
-          It is out of the middle of the screen and small on purpose: the
-          middle is where the road is, and a run that breaks something every
-          corner would otherwise be reading its own damage report through the
-          next one. Five lines stand, each for fifteen seconds — long enough
-          that a driver who was busy at the moment can still find out what
-          happened (App.tsx owns both numbers). */}
-      {!spectate && (
-        <div className="hud-flashes">
-          {flashes.map((f) => (
-            <div
-              key={f.id}
-              className={`hud-flash hud-flash-${f.tone}${f.out ? " hud-flash-out" : ""}`}
-            >
-              {f.text}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* The news column (`HudFlashes`) — not a spectator's, who is watching
+          somebody else's car and gets none of its news. */}
+      {!spectate && <HudFlashes flashes={flashes} />}
 
       {/* Bottom-left: the instrument panel. It is a fixed cast sized to the
           narrowest phone — revs, gear, speed and nothing that comes and goes,

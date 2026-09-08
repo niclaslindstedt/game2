@@ -437,8 +437,29 @@ export type TerrainField = {
    * analysis reads it to measure whatever is left at the seam. */
   latticeAt: (x: number, z: number) => number;
   /** The landscape far from any road (mountains and sea included) — what
-   * streams read to find their downhill side, and tooling can preview. */
+   * tooling can preview, and the country a road's earthworks are measured
+   * against. */
   farHeightAt: (x: number, z: number) => number;
+  /** R18 — THE GROUND THE WATER HAS: the bare country held down under
+   * whatever the road CUT out of it. Stated once, here, because a
+   * watercourse is TRACED against it and then JUDGED against it, and two
+   * copies of that rule is a river in the air the day one of them moves.
+   *
+   * Neither half alone will do. The bare land ignores a cutting — a
+   * corridor takes seven metres off a hillside over a hundred metres of
+   * it, and a course that keeps the level the land had before the road
+   * was built ends up a sheet standing five metres over the ground the
+   * world draws. The shaped ground is wrong the other way: a road crosses
+   * its water on FILL, and a course reading the embankment either runs
+   * down its flank or refuses the reach at the ford altogether. Fill is
+   * ground the road PUT there and the water takes no notice of it; a cut
+   * is ground the road TOOK, and water cannot stand where there is none.
+   * So the cut binds and the fill does not.
+   *
+   * The stream's own carve is not in it — this is the ground the channel
+   * is cut INTO, so a course would otherwise be measured against the hole
+   * it dug. */
+  waterGroundAt: (x: number, z: number) => number;
   /** R47 — the ground over a BORE as if the bore were not there: the
    * lattice with its trench filled back in. Inside the trench (a tunnel
    * sample nearest, within the corridor's lip) it is the bare mountain;
@@ -2397,6 +2418,15 @@ export function createTerrain(track: Track): TerrainField {
     return shape.raised < shape.ceiling ? shape.raised : shape.ceiling;
   };
 
+  /** R18 — the ground the water has (`waterGroundAt`, where the rule is
+   * written down): the bare country held under the road's cut, with the
+   * streams' own carve left out of it. */
+  const waterGround = (x: number, z: number): number => {
+    const shaped = rawHeight(x, z);
+    const bare = farField(x, z);
+    return shaped < bare ? shaped : bare;
+  };
+
   /** R18 — a stream's channel keeps off the ground a road STANDS ON. The
    * carve is a bed cut `depth` under the water and blended out over
    * `BANK`, and beside a crossing the water is inside the corridor by
@@ -2727,10 +2757,18 @@ export function createTerrain(track: Track): TerrainField {
     // Only the actual ribbon hides water. The wider corridor is the graded
     // ground beside the road; suppressing water there would trim a ford's
     // channel at the road edge and make it look painted onto the tarmac.
-    if (near && near.d <= samples[near.index].width / 2 + 0.1 && samples[near.index].deck !== null)
-      return null;
+    const onRoute = near !== null && near.d <= samples[near.index].width / 2 + 0.1;
+    if (onRoute && samples[near.index].deck !== null) return null;
+    // ...and a BRANCH is a road (R17). The route is not the only thing that
+    // crosses a valley on fill: a lane carried over the same water is dry
+    // mat with a channel under it in exactly the way the route's is, and
+    // reading only the route left the sheet drawn across a branch's tarmac
+    // — and told a car standing on it that it was in a river.
+    const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
+    const onBranch = spur !== null && spur.d <= spur.spur.width / 2 + 0.1;
+    if (!onRoute && !onBranch) return null;
     const corridor = corridorGround(x, z);
-    return near && near.d <= samples[near.index].width / 2 + 0.1 && corridor ? corridor.y : null;
+    return corridor ? corridor.y : null;
   };
 
   /** R48 — the ICE standing over a point, m: the surface of a body the
@@ -3117,17 +3155,13 @@ export function createTerrain(track: Track): TerrainField {
       // one river through them (R18) — born on the high ground, gathering
       // as it runs, ending in the lowest water it can find.
       //
-      // The river reads the BARE country, not the ground the road shaped.
-      // A crossing's water lies in its valley (R12, R13), so the land is
-      // the field the water obeys — reading the corridor-shaped field only
-      // makes sense while a crossing's water is laid at the ROAD's height,
-      // and then a course traced against the land the road stands over
-      // refuses every reach. Read the shaped ground instead and
-      // a course leaving a crossing beside an embankment follows the
-      // embankment's flank down — real ground, and the analyzer (which
-      // measures the water against the bare banks, as the world sees it)
-      // reports it ten metres in the air. A stream lies at the toe of a
-      // fill, not on its side.
+      // The river reads `waterGround` — the bare country held under the
+      // road's cut, and the one field a course is both traced and judged
+      // against (`waterGroundAt` states why). Read the bare land alone,
+      // as this did, and a cutting is invisible to the water: seed 19 ran
+      // a course down a flank the corridor had taken seven metres off,
+      // and the sheet stood five metres over the ground the world draws —
+      // a river through the air, forty metres off the road.
       // Traced, then sliced: the field queries the slices, and the whole
       // watercourses are kept beside them because a river is only judgeable
       // end to end — the analysis walks one from its source to its mouth to
@@ -3136,7 +3170,7 @@ export function createTerrain(track: Track): TerrainField {
       for (const river of traceRivers(
         track.seed,
         collectAnchors(track, streamScan, land.surfaceAt),
-        farField,
+        waterGround,
         // R35 — the water the courses are looking for is the water the
         // pour put on the bare country, at its own levels. Asked of the
         // BARE land and not the shaped terrain: a river ends in a lake,
@@ -3274,6 +3308,7 @@ export function createTerrain(track: Track): TerrainField {
     groundAt,
     latticeAt,
     farHeightAt: farField,
+    waterGroundAt: waterGround,
     lidAt,
     geology: land.geology,
     waterAt,

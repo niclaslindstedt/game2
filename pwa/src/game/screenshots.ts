@@ -164,6 +164,13 @@ export type ShotNotes = {
 /**
  * Sign a grabbed frame, encode it, and file it in the roll.
  *
+ * `sign` is the app's MARK in the bottom-right corner, and it is what tells
+ * anybody looking at a shared picture where it came from. A DEVELOPER's
+ * capture turns it off: that frame is evidence rather than a share — it is
+ * read for its boxes and its repro line, and a badge in the corner is chrome
+ * over the very thing being reported. The foot's strips take the corner back
+ * when it goes, so the repro line runs the full width.
+ *
  * Resolves the capture, or null when the browser declined to encode one.
  * Never throws: a picture that could not be taken is a keypress that did
  * nothing, and never a run that ended.
@@ -173,6 +180,7 @@ export async function keepShot(
   label: string,
   notes?: ShotNotes | null,
   hud?: HudLayer | null,
+  sign = true,
 ): Promise<Capture | null> {
   armScreenshots();
   try {
@@ -182,11 +190,11 @@ export async function keepShot(
     // comes back is where the instruments landed, which is what keeps the
     // signature off them.
     const cover = ctx && hud ? await drawHudLayer(ctx, hud, frame.width, frame.height) : null;
-    if (ctx && notes) drawNotes(ctx, frame.width, frame.height, notes);
+    if (ctx && notes) drawNotes(ctx, frame.width, frame.height, notes, sign);
     // The mark is awaited rather than skipped when it is late: the first
     // picture of a session is the one most likely to be shown to somebody,
     // and this is a decode of an inlined SVG, not a network trip.
-    if (ctx) drawStamp(ctx, frame.width, frame.height, (await markPromise) ?? null, cover);
+    if (ctx && sign) drawStamp(ctx, frame.width, frame.height, (await markPromise) ?? null, cover);
     const blob = await toPng(frame);
     if (!blob) return null;
     const takenAt = Date.now();
@@ -204,9 +212,10 @@ export function captureFrame(
   label: string,
   notes?: ShotNotes | null,
   hud?: HudLayer | null,
+  sign = true,
 ): Promise<Capture | null> {
   const frame = grabFrame(source);
-  return frame ? keepShot(frame, label, notes, hud) : Promise.resolve(null);
+  return frame ? keepShot(frame, label, notes, hud, sign) : Promise.resolve(null);
 }
 
 /** The instrument look, restated for the canvas: the same monospace, the
@@ -315,6 +324,7 @@ function drawNotes(
   width: number,
   height: number,
   notes: ShotNotes,
+  sign: boolean,
 ): void {
   if (!notesFit(width, height)) return;
   let L = notesLayout(width, height);
@@ -322,8 +332,9 @@ function drawNotes(
   // this — so the strips along the foot stop above it rather than being
   // signed across. Lifting them keeps the repro line the full width of the
   // picture, which matters more than the corner does: it is the one line
-  // somebody has to be able to select and paste.
-  const signed = stampFits(width, height) ? stampLayout(width, height) : null;
+  // somebody has to be able to select and paste. An UNSIGNED picture has
+  // the corner back and the foot uses it.
+  const signed = sign && stampFits(width, height) ? stampLayout(width, height) : null;
   const bottom = height - (signed ? signed.mark + signed.pad * 2 : 0);
   ctx.save();
   ctx.textBaseline = "top";

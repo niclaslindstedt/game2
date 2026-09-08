@@ -161,6 +161,31 @@ export function beginImageCopy(): PendingCopy {
   }
 }
 
+/** How long a RECEIPT waits for the clipboard before it goes out saying only
+ * what it already knows, ms.
+ *
+ * The wait itself is right — a picture the player meant to paste is not
+ * really taken until it is pasteable, and one line for one press beats two.
+ * What is not right is the wait being unbounded: `clipboard.write` does not
+ * always answer. A window that is not focused, a permission the browser
+ * decides to sit on, an automated pass with no clipboard at all — in each of
+ * those the promise simply never settles, and a shutter whose only receipt
+ * hangs off it tells the player NOTHING about a picture that is already in
+ * the roll. A press always gets an answer; the clipboard gets a moment to be
+ * part of it. */
+export const COPY_WAIT = 1200;
+
+/** Whether the clipboard took the picture, ANSWERING EITHER WAY within
+ * `COPY_WAIT`. A late yes is reported as a plain save — the picture is on
+ * the clipboard regardless, and the receipt for one press has already gone
+ * out. */
+export function copiedWithin(copy: PendingCopy, ms = COPY_WAIT): Promise<boolean> {
+  return Promise.race([
+    copy.done,
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms)),
+  ]);
+}
+
 /** Save the PNG to the player's downloads. The path that always works.
  *
  * The anchor is put in the document rather than clicked detached: Firefox

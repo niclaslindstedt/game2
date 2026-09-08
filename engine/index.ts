@@ -275,6 +275,7 @@ export {
   computeStreams,
   collectAnchors,
   traceRivers,
+  RIVER_BANK,
   carveGround,
   inStream,
   LAKE_Y,
