@@ -2609,10 +2609,24 @@ await capture(
     // `racing` reads the HUD's clock, which this scene has switched off, so
     // the whole wait is on the overlay instead: a `run` row quoting a race
     // time at all is a run that is ticking.
-    await atCleanTime(page, 3.5);
+    await atCleanTime(page, 5.5);
     await clean(page);
   },
-  { ...CLEAN, mode: "headsup", camera: "tv", bot: "1", length: "short", seed: "38" },
+  {
+    ...CLEAN,
+    mode: "headsup",
+    camera: "tv",
+    bot: "1",
+    length: "short",
+    seed: "38",
+    hour: "11",
+    // Every showcase frame taken from a TRIPOD asks to see. The stored fog
+    // is tuned for a driver's eye a metre and a half off the road looking at
+    // the next corner; a camera standing still while a field arrives out of
+    // the distance is looking through all of it, and on the default the
+    // grid comes through the start gate as a grey smudge.
+    drawdistance: "far",
+  },
 );
 
 // 2 — ROAM, which is the generator's own shop window: a seed on the left as
@@ -2768,7 +2782,16 @@ await capture(
     await atDrifting(page, 22);
     await clean(page);
   },
-  { ...CLEAN, mode: "headsup", camera: "tv", bot: "1", seed: "38", length: "short" },
+  {
+    ...CLEAN,
+    mode: "headsup",
+    camera: "tv",
+    bot: "1",
+    seed: "38",
+    length: "short",
+    hour: "11",
+    drawdistance: "far",
+  },
 );
 
 await browser.close();
