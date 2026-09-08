@@ -75,6 +75,23 @@ function drive(state: GameState, stride = 1): Shot[] {
   return out;
 }
 
+/** The sample nearest a tripod, scanned whole. A stand is planted beside the
+ * corner it watches and the car is somewhere else entirely, so nothing about
+ * where the CAR is says which road the camera is standing next to — and the
+ * `index` on a Shot is the car's, not the stand's. */
+function nearestTo(state: GameState, at: THREE.Vector3) {
+  let nearest = state.track.samples[0];
+  let best = Infinity;
+  for (const sample of state.track.samples) {
+    const d = Math.hypot(sample.x - at.x, sample.z - at.z);
+    if (d < best) {
+      best = d;
+      nearest = sample;
+    }
+  }
+  return { sample: nearest, d: best };
+}
+
 /** The distinct tripods a drive actually stood on, in the order they were
  * cut to — the gallery, read back off the shot rather than reached into. */
 function galleryOf(shots: Shot[]): Shot[] {
@@ -90,19 +107,8 @@ describe("the TV cam's gallery", () => {
   it("plants every tripod off the road, never on it", () => {
     const state = game(WINDING);
     const inTheRoad = galleryOf(drive(state)).filter((stand) => {
-      // The nearest sample to the stand, scanned whole: a tripod is planted
-      // beside the corner it watches and the car is somewhere else entirely,
-      // so the car's own hint says nothing about which road it is beside.
-      let nearest = state.track.samples[0];
-      let best = Infinity;
-      for (const sample of state.track.samples) {
-        const d = Math.hypot(sample.x - stand.at.x, sample.z - stand.at.z);
-        if (d < best) {
-          best = d;
-          nearest = sample;
-        }
-      }
-      return best < nearest.width / 2;
+      const near = nearestTo(state, stand.at);
+      return near.d < near.sample.width / 2;
     });
     expect(inTheRoad.map((s) => `${s.at.x.toFixed(1)},${s.at.z.toFixed(1)}`)).toEqual([]);
   });
@@ -154,6 +160,23 @@ describe("the TV cam's gallery", () => {
         (stand, i) => state.track.samples[stand.index].s - state.track.samples[stands[i].index].s,
       );
     expect(Math.max(...gaps)).toBeLessThanOrEqual(TV.maxGap + TV.hold + state.track.step);
+  });
+
+  it("keeps clear of the gates, which are the one built thing on a stage", () => {
+    // The start line is a gantry over the road with posts, boards and
+    // barriers around it, and it is exactly where the gap filler wants to
+    // plant a camera — the run-up bends nowhere and so earns nothing. A
+    // tripod in there looks at the back of a post.
+    // Measured where the TRIPOD is, not where the car was when it was cut to
+    // — those are different places, which is the whole point of this camera.
+    const state = game(WINDING);
+    const stands = galleryOf(drive(state));
+    const inTheGate = stands.filter((stand) => nearestTo(state, stand.at).sample.s < TV.gateClear);
+    expect(inTheGate.length).toBe(0);
+    // ...and the refusal must not cost the whole opening stretch: the filler
+    // probes on rather than giving up, so the first camera stands just past
+    // the furniture instead of a whole gap down the road.
+    expect(nearestTo(state, stands[0].at).sample.s).toBeLessThan(TV.gateClear + TV.maxGap);
   });
 
   it("keeps the car in the frame it cuts to", () => {

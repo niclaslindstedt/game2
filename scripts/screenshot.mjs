@@ -2529,16 +2529,19 @@ async function cleanTime(page) {
   return (await page.evaluate(`Number(/t ([0-9.]+) s/.exec(${debugRow("run")})?.[1] ?? 0)`)) ?? 0;
 }
 
-/** Wait until the car is back within `metres` of the centreline, off the
- * overlay's `off-road` row. A wide shot of the country is spoiled by a car
- * that is in a field rather than on the road, and a bot on an alpine stage
- * spends real seconds out there. */
-async function atOnRoad(page, metres) {
-  await page.waitForFunction(
-    `Number(/^([0-9.]+) m/.exec(${debugRow("off-road")})?.[1] ?? 999) <= ${metres}`,
-    null,
-    { timeout: SHOWCASE_PATIENCE },
-  );
+/** Wait until the car is ON THE ROAD — the CAR box's own `track` row, which
+ * carries ` · OFF` for exactly as long as the engine considers it off. A wide
+ * shot of the country is spoiled by a car standing in a field, and a bot on
+ * an alpine stage spends real seconds out there.
+ *
+ * Read from that row rather than from a distance, because the distance the
+ * overlay quotes is the PLACE box's, and the place box reports where the
+ * CAMERA is standing — it says so in as many words. On a TV tripod that is a
+ * fixed eight metres off the centreline forever. */
+async function atOnRoad(page) {
+  await page.waitForFunction(`/ · OFF/.test(${debugRow("track")}) === false`, null, {
+    timeout: SHOWCASE_PATIENCE,
+  });
 }
 
 /** The run's own clock off the overlay's `run` row — `atStageTime`'s answer
@@ -2551,13 +2554,24 @@ async function atCleanTime(page, seconds) {
   );
 }
 
-/** Wait until the car is actually sideways, by the SLIP ANGLE the overlay
- * quotes rather than by the HUD's drift flag: the flag is the game's own
- * threshold for calling a slide a drift, and a picture wants a bigger angle
- * than the smallest one the game will admit to. Degrees. */
-async function atSlip(page, degrees) {
+/** Wait until the car is SIDEWAYS, on the ground and on the road, all on the
+ * one frame. Degrees of slip.
+ *
+ * One predicate rather than three waits in a row, and that is the whole point
+ * of it: each of the three comes and goes on its own, so waiting for them in
+ * sequence returns on a frame where the last one is true and the first has
+ * already gone. Asked separately, a scene that wanted a drift came back with
+ * four cars in mid-air over a crest — every one of them slipping, none of
+ * them driving.
+ *
+ * Slip is the drift cursor rather than the HUD's own flag: that lights at
+ * `TUNING.drift.enterSlip`, which is about 10°, and a picture wants nearer
+ * twice that. */
+async function atDrifting(page, degrees) {
   await page.waitForFunction(
-    `Math.abs(Number(/^(-?[0-9.]+)/.exec(${debugRow("slip")})?.[1] ?? 0)) >= ${degrees}`,
+    `Math.abs(Number(/^(-?[0-9.]+)/.exec(${debugRow("slip")})?.[1] ?? 0)) >= ${degrees}` +
+      ` && /AIRBORNE/.test(${debugRow("drive")}) === false` +
+      ` && / · OFF/.test(${debugRow("track")}) === false`,
     null,
     { timeout: SHOWCASE_PATIENCE },
   );
@@ -2632,7 +2646,13 @@ await capture(
     elevation: "1",
     steepness: "0.85",
     peaks: "1",
-    altitude: "0.7",
+    // High COUNTRY, low ROAD. The peaks dial is what puts mountains in the
+    // frame; the altitude dial is where the stage itself sits, and wound up
+    // it puts the road above the treeline, where a winter stage is grey
+    // scree under grey sky and the only colour left is the marker posts.
+    // Down at the treeline the same mountains are still there and the road
+    // has snow, rock and trees in it.
+    altitude: "0.25",
   },
 );
 
@@ -2648,12 +2668,18 @@ await capture(
   SHOWCASE,
   async (page) => {
     await atCleanTime(page, 16);
-    await atSlip(page, 22);
+    await atDrifting(page, 22);
     await clean(page);
   },
   {
     ...CLEAN,
-    mode: "headsup",
+    // Roam with a handful of rivals rather than a fifteen-car grid. A mass
+    // start puts six cars inside ten metres of the lens and the frame has no
+    // subject — everything is a car and none of them is THE car. Four
+    // opponents is enough that somebody is being driven past and few enough
+    // that it reads. (`?rivals=` is Roam's own slider; a heads-up grid takes
+    // its size from the race card instead.)
+    rivals: "4",
     biome: "desert",
     car: "coupe",
     // The LONG boom rather than the one the game is driven from: at 22° of
@@ -2694,7 +2720,7 @@ await capture(
   async (page) => {
     const placed = await cleanTime(page);
     await atCleanTime(page, placed + 6);
-    await atOnRoad(page, 2.5);
+    await atOnRoad(page);
     await clean(page);
   },
   {
@@ -2707,7 +2733,7 @@ await capture(
     length: "medium",
     at: "racing",
     s: "1500",
-    hour: "10",
+    hour: "13",
     weather: "clear",
     drawdistance: "far",
     // The same dials the Roam shot names, for the same reason: a country
@@ -2715,23 +2741,31 @@ await capture(
     elevation: "1",
     steepness: "0.85",
     peaks: "1",
-    altitude: "0.7",
+    // High COUNTRY, low ROAD. The peaks dial is what puts mountains in the
+    // frame; the altitude dial is where the stage itself sits, and wound up
+    // it puts the road above the treeline, where a winter stage is grey
+    // scree under grey sky and the only colour left is the marker posts.
+    // Down at the treeline the same mountains are still there and the road
+    // has snow, rock and trees in it.
+    altitude: "0.25",
   },
 );
 
 // 5 — THE TV CAM (camera-tv.ts), which is the shot the camera was built for:
-// a tripod planted just inside the turn-in of a corner, on the OUTSIDE of
-// the bend, and a car arriving at it sideways with the rooster tail off the
-// outside rear coming at the lens. Nothing is pressed here — the director
-// has already chosen where to stand, the bot drives the corner, and the only
-// thing the shutter does is wait for the slide. Shot in a race so the
-// gallery has more than one car going through it.
+// a tripod on the OUTSIDE of a corner, just past where the bend releases,
+// and a car coming out of it sideways and running wide onto the very edge
+// the lens is standing on — arriving already drifting, with the rooster tail
+// off the outside rear thrown at the glass. Nothing is pressed here: the
+// director chose where to stand before the run started, the bot drives the
+// corner, and the shutter only waits for a car that is sideways, on the
+// ground and on the road at once. Shot in a race, so the gallery has more
+// than one car coming through it.
 await capture(
   "shot-showcase-tvcam",
   SHOWCASE,
   async (page) => {
     await atCleanTime(page, 12);
-    await atSlip(page, 22);
+    await atDrifting(page, 22);
     await clean(page);
   },
   { ...CLEAN, mode: "headsup", camera: "tv", bot: "1", seed: "38", length: "short" },

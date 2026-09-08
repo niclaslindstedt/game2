@@ -8,15 +8,18 @@
 //
 // Three decisions make it read as television instead of as a security feed:
 //
-//   THE STANDS ARE WHERE A CREW WOULD ACTUALLY PUT THEM. A corner is worth a
-//   camera and a straight is not, so the walk in `planStands` places one just
-//   inside the turn-in of every corner it finds, on the OUTSIDE of the bend —
-//   the side the crowd is not on, and the side the car is thrown toward. A
-//   car turning in on the limit comes at that lens and then goes sideways
-//   across it, close enough that the rooster tail off the outside rear lands
-//   on the glass. A long corner gets a second stand past its exit, because
-//   the shot of a car coming OUT of a bend under power is a different shot
-//   from the one of it going in; a jump lip gets one beside the landing.
+//   THE STANDS ARE WHERE A CREW WOULD ACTUALLY PUT THEM, WHICH IS THE EXIT.
+//   Every stand is on the OUTSIDE of the bend — the side the crowd is not on
+//   — and the outside is where the car comes CLOSE twice: going in, and
+//   coming out running wide. Those two are not the same shot. Going in, the
+//   car is still gripped: the slide has not built, and a lens there
+//   photographs a car driving straight at it. Coming out it is fully crossed
+//   up, on the power, and travelling sideways toward the outside edge the
+//   camera is standing on — so it arrives already drifting and puts its
+//   rooster tail on the glass. That is why the exit stand is the one EVERY
+//   corner gets, and why a long enough bend also earns one a third of the
+//   way through it, where the angle is on and there is corner left to watch.
+//   A jump lip gets a stand beside the landing.
 //
 //   THE OPERATOR IS SLOW. The pan lags the car (`pan`), so the car leads the
 //   frame going past and the camera catches up after it — which is what a
@@ -25,10 +28,12 @@
 //   and wide open as it arrives, so a stand two hundred metres back is still
 //   a shot of a car rather than a shot of a valley.
 //
-//   THE CUT IS LATE. The director does not cut when the car reaches the next
-//   camera; it cuts once the car is `hold` metres PAST the current one, so
-//   every stand keeps the car for a beat as it goes away. Cutting on arrival
-//   would mean never once seeing a car leave.
+//   THE CAR COMES AT THE LENS. A stand is live for the whole APPROACH to it
+//   and lets go almost the moment the car is past (`hold`), so what the shot
+//   is made of is a car arriving — growing in the frame, turning in, and
+//   throwing its dirt at the glass as it goes by — and never a car receding
+//   up the road with its tail lights on. It is the difference between a
+//   broadcast camera and a security one, and it is one number.
 //
 // It is a camera on the ladder, not a replay mode: the camera key reaches it
 // and a stage can be driven from it, the way a top-down view can be driven
@@ -52,14 +57,20 @@ export const TV = {
    * long enough to deserve a second stand at its exit. */
   runMin: 24,
   runLong: 60,
-  /** How far INTO the corner from the turn-in the entry stand sits, m. Not
-   * at the turn-in itself: a few metres in is where the car is nearest the
-   * outside edge with the slide already started, which is the frame the
-   * shot exists for. */
-  entryInto: 12,
-  /** ...and how far past the corner's end the exit stand sits, and how far
-   * past a jump lip the landing stand sits. */
-  exitPast: 20,
+  /** Where a long corner's SECOND stand goes: this share of the way through
+   * the bend, capped at `midMax` metres in. Deliberately not at the turn-in.
+   * A slide takes a second or so to build, so a lens at the turn-in is a lens
+   * photographing a car that is still gripped and still pointed where it is
+   * going — and the whole reason to stand beside a corner is to see a car
+   * that is not. A third of the way in, the angle is on. */
+  midShare: 1 / 3,
+  midMax: 70,
+  /** How far past the corner's release the EXIT stand sits, m — the primary
+   * stand, and the one every corner gets. Far enough out that the car has
+   * finished the bend and is running wide onto the outside edge the camera
+   * stands on, close enough that it is still sideways when it arrives. */
+  exitPast: 24,
+  /** ...and how far past a jump lip the landing stand sits, m. */
   jumpPast: 26,
   /** How far beyond the road's own edge a tripod stands, m. Close: the
    * whole point of the outside of a corner is the dirt, and dirt does not
@@ -78,10 +89,30 @@ export const TV = {
    * at all — from leaving the director with nothing to cut to. */
   minGap: 90,
   maxGap: 260,
-  /** How far past a stand the car travels before the cut, m. About a second
-   * and a half of rally pace: enough to watch a car leave, short enough
-   * that the next stand still has the car coming toward it. */
-  hold: 55,
+  /** How much road either GATE keeps to itself, m. The start line and the
+   * finish are the two places on a stage that are already built: a gantry
+   * over the road, its posts either side of it, the boards and the barriers
+   * around them. A tripod planted in that is a tripod looking at the back of
+   * a post — and the start is exactly where the gap filler wants to plant
+   * one, because the run-up bends nowhere and earns nothing. Nobody puts a
+   * broadcast camera inside the arch; the first stand is past it.
+   *
+   * Big enough to clear the furniture and no bigger, so the shot of a mass
+   * start still has the grid in it: at three and a half seconds off the line
+   * a car is about this far down the road. */
+  gateClear: 45,
+  /** How far past a stand the car travels before the cut, m — half a second
+   * of rally pace, and deliberately the smallest number that still reads as
+   * a cut rather than a flinch.
+   *
+   * THIS IS THE KNOB THE WHOLE CAMERA TURNS ON. A stand is chosen by being
+   * the next one the car has not passed, so this number is the only part of
+   * a stand's window spent watching the car GO. Anything generous here — a
+   * second and a half was tried — spends half of every shot on a departing
+   * car photographed from behind, which is the one thing a trackside camera
+   * is not for: the dust is thrown AWAY from a lens the car has passed, and
+   * at the lens it is coming at. Short, and the approach is the shot. */
+  hold: 14,
   /** How fast the aim follows the car, 1/s. Loose on purpose. */
   pan: 5.5,
   /** How far over the car's own height the aim sits, m. */
@@ -120,9 +151,16 @@ function rightOf(heading: number): [number, number] {
  * end of the samples built so far — an endless stage is asked for road it
  * has not streamed yet on nearly every corner it finds. */
 function standAt(state: GameState, index: number, side: number): TvStand | null {
-  const samples = state.track.samples;
+  const track = state.track;
+  const samples = track.samples;
   if (index < 0 || index >= samples.length) return null;
   const sample = samples[index];
+  // Never inside a gate's own structure (`gateClear`). The finish is checked
+  // against `finishS` rather than the last sample, because R25 carries road
+  // on past the gate for the car to coast down and a camera IS wanted out
+  // there — it is the arch itself that has no room beside it.
+  if (sample.s < TV.gateClear) return null;
+  if (track.finishS !== null && Math.abs(sample.s - track.finishS) < TV.gateClear) return null;
   const [rx, rz] = rightOf(sample.heading);
   const out = sample.width / 2 + TV.setback;
   const x = sample.x + rx * out * side;
@@ -188,12 +226,14 @@ function planStands(state: GameState, from: number, stands: TvStand[]): number {
     if (run && (sign !== run.sign || Math.abs(k) < TV.corner * TV.release)) {
       const held = sample.s - samples[run.at].s;
       // Planted on the OUTSIDE — away from where the crowd stands, and into
-      // the path of everything the outside rear throws. A long corner earns
-      // the exit as well: a car coming out under power is not the same
-      // picture as a car going in on the brakes.
-      if (held >= TV.runMin)
-        add(standAt(state, run.at + Math.round(TV.entryInto / step), -run.sign));
-      if (held >= TV.runLong) add(standAt(state, i + Math.round(TV.exitPast / step), -run.sign));
+      // the path of everything the outside rear throws. A long bend earns a
+      // stand partway through it as well; the EXIT is the one every corner
+      // gets, because that is where a car arrives already sideways.
+      if (held >= TV.runLong) {
+        const into = Math.min(held * TV.midShare, TV.midMax);
+        add(standAt(state, run.at + Math.round(into / step), -run.sign));
+      }
+      if (held >= TV.runMin) add(standAt(state, i + Math.round(TV.exitPast / step), -run.sign));
       run = null;
     }
     if (!run && Math.abs(k) >= TV.corner) run = { at: i, sign };
@@ -213,14 +253,20 @@ function planStands(state: GameState, from: number, stands: TvStand[]): number {
     lastS = stand.s;
   };
   const fillTo = (s: number): void => {
-    while (Number.isFinite(lastS) && s - lastS > TV.maxGap) {
-      const at = indexAtS(track, lastS + TV.maxGap);
+    if (!Number.isFinite(lastS)) return;
+    let want = lastS + TV.maxGap;
+    while (want <= s) {
       const before = lastS;
+      const at = indexAtS(track, want);
       keep(standAt(state, at, at % 2 === 0 ? -1 : 1));
-      // The road can refuse a filler — off the end of the samples, or too
-      // near what is already there — and a `while` that trusted it not to
-      // would spin forever on the stage that does.
-      if (lastS === before) break;
+      // The road can REFUSE a filler — inside a gate's own furniture, off
+      // the end of the samples, too near what is already planted — and the
+      // answer is to probe on rather than to give up on the stretch. A
+      // straight stage asks for its first camera at the start line, where
+      // the gate refuses it; a filler that stopped there would leave the
+      // whole opening kilometre with nothing to cut to. Either way `want`
+      // grows by at least a gap each pass, so this always ends.
+      want = lastS > before ? lastS + TV.maxGap : want + TV.minGap;
     }
   };
   const first = samples[from];
@@ -274,9 +320,10 @@ export function createTvCamera(): TvCamera {
       const here = track.samples[Math.min(state.nearIndex, track.samples.length - 1)];
       const s = here?.s ?? 0;
       // The director's whole rule: the first tripod the car is not yet
-      // `hold` metres past. Everything else — the late cut, the car
-      // arriving from a distance, a circuit re-using the same gallery on
-      // every lap — falls out of it.
+      // `hold` metres past — so the live stand is nearly always one the car
+      // is coming TOWARD. Everything else falls out of it: the car arriving
+      // out of the distance, the cut landing as it goes by, and a circuit
+      // re-using the same gallery on every lap.
       let next = stands.findIndex((stand) => stand.s + TV.hold >= s);
       if (next < 0) next = stands.length - 1;
       if (next < 0) {
