@@ -249,6 +249,17 @@ what this game does.
 1. `make store-metadata` — read the budget line it prints. A field at 29/30 is
    fine; a field at 30/30 is one rename away from failing.
 2. `npx vitest run tests/store_listing_test.ts` — the limits and the claims.
+   **And run the gates with `copy.mts` MOVED ASIDE too**, because a gitignored
+   source module means this checkout is not a clone and the local whole-repo
+   check is not the one CI runs:
+
+   ```sh
+   mv native/store/copy.mts /tmp/ \
+     && npx tsc --noEmit && npx eslint . \
+     && npx vitest run tests/store_listing_test.ts
+   mv /tmp/copy.mts native/store/
+   ```
+
 3. `make store-preflight` — it reports running on `copy.example.mts` as
    outstanding, because a submission built from the skeleton would ship
    placeholder prose.

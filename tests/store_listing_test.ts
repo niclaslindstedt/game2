@@ -20,8 +20,9 @@
 // to equal `raster` exactly, Chromium accepts a mismatch silently, and Apple
 // rejects a set that is one pixel off.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { RULES } from "../native/store/listing.mts";
@@ -41,15 +42,23 @@ const read = (...parts: string[]) => readFileSync(join(root, ...parts), "utf8");
 // these against the real words at `make store-metadata`, on the machine that
 // has them.
 //
-// `import.meta.resolve` would answer for a module that does not exist, so the
-// choice is made by trying the import.
-const copy = await (async () => {
-  try {
-    return await import("../native/store/copy.mts");
-  } catch {
-    return skeleton;
-  }
-})();
+// IT MUST NOT NAME `copy.mts` IN A LITERAL IMPORT, and that cost a red CI.
+// TypeScript resolves the specifier of a dynamic `import()` exactly as it
+// resolves a static one, so `await import("../native/store/copy.mts")` inside a
+// try/catch typechecks fine on the machine that HAS the file and fails on every
+// clone with `TS2307: Cannot find module`. Locally green, CI red — which is the
+// standing hazard of a gitignored SOURCE module: this checkout is not a clone,
+// so `tsc --noEmit` here is not the check CI runs.
+//
+// So the path is built at runtime and handed over as a URL, which TypeScript
+// cannot resolve and does not try to. The TYPES come from the skeleton, which is
+// committed and therefore always resolvable — and since the skeleton is the
+// declared shape, typing the real module as `typeof skeleton` is exactly the
+// assertion worth making about it.
+const localCopy = join(root, "native", "store", "copy.mts");
+const copy: typeof skeleton = existsSync(localCopy)
+  ? ((await import(pathToFileURL(localCopy).href)) as typeof skeleton)
+  : skeleton;
 
 const EN = copy.APPLE_INFO["en-US"];
 const NOTES = copy.APPLE_REVIEW_NOTES;
