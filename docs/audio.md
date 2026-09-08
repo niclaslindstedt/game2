@@ -292,7 +292,13 @@ car — both lifting with speed, both breathing with the squall (`squallOf` in
 `weather.ts`, the live wind read against the stage's mean, so the sheet
 thickens exactly as the car is shoved sideways). The gale is the wind that is
 not the car's, a brown roar with a whistle over it, and the one thing a
-PARKED car in a storm can still hear.
+PARKED car in a storm can still hear. Its ceiling (`GALE_FULL`) is set by the
+strongest wind the game can blow rather than by the sky's, because a
+SANDSTORM carries the mean far past anything a rain storm ever managed
+(`TUNING.sand.wind`): pinned at the weather's own top the bed went flat out
+the moment a front arrived and then said nothing more about it, which is
+exactly the wrong shape — the whole of a haboob is that it keeps getting
+worse.
 
 ## The listener
 

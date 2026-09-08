@@ -58,10 +58,16 @@ import { ROAD_GLIDE, ROAD_LAYERS, roadTargets, type RoadLayer } from "./road-voi
  */
 const LAT_LIMIT = 14;
 
-/** The wind speed at which the gale layer is as loud as it gets, m/s. A
- * storm's mean runs to 11 and the gusts swing it half as far again, so this
- * is the top of what the game can actually blow. */
-const GALE_FULL = 16;
+/** The wind speed at which the gale layer is as loud as it gets, m/s.
+ *
+ * A weather storm's mean runs to 11 and the gusts swing it half as far
+ * again — but a SANDSTORM carries the mean to 29 (`TUNING.sand.wind`) and
+ * the gusts go on top of that, so the top of what this game can actually
+ * blow is a great deal higher than the sky alone ever managed. Pinned at
+ * the old ceiling the bed went flat out the moment a front arrived and
+ * then said nothing more about it, which is exactly the wrong shape: the
+ * whole of a haboob is that it keeps getting worse. */
+const GALE_FULL = 42;
 
 /** How much wheelspin, m/s of the driven wheels outrunning the road, is a
  * tyre fully lit. */

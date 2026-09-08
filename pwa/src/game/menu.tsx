@@ -14,6 +14,8 @@
 
 import {
   altitudeOf,
+  duneHeightOf,
+  sandPeriodOf,
   biomeRules,
   defaultTemperature,
   fallsAsSnow,
@@ -67,6 +69,11 @@ export type RaceSettings = {
   /** The air at the datum, °C, or null for the season's own in the
    * country (climate.ts) — what the TEMPERATURE row stores as AUTO. */
   temperature: number | null;
+  /** R40 — how often the SANDSTORMS come, 0..1 (`game/sandstorm.ts`).
+   * Kept beside the weather rather than among the generator's dials
+   * because it is not one: the fronts blow across a stage the seed built
+   * without them, so moving this rebuilds the RUN and never the road. */
+  sandstorms: number;
   carId: string;
   length: StageLength;
   /** R22 — a sprint from a start to a finish, or a circuit raced over laps. */
@@ -467,6 +474,41 @@ export function altitudeLabel(knobs: StageKnobs, altitude: number): string {
  * offered it without anybody having to remember to come here. */
 export function hasAltitude(biome: BiomeId | string | undefined): boolean {
   return biomeRules(biome).land.massif !== null;
+}
+
+/** R40 — WHAT THE DUNE ROW READS: how high the sand this country's wind has
+ * piled stands over the trough beside it, in metres (`duneHeightOf`). A
+ * MAXIMUM, and the row says so — most of the country is lower, and between
+ * the ergs there is none at all. Metres for the reason ALTITUDE is in
+ * metres: a dune is a height, and nobody can picture "0.62" of one. */
+export function duneLabel(knobs: StageKnobs, dunes: number): string {
+  const m = Math.round(duneHeightOf({ ...knobs, dunes }));
+  return m === 0 ? "NONE" : `${m} M`;
+}
+
+/** ...and whether this country has any sand to pile. Asked of the country
+ * (`BiomeLand.dunes`) rather than of its name. */
+export function hasDunes(biome: BiomeId | string | undefined): boolean {
+  return biomeRules(biome).land.dunes !== null;
+}
+
+/** R40 — WHAT THE SANDSTORM ROW READS: how long there is between one wall
+ * of sand and the next (`sandPeriodOf`), as minutes, because a period is
+ * what the dial actually moves and "how often" is the question the player
+ * is asking. OFF at the bottom of the travel, where no front is scheduled
+ * at all — the one position that removes the weather rather than spacing
+ * it out. */
+export function sandstormLabel(biome: BiomeId | string | undefined, sandstorms: number): string {
+  const period = sandPeriodOf({ sand: hasSandstorms(biome), sandstorms });
+  if (period === null) return "OFF";
+  const minutes = period / 60;
+  return `EVERY ${minutes < 10 ? minutes.toFixed(1) : minutes.toFixed(0)} MIN`;
+}
+
+/** ...and whether the wind in this country picks the ground up and carries
+ * it (`BiomeRules.blown`) — whether there are storms of it to space out. */
+export function hasSandstorms(biome: BiomeId | string | undefined): boolean {
+  return biomeRules(biome).blown;
 }
 
 export function temperatureLabel(air: number): string {

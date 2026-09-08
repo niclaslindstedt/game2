@@ -85,6 +85,11 @@ export type GroundContext = GroundUnder & {
   /** Current wind velocity, world space m/s. */
   windX: number;
   windZ: number;
+  /** How much SAND is in the air, 0..1 (`sandstorm.ts`). 0 in every country
+   * but the desert and in every desert run with no front over it — which
+   * is what keeps the storm's own terms out of every stage that has never
+   * seen one. */
+  sand: number;
   t: number;
   rng: Rng;
   /** What the drive is multiplied by this step — 1 everywhere except inside

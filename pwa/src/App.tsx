@@ -41,6 +41,7 @@ import {
   resolveKnobs,
   skipIntro,
   DEFAULT_HOUR,
+  DEFAULT_SANDSTORMS,
   status,
   step,
   type CarInput,
@@ -441,6 +442,7 @@ function initialRace(): RaceSettings {
     weather: "clear",
     season: "summer",
     temperature: null,
+    sandstorms: DEFAULT_SANDSTORMS,
     carId: "compact",
     length: "medium",
     shape: "sprint",
@@ -501,6 +503,14 @@ function initialRace(): RaceSettings {
   const temp = params.get("temp");
   if (temp !== null && temp !== "auto" && Number.isFinite(Number(temp))) {
     race.temperature = Number(temp);
+  }
+  // ?sandstorms= — how often the desert's fronts come, 0..1
+  // (game/sandstorm.ts). Clamped rather than rejected: a link from a build
+  // with a different band is still asking for "as often as it goes".
+  if (!Number.isFinite(race.sandstorms)) race.sandstorms = DEFAULT_SANDSTORMS;
+  const storms = params.get("sandstorms");
+  if (storms !== null && Number.isFinite(Number(storms))) {
+    race.sandstorms = Math.min(1, Math.max(0, Number(storms)));
   }
   const car = params.get("car");
   // Checked against the catalog rather than against a pair of literals: a
@@ -677,6 +687,13 @@ type StageSpec = {
    * Part of the ROAD, with the season: the two decide what the compiled
    * track is made of, so the cached track is keyed on both. */
   temperature?: number | null;
+  /** How often the SANDSTORMS come, 0..1, or absent for the default
+   * (`DEFAULT_SANDSTORMS`) — read only in a country whose wind lifts the
+   * ground (`BiomeRules.blown`, `game/sandstorm.ts`). Unlike the season
+   * and the temperature it is NOT part of the road: the fronts cross a
+   * stage that was compiled without knowing about them, so the cached
+   * track is untouched by it and only the RUN is rebuilt. */
+  sandstorms?: number;
   /** The menu's demo has no grid to sit on — nobody is waiting for it. */
   skipCountdown: boolean;
   /** Where the player is stood when the whole field leaves together: the
@@ -746,6 +763,7 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a.weather === b.weather &&
     a.season === b.season &&
     (a.temperature ?? null) === (b.temperature ?? null) &&
+    (a.sandstorms ?? DEFAULT_SANDSTORMS) === (b.sandstorms ?? DEFAULT_SANDSTORMS) &&
     a.skipCountdown === b.skipCountdown &&
     a.grid?.number === b.grid?.number &&
     a.grid?.back === b.grid?.back &&
@@ -771,6 +789,7 @@ function demoStage(race: RaceSettings, seed: number): StageSpec {
     weather: race.weather,
     season: race.season,
     temperature: race.temperature,
+    sandstorms: race.sandstorms,
     skipCountdown: true,
     grid: null,
   };
@@ -792,6 +811,7 @@ function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed:
         weather: race.weather,
         season: race.season,
         temperature: race.temperature,
+        sandstorms: race.sandstorms,
         skipCountdown: true,
         grid: null,
       } satisfies StageSpec,
@@ -1632,7 +1652,12 @@ export function App() {
       // driven. The rivals are never scaled (`createField`): what the crews
       // do to each other is the simulation being honest.
       damageScale: damageScaleFor(runDifficulty(raceRef.current, runRef.current.mode)),
-      env: { hour: spec.hour, weather: spec.weather, season: spec.season },
+      env: {
+        hour: spec.hour,
+        weather: spec.weather,
+        season: spec.season,
+        sandstorms: spec.sandstorms,
+      },
     });
     const previous = gameRef.current;
     gameRef.current = state;
@@ -1849,7 +1874,12 @@ export function App() {
       // to mean the same moment in both games, and whether there was a
       // countdown at all is the first thing that decides it.
       skipCountdown: saved.skipCountdown,
-      env: { hour: spec.hour, weather: spec.weather, season: spec.season },
+      env: {
+        hour: spec.hour,
+        weather: spec.weather,
+        season: spec.season,
+        sandstorms: spec.sandstorms,
+      },
     });
     ghostRef.current = { state, tape: readGhost(saved), at: 0 };
     renderer.setGhost(state);

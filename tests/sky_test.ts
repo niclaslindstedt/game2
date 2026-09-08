@@ -38,6 +38,9 @@ function conditions(over: Partial<RaceEnv>): RaceEnv {
     windDir: 0,
     windSpeed: 0,
     gustPhase: 0,
+    sand: false,
+    sandstorms: 0,
+    sandSeed: 1,
     ...over,
   };
 }

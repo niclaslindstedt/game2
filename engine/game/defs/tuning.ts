@@ -2361,6 +2361,95 @@ export const TUNING = {
     carry: { grounded: 0.04, drifting: 0.12, airborne: 0.3 },
   },
 
+  /** THE SANDSTORM (`game/sandstorm.ts`) — the desert's weather, and the
+   * only one in the game that ARRIVES rather than simply being the case.
+   *
+   * Every number here is in seconds or metres per second and every one of
+   * them is read off what a haboob actually does. A haboob is the outflow
+   * of a collapsing thunderstorm: a wall of lifted sand up to 1,500 m tall
+   * travelling at the speed of that outflow, gusting to around 30 m/s at
+   * its leading edge, visible on the horizon for minutes and then over you
+   * in under one. Once it is on you the visibility goes to nothing — the
+   * threshold for a sandstorm warning is half a mile of visibility at 25
+   * mph of wind, and the core of a real one is a great deal worse than the
+   * threshold. */
+  sand: {
+    /** HOW OFTEN THE FRONTS COME, s between one wall and the next, at the
+     * two ends of the dial (`sandPeriodOf` reads it geometrically, because
+     * the band spans an order of magnitude and read linearly the whole
+     * stormy end would live in the last tenth of the thumb's travel).
+     *
+     * `calm` is a quarter of an hour — twice a long stage, so the bottom of
+     * the travel is a country where a storm is a thing that MIGHT happen
+     * to this run. `often` is under two minutes, which against a front's
+     * own length (`approach` + `front` + `core` + `tail`, near three) is a
+     * run that is in sand more than it is out of it. The dial at exactly 0
+     * is neither: it is OFF, and no front is scheduled at all.
+     *
+     * Measured against the schedule rather than guessed: a front occupies
+     * about 180 s of its period counting the approach, so the share of
+     * five-minute runs that meet one at all is that over the period — a
+     * fifth at the bottom of the travel, about half at the default, and
+     * effectively all of them at the top. */
+    period: { calm: 900, often: 110 },
+    /** How far into its own slot a front's arrival wanders, as a share of
+     * the period. A storm every four minutes exactly is a metronome, and a
+     * player learns to count rather than to look. */
+    jitter: 0.55,
+    /** THE APPROACH, s: how long the wall is up before it lands. This is
+     * the half of the storm the player can DO something about — lift,
+     * shorten the braking, get the corner done before it hits — so it is
+     * long enough to be a decision and short enough that the decision is
+     * still under pressure. (A real haboob is visible for far longer; so
+     * is a real sunset, and the sun's clock in this game runs at an hour a
+     * minute for the same reason.) */
+    approach: 55,
+    /** THE LEADING EDGE, s: how long the wall takes to pass over. Short,
+     * and this is the number that makes it read as a wall rather than as a
+     * weather front — clear air to nothing in a dozen seconds. */
+    front: 12,
+    /** THE CORE, s at full strength... */
+    core: 40,
+    /** ...and THE TAIL, s the sand takes to settle back out of the air.
+     * Much the longest of the three: a haboob leaves and the dust hangs. */
+    tail: 70,
+    /** How strong one front is, 0..1, drawn per front. The floor is well
+     * up the range on purpose — a front that arrives as nothing is a
+     * horizon the player watched for a minute and got nothing from. */
+    strength: { min: 0.45, max: 1 },
+    /** THE WIND INSIDE THE FRONT, m/s: what the mean is carried TO at full
+     * strength (blended from the stage's own mean by the sand in the air,
+     * never multiplied by it — a haboob brings its own wind and does not
+     * care what the afternoon was doing). Thirty is the gust at a real
+     * one's leading edge, and it is also the top of the band the crosswind
+     * work on desert highways finds a car losing its line in. */
+    wind: 29,
+    /** WHAT IS LEFT OF THE VISIBILITY at the core, 0..1 of clear air, and
+     * the exponent the fall to it is read on. The exponent is what makes
+     * the collapse happen at the WALL rather than evenly across the front:
+     * visibility in blowing dust falls away far faster than the dust in
+     * the air rises. */
+    visibility: 0.03,
+    visionFall: 2.2,
+    /** WHAT IT DOES TO THE CAR, at full strength.
+     *
+     * `yaw` is the crosswind's TURNING moment, rad/s² per m/s of wind
+     * across the car — the half of a crosswind that is not a shove. A car
+     * is a sail with its centre of pressure ahead of its centre of mass,
+     * so a gust from the side does not merely move it, it points it, and
+     * the driver holds a correction into the wind for as long as it blows.
+     * This is the number that makes a storm HARD rather than merely
+     * blurry, and it is small: it has to be a correction a good driver
+     * makes without thinking and a bad one runs wide on.
+     *
+     * `grip` is the share of the surface's hold that a road with sand
+     * running across it does not have. Sand blown over tarmac is the
+     * classic desert-road hazard and it is loose material on a hard
+     * surface — the car is on ball bearings for as long as it lasts. */
+    yaw: 0.004,
+    grip: 0.3,
+  },
+
   offTrack: {
     /** Lateral overhang past the road edge that still counts as verge, m.
      * Beyond it the car is exploring: the terrain owns the ground, and

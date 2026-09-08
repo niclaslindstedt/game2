@@ -366,9 +366,16 @@
 //       surfaces, no basin that fills, no crossing on the route and no
 //       river traced through one; its hollows flatten into pans instead,
 //       its ranges are low, and the wind has piled its sand into dune
-//       fields the road rides as a run of crests. A biome never switches a
-//       rule off — a desert stage still obeys every one above — it moves
-//       what the rules draw from, exactly as the other dials do.
+//       fields the road rides as a run of crests. HOW HIGH THAT SAND
+//       STANDS IS A DIAL (`knobs.dunes`, `STAGE_RULES.dunes`, 0-100 m
+//       through `duneHeightOf`): a MAXIMUM, reached where the erg is
+//       deepest and nowhere else, and one that builds a BIGGER dune field
+//       rather than a taller one — the period grows with the height, and
+//       the ergs with the period, because sand cannot stand steeper than
+//       its own angle of repose. At 0 the country comes back with no dune
+//       row at all. A biome never switches a rule off — a desert stage
+//       still obeys every one above — it moves what the rules draw from,
+//       exactly as the other dials do.
 //   R41 THE RAILWAY IS LAID BEFORE THE STAGE IS, like the tarmac (R17), and
 //       the rally goes OVER it on a ramp. A country that carries one
 //       (`biomes.ts`, `rail.chance` of its seeds) has a single track laid
@@ -608,6 +615,28 @@ export type StageKnobs = {
    * it is why the country's zones, the air's lapse rate and the earthworks
    * a road may be built on all read it (`landOf`). */
   altitude: number;
+  /** R40 — HOW HIGH THE SAND STANDS, 0..1, read onto a band of METRES by
+   * `duneHeightOf` — the dial only a sand country reads (`BiomeLand.dunes`;
+   * the taiga and the alpine have no sand to pile). It is a MAXIMUM: what
+   * a full-grown dune stands over the trough beside it, where the wind has
+   * heaped the deepest sand. Most of the country is lower, because the
+   * mask that says where the sand sea is at all fades the field out
+   * between its ergs, and the pans between them carry none.
+   *
+   * The dial does not merely stretch one dune field upward, it builds a
+   * BIGGER ONE: the period across the wind grows with the height, and the
+   * ergs with the period (`STAGE_RULES.dunes.spread`). Sand cannot stand
+   * steeper than its own angle of repose whatever the dial says, so a
+   * dune that got taller without getting longer would be a wall of
+   * something that is physically a liquid — and at the top of the travel
+   * the faces come out right at repose, which is what a real erg looks
+   * like. At 0 the wind has left the country bare: no sand at all, and the
+   * rock and the pans are the whole of it.
+   *
+   * `dunes: 0` is therefore the only dial position that removes something
+   * rather than shrinking it, and it says so honestly — `landOf` hands
+   * back a country with no dune row at all. */
+  dunes: number;
   /** R40 — which COUNTRY the stage is built in (`biomes.ts`). The one dial
    * that is a name rather than a number: it does not move a range, it says
    * which set of ranges — the taiga's lakes and spruce, or the desert's
@@ -630,6 +659,7 @@ export const NUMERIC_KNOBS: readonly NumericKnob[] = [
   "challenge",
   "peaks",
   "altitude",
+  "dunes",
 ];
 
 /** The default dial positions — the stage the rules built before the knobs
@@ -662,6 +692,13 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // is a mountain range and what is below it is a hill — two thirds of the
   // dial for the two thirds of the idea.
   altitude: 0.35,
+  // R40 — the DUNE dial's own pivot: the sand the desert's row was written
+  // for, and the country every desert seed is built in until somebody moves
+  // it (`landOf` hands the row itself back here, so it is). Low on the
+  // travel because what is above it is an erg out of the Empty Quarter and
+  // what is below it is a beach — a quarter of the dial for the country a
+  // rally is actually laid across.
+  dunes: 0.22,
 };
 
 function clamp01(v: number): number {
@@ -686,6 +723,7 @@ export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
     challenge: clamp01(knobs?.challenge ?? DEFAULT_KNOBS.challenge),
     peaks: clamp01(knobs?.peaks ?? DEFAULT_KNOBS.peaks),
     altitude: clamp01(knobs?.altitude ?? DEFAULT_KNOBS.altitude),
+    dunes: clamp01(knobs?.dunes ?? DEFAULT_KNOBS.dunes),
   };
 }
 
@@ -1288,6 +1326,56 @@ export const STAGE_RULES = {
      * burned the taiga's whole cap first. Restarting is cheaper than
      * unpicking (`circuit.ts` found the same). */
     iterations: 2500,
+  },
+
+  /** R40 — THE SAND, as the DIAL sees it (the field itself is the biome
+   * row's, `BiomeLand.dunes`, and the country a rest dial builds is the
+   * numbers in that row). */
+  dunes: {
+    /** What the DUNE row PRINTS: how high a full-grown dune stands over
+     * the trough beside it, m. Nothing at the bottom — a country the wind
+     * has stripped to its rock — and a hundred metres at the top, which is
+     * a real erg: the Namib's and the Empty Quarter's big transverse dunes
+     * run between fifty and a hundred and fifty. The dial reads onto it
+     * LINEARLY because a height is a quantity a player can picture at every
+     * point of the travel, unlike a mountain's (`altitudeMul`), which spans
+     * forty-six times its own bottom and has to be read geometrically. */
+    height: { min: 0, max: 100 },
+    /** How fast the dune's PERIOD across the wind — and with it the ERG,
+     * the field the sand sea occupies at all — grows with its height.
+     *
+     * Under 1, so a bigger dune is also a STEEPER one: that is what a real
+     * dune field does as it matures, and it is what makes the top of the
+     * dial read as something other than a photograph of the bottom of it
+     * enlarged. It cannot go much further under 1 than this, because sand
+     * has a ceiling no exponent may cross — the angle of repose (about
+     * 34°, `budgets.ts`'s `soilSteep`) — and the top of the travel is set
+     * to arrive just under it. A dune standing steeper than repose is a
+     * wall of something that is physically a liquid. */
+    spread: 0.75,
+    /** How much SHARPER the crest is than the rounded fold the ridged
+     * noise gives on its own: the exponent the profile is raised to. Above
+     * 1 it presses the troughs flat and leaves the sand standing in
+     * distinct dunes with interdune corridors between them, which is what
+     * a sand sea looks like from the ground and what the bare fold does
+     * not — the bare fold is a corrugation, every metre of it on a slope.
+     *
+     * It is held LOW because all of the exponent's curvature lands on the
+     * CREST, and curvature is the one thing the drawn lattice cannot hold:
+     * a ridge that turns over inside a 14 m cell reads back as a bump on
+     * the verge rather than as a dune. Measured over eight desert seeds at
+     * the dial's rest, the verge's bump tally ran 97 findings at 1, 102 at
+     * 1.25 and 133 at 1.6 — the interdune corridors are worth a hundred,
+     * the sharper ridge is not worth a hundred and thirty. */
+    crest: 1.25,
+    /** The shortest period the sand is ever drawn at, m — the floor under
+     * `spread`'s shrinking. The ground is TRIANGULATED on a 14 m lattice
+     * (`GROUND_CELL`), and a wave near that spacing is not a landscape, it
+     * is a washboard: it turns over inside a couple of cells, reads as
+     * corrugation and launches the car off every ripple. Six cells and a
+     * half, so the bottom of the dial gives low sand rather than fine
+     * sand. */
+    floor: 90,
   },
 
   /** R32 — THE GROUND, IN LAYERS. What the country beside the road is made
@@ -3658,21 +3746,23 @@ export function altitudeScale(knobs: StageKnobs): AltitudeScale {
   };
 }
 
-/** R47 — THE COUNTRY AT THIS ALTITUDE: the biome's own land row with
- * everything the ALTITUDE dial reaches already read onto it, so that every
- * side of the world — the geology that builds the rock, the search that
- * lays the road on it, the compiler, the terrain, the paint, the planting
- * and the audio — asks one function how high this country stands and gets
- * one answer. A caller reading `biomeRules(knobs.biome).land` directly is
- * reading the country the row was WRITTEN for rather than the one the dial
- * built, which is the same country only at the dial's default.
+/** R40/R47 — THE COUNTRY THE DIALS BUILT: the biome's own land row with
+ * everything the ALTITUDE and DUNE dials reach already read onto it, so
+ * that every side of the world — the geology that builds the rock, the
+ * search that lays the road on it, the compiler, the terrain, the paint,
+ * the planting and the audio — asks one function what this country is and
+ * gets one answer. A caller reading `biomeRules(knobs.biome).land`
+ * directly is reading the country the row was WRITTEN for rather than the
+ * one the dials built, which is the same country only at their defaults.
  *
- * Five things move together, and they have to: the crest's HEIGHT, the
- * GROUND it stands on, how hard the flank is BENT about that crest, how
- * much of the country between the ridges is VALLEY FLOOR, and the
- * elevation BANDS the paint and the planting read. `massif.altitude` says
- * what each of them is worth and why. A country with no massif is handed
- * back untouched.
+ * Five things move together under the ALTITUDE dial, and they have to: the
+ * crest's HEIGHT, the GROUND it stands on, how hard the flank is BENT
+ * about that crest, how much of the country between the ridges is VALLEY
+ * FLOOR, and the elevation BANDS the paint and the planting read.
+ * `massif.altitude` says what each of them is worth and why. The DUNE dial
+ * moves the sand the same way and for the same reason (`dunesAt`). A
+ * country with neither a massif nor sand is handed back untouched, and so
+ * is one whose dials are both at rest.
  *
  * `earthworks` is deliberately NOT among them. A shelf road on a face is
  * paid for by CUT and only by cut, and the two halves of that row do not
@@ -3683,39 +3773,88 @@ export function altitudeScale(knobs: StageKnobs): AltitudeScale {
  * refuse — and a flank is the one place in the game where the search can
  * ask for one on nearly every candidate it draws.
  *
- * Memoized on the two dials it reads, because the paint asks it per ground
+ * Memoized on the dials it reads, because the paint asks it per ground
  * cell: a fresh row per query is an allocation in the hot path, and the
- * answer cannot change while the pair is the same. */
+ * answer cannot change while they are the same. */
 export function landOf(knobs: StageKnobs): BiomeLand {
   const land = biomeRules(knobs.biome).land;
   const M = land.massif;
-  if (M === null) return land;
   const A = altitudeScale(knobs);
-  // The dial at rest hands the ROW ITSELF back, not a copy of it built out
-  // of multiplications by one: `1 - (1 - 0.3) * 1` is 0.30000000000000004,
-  // and a country that differs from its own row in the last bit of a float
-  // is a country whose seeds differ from the ones the game shipped.
-  if (A.height === 1) return land;
-  const key = `${knobs.biome}|${knobs.altitude}`;
+  const dunes = dunesAt(land.dunes, knobs.dunes);
+  // Either dial at rest hands the ROW ITSELF back, not a copy of it built
+  // out of multiplications by one: `1 - (1 - 0.3) * 1` is
+  // 0.30000000000000004, and a country that differs from its own row in the
+  // last bit of a float is a country whose seeds differ from the ones the
+  // game shipped.
+  if (A.height === 1 && dunes === land.dunes) return land;
+  const key = `${knobs.biome}|${knobs.altitude}|${knobs.dunes}`;
   const had = LAND_CACHE.get(key);
   if (had) return had;
   const Z = land.zones;
+  const raised = M !== null && A.height !== 1;
   const built: BiomeLand = {
     ...land,
-    massif: {
-      ...M,
-      height: M.height * A.height,
-      scale: M.scale * A.ground,
-      valley: 1 - (1 - M.valley) * A.flank,
-    },
-    zones: {
-      treeline: Z.treeline * A.bands,
-      rock: { from: Z.rock.from * A.bands, to: Z.rock.to * A.bands },
-      snow: Z.snow === null ? null : Z.snow * A.bands,
-    },
+    dunes,
+    massif:
+      M === null || !raised
+        ? M
+        : {
+            ...M,
+            height: M.height * A.height,
+            scale: M.scale * A.ground,
+            valley: 1 - (1 - M.valley) * A.flank,
+          },
+    zones: !raised
+      ? Z
+      : {
+          treeline: Z.treeline * A.bands,
+          rock: { from: Z.rock.from * A.bands, to: Z.rock.to * A.bands },
+          snow: Z.snow === null ? null : Z.snow * A.bands,
+        },
   };
   LAND_CACHE.set(key, built);
   return built;
+}
+
+/** R40 — THE DUNE FIELD AT THIS POSITION OF THE DUNE DIAL. The row itself
+ * at the dial's rest, so a desert seed nobody has dialled is the desert the
+ * row describes; null at the bottom, because a country with no sand in it
+ * has no dune field rather than a flat one; and otherwise the same field
+ * built at a new size — the height the dial asks for, with the period
+ * across the wind and the erg it lies in grown under `dunes.spread` so the
+ * faces stay under the angle of repose (`STAGE_RULES.dunes`).
+ *
+ * The period has a FLOOR under it and the height does not: a dial near the
+ * bottom asks for low sand, and low sand drawn at a proportionately short
+ * period is a washboard on the drawn lattice rather than a landscape. */
+function dunesAt(row: BiomeLand["dunes"], dial: number): BiomeLand["dunes"] {
+  if (row === null) return null;
+  // The rest position hands the ROW back on the DIAL, not on the metres it
+  // reads onto: `100 * 0.22` is 22.000000000000004, so a country compared
+  // on its height would rebuild itself out of a ratio of one and differ
+  // from its own row in the last bit of a float.
+  if (dial === DEFAULT_KNOBS.dunes) return row;
+  const D = STAGE_RULES.dunes;
+  const amp = knobScale(dial, D.height);
+  if (amp <= 0) return null;
+  const grow = Math.pow(amp / row.amp, D.spread);
+  return {
+    amp,
+    scale: Math.max(D.floor, row.scale * grow),
+    stretch: row.stretch,
+    field: Math.max(D.floor, row.field * grow),
+  };
+}
+
+/** R40 — ...and HOW HIGH THE SAND STANDS, m: what the DUNE row prints, and
+ * the one number the dial is really about. A full-grown dune over the
+ * trough beside it, where the erg is deepest — most of the country is
+ * lower. 0 in a country the wind has never had sand to pile in, which is
+ * what "there are no dunes here" reads as on a row that is not offered
+ * there anyway. */
+export function duneHeightOf(knobs: StageKnobs): number {
+  const D = landOf(knobs).dunes;
+  return D === null ? 0 : D.amp;
 }
 
 /** R47 — ...and HOW HIGH THE MOUNTAIN TOPS OUT over its valley floor, m.

@@ -7,6 +7,7 @@
 import { clamp } from "../lib/math.ts";
 import { createRng } from "../lib/prng.ts";
 import {
+  biomeRules,
   compileStage,
   compileTrack,
   createKerbField,
@@ -14,6 +15,7 @@ import {
   flatTrack,
   STAGE_RULES,
   trainSolidsNear,
+  type BiomeId,
   type StageKnobs,
   type StageLength,
   type StageShape,
@@ -26,6 +28,7 @@ import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContex
 import { clipKerbs, clipSolids, collideCar } from "./collision.ts";
 import { snowBite, temperatureAt } from "./climate.ts";
 import { stepCooling } from "./cooling.ts";
+import { calmSand, sandAt, sandWindSpeed, type SandState } from "./sandstorm.ts";
 import { beyondDriving } from "./damage.ts";
 import { plant, seatOn } from "./ground.ts";
 import { onItsWheels, stepRolling } from "./roll.ts";
@@ -96,7 +99,15 @@ export type CreateGameOptions = {
    * `track` takes them from it and one that compiles its own hands them to
    * the compiler. Defaults: noon, clear, the track's own climate (summer,
    * at the country's temperature). */
-  env?: { hour?: number; weather?: Weather; season?: Season; temperature?: number | null };
+  env?: {
+    hour?: number;
+    weather?: Weather;
+    season?: Season;
+    temperature?: number | null;
+    /** How often the sandstorms come, 0..1 (`game/sandstorm.ts`) — read
+     * only in a country whose wind lifts the ground. */
+    sandstorms?: number;
+  };
   /** The generator's dials (rules.ts) for the stage this run compiles.
    * Ignored when a pre-compiled `track` is handed in — that track carries
    * the dials it was built with. */
@@ -145,6 +156,15 @@ export type CreateGameOptions = {
   traffic?: boolean;
 };
 
+/** HOW OFTEN THE SANDSTORMS COME when nobody has said: a shade under
+ * halfway, which at `sand.period`'s band is a front every six minutes or
+ * so — about an even chance that any one stage meets one. A desert run
+ * ought to be able to bring back the weather its country is famous for,
+ * and it ought not to be a certainty: a wall of sand that turns up every
+ * single time is scenery, and the whole of this feature is that it is an
+ * EVENT. */
+export const DEFAULT_SANDSTORMS = 0.45;
+
 /** Wind direction, mean speed, and gust phase are seeded on their own
  * stream so adding weather never shifts the in-run RNG the physics draws
  * from. The same seed and weather always blow the same wind. */
@@ -154,6 +174,8 @@ function buildEnv(
   weather: Weather,
   season: Season,
   temperature: number,
+  biome: BiomeId,
+  sandstorms: number,
 ): RaceEnv {
   const rng = createRng((seed ^ 0x51ab3d75) >>> 0);
   const [minSpeed, maxSpeed] = T.wind.speed[weather];
@@ -165,6 +187,11 @@ function buildEnv(
     windDir: rng.range(0, Math.PI * 2),
     windSpeed: rng.range(minSpeed, maxSpeed),
     gustPhase: rng.range(0, Math.PI * 2),
+    sand: biomeRules(biome).blown,
+    sandstorms,
+    // Drawn AFTER the wind's three, so a build that carries no storms
+    // draws the same wind every seed always had.
+    sandSeed: rng.int(0, 0xffffffff),
   };
 }
 
@@ -180,10 +207,22 @@ export function blowWind(env: RaceEnv, t: number, into: { x: number; z: number }
     T.wind.gust *
       (0.7 * Math.sin(t * 0.9 + env.gustPhase) + 0.3 * Math.sin(t * 2.3 + env.gustPhase * 1.7));
   const dir = env.windDir + T.wind.veer * Math.sin(t * 0.13 + env.gustPhase);
-  const speed = env.windSpeed * gust;
+  // A SANDSTORM IS A WIND (`sandstorm.ts`), so it belongs here rather than
+  // beside here: everything already reading the wind — the push down the
+  // straight, the carry off a jump, the sheet on the glass, the road's own
+  // voice, a rival's traced car — is then telling the player about the
+  // same front, in step, for nothing.
+  sandAt(env, t, SAND);
+  const speed = sandWindSpeed(env.windSpeed, SAND.sand) * gust;
   into.x = Math.sin(dir) * speed;
   into.z = Math.cos(dir) * speed;
 }
+
+/** The storm reading `blowWind` fills to size its own gust. It is scratch:
+ * the STATE's copy is written by the step (`state.sand`), which is what
+ * every reader outside this function is looking at. One shared record
+ * because `blowWind` is called 120 times a second and never re-entered. */
+const SAND: SandState = calmSand();
 
 export function createGame(options: CreateGameOptions): GameState {
   // The box is folded into the spec once, here: everything that reads
@@ -228,10 +267,14 @@ export function createGame(options: CreateGameOptions): GameState {
     options.env?.weather ?? "clear",
     track.climate.season,
     track.climate.temperature,
+    track.knobs.biome,
+    options.env?.sandstorms ?? DEFAULT_SANDSTORMS,
   );
   // The grid already stands in the wind — its flags and fumes drift before
   // the lights go green, so the vector starts at its t = 0 value.
   const wind = { x: 0, z: 0 };
+  const sand = calmSand();
+  sandAt(env, 0, sand);
   blowWind(env, 0, wind);
   if (!options.quiet) {
     status(
@@ -282,6 +325,7 @@ export function createGame(options: CreateGameOptions): GameState {
     surface: track.samples[0]?.surface ?? "gravel",
     env,
     wind,
+    sand,
     catchUp: options.catchUp ?? null,
     stats: freshStats(),
     rng: createRng((options.seed ^ 0x9e3779b9) >>> 0),
@@ -781,6 +825,7 @@ const GROUND: GroundContext = {
   lip: false,
   windX: 0,
   windZ: 0,
+  sand: 0,
   t: 0,
   rng: createRng(0),
   drive: 1,
@@ -833,8 +878,10 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   state.t += T.dt;
 
   // The wind blows through every phase — the grid's flags and fumes drift
-  // before the lights go green.
+  // before the lights go green — and so does the storm that is bringing it,
+  // so a stage can be started with the wall already on the horizon.
   blowWind(state.env, state.t, state.wind);
+  sandAt(state.env, state.t, state.sand);
   // R44 — and the traffic drives through every phase too: the public roads
   // do not wait for the lights. It is resolved against the car HERE, off
   // the pose the last step left, exactly as the rival field is on its own
@@ -1012,6 +1059,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.lip = track.arena !== null && track.arena.lipAt(car.x, car.z);
     ctx.windX = state.wind.x;
     ctx.windZ = state.wind.z;
+    ctx.sand = state.sand.sand;
     ctx.t = state.t;
     ctx.rng = state.rng;
     ctx.drive = gain;
@@ -1054,7 +1102,10 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     const turnSin = sinH * fwdZ - cosH * fwdX;
     ctx = GROUND;
     ctx.surface = preFix.surface;
-    ctx.hold = track.samples[preFix.index].bite;
+    // A road with a storm running over it is a road with sand ON it, and
+    // loose material on a made surface is the classic desert hazard: the
+    // hold goes with it for as long as the front lasts (`sandstorm.ts`).
+    ctx.hold = track.samples[preFix.index].bite * (1 - state.sand.sand * T.sand.grip);
     ctx.groundY = groundY;
     ctx.slope = preFix.slope * turnCos + preFix.slopeLat * turnSin;
     ctx.slopeLat = preFix.slopeLat * turnCos - preFix.slope * turnSin;
@@ -1062,6 +1113,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.lip = lipNear;
     ctx.windX = state.wind.x;
     ctx.windZ = state.wind.z;
+    ctx.sand = state.sand.sand;
     ctx.t = state.t;
     ctx.rng = state.rng;
     ctx.drive = gain;

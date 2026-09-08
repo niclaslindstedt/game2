@@ -37,6 +37,9 @@ const clear = (hour: number, season: RaceEnv["season"]): RaceEnv => ({
   windDir: 0.4,
   windSpeed: 2,
   gustPhase: 0.3,
+  sand: false,
+  sandstorms: 0,
+  sandSeed: 1,
 });
 
 /** A spread of directions over the whole sphere, for anything that has to

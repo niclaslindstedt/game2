@@ -34,6 +34,7 @@ import * as THREE from "three";
 import {
   fallsAsSnow,
   rainsIn,
+  sandVisibility,
   sunHourAt,
   temperatureAt,
   type BiomeId,
@@ -60,6 +61,7 @@ import { DENSITY_PER_M, mistFor } from "./mist.ts";
 import { createShadowMarch, type ShadowMarch } from "./mountain-shadow.ts";
 import { createNightSky } from "./night-sky.ts";
 import { createRain } from "./rain.ts";
+import { createSandAir } from "./sand-air.ts";
 import { createSnowfall } from "./snowfall.ts";
 import { createSkyShell, litLayers } from "./sky-shader.ts";
 import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
@@ -107,6 +109,15 @@ const REMARCH_EVERY = 0.5 * (Math.PI / 180);
  * takes seconds to cross it; the light going with it in a frame would read
  * as a fault in the lamp. */
 const OCCLUSION_RATE = 1.4;
+
+/** WHAT THE AIR IS COLOURED INSIDE A SANDSTORM, and what the sky over it
+ * goes to. Two tones and not one: the middle distance is the sand itself,
+ * lit warm where the sun still gets through it, and the ceiling above is
+ * the same dust deeper and dirtier — a haboob blots the sun out from below,
+ * so the top of the frame is the darker half, which is the opposite of
+ * every other weather in the game and the thing that makes it read. */
+const SAND_AIR = new THREE.Color(0xc39257);
+const SAND_SKY = new THREE.Color(0x9a6b3d);
 
 /** The stage the sky stands over: where its road goes lowest and highest,
  * m over the sea (the mist pools at the floor; the deck hangs over the
@@ -260,6 +271,9 @@ const STILL_AIR: RaceEnv = {
   windDir: 0,
   windSpeed: 0,
   gustPhase: 0,
+  sand: false,
+  sandstorms: 0,
+  sandSeed: 0,
 };
 
 export function createEnvironment(scene: THREE.Scene): Environment {
@@ -380,6 +394,20 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   const snow = createSnowfall();
   scene.add(snow.points);
   let flakes = 0;
+  // ...and the desert's own weather, which is neither: a wall of the
+  // country in the air, and the country streaming past the glass once it
+  // arrives (`engine/game/sandstorm.ts` runs it; this draws it). In the
+  // world rather than on the camera group for the rain's reason — the
+  // grains are metres from the lens and are drawn at the velocity the
+  // camera sees them at.
+  const sandAir = createSandAir();
+  scene.add(sandAir.grains);
+  scene.add(sandAir.wall);
+  /** How much of the air is sand this instant, and what is left of the
+   * visibility because of it (`sandVisibility`). Held here because the fog
+   * range, the sky's colour and the grains all read the same two numbers. */
+  let sandNow = 0;
+  let sandSeen = 1;
   let effects = 1;
 
   let playThunder: (clap: Clap) => void = () => {};
@@ -432,6 +460,24 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   let march: ShadowMarch | null = null;
   const marchedSun = new THREE.Vector3(0, -1, 0);
 
+  /** THE COLOUR OF THE AIR — the sky's own, with the sand in it.
+   *
+   * A sandstorm does not merely take the distance away, it REPLACES it:
+   * what a driver sees a hundred metres off is not a paler version of the
+   * desert, it is the desert IN THE AIR, lit copper where the sun still
+   * reaches it and going brown as the front thickens. That colour goes on
+   * the fog and on the background at once, because between them they are
+   * everything the far half of the frame is made of. */
+  const applyFogTone = (): void => {
+    fog.color.set(preset.fog);
+    // The sky behind it goes with it: a ceiling still showing blue over a
+    // brown middle distance is the one thing that gives a fog trick away.
+    background.set(preset.zenith);
+    if (sandNow <= 0) return;
+    fog.color.lerp(SAND_AIR, Math.min(1, sandNow * 1.15));
+    background.lerp(SAND_SKY, Math.min(1, sandNow * 1.1));
+  };
+
   const applyRange = (): void => {
     if (absolute) {
       fog.near = absolute.near;
@@ -442,7 +488,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     // (sky.ts), and the player's DISTANCE row is a multiplier on top of it —
     // so the two compound, and what the row may take is decided next to the
     // ladder itself rather than here (`fogRangeFor`).
-    const range = fogRangeFor(preset.fogNear, preset.fogFar, rangeScale);
+    // ...and a SANDSTORM shortens both on top of that. It is not a
+    // preference and not a sky: it is the air actually being full of the
+    // ground, so it compounds with whatever the player and the weather
+    // have already asked for rather than replacing either.
+    const range = fogRangeFor(preset.fogNear, preset.fogFar, rangeScale * sandSeen);
     fog.near = range.near;
     fog.far = range.far;
   };
@@ -525,8 +575,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     keyV.copy(sunDir(preset.sunElevation, preset.sunAzimuth));
     dressing = dressSky(env, biome, coverOf(env), deckAltitude());
     rainNow = preset.rain;
-    background.set(preset.zenith);
-    fog.color.set(preset.fog);
+    applyFogTone();
     applyRange();
     hemi.groundColor.set(preset.hemiGround);
     restLight();
@@ -811,6 +860,24 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     rain.setIntensity(effects > 0 ? rainNow * (1 - flakes) : 0);
     rain.setFlash(surge);
     rain.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
+    // THE SANDSTORM. The engine has already worked out where the front is
+    // (`state.sand`); everything here is what that LOOKS like. The
+    // visibility goes first and it goes fast — a haboob's leading edge
+    // takes the world away in seconds — and the fog is what carries most
+    // of it, because a fog range that collapses is the same thing as air
+    // you cannot see through and every material in the scene already reads
+    // it. The grains and the wall are what makes it read as SAND rather
+    // than as a fog bank, and the wall is the half the player gets to see
+    // coming.
+    const seen = sandVisibility(state.sand.sand);
+    if (seen !== sandSeen || state.sand.sand !== sandNow) {
+      sandNow = state.sand.sand;
+      sandSeen = seen;
+      applyRange();
+      applyFogTone();
+    }
+    sandAir.set(effects > 0 ? sandNow : 0, effects > 0 ? state.sand.approach : 0);
+    sandAir.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
     snow.setIntensity(effects > 0 ? rainNow * flakes : 0);
     snow.setFlash(surge);
     snow.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);

@@ -9,6 +9,7 @@
 import type { CarSpec, GearboxMode } from "./defs/cars.ts";
 import type { KerbField, TerrainField, Track, Underfoot, WildObstacle } from "../mapgen/index.ts";
 import type { Rng } from "../lib/prng.ts";
+import type { SandState } from "./sandstorm.ts";
 import type { TrafficFleet } from "./traffic.ts";
 
 export type CarInput = {
@@ -648,6 +649,18 @@ export type RaceEnv = {
   windSpeed: number;
   /** Seeded phase offset for the gust oscillators, radians. */
   gustPhase: number;
+  /** Whether the wind in this country picks the ground up and carries it
+   * (`BiomeRules.blown`) — whether there are sandstorms here at all. */
+  sand: boolean;
+  /** HOW OFTEN THE SANDSTORMS COME, 0..1, read onto a period by
+   * `sandPeriodOf`. 0 is a run no front is scheduled in. Meaningless where
+   * `sand` is false, and the row is not offered there. */
+  sandstorms: number;
+  /** The seed the storm SCHEDULE is drawn from — which fronts come when,
+   * and how hard. Its own number rather than the run's RNG because the
+   * schedule has to be answerable at any time in any order (`sandAt`), and
+   * a stream cannot do that. */
+  sandSeed: number;
 };
 
 export type GameEvent =
@@ -978,6 +991,12 @@ export type GameState = {
   surface: Underfoot;
   /** The stage's conditions (fixed for the run). */
   env: RaceEnv;
+  /** THE SANDSTORM as it stands this step (`game/sandstorm.ts`): how much
+   * sand is in the air, and how close the next wall is. Calm in every
+   * country but the desert, and in a desert nobody has dialled a storm
+   * into. Updated every step beside the wind, because it is what the wind
+   * is doing. */
+  sand: SandState;
   /** Current gusting wind velocity, world space m/s — updated every step;
    * the renderer reads it for fumes/rain and the HUD for its indicator. */
   wind: { x: number; z: number };

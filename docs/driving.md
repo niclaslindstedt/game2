@@ -389,6 +389,21 @@ Every stage blows a seeded wind (`GameState.env` + the per-step `state.wind` vec
 
 Time of day is presentation only; weather is the lever that reaches the physics (through the wind).
 
+### The sandstorm
+
+The desert has a fourth weather, and it is the only one in the game that ARRIVES rather than simply being the case (`engine/game/sandstorm.ts`, `TUNING.sand`). A HABOOB is the outflow of a collapsing thunderstorm: a wall of lifted sand up to 1,500 m tall, gusting to around 30 m/s at its leading edge, visible on the horizon for minutes and then over you in under one.
+
+So it is modelled as a SCHEDULE rather than a level: fronts crossing the country at their own seeded times and strengths, and a run meets however many of them its length puts it in the way of. `sandAt(env, t)` is a pure function of the environment and the clock — two hashes and no state — so the same seed brings the same storms back on every replay, every rival's trace and every sim digest, and an endless run an hour in can be asked about its next front without anybody having kept a list. It exists only in a country whose wind lifts the ground (`BiomeRules.blown`), which is the desert and nowhere else: a gale through a rooted forest is a gale.
+
+One front has a haboob's own shape, and the asymmetry is the whole character of it — an APPROACH the wall is up across (`approach`, most of a minute: the half the player can do something about), a short violent leading edge (`front`), a CORE at full strength, and a long TAIL as the sand settles out of the air. It reaches the car in four places:
+
+- **The wind** is carried from the stage's own mean up to the front's (`sandWindSpeed` inside `blowWind`) — a blend rather than a multiple, because a haboob brings its wind with it and does not care what the afternoon was doing. Everything already reading the wind moves with it for free: the push down a straight, the carry off a jump, the road's voice, the gale in the audio bed.
+- **A crosswind YAW** (`sand.yaw`) — the half of a crosswind that is not a shove. A car is a sail with its centre of pressure ahead of its centre of mass, so a gust from the side points the nose downwind and the driver holds a correction into it for as long as it blows. This is what makes a storm hard to DRIVE rather than merely hard to see, and it is the term the crosswind work on desert highways measures. It is the storm's alone: outside a front it is exactly zero, so no stage the game ever digested is touched by it.
+- **Grip** (`sand.grip`) — sand blown across a made road is loose material on a hard surface, and the hold goes with it.
+- **The air** — the visibility collapses faster than the sand rises (`sandVisibility`), which is what makes the wall an event rather than a gradient. The renderer reads it off `GameState.sand` and spends it on the fog range, the colour of the air and the sky over it, the grains streaming past the glass and the wall itself out on the horizon (`pwa/src/game/sand-air.ts`).
+
+How often the fronts come is the player's (`RaceSettings.sandstorms`, Roam's SANDSTORMS row, `?sandstorms=`): from one every quarter of an hour to one every couple of minutes, and OFF at the bottom, which is the one position that schedules nothing at all. It is NOT one of the generator's dials — the fronts blow across a road the seed already built, so moving it rebuilds the run and never the stage.
+
 ## Hills
 
 Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, surface bumps; grades live on straights and flatten through corners). Gravity acts along the grade (`TUNING.hills.gravityAlong`): climbs cost speed, descents give it back, and a crest taken flat-out goes light, hops, or flies — the body's own momentum against the ground falling away (the jump, above). Ground height under the car interpolates between centerline samples, so grades stay smooth at any speed — and ACROSS the road it is the same corridor profile the road mesh is drawn from (R16 in [track-generator.md](track-generator.md)), carried out past the mat into the shoulder and the ground leaning away from it, so a car putting two wheels wide rides the verge it can see instead of hovering over it.

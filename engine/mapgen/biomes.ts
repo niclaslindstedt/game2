@@ -72,7 +72,15 @@ export type BiomeLand = {
    * where the country has none. `amp` is how high a ridge stands over the
    * trough beside it, m; `scale` the period across the wind, m; `stretch`
    * how much longer a dune runs along the wind than it is wide; `field`
-   * the period of the slow mask that says where the sand sea is at all. */
+   * the period of the slow mask that says where the sand sea is at all.
+   *
+   * The row is the country at the DUNE dial's rest position, and the dial
+   * builds every other one out of it (`STAGE_RULES.dunes`, `landOf`): a
+   * caller reading this row rather than `landOf(knobs).dunes` is reading
+   * the sand the row was written for and not the sand the player asked
+   * for. Never null on a row a dial can move: a country whose sand has
+   * been dialled away comes back with `dunes: null`, and that is what
+   * "there is no sand here" means everywhere downstream. */
   dunes: { amp: number; scale: number; stretch: number; field: number } | null;
   /** A soft FLOOR under the rock, m over the lake table, or null. Where a
    * country has no water its hollows do not fill — they flatten into pans,
@@ -185,8 +193,18 @@ export type BiomeRules = {
   weathers: readonly Weather[];
   /** Whether its weather is WET: whether rain and a storm here put water
    * on the road and on the glass. A desert's storm is wind and sand, and
-   * the engine's wind is all of it that reaches the car. */
+   * that is `blown` below rather than this. */
   rain: boolean;
+  /** Whether THE WIND PICKS THIS COUNTRY UP AND CARRIES IT: whether a
+   * front here is a wall of its own ground in the air
+   * (`game/sandstorm.ts`). It takes loose dry material and nothing holding
+   * it down, which is the desert and only the desert — a taiga gale blows
+   * through a forest that is rooted, and an alpine one over rock and snow.
+   *
+   * It is the flag the SANDSTORM row is offered on, so a fourth country
+   * made of sand would be offered it without anybody having to come back
+   * here. */
+  blown: boolean;
   /** Where on earth it is, degrees north — what the sun's height and the
    * warmth of its light are derived from (pwa/src/game/sky.ts). */
   latitude: number;
@@ -333,6 +351,9 @@ export const TAIGA: BiomeRules = {
   },
   weathers: ["clear", "rain", "storm"],
   rain: true,
+  // A gale through a forest is a gale through a forest: the ground under
+  // it is rooted, wet for most of the year, and goes nowhere.
+  blown: false,
   latitude: 62,
   settled: true,
   farms: true,
@@ -465,13 +486,21 @@ export const DESERT: BiomeRules = {
   land: {
     relief: 0.7,
     mountains: 0.45,
-    // A ridge every 150 m across the wind, standing seven metres over the
-    // trough, four times as long as it is wide — a road laid along the
-    // country rides them as a run of crests, and across them as a
-    // washboard of blind brows, which is what a desert stage has instead of
-    // hills. The mask puts them in fields a kilometre or so across with
-    // flat pans between.
-    dunes: { amp: 7, scale: 150, stretch: 4, field: 900 },
+    // THE SAND IS THE COUNTRY. A dune every 300 m across the wind,
+    // standing twenty-two metres over the trough and running four times as
+    // long as it is wide — the same size of shape the taiga's hills are
+    // (`geology.bedrock.hills`, 21 m over 130 m), because the sand has to
+    // be to this country what the hills are to that one: the layer a
+    // DRIVER reads, the thing crested and dropped into. A road laid along
+    // the wind rides a crest for hundreds of metres; one laid across it
+    // climbs a face and comes over the top blind. The mask puts them in
+    // ergs a kilometre and a half across with flat pans between, so a
+    // stage crosses sand sea and open pan rather than being laid in one or
+    // the other.
+    //
+    // The DUNE dial moves all three together (`STAGE_RULES.dunes`): this
+    // row is the country at its rest position and nothing more.
+    dunes: { amp: 22, scale: 300, stretch: 4, field: 1500 },
     // Fourteen metres over the lake table. The ROAD rides its own rolling
     // profile on top of the country (`elevation.amplitude`, up to ten
     // metres here at the top of the dial), so the pans have to stand high
@@ -490,6 +519,9 @@ export const DESERT: BiomeRules = {
   },
   weathers: ["clear", "storm"],
   rain: false,
+  // The whole country is loose and dry, so the storm here is made of the
+  // country: a haboob, and the one weather in this game that arrives.
+  blown: true,
   latitude: 33,
   // Nobody lives out here and nothing is farmed: no homestead, no town, and
   // no barn. The railway that does cross a desert is a different railway
@@ -667,6 +699,8 @@ export const ALPINE: BiomeRules = {
   },
   weathers: ["clear", "rain", "storm"],
   rain: true,
+  // Rock, turf and snow: there is nothing up here for the wind to lift.
+  blown: false,
   latitude: 46,
   settled: true,
   farms: true,

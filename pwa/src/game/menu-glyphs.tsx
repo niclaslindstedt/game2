@@ -47,6 +47,8 @@ export const GLYPH_NAMES = [
   "leaf",
   "mountain",
   "altitude",
+  "dune",
+  "sandstorm",
   "crag",
   "water",
   "tree",
@@ -292,6 +294,27 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
     <>
       <path d="M2.6 20.4h18.8M6.2 20.4l6.4-10.6 3.2 5.3" />
       <path d="M19.4 16.6V4.2m-2.6 2.6 2.6-2.6 2.6 2.6" />
+    </>
+  ),
+  // Two dune crests, the near one with its slip face: HOW HIGH the sand
+  // stands (R40's `dunes`). Curves rather than the mountain's straight
+  // flanks, because that is the whole difference between rock and sand —
+  // a dune is a wave, and the one thing it can never be is angular.
+  dune: (
+    <>
+      <path d="M2.4 17.4c3-4.6 5.6-6.8 8-6.8 2.6 0 4.1 2.4 4.1 4.6 0 1.1-.5 1.8-1.3 2.2" />
+      <path d="M9.6 20.4c2.6-5.4 5.2-8.2 7.8-8.2 2.2 0 3.6 1.6 4.2 3.6" />
+      <path d="M2.4 20.4h19.2" />
+    </>
+  ),
+  // A wall of it coming: the crest of a dust front with the sand streaming
+  // off the top of it — how often the SANDSTORMS come. The mark is the
+  // WALL and its streaks rather than a dune, because what this row spaces
+  // out is the arrival, not the sand.
+  sandstorm: (
+    <>
+      <path d="M4.2 20.4c0-6.4 2.8-10.6 6.6-10.6 3.2 0 5.2 2.6 5.2 5.6 0 1.4-.5 2.6-1.3 3.4" />
+      <path d="M2.6 6.4h7M12.4 4.2h8M15.6 8.6h5.8M18.6 12.4h2.8" />
     </>
   ),
   // One peak with its strata: how STEEP the same country stands

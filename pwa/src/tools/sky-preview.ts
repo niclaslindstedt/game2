@@ -217,6 +217,9 @@ async function main(): Promise<void> {
         windDir: 0.7,
         windSpeed: row.windSpeed,
         gustPhase: row.gust ?? 0.4,
+        sand: false,
+        sandstorms: 0,
+        sandSeed: 0,
       };
       state.env = env;
       (state.track.climate as { season: Season }).season = season;
