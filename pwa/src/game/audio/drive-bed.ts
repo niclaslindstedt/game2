@@ -17,7 +17,7 @@
 
 import {
   SAMPLE_STEP,
-  biomeRules,
+  landOf,
   lineAt,
   startsIn,
   sunHourAt,
@@ -417,7 +417,7 @@ export function createDriveBed(synth: Synth, random: () => number = Math.random)
           gale,
           // Where the car stands against the country's own zones: the pass
           // wind, and who lives at this height.
-          exposure: exposureOf(car.y, biomeRules(biome).land.zones),
+          exposure: exposureOf(car.y, landOf(state.track.knobs).zones),
           water: waterNear(state),
           air,
           crowd: Math.max(atStart, atFinish),

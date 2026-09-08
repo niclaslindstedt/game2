@@ -10,16 +10,25 @@ import { describe, expect, it } from "vitest";
 
 import {
   BIOMES,
+  CLIMATE,
   DEFAULT_KNOBS,
   GROUND_CELL,
   LAKE_Y,
   ROAD_CROSS,
   STAGE_RULES,
   TUNING,
+  altitudeMul,
+  altitudeOf,
+  NEUTRAL_INPUT,
   compileStage,
+  createGame,
+  createGeology,
   createTerrain,
+  step,
   generateStage,
   isLoose,
+  landOf,
+  lapseOf,
   resolveKnobs,
   straightPart,
   tunnelTrench,
@@ -100,6 +109,244 @@ describe("R47 — the alpine row", () => {
     const one = compileStage(2, "short", { ...KNOBS, peaks: 0 }, "sprint");
     const many = compileStage(2, "short", { ...KNOBS, peaks: 1 }, "sprint");
     expect(digest(one)).not.toBe(digest(many));
+  });
+});
+
+// R47 — THE ALTITUDE DIAL. How high the mountain the race is on stands, in
+// metres, from a worn shoulder to six thousand — and the four things that
+// have to move with it for the result to be a country rather than a wall:
+// the ground the crest stands on, how hard the flank is bent about it, how
+// much of what is between the ridges is valley floor, and the elevation
+// bands the paint and the planting read.
+//
+// The claims here are the ones the dial is FOR, and each of them is a thing
+// the exponents in `STAGE_RULES.massif.altitude` can silently undo.
+describe("R47 — how high the race is", () => {
+  const at = (altitude: number) => resolveKnobs({ ...KNOBS, altitude });
+
+  it("prints metres from a shoulder to six thousand, and rests on the row it was tuned at", () => {
+    // The two ends the slider shows. These are what the row PRINTS, so they
+    // are held here rather than left to the factors that make them.
+    expect(Math.round(altitudeOf(at(0)))).toBe(176);
+    expect(Math.round(altitudeOf(at(1)))).toBe(6000);
+    // ...and the metres are the GROUND's, not the arithmetic's: what the
+    // row prints is what the country actually tops out at (`summit`).
+    const geology = createGeology(3, at(1));
+    let summit = -Infinity;
+    for (let x = -4000; x <= 4000; x += 200) {
+      for (let z = -4000; z <= 4000; z += 200) {
+        summit = Math.max(summit, geology.surfaceAt(x, z));
+      }
+    }
+    expect(summit).toBeGreaterThan(0.9 * altitudeOf(at(1)));
+    expect(summit).toBeLessThan(1.15 * altitudeOf(at(1)));
+    expect(altitudeOf(at(0.5))).toBeGreaterThan(altitudeOf(at(0.35)));
+    // ...and the DEFAULT is exactly the country the alpine's row describes,
+    // multiplier 1 and nothing touched, which is what makes every seed the
+    // game ever built the seed it still builds.
+    expect(altitudeMul(DEFAULT_KNOBS.altitude)).toBe(1);
+    expect(landOf(at(DEFAULT_KNOBS.altitude))).toEqual(BIOMES.alpine.land);
+    expect(altitudeOf(at(DEFAULT_KNOBS.altitude))).toBeCloseTo(
+      (BIOMES.alpine.land.massif?.height ?? 0) * STAGE_RULES.massif.altitude.summit,
+      6,
+    );
+  });
+
+  it("is a dial only a mountain country reads", () => {
+    for (const biome of ["taiga", "desert"] as const) {
+      expect(altitudeOf(resolveKnobs({ biome, altitude: 1 }))).toBe(0);
+      expect(landOf(resolveKnobs({ biome, altitude: 1 }))).toEqual(BIOMES[biome].land);
+      const high = compileStage(2, "short", { biome, altitude: 1 }, "sprint");
+      expect(digest(high)).toBe(digest(compileStage(2, "short", { biome }, "sprint")));
+    }
+  });
+
+  /** How steep this country's ground actually STANDS, m per m: the 99th
+   * percentile of the local grade over the stage's own box, read across a
+   * ground-lattice cell so it is the slope the world is drawn at. A
+   * percentile rather than a maximum, because the maximum on a mountain is
+   * one cliff and says nothing about the country around it. */
+  const steepness = (knobs: ReturnType<typeof resolveKnobs>): number => {
+    const geology = createGeology(1, knobs);
+    const grades: number[] = [];
+    for (let x = -1500; x <= 1500; x += 50) {
+      for (let z = -1500; z <= 1500; z += 50) {
+        const dx =
+          (geology.surfaceAt(x + GROUND_CELL, z) - geology.surfaceAt(x - GROUND_CELL, z)) /
+          (2 * GROUND_CELL);
+        const dz =
+          (geology.surfaceAt(x, z + GROUND_CELL) - geology.surfaceAt(x, z - GROUND_CELL)) /
+          (2 * GROUND_CELL);
+        grades.push(Math.hypot(dx, dz));
+      }
+    }
+    grades.sort((a, b) => a - b);
+    return grades[Math.round(grades.length * 0.99)];
+  };
+
+  it("stands the country up as it raises it, and never lifts the valley floor off the lake table", () => {
+    let steeper = 0;
+    for (const dial of [0.2, 0.35, 0.5, 0.7, 0.85, 1]) {
+      const knobs = at(dial);
+      // Higher is STEEPER, at every step of the travel — the whole promise
+      // of the dial, and the one an exponent in `massif.altitude` can undo
+      // without any other check noticing.
+      const grade = steepness(knobs);
+      expect(grade).toBeGreaterThan(steeper);
+      steeper = grade;
+      // ...and the floor stays where it always was: the mountain COMES
+      // DOWN to the country the lakes and the villages are in, whatever it
+      // does above.
+      expect(landOf(knobs).floor).toBe(BIOMES.alpine.land.floor);
+    }
+    // A six-thousand-metre country stands ground the tuned one never does.
+    expect(steepness(at(1))).toBeGreaterThan(5 * steepness(at(DEFAULT_KNOBS.altitude)));
+  });
+
+  it("climbs its bands more slowly than its crest, onto the real range's own lines", () => {
+    const tuned = BIOMES.alpine.land.zones;
+    const top = landOf(at(1)).zones;
+    // Slower than the height, so a taller mountain has more of itself above
+    // the treeline rather than being a taller picture of a smaller one.
+    expect(top.treeline / tuned.treeline).toBeLessThan(altitudeMul(1));
+    expect(top.treeline).toBeGreaterThan(tuned.treeline);
+    // ...and where that lands at the top of the dial is not arbitrary: it
+    // is where a real range carries them.
+    expect(top.treeline).toBeGreaterThan(1400);
+    expect(top.treeline).toBeLessThan(1900);
+    expect(top.snow as number).toBeGreaterThan(2600);
+    expect(top.snow as number).toBeLessThan(3200);
+    expect(top.rock.to).toBeLessThan(top.snow as number);
+    // The air's lapse rate comes down with them, so a cold dial means the
+    // same thing at every position of this one (climate.ts).
+    expect(lapseOf(at(1), CLIMATE.lapse)).toBeLessThan(CLIMATE.lapse);
+    expect(lapseOf(at(DEFAULT_KNOBS.altitude), CLIMATE.lapse)).toBe(CLIMATE.lapse);
+  });
+
+  it("starts the stage on top of the mountain, with the mountain under it", () => {
+    // R35 sites the start on the highest shoulder it can hold a grid on,
+    // and at the top of this dial that shoulder is the LEDGE across the
+    // summit — not the valley floor, which is the flattest ground in the
+    // country and which an earlier shape put every stage on. What the
+    // claim is really about is the DROP: how much mountain there is under
+    // the start line to come down.
+    const knobs = at(1);
+    for (const seed of [3, 4, 6]) {
+      const geology = createGeology(seed, knobs);
+      const origin = compileStage(seed, "medium", knobs, "sprint").samples[0];
+      let low = Infinity;
+      let high = -Infinity;
+      for (let x = -1500; x <= 1500; x += 100) {
+        for (let z = -1500; z <= 1500; z += 100) {
+          const y = geology.surfaceAt(origin.x + x, origin.z + z);
+          low = Math.min(low, y);
+          high = Math.max(high, y);
+        }
+      }
+      // The start stands in the top tenth of the country around it...
+      expect(origin.elevation).toBeGreaterThan(low + 0.9 * (high - low));
+      // ...and the valley under it runs all the way back to the lake table.
+      expect(low).toBeLessThan(LAKE_Y + 40);
+      expect(origin.elevation - low).toBeGreaterThan(3000);
+    }
+  });
+
+  it("keeps the road ON the land at every position of the dial", () => {
+    // THE CHECK THIS DIAL EXISTS UNDER, and the one no other instrument
+    // can stand in for. A road descends at `follow.grade` and no faster,
+    // so a mountain the search cannot lay a line across is one where the
+    // compiler builds the road in the AIR over it — a hundred metres up on
+    // an embankment with nothing under it. Every surface check passes: the
+    // ribbon on top of it is perfectly smooth. It is the single measurement
+    // that decides whether a position on this dial is a stage or a ruin.
+    //
+    // MEASURED, seeds 1-4 at medium on these dials: the share of a stage's
+    // samples standing more than 40 m off the bare land runs 0.5% at the
+    // bottom of the travel, 3.3% at its default, 16.2% at its weakest point
+    // just above the middle (worst sample 158 m), and 5.6% at the top
+    // (184 m). The weak band is real and it is the middle: a mountain big
+    // enough that the road cannot follow it down and not yet big enough to
+    // have bent itself into an apron. The ruin these budgets hold the line
+    // against is a different order of thing — 31% and 893 m, which is what
+    // this same country comes out at with the flank left un-bent
+    // (`massif.altitude.sharpen`) or the start let up onto it (`siting`).
+    // Two seeds here rather than four, for the file's own minute; they run
+    // 0.0%, 19.0% and 1.8% at the three positions below.
+    const share = (altitude: number): number => {
+      let over = 0;
+      let n = 0;
+      for (const seed of [1, 2]) {
+        const track = compileStage(seed, "medium", { ...KNOBS, altitude }, "sprint");
+        const terrain = createTerrain(track);
+        for (const sample of track.samples) {
+          if (sample.tunnel) continue;
+          n++;
+          if (Math.abs(sample.elevation - terrain.farHeightAt(sample.x, sample.z)) > 40) over++;
+        }
+      }
+      return over / n;
+    };
+    // The two ends of the travel are held to the tuned country's own order
+    // of magnitude...
+    expect(share(DEFAULT_KNOBS.altitude)).toBeLessThan(0.08);
+    expect(share(1)).toBeLessThan(0.1);
+    // ...and everything between them to the ceiling under which a stage is
+    // still a road on a mountain rather than a causeway over one.
+    expect(share(0.7)).toBeLessThan(0.25);
+  });
+
+  it("throws a car off the side of it, and the air barely holds on", () => {
+    // WHAT THE LEVEL IS FOR. A mountain is only worth six thousand metres
+    // if leaving the road at speed is a FLIGHT — so this drives one off
+    // the flank at rally pace and asks the physics, not the geometry, how
+    // far and how far down.
+    //
+    // MEASURED: from the steepest ground within two kilometres of the
+    // road, at 200 km/h, the car falls 845-2,346 m before it stops, with
+    // single flights of 3.2 to 13.9 seconds. Off the ledge's own rim it is
+    // gentler and still a jump — around 250 m out and 105 m down over five
+    // seconds, and the car is still doing 164 km/h at the end of it, which
+    // is the "not much friction in the air" this is really checking.
+    const knobs = at(1);
+    let deepest = 0;
+    let longest = 0;
+    for (const seed of [2, 3, 5]) {
+      const track = compileStage(seed, "medium", knobs, "sprint");
+      const state = createGame({ seed, carId: "classic", skipCountdown: true, track });
+      const sample = track.samples[60];
+      const rx = Math.cos(sample.heading);
+      const rz = -Math.sin(sample.heading);
+      const ground = state.terrain.groundAt;
+      // The steepest ground within reach of the road, and which way it falls.
+      let pitch = { x: sample.x, z: sample.z, y: sample.elevation, side: 1, grade: 0 };
+      for (const side of [1, -1]) {
+        for (let out = 100; out <= 2000; out += 20) {
+          const x = sample.x + rx * out * side;
+          const z = sample.z + rz * out * side;
+          const grade = (ground(x, z) - ground(x + rx * 40 * side, z + rz * 40 * side)) / 40;
+          if (grade > pitch.grade) pitch = { x, z, y: ground(x, z), side, grade };
+        }
+      }
+      state.car.x = pitch.x;
+      state.car.z = pitch.z;
+      state.car.y = pitch.y;
+      state.car.heading = Math.atan2(-rz * pitch.side, rx * pitch.side);
+      state.car.u = 200 / 3.6;
+      let floor = pitch.y;
+      let flight = 0;
+      for (let n = 0; n < Math.round(60 / TUNING.dt); n++) {
+        step(state, { ...NEUTRAL_INPUT });
+        // A respawn puts the car back up on the road; the fall is over.
+        if (state.car.y > floor + 200) break;
+        floor = Math.min(floor, state.car.y);
+        flight = Math.max(flight, state.car.airTime);
+      }
+      deepest = Math.max(deepest, pitch.y - floor);
+      longest = Math.max(longest, flight);
+    }
+    // Kilometres of fall, and seconds of it with nothing under the wheels.
+    expect(deepest).toBeGreaterThan(800);
+    expect(longest).toBeGreaterThan(3);
   });
 });
 

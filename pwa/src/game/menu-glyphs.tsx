@@ -46,6 +46,7 @@ export const GLYPH_NAMES = [
   "cloud",
   "leaf",
   "mountain",
+  "altitude",
   "crag",
   "water",
   "tree",
@@ -282,6 +283,17 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
   ),
   // A range of peaks: how HIGH the country stands (`elevation`).
   mountain: <path d="M2.4 19.6h19.2L15.2 8.4l-3.5 5.9-2.5-3.7Z" />,
+  // A peak with the height it stands to marked off beside it: HOW HIGH the
+  // race is (R47's `altitude`). The mark is the ARROW and the datum under
+  // it rather than the mountain — a range already says "mountain" on the
+  // row above, and what separates this dial from that one is that this one
+  // is a measurement.
+  altitude: (
+    <>
+      <path d="M2.6 20.4h18.8M6.2 20.4l6.4-10.6 3.2 5.3" />
+      <path d="M19.4 16.6V4.2m-2.6 2.6 2.6-2.6 2.6 2.6" />
+    </>
+  ),
   // One peak with its strata: how STEEP the same country stands
   // (`steepness`). A range says how much ground goes up; a face says how
   // hard it goes up, which is the dial this is.

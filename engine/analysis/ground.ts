@@ -229,19 +229,19 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
         isShaped(k + 2) ||
         isShaped(k + 2 * w);
       const sharp = terrain.geology.sharpAt(x, z) >= B.explicit;
-      // R31 — steeper than the car can climb, and neither a face a road
-      // was cut through (R34, or a cone letting go of a mountain — the
-      // field's own word, `cutAt`) nor the rock's deliberate edge, nor the
-      // country's own rock: bare land that stands steeper than a road may
-      // build, with the soil scoured off it, is a mountain flank, and a
+      // WHETHER THE ROCK HAS BEEN DECLARED HERE: a face a road was cut
+      // through (R34, or a cone letting go of a mountain — the field's own
+      // word, `cutAt`), or the country's own scoured flank — bare land
+      // standing steeper than a road may build, with the soil off it. Both
+      // checks below want the same answer and it costs land queries, so it
+      // is asked once and only once a triangle is steep enough for either
+      // of them to care.
+      const declared =
+        steepest > limit && (terrain.cutAt(x, z) >= ANALYSIS.ground.cut.face || rockFlank(x, z));
+      // R31 — steeper than the car can climb, and none of the above: a
       // flank is rock the driver can see whatever a road did on it.
       // Counted per triangle, because a car meets one triangle at a time.
-      if (
-        steepest > limit &&
-        !sharp &&
-        terrain.cutAt(x, z) < ANALYSIS.ground.cut.face &&
-        !rockFlank(x, z)
-      ) {
+      if (steepest > limit && !sharp && !declared) {
         out.steep += slope(lo) > limit && slope(up) > limit ? 2 : 1;
         if (steepest > out.steepest) {
           out.steepest = steepest;
@@ -250,7 +250,15 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
           steepAt.built = built;
         }
       }
-      if (steepest > B.wall.slope && !sharp && !underLid(x, z)) {
+      // R47 — ...and a WALL is the same question at a harsher threshold, so
+      // it takes the same three exemptions. Held to the constant alone, a
+      // mountain drawn at the top of the ALTITUDE dial reports its own
+      // flank — and the face where the cone lets go onto it, which `fade`
+      // builds deliberately and declares as rock — as a defect on every
+      // seed. What is left for the check to catch is what it was written
+      // for: a wall on ground nothing declared rock, which is the
+      // query-range seam.
+      if (steepest > B.wall.slope && !sharp && !declared && !underLid(x, z)) {
         out.walls++;
         if (steepest > worstWall) {
           worstWall = steepest;

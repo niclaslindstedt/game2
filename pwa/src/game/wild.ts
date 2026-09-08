@@ -273,13 +273,14 @@ export function buildWild(
     // only ground its skirt has to keep off is the water.
     const understory = {
       biome,
+      knobs: track.knobs,
       rng: () => rng.next(),
       groundAt: heightAt,
       blocked: (x: number, z: number): boolean => inStream(field.streams, x, z, 1),
     };
     for (const tree of treesHere) {
       const rip = riparian(tree.x, tree.z);
-      placements.push(treePlacement(tree, biome, rip));
+      placements.push(treePlacement(tree, biome, track.knobs, rip));
       for (const plant of understoryAround(tree, rip, understory)) placements.push(plant);
     }
 
@@ -296,7 +297,7 @@ export function buildWild(
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
       const soft = softMix(
-        mixAt(biome, { y, riparian: riparian(x, z), grove: field.groveAt(x, z) }),
+        mixAt(biome, track.knobs, { y, riparian: riparian(x, z), grove: field.groveAt(x, z) }),
       );
       if (!soft) continue;
       placements.push({ id: pickFlora(soft, roll), x, y, z, scale, spin });
@@ -320,7 +321,7 @@ export function buildWild(
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
       // R47 — nothing grows under the snow, the winter's included.
-      if (plantZone(biome.id, y, false) === "snow" || frozenAt(biome.id, track.climate, y)) {
+      if (plantZone(track.knobs, y, false) === "snow" || frozenAt(track.knobs, track.climate, y)) {
         continue;
       }
       placements.push({

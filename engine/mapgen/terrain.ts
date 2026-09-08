@@ -42,7 +42,7 @@ import { arenaTerrain } from "./arena-field.ts";
 import { GROUND_CELL, TILE_SINK } from "./lattice.ts";
 import type { WaterField } from "./water.ts";
 import type { GeologyField } from "./geology.ts";
-import { STAGE_RULES as R, knobScale } from "./rules.ts";
+import { STAGE_RULES as R, knobScale, landOf } from "./rules.ts";
 import {
   createSpurIndex,
   SPUR_INDEX_REACH,
@@ -2831,7 +2831,7 @@ export function createTerrain(track: Track): TerrainField {
   // (`blanketDepth`), read off the bare ground so the roads and the nature
   // are drawn onto a temperature that already exists.
   const climate = track.climate;
-  const zones = biome.land.zones;
+  const zones = landOf(track.knobs).zones;
   const snowy = track.arena === null && snowyCountry(climate, zones);
   const snowline = snowlineOf(climate, zones);
   /** R48 — whether any body on this country CAN be frozen: its ground has

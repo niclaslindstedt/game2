@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type BiomeId,
   BIOMES,
   CLIMATE,
   NEUTRAL_INPUT,
@@ -21,6 +22,7 @@ import {
   isLoose,
   rainsIn,
   resolveClimate,
+  resolveKnobs,
   simulateStage,
   snowBite,
   snowlineOf,
@@ -31,6 +33,11 @@ import {
 } from "@engine";
 
 import { stageTerrain, stageTrack } from "./support/stages.ts";
+
+/** A country's dials at their defaults — what `resolveClimate` and the zone
+ * readers now take, since R47's ALTITUDE moves both the bands and the rate
+ * the air cools at. */
+const dials = (biome: BiomeId) => resolveKnobs({ biome });
 
 /** The grip the old alpine ice had — the floor the brief puts under every
  * snow: a winter road slides MORE than gravel and LESS than that. */
@@ -81,16 +88,24 @@ describe("the climate", () => {
   });
 
   it("resolves what was chosen, and fills the rest in from the country's year", () => {
-    expect(resolveClimate(undefined, "taiga")).toEqual({ season: "summer", temperature: 18 });
-    expect(resolveClimate({ season: "winter" }, "alpine").temperature).toBe(
+    // R47 — it takes the whole set of DIALS rather than a country's name,
+    // because the lapse rate it resolves is the ALTITUDE dial's as much as
+    // the biome's: a country stood up a mountain cools over its own bands.
+    expect(resolveClimate(undefined, dials("taiga"))).toEqual({
+      season: "summer",
+      temperature: 18,
+      lapse: CLIMATE.lapse,
+    });
+    expect(resolveClimate({ season: "winter" }, dials("alpine")).temperature).toBe(
       defaultTemperature("alpine", "winter"),
     );
-    expect(resolveClimate({ season: "winter", temperature: null }, "taiga").temperature).toBe(
-      defaultTemperature("taiga", "winter"),
-    );
-    expect(resolveClimate({ season: "summer", temperature: -12 }, "desert")).toEqual({
+    expect(
+      resolveClimate({ season: "winter", temperature: null }, dials("taiga")).temperature,
+    ).toBe(defaultTemperature("taiga", "winter"));
+    expect(resolveClimate({ season: "summer", temperature: -12 }, dials("desert"))).toEqual({
       season: "summer",
       temperature: -12,
+      lapse: CLIMATE.lapse,
     });
   });
 
@@ -107,19 +122,21 @@ describe("the climate", () => {
     const taiga = BIOMES.taiga.land.zones;
     const alpine = BIOMES.alpine.land.zones;
     // A summer taiga's line stands over the whole country: no snow anywhere.
-    expect(snowlineOf(resolveClimate(undefined, "taiga"), taiga)).toBeGreaterThan(taiga.rock.to);
+    expect(snowlineOf(resolveClimate(undefined, dials("taiga")), taiga)).toBeGreaterThan(
+      taiga.rock.to,
+    );
     // A winter one is white from the valley floor.
-    expect(snowlineOf(resolveClimate(WINTER, "taiga"), taiga)).toBeLessThan(0);
+    expect(snowlineOf(resolveClimate(WINTER, dials("taiga")), taiga)).toBeLessThan(0);
     // The alpine's permanent snow stands where it always stood in every
     // season that is not winter — the campaign's stages are unchanged...
     for (const season of ["spring", "summer", "autumn"] as const) {
-      expect(snowlineOf(resolveClimate({ season }, "alpine"), alpine)).toBe(alpine.snow);
+      expect(snowlineOf(resolveClimate({ season }, dials("alpine")), alpine)).toBe(alpine.snow);
     }
     // ...and a cold snap brings it down the flank.
     expect(snowlineOf({ season: "autumn", temperature: 2 }, alpine)).toBeLessThan(
       alpine.snow as number,
     );
-    expect(snowlineOf(resolveClimate(WINTER, "alpine"), alpine)).toBeLessThan(0);
+    expect(snowlineOf(resolveClimate(WINTER, dials("alpine")), alpine)).toBeLessThan(0);
   });
 
   it("keeps every snow between gravel and the old ice, glazed near freezing and sharp in the cold", () => {
@@ -178,7 +195,7 @@ describe("a stage in winter", () => {
   it("is the same road, made of snow wherever it was loose", () => {
     const a = summer();
     const b = winter();
-    expect(b.climate).toEqual(MILD);
+    expect(b.climate).toEqual({ ...MILD, lapse: CLIMATE.lapse });
     // The claim below is a claim about a country with no ice on it: a cold
     // that freezes the lakes moves the ROUTE (R48), which is the whole
     // point of `tests/ice_test.ts` and the reason this fixture is mild.

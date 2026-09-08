@@ -16,6 +16,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_KNOBS,
   TUNING,
   botInput,
   compileStage,
@@ -40,6 +41,7 @@ const STAGE: GhostStage = {
   knobs: {
     biome: "taiga",
     peaks: 0.5,
+    altitude: DEFAULT_KNOBS.altitude,
     elevation: 0.5,
     steepness: 0.5,
     water: 0.5,

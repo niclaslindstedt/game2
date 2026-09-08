@@ -162,13 +162,13 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   };
 
   const bareRock = (state: GameState): number =>
-    rockAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs.biome);
+    rockAt(state.terrain.groundAt, state.car.x, state.car.z, state.track.knobs);
   const underSnow = (state: GameState): number =>
     snowAt(
       state.terrain.groundAt,
       state.car.x,
       state.car.z,
-      state.track.knobs.biome,
+      state.track.knobs,
       state.track.climate,
     );
 

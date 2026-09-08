@@ -221,6 +221,25 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   const skip = jumpMask(track);
   const ramps = rampMask(track);
   const mountain = biomeRules(track.knobs.biome).land.massif !== null;
+  /** R47 — WHETHER THE STEP BETWEEN TWO CONTACTS IS THE MOUNTAIN'S rather
+   * than the road's: the BARE country takes the same step, and takes it
+   * steeper than any road may shape ground (`verge.climbable`).
+   *
+   * R31's promise is that the verge is rideable, and the verge is ground a
+   * road made — but a road cut as a ledge into a flank has, a few metres
+   * past its corridor, no ground of its own at all: what is out there is
+   * the mountain, falling away at the grade the ALTITUDE dial built it at.
+   * That is not a defect to fix, it is the drop the level is about, and it
+   * is the one thing R31 has always allowed to stop the car: rock.
+   *
+   * The comparison is what keeps the check honest. A step the corridor
+   * MADE stands over a country that did not take it, and is still
+   * reported — on a flank exactly as anywhere else. */
+  const onTheFlank = (a: Contact, b: Contact, run: number): boolean => {
+    if (!mountain) return false;
+    const bare = Math.abs(terrain.farHeightAt(a.x, a.z) - terrain.farHeightAt(b.x, b.z)) / run;
+    return bare >= STAGE_RULES.verge.climbable && bare >= Math.abs(a.y - b.y) / run;
+  };
 
   // The rank's whole field of contacts: lane-major, so a lane's profile is
   // contiguous and the along-lane walk reads it in order.
@@ -275,7 +294,7 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       const broken = mat ? ANALYSIS.rollers.gradeFail.mat : ANALYSIS.rollers.gradeFail.verge;
       const bumpLimit = mat ? ANALYSIS.rollers.bump.mat : ANALYSIS.rollers.bump.verge;
       const grade = Math.abs(lane[i].y - lane[i - 1].y) / run;
-      if (grade > limit) {
+      if (grade > limit && !(!mat && onTheFlank(lane[i], lane[i - 1], run))) {
         steps++;
         if (grade > broken) breaks++;
         if (grade > worstGrade) {

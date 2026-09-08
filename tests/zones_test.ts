@@ -12,7 +12,7 @@
 // arithmetic — which is what lets this suite read them.
 import { describe, expect, it } from "vitest";
 
-import { BIOMES, LAKE_Y, biomeRules } from "@engine";
+import { BIOMES, LAKE_Y, biomeRules, resolveKnobs, type StageKnobs } from "@engine";
 
 import { BIOMES as LOOKS } from "../pwa/src/game/biome.ts";
 import {
@@ -22,6 +22,16 @@ import {
   rockAt,
   snowAt,
 } from "../pwa/src/game/ground-rules.ts";
+
+/** The dials the readers now take: R47's ALTITUDE moves the bands, so what
+ * they are asked is a whole set of knobs rather than a country's name. Every
+ * case here is at the dial's default, which is the country each biome row
+ * describes — the alpine's own zones, untouched. */
+const dials = (biome?: string) =>
+  // `resolveKnobs` takes an unknown country at runtime — a stale URL, a save
+  // from a build that had one this does not — and hands back the taiga; the
+  // cast is what lets a test name one ("nowhere") and check that it does.
+  resolveKnobs(biome === undefined ? {} : ({ biome } as Partial<StageKnobs>));
 
 /** A flat ground standing at `y` — no slope, so only the height decides. */
 const flat = (y: number) => (): number => y;
@@ -52,8 +62,8 @@ describe("the zones are the country's, and the taiga's are the old constants", (
     expect(rockAt(flat(52), 0, 0)).toBe(1);
     expect(rockAt(flat(80), 0, 0)).toBe(1);
     for (const y of [10, 26, 39, 52, 80]) {
-      expect(rockAt(flat(y), 0, 0, "taiga")).toBe(rockAt(flat(y), 0, 0));
-      expect(snowAt(flat(y), 0, 0, "taiga")).toBe(0);
+      expect(rockAt(flat(y), 0, 0, dials("taiga"))).toBe(rockAt(flat(y), 0, 0));
+      expect(snowAt(flat(y), 0, 0, dials("taiga"))).toBe(0);
     }
     // ...and a flank steeper than 45° is rock whatever its height.
     expect(rockAt(face(5, 1.2), 0, 0)).toBe(1);
@@ -61,9 +71,9 @@ describe("the zones are the country's, and the taiga's are the old constants", (
 
   it("holds the alpine's meadow green where the taiga's would already be stone", () => {
     const zones = BIOMES.alpine.land.zones;
-    expect(rockAt(flat(80), 0, 0, "alpine")).toBe(0);
-    expect(rockAt(flat(zones.rock.from), 0, 0, "alpine")).toBe(0);
-    expect(rockAt(flat(zones.rock.to), 0, 0, "alpine")).toBe(1);
+    expect(rockAt(flat(80), 0, 0, dials("alpine"))).toBe(0);
+    expect(rockAt(flat(zones.rock.from), 0, 0, dials("alpine"))).toBe(0);
+    expect(rockAt(flat(zones.rock.to), 0, 0, dials("alpine"))).toBe(1);
   });
 });
 
@@ -72,33 +82,33 @@ describe("the snow", () => {
   const snowline = zones.snow as number;
 
   it("lies on gentle ground about the alpine snowline, fading in over thirty metres from just under it", () => {
-    expect(snowAt(flat(snowline - 15), 0, 0, "alpine")).toBe(0);
+    expect(snowAt(flat(snowline - 15), 0, 0, dials("alpine"))).toBe(0);
     // At the line itself — where the road turns to snow — the verge is
     // already a third white.
-    const atLine = snowAt(flat(snowline), 0, 0, "alpine");
+    const atLine = snowAt(flat(snowline), 0, 0, dials("alpine"));
     expect(atLine).toBeGreaterThan(0.2);
     expect(atLine).toBeLessThan(0.5);
-    const most = snowAt(flat(snowline + 15), 0, 0, "alpine");
+    const most = snowAt(flat(snowline + 15), 0, 0, dials("alpine"));
     expect(most).toBeGreaterThan(atLine);
     expect(most).toBeLessThan(1);
-    expect(snowAt(flat(snowline + 40), 0, 0, "alpine")).toBe(1);
-    expect(snowAt(flat(snowline + 200), 0, 0, "alpine")).toBe(1);
+    expect(snowAt(flat(snowline + 40), 0, 0, dials("alpine"))).toBe(1);
+    expect(snowAt(flat(snowline + 200), 0, 0, dials("alpine"))).toBe(1);
   });
 
   it("leaves a steep face as rock well above the line", () => {
     // A 60° face: no snow holds on it at all, at any height.
-    expect(snowAt(face(snowline + 100, 1.7), 0, 0, "alpine")).toBe(0);
-    expect(rockAt(face(snowline + 100, 1.7), 0, 0, "alpine")).toBe(1);
+    expect(snowAt(face(snowline + 100, 1.7), 0, 0, dials("alpine"))).toBe(0);
+    expect(rockAt(face(snowline + 100, 1.7), 0, 0, dials("alpine"))).toBe(1);
     // A moderate slope's own snowline stands higher than the flat's.
-    const gentle = snowAt(flat(snowline + 20), 0, 0, "alpine");
-    const sloped = snowAt(face(snowline + 20, 0.45), 0, 0, "alpine");
+    const gentle = snowAt(flat(snowline + 20), 0, 0, dials("alpine"));
+    const sloped = snowAt(face(snowline + 20, 0.45), 0, 0, dials("alpine"));
     expect(sloped).toBeLessThan(gentle);
   });
 
   it("never falls in a country with no snowline", () => {
     for (const biome of ["taiga", "desert"] as const) {
       expect(biomeRules(biome).land.zones.snow).toBeNull();
-      expect(snowAt(flat(500), 0, 0, biome)).toBe(0);
+      expect(snowAt(flat(500), 0, 0, dials(biome))).toBe(0);
     }
   });
 });
@@ -109,26 +119,26 @@ describe("what is planted where", () => {
   // the flora's placement type, and the flora module paints canvases.
   it("plants nothing above the alpine snowline, and the highland from where the paint goes to rock", () => {
     const zones = BIOMES.alpine.land.zones;
-    const at = (y: number) => plantZone("alpine", y, false);
+    const at = (y: number) => plantZone(dials("alpine"), y, false);
     expect(at((zones.snow as number) + 1)).toBe("snow");
     expect(at((zones.snow as number) + 300)).toBe("snow");
     expect(at(zones.rock.from + 1)).toBe("highland");
     expect(at(zones.rock.from - 1)).toBe("community");
     // ...and the snow wins over a stream bank, where the taiga's bank wins
     // over its highland.
-    expect(plantZone("alpine", (zones.snow as number) + 1, true)).toBe("snow");
+    expect(plantZone(dials("alpine"), (zones.snow as number) + 1, true)).toBe("snow");
   });
 
   it("keeps the taiga's highland where it was: above 26 m, and never under snow", () => {
-    expect(plantZone("taiga", 27, false)).toBe("highland");
-    expect(plantZone("taiga", 25, false)).toBe("community");
-    expect(plantZone("taiga", 40, true)).toBe("riparian");
-    expect(plantZone("taiga", 800, false)).toBe("highland");
-    expect(plantZone("taiga", LAKE_Y + 1, false)).toBe("shore");
+    expect(plantZone(dials("taiga"), 27, false)).toBe("highland");
+    expect(plantZone(dials("taiga"), 25, false)).toBe("community");
+    expect(plantZone(dials("taiga"), 40, true)).toBe("riparian");
+    expect(plantZone(dials("taiga"), 800, false)).toBe("highland");
+    expect(plantZone(dials("taiga"), LAKE_Y + 1, false)).toBe("shore");
     // The unnamed country is the taiga here too.
-    expect(plantZone("nowhere", 27, false)).toBe("highland");
+    expect(plantZone(dials("nowhere"), 27, false)).toBe("highland");
     // A dry country has no shore however low its pans lie.
-    expect(plantZone("desert", LAKE_Y + 1, false)).toBe("community");
+    expect(plantZone(dials("desert"), LAKE_Y + 1, false)).toBe("community");
   });
 });
 

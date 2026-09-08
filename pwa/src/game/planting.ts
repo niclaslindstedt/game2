@@ -7,7 +7,7 @@
 // road chunk carries (world.ts) and the open country beyond it (wild.ts) —
 // so both answer "what grows here" the same way.
 
-import { LAKE_Y, biomeRules, type WildObstacle } from "@engine";
+import { LAKE_Y, biomeRules, type StageKnobs, type WildObstacle } from "@engine";
 
 import type { Biome, Community, FloraMix } from "./biome.ts";
 import type { FloraPlacement } from "./flora.ts";
@@ -99,9 +99,12 @@ const BARE: FloraMix = {};
 
 /** The mix that owns a patch of ground — the country's context for it
  * (`plantZone`: the shore, the snow, a stream bank, the highland, or the
- * quilt's own community), as the biome's mix for that context. */
-export function mixAt(biome: Biome, ground: Ground): FloraMix {
-  switch (plantZone(biome.id, ground.y, ground.riparian)) {
+ * quilt's own community), as the biome's mix for that context. The DIALS
+ * come along because the context is a height and the heights the bands
+ * stand at are the ALTITUDE dial's (R47): the same 400 m is highland on a
+ * worn shoulder and deep forest on a six-thousand-metre flank. */
+export function mixAt(biome: Biome, knobs: StageKnobs, ground: Ground): FloraMix {
+  switch (plantZone(knobs, ground.y, ground.riparian)) {
     case "shore":
       return biome.lakeshoreTrees;
     case "snow":
@@ -133,8 +136,13 @@ export function softMix(mix: FloraMix): FloraMix | null {
 /** Dress one engine trunk as the tree the biome grows there. The engine
  * owns WHERE a solid tree stands and how thick its trunk is; which species
  * it IS stays the biome's call. */
-export function treePlacement(tree: WildObstacle, biome: Biome, riparian = false): FloraPlacement {
-  const mix = mixAt(biome, { y: tree.y, riparian, grove: tree.grove ?? 0 });
+export function treePlacement(
+  tree: WildObstacle,
+  biome: Biome,
+  knobs: StageKnobs,
+  riparian = false,
+): FloraPlacement {
+  const mix = mixAt(biome, knobs, { y: tree.y, riparian, grove: tree.grove ?? 0 });
   // A trunk the engine has stood above the snowline is standing there
   // whatever the mix says; it is dressed as the highland's, which is the
   // last thing that grew on the way up.
@@ -199,6 +207,8 @@ const UNDERSTORY_SAPLINGS = 0.55;
  * stand on it, and everything the skirt needs to place one. */
 export type Understory = {
   biome: Biome;
+  /** The stage's dials — `mixAt` reads the country's bands off them. */
+  knobs: StageKnobs;
   rng: () => number;
   groundAt: (x: number, z: number) => number;
   /** Ground nothing may grow on — the road with its aprons, the streams. */
@@ -213,11 +223,11 @@ export function understoryAround(
   riparian: boolean,
   ctx: Understory,
 ): FloraPlacement[] {
-  const { biome, rng, groundAt, blocked } = ctx;
+  const { biome, knobs, rng, groundAt, blocked } = ctx;
   const out: FloraPlacement[] = [];
   if (rng() > UNDERSTORY_SHARE) return out;
   const grove = tree.grove ?? 0;
-  const mix = mixAt(biome, { y: tree.y, riparian, grove });
+  const mix = mixAt(biome, knobs, { y: tree.y, riparian, grove });
   // Over the snowline there is no skirt: nothing grows there, whatever the
   // trunk itself is doing.
   if (plantsNothing(mix)) return out;

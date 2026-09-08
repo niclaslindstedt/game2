@@ -21,6 +21,7 @@ import {
   STAGE_RULES as R,
   followGradeOf,
   knobScale,
+  landOf,
   resolveKnobs,
   roadWidthOf,
 } from "./rules.ts";
@@ -952,7 +953,7 @@ function createCompiler(
   const grade = followGradeOf(track.knobs);
   /** R47 — the country's zones, for the snowline the road goes under —
    * and the line itself, which the climate may bring down (climate.ts). */
-  const zones = biome.land.zones;
+  const zones = landOf(track.knobs).zones;
   const snowline = snowlineOf(track.climate, zones);
   const buildable = (x: number, z: number, roll: number): number => buildableAt(land, x, z, roll);
   if (followsLand) cursor.baseY = buildable(0, 0, rolling(0));
@@ -3575,7 +3576,7 @@ export function compileStage(
   startApron?: number,
 ): Track {
   const dials = resolveKnobs(knobs);
-  const weather = resolveClimate(climate, dials.biome);
+  const weather = resolveClimate(climate, dials);
   const rolling = buildRolling(seed, dials);
   const paving = buildPaving(seed, dials.asphalt);
   const bumps = buildBumps(seed);
@@ -3650,7 +3651,7 @@ export function compileTrack(
 ): Track {
   if (segments === undefined) return compileStage(seed, "medium", knobs, "sprint", climate);
   const dials = resolveKnobs({ asphalt: 0, ...knobs });
-  const track = emptyTrack(seed, false, dials, resolveClimate(climate, dials.biome));
+  const track = emptyTrack(seed, false, dials, resolveClimate(climate, dials));
   // A synthetic rig is a measuring device: flat, smooth, straight-edged and
   // repeatable, so a physics test measures the car rather than the road
   // under it.

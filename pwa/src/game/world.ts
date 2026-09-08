@@ -208,6 +208,7 @@ function buildScenery(
   // so it is only asked where a skirt could actually reach the ribbon.
   const understory = {
     biome,
+    knobs: track.knobs,
     rng: () => rng.next(),
     groundAt: heightAt,
     blocked: (x: number, z: number): boolean =>
@@ -222,7 +223,7 @@ function buildScenery(
       drawnTrees.add(key);
       treeKeys.push(key);
       const rip = riparian(tree.x, tree.z);
-      flora.push(treePlacement(tree, biome, rip));
+      flora.push(treePlacement(tree, biome, track.knobs, rip));
       for (const plant of understoryAround(tree, rip, understory)) flora.push(plant);
     }
   };
@@ -247,7 +248,9 @@ function buildScenery(
     if (inStream(field.streams, x, z, 1.5)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
-    const soft = softMix(mixAt(biome, { y, riparian: riparian(x, z), grove: field.groveAt(x, z) }));
+    const soft = softMix(
+      mixAt(biome, track.knobs, { y, riparian: riparian(x, z), grove: field.groveAt(x, z) }),
+    );
     if (!soft) continue;
     flora.push({ id: pickFlora(soft, roll), x, y, z, scale, spin });
   }
@@ -293,7 +296,7 @@ function buildScenery(
       const shore = onShore(y);
       if (!shore && y < LAKE_Y + 1.2) continue;
       // R47 — nothing grows under the snow, the winter's included.
-      if (plantZone(biome.id, y, false) === "snow" || frozenAt(biome.id, track.climate, y)) {
+      if (plantZone(track.knobs, y, false) === "snow" || frozenAt(track.knobs, track.climate, y)) {
         continue;
       }
       flora.push({

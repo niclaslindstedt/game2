@@ -21,12 +21,13 @@
 // recognised, and they are why no row here carries a sentence: the map
 // answers what a dial does, the moment it is moved.
 //
-// Three rows are deliberately NOT that silhouette, because what they hold is
-// not a place on a three-stop ladder: DIFFICULTY (R46) is a scale and
-// OPPONENTS is a count, so both are sliders, and the SEED is a number, so it
-// can be walked, typed or rolled. All three are still the same row — a name,
-// a mark, and a value between two arrows — which is the whole point of the
-// shape.
+// Four rows are deliberately NOT that silhouette, because what they hold is
+// not a place on a three-stop ladder: DIFFICULTY (R46) is a scale, ALTITUDE
+// (R47) is a span of metres running from a shoulder to six thousand, and
+// OPPONENTS is a count, so all three are sliders; and the SEED is a number,
+// so it can be walked, typed or rolled. All four are still the same row — a
+// name, a mark, and a value between two arrows — which is the whole point of
+// the shape.
 //
 // The stage does not have to be a bare seed: the LEVEL row loads one of the
 // CAMPAIGN's own roads through the campaign's OWN stage boxes
@@ -52,6 +53,8 @@ import {
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
   SEASONS,
+  altitudeLabel,
+  hasAltitude,
   TEMPERATURE_RANGE,
   challengeGlyph,
   challengeWord,
@@ -412,6 +415,36 @@ export function RoamPage({
                     })
                   }
                 />
+                {/* R47 — HOW HIGH THE RACE IS, and the one row in this
+                    column that is not a three-stop dial, for the same
+                    reason DIFFICULTY is not: what it holds is a
+                    MEASUREMENT — a number of metres, running from a worn
+                    shoulder to six thousand — and three named stops on a
+                    span like that would each be a different game. It only
+                    appears over a country that HAS a mountain (R47),
+                    which today is the alpine and nowhere else.
+
+                    It reads in METRES rather than as a position, because
+                    the metres are the whole idea: the mountain stands
+                    that high over a valley floor that stays where it is,
+                    so the number is also how far there is to fall off the
+                    side of it. And it SETTLES, like the two sliders over
+                    the map: every position is a different country, and a
+                    drag across the track would build twenty of them. */}
+                {hasAltitude(race.knobs.biome) && (
+                  <FadeRow
+                    label="ALTITUDE"
+                    glyph="altitude"
+                    value={race.knobs.altitude}
+                    step={0.01}
+                    nudge={0.05}
+                    read={(altitude) => altitudeLabel(race.knobs, altitude)}
+                    less="lower"
+                    more="higher"
+                    settle
+                    onChange={(altitude) => onRace({ ...race, knobs: { ...race.knobs, altitude } })}
+                  />
+                )}
                 {STAGE_DIALS.filter((dial) => !dial.biome || dial.biome === race.knobs.biome).map(
                   (dial) => (
                     <StepRow

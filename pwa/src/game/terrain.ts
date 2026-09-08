@@ -16,6 +16,7 @@ import {
   LAKE_Y,
   ROAD_CROSS,
   biomeRules,
+  landOf,
   createRng,
   createTerrain,
   inStream,
@@ -224,7 +225,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // ...under the stage's own climate: a winter brings the snowline down
   // the whole flank, and the paint goes white wherever the wheels find
   // snow (climate.ts).
-  const zones = zonesUnder(track.climate, rules.land.zones);
+  const zones = zonesUnder(track.climate, landOf(track.knobs).zones);
   // A WET SEASON on a country with no water table (climate.ts, `rainsIn`
   // where the row itself is dry): the rain stands in every flat as
   // puddles (puddles.ts), because there is nowhere for it to go.

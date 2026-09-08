@@ -522,7 +522,7 @@
 //       `steer` is 0 and it bores nothing, so every seed it ever built is
 //       the seed it still builds.
 
-import { biomeRules, isBiomeId, type BiomeId } from "./biomes.ts";
+import { biomeRules, isBiomeId, type BiomeId, type BiomeLand } from "./biomes.ts";
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -592,6 +592,22 @@ export type StageKnobs = {
    * the country the rules were tuned on: one valley and the ridge beside
    * it inside a medium stage's box. */
   peaks: number;
+  /** R47 — HOW HIGH THE RACE IS, 0..1, read onto a band of METRES by
+   * `altitudeOf` — the second dial only a mountain country reads. `peaks`
+   * says how many crests the country has; this says how far the one the
+   * stage is laid on stands over the valley floor, and the valley floor
+   * stays where it is: at the dial's bottom the crest is a few hundred
+   * metres of worn shoulder a rally can run up and down, and at the top it
+   * is six thousand metres of rock with the road blasted along one ledge
+   * of it and the green a mile below.
+   *
+   * The dial does not stretch the mountain, it BUILDS A BIGGER ONE: the
+   * ridge system's period grows too, but only `R.massif.altitude.spread`
+   * as fast, so every metre of height is also a steeper flank. That is the
+   * whole point of the dial — high is not merely far up, it is sheer — and
+   * it is why the country's zones, the air's lapse rate and the earthworks
+   * a road may be built on all read it (`landOf`). */
+  altitude: number;
   /** R40 — which COUNTRY the stage is built in (`biomes.ts`). The one dial
    * that is a name rather than a number: it does not move a range, it says
    * which set of ranges — the taiga's lakes and spruce, or the desert's
@@ -613,6 +629,7 @@ export const NUMERIC_KNOBS: readonly NumericKnob[] = [
   "steepness",
   "challenge",
   "peaks",
+  "altitude",
 ];
 
 /** The default dial positions — the stage the rules built before the knobs
@@ -638,6 +655,13 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // R47 — a valley and the ridge beside it; read by a massif and by
   // nothing else.
   peaks: 0.5,
+  // R47 — the ALTITUDE dial's own pivot: the country the alpine's row was
+  // written for, and the height every alpine seed was built at before
+  // there was a dial (`altitudeMul` is exactly 1 here, so it is). It sits
+  // low on the travel rather than in the middle because what is above it
+  // is a mountain range and what is below it is a hill — two thirds of the
+  // dial for the two thirds of the idea.
+  altitude: 0.35,
 };
 
 function clamp01(v: number): number {
@@ -661,6 +685,7 @@ export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
     steepness: clamp01(knobs?.steepness ?? DEFAULT_KNOBS.steepness),
     challenge: clamp01(knobs?.challenge ?? DEFAULT_KNOBS.challenge),
     peaks: clamp01(knobs?.peaks ?? DEFAULT_KNOBS.peaks),
+    altitude: clamp01(knobs?.altitude ?? DEFAULT_KNOBS.altitude),
   };
 }
 
@@ -1034,6 +1059,27 @@ export const STAGE_RULES = {
      * draws a different line, which is what it is for. */
     maxFill: 22,
     maxCut: 24,
+    /** R34/R47 — THE STEEPEST GROUND A ROAD MAY BE PLANNED ACROSS, m per m
+     * of the bare land under a probe point.
+     *
+     * The caps above ask how far the road stands OFF the country; this asks
+     * whether there is any country under it to stand off. A road descends
+     * at `follow.grade` and no faster, so ground falling away faster than
+     * that has to be crossed along its contour — and the search draws its
+     * corners blind. Where the land runs at ten to one, a candidate that
+     * looks level at one probe point is five hundred metres in the air at
+     * the next, and the offset caps never see it: they are measured on the
+     * search's own coarse walk, and it is the COMPILER'S finer one that
+     * finds the drop. So the ground itself is refused, and the search does
+     * what it does with any refusal — draws a different line.
+     *
+     * Set above anything the countries actually build at the middle of the
+     * ALTITUDE dial (the alpine's flank tops out at 2.5 there), so it is a
+     * dead rule on every stage the game shipped with and comes alive only
+     * where R47 stands the rock up. MEASURED at the top of the dial over
+     * seeds 1-6: without it 31% of a stage's samples stood more than 40 m
+     * off the land, the worst of them 893 m — a road in the sky. */
+    maxLandGrade: 3,
     /** ...and how the cap RELAXES when a country will not yield a stage
      * inside it, the way the water's setback does. Some countries are all
      * ridge and ravine, and a stage has to cross them somehow; the last
@@ -1117,6 +1163,122 @@ export const STAGE_RULES = {
      * twice as much of the ground is floor — one mountain in a plain; at 1
      * the period is little over half and the floors are narrow — a range. */
     peaks: { scale: { easy: 2.5, hard: 0.6 }, valley: { easy: 2, hard: 0.7 } },
+    /** R47 — WHAT THE ALTITUDE DIAL DOES TO A MASSIF.
+     *
+     * `down` and `up` are MULTIPLIERS on the row's own crest height
+     * (`BiomeLand.massif.height`), read geometrically about the dial's
+     * default (`altitudeMul`), so the middle of the dial is exactly the
+     * country the row was written for.
+     *
+     * `summit` is what turns that amplitude into the number the SLIDER
+     * PRINTS. The massif's own height is not how high the country ends up
+     * standing: the taiga's swell and hills ride on top of it, the
+     * `elevation` dial's relief and the `steepness` dial's rise multiply
+     * it, and the ground tops out well over the figure in the row.
+     * MEASURED over seeds 1-6 at four positions of this dial, the ratio is
+     * 1.34 to 1.38 and does not drift with it — so one factor states it,
+     * `altitudeOf` reads the row through it, and `up` is set so the top of
+     * the travel builds a mountain that really does top out at six
+     * thousand metres rather than at eight. The bottom of the travel is a
+     * 175 m shoulder. `tests/alpine_test.ts` holds both ends against the
+     * GROUND, not against the arithmetic, which is the only way this stays
+     * true.
+     *
+     * The other four are EXPONENTS on that same multiplier, and between
+     * them they are the whole character of the dial. The idea they are all
+     * made of: NOTHING about a mountain scales with its height. A range
+     * twice as high is not a photograph of a smaller one enlarged — it
+     * stands on more ground, but not twice as much; it is bent harder
+     * about its own crest; more of it is above the snow; and more of what
+     * is between its ridges is flat valley floor rather than hillside.
+     * Get any one of them wrong and the country stops being a country a
+     * rally can be laid across, which is the failure this row is tuned
+     * against. Every figure below is over seeds 1-6, medium sprints, at
+     * the top of the dial unless it says otherwise.
+     *
+     * `spread` — how fast the ridge system's PERIOD grows. It is also how
+     * far away the next valley is, and a period that outgrows the stage's
+     * own box is a stage with no valley in it at all: at 0.45 the period
+     * reaches 9.5 km and the lowest ground within three kilometres of the
+     * start averages 1,292 m, which is a flank with more flank under it
+     * and nothing else. At 0.3 the period is 6.2 km and the floor is back
+     * inside the box.
+     *
+     * `valleyPull` — how much of the fold the VALLEY FLOOR takes as the
+     * mountain grows (`BiomeLand.massif.valley`, pulled toward 1). This is
+     * what keeps the bottom of the mountain a place rather than a line:
+     * the floor widens into a proper valley with room for the lakes and
+     * the green, and the flank is squeezed into a narrower band of the
+     * same period, which stands it up again for free. At 0 the box's
+     * lowest ground is 874 m and 2% of it is floor — there is no valley,
+     * only mountain. At 0.25 it is the lake table, and a quarter to two
+     * thirds of the box is floor.
+     *
+     * `plateau` — how fast the summit is cut into a SHELF as the mountain
+     * grows (`altitudeScale.shelf`, a blend from the row's own flank to a
+     * ledge; `MASSIF_SHELF` in geology.ts is how much of the climb the
+     * ledge takes). THE LOAD-BEARING ONE, and the least obvious: it
+     * decides WHERE ON THE MOUNTAIN the stage ends up, which is the whole
+     * question the dial is asked.
+     *
+     * The row's flank runs to a point — gentle at the foot, steepest under
+     * the crest — and scaled up, that is a mountain with no ground on it a
+     * road could be laid along except the valley floor. R35 sites the
+     * start on the flattest high shoulder it can find, and on such a
+     * mountain the flattest ground IS the bottom: measured, the stage came
+     * out at 26 m on a six-thousand-metre mountain, which is the opposite
+     * of the level. Blending the top into a ledge is what puts a road up
+     * there — the same seeds now start at 6,013-6,084 m, on the summit
+     * itself, with three to six kilometres of mountain under them.
+     *
+     * A LEDGE rather than a dome, and the width is the point. An earlier
+     * pass flattened the whole upper half of the mountain, which started
+     * the stage high but left the drop a kilometre out across a plateau —
+     * a player driving off the road found more plateau. The ledge is a
+     * couple of hundred metres wide, so the ground is falling away inside
+     * the stage's own shoulder.
+     *
+     * It is also what keeps the road ON the land. A road descends at
+     * `follow.grade` and no faster, so ground falling away faster is
+     * ground the compiler builds the road in the AIR over. Left as the
+     * row's flank, 31% of a stage's samples stood more than 40 m off the
+     * land, the worst of them 893 m; over the ledge it is 3.9%, against
+     * 2.2% for the tuned country.
+     *
+     * `zones` — how fast the country's own bands climb (`BiomeLand.zones`,
+     * and the air's lapse rate against them). Slower than the height,
+     * because a taller mountain is one with more of itself above the
+     * treeline. Three quarters is the exponent that lands the alpine's
+     * bands on the real Alps' own lines — a treeline near 1,600 m and
+     * permanent snow near 2,900 — at the top of the dial, while leaving
+     * the tuned country untouched at the middle.
+     *
+     * What comes out of the six together, at the top of the dial: a
+     * mountain topping out at six thousand metres with a ledge blasted
+     * across its summit, the stage laid along that ledge, the ground
+     * falling away two hundred metres off the road, and three to six
+     * kilometres of it to come down. `make analyze --biome alpine
+     * --altitude 1` scores it no worse than the tuned country (96.3
+     * against 96.5), and `tests/alpine_test.ts` drives a car off the side
+     * of it at 200 km/h to prove the fall is real.
+     *
+     * THE MIDDLE OF THE TRAVEL IS THE WEAK PART, and it is worth knowing
+     * about rather than discovering. Around 0.7 the mountain is big enough
+     * that a road cannot follow it down and not yet big enough for its
+     * ledge to be much of one: 15% of samples stand more than 40 m off the
+     * land there, against 2-4% at either end. Both ends of the dial are
+     * sound; the middle is a road on a long smooth slope, which is a
+     * stage, but not the one this dial is selling. */
+    altitude: {
+      down: 0.38,
+      up: 12.975,
+      spread: 0.3,
+      valleyPull: 0.25,
+      plateau: 1,
+      summit: 1.36,
+      siting: 3,
+      zones: 0.84,
+    },
     /** How many iterations one sub-seed attempt is given before it is
      * given up on, in a country with a massif. The taiga's cap is a
      * thousand plus half the band; a mountain attempt that has not found
@@ -3350,6 +3512,29 @@ export function challengeMul(challenge: number, band: { easy: number; hard: numb
     : 1 + ((mid - challenge) / mid) * (band.easy - 1);
 }
 
+/** R47 — the ALTITUDE dial as a MULTIPLIER on a mountain country's crest
+ * height (`STAGE_RULES.massif.altitude`). `challengeMul`'s shape, read
+ * GEOMETRICALLY rather than linearly: the dial's default hands back
+ * exactly 1 — so the country the alpine's row was written for is the
+ * country an un-dialled seed still gets — and each end is approached by a
+ * constant RATIO per notch of travel rather than a constant number of
+ * metres. That is what a dial spanning forty-six times its own bottom
+ * needs: read linearly, the whole of the low country would live in the
+ * first two per cent of the thumb's travel and every position after it
+ * would be a mountain.
+ *
+ * The exponents on the same multiplier — the ridge period, the elevation
+ * bands, the earthworks — are the caller's, and every one of them is a
+ * `Math.pow` of what comes back here. */
+export function altitudeMul(altitude: number): number {
+  const mid = DEFAULT_KNOBS.altitude;
+  const A = STAGE_RULES.massif.altitude;
+  if (altitude === mid) return 1;
+  return altitude > mid
+    ? Math.pow(A.up, (altitude - mid) / (1 - mid))
+    : Math.pow(A.down, (mid - altitude) / mid);
+}
+
 /** R46 — the difficulty dial as a SKEW on a 0..1 roll that is about to be
  * read onto a band. `pull` says which end of that band a hard dial leans
  * the draw toward (positive the top, negative the bottom) and how hard it
@@ -3392,6 +3577,170 @@ export function reliefOf(knobs: StageKnobs): number {
     knobScale(knobs.elevation, STAGE_RULES.elevation.knob) *
     challengeMul(knobs.challenge, STAGE_RULES.challenge.relief)
   );
+}
+
+/** R47 — THE COUNTRY AT THIS ALTITUDE: the biome's own land row with
+ * everything the ALTITUDE dial reaches already read onto it, so that
+ * every side of the world — the geology that builds the rock, the search
+ * that lays the road on it, the compiler, the terrain, the paint, the
+ * planting and the audio — asks one function how high this country stands
+ * and gets one answer. A caller reading `biomeRules(knobs.biome).land`
+ * directly is reading the country the row was WRITTEN for rather than the
+ * one the dial built, which is the same country only at the dial's
+ * default.
+ *
+ * Four things move together, and they have to: the crest's HEIGHT, the
+ * ground it stands on (`scale`, more slowly, which is what makes a high
+ * mountain a steep one), the elevation BANDS the paint and the planting
+ * read (more slowly still, so a taller mountain has more of itself above
+ * the treeline rather than being a taller picture of the same one), and
+ * the EARTHWORKS a road may be built on, which track the flank's grade
+ * because that is what a cut is paying for. A country with no massif has
+ * no altitude to dial and is handed back untouched.
+ *
+ * Memoized on the two dials it reads, because the paint asks it per
+ * ground cell: a fresh row per query is an allocation in the hot path and
+ * the answer cannot change while the pair is the same. */
+const LAND_CACHE = new Map<string, BiomeLand>();
+
+/** R47 — WHAT THE ALTITUDE DIAL MULTIPLIES, all four factors at once and
+ * derived in one place, because they are one idea seen from four sides and
+ * a caller that re-derives `Math.pow(mul, …)` for itself is a caller that
+ * will still be raising the old exponent after somebody moves it.
+ *
+ * A country with no massif has no altitude to dial, and every factor is 1.
+ */
+export type AltitudeScale = {
+  /** The crest's HEIGHT over its valley floor. The dial itself. */
+  height: number;
+  /** The GROUND it stands on — the ridge system's period. Grows more
+   * slowly than the height, which is the whole trick. */
+  ground: number;
+  /** …so the flank's GRADE is what is left over, and it is what makes a
+   * high mountain a sheer one. Read by everything that has to survive the
+   * slope rather than draw it: the earthworks a road is built on, and how
+   * far from level a start's footprint is allowed to come out. */
+  grade: number;
+  /** The elevation BANDS — the treeline, the rock, the snowline, and the
+   * air's lapse rate read against them. Slower again than the height. */
+  bands: number;
+  /** HOW FAR THE SUMMIT HAS BEEN CUT INTO A SHELF, 0 (the flank the row
+   * describes, running to a point) to 1 (a ledge across the top with the
+   * mountain falling away either side of it). 0 at and below the dial's
+   * default, so the tuned country is untouched. */
+  shelf: number;
+  /** What is left of the massif's flank after the valley floor has taken
+   * its share (`BiomeLand.massif.valley`), as a fraction of the tuned
+   * country's: under 1, so the same ridge holds a wider floor and a
+   * narrower — and therefore steeper again — flank. */
+  flank: number;
+};
+
+export function altitudeScale(knobs: StageKnobs): AltitudeScale {
+  if (biomeRules(knobs.biome).land.massif === null) {
+    return { height: 1, ground: 1, grade: 1, bands: 1, shelf: 0, flank: 1 };
+  }
+  const A = STAGE_RULES.massif.altitude;
+  const height = altitudeMul(knobs.altitude);
+  const ground = Math.pow(height, A.spread);
+  const flank = 1 / Math.pow(height, A.valleyPull);
+  return {
+    height,
+    ground,
+    grade: height / (ground * flank),
+    bands: Math.pow(height, A.zones),
+    // How far the summit has been cut into a SHELF, 0 (the row's own
+    // flank, all the way to a point) to 1. Nothing below the dial's
+    // default: a mountain smaller than the tuned one is the tuned one, and
+    // only a big one gets a ledge blasted across it.
+    shelf: clamp01(Math.log(Math.max(height, 1)) / Math.log(A.up) / A.plateau),
+    flank,
+  };
+}
+
+/** R47 — THE COUNTRY AT THIS ALTITUDE: the biome's own land row with
+ * everything the ALTITUDE dial reaches already read onto it, so that every
+ * side of the world — the geology that builds the rock, the search that
+ * lays the road on it, the compiler, the terrain, the paint, the planting
+ * and the audio — asks one function how high this country stands and gets
+ * one answer. A caller reading `biomeRules(knobs.biome).land` directly is
+ * reading the country the row was WRITTEN for rather than the one the dial
+ * built, which is the same country only at the dial's default.
+ *
+ * Five things move together, and they have to: the crest's HEIGHT, the
+ * GROUND it stands on, how hard the flank is BENT about that crest, how
+ * much of the country between the ridges is VALLEY FLOOR, and the
+ * elevation BANDS the paint and the planting read. `massif.altitude` says
+ * what each of them is worth and why. A country with no massif is handed
+ * back untouched.
+ *
+ * `earthworks` is deliberately NOT among them. A shelf road on a face is
+ * paid for by CUT and only by cut, and the two halves of that row do not
+ * scale together: `generate.ts` opens the cut with the flank's grade,
+ * while the FILL stays exactly where the taiga measured it. A hundred
+ * metres of fill is not an embankment, it is a mesa with a vertical side
+ * and a road along the top of it — the thing R34's cap was written to
+ * refuse — and a flank is the one place in the game where the search can
+ * ask for one on nearly every candidate it draws.
+ *
+ * Memoized on the two dials it reads, because the paint asks it per ground
+ * cell: a fresh row per query is an allocation in the hot path, and the
+ * answer cannot change while the pair is the same. */
+export function landOf(knobs: StageKnobs): BiomeLand {
+  const land = biomeRules(knobs.biome).land;
+  const M = land.massif;
+  if (M === null) return land;
+  const A = altitudeScale(knobs);
+  // The dial at rest hands the ROW ITSELF back, not a copy of it built out
+  // of multiplications by one: `1 - (1 - 0.3) * 1` is 0.30000000000000004,
+  // and a country that differs from its own row in the last bit of a float
+  // is a country whose seeds differ from the ones the game shipped.
+  if (A.height === 1) return land;
+  const key = `${knobs.biome}|${knobs.altitude}`;
+  const had = LAND_CACHE.get(key);
+  if (had) return had;
+  const Z = land.zones;
+  const built: BiomeLand = {
+    ...land,
+    massif: {
+      ...M,
+      height: M.height * A.height,
+      scale: M.scale * A.ground,
+      valley: 1 - (1 - M.valley) * A.flank,
+    },
+    zones: {
+      treeline: Z.treeline * A.bands,
+      rock: { from: Z.rock.from * A.bands, to: Z.rock.to * A.bands },
+      snow: Z.snow === null ? null : Z.snow * A.bands,
+    },
+  };
+  LAND_CACHE.set(key, built);
+  return built;
+}
+
+/** R47 — ...and HOW HIGH THE MOUNTAIN TOPS OUT over its valley floor, m.
+ * What the ALTITUDE row prints, and the one number the dial is really
+ * about. The massif's own amplitude read through `massif.altitude.summit`,
+ * which is the measured distance between that figure and the ground the
+ * country actually stands at once its relief, its rise and the swell and
+ * hills on top of it are in. 0 in a country with no massif, which is what
+ * "there is no mountain here" reads as on a row that is not offered there
+ * anyway. */
+export function altitudeOf(knobs: StageKnobs): number {
+  const M = landOf(knobs).massif;
+  return M === null ? 0 : M.height * STAGE_RULES.massif.altitude.summit;
+}
+
+/** R47 — how fast the air cools with height in this country, °C per metre.
+ * The climate's own rate at the dial's default, divided by the same factor
+ * the elevation bands were multiplied by: the freezing line is a height
+ * like the treeline and the snowline are, and a country whose bands have
+ * been stretched up a mountain with its frost line left where it was is a
+ * country whose road is snow a long way under its own snowline. Scaling
+ * them together is what keeps a cold dial meaning the same thing at every
+ * position of this one. */
+export function lapseOf(knobs: StageKnobs, base: number): number {
+  return base / altitudeScale(knobs).bands;
 }
 
 /** R34/R47 — the grade the road may follow the country at in this
