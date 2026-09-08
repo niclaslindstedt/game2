@@ -663,3 +663,32 @@ export async function holdFor(page, seconds) {
   // finished yesterday is timing out today.
   return seconds > 0 ? wall / seconds : 0;
 }
+
+/**
+ * TAKE THE FRAME, AND SAY WHAT THE SHUTTER ITSELF COST.
+ *
+ * `captureAtS` is honoured exactly — and then the screenshot takes its own
+ * time, during which THE RUN KEEPS GOING. That latency is uncounted by the
+ * offset and it is not small: measured on a four-core runner with no GPU, one
+ * 2868×1320 capture cost 25.3 wall seconds, during which the run clock
+ * advanced 0.90 STAGE seconds.
+ *
+ * Which is longer than some of the moments this set is about. The jump on
+ * Bajada is airborne for 0.70 stage seconds, so on that machine NO value of
+ * `captureAtS` can land inside the flight — the car lands while the shutter is
+ * open, and every sampled offset comes back as a car on the ground under a
+ * caption about being airborne. Twice, before anybody measured it.
+ *
+ * So the cost is measured and returned rather than assumed away. The drivers
+ * warn when it exceeds the offset it is supposed to be measured from, because
+ * at that point the frame is not the frame the recipe asked for and writing it
+ * silently is how a listing ends up advertising a moment the game never had.
+ */
+export async function shoot(page, captureAtS) {
+  const before = await stageTime(page);
+  const started = Date.now();
+  const png = await page.screenshot({ timeout: PATIENCE });
+  const wall = (Date.now() - started) / 1000;
+  const stageCost = (await stageTime(page)) - before;
+  return { png, wall, stageCost, honest: captureAtS <= 0 || stageCost <= captureAtS };
+}
