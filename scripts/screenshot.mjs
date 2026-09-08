@@ -2944,7 +2944,15 @@ await capture(
   "shot-showcase-tvcam",
   SHOWCASE,
   async (page) => {
-    await stageDrift(page, 20);
+    // Fifteen degrees where the desert asks twenty, and the difference is
+    // measured rather than felt. A staged slide on this taiga stretch peaks
+    // at about eighteen degrees while the car is still ON the road — the
+    // road here is narrower than the desert's, so the same provocation runs
+    // out of tarmac sooner — which puts twenty right on the boundary: the
+    // same scene shot fine one run and timed out the next with nothing
+    // between them that touches the car. Fifteen has margin, and is still
+    // half again the angle the game itself calls a drift.
+    await stageDrift(page, 15);
     await clean(page);
   },
   {
