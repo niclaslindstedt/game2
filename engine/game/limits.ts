@@ -81,9 +81,29 @@ export function surfaceGripFor(spec: CarSpec, surface: Underfoot): number {
  */
 export function driveLoadOf(spec: CarSpec, grade: number): number {
   if (spec.drive === "awd") return 1;
-  const shift = (spec.centreHeight / T.drivetrain.wheelbase) * grade;
+  const shift = (spec.centreHeight / T.drivetrain.wheelbase) * drivenGrade(grade);
   const front = spec.balance - shift;
   return clamp(spec.drive === "fwd" ? front : 1 - front, T.drivetrain.loadFloor, 1);
+}
+
+/** THE GRADE THE TRACTION MODEL READS, m per m — the ground's, held inside
+ * the range the model is about.
+ *
+ * Both halves of the model are linear in the grade, and linear in the grade
+ * is only true of ground a car DRIVES on. Extended to a face, the load
+ * transfer says a front-driver's nose is carrying less than nothing, which
+ * is a car doing a wheelie rather than a car climbing, and the climb's cut
+ * says the hill wants several times the friction the tyres have. Both are
+ * arithmetic run past where it means anything: `collision.climbLimit` is
+ * where the ground stops being a hill and starts refusing the car outright,
+ * and past it what happens is the contact model's business and not this
+ * one's — a face that steep is already pushing the car back out of itself
+ * at several g (`car.ts`'s grade term is deliberately uncapped upward), and
+ * charging the tyres a second time for the same hill is the same rule
+ * applied twice. */
+function drivenGrade(grade: number): number {
+  const cap = T.collision.climbLimit;
+  return clamp(grade, -cap, cap);
 }
 
 /** ...and THE BITE ITSELF: how much torque this car can hand the ground
@@ -116,7 +136,7 @@ export function driveBiteOf(spec: CarSpec, surfaceGrip: number, grade: number): 
   // Only a CLIMB charges. Rolling down a hill the tyres have budget to
   // spare and nothing is asking them for it — what a descent costs is
   // brakes, which is a different tyre and a different rule.
-  return axle - Math.max(0, grade) * T.drivetrain.climbCost;
+  return axle - Math.max(0, drivenGrade(grade)) * T.drivetrain.climbCost;
 }
 
 /** ...and HOW FAR SIDEWAYS the pair will go before the tyres give up, as

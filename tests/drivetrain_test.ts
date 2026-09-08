@@ -326,6 +326,22 @@ describe("the drivetrain", () => {
     // the same gradient uphill leaves them.
     expect(sand("classic", -0.25)).toBeGreaterThan(sand("classic", 0.25));
     expect(sand("compact", -0.25)).toBeGreaterThan(sand("compact", 0.25));
+    // AND IT STOPS READING THE GROUND where the ground stops being a hill.
+    // Both halves are linear in the grade and linear is only true of ground
+    // a car drives on: run out to a face, the load transfer has a
+    // front-driver's nose carrying less than nothing and the climb's cut
+    // asks for several times the friction the tyres own. Past
+    // `collision.climbLimit` the contact model is already pushing the car
+    // back out of the bank at several g, and charging the tyres a second
+    // time for the same hill is the same rule applied twice — the car ends
+    // up with no drive at all, sits there spinning, and every recovery that
+    // depends on taking another run at the line stops working.
+    const wall = TUNING.collision.climbLimit;
+    for (const id of ["compact", "coupe", "classic"]) {
+      expect(sand(id, wall * 4)).toBe(sand(id, wall));
+      expect(sand(id, -wall * 4)).toBe(sand(id, -wall));
+      expect(sand(id, wall)).toBeGreaterThan(0);
+    }
   });
 
   it("digs a two-wheel drive into a climb and drives a four-wheel one up it", () => {

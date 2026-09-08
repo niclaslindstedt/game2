@@ -185,6 +185,28 @@ describe("the bot backing out of a wedge", () => {
     }
     expect(pushedAfterBackingOut).toBe(true);
   });
+
+  it("gives the run it backed out for a chance before calling itself wedged again", () => {
+    const state = game();
+    wildWall(state, -4);
+    state.car.heading = -Math.PI / 2;
+    // The trap this catches: coming back through zero, the car is doing
+    // walking pace and covering almost no ground, which is exactly what the
+    // wedge test is looking for — so a bot without the hold-off backs out,
+    // crawls, declares itself wedged at the bottom of its own run-up and
+    // backs out again, walking further from the road every cycle and never
+    // getting going. Count the manoeuvres: taking one run at the line is the
+    // point, taking four in six seconds is the loop.
+    let backOuts = 0;
+    let wasReversing = false;
+    for (let i = 0; i < TUNING.physicsHz * 6; i++) {
+      step(state, botInput(state));
+      if (state.car.reversing && !wasReversing) backOuts++;
+      wasReversing = state.car.reversing;
+    }
+    expect(backOuts).toBeGreaterThan(0);
+    expect(backOuts).toBeLessThan(3);
+  });
 });
 
 describe("the wedge rescue", () => {

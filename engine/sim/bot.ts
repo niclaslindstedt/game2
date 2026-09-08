@@ -103,6 +103,16 @@ export type BotProfile = {
   /** Reverse speed that ends the manoeuvre, m/s. Reached it, the car is off
    * whatever it was against and has room for another run at the line. */
   reverseSpeed: number;
+  /** ...and how long that run gets before the wedge test may fire again, s.
+   * A car that has just backed three metres out of a bank is not wedged
+   * again the moment it slows to turn around — it is going nowhere because
+   * it is coming through zero and building speed, which is the whole point
+   * of having backed out. Without the hold-off the same car backs out,
+   * crawls forward at walking pace, is declared wedged there and backs out
+   * again: a loop that walks it further from the road every cycle and never
+   * takes the run at all. Long enough to cover a standing start on the
+   * nature surface, which is the slowest ground it can happen on. */
+  runUp: number;
   /** Seconds out in the wild before the bot stops trying to drive back and
    * takes the reset instead. Knowing when an excursion is over is a skill:
    * a driver who ploughs on through the trees for a quarter of a minute
@@ -207,6 +217,7 @@ export const RALLY_BOT: BotProfile = {
   brakeUse: 0.7,
   reverseAfter: 0.8,
   reverseSpeed: 4,
+  runUp: 2.5,
   offRoadGiveUp: 8,
   overtake: 0.6,
   aggression: 0.15,
@@ -308,6 +319,12 @@ function gripBySurface(spec: CarSpec): readonly number[] {
  * hands this function fifteen different ones a step. Weak, so a stage that
  * ends takes its drivers with it. */
 const HELD = new WeakMap<GameState, CarInput>();
+
+/** WHEN THIS RUN LAST CAME OFF SOMETHING, s on the run's clock — the start of
+ * the run-up `profile.runUp` protects. Kept the same way and for the same
+ * reason as `HELD`: it is a fact about one driver in one run, and the field
+ * hands this function a dozen of both. */
+const BACKED_OFF = new WeakMap<GameState, number>();
 
 /** Whether the driver re-reads the road on this step, or drives on with the
  * lock and the pedals it last chose (`TUNING.botHz`). Off the run's own
@@ -710,9 +727,15 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
   // it by then. Reversing counts as asking to move (step.ts), so a car that
   // is pinned backwards too still reaches the engine's rescue on time.
   const wedgedFor = state.t - state.stuck.since;
+  const runUpFor = state.t - (BACKED_OFF.get(state) ?? -Infinity);
   const backingOut =
     !car.airborne &&
-    (wedgedFor > profile.reverseAfter || (car.reversing && car.u > -profile.reverseSpeed));
+    ((wedgedFor > profile.reverseAfter && runUpFor > profile.runUp) ||
+      (car.reversing && car.u > -profile.reverseSpeed));
+  // The manoeuvre is over the moment the car is properly moving backwards:
+  // from here the run-up is protected, whatever the wedge test makes of a
+  // car turning around at walking pace.
+  if (car.reversing && car.u <= -profile.reverseSpeed) BACKED_OFF.set(state, state.t);
   if (backingOut) {
     throttle = 0;
     brake = 1;
