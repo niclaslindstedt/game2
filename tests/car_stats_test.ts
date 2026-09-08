@@ -112,10 +112,13 @@ describe("car spec sheet", () => {
       // A target inside the first gear never reaches the second, and never
       // charges for a shift that was not taken.
       expect(sprintTime(spec, "auto", spec.gearTop[0])).toBeCloseTo(first, 6);
-      expect(
-        sprintTime(spec, "manual", spec.gearTop[0] * TUNING.gearbox.set.manual.gearing),
-      ).toBeCloseTo(
-        (first / TUNING.gearbox.set.manual.power) * TUNING.gearbox.set.manual.gearing,
+      // The same in the racing set: a first gear `gearing` longer, filled
+      // at a thrust that is `power / gearing` of the catalog's — so the
+      // gearing is charged TWICE, once for the road it adds and once for
+      // the multiplication it gives up, and only `power` is handed back.
+      const box = TUNING.gearbox.set.manual;
+      expect(sprintTime(spec, "manual", spec.gearTop[0] * box.gearing)).toBeCloseTo(
+        (first * box.gearing * box.gearing) / box.power,
         6,
       );
     }

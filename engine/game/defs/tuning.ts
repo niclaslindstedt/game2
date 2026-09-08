@@ -3615,8 +3615,21 @@ export const TUNING = {
   },
 
   gearbox: {
-    /** Auto shifts up at this fraction of the gear's top speed... */
-    upAt: 0.94,
+    /** Auto shifts up at this fraction of the gear's top speed — about
+     * 6000 rpm of a 6500 shift point, which is where a full-throttle box
+     * takes the next gear.
+     *
+     * IT HAS TO SIT CLEAR OF WHERE THE TAPER BITES. A gear's pull is faded
+     * to nothing at its own ceiling (`engineAccel`), so a car left to
+     * settle in a gear stops a little short of that ceiling whatever the
+     * engine is worth — and if the shift point is ABOVE where it stops,
+     * the box never takes the gear at all and the car is capped, at a
+     * speed nobody chose, by arithmetic rather than by drag. Every gear a
+     * real ladder ends in is an overdrive the car cannot pull out, which
+     * is exactly the case this lands on: at 0.94 both five-speeds settle
+     * in fourth within a percent of their own shift point and stay there.
+     */
+    upAt: 0.92,
     /** ...and down below this fraction of the previous gear's top. */
     downAt: 0.55,
     /** Throttle cut while a manual shift engages, seconds. Short enough to
@@ -3647,13 +3660,17 @@ export const TUNING = {
       manual: {
         /** 6% taller everywhere: the same engine pulls each gear further,
          * which is where the top end comes from. It is paid for at the
-         * bottom of every gear, and by `shiftCut` on each of the five
-         * shifts a driver now has to take themselves. */
+         * bottom of every gear — a ratio that carries the car further
+         * multiplies the engine by exactly that much less — and by
+         * `shiftCut` on every shift a driver now has to take themselves. */
         gearing: 1.06,
-        /** ...and 5% more of it arrives, with no converter slurring the
-         * bottom of the gear away. Slightly under the gearing so the
-         * headroom over drag at `upAt × gearTop` (see cars.ts) is the
-         * catalog's, less a percent, rather than a new floor. */
+        /** ...and 5% of the engine handed back, with no converter slurring
+         * the bottom of the gear away. Read AGAINST the gearing rather than
+         * on top of it (`gearedSpec`): a gear stretched 6% multiplies the
+         * engine 6% less, so what the driver actually holds is 1.05/1.06 of
+         * the catalog's thrust at any speed. Deliberately the short side of
+         * the gearing — the racing set has to cost something at the bottom
+         * of the gear or it is not a choice. */
         power: 1.05,
       },
     },

@@ -184,16 +184,40 @@ describe("the drivetrain", () => {
   });
 
   it("puts the power down where there is nothing to put it down on", () => {
-    // A standing start through water, as a fraction of the same start on
-    // dry gravel. One driven axle carrying all the torque spins it away;
-    // four driven wheels share it out and the car simply goes. This is the
-    // four-wheel-drive's whole case, and the rear-driver's whole cost.
-    const keptInWater = (carId: string): number => {
-      const dry = game(carId, "gravel");
-      run(dry, { throttle: 1 }, 3);
+    // A standing start through water. One driven axle carrying all the
+    // torque spins it away; four driven wheels share it out and the car
+    // simply goes. This is the four-wheel-drive's whole case, and the
+    // rear-driver's whole cost.
+    //
+    // Measured FIRST as the wheelspin, because that is the claim itself
+    // and it is scale-free: what a car does with torque it cannot use is
+    // spin it away, and the three layouts are an order of magnitude apart
+    // on it. The speed kept is the consequence and is checked after —
+    // held on its own it is a weaker guard than it looks, since every car
+    // in water is pinned near the same speed by the drag whatever its
+    // tyres are doing, and what is left in the ratio is mostly how much
+    // engine each has down low.
+    const spinInWater = (carId: string): number => {
       const wet = game(carId, "water");
       run(wet, { throttle: 1 }, 3);
-      return wet.car.u / dry.car.u;
+      return wet.car.wheelspin;
+    };
+    expect(spinInWater(AWD)).toBeLessThan(spinInWater(FWD));
+    expect(spinInWater(FWD)).toBeLessThan(spinInWater(RWD));
+    // The four-wheel drive barely lights up at all where the rear-driver
+    // is spinning its axle away, and it is the WATER doing it: the same
+    // start on dry gravel costs the rear-driver a fraction of the same.
+    expect(spinInWater(AWD)).toBeLessThan(spinInWater(RWD) * 0.1);
+    const dry = game(RWD, "gravel");
+    run(dry, { throttle: 1 }, 3);
+    expect(dry.car.wheelspin).toBeLessThan(spinInWater(RWD) * 0.5);
+    // ...and the speed each one keeps ranks the same way.
+    const keptInWater = (carId: string): number => {
+      const onGravel = game(carId, "gravel");
+      run(onGravel, { throttle: 1 }, 3);
+      const wet = game(carId, "water");
+      run(wet, { throttle: 1 }, 3);
+      return wet.car.u / onGravel.car.u;
     };
     expect(keptInWater(AWD)).toBeGreaterThan(keptInWater(FWD));
     expect(keptInWater(FWD)).toBeGreaterThan(keptInWater(RWD));

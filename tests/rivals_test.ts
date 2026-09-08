@@ -394,14 +394,26 @@ describe("the field on the road", () => {
     // run of it, which is the claim the head start actually makes.
     const clean = (run: (typeof field.runs)[number]): boolean =>
       run.state.stats.offRoadTime < START_INTERVAL && run.state.stats.respawns === 0;
-    const inOrder = [...field.runs].sort((a, b) => a.entry.number - b.entry.number);
+    // ...and it is read between crews in the SAME CAR. An interval is ten
+    // seconds; the roster's spread over a short stage is worth about as
+    // much, so a crew in the slowest car with ten seconds in hand over one
+    // in the quickest is a crew being caught for reasons that have nothing
+    // to do with the start control. That is a rally too — but it is the
+    // ROSTER's claim, not the head start's, and mixing them means the
+    // assertion holds only while no two adjacent numbers happen to be in
+    // the two ends of the catalog.
     let compared = 0;
-    for (let i = 1; i < inOrder.length; i++) {
-      const ahead = inOrder[i - 1];
-      const behind = inOrder[i];
-      if (ahead.done || behind.done || !clean(ahead) || !clean(behind)) continue;
-      expect(ahead.state.progressS).toBeGreaterThan(behind.state.progressS);
-      compared += 1;
+    for (const carId of new Set(field.runs.map((run) => run.entry.crew.carId))) {
+      const inOrder = field.runs
+        .filter((run) => run.entry.crew.carId === carId)
+        .sort((a, b) => a.entry.number - b.entry.number);
+      for (let i = 1; i < inOrder.length; i++) {
+        const ahead = inOrder[i - 1];
+        const behind = inOrder[i];
+        if (ahead.done || behind.done || !clean(ahead) || !clean(behind)) continue;
+        expect(ahead.state.progressS).toBeGreaterThan(behind.state.progressS);
+        compared += 1;
+      }
     }
     // …and the exemption above has not quietly eaten the whole assertion.
     expect(compared).toBeGreaterThan(0);
