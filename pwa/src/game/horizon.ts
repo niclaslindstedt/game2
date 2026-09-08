@@ -27,7 +27,7 @@ import type { BiomeId } from "@engine";
 
 import { SOUTH } from "./daylight.ts";
 import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
-import { dayLight, type Preset } from "./sky.ts";
+import { dayLight, deckToneAt, type Preset } from "./sky.ts";
 
 /** One ring's profile: where each column's foot, snowline and summit sit,
  * plus how the atmosphere has eaten into its rock. `haze` is how much of
@@ -61,15 +61,30 @@ export type Horizon = {
   dispose: () => void;
 };
 
+/** How much of a capped summit is SNOW rather than the hazed rock around
+ * it. Not one: a cap is a field lying in the folds of a peak that still has
+ * faces too steep to hold it, and a summit painted pure snow reads as a
+ * paper cut-out of a mountain. */
+const SNOW_SHOWS = 0.58;
+
 export function createHorizon(): Horizon {
-  const ridgeShade: number[] = [];
-  /** The same profile with every summit left as bare rock — the horizon of
-   * a country that has no snowline. Kept as a second array rather than
-   * rebuilt per country: the rings are one static mesh, and swapping which
-   * shade the painter reads costs nothing. */
-  const ridgeBare: number[] = [];
+  /** Each vertex's own rock, 0.92..1.06 — a tall column stands a shade
+   * lighter than the col beside it. */
+  const ridgeRock: number[] = [];
+  /** …and whether it is under SNOW. A flag rather than a second shade
+   * table: what snow looks like is not what rock looks like multiplied by
+   * anything (see `paint`), and a country with no snowline drops the flag
+   * (`snowy`) rather than needing a whole second profile. */
+  const ridgeCap: number[] = [];
   const ridgeHaze: number[] = [];
   const ridgeTone: number[] = [];
+  /** How high each vertex stands in the sky, as a TANGENT — its height over
+   * the ring's own plane against the radius it stands at. A tangent rather
+   * than an angle because the country's scale is on the height alone
+   * (`setCountry`), so scaling it and taking the arc-tangent at paint time
+   * is the same number the eye sees; an angle baked here would have to be
+   * re-derived anyway. */
+  const ridgeRise: number[] = [];
   const ridgePos: number[] = [];
   const ridgeIndex: number[] = [];
   /** The farthest ring's summit height per column, m, before the country's
@@ -116,10 +131,11 @@ export function createHorizon(): Horizon {
       // flank. A peak short of the line collapses its top quad to nothing.
       const line = snowY === null ? h : Math.min(h, snowY);
       ridgePos.push(x, -6, z, x, line, z, x, h, z);
+      ridgeRise.push(-6 / radius, line / radius, h / radius);
       const rock = 0.92 + 0.14 * Math.min(1, h / Math.max(1, lift + jag));
-      const snow = snowY !== null && h > snowY ? 1.7 : rock;
-      ridgeShade.push(rock, rock, snow);
-      ridgeBare.push(rock, rock, rock);
+      ridgeRock.push(rock, rock, rock);
+      const capped = snowY !== null && h > snowY ? 1 : 0;
+      ridgeCap.push(0, 0, capped);
       for (let k = 0; k < 3; k++) {
         ridgeHaze.push(ridge.haze);
         ridgeTone.push(ridge.tone);
@@ -153,7 +169,7 @@ export function createHorizon(): Horizon {
   // materials, and the whole horizon costs the frame a single draw.
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(ridgePos, 3));
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(ridgeShade.length * 3, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(ridgeRock.length * 3, 3));
   geo.setIndex(ridgeIndex);
   const mat = new THREE.MeshBasicMaterial({
     fog: false,
@@ -179,27 +195,71 @@ export function createHorizon(): Horizon {
 
   let snowy = true;
   let scale = 1;
+  /** The conditions the rings are currently painted for, so a change of
+   * COUNTRY can repaint from them: the colours are read per vertex against
+   * a sky the country's own scale moves the vertices around in, and the two
+   * setters are called in whichever order the caller likes. */
+  let last: Preset | null = null;
 
-  /** Repaint the horizon for the conditions: each ring dissolved into the
-   * sky by its own haze, darkened by its own tone, and the snow picked back
-   * out of whatever that leaves. */
+  /** Repaint the horizon for the conditions: each vertex shaded against the
+   * sky behind it, pulled toward the dark by its ring's own haze, darkened
+   * by its ring's tone, and the snow laid over whatever that leaves. */
   const paint = (p: Preset): void => {
+    last = p;
     const fogColor = new THREE.Color(p.fog);
-    const zenith = new THREE.Color(p.zenith);
+    // The dark end each ring is pulled toward by its own `haze` — the more
+    // of it, the further the ring has dissolved into the distance and the
+    // less of this it keeps. Under the open sky the zenith is the darkest
+    // the sky gets; under a deck it is the ceiling's own black underside,
+    // which is a good deal darker still and, unlike the zenith, is a colour
+    // the player can actually see out there.
+    const dark = new THREE.Color(p.deck ? p.deck.overhead : p.zenith);
+    // WHAT A SNOWFIELD LOOKS LIKE IN THIS LIGHT. A cap is not the rock
+    // under it turned up — it is a white surface, and a white surface is
+    // the colour of whatever falls on it: warm at noon, orange under a low
+    // sun, a dim blue under the moon. It has to be told how much light
+    // there is, because nothing in the scene lights a vertex colour — a
+    // snowfield under a black storm is grey, and left at its clear-day
+    // value it is the brightest thing on the screen.
+    //
+    // Turning the rock up is what this used to do, and a multiply that goes
+    // over one OVERFLOWS: a peak painted at 1.7x a sunset's peach clipped
+    // its red channel, lost the hue with it, and came back chalk-white —
+    // a range out of a different photograph laid over the sunset. A mix
+    // between two colours in gamut cannot do that.
+    //
+    // The ROOT of the light rather than the light itself, because this is
+    // the one surface in the frame with nothing else to read it against: a
+    // snowfield is the last thing in a landscape to go dark, so a clear
+    // moonlit night at a tenth of a noon still wants a third of a cap
+    // showing — while a storm's own tenth, which is the moon greyed out by
+    // the lid rather than the moon, has to keep taking it down.
+    const cap = new THREE.Color(p.sun).multiplyScalar(Math.sqrt(dayLight(p)));
+    const air = new THREE.Color();
     const rock = new THREE.Color();
     const colors = geo.getAttribute("color") as THREE.BufferAttribute;
-    // The snow's lift is a vertex colour and nothing in the scene can dim
-    // it, so the sky's own light has to: a snowfield under a black storm is
-    // grey, and left at its clear-day value it is the brightest thing on
-    // the screen.
-    const lit = 0.35 + 0.65 * dayLight(p);
-    const shades = snowy ? ridgeShade : ridgeBare;
-    for (let i = 0; i < shades.length; i++) {
-      const shade = 1 + (shades[i] - 1) * lit;
+    for (let i = 0; i < ridgeRock.length; i++) {
+      // WHAT IS ACTUALLY BEHIND THIS VERTEX. Under the open sky that is the
+      // air out there, and the fog it fades into is what the far distance
+      // reads as on the ground too. Under a DECK it is not: the ceiling is
+      // drawn over the whole dome, and its own ramp from the lit rim to the
+      // black underside crosses the lower half of the chain (`RIM_BAND`) —
+      // so a ring shaded against one flat colour comes out darker than the
+      // sky at its feet and many times brighter than the sky at its
+      // summits, which is a cut-out pasted over the weather rather than a
+      // range standing in it. Read per vertex, the range picks the gradient
+      // up: its feet dissolve into the lit gap under the base, its tops go
+      // to soot.
+      if (p.deck) deckToneAt(p.deck, Math.atan(ridgeRise[i] * scale), air);
+      else air.copy(fogColor);
       rock
-        .copy(fogColor)
-        .lerp(zenith, ridgeHaze[i])
-        .multiplyScalar(ridgeTone[i] * shade);
+        .copy(air)
+        .lerp(dark, ridgeHaze[i])
+        .multiplyScalar(ridgeTone[i] * ridgeRock[i]);
+      // The cap lies ON that, so it carries the ring's own aerial
+      // perspective with it and a far snowfield stays further away than a
+      // near one.
+      if (snowy && ridgeCap[i]) rock.lerp(cap, SNOW_SHOWS);
       colors.setXYZ(i, rock.r, rock.g, rock.b);
     }
     colors.needsUpdate = true;
@@ -214,6 +274,7 @@ export function createHorizon(): Horizon {
     scale = RIDGE_HEIGHT[biome];
     mesh.scale.y = scale;
     snowy = RIDGE_SNOW[biome];
+    if (last) paint(last);
   };
 
   const turnTo = (bearing: number): void => {

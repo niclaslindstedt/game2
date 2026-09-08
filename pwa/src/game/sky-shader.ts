@@ -26,12 +26,8 @@ import * as THREE from "three";
 import { MAX_LAYERS, type CloudLayer, type SkyDressing } from "./cloud-field.ts";
 import { fogUniforms, heightFogGlsl } from "./height-fog.ts";
 import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
-import { DOME_RADIUS, type Preset } from "./sky.ts";
+import { DOME_RADIUS, RIM_BAND, type Preset } from "./sky.ts";
 import { GALAXY_OCTAVES, starfieldGlsl } from "./starfield.ts";
-
-/** How high the deck's lit rim reaches, radians above the horizon — the
- * same band the simple sky paints its deck mesh over (clouds.ts). */
-const RIM_BAND = 0.16;
 
 /** Where the disc and halo were authored: a plane at 86 % of the dome's
  * radius, sized in metres. The shader wants angles. */
