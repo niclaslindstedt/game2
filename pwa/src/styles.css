@@ -8897,6 +8897,16 @@ a.menu-version:focus-visible {
   border-color: var(--hud-good);
 }
 
+/* The tile's contents, which are nothing until the tile is near enough to
+   the visible run of the strip to have asked for its thumbnail. It fills
+   the button either way, so the dark box is the same size before and after
+   the picture arrives and the strip never reflows under a scroll. */
+.gallery-thumb-slot {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .gallery-thumb-img {
   width: 100%;
   height: 100%;

@@ -67,3 +67,29 @@ export function shotMeta(shots: readonly Shot[]): ShotMeta[] {
     label,
   }));
 }
+
+/** The pixel size a FILMSTRIP THUMBNAIL is decoded at.
+ *
+ * The strip draws a picture at about eighty pixels across, and decoding the
+ * 1920-wide original to show it there costs a full-frame decode and holds
+ * some eight megabytes of bitmap per tile — forty of those at once is what
+ * makes opening a gallery a stall rather than a press. The tile crops with
+ * `object-fit: cover`, so the picture keeps its own shape here and merely
+ * COVERS the box; and it is never scaled UP, on the same principle the
+ * capture itself obeys — an enlarged picture is bytes spent on interpolated
+ * pixels nobody asked for. */
+export function thumbSize(
+  width: number,
+  height: number,
+  boxWidth: number,
+  boxHeight: number,
+): { width: number; height: number } {
+  // A record with no size in it (nothing writes one, but the roll is read
+  // back off disk and disks are not a promise) gets the box itself.
+  if (width <= 0 || height <= 0) return { width: boxWidth, height: boxHeight };
+  const scale = Math.min(1, Math.max(boxWidth / width, boxHeight / height));
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
