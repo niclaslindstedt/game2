@@ -516,7 +516,9 @@ export function stepAirborne(
     if (!soft) car.settle = Math.max(car.settle, clamp(slam / T.suspension.settleSlam, 0, 1));
     // ...and the underside folds around what the GROUND did not take: a
     // slam into sand is half a furrow, a slam onto tarmac is all car.
-    landingDamage(spec, car, slam * (1 - groundOf(ctx.surface).give), events, stats);
+    // ...at the attitude it arrived in: a car that went over an edge and
+    // settled nose-down lands on the end of itself, not on its floorpan.
+    landingDamage(spec, car, slam * (1 - groundOf(ctx.surface).give), events, stats, car.pitch);
     // Pick the road's own vertical speed back up instead of zeroing: land on
     // a brow and the car may be off the ground again next step, and a stale
     // zero there is a bounce where there should be a flight.

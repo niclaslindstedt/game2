@@ -901,7 +901,10 @@ describe("the end of the run", () => {
     const car = state.car;
     car.roll = TUNING.air.rollLandLimit + 0.2; // right side up: the LEFT flank lands
     const events: GameEvent[] = [];
-    landingDamage(state.spec, car, 26, events, state.stats);
+    // Gentle enough that the arrival stays inside the arms' own rating
+    // (`mounts.hubG`), so what is under test is the FOLD reaching the
+    // wheels and not the load tearing the hubs off.
+    landingDamage(state.spec, car, 16, events, state.stats);
     expect(car.damage.zones[6]).toBeGreaterThan(0);
     expect(car.damage.wheels[0]).toBeGreaterThan(0);
     expect(car.damage.wheels[2]).toBeGreaterThan(0);
@@ -1166,10 +1169,14 @@ describe("the glass, on the way to being gone", () => {
 });
 
 describe("hard landings", () => {
-  it("a cliff plunge crushes the underside and wears the chassis", () => {
+  it("a hard arrival on the wheels crushes the underside and wears the chassis", () => {
     const state = freshState();
-    state.car.u = 20;
-    state.car.y = 12; // a real drop: touchdown around 19 m/s of descent
+    // Carried far enough forward that the body stays inside its approach
+    // angle all the way down: this is a car BOTTOMING OUT, which is what
+    // the floorpan is for. A steeper line is a car arriving on its nose
+    // (`structure.diveAngle`), and folds a ring zone instead.
+    state.car.u = 45;
+    state.car.y = 12; // a real drop: touchdown around 15 m/s of descent
     state.car.vy = 0;
     state.car.airborne = true;
     const events: GameEvent[] = [];

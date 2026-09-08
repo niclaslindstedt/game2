@@ -49,11 +49,14 @@ export {
 // What the shell is made of, face by face (structure.ts).
 export {
   crushCap,
+  diveShare,
   foldSpeed,
   landingFace,
   restitutionAt,
   type CrushFace,
 } from "./game/structure.ts";
+// ...and what it is bolted together with (mounts.ts).
+export { arrestLoad, mountFailure } from "./game/mounts.ts";
 export { beyondDriving, damageEffects, lampShare, type DamageEffects } from "./game/damage.ts";
 export { heatPower, stepCooling } from "./game/cooling.ts";
 export {

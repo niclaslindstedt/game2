@@ -38,20 +38,44 @@ const S = TUNING.collision.structure;
  * for. */
 export type CrushFace = number | "belly" | "roof";
 
+/** Three quarters of a turn: the corner between a flank and the roof. */
+const ROOF_FROM = (Math.PI * 3) / 4;
+
 /** ...and which one the GROUND arrived at, from the attitude alone. Positive
  * roll lifts the right side, so a car tilted positive is one lying on its
  * LEFT flank (zone 6).
  *
- * The boundaries are the two the hull's own geometry sets: `rollLandLimit`
- * is as far as a car can lean and still land on its tyres, and three
- * quarters of a turn is the corner between a flank and the roof. */
-const ROOF_FROM = (Math.PI * 3) / 4;
-
-export function landingFace(tilt: number): CrushFace {
+ * The boundaries are the ones the hull's own geometry sets: `rollLandLimit`
+ * is as far as a car can lean and still land on its tyres, `ROOF_FROM` is
+ * the corner between a flank and the roof, and `diveAngle` is the APPROACH
+ * ANGLE — how far the nose can drop before the bumper reaches
+ * the ground ahead of the front tyres. A car that goes over an edge and
+ * settles nose-down does not land on its floorpan; it lands on the end of
+ * itself, which is a fold in a ring zone with the engine behind it.
+ *
+ * `pitch` is optional because only an arrival out of the AIR has an
+ * attitude of its own to arrive at. A grounded car's pitch is the grade it
+ * is standing on, and a bank met at pace is not a car diving into it —
+ * so those callers pass nothing and get the tyres, as they always did. */
+export function landingFace(tilt: number, pitch = 0): CrushFace {
   const lean = Math.abs(tilt);
-  if (lean <= T.air.rollLandLimit) return "belly";
   if (lean >= ROOF_FROM) return "roof";
-  return tilt > 0 ? 6 : 2;
+  if (lean > T.air.rollLandLimit) return tilt > 0 ? 6 : 2;
+  if (pitch <= -S.diveAngle) return 0;
+  if (pitch >= S.diveAngle) return 4;
+  return "belly";
+}
+
+/** How much of an END arrival the springs are still out of, 0..1 — the
+ * hand-over `diveAngle` opens and `attitude.pitchMax` closes. At the
+ * approach angle the bumper and the tyres touch together and the springs
+ * take what they always did; at the steepest attitude the body is allowed
+ * to hold they are not in the load path at all. Read by `landingDamage`
+ * for both what is free and how far the car travels while it stops, so a
+ * jump flown a degree past the line costs what it did a degree short. */
+export function diveShare(pitch: number): number {
+  const span = Math.max(1e-3, T.attitude.pitchMax - S.diveAngle);
+  return Math.min(1, Math.max(0, (Math.abs(pitch) - S.diveAngle) / span));
 }
 
 /** The car's mass against the mass every collision number is written for.
