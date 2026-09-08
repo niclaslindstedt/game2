@@ -249,7 +249,10 @@ describe("a jump met from behind", () => {
     state.nearIndex = lip + 60;
     let worstRise = 0;
     let flew = false;
-    for (let i = 0; i < TUNING.physicsHz * 4 && !flew; i++) {
+    // Five seconds to cover the sixty samples back to the lip: at a third
+    // of the throttle in a real third gear this car is barely gaining, and
+    // four used to be the whole distance only because the ladder was flat.
+    for (let i = 0; i < TUNING.physicsHz * 5 && !flew; i++) {
       const before = car.y;
       // Thrown by the lip — the `takeoff` — and not merely off the ground
       // for a moment: the road can hop the car on the way to it.
