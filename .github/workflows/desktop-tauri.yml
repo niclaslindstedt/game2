@@ -55,8 +55,6 @@ concurrency:
 
 permissions:
   contents: read
-  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
-  packages: read
 
 jobs:
   check:
@@ -153,8 +151,6 @@ jobs:
       # output and packages around it.
       - uses: ./.github/actions/setup
         if: inputs.platform == 'all' || inputs.platform == matrix.target
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
         if: inputs.platform == 'all' || inputs.platform == matrix.target
       - uses: Swatinem/rust-cache@v2

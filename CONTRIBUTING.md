@@ -5,7 +5,6 @@ Thanks for wanting to make the drifting better. This document covers everything 
 ## Prerequisites
 
 - Node.js 22+ (CI pins 24 via `.nvmrc`), npm 10+
-- A GitHub token with `read:packages` in `~/.npmrc` (the `@niclaslindstedt/oss-framework` dependency resolves from GitHub Packages — see the README's Configuration section)
 - Optional: `shellcheck` and `actionlint` for the shell-lint targets, a Chromium for `make screenshots`
 
 ## Getting the code running

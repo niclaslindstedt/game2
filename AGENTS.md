@@ -9,7 +9,7 @@ This repository conforms to [`OSS_SPEC.md`](OSS_SPEC.md) (the committed copy is 
 ## Build and test commands
 
 ```sh
-npm install       # needs a GitHub Packages read token — see below
+npm install       # everything resolves from the public npm registry
 make build        # typecheck + production build (pwa/dist/)
 make test         # vitest over the engine (SHARD=i/N slices it; CI runs ten)
 make lint         # eslint + typecheck, zero warnings
@@ -20,8 +20,6 @@ make check-seo    # build + structural SEO/PWA/bundle assertions
 ```
 
 That is the everyday set. **The full list — every lab, every preview tool, what each one prints — is the README's Usage table, and the `Makefile` is the authority.** The table below says which of them a given change OWES.
-
-`@niclaslindstedt/oss-framework` resolves from GitHub Packages, which requires auth even for public reads. Web sessions: `.claude/hooks/session-start.sh` writes the token from the environment (`GITHUB_PAT` et al.) into `~/.npmrc` and installs dependencies automatically. Locally: add `//npm.pkg.github.com/:_authToken=<token>` to your own `~/.npmrc`.
 
 **Scope the linter, never the typechecker, and leave the suite to CI.** `npx eslint <changed files>` is 2 s where the whole repo is 24; `npx tsc --noEmit` is 3 s and must stay whole-program, because it checks a PROGRAM (naming files makes it ignore `tsconfig.json`) and because a changed signature breaks its CALLERS — the files you did not touch.
 
@@ -80,7 +78,7 @@ Rules that apply to every task, before any subject skill has a say. They are res
 Three layers, one direction of dependency (details: [docs/architecture.md](docs/architecture.md)):
 
 - **`engine/`** — the whole game as a framework-free, renderer-free TypeScript module. Fixed 120 Hz `step(state, input)` (`TUNING.physicsHz`, with the bot's own decision rate beside it as `TUNING.botHz` — both knobs, both shipping at 120), deterministic per seed (no `Math.random` at runtime — everything draws from the seeded RNG in state). Contains the car model (`game/`), the stage rules engine (`mapgen/`), the bot driver + headless simulator (`sim/`), the generator's scoreboard (`analysis/` — dev-time only, never imported by the app), the §19.4 output module (`output.ts`), and data-authored content (`game/defs/`).
-- **`pwa/`** — the browser shell: Preact app, three.js renderer (reads `GameState`, never steps physics), input, HUD, the audio surface (a WebAudio synth, the sound bank, the road bed and the tracker scores — nothing is a file), PWA plumbing (hand-rolled service worker via `pwa-plugin.ts` + the framework's `usePwaUpdate` behind the app's own `update-button.tsx`).
+- **`pwa/`** — the browser shell: Preact app, three.js renderer (reads `GameState`, never steps physics), input, HUD, the audio surface (a WebAudio synth, the sound bank, the road bed and the tracker scores — nothing is a file), PWA plumbing (hand-rolled service worker via `pwa-plugin.ts` + the update watch in `lib/pwa-update.ts` behind the app's own `update-button.tsx`).
 - **`tests/` + `scripts/`** — root-level vitest suites over the engine, and Node tooling (sim CLI, track previews, screenshots, icons, SEO checks, release plumbing).
 
 Beside them, OUTSIDE the npm workspace and outside the root suite's path, the two shells that wrap the built site — **`tauri/`** (the desktop app: two Rust crates, `shell/` every decision and `src-tauri/` every effect) and **`native/`** (the App Store / Play Store app: an Expo WebView over a bundled copy of the site). **Nothing in `engine/` may learn either exists, and the ONE line of `pwa/` that does is `pwa/src/shell-host.ts`.** A feature a shell needs is a feature the website needs first. The `platform-shells` skill owns both, along with `tauri/README.md` and `native/README.md`.

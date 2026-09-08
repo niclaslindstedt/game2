@@ -2,16 +2,9 @@
 
 Scandinavian Flick has no runtime configuration surface (no accounts, no server); everything below is build-time or repo plumbing.
 
-## GitHub Packages auth (required to install)
+## Installing
 
-`@niclaslindstedt/oss-framework` resolves from `npm.pkg.github.com`, which requires a token even for public reads. The committed `.npmrc` maps the scope; the token lives in **your** `~/.npmrc`:
-
-```
-//npm.pkg.github.com/:_authToken=<GitHub token with read:packages>
-```
-
-- **CI** authenticates with the workflow's `GITHUB_TOKEN` (the workflows request `packages: read`).
-- **Claude web sessions** run `.claude/hooks/session-start.sh`, which finds a token in the environment (`NODE_AUTH_TOKEN`, `GITHUB_PAT`, `GH_TOKEN`, `GITHUB_TOKEN` — first match wins), writes it to `~/.npmrc`, and installs dependencies in the background.
+Every dependency resolves from the public npm registry, so `npm install` needs no token and no `~/.npmrc` entry. Claude web sessions run `.claude/hooks/session-start.sh`, which installs and builds in the background so the tooling is ready when the session opens.
 
 ## Build-time environment
 

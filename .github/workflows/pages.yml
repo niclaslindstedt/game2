@@ -55,8 +55,6 @@ permissions:
   contents: write
   pages: write
   id-token: write
-  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
-  packages: read
 
 concurrency:
   group: pages
@@ -149,11 +147,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@niclaslindstedt"
       - run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build ${{ matrix.slot }}
         run: npm run build --workspace pwa

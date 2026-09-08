@@ -2,11 +2,8 @@
 
 ## Installing / building
 
-**`npm install` fails with 401/403 on `@niclaslindstedt/oss-framework`.**
-Your GitHub Packages token is missing, expired, or lacks `read:packages`. See [configuration.md](configuration.md). Note npm reads `~/.npmrc` — a token exported only as an env var is not enough locally.
-
-**`npm install` fails on `E404 @niclaslindstedt/oss-framework`.**
-The committed `.npmrc` (scope → `npm.pkg.github.com`) didn't apply — run npm from the repo root, not a parent directory.
+**`npm install` fails to reach a registry.**
+Every dependency comes from the public npm registry; the repo commits no `.npmrc` and needs no token. A 401/403 is a stale `//npm.pkg.github.com/:_authToken=` or `@niclaslindstedt:registry=` line left in **your** `~/.npmrc` from an earlier checkout — delete it.
 
 **`make lint` / `make test` pass locally but CI disagrees.**
 Check Node major (`.nvmrc` says 24; ≥22 works) and that you ran the Make target, not a bare tool — the targets chain typechecks the bare tools skip.

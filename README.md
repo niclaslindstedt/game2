@@ -27,7 +27,6 @@ Three cars ship, and which wheels they drive is real physics rather than a badge
 
 - Node.js 22+ (CI pins 24 via [`.nvmrc`](.nvmrc))
 - npm 10+
-- A GitHub token able to read GitHub Packages (the [`@niclaslindstedt/oss-framework`](https://github.com/niclaslindstedt/oss-framework) dependency resolves from `npm.pkg.github.com`, which requires auth even for public reads — see Configuration)
 
 ## Install
 
@@ -37,7 +36,7 @@ cd game2
 npm install
 ```
 
-If the install fails on `@niclaslindstedt/oss-framework`, add a GitHub Packages token to your `~/.npmrc` first (see Configuration).
+Every dependency comes from the public npm registry — no token, no registry configuration.
 
 ## Quick start
 
@@ -107,14 +106,6 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 
 All configuration is optional and build-time:
 
-- **GitHub Packages auth** (required to install): add to `~/.npmrc`:
-
-  ```
-  //npm.pkg.github.com/:_authToken=<your GitHub token with read:packages>
-  ```
-
-  CI and Claude web sessions get this automatically (`GITHUB_TOKEN` / `GITHUB_PAT`).
-
 - `VITE_BASE` — deploy base path (`/`, `/preview/`, `/branch/`); set by the Pages workflow, defaults to `/`.
 - `VITE_PWA_IGNORE_PATHS` — sibling deploy slots the root service worker must not claim; set by the Pages workflow.
 
@@ -131,7 +122,6 @@ npm run track -- --seeds 42,99
 
 ## Troubleshooting
 
-- **`npm install` 401/403 on `@niclaslindstedt/oss-framework`** — your GitHub Packages token is missing or lacks `read:packages`; see Configuration.
 - **Black canvas / WebGL errors** — the renderer needs WebGL2; check `chrome://gpu` or try another browser. The engine itself is fine — `make sim` runs without any GPU.
 - **Stale build after deploy** — the service worker prompts before updating; if a prompt was dismissed, reload twice or clear site data.
 - **Choppy on phone** — close other tabs; the renderer pins pixel ratio at 2 and the engine steps at a fixed 120 Hz regardless of frame rate.

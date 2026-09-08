@@ -4,7 +4,7 @@ The repository is structured after its sibling game repo, which ships one produc
 
 ## Web / PWA (`pwa/`)
 
-The deployed site IS the product. It is installable (home-screen app on iOS/Android, fullscreen launch), offline-capable (hand-rolled precaching service worker), self-updating (in-app prompt via the oss-framework), and phone-first with full desktop keyboard support. Three deploy slots on [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/):
+The deployed site IS the product. It is installable (home-screen app on iOS/Android, fullscreen launch), offline-capable (hand-rolled precaching service worker), self-updating (in-app prompt from `pwa/src/lib/pwa-update.ts`), and phone-first with full desktop keyboard support. Three deploy slots on [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/):
 
 | Slot        | Serves                                        |
 | ----------- | --------------------------------------------- |

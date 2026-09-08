@@ -127,7 +127,7 @@ The **clock** owns the top-left corner, because in a racing game the clock is th
 ```sh
 git clone https://github.com/niclaslindstedt/game2
 cd game2
-npm install        # needs a GitHub Packages token — see docs/configuration.md
+npm install
 npm run dev
 ```
 

@@ -6,11 +6,10 @@
      2. The game shell: a full-viewport, non-scrolling canvas with the
         arcade HUD painted over it.
 
-   The framework's own stylesheet is deliberately NOT imported, and its
-   package is not scanned for utility classes: the app renders none of its
-   components — only its hooks — and every surface a player sees, the
-   new-build card included, wears the arcade chrome below. Import both back
-   the day a framework component is actually mounted. */
+   Every surface a player sees, the new-build button included, is the app's
+   own and wears the arcade chrome below: there is no third-party component
+   stylesheet here, and nothing outside this tree is scanned for utility
+   classes. */
 
 @import "tailwindcss";
 
