@@ -7569,6 +7569,10 @@ a.menu-version:focus-visible {
 .bench {
   align-items: stretch;
   text-align: center;
+  /* Given up to `.bench-head`, which is pinned and has to reach the card's
+     inner edge — see the band's own rule for why the padding cannot stay
+     here. */
+  padding-top: 0;
   min-width: min(23rem, 88vw);
   /* Wider than the other cards on this tier, because the thing it exists to
      show is a GRAPH and a graph is only as good as the width it is drawn
@@ -7600,13 +7604,16 @@ a.menu-version:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
-  /* IT EATS THE CARD'S TOP PADDING AND GIVES IT BACK INSIDE ITSELF. Sticky
-     pins the band to the top of the scrollport, which sits BELOW `.hud-menu`'s
-     1.2rem of padding — so without this the title scrolls up through that
-     1.2rem strip above the band and is cut in half by the card's own edge.
-     The negative margin lifts the box over the strip; the padding puts the
-     buttons back where they were. */
-  margin-top: -1.2rem;
+  /* THE BAND OWNS THE CARD'S TOP PADDING — `.bench` gives it up (above), and
+     this puts it back inside the band.
+
+     A negative margin does NOT work here and looked like it did: sticky pins
+     the band `top` from the SCROLLPORT, and the card's 1.2rem of padding is
+     inside that, so the band settles 19.2px below the card's inner edge
+     whatever the margin says. The strip that leaves is empty until the card
+     is scrolled to its end, and then the score's own caption paints in it,
+     above a band that is supposed to be the top of the card. With the padding
+     moved onto the band there is no strip to leak through. */
   padding-block: 1.2rem 0.35rem;
   background: rgb(18 48 105);
   border-bottom: 1px solid rgb(255 255 255 / 22%);
