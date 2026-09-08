@@ -2807,7 +2807,11 @@ await capture(
     roam: "1",
     seed: "20704",
     biome: "alpine",
-    season: "winter",
+    // SPRING rather than winter. An alpine winter puts the sun low enough at
+    // midday that the sky goes pink and the whole country reads as dusk — a
+    // handsome frame, and not the one this scene is for, which is the Alps in
+    // daylight. The snow that matters is on the peaks either way.
+    season: "spring",
     length: "short",
     // The generator's own dial names (NUMERIC_KNOBS in mapgen/rules.ts), not
     // the words the page prints beside them: HILLS is `elevation` and TERRAIN
@@ -2898,7 +2902,11 @@ await capture(
   {
     ...CLEAN,
     biome: "alpine",
-    season: "winter",
+    // SPRING rather than winter. An alpine winter puts the sun low enough at
+    // midday that the sky goes pink and the whole country reads as dusk — a
+    // handsome frame, and not the one this scene is for, which is the Alps in
+    // daylight. The snow that matters is on the peaks either way.
+    season: "spring",
     camera: "far",
     bot: "1",
     seed: "20704",
