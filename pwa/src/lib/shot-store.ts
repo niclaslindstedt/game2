@@ -36,8 +36,15 @@ const STORE = "shots";
  * flips between pictures with the arrow keys, and a round trip to disk per
  * press would show as a stutter. */
 let roll: Shot[] = [];
-let loaded = false;
 let options: ShotStoreOptions = { dbName: "shots", limit: 40 };
+
+/** The read off disk, once per session — held so a second caller joins the
+ * first rather than starting a second read of the same store. */
+let reading: Promise<readonly ShotMeta[]> | null = null;
+/** ...and whether it has come BACK. A gallery that opens on an empty roll
+ * has to tell "there are no pictures" apart from "nobody has looked yet",
+ * because those two are different things to say to a player. */
+let read = false;
 
 type Listener = (shots: readonly ShotMeta[]) => void;
 const listeners = new Set<Listener>();
@@ -113,9 +120,20 @@ function announce(): void {
 
 /** Read the roll in, once per session. An unreadable store simply resolves
  * to whatever is already in memory. */
-export async function loadShots(): Promise<readonly ShotMeta[]> {
-  if (loaded) return shotMeta(roll);
-  loaded = true;
+export function loadShots(): Promise<readonly ShotMeta[]> {
+  reading ??= readRoll().then((meta) => {
+    read = true;
+    return meta;
+  });
+  return reading;
+}
+
+/** Whether the roll has been read off disk yet. */
+export function shotsRead(): boolean {
+  return read;
+}
+
+async function readRoll(): Promise<readonly ShotMeta[]> {
   const db = await openDb();
   if (!db) return shotMeta(roll);
   const stored = await new Promise<Shot[]>((resolve) => {

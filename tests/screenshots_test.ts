@@ -32,7 +32,14 @@ import {
   stampLift,
   type HudCover,
 } from "../pwa/src/game/shot-plan.ts";
-import { shotId, shotMeta, withShot, withStored, type Shot } from "../pwa/src/lib/shot-roll.ts";
+import {
+  shotId,
+  shotMeta,
+  thumbSize,
+  withShot,
+  withStored,
+  type Shot,
+} from "../pwa/src/lib/shot-roll.ts";
 import { DEFAULT_SETTINGS, loadSettings } from "../pwa/src/game/settings.ts";
 
 /** A picture. Node has Blob, and the roll never looks inside one — it is
@@ -81,6 +88,39 @@ describe("the roll", () => {
 
   it("leaves the pixels out of a listing", () => {
     expect(shotMeta([shotAt(1000)])[0]).not.toHaveProperty("blob");
+  });
+});
+
+describe("a filmstrip thumbnail's size", () => {
+  it("covers the tile without blowing the box out", () => {
+    const size = thumbSize(1920, 1080, 160, 90);
+    expect(size).toEqual({ width: 160, height: 90 });
+  });
+
+  it("keeps the picture's own shape, so the tile's crop is the tile's job", () => {
+    // A portrait phone's shot in a landscape tile: it has to be wide enough
+    // to cover, which makes it taller than the box, and `object-fit: cover`
+    // takes the middle of it.
+    const size = thumbSize(1080, 1920, 160, 90);
+    expect(size.width).toBe(160);
+    expect(size.height).toBe(Math.round((160 * 1920) / 1080));
+  });
+
+  it("never scales a small picture UP", () => {
+    const size = thumbSize(64, 36, 160, 90);
+    expect(size).toEqual({ width: 64, height: 36 });
+  });
+
+  it("is a real size for a record that has lost its own", () => {
+    expect(thumbSize(0, 0, 160, 90)).toEqual({ width: 160, height: 90 });
+  });
+
+  it("is a thumbnail rather than a screenshot — the whole point of it", () => {
+    const full = 1920 * 1080;
+    const size = thumbSize(1920, 1080, 160, 90);
+    // Two orders of magnitude fewer pixels to decode and to hold, per tile,
+    // times a roll of forty.
+    expect(size.width * size.height).toBeLessThan(full / 100);
   });
 });
 
