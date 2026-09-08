@@ -714,7 +714,12 @@ export type GameEvent =
    * no ring angle applies. */
   | { type: "impact"; speed: number; angle: number; belly: boolean }
   /** A piece of the body tearing off — the renderer sends it flying. */
-  | { type: "partBreak"; part: DamagePart }
+  /** A part off the car for good. `shed` is how fast it LEAVES, m/s — the
+   * speed of whatever took it off, spent through the wedge it was squeezed
+   * out of (`mounts.ts`, `shedSpeed`), so a wheel forced out from under a
+   * car that came down on it is thrown where one levered off by a trunk at
+   * road speed is dropped. The renderer throws the piece at it. */
+  | { type: "partBreak"; part: DamagePart; shed: number }
   /** THE ONE PIECE OF DAMAGE NEWS NOBODY CAN SEE. A folded wing is on the
    * screen and a bonnet leaving on the wind announces itself; an engine
    * that has quietly lost a third of its power does not, and a driver who

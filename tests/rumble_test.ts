@@ -86,7 +86,7 @@ describe("what an event is worth in the hands", () => {
       { type: "lap", lap: 2, time: 60, best: true },
       { type: "checkpoint", index: 1, count: 3, split: 30, time: 30 },
       { type: "cheer", size: 0.5 },
-      { type: "partBreak", part: "doorL" },
+      { type: "partBreak", part: "doorL", shed: 4 },
       { type: "systemFail", system: "engine", stage: "hurt" },
       { type: "spin", slip: 1.4, speed: 20 },
     ];

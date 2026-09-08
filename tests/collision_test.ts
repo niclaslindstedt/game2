@@ -847,7 +847,8 @@ describe("the end of the run", () => {
     expect(car.damage.wheels[1]).toBe(1);
     expect(car.damage.broken).toContain("wheelFR");
     expect(events).toContainEqual({ type: "wheelFail", wheel: 1, off: true });
-    expect(events).toContainEqual({ type: "partBreak", part: "wheelFR" });
+    // ...carrying how hard it was thrown off with it (`mounts.shedSpeed`).
+    expect(events).toContainEqual(expect.objectContaining({ type: "partBreak", part: "wheelFR" }));
     // Three hits on the same trunk from the same spot stack three trips and
     // three shoves into the body — enough to roll it, or to skid it off
     // the road into the next tree, and either is a different run. What is

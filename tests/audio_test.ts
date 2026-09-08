@@ -236,7 +236,7 @@ describe("event routing", () => {
       { type: "impact", speed: 10, angle: 1, belly: false },
       { type: "impact", speed: 24, angle: 2, belly: true },
     ],
-    partBreak: [{ type: "partBreak", part: "bumperF" }],
+    partBreak: [{ type: "partBreak", part: "bumperF", shed: 4 }],
     kerbHit: [
       { type: "kerbHit", speed: 5 },
       { type: "kerbHit", speed: 20 },

@@ -372,6 +372,10 @@ aircam:
 # chase camera, the helicopter and a lens planted at the verge. REQUIRED
 # before/after any change to loose-wheel.ts. Same Chromium requirements as
 # `screenshots`.
+# `SHED=` sets how hard the wheel is thrown off, m/s (`partBreak.shed`):
+# the default is a wheel levered off its hub at road speed, and `SHED=11
+# make wheel OUT=wheel-plunge` is one squeezed out from under a car that
+# came down on that corner. Both ends want shooting on any change to it.
 wheel:
 	npm run wheel
 

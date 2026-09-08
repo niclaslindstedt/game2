@@ -42,6 +42,17 @@ const RUN_IN = 3.5;
 /** Which wheel goes: the rear right, which is the one the chase camera can
  * see whole. */
 const WHEEL = 3;
+/** ...and how hard it is thrown off, m/s — `partBreak.shed`, which is the
+ * engine's answer to how violently the thing that took it off was
+ * travelling (`mounts.ts`, `shedSpeed`). The default is the floor: a wheel
+ * levered off its hub at road speed, which is what every ordinary crash
+ * gives it. `?shed=11` is the other end — a wheel squeezed out from under a
+ * car that came down on that corner from a height — and the two ends want
+ * looking at side by side, because the throw is the one thing about a lost
+ * wheel a still frame cannot argue about. */
+const SHED = Number(
+  new URLSearchParams(location.search).get("shed") ?? TUNING.collision.mounts.shedFloor,
+);
 
 /** The seats. `chase` and `heli` are the game's own cameras and follow the
  * car; `free` is planted where a spectator would stand, at the verge ahead,
@@ -134,7 +145,7 @@ async function main(): Promise<void> {
     }
     renderer.onEvents(game, [
       { type: "wheelFail", wheel: WHEEL, off: true },
-      { type: "partBreak", part: WHEEL_PARTS[WHEEL] },
+      { type: "partBreak", part: WHEEL_PARTS[WHEEL], shed: SHED },
     ]);
 
     for (let f = 0; f < PER_SEAT; f++) {
@@ -145,7 +156,7 @@ async function main(): Promise<void> {
         image: await createImageBitmap(canvas),
         label:
           f === 0
-            ? `${seat}  wheel off at ${kmh} km/h`
+            ? `${seat}  wheel off at ${kmh} km/h, shed ${SHED.toFixed(1)} m/s`
             : `+${(f * FRAME).toFixed(2)}s  ${kmh} km/h`,
         head: f === 0,
       });

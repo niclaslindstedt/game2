@@ -19,7 +19,7 @@ import { KERB_MARKER, type KerbMarker, type WildObstacle } from "../mapgen/index
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { climbSpeed } from "./limits.ts";
-import { arrestLoad, mountFailure } from "./mounts.ts";
+import { arrestLoad, cornerLoads, mountFailure, shedSpeed } from "./mounts.ts";
 import {
   type CrushFace,
   crushCap,
@@ -163,16 +163,26 @@ export function glassCrack(damage: CarState["damage"], pane: number): number {
  * and spent inside the same call. */
 const WAS_GLASS = [0, 0, 0, 0];
 
+/** ...and each corner's helping of an arrival, in `WHEEL_PARTS` order. One
+ * array for the whole engine, for the same reason: it is written and spent
+ * inside one `mountLoads` call. */
+const CORNER_SHARE = [1, 1, 1, 1];
+
 function readCracks(damage: CarState["damage"], into: number[]): void {
   for (let pane = 0; pane < GLASS_PARTS.length; pane++) into[pane] = glassCrack(damage, pane);
 }
 
 /** ...and the panes the crush just carried over the top: each one leaves
  * its frame exactly once, the way any other part does. */
-function shearGlass(damage: CarState["damage"], was: number[], events: GameEvent[]): void {
+function shearGlass(
+  damage: CarState["damage"],
+  was: number[],
+  events: GameEvent[],
+  shed: number,
+): void {
   for (let pane = 0; pane < GLASS_PARTS.length; pane++) {
     if (was[pane] >= 1 || glassCrack(damage, pane) < 1) continue;
-    shear(damage, GLASS_PARTS[pane], events);
+    shear(damage, GLASS_PARTS[pane], events, shed);
   }
 }
 
@@ -280,7 +290,13 @@ function dealSystems(car: CarState, face: CrushFace, crush: number, events: Game
  * lines: the flat (`chassis.wheelFlat`) and the wheel coming off (1), the
  * latter also a `partBreak` for the piece itself. Compared against the
  * value before, like every call: dozens of small bites cross a line once. */
-function dealWheel(car: CarState, wheel: number, amount: number, events: GameEvent[]): void {
+function dealWheel(
+  car: CarState,
+  wheel: number,
+  amount: number,
+  events: GameEvent[],
+  shed: number,
+): void {
   if (amount <= 0) return;
   const wheels = car.damage.wheels;
   const was = wheels[wheel];
@@ -291,7 +307,7 @@ function dealWheel(car: CarState, wheel: number, amount: number, events: GameEve
     const part = WHEEL_PARTS[wheel];
     if (!car.damage.broken.includes(part)) {
       car.damage.broken.push(part);
-      events.push({ type: "partBreak", part });
+      events.push({ type: "partBreak", part, shed });
     }
   } else if (was < flat && wheels[wheel] >= flat) {
     events.push({ type: "wheelFail", wheel, off: false });
@@ -306,11 +322,12 @@ function dealWheels(
   crush: number,
   flat: boolean,
   events: GameEvent[],
+  shed: number,
 ): void {
   const S = T.collision.systems;
   if (face === "belly" || face === "roof") {
     const per = face === "belly" ? S.wheelFromBelly : S.wheelFromRoof;
-    for (let i = 0; i < WHEEL_PARTS.length; i++) dealWheel(car, i, crush * per, events);
+    for (let i = 0; i < WHEEL_PARTS.length; i++) dealWheel(car, i, crush * per, events, shed);
     return;
   }
   // A GROUND arrival across the whole of a flank is not a trunk driven into
@@ -323,7 +340,9 @@ function dealWheels(
   const zone = face;
   const corner = zone === 1 || zone === 3 || zone === 5 || zone === 7;
   const per = corner ? S.wheelFromCorner : S.wheelFromFlank;
-  for (const [wheel, share] of WHEELS_AT[zone]) dealWheel(car, wheel, crush * per * share, events);
+  for (const [wheel, share] of WHEELS_AT[zone]) {
+    dealWheel(car, wheel, crush * per * share, events, shed);
+  }
 }
 
 /** Book one dealt crush: fold the panels (a ring zone, or the underside
@@ -368,8 +387,11 @@ function dealCrush(
   callDamage("chassis", wasWear, damage.wear, events);
   damage.version += 1;
   if (crush <= 0) return;
+  // How fast anything the fold shears through LEAVES the car — the contact's
+  // own speed through the wedge it is squeezed out of (`shedSpeed`).
+  const shed = shedSpeed(speed);
   dealSystems(car, face, crush, events);
-  dealWheels(car, face, crush, flat, events);
+  dealWheels(car, face, crush, flat, events, shed);
   // The GLASS is read off the crush rather than written, so its before is
   // taken here — after the early returns that cannot craze anything, and
   // before the fold that can. EVERY face can: the ring around the panes,
@@ -378,29 +400,29 @@ function dealCrush(
   readCracks(damage, WAS_GLASS);
   if (face === "belly") {
     damage.belly = before + crush;
-    shearGlass(damage, WAS_GLASS, events);
+    shearGlass(damage, WAS_GLASS, events, shed);
     for (const bolt of BELLY_BOLTS) {
       if (damage.belly < bolt.crushAt) continue;
-      shear(damage, bolt.part, events);
+      shear(damage, bolt.part, events, shed);
     }
     return;
   }
   if (face === "roof") {
     damage.roof = before + crush;
-    shearGlass(damage, WAS_GLASS, events);
+    shearGlass(damage, WAS_GLASS, events, shed);
     for (const bolt of ROOF_BOLTS) {
       if (damage.roof < bolt.crushAt) continue;
-      shear(damage, bolt.part, events);
+      shear(damage, bolt.part, events, shed);
     }
     return;
   }
   const zone = face;
   damage.zones[zone] = before + crush;
-  shearGlass(damage, WAS_GLASS, events);
+  shearGlass(damage, WAS_GLASS, events, shed);
   for (const bolt of PART_BOLTS) {
     if (!bolt.zones.includes(zone)) continue;
     if (damage.zones[zone] < bolt.crushAt) continue;
-    shear(damage, bolt.part, events);
+    shear(damage, bolt.part, events, shed);
   }
 }
 
@@ -430,11 +452,16 @@ export function shearedParts(damage: CarState["damage"]): DamagePart[] {
 }
 
 /** One part off its bolts, once — a piece already on the road behind the
- * car cannot come off a second time. */
-function shear(damage: CarState["damage"], part: DamagePart, events: GameEvent[]): void {
+ * car cannot come off a second time. `shed` is how fast it leaves. */
+function shear(
+  damage: CarState["damage"],
+  part: DamagePart,
+  events: GameEvent[],
+  shed: number,
+): void {
   if (damage.broken.includes(part)) return;
   damage.broken.push(part);
-  events.push({ type: "partBreak", part });
+  events.push({ type: "partBreak", part, shed });
 }
 
 /** The ground hitting back at touchdown. `slam` is the descent speed
@@ -493,7 +520,7 @@ export function landingDamage(
   const stroke = Math.min(crush * car.damageScale, room) + M.shellSquash + springs;
   if (typeof face !== "number") {
     dealCrush(car, face, crush, 0, slam, events, stats, true);
-    mountLoads(car, slam, stroke, events);
+    mountLoads(car, slam, stroke, pitch, events);
     return;
   }
   // Zone 0 is the nose and the indices grow clockwise, so a face's own
@@ -516,9 +543,10 @@ export function landingDamage(
   // nose and the tail reach no wheel at all: what a car that dived onto
   // its bumper does to its arms is the load, below, and not the panel.
   const extra = crush * car.damageScale * T.collision.systems.wheelFromSideLand;
-  for (const [wheel, share] of WHEELS_AT[face]) dealWheel(car, wheel, extra * share, events);
+  const shed = shedSpeed(slam);
+  for (const [wheel, share] of WHEELS_AT[face]) dealWheel(car, wheel, extra * share, events, shed);
   if (extra > 0) car.damage.version += 1;
-  mountLoads(car, slam, stroke, events);
+  mountLoads(car, slam, stroke, pitch, events);
 }
 
 /** WHAT THE ARRIVAL ASKED OF THE BOLTS. The panels folding is the car
@@ -531,14 +559,32 @@ export function landingDamage(
  * lets go: the uprights first, taking their wheels with them, then the
  * drive shafts through their own joints, and last the engine, which goes
  * on falling inside the shell until the bulkhead stops it. Nothing here
- * knows how far the car fell, or that it fell at all. */
-function mountLoads(car: CarState, slam: number, stroke: number, events: GameEvent[]): void {
+ * knows how far the car fell, or that it fell at all.
+ *
+ * The load is not shared evenly: `pitch` and the roll say which corner the
+ * car actually came down on, and that corner takes more of it and throws
+ * its wheel harder (`cornerLoads`, `shedSpeed`). */
+function mountLoads(
+  car: CarState,
+  slam: number,
+  stroke: number,
+  pitch: number,
+  events: GameEvent[],
+): void {
   const failed = mountFailure(arrestLoad(slam, stroke));
   const hub = failed.hub * car.damageScale;
   const shafts = failed.drive * car.damageScale;
   const block = failed.engine * car.damageScale;
   if (hub <= 0 && shafts <= 0 && block <= 0) return;
-  for (let wheel = 0; wheel < WHEEL_PARTS.length; wheel++) dealWheel(car, wheel, hub, events);
+  // WHICH CORNER TOOK IT. A car almost never lands level, and the load goes
+  // down through the corner that reached the ground first — which is what
+  // makes a nose-first plunge tear off its FRONT wheels and throw them
+  // further than the pair that was still in the air.
+  cornerLoads(rollTilt(car.roll), pitch, CORNER_SHARE);
+  for (let wheel = 0; wheel < WHEEL_PARTS.length; wheel++) {
+    const share = CORNER_SHARE[wheel];
+    dealWheel(car, wheel, hub * share, events, shedSpeed(slam, share));
+  }
   const sys = car.damage.systems;
   const deal = (key: "gearbox" | "engine", amount: number): void => {
     if (amount <= 0) return;
