@@ -2944,28 +2944,36 @@ await capture(
   "shot-showcase-tvcam",
   SHOWCASE,
   async (page) => {
-    // Fifteen degrees where the desert asks twenty, and the difference is
-    // measured rather than felt. A staged slide on this taiga stretch peaks
-    // at about eighteen degrees while the car is still ON the road — the
-    // road here is narrower than the desert's, so the same provocation runs
-    // out of tarmac sooner — which puts twenty right on the boundary: the
-    // same scene shot fine one run and timed out the next with nothing
-    // between them that touches the car. Fifteen has margin, and is still
-    // half again the angle the game itself calls a drift.
-    await stageDrift(page, 15);
+    // No drift predicate here, and that is the measured answer rather than a
+    // surrender. On this taiga stretch the bot's slip peaks at 7°, and a
+    // staged slide is worse than useless: the road is narrower than the
+    // desert's, so the same provocation that works there has the car off the
+    // road before the shutter starts watching, and — with the lock still on
+    // and the throttle pinned — driving circles in a field for the rest of
+    // the run. Every angle worth photographing on this stage happens while
+    // the car is somewhere the predicate rightly refuses.
+    //
+    // Which is fine, because the SUBJECT of this frame is the camera. A
+    // trackside tripod watching a car come through a corner is the picture;
+    // whether that car is fifteen degrees sideways or five is the desert
+    // shot's business. So the bot drives, the run is stood near a corner,
+    // and the shutter asks only that the car is on the road when it fires.
+    const placed = await cleanTime(page);
+    await atCleanTime(page, placed + 4);
+    await atOnRoad(page);
     await clean(page);
   },
   {
     ...CLEAN,
     rivals: "4",
     camera: "tv",
-    // Stood partway down the stage and driven by hand, exactly as the desert
-    // is and for the same measured reasons (`stageDrift`) — with the added
-    // one that this is the only frame in the set paying for the lens pass on
-    // top of a software-rendered one, so it is the slowest scene here and the
-    // least able to afford driving to its moment.
+    // Stood partway down the stage rather than driven there: this is the only
+    // frame in the set paying for the lens pass on top of a software-rendered
+    // one, so it is the slowest scene here and the least able to afford the
+    // drive.
     at: "racing",
     s: "900",
+    bot: "1",
     seed: "38",
     length: "short",
     hour: "11",
