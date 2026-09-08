@@ -2026,7 +2026,7 @@ It shows as much as it costs: `wheelspin` carries it into the drawn wheels
 and the tachometer, the launch cloud is thrown off the same number
 (`launchThrow` in `pwa/src/game/dust.ts`), the pipe smokes hardest at
 exactly the moment none of the fuel is becoming road speed (`pipeWork` in
-`pwa/src/game/fumes.ts`), and the body trembles on its
+`pwa/src/game/exhaust.ts`), and the body trembles on its
 mounts while the revs are up and the car is not
 (`pwa/src/game/car-shake.ts` — millimetres, on the sprung mass and on the
 in-car eye, and gone by 50 km/h where the road's own grain takes over).
@@ -2035,8 +2035,8 @@ in-car eye, and gone by 50 km/h where the road's own grain takes over).
 On a heads-up grid the rivals sit through the same ceremony, and the bot
 spends it blipping its own throttle — deeper, oftener and higher at the
 green the more temper the crew has (the grid ritual, in
-[simulation.md](simulation.md)). Because `car.rev` is the same number for
-everybody, the tremble and the exhaust follow for nothing: the rivals'
+[simulation.md](simulation.md)). Because `car.rev` and `car.pedal` are the same
+numbers for everybody, the tremble and the exhaust follow for nothing: the rivals'
 bodies already read it (`car-mesh.ts`), and the field smokes out of a second
 shared cloud on the same terms as its dust (`field-cars.ts` over
 `fumes.ts`), thinned by `FIELD_FUMES` and capped to the nearest few crews.
@@ -2054,6 +2054,44 @@ car, so the cloud can only ever leave a pipe that exists).
 The revs a rival is sat on are the revs its clutch drops on, so the smoke
 and the shake at the lights are a true advertisement of who is about to
 light their tyres up.
+
+### What is actually coming out of the pipe
+
+`pwa/src/game/exhaust.ts` is the arithmetic and `fumes.ts` is the cloud, and
+the split is worth knowing because the exhaust answers **two** things that
+have nothing to do with each other.
+
+**The water, which is the weather's.** Burning petrol makes about its own
+weight in water and it leaves the pipe as vapour every time; what changes is
+whether the air will hold it. Above about 12 °C it cannot be seen at all, and
+by −10 it is the white plume that hangs over a start line — the same plume as
+breath on a cold morning, for the same reason. The temperature is read at the
+**pipe's own height** off the stage's climate (`temperatureAt`, so a stage
+that climbs to a pass drives into its own winter), a wet sky condenses more of
+it than a clear one, and a **cold pipe** in the first half-minute of a run is
+worth another half again — which is why a winter start line is the thickest
+this effect ever gets. Nothing about the throttle enters here: a revving
+engine makes more water _and_ more gas to carry it, so what the pedal changes
+is how much plume there is, not how white it is.
+
+**The soot, which is the driver's.** `car.pedal` — the throttle the engine is
+actually being given, which is what separates a car dragging itself out of a
+hairpin from one coasting into it at the same revs, a distinction `car.rev`
+cannot make. Richest wide open and low down, so a stab of throttle is a puff
+of black that clears as the engine comes up to meet it, and a clutch dropped
+on a lit axle is the blackest moment in a run. It is thin — a haze in summer,
+not a smokescreen — and a full water plume **washes** half of it out, so the
+same bootful is black in August and grey in February.
+
+Off the throttle in warm air the two come to nothing and `pipeWork` returns a
+burst of **no puffs at all**: the pool is never touched, which is also the
+cheapest this effect ever is. What it costs when it is not free is the winter
+half — the biggest, longest-lived, most overlapping sprites the game draws,
+eight cars' worth on a grid — so the DETAIL row's exhaust stop carries a third
+answer beside its two audiences (`vapour` in `EXHAUST_SEEN`): how much of the
+condensation to draw. It thins the water and never the soot, because a machine
+where standing on the throttle made no difference to the pipe would read as a
+bug rather than as a setting.
 
 ## Car against car
 

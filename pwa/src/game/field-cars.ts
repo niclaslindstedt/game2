@@ -63,7 +63,8 @@ import { liveryForCrew } from "./car-livery.ts";
 import { BRAKE_DUST, lightDust } from "./dust-light.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { pipeAnchors, type PipeAnchor } from "./car/shell.ts";
-import { createFumes, pipeBursts, pipeWork } from "./fumes.ts";
+import { pipeAir, pipeBursts, pipeWork } from "./exhaust.ts";
+import { createFumes } from "./fumes.ts";
 import { plumeGround } from "./ground-tint.ts";
 import { createNameTag, type NameTag } from "./name-tag.ts";
 import { createPlume } from "./plume.ts";
@@ -144,16 +145,17 @@ const FUME_CARS = 7;
  * second and tear holes in each other's clouds.
  *
  * It is well over half rather than a token, and that is a LOOKED-AT number.
- * The rate the player's pipe works at is steeply non-linear in the revs
- * (`EXHAUST.every` runs from an eighth of a second at idle to a sixtieth at
- * the limiter), so a thinning that sounds generous on paper lands on the
- * flat part of it: at a third, a rival holding half revs on the line made
- * about eight puffs a second and was invisible from the car behind it,
+ * The rate the player's pipe works at is steeply non-linear in the fuel
+ * (`EXHAUST.every` runs from an eighth of a second at idle to a thirtieth
+ * with the pedal buried), so a thinning that sounds generous on paper lands
+ * on the flat part of it: at a third, a rival holding half revs on the line
+ * made about eight puffs a second and was invisible from the car behind it,
  * which is the entire failure this exists to prevent.
  *
  * The pool is then sized for what that rate asks for at its worst — the
- * whole grid on the limiter at once, over the second or so a puff lives —
- * with the same headroom the field's dust cloud carries. */
+ * whole grid buried in the throttle on a winter start line, where the puffs
+ * are the longest-lived the cloud makes (`EXHAUST.look.life`) as well as the
+ * most frequent — with the same headroom the field's dust cloud carries. */
 const FIELD_FUMES = 0.6;
 const FUME_POOL = 1536;
 
@@ -181,18 +183,25 @@ export type FieldCars = {
    * which is looking at a stage rather than at cars and takes the whole
    * field off along with the player's own body. */
   update: (viewer: GameState, camera: THREE.PerspectiveCamera, dt: number, shown: boolean) => void;
-  /** The three things the field's clouds need and only the renderer knows:
-   * whether the rain has settled this stage (there is no cloud to tow off a
-   * soaked road), and one budget per cloud — how thick the field's EXHAUST
-   * may be, and how thick its TOWED dust.
+  /** What the field's clouds need and only the renderer knows: whether the
+   * rain has settled this stage (there is no cloud to tow off a soaked
+   * road), and one budget per cloud — how thick the field's EXHAUST may be,
+   * and how thick its TOWED dust.
    *
    * A budget each rather than one shared because the player owns them
    * separately (settings.ts's EXHAUST and DUST rows, either of which can put
    * the entry list's cloud away and leave the driven car's standing), and
    * because an exhaust is not dust: a grid steaming on the line is the
    * effect at its best and has nothing to do with what the ground gives up,
-   * which is why the rain reaches one of them and not the other. */
-  setClouds: (wet: boolean, smoked: number, towed: number) => void;
+   * which is why the rain reaches one of them and not the other.
+   *
+   * `vapour` is the EXHAUST row's SECOND answer, beside `smoked`: how much
+   * of the cold air's condensation plume this machine has agreed to draw
+   * (`EXHAUST_SEEN`). Its own number rather than a share of the budget
+   * because the two thin different things — `smoked` is the rate every pipe
+   * fires at, and this is the size and the life of a winter puff, which is
+   * where a grid of eight of them actually costs anything. */
+  setClouds: (wet: boolean, smoked: number, vapour: number, towed: number) => void;
   /** Hang the nearest crews' lamps on the register the clouds are lit from
    * (dust-light.ts) — a rival ahead of you in the dark is a red glow inside
    * its own dust before it is a car. `power` is how much of a beam the
@@ -327,8 +336,11 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let wetGround = false;
   /** The budget the towed cloud may spend — see `setClouds`. */
   let towedFx = 1;
-  /** …and the one the pipes may spend, which is a separate row's answer. */
+  /** …and the one the pipes may spend, which is a separate row's answer —
+   * with that row's other half beside it, the share of the cold plume the
+   * field is allowed to condense (see `setClouds`). */
   let smokedFx = 1;
+  let fieldVapour = 1;
   /** One cloud for the whole entry list — see the module note. Off until
    * somebody is entered (`showCloud`). */
   // The marks the field leaves in snow (snow-marks.ts) — on the DUST row's
@@ -554,13 +566,19 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           const blown = car.damage.broken.includes("exhaust");
           const ports = blown ? body.pipeStub : body.pipes;
           if (ports.length === 0) continue;
-          body.fumeClock += dt;
-          const pipe = pipeWork(car.rev, car.u, state.phase, smokedFx, {
+          const pipe = pipeWork(car, pipeAir(state, car.y), smokedFx, {
             thickness: FIELD_FUMES,
             pipes: ports.length,
+            vapour: fieldVapour,
             broken: blown,
           });
-          const bursts = car.airborne ? 0 : pipeBursts(body.fumeClock, pipe.every);
+          // Same bargain the player's pipe strikes: the clock runs only
+          // while there is something to make good on, or a rival that has
+          // been coasting through a warm stage pays the burst cap into one
+          // position the moment it picks the throttle back up.
+          const smoking = !car.airborne && pipe.puffs > 0;
+          body.fumeClock = smoking ? body.fumeClock + dt : 0;
+          const bursts = smoking ? pipeBursts(body.fumeClock, pipe.every) : 0;
           if (bursts === 0) continue;
           body.fumeClock -= bursts * pipe.every;
           // Their own axes, not the viewer's: the field on a grid is not all
@@ -576,16 +594,17 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
                 car.z - fwdZ * at.back - fwdX * at.side,
                 -fwdX * pipe.blast + state.wind.x * 0.85,
                 -fwdZ * pipe.blast + state.wind.z * 0.85,
-                pipe.shade,
+                pipe,
               );
             }
           }
         }
       }
     },
-    setClouds: (wet, smoked, towed) => {
+    setClouds: (wet, smoked, vapour, towed) => {
       wetGround = wet;
       smokedFx = smoked;
+      fieldVapour = vapour;
       towedFx = towed;
       showCloud();
     },

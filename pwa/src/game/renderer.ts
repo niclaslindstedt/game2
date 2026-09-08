@@ -73,7 +73,7 @@ import { createFieldCars, type FieldCars } from "./field-cars.ts";
 import { watchGpuContext } from "./gpu-context.ts";
 import { wetnessOf, type Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
-import { pipeBursts, pipeWork } from "./fumes.ts";
+import { pipeAir, pipeBursts, pipeWork } from "./exhaust.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
 import {
@@ -1455,24 +1455,30 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     }
 
     // Exhaust: puffs off every tailpipe the car's bodywork has
-    // (`pipeAnchors`), faster and sootier the more fuel the engine is
-    // drinking, handed to the wind the moment they leave the pipe. The rate
-    // is shared across the pipes rather than paid per pipe, so a twin-exit
-    // car puts up two plumes and the same amount of smoke.
+    // (`pipeAnchors`), thicker the more fuel the engine is drinking, sootier
+    // the harder the pedal is asking for it, whiter the colder the air is
+    // around it — and handed to the wind the moment they leave the pipe. The
+    // rate is shared across the pipes rather than paid per pipe, so a
+    // twin-exit car puts up two plumes and the same amount of smoke.
     // A car revving on the grid is drinking plenty and turning none of it
-    // into road speed, so it smokes harder than one at pace — `car.rev` is
-    // the throttle itself anywhere in the start control, and gearing plus
-    // speed at every other moment, which is why the read is phase-gated.
+    // into road speed, so it smokes harder than one at pace; a warm car off
+    // the throttle puts out gas the air swallows whole, and `pipe.puffs`
+    // comes back zero rather than spending the pool on nothing.
     const pipeFx = exhaustFx();
     const blown = c.damage.broken.includes("exhaust");
     const ports = blown ? pipeStub : pipes;
-    const pipe = pipeWork(c.rev, c.u, state.phase, pipeFx, {
+    const pipe = pipeWork(c, pipeAir(state, c.y), pipeFx, {
       pipes: ports.length,
+      vapour: EXHAUST_SEEN[quality.exhaust].vapour,
       broken: blown,
     });
-    fumeClock += dt;
-    const bursts =
-      pipeFx > 0 && ports.length > 0 && !c.airborne ? pipeBursts(fumeClock, pipe.every) : 0;
+    const smoking = pipeFx > 0 && ports.length > 0 && !c.airborne && pipe.puffs > 0;
+    // The clock only runs while there is something to make good on. Left
+    // running through a warm stage's whole coast it banks seconds, and the
+    // first frame back on the pedal pays the burst cap out of the pool in
+    // one position — a puff of smoke where the car ISN'T.
+    fumeClock = smoking ? fumeClock + dt : 0;
+    const bursts = smoking ? pipeBursts(fumeClock, pipe.every) : 0;
     if (bursts > 0) {
       fumeClock -= bursts * pipe.every;
       for (const at of ports) {
@@ -1483,7 +1489,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
             c.z - fwdZ * at.back + rightZ * at.side,
             -fwdX * pipe.blast + state.wind.x * 0.85,
             -fwdZ * pipe.blast + state.wind.z * 0.85,
-            pipe.shade,
+            pipe,
           );
         }
       }
@@ -1604,6 +1610,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     field.setClouds(
       wetGround,
       EXHAUST_SEEN[quality.exhaust].field ? fx : 0,
+      EXHAUST_SEEN[quality.exhaust].vapour,
       DUST_RAISED[quality.dust].field ? fx : 0,
     );
     field.update(state, chase.camera, dt, view !== "map");

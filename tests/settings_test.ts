@@ -374,15 +374,27 @@ describe("whose body folds at each DETAIL stop", () => {
 // plume leaving a car with no pipe under it.
 describe("who has an exhaust at each DETAIL stop", () => {
   it("takes the exhaust off every car on LOW", () => {
-    expect(EXHAUST_SEEN[DETAIL_PRESETS.low.exhaust]).toEqual({ player: false, field: false });
+    expect(EXHAUST_SEEN[DETAIL_PRESETS.low.exhaust]).toEqual({
+      player: false,
+      field: false,
+      vapour: 0,
+    });
   });
 
   it("leaves it to the car being driven on MEDIUM", () => {
-    expect(EXHAUST_SEEN[DETAIL_PRESETS.medium.exhaust]).toEqual({ player: true, field: false });
+    expect(EXHAUST_SEEN[DETAIL_PRESETS.medium.exhaust]).toEqual({
+      player: true,
+      field: false,
+      vapour: 0.55,
+    });
   });
 
   it("gives the whole entry list a pipe on HIGH", () => {
-    expect(EXHAUST_SEEN[DETAIL_PRESETS.high.exhaust]).toEqual({ player: true, field: true });
+    expect(EXHAUST_SEEN[DETAIL_PRESETS.high.exhaust]).toEqual({
+      player: true,
+      field: true,
+      vapour: 1,
+    });
   });
 
   // A rival steaming behind a car whose own pipe is off reads as a bug in
@@ -390,6 +402,18 @@ describe("who has an exhaust at each DETAIL stop", () => {
   it("never smokes a rival the driven car is not", () => {
     for (const audience of Object.values(EXHAUST_SEEN)) {
       expect(audience.field && !audience.player).toBe(false);
+    }
+  });
+
+  // A stop that draws no pipe at all cannot be drawing a plume out of it,
+  // and the top stop is the effect as it was tuned.
+  it("condenses nothing where nothing smokes, and all of it at the top", () => {
+    expect(EXHAUST_SEEN.off.vapour).toBe(0);
+    expect(EXHAUST_SEEN.all.vapour).toBe(1);
+    for (const audience of Object.values(EXHAUST_SEEN)) {
+      expect(audience.vapour).toBeGreaterThanOrEqual(0);
+      expect(audience.vapour).toBeLessThanOrEqual(1);
+      if (!audience.player) expect(audience.vapour).toBe(0);
     }
   });
 
@@ -403,6 +427,7 @@ describe("who has an exhaust at each DETAIL stop", () => {
       const over = walk[i]!;
       expect(over.player || !under.player).toBe(true);
       expect(over.field || !under.field).toBe(true);
+      expect(over.vapour).toBeGreaterThanOrEqual(under.vapour);
     }
   });
 });

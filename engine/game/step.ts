@@ -919,9 +919,16 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     // The seed goes in on the last grid frame, which is this one: the car is
     // handed to the handling model already lit.
     if (state.phase === "racing") grid.launchSpin = clutchDump(state.spec, grid, state.surface);
+    grid.pedal = revTarget;
     state.stuck.since = state.t;
     return events;
   }
+  // NOBODY IS DRIVING IT until the step below says otherwise. Every branch
+  // from here to the handling is a car out of the driver's hands — the
+  // flag is out, it is under water, it is on its roof — and a pedal left
+  // at whatever it was last pressed to is an engine still drinking at a
+  // car nobody is in. The driven case writes it back beside the cooling.
+  state.car.pedal = 0;
   if (state.phase === "finished" || state.phase === "retired") return events;
 
   // R25 — the roll-out. The clock has stopped; the car has not. Nothing the
@@ -1151,6 +1158,10 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // (game/cooling.ts), and one that runs out is an engine at 1 — which is
   // the retire below.
   stepCooling(car, drive.throttle, car.u, T.dt, events);
+  // ...and the pedal that made it, kept for the presentation to read: the
+  // exhaust is fuel burned, and this is the half of that the needle cannot
+  // tell it (`CarState.pedal`).
+  car.pedal = clamp(drive.throttle, 0, 1);
   // ...and WHERE that roll stopped is the whole of the question. Asked of
   // a body that has finished moving, so a car mid-roll and a car in the
   // air are both still having their go: only one that is down, still and

@@ -849,11 +849,29 @@ export const CRUMPLE_SEEN: Record<VideoSettings["crumple"], { player: boolean; f
  * same two questions the dust is asked: the car the frame is rendered FROM,
  * and the rest of the entry list. One record for the same reason DUST_RAISED
  * is one: a stage where the field is smoking and the car being driven is not
- * would read as a bug in the car. */
-export const EXHAUST_SEEN: Record<VideoSettings["exhaust"], { player: boolean; field: boolean }> = {
-  off: { player: false, field: false },
-  player: { player: true, field: false },
-  all: { player: true, field: true },
+ * would read as a bug in the car.
+ *
+ * ...and a THIRD question the dust is never asked, because an exhaust is the
+ * one cloud whose cost is set by the WEATHER rather than by the driving.
+ * What a pipe puts out is mostly water, and water is invisible until the air
+ * is cold enough to condense it (fumes.ts) — so the same car that costs
+ * nothing on a summer stage hangs the thickest, longest-lived, most
+ * overlapping sprites in the game off its bumper at ten below, and a winter
+ * grid is eight of them at once. `vapour` is the share of that plume a stop
+ * draws: full at the top, thinned in the middle, and moot at the bottom
+ * where no pipe smokes at all.
+ *
+ * It thins the WATER and never the soot. What the pedal blows out of the
+ * back of a car is a wisp at any stop and costs accordingly, and a machine
+ * where standing on the throttle made no difference to the exhaust would
+ * read as a bug rather than as a setting. */
+export const EXHAUST_SEEN: Record<
+  VideoSettings["exhaust"],
+  { player: boolean; field: boolean; vapour: number }
+> = {
+  off: { player: false, field: false, vapour: 0 },
+  player: { player: true, field: false, vapour: 0.55 },
+  all: { player: true, field: true, vapour: 1 },
 };
 
 /** HOW MANY OF THE CAR'S OWN LAMPS ARE ACTUALLY THROWN at each stop of the

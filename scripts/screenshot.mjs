@@ -100,6 +100,26 @@ async function slowerThan(page, kmh) {
   );
 }
 
+/** Wait until the car is ON THE POWER — the speedo climbing over a pair of
+ * samples, and past walking pace so a standing start does not qualify. The
+ * HUD carries no throttle, and for anything that answers the PEDAL (the
+ * exhaust's soot) that is the fact a scene has to wait for: `atOpenRoad`
+ * says only that nothing is called, and a bot with nothing called may still
+ * be settling the car or braking early. */
+async function onThePower(page) {
+  const speed = "Number.parseInt(document.querySelector('.hud-speed-num')?.textContent ?? '0', 10)";
+  await page.waitForFunction(
+    `(() => {
+      const now = ${speed};
+      const was = window.__shotSpeed ?? 0;
+      window.__shotSpeed = now;
+      return now > 40 && now > was + 2;
+    })()`,
+    null,
+    { timeout: 180000, polling: 400 },
+  );
+}
+
 /** The run's own clock, seconds. */
 async function stageTime(page) {
   return (await page.evaluate(`${READ_CLOCK} ?? 0`)) ?? 0;
@@ -234,6 +254,102 @@ await capture(
     await atLamps(page, 2);
   },
   { mode: "headsup", camera: "heli" },
+);
+
+/** Every picture row at its top stop. The exhaust is the one effect whose
+ * DETAIL row decides whether there is anything to photograph at all — a
+ * grid at the shipped MEDIUM smokes out of one pipe, the player's — so the
+ * two scenes below ask for HIGH and get the whole entry list working. */
+const RICH_PICTURE = `localStorage.setItem(
+  "scandi-flick-options",
+  JSON.stringify({
+    video: {
+      effects: "full",
+      interior: "full",
+      glass: "all",
+      crumple: "all",
+      wheelLoss: "all",
+      flora: "rich",
+      ground: "rich",
+      dust: "all",
+      exhaust: "all",
+    },
+  }),
+)`;
+
+// THE SAME GRID, COLD AND WARM — the pair, because an exhaust is a WINTER
+// effect and a single frame of one cannot say so. What a pipe puts out is
+// mostly water, invisible until the air is cold enough to condense it
+// (pwa/src/game/exhaust.ts), so the acceptance test is the DIFFERENCE
+// between these two files and not either one of them:
+//
+//   COLD — a pale plume standing off every pipe on the line, thickest here
+//   of anywhere in the game: the cars are stationary, their pipes are still
+//   cold steel from the manifold back, and the whole field is blipping. If
+//   this frame is a row of thin grey wisps, `condense` is wrong.
+//
+//   WARM — the same seed, the same lamp, the same throttles, and very nearly
+//   nothing: a dark haze off the crews hardest on the pedal and clean air
+//   behind the rest. If this frame has a plume in it, the effect has stopped
+//   being about the weather.
+//
+// Shot from over the field rather than from behind it, because a chase
+// camera looks along its own car's roofline and a tailpipe is under the
+// bumper at the bottom of the frame — from the seat your own exhaust is
+// something you catch in the mirror, and every other car's is what the
+// effect is actually for.
+//
+// The shutter is on the RUN's clock a beat after the green rather than on a
+// lamp, and that is the only cursor the pair can share. A lamp resolves and
+// the shutter fires behind it, so under software rendering one of the two
+// lands on the line and the other half a second down the road — two frames
+// of different moments, which is the one thing a comparison may not be. A
+// beat after the green is also the best exhaust in the game: every pipe on
+// the field cold, and every throttle buried. The player's own is down from
+// the first lamp, so there is a near pipe to judge the far ones against.
+for (const scene of [
+  { name: "cold", params: { season: "winter", temp: "-12" } },
+  { name: "warm", params: { season: "summer", temp: "26" } },
+]) {
+  await capture(
+    `shot-exhaust-${scene.name}`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await atLamps(page, 1);
+      await page.keyboard.down("ArrowUp");
+      await atStageTime(page, 0.5);
+    },
+    { mode: "headsup", camera: "heli", ...scene.params },
+    "load",
+    { initScript: RICH_PICTURE },
+  );
+}
+
+// ...and the other half of the claim: the PIPE ON A CAR THAT IS MOVING. The
+// plume is left standing on the road rather than towed, so a cold stage
+// keeps a line of it down the road behind the car — and the acceptance test
+// is that it is a TRAIL and not a ball, which is the difference between a
+// puff that lives long enough to be left behind and one that dies at the
+// bumper.
+//
+// Driven by the bot, and held until the car is provably ACCELERATING. Open
+// road is not enough on its own: the bot can be off the throttle with
+// nothing called — settling the car, or already braking for the corner the
+// call is about to name — and a car off the throttle has no exhaust to
+// photograph by design, so a scene that caught one would say nothing either
+// way. From over the car for the reason the grid pair is: the road behind it
+// is where the plume is, and from any rig behind the car that road is off
+// the bottom of the frame.
+await capture(
+  "shot-exhaust-cold-pace",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 12);
+    await atOpenRoad(page);
+    await onThePower(page);
+  },
+  { season: "winter", temp: "-12", bot: "1", camera: "heli" },
 );
 
 await capture(
