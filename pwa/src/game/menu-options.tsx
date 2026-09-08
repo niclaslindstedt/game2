@@ -11,8 +11,9 @@
 //               on the pre-race card beside the car's own numbers, and the
 //               answer is simply remembered (`settings.gearbox`).
 //   CONTROLS  — only what the device can use: which thumb steers on glass,
-//               and a door each to the keyboard's and the controller's
-//               bindings, which are pages of their own.
+//               a door each to the keyboard's and the controller's bindings,
+//               which are pages of their own, and the vibration a device
+//               with a motor can be felt through.
 //
 // Every row is the same knob (menu-knobs.tsx) and nothing else: no sentence
 // under it, no caption bar, no OK button — a row whose name and three stops
@@ -26,6 +27,7 @@ import { useEffect, useRef, useState } from "react";
 import { askShellFullscreen, onShellFullscreen } from "../shell-host.ts";
 import { desktopPicture, renderHeightOf, renderHeightStops } from "./desktop-video.ts";
 import { captureAxis, captureSource, type PadFrame } from "./gamepad.ts";
+import { canRumble } from "./haptics.ts";
 import { deviceControls, holdPad, readPadFrames } from "./input.ts";
 import { MenuHead } from "./menu.tsx";
 import {
@@ -175,6 +177,9 @@ function MainPage({
   // Probed once per mount: a device does not grow a keyboard while the
   // options page is open, and re-probing on every render would churn.
   const [device] = useState(deviceControls);
+  // ...and whether there is anything to vibrate, probed the same way and for
+  // the same reason: a device does not grow a motor while the page is open.
+  const [rumbles] = useState(canRumble);
   const pads = usePadPresence();
   // ...and the two rows only the desktop app has. The shell's word is fixed
   // for the life of the process, so it is read once; the window it describes
@@ -348,6 +353,18 @@ function MainPage({
               disabled={!pads.connected}
               onOpen={() => onSub("controller")}
             />
+            {/* Only where there is a motor to switch — see `canRumble`. A
+                laptop is never asked a question about hardware it does not
+                have, and the row is the last in the group because it is the
+                one control that is felt rather than pressed. */}
+            {rumbles && (
+              <StepRow
+                label="VIBRATION"
+                stops={ON_OFF}
+                value={onOff(settings.rumble)}
+                onPick={(id) => set({ rumble: id === "on" })}
+              />
+            )}
           </KnobGroup>
         </div>
       </div>

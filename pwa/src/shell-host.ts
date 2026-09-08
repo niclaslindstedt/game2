@@ -4,8 +4,10 @@
 // initialization script defines one frozen global before the game's own
 // scripts run, and this is the only place that reads it. What differs in a
 // shell is small and stated here in full: the bundle IS the update, so the
-// PWA update lifecycle stays off; and the desktop window has a fullscreen a
-// browser tab keeps for itself, so the page may ask for it (below).
+// PWA update lifecycle stays off; the desktop window has a fullscreen a
+// browser tab keeps for itself, so the page may ask for it; and a phone has
+// haptics a WebView cannot reach, so the page may ask for a pulse (both
+// below).
 //
 // DOM-free where it can be: the probe goes through `globalThis`, which Node
 // has too, and the fullscreen bridge below guards every DOM call it makes —
@@ -57,6 +59,25 @@ export function askShellFullscreen(want: FullscreenAsk): void {
   const target = globalThis as { dispatchEvent?: (event: Event) => boolean };
   if (typeof CustomEvent !== "function" || typeof target.dispatchEvent !== "function") return;
   target.dispatchEvent(new CustomEvent(SHELL_FULLSCREEN_ASK, { detail: { want } }));
+}
+
+/** A PULSE THE PLAYER CAN FEEL, handed out. The third thing the page may
+ * know about a shell, and the second thing it may ask one to DO.
+ *
+ * A browser has the Vibration API and the game uses it where it exists
+ * (`game/haptics.ts`); an iOS WebView has nothing of the kind, and the phone
+ * it is running on has the best haptics in the game. So the page describes
+ * the pulse it wants — how long, and how hard, 0..1 — and the shell spends
+ * that on whatever its platform actually has. Told rather than asked: there
+ * is no answer, and a pulse nobody is listening for is a pulse that did not
+ * happen, which is exactly what a browser with no motor should do. */
+export const SHELL_RUMBLE = "sf-shell-rumble";
+
+/** Ask the shell for one pulse. A no-op in a browser. */
+export function askShellRumble(ms: number, strength: number): void {
+  const target = globalThis as { dispatchEvent?: (event: Event) => boolean };
+  if (typeof CustomEvent !== "function" || typeof target.dispatchEvent !== "function") return;
+  target.dispatchEvent(new CustomEvent(SHELL_RUMBLE, { detail: { ms, strength } }));
 }
 
 /** Hear every answer, until the returned hand-back is called. */

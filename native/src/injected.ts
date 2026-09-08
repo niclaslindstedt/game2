@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// JavaScript injected into the game WebView. Two jobs, both invisible to the
+// JavaScript injected into the game WebView. Three jobs, all invisible to the
 // game's own code:
 //
 //  1. NATIVE_FLAG — names this shell to the page BEFORE the game boots, on
@@ -12,7 +12,16 @@
 //     new build, never by an in-page reload. Frozen, like the desktop one, so
 //     nothing on the page can later claim to be a browser.
 //
-//  2. VIEWPORT_HARDENING — make the page feel like an app, not a document:
+//  2. RUMBLE_BRIDGE — carry the page's vibration asks out to the phone's own
+//     haptics. The website decides what is felt and how big it is
+//     (pwa/src/game/rumble.ts) and dispatches a DOM event describing each
+//     pulse; a browser with a motor answers it itself, and a WKWebView — which
+//     has no Vibration API at all — has this listener instead, relaying the
+//     pulse over the message channel to src/haptics.ts. Injected BEFORE the
+//     content for the same reason the flag is: a listener added after the
+//     game's first frame is a pulse nobody hears.
+//
+//  3. VIEWPORT_HARDENING — make the page feel like an app, not a document:
 //     kill the long-press callout/selection and rubber-band scroll that a raw
 //     WKWebView still allows even with the website's own viewport meta.
 //
@@ -28,6 +37,25 @@ export const NATIVE_FLAG = `(function () {
       writable: false,
       configurable: false,
       enumerable: false,
+    });
+  } catch (e) {}
+  true;
+})();`;
+
+/** Listens for the page's rumble asks and posts each one to the shell. The
+ * event's name and its two fields are `SHELL_RUMBLE` in
+ * `pwa/src/shell-host.ts`, and the message's shape is `parseRumble` in
+ * `src/rumble.ts` — change one, change all three; `tests/rumble_test.ts`
+ * holds them together. */
+export const RUMBLE_BRIDGE = `(function () {
+  try {
+    window.addEventListener("sf-shell-rumble", function (event) {
+      var pulse = event.detail || {};
+      var post = window.ReactNativeWebView;
+      if (!post) return;
+      post.postMessage(
+        JSON.stringify({ sf: "rumble", ms: pulse.ms, strength: pulse.strength }),
+      );
     });
   } catch (e) {}
   true;
