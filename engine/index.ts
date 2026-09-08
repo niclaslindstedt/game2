@@ -120,7 +120,7 @@ export {
   type Climate,
   type ClimateChoice,
 } from "./game/climate.ts";
-export { jumpFlight, jumpSize, type JumpSize } from "./game/jump.ts";
+export { jumpArc, jumpFlight, jumpSize, type JumpArc, type JumpSize } from "./game/jump.ts";
 export {
   boardHalfWidth,
   crossedFinish,

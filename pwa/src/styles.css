@@ -981,6 +981,62 @@ body {
   transition: opacity 0.12s linear;
 }
 
+/* THE ESTIMATE, drawn as an estimate. The flight over a lip is the one line
+   in the whole strip that is a PREDICTION rather than a survey — the road is
+   compiled and the arc is only what the ramp and the reference pace say the
+   car will do with it — so it is broken where the ground either side of it is
+   solid, which is the projection idiom off any trajectory diagram. It is
+   drawn lighter than the road for the same reason: it is air.
+
+   The dash is on the FAINT copy only. The lit copy reveals itself with a dash
+   of its own (`stroke-dasharray` is the mechanism the fill is built on, and
+   one element cannot carry two patterns), so flying the jump replaces the
+   broken guess with a solid line over exactly the part of it that has been
+   flown — the estimate becoming the fact, along the arc, as it happens. */
+/* THE AIR ITSELF, under the two lines that bound it. Faint enough that the
+   drawn road and the arc stay the sign and this stays their backing, solid
+   enough to be the thing that survives when the plate is halved and shrunk
+   into the second slot. It is deliberately NOT part of `.hud-pace-road`,
+   whose 0.42 is tuned for a stroke: the same value over an area this size
+   would read as a filled shape with two lines on it. */
+.hud-pace-airspace {
+  fill: currentColor;
+  opacity: 0.17;
+}
+
+/* A LIGHTER LINE THAN A CORNER'S. A corner sign is one stroke and can afford
+   to be drawn as thick as the box allows; a jump sign is two lines with the
+   whole call in the space BETWEEN them, and at the corner's weight the ground
+   and the arc close that space up and the sign becomes a blob. */
+.hud-pace-lip {
+  --pace-stroke: 8;
+}
+
+.hud-pace-arrow .hud-pace-air {
+  stroke-width: calc(var(--pace-stroke) * 0.62);
+}
+
+/* Long enough to read as a broken line rather than as beads: the caps are
+   round, so a dash much under twice the stroke's width comes out a dot. */
+.hud-pace-road .hud-pace-air {
+  stroke-dasharray: 11 9;
+}
+
+/* ...and heavier again in the second slot, which is drawn at 0.58 and would
+   otherwise lose the two thinnest lines on the strip. A corner call behind a
+   corner call survives the scaling on one bold stroke; a jump sign is a road,
+   an arc and the daylight between them, and all three shrink together. The
+   ink is put back in proportion to what the scale takes out, and the dashes
+   are lengthened with it so the broken line does not close up into a solid
+   one at the smaller size. */
+.hud-pace-next .hud-pace-lip {
+  --pace-stroke: 11;
+}
+
+.hud-pace-next .hud-pace-road .hud-pace-air {
+  stroke-dasharray: 15 11;
+}
+
 /* The way home is lettered rather than drawn, and its triangle stands beside
    a sentence instead of being the whole call: a lighter line, so it sits at
    the weight of the words next to it. */

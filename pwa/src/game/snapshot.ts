@@ -8,6 +8,7 @@
 
 import {
   TUNING,
+  jumpArc,
   jumpSize,
   startsIn,
   travelSpeed,
@@ -25,7 +26,7 @@ import { nightNow } from "./daylight.ts";
 import { clamp } from "../lib/util.ts";
 import { carHealth } from "./car-health.ts";
 import { tachometer } from "./car-instruments.ts";
-import { cornerSign, type PaceSign } from "./pace-shape.ts";
+import { cornerSign, jumpSign, type JumpSign, type PaceSign } from "./pace-shape.ts";
 import { shiftLightOn, shiftWindow } from "./shift-window.ts";
 import type { HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx";
 
@@ -155,11 +156,18 @@ export type PaceMemory = {
 };
 
 /** One thing worth calling, and where on the stage it is. A corner carries
- * the note the generator wrote; a jump is the sample the lip crosses, with
- * the size the engine gives it (`jumpSize`) already taken — the flight is a
- * walk down the elevation profile, and the stage's lips do not change under
- * a running car any more than its corners do. */
-type PaceEvent = { s: number; note: Pacenote } | { s: number; jump: TrackSample; size: JumpSize };
+ * the note the generator wrote; a jump carries the size the engine gives it
+ * (`jumpSize`) and the SIGN drawn off its estimated flight — both walks down
+ * the elevation profile, and the stage's lips do not change under a running
+ * car any more than its corners do.
+ *
+ * The jump's sign is built here rather than lazily like a corner's because a
+ * stage carries a couple of lips against dozens of corners, and the sign is
+ * also what says where the call ENDS — the road runs out at the lip, but the
+ * call does not, and the strip needs the landing to know when to take it
+ * down. */
+type PaceEvent =
+  { s: number; note: Pacenote } | { s: number; jump: TrackSample; size: JumpSize; sign: JumpSign };
 
 export function createPaceMemory(): PaceMemory {
   return {
@@ -199,7 +207,12 @@ function paceEvents(state: GameState, mem: PaceMemory): PaceEvent[] {
   const events: PaceEvent[] = notes.map((note) => ({ s: note.s, note }));
   for (let i = 0; i < samples.length; i++) {
     if (!samples[i].jump) continue;
-    events.push({ s: samples[i].s, jump: samples[i], size: jumpSize(state.track, i) });
+    events.push({
+      s: samples[i].s,
+      jump: samples[i],
+      size: jumpSize(state.track, i),
+      sign: jumpSign(samples, i, jumpArc(state.track, i)),
+    });
   }
   events.sort((a, b) => a.s - b.s);
   mem.events = events;
@@ -227,8 +240,9 @@ function throughCorner(state: GameState, note: Pacenote): number {
   return clamp((state.progressS - note.s) / span, 0, 1);
 }
 
-/** How much of the corner the fill is spent over — the rest of it is the sign
- * standing COMPLETE before it comes down.
+/** How much of the call's own road the fill is spent over — the rest of it is
+ * the sign standing COMPLETE before it comes down. Shared by both kinds of
+ * sign: a jump's run-out is its exit, and it earns the same beat.
  *
  * It has to be less than the whole corner, or the finished sign is a frame
  * nobody is ever shown: the call is taken down the moment `endS` is behind
@@ -242,6 +256,27 @@ function throughCorner(state: GameState, note: Pacenote): number {
  * three to eight ticks of the strip at any pace a corner is taken at, so it
  * is a beat rather than a flicker. */
 const THROUGH_FULL = 0.9;
+
+/** HOW FAR THROUGH THE JUMP the car is, 0 where the sign's approach starts
+ * and 1 at the end of its run-out — the same instrument the corner's fill is,
+ * over the road the jump's sign actually draws.
+ *
+ * The lip is not the end of a jump call, it is the middle of one: the sign
+ * runs from the approach, up the ramp, along the estimated flight and down
+ * the landing, so the fill climbs the ramp with the car and then goes through
+ * the air with it. A call that stopped at the lip would be a sign that went
+ * out at the instant the jump began.
+ *
+ * ARC POSITION, like the corner's, and for the same reason — and it holds up
+ * in the air because `progressS` keeps tracking the road under a flying car.
+ * A driver who leaves the lip slower than the reference pace lands before the
+ * drawn arc fills, which is the honest reading: the sign says what the lip
+ * gives, and the fill says what this car did with it. */
+function throughJump(state: GameState, sign: JumpSign): number {
+  const span = (sign.endS - sign.startS) * THROUGH_FULL;
+  if (span <= 0) return 0;
+  return clamp((state.progressS - sign.startS) / span, 0, 1);
+}
 
 /** Turn angle past which a call earns the LONG modifier, radians (~100°). */
 const LONG_NOTE_ANGLE = 1.75;
@@ -275,7 +310,7 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
     // never the clock, so a car stopped short of a corner keeps its call
     // however long it sits there.
     if ("note" in event && event.note.endS <= state.progressS) continue;
-    if ("jump" in event && event.jump.s < state.progressS) continue;
+    if ("jump" in event && event.sign.endS <= state.progressS) continue;
     const eventS = event.s;
     const called = "note" in event ? event.note.s <= mem.calledS : eventS <= mem.calledJumpS;
     // THE COUNTDOWN ONLY EVER RUNS DOWN. Seconds to a corner is metres over
@@ -296,7 +331,13 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
     live.push(eventS);
     if ("jump" in event) {
       mem.calledJumpS = Math.max(mem.calledJumpS, eventS);
-      out.push({ kind: "jump", size: event.size, eta });
+      out.push({
+        kind: "jump",
+        size: event.size,
+        eta,
+        fill: throughJump(state, event.sign),
+        sign: event.sign,
+      });
       if (out.length >= 2) break;
       continue;
     }

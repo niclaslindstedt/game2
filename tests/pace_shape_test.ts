@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE CORNER SIGN — the co-driver strip's picture of the turn being called.
+// THE CO-DRIVER'S SIGNS — the strip's picture of the thing being called: a
+// corner's plan, and a jump's elevation with its estimated flight over it.
 //
 // It is tested here rather than looked at because the claims it has to keep
 // are geometric, and a screenshot only ever shows one corner on one stage:
@@ -19,11 +20,24 @@
 //
 // It also covers the one case that has no samples to walk: a note at an
 // endless stage's streaming frontier, which still has to draw something.
+//
+// The JUMP sign is here for the same reasons and one of its own: what it has
+// to keep is a relationship BETWEEN two lines — the arc has to clear the road
+// it is drawn over, land back on it, and fill in the order a car flies it —
+// and a picture only ever shows one lip on one stage.
 
 import { describe, expect, it } from "vitest";
-import { compileTrack, type Pacenote, type SegmentPlan } from "@engine";
+import { compileTrack, jumpArc, type Pacenote, type SegmentPlan, type Track } from "@engine";
 
-import { cornerSign, fillSign, type PacePoint, type PaceSign } from "../pwa/src/game/pace-shape.ts";
+import {
+  cornerSign,
+  fillJump,
+  fillSign,
+  jumpSign,
+  type JumpSign,
+  type PacePoint,
+  type PaceSign,
+} from "../pwa/src/game/pace-shape.ts";
 
 /** A rig with one corner in it, plus the road either side so the note has a
  * clean entry and exit. `dir` +1 grows the heading — a LEFT call on screen. */
@@ -227,5 +241,171 @@ describe("the sign filling as the corner is driven", () => {
     expect(fillSign(sign, -1).head).toBeNull();
     expect(fillSign(sign, -1).lit).toBe(0);
     expect(fillSign(sign, 2).head).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/** A one-lip stage whose ramp is exactly as steep as asked, with room to run
+ * up to it and a long flat road past it — so nothing but the ramp decides the
+ * flight, and the sign has real ground either side of the lip to draw. */
+function lipStage(lipHeight: number): SegmentPlan[] {
+  return [
+    {
+      kind: "straight",
+      length: 1400,
+      feature: "jump",
+      featureStart: 400,
+      featureEnd: 416,
+      lipHeight,
+    },
+  ];
+}
+
+function lipSign(lipHeight: number): { sign: JumpSign; track: Track; lip: number } {
+  const track = compileTrack(11, lipStage(lipHeight));
+  const lip = track.samples.findIndex((s) => s.jump);
+  expect(lip).toBeGreaterThan(0);
+  return { sign: jumpSign(track.samples, lip, jumpArc(track, lip)), track, lip };
+}
+
+/** Every point of a jump sign, whichever of its four lines it is on. */
+function allPoints(sign: JumpSign): PacePoint[] {
+  return [...sign.ramp, ...sign.gap, ...sign.landing, ...sign.flight];
+}
+
+/** The drawn height of the flight above the road it is passing over, at the
+ * widest — the DAYLIGHT, which is the whole thing a jump call is about. In
+ * screen axes y grows downward, so clearing the ground is a smaller y. */
+function daylight(sign: JumpSign): number {
+  let most = 0;
+  for (const [x, y] of sign.flight) {
+    // The ground directly under this point of the arc, walked along the road
+    // the flight passes over.
+    for (let i = 1; i < sign.gap.length; i++) {
+      const [ax, ay] = sign.gap[i - 1];
+      const [bx, by] = sign.gap[i];
+      if (x < Math.min(ax, bx) || x > Math.max(ax, bx)) continue;
+      const t = bx === ax ? 0 : (x - ax) / (bx - ax);
+      most = Math.max(most, ay + (by - ay) * t - y);
+    }
+  }
+  return most;
+}
+
+describe("the jump the sign draws", () => {
+  it("draws the road the flight passes over, and flies the arc above it", () => {
+    // The two lines and the space between them ARE the call: an arc drawn
+    // with no ground under it is a curve, and a jump is the daylight.
+    const { sign } = lipSign(2.4);
+    expect(sign.gap.length).toBeGreaterThan(2);
+    expect(daylight(sign)).toBeGreaterThan(8);
+  });
+
+  it("lands the flight exactly on the road, not near it", () => {
+    const { sign } = lipSign(2.4);
+    const touchdown = sign.flight[sign.flight.length - 1];
+    // The landing starts where the flight ends — a stroke of separation there
+    // reads as a car that never came down.
+    const seam = Math.hypot(touchdown[0] - sign.landing[0][0], touchdown[1] - sign.landing[0][1]);
+    expect(seam).toBeLessThan(1e-9);
+  });
+
+  it("runs left to right, so a jump can never be mistaken for a corner", () => {
+    const { sign } = lipSign(2.4);
+    const line = [...sign.ramp, ...sign.gap.slice(1), ...sign.landing.slice(1)];
+    for (let i = 1; i < line.length; i++) {
+      expect(line[i][0]).toBeGreaterThanOrEqual(line[i - 1][0] - 1e-9);
+    }
+  });
+
+  it("fits its box, ramp and arc and landing alike", () => {
+    for (const height of [0.8, 1.6, 2.4, 3.2, 4]) {
+      for (const [x, y] of allPoints(lipSign(height).sign)) {
+        expect(x).toBeGreaterThanOrEqual(0);
+        expect(x).toBeLessThanOrEqual(100);
+        expect(y).toBeGreaterThanOrEqual(0);
+        expect(y).toBeLessThanOrEqual(100);
+      }
+    }
+  });
+
+  it("a longer flight is a bigger jump on the sign, not the same picture", () => {
+    // Both signs are fitted to the same box, so the only thing telling them
+    // apart is the shape — the whole reason the sign is the jump and not a
+    // canned ramp-and-arrow.
+    const small = lipSign(1);
+    const big = lipSign(4);
+    expect(big.sign.length).toBeGreaterThan(small.sign.length + 10);
+    expect(daylight(big.sign)).toBeGreaterThan(daylight(small.sign));
+  });
+
+  it("quotes the engine's own estimate of the flight, and no other", () => {
+    const { sign, track, lip } = lipSign(2.4);
+    expect(sign.length).toBeCloseTo(jumpArc(track, lip).length, 9);
+  });
+});
+
+describe("the jump sign filling as the lip is taken", () => {
+  const { sign } = lipSign(2.4);
+
+  it("lights nothing on the approach", () => {
+    const lit = fillJump(sign, 0);
+    expect(lit.ramp.lit).toBe(0);
+    expect(lit.flight.lit).toBe(0);
+    expect(lit.landing.lit).toBe(0);
+  });
+
+  it("climbs the ramp before any of the flight lights", () => {
+    // The order is the whole claim. A jump call covers the road either side
+    // of the lip, so its fill has a run-up to spend before any of the air is
+    // drawn as flown — light them together and the sign says the car left the
+    // ground on the approach.
+    const onRamp = fillJump(sign, sign.share.ramp * 0.5);
+    expect(onRamp.ramp.lit).toBeGreaterThan(0);
+    expect(onRamp.ramp.lit).toBeLessThan(onRamp.ramp.span);
+    expect(onRamp.flight.lit).toBe(0);
+  });
+
+  it("flies the arc with the whole ramp behind it, and the landing still dark", () => {
+    const inAir = fillJump(sign, sign.share.ramp + sign.share.flight * 0.5);
+    expect(inAir.ramp.lit).toBeCloseTo(inAir.ramp.span, 9);
+    expect(inAir.flight.lit).toBeGreaterThan(0);
+    expect(inAir.flight.lit).toBeLessThan(inAir.flight.span);
+    expect(inAir.landing.lit).toBe(0);
+  });
+
+  it("only ever goes forwards, ramp then air then landing", () => {
+    let last = [-1, -1, -1];
+    for (let i = 0; i <= 40; i++) {
+      const lit = fillJump(sign, i / 40);
+      const now = [lit.ramp.lit, lit.flight.lit, lit.landing.lit];
+      now.forEach((v, k) => expect(v).toBeGreaterThanOrEqual(last[k] - 1e-9));
+      last = now;
+    }
+  });
+
+  it("is whole by the end of the landing, every part of it", () => {
+    const lit = fillJump(sign, 1);
+    expect(lit.ramp.lit).toBeCloseTo(lit.ramp.span, 9);
+    expect(lit.flight.lit).toBeCloseTo(lit.flight.span, 9);
+    expect(lit.landing.lit).toBeCloseTo(lit.landing.span, 9);
+  });
+
+  it("clamps either side of the jump", () => {
+    expect(fillJump(sign, -1).ramp.lit).toBe(0);
+    expect(fillJump(sign, 2).landing.lit).toBeCloseTo(fillJump(sign, 1).landing.span, 9);
+  });
+
+  it("spends the fill in the stage's own metres, not the fitted line's", () => {
+    // The vertical is stretched tenfold to make the height readable, which
+    // makes the drawn arc far longer than the drawn ramp even where the road
+    // says otherwise. Reading the split off the drawing would put the lit end
+    // of the sign somewhere the car is not.
+    const shares = sign.share.ramp + sign.share.flight + sign.share.landing;
+    expect(shares).toBeCloseTo(1, 9);
+    const lit = fillJump(sign, sign.share.ramp);
+    expect(lit.ramp.lit).toBeCloseTo(lit.ramp.span, 9);
+    expect(lit.flight.lit).toBe(0);
   });
 });

@@ -2088,14 +2088,16 @@ await captureElement(
 // run is PLACED a call's lead short of it (`at=racing&s=`, engine's
 // place.ts) and the strip is photographed on its own. Read them as a row —
 // the point of three words is that they are told apart at a glance, and
-// three separate frames are the only way to see whether the colour, the
-// word and the ramp in the icon all step together.
+// three separate frames are the only way to see whether the colour and the
+// drawn flight step together: the sign is the lip's own elevation, so a
+// bigger jump has to come back as more daylight between the arc and the
+// ground falling away under it, not merely as a different colour.
 //
 // The seeds are not decorative: re-roll the generator and these lips move,
 // so if a shot comes back with no call in it, re-list the stage's lips
 // (their sizes are `jumpSize` over `track.samples[i].jump`) and re-pick.
 for (const lip of [
-  { name: "small", seed: "5", s: 334 },
+  { name: "small", seed: "26", s: 796 },
   { name: "medium", seed: "7", s: 1178 },
   { name: "big", seed: "3", s: 2475 },
 ]) {

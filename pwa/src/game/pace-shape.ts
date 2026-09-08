@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE CORNER AS ITS OWN SIGN — the line the co-driver's strip draws is the
-// stage's own plan view of the turn being called, walked off the compiled
-// centerline.
+// THE CALL AS ITS OWN SIGN — the line the co-driver's strip draws is the
+// stage's own drawing of the thing being called, walked off the compiled
+// road. A corner is its PLAN, seen from above; a jump is its ELEVATION, seen
+// from the side, with the estimated flight arcing over the road that falls
+// away under it. Two projections, one hand.
 //
 // A fixed arrow per severity is a vocabulary the driver has to learn; the
 // corner itself is one they already have, out of the windscreen. A double
@@ -18,7 +20,7 @@
 //
 // DOM-free — it is geometry, and the tests read it without a browser.
 
-import type { Pacenote, TrackSample } from "@engine";
+import type { JumpArc, Pacenote, TrackSample } from "@engine";
 
 /** A point in the sign's own 100x100 box — the viewBox the HUD draws in. */
 export type PacePoint = [number, number];
@@ -343,3 +345,247 @@ function fitToBox(line: PacePoint[]): PacePoint[] {
   const originY = PAD + (usable - h * sy) / 2;
   return line.map((p): PacePoint => [originX + (p[0] - minX) * sx, originY + (p[1] - minY) * sy]);
 }
+
+// ---------------------------------------------------------------------------
+// THE JUMP AS ITS OWN SIGN
+// ---------------------------------------------------------------------------
+
+/** How much road is drawn in FRONT of the lip, m — enough that the ramp is a
+ * ramp with a grade to read rather than a line that stops. Metres and not a
+ * fraction of the flight, unlike the corner's LEAD: a corner is fitted to the
+ * box afterwards and has no natural scale, where a jump's own length is the
+ * thing the sign is FOR, and a run-up that grew with it would cancel it out
+ * exactly. */
+const JUMP_LEAD = 20;
+/** ...and how much past the landing, m. Shorter than the run-up: the road
+ * after touchdown is where the call has stopped mattering. */
+const JUMP_RUNOUT = 18;
+
+/** Room kept clear around the jump's profile, user units — tighter than the
+ * corner's PAD, and it buys the one measurement the sign lives or dies on.
+ * What a jump call says is the DAYLIGHT between the arc and the ground that
+ * has dropped away under it, and that gap is what is left after both strokes
+ * have taken their half-widths out of it. Every unit of box the padding does
+ * not spend is a unit of gap. */
+const JUMP_PAD = 10;
+
+/** How much the sign exaggerates the vertical against the horizontal.
+ *
+ * A jump is a hundred metres of road with three to ten metres of height in
+ * it, and drawn honestly it is a horizontal line — the ramp, the flight and
+ * the ground falling away are all inside the stroke's own width. The whole
+ * point of an elevation is the height, so the height is stretched.
+ *
+ * TEN, so that the stage's own lips land across the box rather than at one
+ * end of it: over 48 lips from seeds 1-12 at all three lengths, the drawn
+ * profile's height-to-length ratio runs 0.03 to 0.098, and ten times the
+ * horizontal scale puts those between a third of the box and the whole of
+ * it. So a small lip is a shallow mark and a big one plunges, and neither
+ * has to be measured against anything to be read that way. */
+const JUMP_VERT = 10;
+
+/** A jump, drawn from the side: the road up to the lip, the estimated flight
+ * over the gap, and the road it comes back down to.
+ *
+ * The four lines share ONE fit, so they are one picture: the arc really does
+ * clear the ground it is drawn over, and the height it clears it by is the
+ * air the call is about. */
+export type JumpSign = {
+  /** The road into the lip — the approach and the ramp face. */
+  ramp: PacePoint[];
+  /** The road the flight passes OVER, lip to touchdown. It is drawn and it
+   * never lights: the car is not on it, and the daylight between it and the
+   * arc is the whole call. */
+  gap: PacePoint[];
+  /** The road from touchdown on. */
+  landing: PacePoint[];
+  /** The estimated flight itself, lip to touchdown. */
+  flight: PacePoint[];
+  /** THE AIR: the region the flight encloses against the road beneath it,
+   * closed and ready to wash. The arc and the ground are two thin lines and
+   * the jump is the space between them — as a filled area that space survives
+   * being scaled down and dimmed in the strip's second slot, where two
+   * hairlines do not, and it says how much air at a glance instead of asking
+   * for the gap to be measured by eye. */
+  air: PacePoint[];
+  /** What share of the call's road each DRIVEN part is worth, summing to 1 —
+   * measured off the stage in metres, not off the drawn line, so the fill
+   * tracks the car rather than the fitting. */
+  share: { ramp: number; flight: number; landing: number };
+  /** The estimated jump length, m: how much air the flight covers. */
+  length: number;
+  /** Arc position the sign starts at and ends at, m — what `progressS` is
+   * read against to fill it. */
+  startS: number;
+  endS: number;
+};
+
+/** The jump's sign, in the same 100x100 box the corner's is drawn in.
+ *
+ * `arc` is the engine's own estimate of the flight (`jumpArc`), so the
+ * picture and the word on the plate come off ONE ballistic answer and cannot
+ * describe different jumps. */
+export function jumpSign(
+  samples: readonly TrackSample[],
+  lipIndex: number,
+  arc: JumpArc,
+): JumpSign {
+  const lip = samples[lipIndex];
+  const first = samples[0].s;
+  const last = samples[samples.length - 1].s;
+  const startS = Math.max(first, lip.s - JUMP_LEAD);
+  const landS = Math.min(last, lip.s + arc.length);
+  const endS = Math.min(last, landS + JUMP_RUNOUT);
+
+  // The road under all of it, in the lip's own frame: metres along the stage
+  // from the lip, metres above the road's height at it. The three joints are
+  // put in by hand so the pieces below meet exactly where they are split.
+  const ground = (s: number): PacePoint => [s - lip.s, groundAt(samples, s) - lip.elevation];
+  const ramp = [ground(startS), ...between(samples, startS, lip.s, ground), [0, 0] as PacePoint];
+  const gap = [[0, 0] as PacePoint, ...between(samples, lip.s, landS, ground), ground(landS)];
+  const landing = [ground(landS), ...between(samples, landS, endS, ground), ground(endS)];
+  // The flight lands ON the road rather than near it: `jumpFlight` found
+  // touchdown by the same interpolation `groundAt` walks, so the two agree to
+  // within a sample step — and a sign whose arc stops a stroke short of the
+  // ground it just landed on reads as a car that did not come down.
+  //
+  // Cut to `landS` first, for the one case where they genuinely part company:
+  // at an endless stage's streaming frontier the flight is longer than the
+  // road compiled so far, and the arc's own points would otherwise carry on
+  // past the end of the ground and hang the sign off its box.
+  const landX = landS - lip.s;
+  const flight = arc.points.filter((p) => p.s < landX).map((p): PacePoint => [p.s, p.y]);
+  flight.push(ground(landS));
+
+  const span = Math.max(endS - startS, 1e-6);
+  // Out along the flight and back along the road under it: both run the same
+  // way down the stage and share their two ends, so reversing one closes the
+  // daylight between them into a simple polygon.
+  const air = [...flight, ...gap.slice().reverse()];
+  return fitJump({
+    ramp,
+    gap,
+    landing,
+    flight,
+    air,
+    share: {
+      ramp: (lip.s - startS) / span,
+      flight: (landS - lip.s) / span,
+      landing: (endS - landS) / span,
+    },
+    length: arc.length,
+    startS,
+    endS,
+  });
+}
+
+/** The road's height at an arc position, interpolated between the samples
+ * either side of it and held flat past the ends of the compiled stage. */
+function groundAt(samples: readonly TrackSample[], s: number): number {
+  const i = indexAt(samples, s);
+  if (i <= 0) return samples[0].elevation;
+  const a = samples[i - 1];
+  const b = samples[i];
+  const step = b.s - a.s;
+  if (step <= 0) return b.elevation;
+  const t = Math.min(Math.max((s - a.s) / step, 0), 1);
+  return a.elevation + (b.elevation - a.elevation) * t;
+}
+
+/** The samples strictly inside an arc span, mapped. The joints themselves are
+ * added by the caller, which is what lets two neighbouring pieces share a
+ * point exactly instead of nearly. */
+function between(
+  samples: readonly TrackSample[],
+  from: number,
+  to: number,
+  map: (s: number) => PacePoint,
+): PacePoint[] {
+  const out: PacePoint[] = [];
+  for (let i = indexAt(samples, from); i < samples.length && samples[i].s < to; i++) {
+    if (samples[i].s > from) out.push(map(samples[i].s));
+  }
+  return out;
+}
+
+/** All four lines into the box under ONE transform, flipped into screen axes
+ * (x right along the stage, y DOWN, so higher road is higher on the sign).
+ *
+ * The length is fitted to the box's width and the height is then stretched
+ * against it by JUMP_VERT — capped, so the tallest lip on any stage is
+ * contained rather than clipped. Fitting the length means every call is the
+ * same size on screen, which is the corner sign's rule too; what varies is
+ * the SHAPE, and here that is how much of the sign is air and how far the
+ * ground drops out from under it. */
+function fitJump(sign: JumpSign): JumpSign {
+  const lines = [sign.ramp, sign.gap, sign.landing, sign.flight];
+  // `air` is those same points closed into a region, so it can add nothing to
+  // the bounds and is left out of the measuring.
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const line of lines) {
+    for (const [x, y] of line) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  const usable = BOX - 2 * JUMP_PAD;
+  const w = maxX - minX || 1;
+  const h = maxY - minY || 1;
+  const sx = usable / w;
+  const sy = Math.min(sx * JUMP_VERT, usable / h);
+  const originX = JUMP_PAD;
+  // Centred on the box's own middle rather than hung from the top: a shallow
+  // lip draws a short shape, and a short shape pinned to one edge reads as a
+  // sign that has slipped rather than as a small jump.
+  const originY = JUMP_PAD + (usable + h * sy) / 2;
+  const place = (line: PacePoint[]): PacePoint[] =>
+    line.map((p): PacePoint => [originX + (p[0] - minX) * sx, originY - (p[1] - minY) * sy]);
+  return {
+    ...sign,
+    ramp: place(sign.ramp),
+    gap: place(sign.gap),
+    landing: place(sign.landing),
+    flight: place(sign.flight),
+    air: place(sign.air),
+  };
+}
+
+/** One drawn line, and how much of it is lit — what the dash hiding the
+ * unlit part is measured against. */
+export type PaceSpan = { span: number; lit: number };
+
+/** THE JUMP SIGN, PART DRIVEN. The three parts the car is actually on light
+ * in turn — up the ramp, through the air, away down the landing — and the
+ * road under the flight never does, because the car is not on it.
+ *
+ * The split between them is MEASURED off the stage: each part gets the share
+ * of the fill that its own metres of road are worth (`share`), not the share
+ * of the drawn line it happens to occupy after the fitting stretched the
+ * vertical. So the lit end of the sign sits where the car sits — a driver who
+ * is halfway down the ramp sees a sign lit halfway up its ramp, and one who
+ * is in the air sees the arc coming up under them. */
+export function fillJump(sign: JumpSign, through: number): JumpFill {
+  let left = Math.min(Math.max(through, 0), 1);
+  const part = (line: PacePoint[], share: number): PaceSpan => {
+    const span = lineLength(line);
+    const t = share > 0 ? Math.min(left / share, 1) : left > 0 ? 1 : 0;
+    left = Math.max(left - share, 0);
+    return { span, lit: span * t };
+  };
+  return {
+    ramp: part(sign.ramp, sign.share.ramp),
+    flight: part(sign.flight, sign.share.flight),
+    landing: part(sign.landing, sign.share.landing),
+  };
+}
+
+export type JumpFill = {
+  ramp: PaceSpan;
+  flight: PaceSpan;
+  landing: PaceSpan;
+};

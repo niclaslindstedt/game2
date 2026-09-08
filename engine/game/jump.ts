@@ -114,3 +114,43 @@ export function jumpSize(track: Track, lipIndex: number): JumpSize {
   if (flight >= SIZE_AT.medium) return "medium";
   return "small";
 }
+
+/** How many points the drawn flight carries. Enough that the parabola reads
+ * as a curve rather than as a pair of ramps meeting at an apex, few enough
+ * that the sign it is fitted into stays a mark rather than a plot. */
+const ARC_POINTS = 14;
+
+/** A lip's estimated flight, in the ROAD'S OWN FRAME: metres along the stage
+ * from the lip, and metres above the road's height AT the lip. Whatever
+ * draws it supplies its own axes and its own scale — this is the flight, not
+ * a picture of one. */
+export type JumpArc = {
+  /** The path, lip to touchdown, at an even stride along the stage. */
+  points: { s: number; y: number }[];
+  /** How much air it covers, m — the estimated jump length, and the same
+   * number `jumpSize` reads its word off. */
+  length: number;
+};
+
+/** The flight a co-driver is describing when they call a lip — plain
+ * ballistics off the ramp's grade at the reference pace, walked out to where
+ * `jumpFlight` says the ground comes back.
+ *
+ * AT THE REFERENCE PACE, for the reason the tier is: a path that answered to
+ * the car's own speed would redraw itself under the lift it asks for, and a
+ * sign that argues with itself while it is being read is worse than no sign.
+ * The drawn arc and the spoken word therefore come off one flight, and
+ * cannot disagree about how far the car is going. */
+export function jumpArc(track: Track, lipIndex: number): JumpArc {
+  const length = jumpFlight(track, lipIndex, REFERENCE_SPEED);
+  const pitch = Math.atan(slopeAt(track, lipIndex));
+  const vy = REFERENCE_SPEED * Math.sin(pitch);
+  const vx = Math.max(1, REFERENCE_SPEED * Math.cos(pitch));
+  const points: { s: number; y: number }[] = [];
+  for (let i = 0; i <= ARC_POINTS; i++) {
+    const run = (length * i) / ARC_POINTS;
+    const t = run / vx;
+    points.push({ s: run, y: vy * t - 0.5 * GRAVITY * t * t });
+  }
+  return { points, length };
+}

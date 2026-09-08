@@ -6,7 +6,14 @@
 // and keeps their foot in for the rest.
 import { describe, expect, it } from "vitest";
 
-import { SAMPLE_STEP, compileTrack, jumpFlight, jumpSize, type SegmentPlan } from "@engine";
+import {
+  SAMPLE_STEP,
+  compileTrack,
+  jumpArc,
+  jumpFlight,
+  jumpSize,
+  type SegmentPlan,
+} from "@engine";
 
 import { stageTrack } from "./support/stages.ts";
 
@@ -135,5 +142,61 @@ describe("how big a jump is", () => {
       (f) => Math.abs(f / SAMPLE_STEP - Math.round(f / SAMPLE_STEP)) < 1e-6,
     );
     expect(stepped.length).toBe(0);
+  });
+});
+
+// The flight the co-driver's sign is DRAWN from. The word and the picture on
+// the strip are both descriptions of one lip, and a driver reads them in the
+// same glance — so the one thing they may never do is describe different
+// jumps.
+describe("the flight a jump call draws", () => {
+  it("is the same flight the word is spoken off", () => {
+    for (const height of [1, 2, 3, 4]) {
+      const track = compileTrack(11, lipStage(height));
+      const lip = lipAt(track.samples);
+      // 37 m/s is the pace `jumpSize` reads a lip at; the arc has to be the
+      // same answer, or the sign draws a jump the plate is not calling.
+      expect(jumpArc(track, lip).length).toBeCloseTo(jumpFlight(track, lip, 37), 9);
+    }
+  });
+
+  it("leaves the lip and comes back to the ground, without sinking on the way", () => {
+    const track = compileTrack(11, lipStage(3));
+    const arc = jumpArc(track, lipAt(track.samples));
+    expect(arc.points[0].s).toBe(0);
+    expect(arc.points[0].y).toBeCloseTo(0, 9);
+    expect(arc.points[arc.points.length - 1].s).toBeCloseTo(arc.length, 9);
+    // A ballistic path over flat road: up to an apex, then down. Never a
+    // second hump, which is what a mis-integrated parabola looks like.
+    const apex = arc.points.reduce((best, p, i) => (p.y > arc.points[best].y ? i : best), 0);
+    expect(apex).toBeGreaterThan(0);
+    for (let i = 1; i <= apex; i++) expect(arc.points[i].y).toBeGreaterThan(arc.points[i - 1].y);
+    for (let i = apex + 1; i < arc.points.length; i++) {
+      expect(arc.points[i].y).toBeLessThan(arc.points[i - 1].y);
+    }
+  });
+
+  it("throws a steeper ramp higher, not just further", () => {
+    const high = (h: number): number => {
+      const track = compileTrack(11, lipStage(h));
+      return Math.max(...jumpArc(track, lipAt(track.samples)).points.map((p) => p.y));
+    };
+    expect(high(4)).toBeGreaterThan(high(1.5));
+  });
+
+  it("walks the stage's own lips without ever leaving the road behind it", () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const track = stageTrack(seed, "medium");
+      for (let i = 0; i < track.samples.length; i++) {
+        if (!track.samples[i].jump) continue;
+        const arc = jumpArc(track, i);
+        expect(arc.length).toBeGreaterThan(0);
+        // Monotone along the stage, so the sign it is drawn into cannot fold
+        // back on itself.
+        for (let k = 1; k < arc.points.length; k++) {
+          expect(arc.points[k].s).toBeGreaterThan(arc.points[k - 1].s);
+        }
+      }
+    }
   });
 });
