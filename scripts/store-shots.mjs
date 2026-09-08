@@ -152,9 +152,21 @@ for (const device of devices) {
   });
   await prepareContext(context);
 
-  for (const [index, shot] of shots.entries()) {
+  for (const shot of shots) {
     if (shot.devices && !shot.devices.includes(device.name)) continue;
-    const n = String(index + 1).padStart(2, "0");
+    // THE NUMBER IS THE RECIPE'S OWN POSITION IN `SHOTS`, not its position in
+    // this run's filtered list — a frame's filename has to be the same whether
+    // the whole set was shot or one frame was re-shot.
+    //
+    // Taking it from the filter is what a `for…of shots.entries()` gives you,
+    // and it silently corrupts the directory: `--shot drift,air,country`
+    // numbered its three frames 01–03, so `air` landed as `02-air.png` beside
+    // the full run's `04-air.png` and the set ended up holding two copies of
+    // two frames under four numbers. A `--shot` run deliberately leaves the
+    // other frames alone (that is the point of it), so nothing cleans the
+    // duplicate up — and `fastlane deliver` ships everything it finds in this
+    // directory, in name order.
+    const n = String(SHOTS.indexOf(shot) + 1).padStart(2, "0");
     const file = join(outDir, `${n}-${shot.id}.png`);
     const page = await context.newPage();
     page.on("pageerror", (error) => console.error(`  PAGE ERROR: ${error.message}`));
