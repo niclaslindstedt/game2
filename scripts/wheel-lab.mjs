@@ -79,7 +79,19 @@ page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
 page.on("console", (msg) => {
   if (msg.type() === "error") console.error(`[console] ${msg.text()}`);
 });
-await page.goto(`http://127.0.0.1:${port}/wheel-preview.html`);
+// How hard the wheel is thrown off, m/s (`partBreak.shed`) — the engine's
+// own floor unless asked otherwise, which is what a wheel levered off a hub
+// at road speed leaves with. `SHED=11 make wheel` is the other end of the
+// range: a wheel squeezed out from under a car that fell on that corner.
+// ...and PART points the same three seats at some other piece of the car:
+// `PART=glassR SHED=12 make wheel OUT=wheel-glass` is a tempered window
+// letting go of a car that came down on it, which dices rather than flying
+// off as a sheet.
+const query = new URLSearchParams();
+if (process.env.SHED) query.set("shed", process.env.SHED);
+if (process.env.PART) query.set("part", process.env.PART);
+const search = query.size > 0 ? `?${query}` : "";
+await page.goto(`http://127.0.0.1:${port}/wheel-preview.html${search}`);
 // HOW LONG THE SHEET IS GIVEN TO DRAW ITSELF, ms — sized for the machine
 // with no GPU, where Chromium software-rasterizes every frame of three
 // runs. A deadline rather than a budget: the wait ends when `__done` is set.

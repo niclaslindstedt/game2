@@ -1230,6 +1230,40 @@ every solid is a circle, and a hit does several things at once:
   stops it. Whatever leaves takes the structure it was bolted to with it
   (`wearPerMount`), so a car that has shed all three is not a shape any
   more whatever its panels read.
+  **WHICH corner it goes down through is the attitude's** (`cornerLoads`,
+  `mounts.tiltShare`): a car almost never lands level, and the corner
+  lowest under the attitude it arrived at reaches the ground first and is
+  what the mass comes down through. So a car that spears in nose-first
+  tears its FRONT wheels off and leaves the rear pair flat and hanging,
+  and one slammed onto its left flank loses the left pair. The shares are
+  symmetric about one across the four corners, so the arrival is only ever
+  redistributed and never inflated — a car that arrives level pays exactly
+  what it always paid.
+  **The GLASS knows which kind it is.** Only ONE pane on the car leaves as
+  a sheet: the windscreen is LAMINATED — two sheets bonded to a layer of
+  plastic — so it comes out in one folded plate, carrying the web of cracks
+  that was across it, and falls. Every other window is TEMPERED, under
+  enough surface compression that a crack anywhere releases the whole pane
+  at once, and what leaves the frame is a windowful of blunt cubes: there
+  is no sheet in it, and it leaves as the burst alone (`GLASS_SHARDS` /
+  `GLASS_BURST` in renderer.ts). How much of that burst there is, and how
+  far it opens, is how hard the pane was let go of — a window popping out
+  of its seal drops gravel down the door, one let go by a car that came
+  down on it throws a windowful across the road.
+  `engine/game/state.ts`'s `LAMINATED_GLASS` is the one place the
+  difference is stated; `collision.glass.tempered` prices the same fact
+  into how fast each kind crazes on its way there.
+  **And a wheel torn off is not dropped** (`shedSpeed`, `partBreak.shed`).
+  It is trapped between the ground and its own arch as the car comes down
+  on it, and what the structure cannot hold it against squeezes it out
+  sideways — so how fast it leaves is the speed of whatever took it off,
+  times that corner's own helping of it. The floor under that is what a
+  part has always been thrown off with, which no contact under about
+  23 m/s beats: every ordinary crash throws its debris exactly as it did,
+  and only a fall throws it hard. It matters because a plunging car has
+  neither of the two things the throw used to be made of — it has stopped
+  dead and its tread is not turning — so without it four wheels leave a
+  pancaked car in formation, at walking pace, and flop over beside it.
   This is the whole difference between a wall and a cliff, and neither is
   special-cased anywhere: a wall met at 100 km/h is stopped over half a
   metre of crumple zone BUILT to take it and the car keeps all four
@@ -1237,10 +1271,12 @@ every solid is a circle, and a hit does several things at once:
   terminal speed (`air.aero`, about 65 m/s) asks the same arms for ten
   times the load. Nothing in the model knows how far the car fell, or that
   it fell at all. What comes out of it: a 5 m drop is free, a 20 m drop
-  bends the front of the car, a 50 m drop is the engine and the run, and
-  anything past about 150 m puts all four wheels on the ground behind the
-  car and retires it where it stops (`beyondDriving`). The hardest landing
-  a bot takes on a stage pulls 50 g and costs nothing.
+  bends the front of the car, a 50 m drop is the engine and the run, a
+  100 m nose-first arrival tears the front pair of wheels off and leaves
+  the rears flat, and a fall long enough to reach terminal speed takes
+  three of them and finishes the fourth (`beyondDriving` retires the car
+  where it stops on any two). The hardest landing a bot takes on a stage
+  pulls 50 g and costs nothing.
 - **The springs.** Every contact also loads them (`TUNING.suspension`):
   the wheels stop and the body does not, so the car rocks and the nose dips
   for a beat afterwards. See [Weight: the springs](#weight-the-springs).

@@ -3325,6 +3325,55 @@ export const TUNING = {
        * the bulkhead and the floorpan stop it — which is what actually
        * destroys an engine in a fall, not the landing itself. */
       engineG: 200,
+      /** HOW FAR THE ARRIVAL IS REDISTRIBUTED ACROSS THE FOUR CORNERS by
+       * the attitude the car came down at, as the swing either side of an
+       * even share (`mounts.ts`, `cornerLoads`). At 0.25 the corner the car
+       * landed on takes 1.25 of a share and the one still in the air takes
+       * 0.75, and the four always sum to four — a car that arrives level
+       * pays exactly what it always paid.
+       *
+       * It is what stops a plunge shedding its wheels in formation, and
+       * both ends of it are measured. Too little and nothing is
+       * distinguished: at 0.2 a car that spears in from 100 m leaves every
+       * wheel bolted on at 0.96 of its ledger, which is the old symmetric
+       * answer with extra steps. Too much and the corner that was still in
+       * the air is SAVED by an attitude it held for ten milliseconds:
+       * at 0.45 a fall of 150 m leaves its rear pair at 0.60, and the car
+       * has more wheels than a fall from 100 m did.
+       *
+       * A quarter puts the interesting cases where they belong. A 100 m
+       * nose-first arrival tears the front pair off and leaves the rears
+       * flat; a fall long enough to reach terminal speed takes three and
+       * leaves the fourth hanging by a thread, which reads as a car that
+       * came apart rather than one that was disassembled. */
+      tiltShare: 0.25,
+      /** ...and how deep a corner has to sit under the body's middle for
+       * that swing to be fully spent, m. It is a measurement off the body:
+       * the collision box's corner is 2.1 m from the middle, so a car at
+       * the steepest attitude it can hold (`attitude.pitchMax`, 34°) has
+       * its nose corners 1.17 m down, and a metre puts that at the top of
+       * the swing with a little in hand.
+       *
+       * The point of it is that the swing is GRADED. Too short and the
+       * share saturates on any attitude at all, which turns a car landing
+       * eleven degrees nose-down — an ordinary plunge, near enough flat —
+       * into one that sheds its front wheels and keeps its rears. Over the
+       * metre: eleven degrees is a 1.18/0.82 split and all four still go,
+       * the front pair first and hardest; a proper nose-first spear is
+       * 1.45/0.55 and genuinely leaves the rear pair hanging off a car
+       * that has no front left. */
+      tiltReach: 1,
+      /** WHAT A PART LEAVES THE CAR AT, as a share of the speed of
+       * whatever took it off. A wheel is trapped between the ground and
+       * its own arch as the car comes down on it, and what the structure
+       * cannot hold it against squeezes it out sideways — a wedge ratio,
+       * which is why it is a fraction and a small one. */
+      shedPerSpeed: 0.16,
+      /** ...and the floor under it, m/s — what a part has always been
+       * thrown off with, so a gentle loss stays exactly as gentle as it
+       * was and only a violent one is thrown harder. A contact under about
+       * 23 m/s never beats it, which is every ordinary crash in the game. */
+      shedFloor: 3.72,
       /** ...and what the shell is spent by EVERY mount that lets go, per
        * multiple over summed across the three. A hub does not leave
        * cleanly: it tears its mounting points out of the floor on the way,

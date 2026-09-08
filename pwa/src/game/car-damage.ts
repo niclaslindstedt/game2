@@ -44,6 +44,7 @@
 import * as THREE from "three";
 import {
   GLASS_PARTS,
+  LAMINATED_GLASS,
   TUNING,
   WHEEL_PARTS,
   glassCrack,
@@ -107,18 +108,32 @@ const BOND_SPEED = Math.sqrt((2 * PANE_BOND) / PANE_MASS);
  * across. Small: a screen popping out is thrown by the CAR, not by the
  * frame. */
 const PANE_POP = 2.4;
+/** ...and the most that is multiplied by when the pane was let go of hard
+ * (`partBreak.shed` against its own floor). */
+const PANE_POP_MAX = 2.5;
 const PANE_LIFT = 2.2;
-/** How fast a loose pane turns as it goes, rad/s either way — a plate this
- * light and this wide is turned by the air as much as by the hit. */
-const PANE_SPIN = 5;
+/** How fast a loose pane turns as it goes, rad/s either way. It is the ONE
+ * plate the game throws — the laminated screen — and it is heavy, wide and
+ * floppy: it leaves the frame and falls, where a fast turn on a shape that
+ * size reads as a frisbee and takes the whole crash into cartoon with it. */
+const PANE_SPIN = 2.2;
 /** How thick the plate is drawn, m — half of it is how far its centre ends
  * up over whatever it comes to rest on. */
 const PANE_HALF = 0.006;
 
-/** What the hit that tears a wheel off adds to the corner's own velocity,
- * m/s: out of the arch and up over it. The rest of what the wheel leaves
- * with is the car's speed and the tread's spin (loose-wheel.ts). */
-const WHEEL_KICK = { out: 2.2, up: 3 };
+/** WHICH WAY a wheel is squeezed out of its arch — out of it and up over
+ * the lip, as a direction of unit length. HOW FAST is the engine's
+ * (`partBreak.shed`, `mounts.ts`): a wheel forced out from under a car
+ * that came down on that corner leaves at three times the speed of one
+ * levered off a hub by a trunk. The rest of what it leaves with is the
+ * car's own speed and the tread's spin (loose-wheel.ts) — neither of which
+ * a car that fell out of the sky has any of, which is why the shed speed
+ * is the whole of what a plunge throws its wheels with. */
+const WHEEL_KICK = { out: 0.591, up: 0.807 };
+/** ...and what a part leaves with when nobody said — a car BUILT with a
+ * part already gone, a staged wreck. The engine's own floor, so a piece
+ * placed by hand is thrown exactly like one the game knocked off. */
+const SHED_FLOOR: number = TUNING.collision.mounts.shedFloor;
 /** Which of a torn-off panel's own axes is its face — the one the tumbler
  * turns upward so it comes to rest lying flat (tumble.ts). A lamp or a
  * mirror is a lump and lies however it lands. */
@@ -479,6 +494,10 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     state: GameState,
     rest: number,
     flat: "x" | "y" | "z" | null = null,
+    // How hard the piece was thrown OFF, against what a part has always
+    // been thrown off with — exactly 1 for every contact gentle enough not
+    // to beat the engine's floor, which is every ordinary crash.
+    force = 1,
   ): void => {
     // attach() keeps the world transform while re-parenting into the
     // world-anchored debris group — the piece separates mid-motion.
@@ -490,9 +509,9 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
       tumbleFrom(
         mesh,
         new THREE.Vector3(
-          (sinH * c.u + cosH * c.w) * 0.8 + (Math.random() - 0.5) * 3,
-          2.5 + Math.random() * 3,
-          (cosH * c.u - sinH * c.w) * 0.8 + (Math.random() - 0.5) * 3,
+          (sinH * c.u + cosH * c.w) * 0.8 + (Math.random() - 0.5) * 3 * force,
+          (2.5 + Math.random() * 3) * force,
+          (cosH * c.u - sinH * c.w) * 0.8 + (Math.random() - 0.5) * 3 * force,
         ),
         new THREE.Vector3(
           (Math.random() - 0.5) * 14,
@@ -517,7 +536,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
    * along the pane's normal: a screen goes out over the bonnet, a door
    * window goes out sideways, because the normal says which way each of
    * them faces without anything here having to know. */
-  const throwPane = (pane: GlassPane, state: GameState): void => {
+  const throwPane = (pane: GlassPane, state: GameState, shed: number): void => {
     const source = body.glassMesh;
     if (!source) return;
     const pos = source.geometry.getAttribute("position");
@@ -578,6 +597,11 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     // What the bond took out of it. A car crawling into a wall drops its
     // screen at its feet; one at rally pace throws it down the road.
     const carry = speed > BOND_SPEED ? (speed - BOND_SPEED) / speed : 0;
+    // ...and how hard the FRAME let go of it (`partBreak.shed`), against
+    // what a pane has always left with. Capped: a screen sprung out by a
+    // car that came down on its roof still has to fall out of the frame
+    // rather than be launched over it.
+    const pop = PANE_POP * Math.min(PANE_POP_MAX, shed / SHED_FLOOR);
     // The plate's own +z is its face now (the geometry was turned onto it),
     // so the world direction comes off the mesh rather than off `face` —
     // which is stated in the frame the turn has already left behind.
@@ -586,9 +610,9 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
       tumbleFrom(
         mesh,
         new THREE.Vector3(
-          vx * carry + out.x * PANE_POP,
-          c.vy * carry + out.y * PANE_POP + PANE_LIFT,
-          vz * carry + out.z * PANE_POP,
+          vx * carry + out.x * pop,
+          c.vy * carry + out.y * pop + PANE_LIFT,
+          vz * carry + out.z * pop,
         ),
         new THREE.Vector3(
           (Math.random() - 0.5) * PANE_SPIN,
@@ -604,11 +628,24 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
 
   /** A pane out of its frame: its triangles go to alpha zero and stay
    * there, the web that was across it goes with them, and so does the film
-   * the wipers were keeping over it. With `thrown`, the pane itself leaves
-   * as a plate first — the car was built with it already gone otherwise,
-   * and there is nothing to throw. */
-  const shatter = (pane: GlassPane, state: GameState, thrown: boolean): void => {
-    if (thrown) throwPane(pane, state);
+   * the wipers were keeping over it.
+   *
+   * WHETHER THERE IS A PLATE TO THROW depends on what the glass is made of,
+   * and the engine names the one pane it is true of (`LAMINATED_GLASS`). A
+   * windscreen is two sheets bonded to a layer of plastic and comes out in
+   * one folded piece, carrying the web that was across it — that is what
+   * the plastic is for. Every other window is TEMPERED: it is under enough
+   * surface compression that a crack anywhere releases the whole pane at
+   * once, and what leaves the frame is a windowful of blunt cubes. There is
+   * no plate in that, and drawing one — a door window sailing off as an
+   * intact sheet, turning over like a page — is the single most cartoon
+   * thing a crash here could do. It leaves as the burst the renderer throws
+   * out of the frame (`GLASS_SHARDS` in renderer.ts) and nothing else.
+   *
+   * With `thrown` false there is nothing to throw either way: the car was
+   * built with the pane already gone. */
+  const shatter = (pane: GlassPane, state: GameState, thrown: boolean, shed: number): void => {
+    if (thrown && pane === LAMINATED_GLASS) throwPane(pane, state, shed);
     if (glassCol) {
       for (const { start, count } of body.panes[pane]) {
         for (let i = start; i < start + count; i++) glassCol.setW(i, 0);
@@ -624,7 +661,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
    * of the mesh on the hub, let go at the corner's speed with the tread's
    * spin, from here on the world's (loose-wheel.ts). `thrown` false leaves
    * only the hub. */
-  const loseWheel = (index: number, state: GameState, thrown: boolean): void => {
+  const loseWheel = (index: number, state: GameState, thrown: boolean, shed: number): void => {
     const wheel = body.wheelGroups[index];
     const spin = body.wheelSpin[index] as THREE.Mesh;
     if (thrown && wheelsRoll) {
@@ -638,7 +675,8 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
       debris.attach(loose);
       const axle = new THREE.Vector3(1, 0, 0).applyQuaternion(loose.quaternion);
       const corner = { fwd: wheel.position.z, right: wheel.position.x };
-      const start = throwWheel(state.car, corner, axle, spec.wheelRadius, WHEEL_KICK);
+      const kick = { out: WHEEL_KICK.out * shed, up: WHEEL_KICK.up * shed };
+      const start = throwWheel(state.car, corner, axle, spec.wheelRadius, kick);
       rolling.push(looseWheel(loose, start.vel, start.spin, spec.wheelRadius, spec.wheelWidth / 2));
     }
     spin.visible = false;
@@ -653,7 +691,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
   /** Tear a part off the body and hand it to the world to tumble — or,
    * with `thrown` false, take it off the body and throw nothing: the car
    * was built with the part already gone. */
-  const breakOff = (part: DamagePart, state: GameState, thrown = true): void => {
+  const breakOff = (part: DamagePart, state: GameState, thrown = true, shed = SHED_FLOOR): void => {
     if (detached.has(part)) return;
     const wheel = WHEEL_PARTS.indexOf(part);
     if (wheel >= 0) {
@@ -665,13 +703,13 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
         return;
       }
       detached.add(part);
-      loseWheel(wheel, state, thrown);
+      loseWheel(wheel, state, thrown, shed);
       bentVersion = -1;
       return;
     }
     if (isGlass(part)) {
       detached.add(part);
-      shatter(part, state, thrown);
+      shatter(part, state, thrown, shed);
       return;
     }
     const mesh = body.breakables[part];
@@ -708,14 +746,14 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     geo.translate(-centre.x, -centre.y, -centre.z);
     mesh.position.copy(centre);
     const rest = Math.min(size.x, size.y, size.z) / 2 + DEBRIS_REST;
-    throwOff(mesh, state, rest, PANEL_FACE[part] ?? null);
+    throwOff(mesh, state, rest, PANEL_FACE[part] ?? null, shed / SHED_FLOOR);
     // A door leaves a hole that is painted into the flank: re-bend.
     if (part === "doorL" || part === "doorR") bentVersion = -1;
   };
 
   const onEvents = (state: GameState, events: GameEvent[]): void => {
     for (const ev of events) {
-      if (ev.type === "partBreak") breakOff(ev.part, state);
+      if (ev.type === "partBreak") breakOff(ev.part, state, true, ev.shed);
     }
   };
 

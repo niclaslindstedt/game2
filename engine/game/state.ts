@@ -111,6 +111,14 @@ export const REAR_LAMPS: readonly DamagePart[] = ["lampRL", "lampRR"];
  * is the right side) — the screen flips once, in the HUD. */
 export const WHEEL_PARTS: readonly DamagePart[] = ["wheelFL", "wheelFR", "wheelRL", "wheelRR"];
 
+/** The one pane on the car that is LAMINATED — two sheets bonded to a
+ * layer of plastic, which is what keeps a windscreen in one piece when it
+ * has stopped being a windscreen. Every other window is TEMPERED and dices
+ * into gravel the moment it lets go anywhere, which is the same fact
+ * `collision.glass.tempered` prices the crazing with: stated once, here,
+ * because the renderer has to draw the difference and must not restate it. */
+export const LAMINATED_GLASS: DamagePart = "glassF";
+
 /** The machinery under the panels. Each system takes damage from the crush
  * landing nearest to it and degrades ITS OWN job: the engine loses power
  * and, at the end of it, stops for good; the COOLING loses the coolant that
@@ -732,7 +740,12 @@ export type GameEvent =
    * no ring angle applies. */
   | { type: "impact"; speed: number; angle: number; belly: boolean }
   /** A piece of the body tearing off — the renderer sends it flying. */
-  | { type: "partBreak"; part: DamagePart }
+  /** A part off the car for good. `shed` is how fast it LEAVES, m/s — the
+   * speed of whatever took it off, spent through the wedge it was squeezed
+   * out of (`mounts.ts`, `shedSpeed`), so a wheel forced out from under a
+   * car that came down on it is thrown where one levered off by a trunk at
+   * road speed is dropped. The renderer throws the piece at it. */
+  | { type: "partBreak"; part: DamagePart; shed: number }
   /** THE ONE PIECE OF DAMAGE NEWS NOBODY CAN SEE. A folded wing is on the
    * screen and a bonnet leaving on the wind announces itself; an engine
    * that has quietly lost a third of its power does not, and a driver who

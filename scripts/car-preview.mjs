@@ -156,13 +156,21 @@ if (has("crew")) {
     // OFF THE EDGE. Neither of these is a shape anybody drew: what takes a
     // car apart in a fall is the LOAD (`engine/game/mounts.ts`) — the arms,
     // the shafts and the engine mounts brought to a stop over a stroke they
-    // were never rated for — so all four wheels are off it whichever face
-    // met the ground, and the shell is spent by their leaving. The first is
-    // a car that went over with speed on and settled nose-down; the second
-    // fell far enough to lose the speed and came down flat on its floor,
-    // which is why it has no crease anywhere and no windows either.
-    ["off a cliff, nose first", ledger({ zones: { 0: 0.4 }, wear: 1, wheels: [1, 1, 1, 1] })],
-    ["off a mountain, flat", ledger({ belly: 0.37, wear: 1, wheels: [1, 1, 1, 1] })],
+    // were never rated for — and the shell is spent by their leaving.
+    //
+    // WHICH wheels go is the attitude it arrived at (`cornerLoads`), and
+    // that is the whole difference between these two rows. The first went
+    // over an edge with speed on and settled nose-down, so the FRONT pair
+    // is what the mass came down through: those two are gone and the rears
+    // are left flat on a car with no front. The second fell far enough to
+    // lose its speed and came down on its floor, which spreads the arrival
+    // over all four — and is why it has no crease anywhere and no windows
+    // either.
+    [
+      "off a cliff, nose first",
+      ledger({ zones: { 0: 0.39 }, wear: 1, wheels: [1, 1, 0.82, 0.82] }),
+    ],
+    ["off a mountain, flat", ledger({ belly: 0.34, wear: 1, wheels: [1, 1, 1, 0.84] })],
     [
       "rolled",
       ledger({

@@ -167,6 +167,29 @@ export const CRASH_GRIT: DustStyle = {
   pool: CRASH_THROW.pool,
 };
 
+/** TEMPERED GLASS, once it has stopped being a window. Its own style
+ * because nothing else the car throws is TRANSLUCENT, and drawn as grit it
+ * is the one cloud in the game that reads as a cartoon: a grain of gravel
+ * is opaque and the same colour as the ground it came out of, so a fat
+ * sprite of it disappears into the dust, where a fat sprite of pale glass
+ * against a dirt road is a white square stuck to the screen — a page of
+ * confetti coming off the car.
+ *
+ * So it is the smallest and faintest thing in the file, and there is a lot
+ * of it. A cube of tempered glass is a few millimetres; nothing can draw
+ * that, and what the eye actually reads at speed is not the cubes but the
+ * GLINT off a cloud of them. Small enough to be a speck, faint enough to
+ * be glass rather than chalk, and heavy: glass is thrown and then it falls
+ * and stays where it lands, where dust hangs and drifts. */
+export const GLASS_GRAINS: DustStyle = {
+  size: 0.03,
+  opacity: 0.5,
+  rise: 0.4,
+  gravity: 11,
+  life: { min: 0.35, max: 0.75 },
+  pool: 256,
+};
+
 export const TIRE_SMOKE: DustStyle = {
   size: 0.42,
   opacity: 0.3,

@@ -17,11 +17,14 @@ import {
   arrestLoad,
   beyondDriving,
   compileTrack,
+  cornerLoads,
   createGame,
   diveShare,
   landingFace,
   mountFailure,
+  shedSpeed,
   step,
+  type GameEvent,
   type GameState,
 } from "@engine";
 
@@ -65,6 +68,9 @@ function plunge(height: number, carId = "classic", forward = 20): GameState {
 
 const wheelsOff = (state: GameState): number =>
   state.car.damage.wheels.filter((w) => w >= 1).length;
+
+/** The four corners, in `WHEEL_PARTS` order. */
+const [FL, FR, RL, RR] = [0, 1, 2, 3];
 
 describe("the load an arrival puts on the mounts", () => {
   it("is the descent stopped over the stroke, in g", () => {
@@ -161,11 +167,18 @@ describe("a car that falls", () => {
     expect(beyondDriving(state.car)).toBe(null);
   });
 
-  it("loses every wheel off the bolts at terminal speed", () => {
+  it("comes apart at terminal speed — most of its wheels off, the rest finished", () => {
     const state = plunge(1500);
+    const wheels = state.car.damage.wheels;
+    // Which corners go is the attitude's (`cornerLoads`), so what is held
+    // here is the outcome and not a formation: nearly all of them leave,
+    // and anything still bolted on is flat and bent past use.
+    expect(wheelsOff(state)).toBeGreaterThanOrEqual(WHEEL_PARTS.length - 1);
     for (let wheel = 0; wheel < WHEEL_PARTS.length; wheel++) {
-      expect(state.car.damage.wheels[wheel]).toBe(1);
-      expect(state.car.damage.broken).toContain(WHEEL_PARTS[wheel]);
+      expect(wheels[wheel]).toBeGreaterThan(TUNING.collision.chassis.wheelFlat);
+    }
+    for (let wheel = 0; wheel < WHEEL_PARTS.length; wheel++) {
+      if (wheels[wheel] >= 1) expect(state.car.damage.broken).toContain(WHEEL_PARTS[wheel]);
     }
   });
 
@@ -186,14 +199,154 @@ describe("a car that falls", () => {
     // is what arrives — a different face, the same answer, because what
     // takes the car apart is the load and not which panel met the ground.
     const state = plunge(1500, "classic", 0);
-    expect(wheelsOff(state)).toBe(WHEEL_PARTS.length);
+    expect(wheelsOff(state)).toBeGreaterThanOrEqual(WHEEL_PARTS.length - 1);
     expect(state.car.damage.wear).toBe(1);
     expect(state.phase).toBe("retired");
   });
 
   it("costs every car in the roster its wheels, not just the heavy one", () => {
     for (const carId of ["compact", "coupe"]) {
-      expect(wheelsOff(plunge(1500, carId))).toBe(WHEEL_PARTS.length);
+      expect(wheelsOff(plunge(1500, carId))).toBeGreaterThanOrEqual(WHEEL_PARTS.length - 1);
     }
+  });
+});
+
+describe("which corner the arrival goes down through", () => {
+  const share = (tilt: number, pitch: number): number[] => {
+    const into = [0, 0, 0, 0];
+    cornerLoads(tilt, pitch, into);
+    return into;
+  };
+
+  it("is every corner equally on a car that arrives level", () => {
+    expect(share(0, 0)).toEqual([1, 1, 1, 1]);
+  });
+
+  it("is the FRONT of a car that came down nose-first", () => {
+    const nose = share(0, -TUNING.attitude.pitchMax);
+    expect(nose[FL]).toBeGreaterThan(1);
+    expect(nose[FL]).toBe(nose[FR]);
+    expect(nose[RL]).toBeLessThan(1);
+    expect(nose[RL]).toBe(nose[RR]);
+  });
+
+  it("...and the TAIL of one that came down on its back end", () => {
+    const tail = share(0, TUNING.attitude.pitchMax);
+    expect(tail[RL]).toBeGreaterThan(1);
+    expect(tail[FL]).toBeLessThan(1);
+  });
+
+  it("is the low SIDE of one that arrived leaning", () => {
+    // Positive roll lifts the right side, so the left pair is the low one.
+    const lean = share(0.5, 0);
+    expect(lean[FL]).toBeGreaterThan(1);
+    expect(lean[FL]).toBe(lean[RL]);
+    expect(lean[FR]).toBeLessThan(1);
+  });
+
+  it("only ever REDISTRIBUTES the arrival, never inflates it", () => {
+    for (const [tilt, pitch] of [
+      [0, 0],
+      [0.5, -0.6],
+      [-1.2, 0.3],
+      [Math.PI / 2, 0],
+      [0.2, -0.15],
+    ]) {
+      const sum = share(tilt, pitch).reduce((a, b) => a + b, 0);
+      expect(sum).toBeCloseTo(4, 9);
+    }
+  });
+
+  it("cannot take a corner past its own share or below nothing", () => {
+    for (const [tilt, pitch] of [
+      [3, 0.6],
+      [-3, -0.6],
+    ]) {
+      for (const s of share(tilt, pitch)) {
+        expect(s).toBeGreaterThan(0);
+        expect(s).toBeLessThanOrEqual(1 + TUNING.collision.mounts.tiltShare);
+      }
+    }
+  });
+});
+
+describe("how hard a part is thrown off", () => {
+  it("is never gentler than a part has always left with", () => {
+    expect(shedSpeed(0)).toBe(TUNING.collision.mounts.shedFloor);
+    expect(shedSpeed(8)).toBe(TUNING.collision.mounts.shedFloor);
+  });
+
+  it("grows with the speed of whatever took it off", () => {
+    expect(shedSpeed(60)).toBeGreaterThan(shedSpeed(30));
+    expect(shedSpeed(30)).toBeGreaterThan(TUNING.collision.mounts.shedFloor);
+  });
+
+  it("...and with that corner's own helping of it", () => {
+    expect(shedSpeed(60, 1.4)).toBeGreaterThan(shedSpeed(60, 0.6));
+  });
+});
+
+describe("a wheel leaving a car that fell on it", () => {
+  /** Every `partBreak` a plunge raises, by part. */
+  const shedding = (height: number, forward = 20): Map<string, number> => {
+    const state = createGame({
+      seed: 1,
+      carId: "classic",
+      skipCountdown: true,
+      track: compileTrack(0, LONG_STRAIGHT),
+    });
+    const car = state.car;
+    car.x += 60;
+    const floor = state.terrain.groundAt(car.x, car.z);
+    state.terrain.groundAt = () => floor;
+    car.y = floor + height;
+    car.u = forward;
+    car.w = 0;
+    car.vy = 0;
+    car.airborne = true;
+    car.settling = false;
+    car.airTime = 0;
+    const shed = new Map<string, number>();
+    let after = 0;
+    for (let i = 0; i < TUNING.physicsHz * 200; i++) {
+      const events: GameEvent[] = step(state, { ...NEUTRAL_INPUT });
+      for (const ev of events) {
+        if (ev.type === "partBreak" && !shed.has(ev.part)) shed.set(ev.part, ev.shed);
+      }
+      if (!car.airborne) after += 1;
+      if (after > TUNING.physicsHz * 12) break;
+    }
+    return shed;
+  };
+
+  it("is thrown off far harder than one levered off at road speed", () => {
+    const shed = shedding(1500);
+    const wheel = shed.get("wheelFL");
+    expect(wheel).toBeDefined();
+    expect(wheel as number).toBeGreaterThan(TUNING.collision.mounts.shedFloor * 2);
+  });
+
+  it("loses the pair the car came down on before the pair still in the air", () => {
+    // A car that goes over an edge with speed on settles nose-down, so the
+    // front wheels are what the whole mass arrives through: they leave, and
+    // the rear pair is left flat on a car that has no front.
+    const state = plunge(150);
+    const wheels = state.car.damage.wheels;
+    expect(wheels[FL]).toBe(1);
+    expect(wheels[FR]).toBe(1);
+    expect(wheels[RL]).toBeLessThan(1);
+    expect(wheels[RL]).toBeGreaterThan(TUNING.collision.chassis.wheelFlat);
+    // ...and it is still the run: two wheels gone is a car that cannot be
+    // driven, however many are left hanging.
+    expect(beyondDriving(state.car)).not.toBe(null);
+    expect(state.phase).toBe("retired");
+  });
+
+  it("throws the corner it landed on harder than the others", () => {
+    const shed = shedding(1500);
+    const front = shed.get("wheelFL");
+    const rear = shed.get("wheelRL");
+    expect(front).toBeDefined();
+    if (rear !== undefined) expect(front as number).toBeGreaterThan(rear);
   });
 });

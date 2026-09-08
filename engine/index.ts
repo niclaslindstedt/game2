@@ -56,7 +56,7 @@ export {
   type CrushFace,
 } from "./game/structure.ts";
 // ...and what it is bolted together with (mounts.ts).
-export { arrestLoad, mountFailure } from "./game/mounts.ts";
+export { arrestLoad, cornerLoads, mountFailure, shedSpeed } from "./game/mounts.ts";
 export { beyondDriving, damageEffects, lampShare, type DamageEffects } from "./game/damage.ts";
 export { heatPower, stepCooling } from "./game/cooling.ts";
 export {
@@ -64,6 +64,7 @@ export {
   DAMAGE_ZONES,
   FRONT_LAMPS,
   INTERNAL_SYSTEMS,
+  LAMINATED_GLASS,
   REAR_LAMPS,
   WHEEL_PARTS,
   rollTilt,

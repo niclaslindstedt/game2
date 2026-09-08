@@ -21,6 +21,7 @@
 // how hard the arrival pulled, and what that spends of each mount's life —
 // and collision.ts is the one place that writes the ledger.
 
+import { clamp } from "../lib/math.ts";
 import { TUNING } from "./defs/tuning.ts";
 
 const M = TUNING.collision.mounts;
@@ -68,4 +69,57 @@ export function mountFailure(load: number): { hub: number; drive: number; engine
     drive: Math.max(0, load / M.driveG - 1) * M.drivePerOver,
     engine: Math.max(0, load / M.engineG - 1) * M.enginePerOver,
   };
+}
+
+/** The four corners as arms off the middle of the body, m — forward, and to
+ * the RIGHT, in `WHEEL_PARTS` order (FL, FR, RL, RR). The collision box is
+ * the footprint every contact already reasons about the car with, so its
+ * corners are the arms: nothing here needs a wheel's exact place, only
+ * which end and which side of the car it is on. */
+const ARMS: readonly (readonly [number, number])[] = [
+  [TUNING.collision.halfLength, -TUNING.collision.halfWidth],
+  [TUNING.collision.halfLength, TUNING.collision.halfWidth],
+  [-TUNING.collision.halfLength, -TUNING.collision.halfWidth],
+  [-TUNING.collision.halfLength, TUNING.collision.halfWidth],
+];
+
+/** WHICH CORNER TOOK THE ARRIVAL, as a multiplier on each hub's share of
+ * the load — `WHEEL_PARTS` order, written into `into`.
+ *
+ * A car almost never lands level, and the corner that is LOWEST under the
+ * attitude it arrived at reaches the ground first and is what the whole
+ * mass comes down through. So a car that spears in nose-down tears its
+ * front wheels off and may leave the rear pair hanging; one slammed onto
+ * its left flank loses the left pair. Dealing the same load to all four is
+ * what made a plunge shed its wheels in formation.
+ *
+ * `tilt` is the roll (positive lifts the right side) and `pitch` the nose
+ * (positive lifts it), so a corner's height off the body's middle plane is
+ * `fwd·sin(pitch) + right·sin(tilt)` and the deepest one is the most
+ * negative. The shares are symmetric about 1 across the four corners, so
+ * the ARRIVAL is only ever redistributed and never inflated — what a level
+ * car takes is exactly what it always took. */
+export function cornerLoads(tilt: number, pitch: number, into: number[]): void {
+  const sinPitch = Math.sin(pitch);
+  const sinTilt = Math.sin(tilt);
+  for (let i = 0; i < ARMS.length; i++) {
+    const [fwd, right] = ARMS[i];
+    const lift = fwd * sinPitch + right * sinTilt;
+    into[i] = 1 + M.tiltShare * clamp(-lift / M.tiltReach, -1, 1);
+  }
+}
+
+/** HOW FAST A PART LEAVES THE CAR, m/s. A wheel torn off is not dropped:
+ * it is trapped between the ground and its own arch as the car comes down
+ * on it, and what the structure cannot hold it against squeezes it out
+ * sideways — the harder the arrival, the harder it goes.
+ *
+ * `speed` is what the thing that took it off was travelling at (a
+ * landing's slam, a contact's closing speed) and `share` is that corner's
+ * own helping of it (`cornerLoads`), so the corner the car came down on
+ * throws its wheel furthest. The floor is what a part has always left
+ * with, so nothing that used to pop off gently now flops instead: this
+ * only has something to say about arrivals violent enough to beat it. */
+export function shedSpeed(speed: number, share = 1): number {
+  return Math.max(M.shedFloor, M.shedPerSpeed * speed * share);
 }

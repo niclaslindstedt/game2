@@ -129,6 +129,18 @@ const SLAM_FLOOR = 0.34;
 const SPLINTERS: DustTint = { base: 0xc9b892, fleck: TRUNK_COLOR, fleckMix: 0.35 };
 /** ...and a window going: pale glass, thrown everywhere at once. */
 const GLASS_SHARDS = 0xd4e4f0;
+/** HOW BIG THAT BURST IS. `grains` and `spread` are a window popping out of
+ * its seal — the least a pane can leave with; `moreGrains` and `moreSpread`
+ * are what a pane let go of at `shedFull` m/s adds on top, which is about
+ * what a car that came down on that side throws (`mounts.shedSpeed`). The
+ * spread is in m/s and is the burst's own, on top of the car's motion. */
+const GLASS_BURST = {
+  grains: 18,
+  moreGrains: 34,
+  spread: 3.4,
+  moreSpread: 4.6,
+  shedFull: 12,
+};
 
 /** Where each pane sits on the car, m off its own axes, for the burst it
  * leaves behind: along the nose, out to the ENGINE's right, and up. */
@@ -1171,19 +1183,29 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         );
       } else if (ev.type === "partBreak") {
         // The GLASS does not fly, it goes everywhere: a burst of pale
-        // shards out of the frame that lost it. A WHEEL leaving throws the
-        // road up with it. Every other part is the car mesh's to tumble.
+        // shards out of the frame that lost it. For every window but the
+        // laminated screen that burst is the WHOLE of it (car-damage.ts) —
+        // tempered glass dices, and there is no sheet left to throw.
+        //
+        // How much of it, and how far it opens, is how hard the pane was
+        // let go of (`partBreak.shed`, m/s): a window popping out of its
+        // seal drops a handful of gravel down the door, and one let go by a
+        // car that came down on it throws a windowful across the road. Both
+        // ends are bounded, because a burst that scales without a ceiling
+        // empties the pool the wheels and the crash are sharing.
         const glass = GLASS_AT[ev.part];
         const sinH = Math.sin(c.heading);
         const cosH = Math.cos(c.heading);
         if (glass) {
-          dust.spawn(
+          const hard = Math.min(1, ev.shed / GLASS_BURST.shedFull);
+          carFx.showGlass();
+          carFx.glass.spawn(
             c.x + sinH * glass.fwd + cosH * glass.side,
             c.y + glass.up,
             c.z + cosH * glass.fwd - sinH * glass.side,
             GLASS_SHARDS,
-            Math.round(22 * fx),
-            4.5,
+            Math.round((GLASS_BURST.grains + GLASS_BURST.moreGrains * hard) * fx),
+            GLASS_BURST.spread + GLASS_BURST.moreSpread * hard,
           );
         } else if (ev.part.startsWith("wheel")) {
           const front = ev.part === "wheelFL" || ev.part === "wheelFR";
