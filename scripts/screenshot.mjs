@@ -273,6 +273,7 @@ const RICH_PICTURE = `localStorage.setItem(
       ground: "rich",
       dust: "all",
       exhaust: "all",
+      snow: "crystal",
     },
   }),
 )`;
@@ -1936,6 +1937,55 @@ await capture(
   },
   { tod: "night" },
 );
+
+// WHAT IS FALLING, at the pace it is read at. `make sky` has every weather
+// against every hour, but its cells are a fifth of a frame and a drop and a
+// flake are sized in PIXELS — so the sheet says whether the SKY is right and
+// only a real frame says whether the WEATHER is. Four of them, because the
+// sheets of rain and snow are built as three ranges each (rain.ts,
+// snowfall.ts) and every one of the four has to show all three:
+//
+//   NEAR — streaks or crystals coming at the glass, dense enough to be
+//   weather. At night this is the half the lamps light, and the acceptance
+//   test is that the two substances do not look alike: rain is a scatter of
+//   bright streaks with dark air between them, snow a wall.
+//
+//   MIDDLE — the far shell, hatching the country over rather than stopping
+//   at a bubble round the car. A frame where the rain ends at a clean radius
+//   is the defect this set exists to catch.
+//
+//   FAR — the fog, closed down live by the squall (`precipReach`,
+//   weather.ts) and, in snow, whitened to the flakes' own colour. The test
+//   is that the distance says it is raining WITHOUT a single drop in it: a
+//   downpour whose ridge line is as crisp as a clear day's is not a
+//   downpour.
+for (const scene of [
+  { name: "rain-day", params: { weather: "storm", hour: "12" } },
+  { name: "rain-night", params: { weather: "storm", hour: "22" } },
+  { name: "snow-day", params: { weather: "storm", season: "winter", temp: "-12", hour: "12" } },
+  { name: "snow-night", params: { weather: "storm", season: "winter", temp: "-12", hour: "22" } },
+]) {
+  await capture(
+    `shot-falling-${scene.name}`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      // Driven by the bot and shot well down the stage: both sheets are
+      // drawn at the velocity they are SEEN at, so a parked camera
+      // photographs a completely different weather from the one anybody
+      // plays in — and the snow's own cross-fade takes a second to come up
+      // once the air at the camera is under freezing.
+      await racing(page);
+      await atStageTime(page, 8);
+    },
+    { bot: "1", ...scene.params },
+    "load",
+    // The DETAIL row's top stop, because the lamps finding the flakes and
+    // the crystals near the glass BOTH ride it (`snow` in settings.ts) —
+    // shot on the default preset this set photographs plain grey dots and
+    // says nothing about the half of the effect a night blizzard is.
+    { initScript: RICH_PICTURE },
+  );
+}
 
 // THE BRAKE LIGHTS, which are the one lamp on the car that is a SIGNAL: they
 // exist for the driver behind, so they have to be read at the couple of car

@@ -49,8 +49,9 @@ const STEPS = 150;
 
 export type Horizon = {
   mesh: THREE.Mesh;
-  /** Repaint the rings for the conditions. */
-  paint: (p: Preset) => void;
+  /** Repaint the rings for the conditions. `taken` is how much of the chain
+   * the AIR ITSELF has, 0..1 — see `paint`. */
+  paint: (p: Preset, taken?: number) => void;
   /** Which country's skyline this is — how tall, and whether snowed. */
   setCountry: (biome: BiomeId) => void;
   /** Turn the ring so its sea gap faces this world heading. */
@@ -200,12 +201,17 @@ export function createHorizon(): Horizon {
    * a sky the country's own scale moves the vertices around in, and the two
    * setters are called in whichever order the caller likes. */
   let last: Preset | null = null;
+  /** …and how much of the chain the air had when it was, so a repaint the
+   * COUNTRY asks for (`setCountry`) does not quietly hand a white-out its
+   * clear-air skyline back. */
+  let lastTaken = 0;
 
   /** Repaint the horizon for the conditions: each vertex shaded against the
    * sky behind it, pulled toward the dark by its ring's own haze, darkened
    * by its ring's tone, and the snow laid over whatever that leaves. */
-  const paint = (p: Preset): void => {
+  const paint = (p: Preset, taken = 0): void => {
     last = p;
+    lastTaken = taken;
     const fogColor = new THREE.Color(p.fog);
     // The dark end each ring is pulled toward by its own `haze` — the more
     // of it, the further the ring has dissolved into the distance and the
@@ -260,6 +266,18 @@ export function createHorizon(): Horizon {
       // perspective with it and a far snowfield stays further away than a
       // near one.
       if (snowy && ridgeCap[i]) rock.lerp(cap, SNOW_SHOWS);
+      // ...AND THEN THE AIR TAKES IT. Everything above is aerial
+      // perspective in CLEAR air: a ring dissolves toward the sky it is
+      // drawn against, which under a deck is the ceiling, and it is why a
+      // storm's chain goes to soot rather than to grey. Air with weather
+      // actually IN it is a different claim — a downpour or a white-out is
+      // an opaque curtain hung a hundred metres out, and the range two
+      // kilometres behind it is not darker, it is GONE. So the finished
+      // colour goes to the FOG, which is the one thing in the frame that
+      // is already the colour of what is falling (`snowTone` on it,
+      // environment.ts), and at the top of a blizzard the whole chain is
+      // the fog and there is no skyline left to see.
+      if (taken > 0) rock.lerp(fogColor, taken);
       colors.setXYZ(i, rock.r, rock.g, rock.b);
     }
     colors.needsUpdate = true;
@@ -274,7 +292,7 @@ export function createHorizon(): Horizon {
     scale = RIDGE_HEIGHT[biome];
     mesh.scale.y = scale;
     snowy = RIDGE_SNOW[biome];
-    if (last) paint(last);
+    if (last) paint(last, lastTaken);
   };
 
   const turnTo = (bearing: number): void => {
