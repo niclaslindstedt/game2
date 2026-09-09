@@ -79,7 +79,13 @@ describe("how big a jump is", () => {
   it("the word never disagrees with the flight it is drawn from", () => {
     const rank = { small: 0, medium: 1, big: 2 };
     const seen: { flight: number; size: string }[] = [];
-    for (let seed = 1; seed <= 12; seed++) {
+    // SIXTEEN seeds, not twelve, and the four extra are the guard's margin
+    // rather than more coverage: how many jumps a sweep contains is the
+    // generator's to decide, and after a rules change re-rolled the routes
+    // twelve seeds carried exactly ten — landing the `> 10` guard below on
+    // its own boundary, so the suite failed without anything being wrong
+    // with a jump. Sixteen carries fourteen.
+    for (let seed = 1; seed <= 16; seed++) {
       const track = stageTrack(seed);
       for (let i = 0; i < track.samples.length; i++) {
         if (!track.samples[i].jump) continue;

@@ -71,17 +71,25 @@ const flag = (name, fallback) => {
  * The lift trades foreground for distance, and a shot with the horizon in it
  * has all the distance it can use already. From 200 m the nearest ground in
  * frame is nearly 400 m away, so the whole picture sits in the hazy half and
- * reads as weather; from here it starts around 200 m, and the rock, the
+ * reads as weather; from here it starts around 100 m, and the rock, the
  * trees and the road in the near third give the far ones something to be far
- * FROM. */
-const LIFT = Number(flag("lift", 110));
+ * FROM.
+ *
+ * IT WAS 110 AND THAT WAS STILL TOO HIGH. Every one of the three banners
+ * came back as a white field with a smudge in it: at 110 m the nearest
+ * ground is already 200 m out, which on the game's own fog is most of the
+ * way to solid, so the countries were being advertised by their haze. A
+ * country is sold by what GROWS in it — the spruce, the saguaro, the gravel
+ * under the road — and none of that is legible unless the near third of the
+ * frame is close enough to be sharp. */
+const LIFT = Number(flag("lift", 55));
 
 /** How far the camera tilts down from level, radians. Shallow enough that
  * THE HORIZON IS IN THE FRAME, which is what makes this a view out across a
  * country rather than a map of one — an aerial with no horizon in it reads
  * as the map view with extra steps, whatever lens took it. Sky is the top
  * few percent; everything below is land going away from you. */
-const TILT = Number(flag("tilt", -0.24));
+const TILT = Number(flag("tilt", -0.16));
 
 /** How far the world is DRAWN for the shot, m (`?air=`).
  *
@@ -99,8 +107,12 @@ const TILT = Number(flag("tilt", -0.24));
  * the car, the camera's far plane, and the fog — which is set to go solid
  * exactly at the drawn edge, so the country ends in haze rather than on a
  * line. Two and a half kilometres is as far as the eye picks out anything at
- * this scale, and the tile count goes up with the square of it. */
-const AIR = Number(flag("air", 2600));
+ * this scale, and the tile count goes up with the square of it — which is
+ * why this is the number that moved LAST. Lowering the camera is what makes
+ * the near ground sharp; this is only what stops the far ground ending
+ * inside the frame once the lens is looking further along the country
+ * instead of down at it. */
+const AIR = Number(flag("air", 4200));
 
 /** The banner, px. Low resolution on purpose: it is read as a strip behind
  * a location's name, and the game it is a picture of is low-poly anyway.

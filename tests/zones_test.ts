@@ -41,11 +41,17 @@ const face =
   (x: number): number =>
     y + x * grade;
 
-describe("the zones are the country's, and the taiga's are the old constants", () => {
-  it("states the taiga's rock line at 26..52 m with no snow, and an alpine snowline above its rock", () => {
+describe("the zones are the country's, read against the country's own ground", () => {
+  it("states the taiga's rock line at 55..100 m with no snow, and an alpine snowline above its rock", () => {
+    // A BAND IS A PERCENTILE OF ITS OWN COUNTRY. These were 46 and 26..52,
+    // which are the desert's numbers and right for the desert — its ground
+    // reaches 26 m at p88. The taiga's stands about twice as tall, so the
+    // same band started at p65 and an eighth of everything a player drove
+    // past was solid bedrock with no soil under it. Re-read at the desert's
+    // own percentiles of the taiga's distribution (biomes.ts).
     expect(BIOMES.taiga.land.zones).toEqual({
-      treeline: 46,
-      rock: { from: 26, to: 52 },
+      treeline: 92,
+      rock: { from: 55, to: 100 },
       snow: null,
     });
     const alpine = BIOMES.alpine.land.zones;
@@ -54,14 +60,14 @@ describe("the zones are the country's, and the taiga's are the old constants", (
     expect(alpine.snow as number).toBeGreaterThan(alpine.rock.to);
   });
 
-  it("paints the taiga's rock exactly as before: nothing at 26 m, half way at 39 m, all rock from 52 m", () => {
+  it("paints the taiga's rock over its band: nothing at 55 m, half way at 77.5 m, all rock from 100 m", () => {
     // The unnamed country is the taiga, as it is everywhere else in the app.
     expect(rockAt(flat(10), 0, 0)).toBe(0);
-    expect(rockAt(flat(26), 0, 0)).toBe(0);
-    expect(rockAt(flat(39), 0, 0)).toBeCloseTo(0.5, 6);
-    expect(rockAt(flat(52), 0, 0)).toBe(1);
-    expect(rockAt(flat(80), 0, 0)).toBe(1);
-    for (const y of [10, 26, 39, 52, 80]) {
+    expect(rockAt(flat(55), 0, 0)).toBe(0);
+    expect(rockAt(flat(77.5), 0, 0)).toBeCloseTo(0.5, 6);
+    expect(rockAt(flat(100), 0, 0)).toBe(1);
+    expect(rockAt(flat(130), 0, 0)).toBe(1);
+    for (const y of [10, 55, 77.5, 100, 130]) {
       expect(rockAt(flat(y), 0, 0, dials("taiga"))).toBe(rockAt(flat(y), 0, 0));
       expect(snowAt(flat(y), 0, 0, dials("taiga"))).toBe(0);
     }
@@ -129,14 +135,17 @@ describe("what is planted where", () => {
     expect(plantZone(dials("alpine"), (zones.snow as number) + 1, true)).toBe("snow");
   });
 
-  it("keeps the taiga's highland where it was: above 26 m, and never under snow", () => {
-    expect(plantZone(dials("taiga"), 27, false)).toBe("highland");
-    expect(plantZone(dials("taiga"), 25, false)).toBe("community");
+  it("puts the taiga's highland at its rock line: above 55 m, and never under snow", () => {
+    // The highland mix — squat spruce, juniper, snags — follows `rock.from`,
+    // so it moved with the band above. It had been dressing most of every
+    // high stage in stunted trees on the strength of a 26 m line.
+    expect(plantZone(dials("taiga"), 56, false)).toBe("highland");
+    expect(plantZone(dials("taiga"), 54, false)).toBe("community");
     expect(plantZone(dials("taiga"), 40, true)).toBe("riparian");
     expect(plantZone(dials("taiga"), 800, false)).toBe("highland");
     expect(plantZone(dials("taiga"), LAKE_Y + 1, false)).toBe("shore");
     // The unnamed country is the taiga here too.
-    expect(plantZone(dials("nowhere"), 27, false)).toBe("highland");
+    expect(plantZone(dials("nowhere"), 56, false)).toBe("highland");
     // A dry country has no shore however low its pans lie.
     expect(plantZone(dials("desert"), LAKE_Y + 1, false)).toBe("community");
   });

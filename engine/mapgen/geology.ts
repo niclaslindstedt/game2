@@ -66,6 +66,7 @@ import {
   knobScale,
   landOf,
   reliefOf,
+  siteBiasOf,
   type StageKnobs,
 } from "./rules.ts";
 
@@ -802,7 +803,12 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     // the opening straight cannot be laid from (R34). The biggest value
     // wins, so a country with no shoulder still gets its flattest high
     // ground rather than failing.
-    if (L.startHigh) {
+    // R49 — ...and the TILT dial asks for the same walk in a country that
+    // would not otherwise take it, or for its opposite. Zero is the plain
+    // spiral below, so a stage that asks for no tilt in a country that
+    // does not start high is sited exactly where it always was.
+    const bias = siteBiasOf(knobs);
+    if (bias !== 0) {
       let best = { x: 0, z: 0 };
       let bestScore = -Infinity;
       const snowCeiling =
@@ -827,12 +833,24 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
       // height there is to tempt the site up onto a face, and a start on a
       // face is a stage the search then has to lay down off one.
       const penalty = SHOULDER_PENALTY * Math.pow(altitude.height, R.massif.altitude.siting);
+      const reach = siteFar * Math.abs(bias);
       const consider = (ox: number, oz: number): void => {
         const f = footprint(ox, oz);
         if (f.clear < 0) return;
         // Height counts up to the ceiling and against past it, so the
-        // best shoulder is the one nearest the snowline from below.
-        const height = f.mean <= ceiling ? f.mean : ceiling - (f.mean - ceiling);
+        // best shoulder is the one nearest the snowline from below. The
+        // ceiling is a rule about standing a grid in the snow, so it binds
+        // a site walking UP and has nothing to say to one walking down.
+        const capped = f.mean <= ceiling ? f.mean : ceiling - (f.mean - ceiling);
+        // R49 — the BIAS says only WHICH WAY to look. How FAR it looks is
+        // what makes the dial graduated (`reach` above): scaling the score
+        // does nothing at all, because the best site is the best site
+        // whatever the terms are multiplied by, and a dial at a tenth
+        // picked exactly the same shoulder as a dial at one. Bounding the
+        // WALK is what a gentle setting should mean anyway — a stage that
+        // wants a small descent starts on the high ground NEARBY, not on
+        // the best shoulder in the county.
+        const height = bias > 0 ? capped : -f.mean;
         const score = height - penalty * Math.max(0, f.spread - allowance);
         if (score > bestScore) {
           bestScore = score;
@@ -840,7 +858,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
         }
       };
       consider(0, 0);
-      for (let radius = siteStep; radius <= siteFar; radius += siteStep) {
+      for (let radius = siteStep; radius <= reach; radius += siteStep) {
         const points = Math.max(6, Math.round((2 * Math.PI * radius) / siteStep));
         for (let a = 0; a < points; a++) {
           const angle = (a / points) * Math.PI * 2;

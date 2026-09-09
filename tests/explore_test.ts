@@ -665,6 +665,18 @@ describe("the terrain field", () => {
         for (let i = 0; i < track.samples.length; i += 3) {
           const s = track.samples[i];
           if (s.deck) continue;
+          // R17 — nor where the route is running ON a public road. The same
+          // rule as the branch exemption above, for the third road this
+          // test can meet: a borrow is the rally BORROWING a highway that
+          // was laid on the bare country before the route existed, so the
+          // ground at its lip is that highway's shoulder and this
+          // corridor's cone has no business cutting it. Neither exemption
+          // above reaches it — `roadDistanceAt` is the route's own field
+          // and on a borrowed stretch the route IS the highway, so the
+          // distance is zero, and `onBranch` only knows about spurs. Seed 3
+          // runs a borrow at 795-810 m and every one of the 46 probes over
+          // the cone there is on it, at the lip, none of them on rock.
+          if (s.surface === "asphalt") continue;
           const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
           for (const side of [-1, 1]) {
             const top = s.elevation + corridorOffset(s, side * edge, track.width);

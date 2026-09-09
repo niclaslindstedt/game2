@@ -470,9 +470,12 @@ export const SHOTS = [
     id: "pack",
     caption: "GET PAST THEM",
     // THE CLAIM: the field is not scenery — it is in the way. Taiga-1's first
-    // two calls come at 167 m and 217 m, an EASY LEFT straight into an EASY
-    // RIGHT, which is the earliest place on the stage where fifteen cars that
-    // left together have to take the same line at once.
+    // call is T1 at 159 m, an EASY LEFT of 81 m radius (`make level
+    // LEVEL=taiga-1`), and it is the earliest place on the stage where fifteen
+    // cars that left together have to take the same line at once — a fast open
+    // bend rather than the LONG HARD LEFT hairpin that follows it at 295 m,
+    // because a hairpin this early would have the field single file by the time
+    // anybody reached the apex.
     //
     // Placed EARLY rather than driven from the grid. Both work and the placement
     // is the one to keep: `placeField` advances every crew to the player's own
@@ -504,18 +507,18 @@ export const SHOTS = [
     // the bright one; weather goes in the `weather` frame, where being dark is
     // the point.
     //
-    // Stood at 650 m, sixty metres short of T5 — a LONG MEDIUM LEFT of
-    // thirty-two metres' radius (`make level LEVEL=taiga-1`). MEDIUM rather
-    // than hard, deliberately: the harness asks for the slide itself, and full
-    // lock into T3's twenty-metre hairpin at a hundred is a spin — a different
-    // frame with a different caption.
+    // Stood at 480 m, on the short straight into T4 — a LONG MEDIUM RIGHT of
+    // 132° over 104 m at 37 m radius (`make level LEVEL=taiga-1`). MEDIUM
+    // rather than hard, deliberately: the harness asks for the slide itself,
+    // and full lock into T2's fourteen-metre hairpin at a hundred is a spin —
+    // a different frame with a different caption.
     //
     // `commitToTheCorner` then `holdTheSlide` are what make it a drift rather
     // than a tidy line; see the notes on both, and the measurements behind
     // them. The shutter is timed from the CATCH rather than from the input,
     // because how far the car has come round by the time the lock comes off is
     // this frame's whole subject.
-    params: { level: "taiga-1", at: "racing", s: "650", speed: "25", camera: "chase" },
+    params: { level: "taiga-1", at: "racing", s: "480", speed: "25", camera: "chase" },
     prepare: commitToTheCorner,
     trigger: holdTheSlide,
     captureAtS: 0.4,

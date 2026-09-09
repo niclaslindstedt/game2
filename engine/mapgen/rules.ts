@@ -532,6 +532,29 @@
 //       without a massif: every multiplier in the taiga's row is 1, its
 //       `steer` is 0 and it bores nothing, so every seed it ever built is
 //       the seed it still builds.
+//
+//   R49 WHICH WAY A STAGE RUNS THROUGH ITS COUNTRY is a DIAL —
+//       `knobs.tilt` — and it is decided by WHERE THE STAGE STARTS. The
+//       road follows the bare land through a lag (R34), so its height at
+//       any point is the country's; what the stage does over its whole
+//       length is therefore almost entirely how high the ground under the
+//       start line stands against the country's own average. So the dial
+//       moves R35's siting walk and nothing else: above the middle the
+//       origin walks for the highest level shoulder it can find and the
+//       stage comes down off it, below the middle for the lowest ground it
+//       can start on and the stage climbs. HOW FAR it walks is what the
+//       dial's magnitude buys (`siteBiasOf`), because the best site is the
+//       best site whatever the score is scaled by — a gentle setting means
+//       the high ground NEARBY, a full one the best shoulder in the
+//       county. The middle asks for nothing and is R35's plain spiral, so
+//       every seed built without a tilt is the seed it always was; a
+//       country that already starts high (R47's alpine) is exactly its old
+//       self at the middle and takes the dial as an offset either way. It
+//       can only trade inside the relief the country actually has, and it
+//       never touches the road's own grade — nothing it does can make a
+//       stage steeper than R34 already allows. It says nothing at all to a
+//       CIRCUIT (R22): a lap comes back to its own start line, so its net
+//       drop is zero however the country is sited under it.
 
 import { biomeRules, isBiomeId, type BiomeId, type BiomeLand } from "./biomes.ts";
 
@@ -582,6 +605,33 @@ export type StageKnobs = {
    * a CUT: a blasted face standing over the verge instead of a bank
    * battered back to something a car could climb. */
   steepness: number;
+  /** R49 — WHICH WAY THE STAGE RUNS THROUGH THE COUNTRY, 0..1: 0 is a
+   * stage that climbs, 1 is a stage that comes down, and 0.5 is neither —
+   * a road that takes the country as it finds it, which is every stage
+   * this generator built before the dial existed.
+   *
+   * It is not `elevation`, which says how much height the country HAS, nor
+   * `steepness`, which says what angle it is held at. Those two describe
+   * the ground; this one describes the JOURNEY across it, and it is the
+   * half of a rally stage a player feels first — a road that loses height
+   * carries speed it did not have to earn, and one that gains it spends
+   * the whole stage paying for the view.
+   *
+   * It works by moving WHERE THE STAGE STARTS, which is the one lever a
+   * country of bounded hills actually answers to (R35, R49). The road
+   * follows the land through a lag, so its height at any point is the
+   * country's; what the stage does over its whole length is therefore
+   * decided almost entirely by how high the ground under the start line
+   * is against the country's average. Sited on a shoulder, a stage spends
+   * the rest of itself coming down off it.
+   *
+   * That is also why it is a MILD instrument, and deliberately so. It can
+   * only trade within the relief the country actually has — a taiga at the
+   * top of the dial comes down a few tens of metres over a stage, not a
+   * mountainside — and it cannot make the road steeper than R34 already
+   * allows, because it never touches the road's own grade. A stage that
+   * drops off a cliff is `elevation` and `steepness`, not this. */
+  tilt: number;
   /** R46 — HOW HARD THE ROAD IS, 0..1. The one dial that is not about a
    * single thing the stage has in it: it leans on the corner vocabulary,
    * the jumps, the road's width and the country's relief at once, always
@@ -660,6 +710,7 @@ export const NUMERIC_KNOBS: readonly NumericKnob[] = [
   "asphalt",
   "width",
   "steepness",
+  "tilt",
   "challenge",
   "peaks",
   "altitude",
@@ -683,6 +734,11 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // Middling country: rock faces where the road has to force a shoulder,
   // worn slopes everywhere it does not.
   steepness: 0.5,
+  // R49 — the middle of the tilt dial, which is the one position that asks
+  // the search for nothing: the country decides where the road goes, as it
+  // did before there was a dial. Every campaign stage but the ones that
+  // name a tilt is built here.
+  tilt: 0.5,
   // R46 — the middle of the difficulty dial, which is the vocabulary every
   // rule above states and every stage in the campaign is built on.
   challenge: 0.5,
@@ -724,6 +780,7 @@ export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
     asphalt: clamp01(knobs?.asphalt ?? DEFAULT_KNOBS.asphalt),
     width: clamp01(knobs?.width ?? DEFAULT_KNOBS.width),
     steepness: clamp01(knobs?.steepness ?? DEFAULT_KNOBS.steepness),
+    tilt: clamp01(knobs?.tilt ?? DEFAULT_KNOBS.tilt),
     challenge: clamp01(knobs?.challenge ?? DEFAULT_KNOBS.challenge),
     peaks: clamp01(knobs?.peaks ?? DEFAULT_KNOBS.peaks),
     altitude: clamp01(knobs?.altitude ?? DEFAULT_KNOBS.altitude),
@@ -3959,6 +4016,23 @@ export function followGradeOf(knobs: StageKnobs): number {
  * flat. The two are tuned together (`BiomeLand.lag`). */
 export function followLagOf(knobs: StageKnobs): number {
   return STAGE_RULES.elevation.follow.lag * biomeRules(knobs.biome).land.lag;
+}
+
+/** R35/R49 — WHICH WAY THE ORIGIN LOOKS for its site, -1..1. Above zero it
+ * walks to the highest level shoulder it can find, so the stage runs DOWN
+ * off it; below zero to the lowest ground it can start on, so the stage
+ * climbs; and the magnitude is how much height it is willing to trade for
+ * level ground to put a grid on.
+ *
+ * The country's own appetite (`BiomeLand.startHigh` — a mountain stage
+ * comes down a mountain, R47) plus the TILT dial's, clamped to the travel.
+ * At the middle of the dial a country that does not start high gets
+ * exactly zero, which is R35's plain spiral and the site every seed has
+ * always had. */
+export function siteBiasOf(knobs: StageKnobs): number {
+  const country = biomeRules(knobs.biome).land.startHigh ? 1 : 0;
+  const bias = country + (knobs.tilt - 0.5) * 2;
+  return bias < -1 ? -1 : bias > 1 ? 1 : bias;
 }
 
 /** R22 — the band ONE LAP of a circuit is searched inside: the sprint band
