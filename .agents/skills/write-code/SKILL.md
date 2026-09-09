@@ -208,7 +208,13 @@ Make targets are the definition of green CI enforces).
   with errors pointing at the DOM module rather than at your test. **An
   `import type` counts** — the import is erased at runtime but the module it
   names is still type-CHECKED, so one type pulled from a DOM-touching module
-  poisons an otherwise DOM-free one. State the shape locally instead. Check the
+  poisons an otherwise DOM-free one. The root config sets no `jsx` either, so a
+  `.tsx` cannot be reached AT ALL — `import type { RaceSettings } from
+  "./menu.tsx"` fails with `TS6142: '--jsx' is not set`, and that is the common
+  way a pwa payload module locks itself out of the root suite. State the shape
+  locally instead — best as a `Pick<>` of a type the DOM-free side already owns
+  (`menu-demo.ts`'s `DemoConditions` is a slice of `StageSpec`), which narrows
+  the parameter to what the module actually needs and restates nothing. Check the
   import chain before writing the test — and when a pure model sits in a
   module that is not DOM-free, either leave it untested or split it the way
   the audio surface already does (`lib/voice.ts` describes, `lib/synth.ts`
