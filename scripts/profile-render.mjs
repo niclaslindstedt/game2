@@ -153,11 +153,16 @@ const MIRROR_HZ = "60";
 
 const rows = [];
 
-async function scene(name, params, settle) {
+/** `initScript` runs before any page script, for the rows that have to be
+ * metered at a PICTURE the URL cannot ask for: the video options live in
+ * `localStorage` and there is no `?detail=`. Same hook `screenshot.mjs`
+ * uses, and for the same reason. */
+async function scene(name, params, settle, initScript) {
   if (only.length > 0 && !only.some((f) => name.includes(f))) return;
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
   await page.addInitScript(METER);
+  if (initScript) await page.addInitScript(initScript);
   await page.goto(`${url}?${new URLSearchParams({ seed, mirrorhz: MIRROR_HZ, ...params })}`, {
     waitUntil: "load",
   });
@@ -240,6 +245,82 @@ await scene("storm", { start: "1", bot: "1", weather: "storm" }, async (page) =>
   await racing(page);
   await atStageTime(page, 12);
 });
+
+/** The picture at the top of the DETAIL row. Only the ten levers that row
+ * owns are written: the loader resolves a stored blob to the stop it most
+ * resembles and snaps the whole row onto it (`detailOf`, settings.ts), so
+ * these are what asks for HIGH rather than a value each being read. */
+const RICH_DETAIL = `localStorage.setItem(
+  "scandi-flick-options",
+  JSON.stringify({
+    video: {
+      effects: "full",
+      interior: "full",
+      glass: "all",
+      crumple: "all",
+      wheelLoss: "all",
+      flora: "lush",
+      ground: "rich",
+      dust: "all",
+      exhaust: "all",
+      snow: "crystal",
+    },
+  }),
+)`;
+
+// THE SAME STORM IN WINTER — the snowiest frame the game draws, and the one
+// row here whose subject is the SEASON rather than the stage under it. It
+// sits directly beneath `storm` on purpose: same seed, same stage, same
+// weather, same moment, same picture, and the only difference between the
+// two rows is the cold.
+//
+// And the difference goes DOWN, which is the thing worth having the row
+// for: a winter taiga draws about a fifth fewer calls and a quarter fewer
+// triangles than the same stage in summer. The season re-plants the world,
+// and what it plants in winter is cheaper by more than the blanket, the
+// tracks and the falling sheet add back. So the honest reading of the pair
+// is "what the season changes", not "what winter costs" — and the number to
+// watch is this row against ITSELF, because a change that makes winter
+// dearer than summer is a change that has done something unintended.
+await scene(
+  "storm-snow",
+  { start: "1", bot: "1", weather: "storm", season: "winter", temp: "-13" },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 12);
+  },
+);
+
+// ...and that same winter frame at the TOP of the DETAIL row, which is where
+// the falling snow stops being plain dots: every flake sums the car-lamp
+// register in its vertex shader, and the ones near the glass are stamped
+// from the crystal atlas (snowfall.ts). It needs the init script because
+// the video options live in `localStorage` and there is no `?detail=`; the
+// row is snapped whole (`detailOf`), so `snow` cannot be moved on its own
+// and this is the only way to reach that shader at all.
+//
+// THE PAIR COMES OUT ALMOST FLAT, and that is the result rather than a
+// failure of the scene: the lit sheet and the crystals are per-particle
+// work inside ONE draw call that was already being issued, so they move
+// neither the draw count nor the triangles, and what separates these two
+// rows is the rest of the top stop — a few thousand triangles of lusher
+// undergrowth on a stage with no field on it to furnish.
+//
+// So do not read a flat pair as "the top stop is free". This meter counts
+// draws, triangles and binds; the snow shader's cost is vertex ALU and
+// blended overdraw, and neither is a number in this table. What the row is
+// FOR is the other thing: the worst frame in the game, pinned, and a
+// guarantee that the top stop adds no draw calls here. Both should stay
+// where they are unless somebody moves them on purpose.
+await scene(
+  "storm-snow-rich",
+  { start: "1", bot: "1", weather: "storm", season: "winter", temp: "-13" },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 12);
+  },
+  RICH_DETAIL,
+);
 
 // THE TRAINING GROUND (engine/mapgen/arena.ts). Its own row because it is
 // the one place in the game whose GROUND is not a stage's: the pad is drawn
