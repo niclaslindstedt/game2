@@ -2693,6 +2693,41 @@ async function atDrifting(page, degrees) {
   );
 }
 
+/** PROVOKE THE SLIDE, then wait for it. Returns once the car is `degrees`
+ * sideways with all four wheels down and still on the road.
+ *
+ * This scene drives the car by hand, and it is worth writing down why, because
+ * the obvious thing — hand the bot a stage and wait for it to drift — was
+ * tried first and does not work. Measured on the desert seed this set uses:
+ * the bot's slip peaks at 9.8° over three hundred metres of open sand, which
+ * is UNDER the angle the game itself calls a drift. There is no threshold that
+ * would have caught it, and lowering one twice is how two ten-minute runs
+ * ended in a stack trace. A bot driving a fast, wide road tidily is the bot
+ * working; it is simply not a photograph.
+ *
+ * The other half of the reason is time. Under software rendering the sim
+ * advances about a second per eighteen of wall clock, so DRIVING to a corner
+ * that might produce a slide is minutes per attempt. `?at=racing&s=` stands
+ * the run where the shot wants it (engine's place.ts) and the clock it writes
+ * from the skipped road is why every wait here is an offset off `cleanTime`.
+ *
+ * So: throttle, a stab of handbrake to unstick the rear, and lock held into
+ * the turn. Held any longer than this the car leaves the road — at full lock
+ * it reaches 45° and ends up in a field, which the predicate correctly
+ * refuses — so the shutter wants the early part of the slide, while the angle
+ * is up and the car is still on the road. */
+async function stageDrift(page, degrees) {
+  const placed = await cleanTime(page);
+  await atCleanTime(page, placed + 1.5);
+  await page.keyboard.down("ArrowUp");
+  await atCleanTime(page, placed + 3);
+  await page.keyboard.down("ArrowRight");
+  await page.keyboard.down("Space");
+  await atCleanTime(page, placed + 3.6);
+  await page.keyboard.up("Space");
+  await atDrifting(page, degrees);
+}
+
 /** Take the last two layers off for the shutter: whatever the HUD still
  * draws with the panel switched off (the pause chip, the lights, a call to
  * get a lost car home) and the developer overlay this scene steered by. */
@@ -2772,7 +2807,11 @@ await capture(
     roam: "1",
     seed: "20704",
     biome: "alpine",
-    season: "winter",
+    // SPRING rather than winter. An alpine winter puts the sun low enough at
+    // midday that the sky goes pink and the whole country reads as dusk — a
+    // handsome frame, and not the one this scene is for, which is the Alps in
+    // daylight. The snow that matters is on the peaks either way.
+    season: "spring",
     length: "short",
     // The generator's own dial names (NUMERIC_KNOBS in mapgen/rules.ts), not
     // the words the page prints beside them: HILLS is `elevation` and TERRAIN
@@ -2802,13 +2841,7 @@ await capture(
   "shot-showcase-desert",
   SHOWCASE,
   async (page) => {
-    await atCleanTime(page, 16);
-    // Sixteen degrees, and lower than anywhere else on purpose: this is the
-    // scene that names the FOUR-WHEEL-DRIVE car, and four-wheel drive is the
-    // layout that gives away the least angle of the three. Asking a coupe for
-    // the slip a rear-driven car finds on the same corner is asking for a
-    // moment its drivetrain does not have.
-    await atDrifting(page, 16);
+    await stageDrift(page, 20);
     await clean(page);
   },
   {
@@ -2820,6 +2853,10 @@ await capture(
     // that it reads. (`?rivals=` is Roam's own slider; a heads-up grid takes
     // its size from the race card instead.)
     rivals: "4",
+    // Stood deep in the stage and DRIVEN BY HAND (`stageDrift`), for reasons
+    // measured rather than guessed — see that helper.
+    at: "racing",
+    s: "1200",
     biome: "desert",
     car: "coupe",
     // The LONG boom rather than the one the game is driven from: at 22° of
@@ -2827,7 +2864,6 @@ await capture(
     // bottom of the frame and goes off the edge of it, and what a shot of a
     // slide has to show is the whole car at an angle to the road it is on.
     camera: "far",
-    bot: "1",
     seed: "27",
   },
 );
@@ -2866,7 +2902,11 @@ await capture(
   {
     ...CLEAN,
     biome: "alpine",
-    season: "winter",
+    // SPRING rather than winter. An alpine winter puts the sun low enough at
+    // midday that the sky goes pink and the whole country reads as dusk — a
+    // handsome frame, and not the one this scene is for, which is the Alps in
+    // daylight. The snow that matters is on the peaks either way.
+    season: "spring",
     camera: "far",
     bot: "1",
     seed: "20704",
@@ -2904,24 +2944,35 @@ await capture(
   "shot-showcase-tvcam",
   SHOWCASE,
   async (page) => {
-    await atCleanTime(page, 12);
-    // Eighteen degrees rather than the twenty-two the desert asks for, and a
-    // handful of rivals rather than a grid. Both are about what this scene
-    // can AFFORD: it is the only one that pays for the depth-of-field pass on
-    // top of a software-rendered frame, so its sim advances at a fraction
-    // even of the others' — and a predicate that wants a deep angle, all four
-    // wheels down and the car on the road, all on one frame, is a rare frame
-    // to begin with. Asking for a rarer one on a slower run is how a scene
-    // spends ten minutes and comes back with a stack trace. Eighteen is still
-    // most of twice `TUNING.drift.enterSlip`, which is to say properly
-    // crossed up rather than merely loose.
-    await atDrifting(page, 18);
+    // No drift predicate here, and that is the measured answer rather than a
+    // surrender. On this taiga stretch the bot's slip peaks at 7°, and a
+    // staged slide is worse than useless: the road is narrower than the
+    // desert's, so the same provocation that works there has the car off the
+    // road before the shutter starts watching, and — with the lock still on
+    // and the throttle pinned — driving circles in a field for the rest of
+    // the run. Every angle worth photographing on this stage happens while
+    // the car is somewhere the predicate rightly refuses.
+    //
+    // Which is fine, because the SUBJECT of this frame is the camera. A
+    // trackside tripod watching a car come through a corner is the picture;
+    // whether that car is fifteen degrees sideways or five is the desert
+    // shot's business. So the bot drives, the run is stood near a corner,
+    // and the shutter asks only that the car is on the road when it fires.
+    const placed = await cleanTime(page);
+    await atCleanTime(page, placed + 4);
+    await atOnRoad(page);
     await clean(page);
   },
   {
     ...CLEAN,
     rivals: "4",
     camera: "tv",
+    // Stood partway down the stage rather than driven there: this is the only
+    // frame in the set paying for the lens pass on top of a software-rendered
+    // one, so it is the slowest scene here and the least able to afford the
+    // drive.
+    at: "racing",
+    s: "900",
     bot: "1",
     seed: "38",
     length: "short",

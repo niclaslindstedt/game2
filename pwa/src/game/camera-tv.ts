@@ -77,12 +77,19 @@ export const TV = {
    * carry. Far enough that the car goes past the lens rather than through
    * it. */
   setback: 4.2,
-  /** How high the lens is held over the ground it stands on, m, and how far
-   * over the ROAD's crown it is never allowed to fall — a stand on the
-   * outside of a corner cut into a hillside is often on ground metres below
-   * the road, and a lens down there is filming a bank. */
+  /** How high the lens is held over the ground it stands on, m, and the band
+   * over the ROAD's crown it is kept inside whatever that ground does — a
+   * stand on the outside of a corner cut into a hillside is as often metres
+   * below the road as metres above it, and neither is a tripod. */
   lift: 1.9,
   overRoad: 1.2,
+  /** ...and the CEILING on the same thing, m. The floor stops a stand on the
+   * low side of a shelf from filming a bank; without a ceiling the stand on
+   * the HIGH side climbs it instead, and a lens six metres over the road is
+   * a crane looking down on a car rather than a tripod a car goes past. An
+   * operator on a bank stands part-way down it, which is what this is. Kept
+   * above head height so the shot still clears the verge. */
+  overRoadMax: 2.6,
   /** How close two stands may be, m, and the gap past which a stretch gets
    * a plain roadside camera whether or not it bends. The second is what
    * keeps a long straight — or a synthetic test rig with no corners in it
@@ -194,7 +201,10 @@ function standAt(state: GameState, index: number, side: number): TvStand | null 
   // under a point for the reason every outside camera reads it that way
   // (camera-ground.ts) — and floored against the road, so a stand on the
   // low side of a shelf is still looking at the road rather than up at it.
-  const y = Math.max(groundOver(state, x, z) + TV.lift, sample.elevation + TV.overRoad);
+  const y = Math.min(
+    Math.max(groundOver(state, x, z) + TV.lift, sample.elevation + TV.overRoad),
+    sample.elevation + TV.overRoadMax,
+  );
   return { s: sample.s, x, y, z };
 }
 
