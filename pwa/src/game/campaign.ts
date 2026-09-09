@@ -211,15 +211,37 @@ function levelKnobs(biome: BiomeId, level: CampaignLevel): StageKnobs {
  */
 
 /** The Taiga ladder — the first country, and the game's opening hour.
- * Gravel through spruce, a village with tarmac through it, and water that
- * is a ford in the spring and something you drive over in January.
+ * Gravel through spruce, a village with tarmac through it, and water the
+ * road fords rather than crosses.
  *
- *   seed 28 short   sprint   1.71 km   78 s   79 km/h   a bridge, a village, a crest
- *   seed 19 medium  circuit  1.63×3   216 s   81 km/h   a ford, set solid
- *   seed 12 medium  sprint   4.52 km  201 s   81 km/h   38 bends, 8 of them hard
- *   seed 46 long    circuit  2.75×3   372 s   80 km/h   28 bends a lap, 28% sealed
- *   seed 45 long    sprint   7.68 km  377 s   73 km/h   23 hard bends, 5 crests
- *   seed 40 xlong   sprint  10.71 km  538 s   72 km/h   96 bends in the dark
+ * IT RUNS SPRING TO AUTUMN, and never in winter. The cold country is the
+ * ALPINE's, six levels later, and a taiga that opened on ice said the game
+ * had one landscape rather than three — the boreal forest under snow is a
+ * different biome to look at, not a fourth face of this one. Winter here is
+ * Roam's: every seed can still be driven in it, and R48's ice road with it.
+ *
+ * THE FIRST THREE RUNGS ARE THE TUTORIAL THE GAME DOES NOT HAVE, so they
+ * are built rather than merely chosen. Each carries its own dials
+ * (`knobs`), which is the whole reason a level may: a WIDER road, because
+ * the first thing a player is learning is where the car points and a lane
+ * that punishes a late turn-in teaches nothing; and a small DESCENT (R49),
+ * because a road that gives speed back reads as fast without asking for
+ * anything, and because this game rolls a car easily enough that a big one
+ * would be a cliff to fall off rather than a gift. They fall away by rung —
+ * 22 m of road at level one, then 21, then 19 — so the road has closed to
+ * the game's own width by the time the ladder is asking real questions.
+ *
+ *   seed 30 short   sprint   1.79 km   82 s   79 km/h   a ford, a crest, 20.0 m of road
+ *   seed 11 medium  circuit  1.72×3   225 s   82 km/h   16 calls a lap, 28 m of climb
+ *   seed 48 medium  sprint   4.85 km  208 s   84 km/h   43 calls, two jumps, a bridge
+ *   seed 46 long    circuit  2.74×3   372 s   80 km/h   28 bends a lap, 28% sealed
+ *   seed 45 long    sprint   7.48 km  344 s   78 km/h   the country stands up, in rain
+ *   seed  1 xlong   sprint  10.42 km  457 s   82 km/h   92 calls, 17 of them hard
+ *
+ * The bot drives all eighteen clean in all three cars: no spin, no roll,
+ * no respawn and no damage anywhere on the ladder — which is the bar the
+ * first three rungs exist to clear, because a wide road that still rolls
+ * the car has taught nobody anything.
  */
 const TAIGA: CampaignLocation = {
   id: "taiga",
@@ -229,34 +251,42 @@ const TAIGA: CampaignLocation = {
   levels: [
     {
       id: "taiga-1",
-      name: "Mill Bridge",
-      seed: 28,
+      name: "Broad Ford",
+      seed: 30,
       length: "short",
       hour: 13,
       weather: "clear",
       season: "summer",
-      blurb: "Over the bridge, past the village, one blind crest",
+      // R21/R49 — the widest road in the game and a gentle fall through it.
+      knobs: { width: 0.85, tilt: 0.7 },
+      blurb: "A wide road falling through the spruce, one ford",
     },
     {
       id: "taiga-2",
-      name: "Frozen Ford",
-      seed: 19,
+      name: "Morning Loop",
+      seed: 11,
       length: "medium",
       shape: "circuit",
-      hour: 11,
+      hour: 7,
       weather: "clear",
-      season: "winter",
-      blurb: "Three laps over water the winter has set solid",
+      season: "spring",
+      // Still wide. No tilt: a lap comes back to its own start line, so
+      // there is no descent to ask for (R49) — what a circuit wants is
+      // FLAT, and this seed climbs 19 m a km against a band that allows 42.
+      knobs: { width: 0.8 },
+      blurb: "Three flat laps past the town, in the early light",
     },
     {
       id: "taiga-3",
       name: "Turbine Road",
-      seed: 12,
+      seed: 48,
       length: "medium",
-      hour: 17.5,
+      hour: 15,
       weather: "rain",
       season: "spring",
-      blurb: "Thirty-eight bends under the turbines, in the wet",
+      // The last of the wide ones, and the narrowest of the three.
+      knobs: { width: 0.7, tilt: 0.6 },
+      blurb: "Forty-three calls under the turbines, in the wet",
     },
     {
       id: "taiga-4",
@@ -277,17 +307,17 @@ const TAIGA: CampaignLocation = {
       hour: 22,
       weather: "rain",
       season: "autumn",
-      blurb: "Twenty-three hard corners and five blind crests, in the rain",
+      blurb: "The country stands up, and the rain comes with it",
     },
     {
       id: "taiga-6",
       name: "The Long Dark",
-      seed: 40,
+      seed: 1,
       length: "xlong",
       hour: 23,
       weather: "storm",
-      season: "winter",
-      blurb: "Eleven kilometres of frozen forest, in the dark",
+      season: "autumn",
+      blurb: "Ten kilometres and ninety calls, in the dark",
     },
   ],
 };

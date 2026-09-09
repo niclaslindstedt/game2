@@ -45,6 +45,7 @@ const STAGE: GhostStage = {
     dunes: DEFAULT_KNOBS.dunes,
     elevation: 0.5,
     steepness: 0.5,
+    tilt: DEFAULT_KNOBS.tilt,
     water: 0.5,
     trees: 0.5,
     asphalt: 0.5,

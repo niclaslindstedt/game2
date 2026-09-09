@@ -63,6 +63,92 @@ describe("the stage dials", () => {
     );
   });
 
+  // R49 — a POPULATION property, and it has to be: the dial moves where the
+  // stage starts, and one seed's country can put high ground anywhere. A
+  // per-seed assertion here would be a fixture pinned to a noise field.
+  it("R49 — the tilt dial decides which way a stage runs through its country", () => {
+    const meanDrop = (tilt: number): number => {
+      let total = 0;
+      for (const seed of SEEDS) {
+        const samples = compileStage(seed, "short", { tilt }).samples;
+        total += samples[0].elevation - samples[samples.length - 1].elevation;
+      }
+      return total / SEEDS.length;
+    };
+    const climbs = meanDrop(0.15);
+    const level = meanDrop(0.5);
+    const descends = meanDrop(0.85);
+    // Every stop asks for more descent than the one under it, and the two
+    // ends are far enough apart to be a different stage rather than noise.
+    expect(climbs).toBeLessThan(level);
+    expect(level).toBeLessThan(descends);
+    expect(descends - climbs).toBeGreaterThan(20);
+  });
+
+  it("R49 — the middle of the tilt dial is the stage that was built before it", () => {
+    // The one position that must change nothing: `siteBiasOf` comes out at
+    // zero in a country that does not start high, and R35's plain spiral
+    // runs exactly as it always did.
+    for (const seed of [4, 7, 19]) {
+      expect(compileStage(seed, "medium", { tilt: 0.5 }).samples).toEqual(
+        compileStage(seed, "medium").samples,
+      );
+    }
+  });
+
+  // R49/R22 — a lap comes back to its own start line, so there is no net
+  // drop to ask for. Stated as a test because the dial is offered on every
+  // stage and a circuit is the one shape it cannot move.
+  it("R49 — a circuit cannot be tilted", () => {
+    for (const tilt of [0.15, 0.5, 0.85]) {
+      const samples = compileStage(11, "medium", { tilt }, "circuit").samples;
+      expect(samples[0].elevation - samples[samples.length - 1].elevation).toBeCloseTo(0, 1);
+    }
+  });
+
+  // R49 — a POPULATION property, and it has to be: the dial moves where the
+  // stage starts, and one seed's country can put high ground anywhere. A
+  // per-seed assertion here would be a fixture pinned to a noise field.
+  it("R49 — the tilt dial decides which way a stage runs through its country", () => {
+    const meanDrop = (tilt: number): number => {
+      let total = 0;
+      for (const seed of SEEDS) {
+        const samples = compileStage(seed, "short", { tilt }).samples;
+        total += samples[0].elevation - samples[samples.length - 1].elevation;
+      }
+      return total / SEEDS.length;
+    };
+    const climbs = meanDrop(0.15);
+    const level = meanDrop(0.5);
+    const descends = meanDrop(0.85);
+    // Every stop asks for more descent than the one under it, and the two
+    // ends are far enough apart to be a different stage rather than noise.
+    expect(climbs).toBeLessThan(level);
+    expect(level).toBeLessThan(descends);
+    expect(descends - climbs).toBeGreaterThan(20);
+  });
+
+  it("R49 — the middle of the tilt dial is the stage that was built before it", () => {
+    // The one position that must change nothing: `siteBiasOf` comes out at
+    // zero in a country that does not start high, so R35's plain spiral
+    // runs exactly as it always did.
+    for (const seed of [4, 7, 19]) {
+      expect(compileStage(seed, "medium", { tilt: 0.5 }).samples).toEqual(
+        compileStage(seed, "medium").samples,
+      );
+    }
+  });
+
+  // R49/R22 — a lap comes back to its own start line, so there is no net
+  // drop to ask for. Stated as a test because the dial is offered on every
+  // stage and a circuit is the one shape it cannot move.
+  it("R49 — a circuit cannot be tilted", () => {
+    for (const tilt of [0.15, 0.5, 0.85]) {
+      const samples = compileStage(11, "medium", { tilt }, "circuit").samples;
+      expect(samples[0].elevation - samples[samples.length - 1].elevation).toBeCloseTo(0, 1);
+    }
+  });
+
   it("the elevation dial is the road's own relief", () => {
     const swing = (elevation: number): number => {
       const ys = compileStage(4, "medium", { elevation }).samples.map((s) => s.elevation);

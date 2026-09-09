@@ -27,7 +27,7 @@
 import { icyCountry, waterFrozen, type Climate } from "../game/climate.ts";
 import { createGeology, type GeologyField } from "./geology.ts";
 import { createWaterField, SEA, type WaterField } from "./water.ts";
-import { STAGE_RULES as R, landOf, type StageKnobs } from "./rules.ts";
+import { NUMERIC_KNOBS, STAGE_RULES as R, landOf, type StageKnobs } from "./rules.ts";
 
 /** The sea's own table, m. The name the rest of the generator has always
  * known it by; `SEA` is where it is defined and what the pour treats as
@@ -131,7 +131,15 @@ export function createLandField(
   climate?: Climate,
 ): LandField {
   const cold = climate === undefined ? "" : `${climate.season}|${climate.temperature}`;
-  const key = `${seed}|${knobs.biome}|${knobs.elevation}|${knobs.steepness}|${knobs.water}|${knobs.trees}|${knobs.asphalt}|${knobs.width}|${knobs.challenge}|${knobs.peaks}|${knobs.altitude}|${cold}`;
+  // Every dial, walked rather than listed. The country a stage is laid
+  // across is a function of the seed and the dials, and a key that names
+  // them by hand is a key that goes stale the next time one is added — it
+  // had already lost `dunes`, so two desert stages a dune apart shared one
+  // country, and R49's tilt would have joined it. A dial the land does not
+  // read costs a cache miss nobody will notice; a dial it reads and the
+  // key does not is a stage built from another stage's country.
+  const dials = NUMERIC_KNOBS.map((dial) => knobs[dial]).join("|");
+  const key = `${seed}|${knobs.biome}|${dials}|${cold}`;
   const had = memo.find((entry) => entry.key === key);
   if (had) return had.land;
   const land = buildLandField(seed, knobs, climate);

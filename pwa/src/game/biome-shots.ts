@@ -26,7 +26,7 @@ export type BiomeShot = {
 export const BIOME_SHOTS: Record<string, BiomeShot> = {
   taiga: {
     level: "taiga-1",
-    seed: 28,
+    seed: 30,
     length: "short",
     shape: "sprint",
     hour: 13,

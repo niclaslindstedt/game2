@@ -107,6 +107,7 @@ type RoamProps = {
 const DIAL_GLYPHS: Record<string, GlyphName> = {
   elevation: "mountain",
   steepness: "crag",
+  tilt: "descent",
   water: "water",
   trees: "tree",
   asphalt: "tarmac",

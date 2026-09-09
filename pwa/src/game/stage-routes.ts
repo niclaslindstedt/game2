@@ -28,19 +28,19 @@ export type StageRoute = {
 
 export const STAGE_ROUTES: Record<string, StageRoute> = {
   "taiga-1": {
-    d: "CP4IqwqgEY4TfxBxAD8AOQI0BDIHMipFMUc3Rj1CQz1JMk4vUzJcQmBGg0KHPok4iTKGJIcciReMFLIAtwO6CboPuB+7LMEyyjbPOtRC1kvWVNRczWbJdMF7voO8i72Tv5j/+g==",
-    aspect: 1.6797,
-    spec: { seed: 28, length: "short", shape: "sprint", season: "summer" },
+    d: "AP4AzALEBb4LuSOsJ6wrri+wMbQxuy3ELMku0DPWSd1P3ljbX9RgzV3AXrtis2KuS4hKhEt/UndVcVZIWUJfP2U+mUKlSK1RsVW4V75W4EniRuJD3D3aONo03DDkKvAo9ib7I/4e/xj9EvgN8QpyAA==",
+    aspect: 0.7853,
+    spec: { seed: 30, length: "short", shape: "sprint", season: "summer" },
   },
   "taiga-2": {
-    d: "FLgTdg9rA1oAUQJFBUAKPBA4GDUfNS03NjdBNUkyUi1ZJl0fYRVlD2sLdgiBBowHlgqpErsUxhPQEfUA+QD9Av8H7EXsUPNj82ryctar0bLLuL++g9OB1n7heelx8Wj3Wfw4/zL+LPwb8BbqFOEUuQ==",
-    aspect: 0.8283,
-    spec: { seed: 19, length: "medium", shape: "circuit", season: "winter" },
+    d: "zpDOVs9R00rZRuFC8D/5OPwx/xf+FfkR7xDmEtYYxhi5FK4KpweJAH0BdQRvCUo/SURKSk1NVVNYWFhdVmNQaUpuQXE0dS16Kn4ogyiILJIrlimaIKEQpQipArAAuALACMgQzCDSKNgt4S3vMPM19z35RflM91jwYu9r8Yn+kf+Z+8TLycTMvc62zpE=",
+    aspect: 0.7071,
+    spec: { seed: 11, length: "medium", shape: "circuit", season: "spring" },
   },
   "taiga-3": {
-    d: "APIA1QPPC8wNyQ7FC78MuhK1IbMmtSm6J8sp4if6J/0r/zD/PPhY8lvuWelW51DmTOVK4UndS9ldxl/FZ8VsxHDBdbt5un66hr+KwI29jriQtZSzmrKdr56rnaeMmIuVjJORkZaSmZSjn6Wgp5+qm6mTq46xibyGwX7Jd9Bb01riXehc/Eb/Pvw2+DPuMeor6ibsHuoV7Q/sC+gI3wfYAdEBzAbLCs0RzBa9K70uwDLBNcA5vTu5PLU6qienJKAimiSXKJgsojWhOJs6mT6edA==",
-    aspect: 0.8752,
-    spec: { seed: 12, length: "medium", shape: "sprint", season: "spring" },
+    d: "aFBoJWsfbxp4F4UYnQyhDKYOqg6vC7MDuAC+Ac0Jzw7PEswVxhnDH8pFyE7CWMFew2LHZMpk0WHXY9pm6oDugvSA+IH8g/6H/4z9kPqT8Zbume2d7qP1qPet97H0t/S89sD8x/7S/dn53vLj6OTh6tvs1enT4tHfydzA1bzVodiZ1ZXVkdaP2o7qi/CH9X/5ZP9g/lz6W+9ezFqjV6E8lTqROoY3fh9mHGcZahhtGHIadiB9JIkrjy6UL5otpi2pMao5pkCmTq5QslC3Q8lDzkbVRdtC3yvyKPMl8wC5",
+    aspect: 1.0251,
+    spec: { seed: 48, length: "medium", shape: "sprint", season: "spring" },
   },
   "taiga-4": {
     d: "27vaidaEzYHIfsV5xHTGb99G30HdP9k+zkDFQL4+uDu0N7Iysi61JrYhtBuwFqgQlwuJAoEAfAJ4BGsUaBtoIGombip0MHc1d0hzUmxaY15aXVBWSVRBVTlaNl80azFxK3UfeRp/GIgboBumGKwOtA24Db8MwwnHAswA0wLZCd0P3hrbH9sj3ibhKeUo8Cr2MPw4/0L+SvtO9lPtV+mDyobJisqQ0ZjWn9it2bfdv+PR9db33vTo7fPr+Oj84f/S/s/7y/jK9MrwzePb4Nzd29vY27s=",
@@ -48,14 +48,14 @@ export const STAGE_ROUTES: Record<string, StageRoute> = {
     spec: { seed: 46, length: "long", shape: "circuit", season: "summer" },
   },
   "taiga-5": {
-    d: "35/ff+V58Xf2dPdx927wZu9h81z9Wf9U/E/2TNVIz0zNVMlYwli7VbZUnFqYXppll2l3cXN0dHh3en16hHiJd415k32Zfp59p3exdrZ1uXG8a8RkyWTMZ8xsxnLEdsd70IHShNKI0Iy8nLugvae7rLeusbCjrp+um7GVuZO7kbqIt3+4fLp7vn3FfMll3WbgauKL3o7bjtKP0J7PpManxavEsce3zrjQn+GT43n1avdf/lj/U/1P+U70U+pU50TRQNA60jPQLtAq0h/cGt4W3QDPBMUBvQK5BbcNsxKpF6Uspj+tQbBAsza7NL82xDzGVsJXv1S4VLFWrnSfep+GpoqliIyGiYOIfIh1hXGEa4Zkil6KWohTg0aBQ39CfEJ4RXVeal5nVmBWXldbXVppW3BadFZ3S39HgkOHN4Y1fjJxMmwwai1pKmonbCRxIXohfR+TC5YLnA+iD6gMqwWtA7wAwADDAsQGtjs=",
-    aspect: 0.7823,
+    d: "HVMcPBc3DTMLMA0tFCoYJCYhKh4qHCgZJBcXFxEVDRINDxMMKQwrCjABMwA7AUUEVANaBV4Ochx0IHEkaCVkKGMqZS9lMmA1VThTO1U+WT9kQHBJg02SXLJcs16xYbJkvGrdZeZn8mT6Zf5n/2n9evp+9IHlgNeD0IPLgsl/yX3LeMp0xXK+cblyon+cgJd9lHmZa5ZpkWiLa4hxf3aAen59coJxhHKIcIptjGiNYYxbh1CCTn5QeE12RXRCdT93Ooc7jD+QTJZcp2GpZqlzpnmnibCIsoC1friAu4a/h8OExnbMdM92037Wi9WS1pfZrOmy673rw+zR+dD8zP3F/Lz5tPis+pv/lf+R/JD6kPeU9JTwhuGC33fdb9pp2V/bVeFM4UbfQ9k/2CjYJ9Yq0ynQH8wZxxPGBsgDxwDDAsASuxa3FbUPsg6vFYk=",
+    aspect: 0.5174,
     spec: { seed: 45, length: "long", shape: "sprint", season: "autumn" },
   },
   "taiga-6": {
-    d: "ukO6Mr0twS3FMco0zDfMO8o/xEPER8ZIzUnRS9pZ4F7jZepp7Gvsbutv3XXdd+J64YHkg+iC64HtfPF783z2gf2C/4H/f/t4+HbzdvB18mzuZOpi5lzjWeRT40/WQ9Y/2zvbN9QszivMJ84j1CDVHdAVyhPIEccCxAC+ArUMrw6pDqYKnASYBZQJkQuNDIkKhQuEDoUSlBiYHJgflSSXKZcskzGRMowviCiBKHoldSh3LnUxcjJrMWczZjVmOGo+bEFsT2pSZVJfTllPU01JU0VXQlY9UjhSNlQ1WTFcK1smViFVFGAUYxZmFmkTaw5rCm4Lbw5xFXEebCVtK2cvaTZpOmw9bU1pVmxdaGBpYW5lcmZ1ZXdjeV15WHpWeVFzTXNKdUl6P4JBhk6OTpBLk0uXVZ1XolWyTrpPwE3CQsw9yTnLNswqxSXAFLsTvRbDFsYPywrXA9cA2AHdCeQO4xDfEt0W3RjgEv8=",
-    aspect: 0.8627,
-    spec: { seed: 40, length: "xlong", shape: "sprint", season: "winter" },
+    d: "Gf8Z5xzjJN0szi7OP9ZP4WLrZups5YDlg+SF4ovTitCFyoHIe8p40XPTbtJpzmXNYc5b0UjRRM9EzUbLUcdUxFO6V7VUsFStW51gm2SYaZd7oIKVipONj4yKh4lxjmmNZ4pphWiBXnpac1dxTW5Gb0JxNX41gTiDPIJBfkZ+S4VUiVWNU49QkEWPQJA+k0CbP508njWcMZ4voS6nKKsjsh60GbINpAKlAKQClwaTCpMOlQ+YD54UoRmgHp0kmyaZJpQdhx2EIn4teDhnOGEwWC5TMFA2Sjc4OzZAMUQxSDJMNVZEXkhhT2RRalFvVHRVf0+BS4FHdDd1NH4ugy6SNpQ2mDKbMqRApkGrPq41sTK1Mb0yyC3KKsklzSHSIdsn5SjtK/wl/yH+HfcT9BPyFu8X3BbcFN8P3QvUBs4CyQDEAMECvgq2ELMYrRynG5kQlxGUFZEWhRJ+F3kYTBk=",
+    aspect: 0.7999,
+    spec: { seed: 1, length: "xlong", shape: "sprint", season: "autumn" },
   },
   "desert-1": {
     d: "Qf5Bwz+8PLU0rCmmH6QOpQijAp8AmAGTA44Tfhh8RG5Ja0xmTWJNXUhTP0svQys/KTkrMj4QRgdSAV4AZgRsEXUWgRiOE5QSnBShGaMeoyOgKJ0rZz9jQmRHZ0x0VntggGWHZ/90",

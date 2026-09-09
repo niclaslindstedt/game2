@@ -334,6 +334,19 @@ export const STAGE_DIALS: {
     ],
   },
   {
+    // R49 — WHICH WAY the stage runs through that country, as against how
+    // much of it there is (`elevation`) and how steep it stands
+    // (`steepness`). A DESCENT is the one a player feels first: the road
+    // gives back speed the whole way instead of asking for it.
+    key: "tilt",
+    label: "GRADIENT",
+    stops: [
+      { id: "low", label: "CLIMB", value: 0.15 },
+      { id: "mid", label: "MIXED", value: 0.5 },
+      { id: "high", label: "DESCENT", value: 0.85 },
+    ],
+  },
+  {
     key: "water",
     label: "WATER",
     stops: [

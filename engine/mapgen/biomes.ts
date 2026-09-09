@@ -365,8 +365,22 @@ export const TAIGA: BiomeRules = {
     massif: null,
     // The rock line the taiga's paint was written against, and the height
     // the ice scoured its high ground bare at — in effect the treeline of
-    // a country that never has one, since its hills barely reach it.
-    zones: { treeline: 46, rock: { from: 26, to: 52 }, snow: null },
+    // a country that never has one.
+    //
+    // A BAND IS A PERCENTILE OF ITS OWN COUNTRY, not a height that can be
+    // shared. These numbers were the desert's, and on the desert they are
+    // right: measured in the road band over 40 seeds at three lengths, its
+    // ground reaches 26 m at p88 and 52 m at p99.6, so rock tints the top
+    // tenth of the country and goes solid only on the very tops. The
+    // taiga's ground stands about twice as tall for the same numbers —
+    // p50 is 16 m, p90 is 57, p99 is 91 — so the same band started at p65
+    // and completed at p88: an eighth of everything a player drove past
+    // was painted solid bedrock, and a stage that happened to run over
+    // high country came out grey end to end with no soil and half its
+    // trees (`taiga-1` measured 98% rock and 96% above the treeline).
+    // Re-read at the desert's own percentiles of the taiga's distribution,
+    // which is what these are, the country is green and its tops are bare.
+    zones: { treeline: 92, rock: { from: 55, to: 100 }, snow: null },
     steer: 0,
     tunnels: false,
     grade: 1,

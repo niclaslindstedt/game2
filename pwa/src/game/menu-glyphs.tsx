@@ -51,6 +51,7 @@ export const GLYPH_NAMES = [
   "dune",
   "sandstorm",
   "crag",
+  "descent",
   "water",
   "tree",
   "tarmac",
@@ -334,6 +335,16 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
     <>
       <path d="M2.6 20.4 12 4.6l9.4 15.8Z" />
       <path d="M7.4 12.6h9.2M9.7 16.6h4.6" />
+    </>
+  ),
+  // A road falling away from a brow, with the arrow on the way DOWN: which
+  // way the stage runs through the country (`tilt`, R49). The mountain and
+  // the crag say how much country there is and how steep it stands; this
+  // one says which end of it the stage starts at.
+  descent: (
+    <>
+      <path d="M2.6 6.2h4.2c5.6 0 5.6 11.6 11.2 11.6h3.4" />
+      <path d="m17.8 14.2 3.6 3.6-3.6 3.6" />
     </>
   ),
   // Three waves: the lakes, the streams and the fords.
