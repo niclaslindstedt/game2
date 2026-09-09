@@ -2476,11 +2476,22 @@ function createCompiler(
         // still lands roughly on the clock.
         const bar = since >= gap * C.late ? 0 : since >= gap ? 1 : 2;
         if (!linked && since >= gap * C.early && SEVERITY_RANK[openNote.severity] >= bar) {
-          // The run-out is capped by the road that carries it, so the board
-          // always falls inside this segment: a corner followed by another
-          // corner takes its board on the exit itself.
-          checkpointDue =
-            cursor.s + (built.kind === "turn" ? 0 : Math.min(C.runOut, built.length * 0.6));
+          // WHERE in this segment the board stands. The run-out is what
+          // makes a board read as the corner's reward rather than as part
+          // of the corner — but it is also road a car that CUT the corner
+          // rejoins on, and a board it rejoins before is a board the cut
+          // books for free. So a corner tight enough to be worth cutting
+          // gets none of it: its board stands the instant the curve
+          // finishes, and a car that did not drive the curve is past the
+          // line before it is back on the road. The run-out is capped by
+          // the road that carries it either way, so the board always falls
+          // inside this segment: a corner followed by another corner takes
+          // its board on the exit itself.
+          const runOut =
+            openNote.angle >= C.tight || built.kind === "turn"
+              ? 0
+              : Math.min(C.runOut, built.length * 0.6);
+          checkpointDue = cursor.s + runOut;
         }
       }
 

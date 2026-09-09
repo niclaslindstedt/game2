@@ -58,6 +58,7 @@ describe("checkpoint placement", () => {
     let tight = 0;
     let total = 0;
     let forced = 0;
+    let onCurveEnd = 0;
     for (const seed of SEEDS) {
       const track = compileStage(seed, "long");
       let prev = 0;
@@ -77,11 +78,27 @@ describe("checkpoint placement", () => {
           prev = board.s;
           continue;
         }
+        // R28 — and a corner tight enough to be worth CUTTING gets no
+        // run-out: its board stands where the curve finishes, so a car that
+        // rejoined the road past the corner is already behind it.
+        if (note.angle >= C.tight) {
+          // Within one sample of the exit: a board goes down on the first
+          // sample at or past where it is due, and a short segment's own
+          // sampling is a little coarser than the nominal step.
+          expect(
+            board.s - note.endS,
+            `seed ${seed}: run-out on a tight corner's board`,
+          ).toBeLessThanOrEqual(track.step * 2);
+          onCurveEnd += 1;
+        }
         prev = board.s;
         total += 1;
-        if ((note as { severity: string }).severity !== "soft") tight += 1;
+        if (note.severity !== "soft") tight += 1;
       }
     }
+    // Corners that double back are what a rally stage is made of, so the
+    // no-run-out board is a normal sight rather than a corner case.
+    expect(onCurveEnd).toBeGreaterThan(total / 10);
     // The exception stays one: most boards are still a corner's reward.
     expect(forced).toBeLessThan(total / 4);
     expect(total).toBeGreaterThan(50);
