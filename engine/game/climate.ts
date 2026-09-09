@@ -226,6 +226,112 @@ export function fallsAsSnow(temperature: number): boolean {
   return temperature <= CLIMATE.freeze;
 }
 
+/** WHICH CRYSTAL FALLS — the habits a snow crystal can grow into, in the
+ * one order everything that draws them agrees on (`snowHabits`).
+ *
+ * They are the named forms of the morphology guides, and the four shapes
+ * under them are what the eye actually tells apart at a windscreen: a flat
+ * six-sided plate, a six-armed star, a rod, and a rod with a plate on each
+ * end. */
+export const SNOW_HABITS = [
+  /** A plain hexagonal plate — the simplest crystal there is, and most of
+   * what falls in bitter cold, where it is the "diamond dust" a clear
+   * arctic night glitters with. */
+  "plate",
+  /** The same plate with six ridges run out to its corners. */
+  "sectored",
+  /** Six broad, blunt arms off a central plate: a star without branches. */
+  "stellar",
+  /** Six arms carrying side branches — the snowflake of the word. */
+  "dendrite",
+  /** …and the same crystal grown as far as it goes, the side branches
+   * carrying side branches of their own. The largest thing that falls,
+   * around 5 mm across. */
+  "fern",
+  /** A slender rod. */
+  "needle",
+  /** A short hollow prism — a rod with the proportions of a barrel. */
+  "column",
+  /** A column with a plate grown on each end: two wheels on an axle. */
+  "capped",
+] as const;
+
+export type SnowHabit = (typeof SNOW_HABITS)[number];
+
+/** WHAT THE CRYSTALS FALLING AT A TEMPERATURE LOOK LIKE: a weight per
+ * habit, in `SNOW_HABITS` order, summing to 1.
+ *
+ * This is Nakaya's morphology diagram, which is the one fact about snow
+ * that a driver can see and that a game almost never says: WHICH crystal
+ * grows is decided by how cold the cloud is, and it changes completely
+ * over a few degrees. Just under freezing the air makes thin plates and
+ * simple stars. Colder, between about -3 and -10, the growth flips to rods
+ * — needles and hollow columns, the "small bits of white hair" a guide
+ * calls them, and nothing a child would draw. Colder still, and it flips
+ * back: -10 to -22 is plate country again, and right around -15 it makes
+ * the big six-armed dendrites and ferns everybody pictures. Past -22 the
+ * air has too little water left in it for any of that and goes back to
+ * small plates and columns.
+ *
+ * So the flakes in front of a windscreen are a fact about the stage's own
+ * cold rather than a bag of sprites, a -6° stage does not look like a -15°
+ * one, and the prettiest snow in the game falls in the middle of the range
+ * rather than at the bottom of it.
+ *
+ * A MIX rather than one answer per band, because a real snowfall is never
+ * one habit: the crystals in a single fall grew at different heights in
+ * the cloud, and the bands blend into each other. The weights are only
+ * ever read as odds to draw one crystal against another, so they are
+ * shaped for what a sheet of them LOOKS like — the peaks are where the
+ * diagram puts them, and no band is ever pure.
+ */
+export function snowHabits(temperature: number): readonly number[] {
+  /** How strongly this temperature sits in a band centred on `at` and
+   * `half` degrees wide either side — 1 at the middle, 0 at the edges. */
+  const band = (at: number, half: number): number =>
+    Math.max(0, 1 - Math.abs(temperature - at) / half);
+  // The bands overlap generously, and that is not a hedge: a snowfall is
+  // never one habit, because the crystals landing together grew at
+  // different HEIGHTS in the same cloud, through several degrees of it, and
+  // what reaches the ground is that whole column mixed. A band narrow
+  // enough to be pure would be a lie about one stage and a dull one about
+  // every other — no taiga winter would ever show a dendrite.
+  const warm = band(-1.5, 7);
+  const rods = band(-6.5, 7);
+  const stars = band(-15, 9);
+  const bitter = temperature > -22 ? 0 : Math.min(1, (-22 - temperature) / 8);
+  const w = [
+    // Plates: the warm band's own, and everything the bitter end has left.
+    warm * 0.5 + bitter * 0.6 + stars * 0.15,
+    warm * 0.3 + stars * 0.2,
+    warm * 0.2 + stars * 0.25,
+    stars * 0.25,
+    stars * 0.15,
+    rods * 0.5,
+    rods * 0.35 + bitter * 0.4,
+    rods * 0.15,
+  ];
+  const total = w.reduce((sum, v) => sum + v, 0);
+  // Nothing at all is possible only outside every band, which the bitter
+  // term rules out below and the warm one above: an even mix is the honest
+  // answer there rather than a divide by zero.
+  if (total <= 0) return w.map(() => 1 / w.length);
+  return w.map((v) => v / total);
+}
+
+/** Draw one habit from `snowHabits` at `temperature`, given a roll 0..1 —
+ * its index in `SNOW_HABITS`. Stated here beside the weights so nobody has
+ * to re-derive what "in habit order, summing to 1" means to use them. */
+export function rollSnowHabit(temperature: number, roll: number): number {
+  const w = snowHabits(temperature);
+  let seen = 0;
+  for (let i = 0; i < w.length; i++) {
+    seen += w[i];
+    if (roll < seen) return i;
+  }
+  return w.length - 1;
+}
+
 /** R48 — whether standing water whose surface stands at `level` has frozen
  * SOLID under this climate: the air at that height, against `CLIMATE.ice`.
  *

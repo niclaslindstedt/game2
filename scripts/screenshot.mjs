@@ -1809,8 +1809,13 @@ await capture(
     await page.waitForTimeout(400);
     await page.locator(".menu-location", { hasText: "TAIGA" }).first().click();
     await page.waitForTimeout(400);
-    // Granite Ridge — the long one, with the jumps and the water in it.
-    await page.locator(".menu-level", { hasText: "GRANITE RIDGE" }).first().click();
+    // The LAST stage of the location — the long climactic one, which is the
+    // stage with the most in it to paint a layer over. Taken by position
+    // rather than by name: the campaign's levels are re-picked whenever the
+    // generator moves, and a name pinned here fails as a silent click
+    // timeout rather than as an error. The picker opens every stage, locked
+    // or not, so the last box is always there to take.
+    await page.locator(".menu-level-open").last().click();
     await mapUp(page);
     // ...and the layer switched on with the BUTTON, not with a URL. Painting
     // a layer samples the generator over the whole stage on the main thread,
@@ -2509,7 +2514,12 @@ if (only.length === 0 || only.some((f) => "shot-campaign shot-start".includes(f)
   await page.getByText("HARD", { exact: true }).first().click();
   await page.screenshot({ path: join(outDir, "shot-campaign-stages.png") });
   console.log("previews/shot-campaign-stages.png");
-  await page.getByText("Loggers' Run", { exact: false }).first().click();
+  // The first OPEN stage on the page, by its box rather than by its name:
+  // the campaign's levels are re-picked whenever the generator moves and a
+  // name pinned here goes stale silently — this scene sat out a 30 s click
+  // timeout on a stage that had been renamed, and took the rest of the run
+  // down with it. Only the first is guaranteed unlocked on a fresh profile.
+  await page.locator(".menu-level-open").first().click();
   // A stage press opens the pre-race card, not the stage: the car and the
   // gearbox are chosen there, and START is what begins the run.
   await page.getByRole("button", { name: "START" }).click();

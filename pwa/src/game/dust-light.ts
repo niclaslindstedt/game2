@@ -135,6 +135,59 @@ export function clearDustLamps(): void {
   DUST_LAMP_UNIFORMS.uDustLampCount.value = 0;
 }
 
+/** THE REGISTER AS THE SHADER SEES IT — its uniform block, and the loop
+ * that sums it at a point. Exported as source because two substances read
+ * the same register from two different materials (the dust's own puffs and
+ * the falling snow, snowfall.ts), and a lamp is one answer: a second copy
+ * of this loop is a second cone shape and a second falloff to keep in step
+ * with the numbers above. */
+export const DUST_LAMP_GLSL = `
+        uniform vec4 uDustLampSpot[ ${DUST_LAMPS} ];
+        uniform vec4 uDustLampFace[ ${DUST_LAMPS} ];
+        uniform vec3 uDustLampGlow[ ${DUST_LAMPS} ];
+        uniform int uDustLampCount;`;
+
+/**
+ * ...and the sum itself: what the register puts on a particle standing at
+ * `at` (a world-space vec3 already in scope), written into `into`.
+ *
+ * `gain` is what a substance that is not dust says for itself — the
+ * register is driven at the strength a gravel cloud wants, and a flake of
+ * snow returns far more of a beam than a wisp of dust does. It is folded
+ * in at 1 for free: the multiply is not emitted at all.
+ */
+export function dustLampSum(at: string, into: string, gain = 1): string {
+  return `
+        ${into} = vec3( 0.0 );
+        for ( int i = 0; i < ${DUST_LAMPS}; i++ ) {
+          // The register is filled from the front, so past the count there
+          // is nothing but black — and a cone and a falloff per particle
+          // for each of those slots is a loop worth leaving.
+          if ( i >= uDustLampCount ) break;
+          vec4 lamp = uDustLampSpot[ i ];
+          vec3 away = ${at} - lamp.xyz;
+          float gap = length( away );
+          // Linear to the lamp's reach and nothing past it, squared so the
+          // light is concentrated at the tyre rather than spread evenly
+          // over the whole cone.
+          float fall = max( 0.0, 1.0 - gap / max( lamp.w, 0.001 ) );
+          vec4 aim = uDustLampFace[ i ];
+          // Soft-edged: a hard cone edge across a cloud is a straight line
+          // drawn on smoke, which is the one shape smoke never has.
+          float cone = smoothstep(
+            aim.w,
+            mix( aim.w, 1.0, 0.55 ),
+            dot( away / max( gap, 0.001 ), aim.xyz )
+          );
+          ${into} += uDustLampGlow[ i ] * cone * fall * fall;
+        }${
+          gain === 1
+            ? ""
+            : `
+        ${into} *= ${gain.toFixed(3)};`
+        }`;
+}
+
 const heading = new THREE.Vector3();
 const hue = new THREE.Color();
 

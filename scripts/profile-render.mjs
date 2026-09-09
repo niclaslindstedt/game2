@@ -275,7 +275,12 @@ await scene("field", { menu: "1", splash: "0", bot: "1" }, async (page) => {
   await page.getByText("CAMPAIGN", { exact: false }).first().click();
   await page.getByText("TAIGA", { exact: false }).first().click();
   await page.getByText("HARD", { exact: true }).first().click();
-  await page.getByText("Loggers' Run", { exact: false }).first().click();
+  // The first OPEN stage on the page, by its box rather than by its name:
+  // the campaign's levels are re-picked whenever the generator moves and a
+  // name pinned here goes stale silently — this scene sat out a 30 s click
+  // timeout on a stage that had been renamed, and took the rest of the run
+  // down with it. Only the first is guaranteed unlocked on a fresh profile.
+  await page.locator(".menu-level-open").first().click();
   // A stage press opens the pre-race card, not the stage: the car and the
   // gearbox are chosen there, and START is what begins the run. Without it
   // this scene waits out its timeout on a card that is not going anywhere,

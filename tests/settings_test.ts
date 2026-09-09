@@ -132,6 +132,22 @@ describe("the five picture rows", () => {
     }
   });
 
+  it("keeps the lit, crystalline snow to the top of DETAIL alone", () => {
+    // The two things a flake can be given — the car lamps summed per
+    // particle, and the crystal drawn on the near ones — are one stop
+    // because they are one bill on the same thousands of sprites. A machine
+    // that has not asked for the top of the row gets neither, and the
+    // shipped picture is MEDIUM, so this is off by default.
+    expect(DETAIL_PRESETS.high.snow).toBe("crystal");
+    expect(DETAIL_PRESETS.medium.snow).toBe("plain");
+    expect(DETAIL_PRESETS.low.snow).toBe("plain");
+    expect(DEFAULT_SETTINGS.video.snow).toBe("plain");
+    // …and it is a DETAIL lever rather than a lever of its own: turning the
+    // row up is the only thing that turns it on.
+    expect(detailOf({ ...DETAIL_PRESETS.medium, snow: "crystal" })).toBe("medium");
+    expect(detailOf(DETAIL_PRESETS.high)).toBe("high");
+  });
+
   // The rows do NOT ship on the same stop, and that is the point of
   // splitting them: the picture is bought sharp and near rather than soft
   // and far, with DETAIL and LIGHTING left on the numbers the game was
