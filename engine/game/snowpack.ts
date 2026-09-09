@@ -76,97 +76,46 @@ export type Snowpack = {
   readonly worked: number;
 };
 
-/** Cells the table starts at, and the most it may ever hold. The cap is
- * about twenty thousand square metres of worked ground at
- * `CLIMATE.pack.cell` — a trail down the whole of a long stage with room
- * either side for the corners a car ran wide out of. Past it new snow
- * simply stops being remembered rather than the table growing without end;
- * every rut already cut keeps its shape.  */
-const FIRST = 1 << 12;
-const CAP = 1 << 17;
+/** Cells the pack remembers — about ten thousand square metres of worked
+ * ground at `CLIMATE.pack.cell`, which is a trail down the whole of a long
+ * stage with room either side for the corners a car ran wide out of. Past
+ * it new snow simply stops being remembered rather than the memory growing
+ * without end; every rut already cut keeps its shape. */
+const CELLS = 1 << 16;
 
-/** How full the table is allowed to get before it doubles. Linear probing
- * degrades badly past about two thirds. */
-const LOAD = 0.6;
-
-/** A cell's key, hashed. Two int32s into one bucket — the multiply-xor mix
- * is there because the cells a car visits are a LINE, and a plain
- * `i * prime + j` walks a stripe of the table and probes for ever. */
-function hashOf(i: number, j: number): number {
-  let h = (Math.imul(i, 0x27d4eb2d) ^ Math.imul(j, 0x165667b1)) >>> 0;
-  h ^= h >>> 15;
-  h = Math.imul(h, 0x2545f491) >>> 0;
-  return (h ^ (h >>> 13)) >>> 0;
+/** A cell's key. The world is tens of kilometres across at a `pack.cell`
+ * grain, so a cell index fits in twenty bits either way with room to
+ * spare, and the pair packs into one exact double — which is what lets
+ * the index be a plain `Map` rather than a hash table written out by
+ * hand. */
+function keyOf(i: number, j: number): number {
+  return i * 0x100000 + j;
 }
 
-/** The worked cells — an open-addressed table over typed arrays, grown on
- * demand. Nothing is ever removed, so a probe run ends at the first empty
- * slot and there are no tombstones to skip. */
+/** The worked cells: where each one's readings live, and the readings.
+ * Nothing is ever removed. */
 type Cells = {
-  /** Slot -> entry index, -1 empty. A power of two, always at least twice
-   * the entry capacity. */
-  slots: Int32Array;
-  ci: Int32Array;
-  cj: Int32Array;
+  at: Map<number, number>;
   /** How far this corner has been let down, m. */
   cut: Float32Array;
   /** ...and how worked its snow is now, 0..1. */
   work: Float32Array;
-  n: number;
-  cap: number;
 };
-
-function makeCells(cap: number): Cells {
-  return {
-    slots: new Int32Array(cap * 2).fill(-1),
-    ci: new Int32Array(cap),
-    cj: new Int32Array(cap),
-    cut: new Float32Array(cap),
-    work: new Float32Array(cap),
-    n: 0,
-    cap,
-  };
-}
-
-/** The entry for a cell, or -1 where nothing has driven. */
-function find(cells: Cells, i: number, j: number): number {
-  const mask = cells.slots.length - 1;
-  let at = hashOf(i, j) & mask;
-  for (;;) {
-    const e = cells.slots[at];
-    if (e < 0) return -1;
-    if (cells.ci[e] === i && cells.cj[e] === j) return e;
-    at = (at + 1) & mask;
-  }
-}
-
-/** Put an entry's index in the slot its key hashes to. Only ever called
- * with room to spare, so the probe always terminates. */
-function seat(cells: Cells, e: number): void {
-  const mask = cells.slots.length - 1;
-  let at = hashOf(cells.ci[e], cells.cj[e]) & mask;
-  while (cells.slots[at] >= 0) at = (at + 1) & mask;
-  cells.slots[at] = e;
-}
-
-function grow(cells: Cells): Cells {
-  const next = makeCells(Math.min(CAP, cells.cap * 2));
-  next.ci.set(cells.ci.subarray(0, cells.n));
-  next.cj.set(cells.cj.subarray(0, cells.n));
-  next.cut.set(cells.cut.subarray(0, cells.n));
-  next.work.set(cells.work.subarray(0, cells.n));
-  next.n = cells.n;
-  for (let e = 0; e < next.n; e++) seat(next, e);
-  return next;
-}
 
 export function createSnowpack(white: boolean): Snowpack {
   /** Allocated on the first cell actually carved: a stage nobody drives on
    * never pays for the table, and a green one never can. */
   let cells: Cells | null = null;
 
-  const cutAt = (x: number, z: number): number => {
-    if (!cells) return 0;
+  /** One cell corner's reading off `of`, or `miss` where nothing has ever
+   * driven there, interpolated across the cell the point falls in. Both
+   * readers below are the same walk over a different array, which is why
+   * they are one function: the interpolation has to agree with the carve's
+   * own splat to the bit, and two copies of it would be two chances to
+   * disagree. */
+  const across = (x: number, z: number, of: Float32Array, miss: number): number => {
+    const table = cells;
+    if (!table) return miss;
     const c = CLIMATE.pack.cell;
     const gx = x / c;
     const gz = z / c;
@@ -174,74 +123,58 @@ export function createSnowpack(white: boolean): Snowpack {
     const j = Math.floor(gz);
     const fx = gx - i;
     const fz = gz - j;
-    const table = cells;
     const at = (di: number, dj: number): number => {
-      const e = find(table, i + di, j + dj);
-      return e < 0 ? 0 : table.cut[e];
+      const e = table.at.get(keyOf(i + di, j + dj));
+      return e === undefined ? miss : of[e];
     };
     const a = at(0, 0);
     const b = at(1, 0);
-    const c0 = at(0, 1);
-    const d = at(1, 1);
-    return (a * (1 - fx) + b * fx) * (1 - fz) + (c0 * (1 - fx) + d * fx) * fz;
+    const d = at(0, 1);
+    const f = at(1, 1);
+    return (a * (1 - fx) + b * fx) * (1 - fz) + (d * (1 - fx) + f * fx) * fz;
   };
+
+  const cutAt = (x: number, z: number): number => (cells ? across(x, z, cells.cut, 0) : 0);
 
   const workAt = (x: number, z: number, floor: number): number => {
     const base = clamp(floor, 0, 1);
     if (!cells || base >= 1) return base;
-    const c = CLIMATE.pack.cell;
-    const gx = x / c;
-    const gz = z / c;
-    const i = Math.floor(gx);
-    const j = Math.floor(gz);
-    const fx = gx - i;
-    const fz = gz - j;
-    const table = cells;
-    const at = (di: number, dj: number): number => {
-      const e = find(table, i + di, j + dj);
-      return e < 0 ? base : table.work[e];
-    };
-    const a = at(0, 0);
-    const b = at(1, 0);
-    const c0 = at(0, 1);
-    const d = at(1, 1);
-    const worked = (a * (1 - fx) + b * fx) * (1 - fz) + (c0 * (1 - fx) + d * fx) * fz;
     // An untouched corner answers with the ground's own pack rather than
     // with nothing, so the edge of a trail fades into the road it is on
     // instead of reading as fresh powder laid across the racing line.
+    const worked = across(x, z, cells.work, base);
     return worked > base ? worked : base;
   };
 
   /** Work one cell corner by `share` of a pass, and record how far it went
-   * down for it. A corner nobody has reached is added; past the cap it is
+   * down for it. A corner nobody has reached is added; past `CELLS` it is
    * simply not recorded, which leaves that patch of snow untouched rather
    * than taking a rut away from somewhere else. */
   const workCorner = (i: number, j: number, under: SnowUnder, share: number): void => {
     if (share <= 1e-4) return;
-    if (!cells) cells = makeCells(FIRST);
-    let e = find(cells, i, j);
-    if (e < 0) {
-      if (cells.n + 1 > cells.slots.length * LOAD || cells.n >= cells.cap) {
-        if (cells.cap >= CAP) return;
-        cells = grow(cells);
-      }
-      e = cells.n++;
-      cells.ci[e] = i;
-      cells.cj[e] = j;
-      cells.cut[e] = 0;
-      cells.work[e] = under.base;
-      seat(cells, e);
+    const table = (cells ??= {
+      at: new Map<number, number>(),
+      cut: new Float32Array(CELLS),
+      work: new Float32Array(CELLS),
+    });
+    const key = keyOf(i, j);
+    let e = table.at.get(key);
+    if (e === undefined) {
+      if (table.at.size >= CELLS) return;
+      e = table.at.size;
+      table.at.set(key, e);
+      table.work[e] = under.base;
     }
-    const before = Math.max(cells.work[e], under.base);
+    const before = Math.max(table.work[e], under.base);
     const after = packedBy(before, share);
-    cells.work[e] = after;
+    table.work[e] = after;
     // How far the wheels now stand below where they stood before. Capped
     // against what THIS point can give: a corner worked once out in a deep
-    // field and again beside a bladed road must not let the ground down
-    // by the field's depth twice.
-    const room = under.rest * (CLIMATE.blanket.ride - CLIMATE.pack.floor);
+    // field and again beside a bladed road must not let the ground down by
+    // the field's depth twice.
+    const room = Math.max(0, under.rest * (CLIMATE.blanket.ride - CLIMATE.pack.floor));
     const fell = snowRide(under.rest, before) - snowRide(under.rest, after);
-    cells.cut[e] = Math.min(Math.max(room, 0), cells.cut[e] + Math.max(0, fell));
+    table.cut[e] = Math.min(room, table.cut[e] + Math.max(0, fell));
   };
 
   const carve = (x: number, z: number, under: SnowUnder, share: number): void => {
@@ -270,7 +203,7 @@ export function createSnowpack(white: boolean): Snowpack {
     workAt,
     carve,
     get worked(): number {
-      return cells ? cells.n : 0;
+      return cells ? cells.at.size : 0;
     },
   };
 }
