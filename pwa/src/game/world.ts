@@ -458,12 +458,14 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     // place, and a gantry over it saying START would be the game claiming a
     // race is on when the whole point of the level is that none is.
     const raced = track.arena === null;
-    if (from === 0 && !track.circuit && raced) chunkGroup.add(buildStartGate(track, 2));
+    if (from === 0 && !track.circuit && raced) {
+      chunkGroup.add(buildStartGate(track, 2, terrain.standOn));
+    }
     // R25 — the finish GATE, which on a sprint is no longer the last thing
     // on the road: the run-out carries on past it, and this chunk draws
     // both. The cannons stand beside it either way.
     if (!track.endless && raced && to === track.samples.length) {
-      finish = buildFinishGate(track, track.circuit ? "START/FINISH" : "FINISH");
+      finish = buildFinishGate(track, track.circuit ? "START/FINISH" : "FINISH", terrain.standOn);
       chunkGroup.add(finish.group);
     }
     chunkGroup.name = "road chunks";
