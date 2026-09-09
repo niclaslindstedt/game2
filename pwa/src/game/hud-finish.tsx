@@ -154,10 +154,16 @@ export type FinishCardProps = {
    * named — set only when the ladder's next rung is in a location the points
    * have not opened yet. */
   locked: string | null;
-  /** Save the run just driven as a run tape (game/run-tape.ts). Null unless
-   * the developer switch that collects them is on; returns whether the file
-   * actually reached the disk, so the button can say when it did not. */
+  /** Save the run just driven as a run tape FILE (game/run-tape.ts). Null
+   * unless the developer switch that collects them is on; returns whether the
+   * file actually reached the disk, so the button can say when it did not. */
   onSaveRun: (() => boolean) | null;
+  /** WATCH THE RUN AGAIN (game/replay.ts) — the recording of the run this
+   * card is about, put straight back on the road under the TV cameras. It
+   * keeps nothing: the disk in the replay's own bar is what does that, so a
+   * player who only wanted to see the corner they lost it on owes the roll
+   * nothing. Null over a replay, which is already one. */
+  onReplay: (() => void) | null;
   /** WATCH THE REST OF THEM COME HOME (spectate.ts). Offered only while the
    * road still has somebody on it — which is exactly as long as the sheet
    * has an OUT on it. */
@@ -180,6 +186,24 @@ function SaveRunButton({ onSave }: { onSave: () => boolean }) {
       }}
     >
       {said ?? "SAVE RUN DATA"}
+    </button>
+  );
+}
+
+/** WATCH THE RUN AGAIN. Not a way OFF the card — it is the card's one press
+ * that goes back to the stage — so it sits with the other acts rather than
+ * with the ways on. */
+function ReplayButton({ onWatch }: { onWatch: () => void }) {
+  return (
+    <button
+      type="button"
+      className="hud-pause-act fin-act"
+      onClick={() => {
+        playUi("select");
+        onWatch();
+      }}
+    >
+      WATCH REPLAY
     </button>
   );
 }
@@ -247,6 +271,7 @@ export function FinishCard({
   race,
   locked,
   onSaveRun,
+  onReplay,
   onSpectate,
 }: FinishCardProps) {
   // THE THREE LETTERS, held HERE rather than down on the board that draws
@@ -287,6 +312,7 @@ export function FinishCard({
         <div className="fin-title">{RETIRED_BY[retired].broke}</div>
         <div className="fin-note">{RETIRED_BY[retired].means}</div>
         <div className="fin-acts fin-foot pointer-events-auto">
+          {onReplay && <ReplayButton onWatch={onReplay} />}
           {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
           {/* `data-nav-back` is what a controller's B button presses. */}
           <button
@@ -391,6 +417,11 @@ export function FinishCard({
                 SPECTATE
               </button>
             )}
+            {/* …and the way to see what actually happened out there. It
+                  stands beside SPECTATE because the two are the same offer
+                  pointed at different cars: the race still being decided,
+                  and the run that has just been. */}
+            {onReplay && <ReplayButton onWatch={onReplay} />}
             {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
           </>
         }

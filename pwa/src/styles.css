@@ -1986,6 +1986,127 @@ body {
    always in the same place — and when the oldest goes off the top, nothing
    below it moves. Right-aligned for the same reason: the edge the eye comes
    back to is straight whatever the lines say. */
+/* ── THE REPLAY BAR ──────────────────────────────────────────────────────
+   The one strip on screen while a recorded run is being watched
+   (hud-replay.tsx).
+
+   A LOWER THIRD: left-hand side, STOOD ON the instrument panel rather than
+   across it. Every other corner of a driving frame is claimed — the clock
+   top-left, the route and the place top-right, the news column bottom-right,
+   the dial and the speed along the whole foot — and the thumb zones are the
+   only thing that is NOT there on a replay, because there is nothing to
+   steer. So the strip takes the space they leave, which is also where a
+   broadcast puts the same caption. Its height comes off `--hud-tach`, the
+   panel's own, exactly as the news column's does in portrait.
+
+   It stands over the results card at the end of the recording, which is the
+   moment the disk is most likely to be wanted — so its stack order has to
+   beat the card's, and its own box is small enough that the card's title and
+   sheet clear it. */
+.hud-replay {
+  position: absolute;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + var(--hud-tach) + 0.4rem);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.5rem, 2vmin, 1rem);
+  max-width: min(94vw, 46rem);
+  padding: 0.45rem 0.7rem;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.7rem;
+  background: rgb(12 18 32 / 72%);
+  backdrop-filter: blur(6px);
+}
+
+.hud-replay-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+/* The word REPLAY is the smallest thing in the strip and the only one that
+   never changes: it says what is being looked at once, and then gets out of
+   the way of the stage's own name. */
+.hud-replay-label {
+  font-size: clamp(0.5rem, 1.6vmin, 0.68rem);
+  letter-spacing: 0.22em;
+  color: var(--hud-info);
+  opacity: 0.9;
+}
+
+.hud-replay-title {
+  font-size: clamp(0.78rem, 2.6vmin, 1.05rem);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-replay-line {
+  font-size: clamp(0.55rem, 1.9vmin, 0.75rem);
+  letter-spacing: 0.08em;
+  opacity: 0.78;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-replay-acts {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+}
+
+.hud-replay .hud-pause-act {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: clamp(0.62rem, 2.2vmin, 0.85rem);
+  padding: 0.4rem 0.7rem;
+}
+
+.hud-replay-glyph {
+  width: clamp(0.85rem, 2.6vmin, 1.15rem);
+  height: clamp(0.85rem, 2.6vmin, 1.15rem);
+  display: block;
+  flex: none;
+}
+
+/* KEPT is not a press. The button stays where it was — a control that
+   vanishes once it has been used moves everything beside it, and the row is
+   read at a glance — and says so instead. */
+.hud-replay-kept {
+  cursor: default;
+  opacity: 0.62;
+  border-color: rgb(255 255 255 / 25%);
+}
+
+/* On a narrow screen the strip is the stage name and the two presses. The
+   line under it is the first thing to go — the picture is already saying most
+   of what it says — and the disk's word goes with it, leaving the mark. */
+@media (width <= 30rem) {
+  .hud-replay {
+    max-width: min(72vw, 20rem);
+  }
+
+  .hud-replay-word {
+    display: none;
+  }
+}
+
+/* The line goes on anything SHORT as well as on anything narrow. A phone
+   held sideways has no vertical room: the instrument panel is a third of the
+   frame, so standing on it puts the strip level with the co-driver's calls,
+   and a two-row strip is wide enough to reach them. One row is not. */
+@media (width <= 30rem), (height <= 26rem) {
+  .hud-replay-line {
+    display: none;
+  }
+}
+
 .hud-flashes {
   position: absolute;
   right: max(1rem, env(safe-area-inset-right));
@@ -3591,9 +3712,9 @@ body {
 }
 
 /* ── The front door ──────────────────────────────────────────────────────
-   Six tiles, each a mark and a name. The rows this replaced each carried a
-   sentence explaining the mode, and six explanations is a card that fills a
-   phone — with nothing on it that survives the second visit.
+   Tiles, each a mark and a name. The rows this replaced each carried a
+   sentence explaining the mode, and a card of explanations fills a phone —
+   with nothing on it that survives the second visit.
 
    Two columns is the shape the front door is designed AT: three rows of two
    on a portrait phone, and the same block on a laptop rather than a column
@@ -8920,4 +9041,122 @@ a.menu-version:focus-visible {
   .gallery-frame {
     height: min(38vh, 20rem);
   }
+}
+
+/* ── The replays page ────────────────────────────────────────────────────
+   The runs the player kept, as rows (menu-replays.tsx). A LIST rather than
+   a viewer — the opposite call to the gallery above, and for one reason: a
+   picture can be looked at on its page and a replay cannot, because
+   watching one means leaving the menu for the stage it was driven on. So
+   every row's whole job is to be recognised and pressed. */
+.menu-replays {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow-y: auto;
+  /* The card is already capped; this is what keeps a full roll from pushing
+     the head off a phone held sideways. */
+  max-height: min(52vh, 26rem);
+}
+
+/* The row and its delete share a line: the row takes the width, the cross
+   takes what a thumb needs and no more. */
+.menu-replay {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.menu-replay-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  letter-spacing: 0.08em;
+  text-align: left;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 40%);
+  border-left: 6px solid var(--hud-good);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.menu-replay-row:hover,
+.menu-replay-row:focus-visible {
+  background: rgb(255 255 255 / 18%);
+}
+
+.menu-replay-row .menu-glyph {
+  width: 1.6em;
+  height: 1.6em;
+  color: var(--hud-good);
+}
+
+.menu-replay-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.menu-replay-name {
+  font-size: clamp(0.9rem, 3.4vmin, 1.25rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-replay-line {
+  font-size: clamp(0.58rem, 2vmin, 0.8rem);
+  opacity: 0.78;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The date is the row's quietest column and its last: it is what separates
+   two runs of the same stage in the same car, and nothing else. */
+.menu-replay-when {
+  flex: none;
+  font-size: clamp(0.55rem, 1.9vmin, 0.75rem);
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-replay-drop {
+  flex: none;
+  font: inherit;
+  font-size: clamp(0.9rem, 3.2vmin, 1.2rem);
+  line-height: 1;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 8%);
+  border: 2px solid rgb(255 255 255 / 28%);
+  border-radius: 0.6rem;
+  padding: 0 0.7rem;
+  cursor: pointer;
+  opacity: 0.7;
+  text-shadow: none;
+}
+
+.menu-replay-drop:hover,
+.menu-replay-drop:focus-visible {
+  opacity: 1;
+  color: var(--hud-shadow);
+  background: var(--hud-bad);
+}
+
+/* A page with nothing on it yet says how to put something there — once, in
+   the space the rows would have taken. */
+.menu-note {
+  font-size: clamp(0.65rem, 2.2vmin, 0.9rem);
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  opacity: 0.8;
+  max-width: 34rem;
 }

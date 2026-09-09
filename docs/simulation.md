@@ -266,7 +266,7 @@ The tables above are bots measuring bots. That is the right measurement for hand
 
 Recording one:
 
-- **In the game.** Developer menu → **COLLECT RACE DATA**, drive, then **SAVE RUN DATA** on the results card. (`?record=1` forces the switch on for a scripted pass, which is how `scripts/` collects one without anybody finding the menu.)
+- **In the game.** Every real run is recorded as it is driven — that is what the player's REPLAYS are made of (`pwa/src/game/replay.ts`), and it is armed on every start and restart rather than by a switch, because a recorder armed after the fact records nothing. What the developer switch buys is the FILE: Developer menu → **COLLECT RACE DATA**, drive, then **SAVE RUN DATA** on the results card puts the same tape on your disk. (`?record=1` forces the switch on for a scripted pass, which is how `scripts/` collects one without anybody finding the menu.) A recording stops at `MAX_TAPE_STEPS` — twenty minutes, which every generated stage is well inside and the endless road is not.
 - **Headlessly.** `make record SEED=42 CAR=compact DIFFICULTY=hard` drives the bot and writes the same file — a reference lap in one command.
 
 Reading one back:
@@ -277,7 +277,7 @@ npm run tape -- replay runs/my-run.jsonl --splits   # where the time went
 npm run tape -- show runs/my-run.jsonl              # the header and the field, no replay
 ```
 
-The file is one JSON object per line: a `run` header (stage, car, field, start), `in` lines each holding until the next one (so a pedal buried down a straight is one line and not nine hundred), a `skip` line where the driver cut the establishing shot, a `sample` a second, and a `result` plus one `rival` line per crew. Being JSONL means `grep`, `jq` and a diff all work on it, and a line can be edited by hand to ask "what if I had lifted here".
+The file is one JSON object per line: a `run` header (stage, car, field, start, and the `damageScale` the run was driven at — the one difficulty setting that reaches the physics, so a replay driven without it bends a different amount of metal), `in` lines each holding until the next one (so a pedal buried down a straight is one line and not nine hundred), a `skip` line where the driver cut the establishing shot, a `sample` a second, and a `result` plus one `rival` line per crew. Being JSONL means `grep`, `jq` and a diff all work on it, and a line can be edited by hand to ask "what if I had lifted here".
 
 The replay prints two things, and they are different questions:
 

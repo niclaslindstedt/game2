@@ -79,6 +79,16 @@ export type TapeStage = {
   /** The temperature at the datum, °C, or null (or absent, on a tape
    * written before there was one) for the season's own (climate.ts). */
   temperature?: number | null;
+  /** How often the sandstorms come, 0..1, or absent for the country's own
+   * default. Not part of the ROAD — the fronts cross a stage compiled
+   * without knowing about them — but they are part of what the run drove
+   * through, so a replay owes them. */
+  sandstorms?: number;
+  /** THE TRAINING GROUND rather than a generated stage: the hand-built
+   * arena (`mapgen/arena.ts`). Nothing about the seed, the band or the dials
+   * describes it, so a replay that missed this flag would send the generator
+   * looking for a road that was never generated. */
+  arena?: boolean;
 };
 
 /** What the four words a stage used to be set by mean as an hour, for
@@ -118,6 +128,12 @@ export type TapeHeader = {
   /** The field that was on the road, or null when the run was alone. */
   field: FieldPlan | null;
   start: TapeStart;
+  /** What a hit COST this car, 0..1 (`damageScaleFor`). It is the one
+   * difficulty setting that reaches the physics, so a replay driven at
+   * another one bends a different amount of metal and is somewhere else by
+   * the first corner. Absent on a tape written before it was recorded, and
+   * on one the whole scale is left to the replay's own setting. */
+  damageScale?: number;
   /** The physics timestep the tape was recorded at. A tape recorded at
    * another one is not replayable and says so on the first line. */
   dt: number;

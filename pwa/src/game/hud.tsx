@@ -397,9 +397,18 @@ type HudProps = {
   /** The location whose table stands between this run and the next country,
    * or null when nothing does. */
   locked: string | null;
-  /** Save the run as a run tape from the results card. Null unless the
+  /** Save the run as a run tape FILE from the results card. Null unless the
    * developer switch that collects them is on. */
   onSaveRun: (() => boolean) | null;
+  /** WATCH THE RUN AGAIN (game/replay.ts) — the recording of the run that has
+   * just ended, put back on the road. Null over a replay, which is already
+   * one. */
+  onReplay: (() => void) | null;
+  /** Whether what is on screen IS a replay. The instruments all stay — a
+   * recording reads on the same dials as the run it is of — but everything
+   * that would DRIVE comes off, because a recorded run is one nobody has
+   * their hands on. */
+  replaying: boolean;
   /** Leave the card and go and WATCH the crews still out there. Null when
    * the road is already clear, and on every run with nobody entered. */
   onSpectate: (() => void) | null;
@@ -511,11 +520,21 @@ export function Hud({
   race,
   locked,
   onSaveRun,
+  onReplay,
+  replaying,
   onSpectate,
   watching,
   spectate,
 }: HudProps) {
   const { touch } = input;
+  // NOBODY HAS THEIR HANDS ON THIS CAR — a run-out being watched, or a
+  // recording playing. Every control that would DRIVE comes off: the wheel,
+  // the pedal, the bezel swipe and the way back to the last board are
+  // presses that do nothing, and on a phone they would be the only controls
+  // on screen. The CAMERA button is the exception on a replay and stays:
+  // watching the corner again from somewhere else is the whole offer, and on
+  // a phone that button is the only door to it.
+  const handsOff = spectate !== null || replaying;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
   // The thumb zones exist only where there are thumbs. CSS already hides
   // them on a pointer-fine display, but hidden is not the same as absent:
@@ -564,6 +583,7 @@ export function Hud({
       race={race}
       locked={locked}
       onSaveRun={onSaveRun}
+      onReplay={onReplay}
       onSpectate={onSpectate}
     />
   );
@@ -646,7 +666,7 @@ export function Hud({
                 run to put back: on the grid there is no road behind the car,
                 and while a run-out is watched the car on the screen is
                 somebody else's. */}
-            {!spectate && snap.phase === "racing" && <RecoverButton onReset={onReset} />}
+            {!handsOff && snap.phase === "racing" && <RecoverButton onReset={onReset} />}
             {/* TOUCH ONLY: a keyboard or a controller has the bind, and the
                 angle is also a row on the options page — a button for it on
                 the one strip a driver glances at mid-stage is a third door to
@@ -738,7 +758,15 @@ export function Hud({
           switching off the corner calls is a driver saying they know the
           stage, not one who wants to stay lost.
           WATCHING, the slot is the spectator's banner instead: there is
-          nobody in this car to call a corner to, and nobody to send home. */}
+          nobody in this car to call a corner to, and nobody to send home.
+          IN A REPLAY the corner and jump calls come off as well, and for the
+          same reason: a call is a WARNING, told to somebody who has not seen
+          the corner yet and has to decide what to do about it. Nobody
+          watching a recording is deciding anything — the car has already
+          taken the corner, and the sign over it is the one thing on screen
+          claiming otherwise. The way home and TURN AROUND stay: those are
+          not warnings but the story of a run that went off, which is
+          precisely what a replay of it is worth watching for. */}
       {spectate ? (
         <SpectateBanner {...spectate} />
       ) : (
@@ -748,7 +776,9 @@ export function Hud({
         ) : snap.wrongWay ? (
           <TurnAroundCall />
         ) : (
-          show.pacenotes && snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
+          !replaying &&
+          show.pacenotes &&
+          snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
         ))
       )}
 
@@ -817,12 +847,12 @@ export function Hud({
         {/* The bezel swipe, on the same terms as the button above it — and
             on touch alone, because it is the door for the device that has
             no keyboard to bind and no room for a row of buttons. */}
-        {thumbs && !flying && !spectate && snap.phase === "racing" && (
+        {thumbs && !flying && !handsOff && snap.phase === "racing" && (
           <EdgeRecoverZone onReset={onReset} />
         )}
         {thumbs && flying && <FlyControls fly={input.flyTouch} stickSide={touchLayout.steerSide} />}
-        {thumbs && !flying && !spectate && <SteerZone touch={touch} side={touchLayout.steerSide} />}
-        {thumbs && !flying && !spectate && (
+        {thumbs && !flying && !handsOff && <SteerZone touch={touch} side={touchLayout.steerSide} />}
+        {thumbs && !flying && !handsOff && (
           <PedalZone
             touch={touch}
             layout={touchLayout}

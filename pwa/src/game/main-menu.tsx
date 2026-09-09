@@ -53,6 +53,8 @@ import { LevelGrid, LocationList } from "./menu-levels.tsx";
 import { StandingsModal, warmStandings, type StandingsRow } from "./results-table.tsx";
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
+import { ReplaysPage } from "./menu-replays.tsx";
+import type { ReplayMeta } from "./replay.ts";
 import { TRAINING_ID, TRAINING_LEVEL, TRAINING_LOCATION, isTraining } from "./training.ts";
 import { DebugLogPage, DeveloperPage, UnlockPage } from "./menu-dev.tsx";
 import { BenchmarkHistoryPage } from "./menu-bench.tsx";
@@ -82,6 +84,9 @@ export type MenuPage =
    * what decides which grid BACK returns to. */
   | { page: "car"; levelId: string; mode: PlayMode }
   | { page: "gallery" }
+  /** The runs the player kept, listed so one can be watched again
+   * (menu-replays.tsx). */
+  | { page: "replays" }
   /** Roam — and, with `viewing` set, the developer's MAP VIEWER.
    *
    * ONE page state rather than two because the backdrop is the same in
@@ -141,6 +146,9 @@ export type MainMenuProps = {
   /** Leave the menu for the developer's stopwatch — a fixed piece of racing,
    * drawn as fast as the machine will draw it (game/benchmark.ts). */
   onBenchmark: () => void;
+  /** Leave the menu to WATCH a kept run again (game/replay.ts). The page
+   * hands over the listing; App reads the tape off the store. */
+  onWatchReplay: (meta: ReplayMeta) => void;
 };
 
 /** The build, bottom right, linking to the exact commit it was cut from.
@@ -182,11 +190,10 @@ function campaignEntry(): MenuPage {
  * be driven. */
 const ROOT_NEXT = "campaign";
 
-/** THE FRONT DOOR, as six marks. Every row used to carry a sentence saying
- * what the mode was, which is a menu explaining itself: six explanations is
- * a card that fills a phone, and none of them survives the second visit. A
- * glyph and a name is the whole entry — what CAMPAIGN is, is learned by
- * pressing it once.
+/** THE FRONT DOOR, as marks. A row carrying a sentence saying what its mode
+ * is, is a menu explaining itself: a card of explanations fills a phone, and
+ * none of them survives the second visit. A glyph and a name is the whole
+ * entry — what CAMPAIGN is, is learned by pressing it once.
  *
  * `data-menu` is the stable hook the capture harness presses; the label is
  * free to change without a probe changing with it. */
@@ -207,6 +214,7 @@ const ROOT_ITEMS: {
     label: "TRAINING",
     page: { page: "car", levelId: TRAINING_ID, mode: "training" },
   },
+  { key: "replays", glyph: "replay", label: "REPLAYS", page: { page: "replays" }, quiet: true },
   { key: "gallery", glyph: "camera", label: "GALLERY", page: { page: "gallery" }, quiet: true },
   {
     key: "options",
@@ -628,6 +636,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
   headsup: 1,
   roam: 1,
   gallery: 1,
+  replays: 1,
   options: 1,
   developer: 1,
   location: 2,
@@ -843,6 +852,9 @@ export function MainMenu(props: MainMenuProps) {
         )}
         {page.page === "gallery" && (
           <GalleryPage settings={props.settings} onBack={() => navigate({ page: "root" })} />
+        )}
+        {page.page === "replays" && (
+          <ReplaysPage onWatch={props.onWatchReplay} onBack={() => navigate({ page: "root" })} />
         )}
         {page.page === "roam" && page.viewing === true && (
           <MapViewerPage

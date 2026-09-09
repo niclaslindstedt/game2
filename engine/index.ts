@@ -580,6 +580,7 @@ export {
   type TapeCar,
   type TapeHeader,
   type TapeInput,
+  type TapePlayer,
   type TapeRecorder,
   type TapeResult,
   type TapeRival,

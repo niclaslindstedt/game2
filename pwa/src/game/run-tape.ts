@@ -4,22 +4,31 @@
 //
 // The engine owns the format and the replay (engine/sim/tape.ts,
 // engine/sim/race.ts); this is the browser's half of it — the header built
-// out of the app's own StageSpec, and the file put on a disk. It is armed by
-// a developer switch (COLLECT RACE DATA, in the developer menu) rather than
-// by debug mode: collecting a drive and looking at the debug boxes are separate
-// wants, and a session recorded for calibration should not have to be driven
-// with an overlay across it.
+// out of the app's own StageSpec, and the file put on a disk.
 //
-// WHAT IT IS FOR. A tape is one human drive, and a human drive is the only
-// honest measuring stick for a difficulty: `npm run tape -- replay <file>
+// EVERY REAL RUN IS RECORDED. A tape is the only thing in the game that can
+// put a drive back on the road exactly as it happened, so it is what REPLAYS
+// are made of (replay.ts): the run just driven is always in hand, whether or
+// not the player ever asks to see it, because a recorder armed after the fact
+// records nothing. Nothing is armed behind the menu, where the stage is
+// scenery a bot is driving.
+//
+// IT IS ALSO THE CALIBRATION ARTIFACT. A human drive is the only honest
+// measuring stick for a difficulty: `npm run tape -- replay <file>
 // --difficulty easy,medium,hard` puts the SAME driving in front of all three
 // fields and prints where it placed in each. Hard being hard is a thing you
-// can then read off a table instead of arguing about.
+// can then read off a table instead of arguing about — which is what the
+// developer switch (COLLECT RACE DATA) still buys: the results card's press
+// that puts the same tape on a disk as a file.
 //
-// Nothing here costs anything when the switch is off: no recorder is built,
-// and the frame loop's one call is on a null.
+// WHAT A HEADER OWES. Everything the engine was handed that a rebuild cannot
+// re-derive: the stage AND the conditions crossing it, the car and its box,
+// the field's plan, where the driver stood on the grid, and `damageScale` —
+// the one difficulty setting that reaches the physics. Anything missing here
+// is a replay that is somewhere else by the first corner.
 
 import {
+  TUNING,
   createTapeRecorder,
   engineVersion,
   type CarInput,
@@ -37,6 +46,15 @@ import {
 
 import type { ClassRow } from "./standings.ts";
 
+/** THE MOST A RECORDING MAY RUN TO, steps — twenty minutes at the physics
+ * rate. Every stage the game generates is well inside it (the longest band is
+ * about eight minutes of driving), and what the ceiling is actually for is
+ * the ENDLESS road: it has no finish line to stop the recorder at, so without
+ * one a tape would go on taking lines for as long as somebody kept driving.
+ * Past it the recorder simply stops, and the replay is the first twenty
+ * minutes of the run. */
+export const MAX_TAPE_STEPS = Math.round((20 * 60) / TUNING.dt);
+
 /** Everything about the run that is fixed before it starts — the app's
  * StageSpec, the box the car was handed, and the field that was entered. */
 export type RunTapeStart = {
@@ -52,6 +70,13 @@ export type RunTapeStart = {
   season: Season;
   /** The air at the datum, °C, or null for the season's own (climate.ts). */
   temperature?: number | null;
+  /** How often the sandstorms come, 0..1, or absent for the country's own. */
+  sandstorms?: number;
+  /** The training ground rather than a generated stage. */
+  arena?: boolean;
+  /** What a hit costs this car, 0..1 — the one difficulty setting that
+   * reaches the physics, so a replay owes it. */
+  damageScale: number;
   skipCountdown: boolean;
   grid: GridSlot | null;
   /** What kind of run it is — the app's own word for it. */
@@ -108,13 +133,22 @@ export function createRunTape(start: RunTapeStart): RunTapeRecorder {
       hour: start.hour,
       weather: start.weather,
       season: start.season,
+      temperature: start.temperature ?? null,
+      ...(start.sandstorms === undefined ? {} : { sandstorms: start.sandstorms }),
+      ...(start.arena ? { arena: true } : {}),
     },
     car: { id: start.carId, gearbox: start.gearbox },
     field: start.field,
     start: { skipCountdown: start.skipCountdown, grid: start.grid },
+    damageScale: start.damageScale,
   });
   return {
-    record: tape.record,
+    // Past the ceiling the recorder is simply not called again: the tape
+    // stops where it stops rather than growing for the life of the tab.
+    record: (input, state) => {
+      if (tape.steps() >= MAX_TAPE_STEPS) return;
+      tape.record(input, state);
+    },
     skipped: tape.skipped,
     steps: tape.steps,
     seal: (end) =>

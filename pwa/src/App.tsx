@@ -37,7 +37,9 @@ import {
   compileStage,
   createGame,
   damageScaleFor,
+  parseTape,
   placeRun,
+  readTape,
   resolveKnobs,
   skipIntro,
   DEFAULT_HOUR,
@@ -51,11 +53,12 @@ import {
   type GearboxMode,
   type RetireReason,
   type GridSlot,
-  type StageKnobs,
   type StageLength,
   type StageShape,
   type Difficulty,
+  type RunTape,
   type Season,
+  type TapePlayer,
   type Track,
   type Weather,
   isBiomeId,
@@ -162,6 +165,18 @@ import {
   type RunTapeEnd,
   type RunTapeRecorder,
 } from "./game/run-tape.ts";
+import { sameStage, type StageSpec } from "./game/stage-spec.ts";
+import {
+  readReplayMeta,
+  replayField,
+  replayLine,
+  replayStage,
+  replayTitle,
+  type ReplayMeta,
+} from "./game/replay.ts";
+import { newReplayId, putReplay, replayTape } from "./game/replay-store.ts";
+import { ReplayBar } from "./game/hud-replay.tsx";
+import { replayStageName } from "./game/menu-replays.tsx";
 import {
   lastInitials,
   loadBoard,
@@ -662,68 +677,6 @@ const URL_AIR = (() => {
  * it every frame would make the map impossible to move. */
 const URL_MAP_POSE = mapPoseFromUrl();
 
-/** Everything that decides WHICH stage is standing: change any of it and
- * the run is rebuilt. */
-type StageSpec = {
-  seed: number;
-  length: StageLength;
-  /** R25 — a sprint from a start to a finish, or a circuit raced over laps. */
-  shape: StageShape;
-  /** Laps a circuit is raced over; 1 on anything that does not come back. */
-  laps: number;
-  /** The generator's dials — what KIND of country the seed is built in. */
-  knobs: StageKnobs;
-  carId: string;
-  /** The box, when the stage insists on one. Normally absent: which gearbox
-   * the car is driven with is the PLAYER's option, read fresh off OPTIONS
-   * every time a stage is built. The benchmark is the exception — the two
-   * boxes scale the gear tops and the drive between them (`gearedSpec`), so
-   * a measurement that inherited one would be timing a different car. */
-  gearbox?: GearboxMode;
-  /** The hour the stage starts at, 0..24 (`RaceEnv.hour`). */
-  hour: number;
-  weather: Weather;
-  season: Season;
-  /** The air at the datum, °C, or null (or absent — the campaign's levels
-   * never name one) for the season's own in the country (climate.ts).
-   * Part of the ROAD, with the season: the two decide what the compiled
-   * track is made of, so the cached track is keyed on both. */
-  temperature?: number | null;
-  /** How often the SANDSTORMS come, 0..1, or absent for the default
-   * (`DEFAULT_SANDSTORMS`) — read only in a country whose wind lifts the
-   * ground (`BiomeRules.blown`, `game/sandstorm.ts`). Unlike the season
-   * and the temperature it is NOT part of the road: the fronts cross a
-   * stage that was compiled without knowing about them, so the cached
-   * track is untouched by it and only the RUN is rebuilt. */
-  sandstorms?: number;
-  /** The menu's demo has no grid to sit on — nobody is waiting for it. */
-  skipCountdown: boolean;
-  /** Where the player is stood when the whole field leaves together: the
-   * last row of the mass-start grid, deepest into the apron behind the start
-   * gate, and the drive it is owed for the rows in front of it
-   * (engine/sim/grid.ts). Null on every other start — a rally interval, a
-   * time trial, Roam — where the player is on the line on their own and owes
-   * nobody anything. */
-  grid: GridSlot | null;
-  /** How many cars the stage is BUILT FOR, the player included; one — or
-   * absent — on every start that is one car on the line.
-   *
-   * It is part of the STAGE rather than of the field because it moves the
-   * ground: a mass start stands one row per car behind the start gate, and
-   * the run-up has to be long enough to hold the back one (`apronForGrid`).
-   * The route never moves for it — the same seed is the same road whoever is
-   * standing on it — but the apron and the shelf under it do, which makes
-   * this part of what the compiled track is keyed on. */
-  cars?: number;
-  /** THE TRAINING GROUND instead of a generated stage: the hand-built
-   * arena (`mapgen/arena.ts`) and the approach road it stands on. It is a
-   * flag rather than a length or a shape because it is neither — nothing
-   * about the seed, the band, the dials or the laps describes it, and a
-   * stage spec that pretended otherwise would send the generator looking
-   * for a road that was never generated. */
-  arena?: boolean;
-};
-
 /** THE TRAINING GROUND as a stage spec. There is only one of it — the
  * place is authored (`mapgen/arena.ts`), the conditions are fixed, and the
  * only thing a player chooses is the car — so it is stated once here and
@@ -747,33 +700,6 @@ function trainingSpec(carId: string): StageSpec {
     skipCountdown: true,
     grid: null,
   };
-}
-
-function sameStage(a: StageSpec | null, b: StageSpec): boolean {
-  return (
-    a !== null &&
-    (a.arena ?? false) === (b.arena ?? false) &&
-    a.seed === b.seed &&
-    a.length === b.length &&
-    a.shape === b.shape &&
-    a.laps === b.laps &&
-    a.knobs.biome === b.knobs.biome &&
-    NUMERIC_KNOBS.every((key) => a.knobs[key] === b.knobs[key]) &&
-    a.carId === b.carId &&
-    a.gearbox === b.gearbox &&
-    a.hour === b.hour &&
-    a.weather === b.weather &&
-    a.season === b.season &&
-    (a.temperature ?? null) === (b.temperature ?? null) &&
-    (a.sandstorms ?? DEFAULT_SANDSTORMS) === (b.sandstorms ?? DEFAULT_SANDSTORMS) &&
-    a.skipCountdown === b.skipCountdown &&
-    a.grid?.number === b.grid?.number &&
-    a.grid?.back === b.grid?.back &&
-    // The field's depth is the apron's length, and the apron is compiled
-    // into the track — so a stage asked for with more cars on it is not the
-    // stage already standing, even where everything else about it matches.
-    (a.cars ?? 1) === (b.cars ?? 1)
-  );
 }
 
 /** The stage the menu's demo is driving. Medium is the length that shows
@@ -830,6 +756,7 @@ const MODE_NAME: Record<PlayMode, string> = {
   headsup: "Heads up",
   roam: "Roam",
   training: "Training",
+  replay: "Replay",
 };
 
 /** HOW MANY CARS a run puts on the road, the player included. One on
@@ -1296,6 +1223,32 @@ export function App() {
    * stopped, and recording it would put a minute of coasting on the end of
    * every replay. */
   const tapeEndRef = useRef<Omit<RunTapeEnd, "rows" | "rivalSplits"> | null>(null);
+  /** THE REPLAY ON SCREEN, when the run being watched is a recorded one
+   * (game/replay.ts). The tape has the wheel: the frame loop hands the engine
+   * the controls this recording was driven on instead of the player's, and
+   * everything else about the run — the stage, the car, the field, the
+   * physics — is the same code doing the same work, which is what makes the
+   * picture the run rather than a picture OF the run.
+   *
+   * `at` is how many steps of it have been driven, and it is the only piece
+   * of this that moves. Null on every run the player is actually driving. */
+  const replayRef = useRef<{
+    /** What it is filed under, minted at the press whether or not it is ever
+     * kept, so the disk can be pressed twice without doubling the row. */
+    id: string;
+    meta: ReplayMeta;
+    /** The tape as JSONL, held so the disk files what is being watched
+     * rather than re-sealing a recorder that is no longer running. */
+    text: string;
+    player: TapePlayer;
+    /** The field the run was driven against, re-entered for the watching. */
+    plan: FieldPlan | null;
+    at: number;
+  } | null>(null);
+  /** ...and the strip over it (hud-replay.tsx): what is being watched, and
+   * whether it has been kept. State rather than a ref because the disk's own
+   * press is what changes it. */
+  const [replaying, setReplaying] = useState<{ meta: ReplayMeta; kept: boolean } | null>(null);
   /** The book this run is being timed against — null on Roam and behind the
    * menu, where nobody is keeping score. The HUD's clock reads it, and so
    * does the results card's NEW RECORD. */
@@ -1669,9 +1622,13 @@ export function App() {
       // nothing on EASY, half on MEDIUM, the whole of it on HARD. Read fresh
       // on every build, like the gearbox above, so a setting changed in the
       // menu is in the next car put on the road and never in the one being
-      // driven. The rivals are never scaled (`createField`): what the crews
-      // do to each other is the simulation being honest.
-      damageScale: damageScaleFor(runDifficulty(raceRef.current, runRef.current.mode)),
+      // driven — unless the stage pins one, which a REPLAY does: it is the
+      // one difficulty setting that reaches the physics, so a recording
+      // re-driven at another one bends a different amount of metal. The
+      // rivals are never scaled (`createField`): what the crews do to each
+      // other is the simulation being honest.
+      damageScale:
+        spec.damageScale ?? damageScaleFor(runDifficulty(raceRef.current, runRef.current.mode)),
       env: {
         hour: spec.hour,
         weather: spec.weather,
@@ -1908,17 +1865,28 @@ export function App() {
   const armGhostRef = useRef(armGhost);
   armGhostRef.current = armGhost;
 
-  /** Arm the run tape, when the developer switch asks for one. Called on
-   * every start AND every restart, for the same reason the ghost is: a tape
-   * carried over from the last attempt would be one run's controls under
-   * another run's clock. The FIELD it names is the plan the field was
-   * actually entered on, so a replay races the same crews at the same
-   * difficulty unless it is deliberately asked not to. */
-  const armTape = (spec: StageSpec, mode: PlayMode, levelId?: string): void => {
+  /** ARM THE RUN TAPE. Every real run is recorded, because a recorder armed
+   * after the fact records nothing: the tape is what a REPLAY is made of
+   * (`game/replay.ts`), and the offer to watch the run just driven has to be
+   * there whether or not the player knew they would want it.
+   *
+   * Called on every start AND every restart, for the same reason the ghost
+   * is: a tape carried over from the last attempt would be one run's controls
+   * under another run's clock.
+   *
+   * Nothing is armed behind the menu, where the stage is scenery a bot is
+   * driving — nor over a REPLAY, which is a recording being watched and has
+   * nothing new to record.
+   *
+   * WHAT THE HEADER OWES is everything a rebuild cannot re-derive, and every
+   * field of it is read off what `applyStage` actually handed the engine
+   * rather than off what the menu asked for: the box the car is in, the
+   * ceremony god mode skipped, the damage scale the difficulty bought, and
+   * the field's own plan. */
+  const armTape = (spec: StageSpec, mode: PlayMode, levelId?: string, plan?: FieldPlan): void => {
     tapeRef.current = null;
     tapeEndRef.current = null;
-    if (!optionsRef.current.dev.record || menuRef.current) return;
-    const entered = mode === "campaign" || mode === "headsup";
+    if (menuRef.current || mode === "replay") return;
     tapeRef.current = createRunTape({
       seed: spec.seed,
       length: spec.length,
@@ -1926,18 +1894,23 @@ export function App() {
       laps: spec.laps,
       knobs: spec.knobs,
       carId: spec.carId,
-      gearbox: optionsRef.current.gearbox,
+      gearbox: spec.gearbox ?? optionsRef.current.gearbox,
       hour: spec.hour,
       weather: spec.weather,
       season: spec.season,
       temperature: spec.temperature ?? null,
-      // What `applyStage` actually handed the engine, god mode included:
-      // a tape has to say what the run WAS, not what the menu asked for.
+      ...(spec.sandstorms === undefined ? {} : { sandstorms: spec.sandstorms }),
+      ...(spec.arena ? { arena: true } : {}),
+      damageScale: spec.damageScale ?? damageScaleFor(runDifficulty(raceRef.current, mode)),
       skipCountdown: spec.skipCountdown || godRef.current,
       grid: spec.grid,
       mode,
       ...(levelId ? { levelId } : {}),
-      field: entered ? fieldPlan(raceRef.current, mode, spec) : null,
+      // The plan the field was actually entered on — the caller's, where it
+      // stated one (the benchmark), and the settings-derived one otherwise.
+      // Null on a run with nobody on the road, which is what `fieldPlan`
+      // hands back for it.
+      field: plan ?? fieldPlan(raceRef.current, mode, spec),
     });
   };
   const armTapeRef = useRef(armTape);
@@ -1956,12 +1929,16 @@ export function App() {
 
   /** Leave whatever is on screen for the main menu, with its demo behind it.
    * The run's tape and its ghost go with it: a stage abandoned halfway is
-   * not a time, and the demo behind the cards races nobody. */
+   * not a time, and the demo behind the cards races nobody. So does a REPLAY
+   * — a recording nobody is watching any more is not on screen, and one that
+   * was never kept is gone for good, which is the bargain the disk offers. */
   const goMainMenu = (): void => {
     setPaused(false);
     setScores(null);
     recorderRef.current = null;
     ghostRef.current = null;
+    replayRef.current = null;
+    setReplaying(null);
     fieldRef.current = null;
     standingRef.current = null;
     // Same bargain as a restart: the stage the player just drove keeps its
@@ -2059,7 +2036,7 @@ export function App() {
         },
       },
       { id: "ghost", label: "Warming up", run: () => (armGhost(spec, mode, levelId), false) },
-      { id: "tape", label: "Warming up", run: () => (armTape(spec, mode, levelId), false) },
+      { id: "tape", label: "Warming up", run: () => (armTape(spec, mode, levelId, plan), false) },
       // Every shader the stage is about to need, compiled where there is
       // nothing to stutter. Last, because it compiles what is IN the scene
       // and the field's cars are part of it.
@@ -2149,13 +2126,26 @@ export function App() {
     // A new run inherits nothing from the last one: the engine's note would
     // otherwise glide from wherever the previous car left it.
     audioRef.current?.reset();
+    // …and neither does it inherit the last one's RECORDING. `startReplay`
+    // arms the ref before it comes through here, so this only ever clears a
+    // replay the player is leaving for something they are going to drive.
+    if (mode !== "replay") {
+      replayRef.current = null;
+      setReplaying(null);
+    }
     setPaused(false);
     setRun({ mode, levelId });
     runRef.current = { mode, levelId };
     setMenu(null);
     menuRef.current = null;
     beginLoad(spec, mode, levelId, plan, done, extra);
-    pickPlayCamera(startCamera(optionsRef.current.camera));
+    // A REPLAY OPENS ON THE TV GALLERY. It is the one view built for watching
+    // rather than driving — fixed tripods on the outside of every corner,
+    // the car arriving at the lens (camera-tv.ts) — and a recording is
+    // exactly the thing there is nothing to drive in. The ladder is still
+    // there: the camera key walks off it the moment the player wants a
+    // different angle, and `?camera=` still wins for the tooling.
+    pickPlayCamera(startCamera(mode === "replay" ? "tv" : optionsRef.current.camera));
     audioRef.current?.setView(playCameraRef.current);
     // The god-mode effect owns the camera while it is flying; setting a play
     // camera here as well would land the flight every time a run started.
@@ -2233,6 +2223,71 @@ export function App() {
       },
       "roam",
     );
+  };
+
+  /** WATCH A RECORDED RUN (game/replay.ts).
+   *
+   * The whole of a replay is here: parse the tape, rebuild the world its
+   * header describes, re-enter the field it was driven against, and start the
+   * stage with the recording holding the wheel. Nothing downstream is a
+   * special case — the same engine steps the same physics off the same
+   * controls, which is what makes a replay the run itself rather than a
+   * picture of it.
+   *
+   * It is entered with NO LEVEL ID whatever stage the tape was driven on, and
+   * that is the one line that keeps a replay honest: the level id is what
+   * opens the ghost, the record book, the campaign's points and the time
+   * trial's board, so a run that is only being watched can reach none of
+   * them. Watching your own best lap must not be able to beat it.
+   *
+   * `saved` is the roll's own listing when the replay came off it, and null
+   * when it is the run just driven — which is not kept until the disk in the
+   * bar is pressed. */
+  const startReplay = (text: string, saved: ReplayMeta | null): void => {
+    let tape: RunTape;
+    try {
+      tape = parseTape(text);
+    } catch (err) {
+      // A tape this build cannot read — an older format, another timestep —
+      // is a replay that would be a fiction, and the parser says which.
+      status(`Replay: ${err instanceof Error ? err.message : "unreadable"}`);
+      return;
+    }
+    const spec = replayStage(tape.header);
+    const plan = replayField(tape.header);
+    // A recording is given its id the moment it goes on screen, kept or not,
+    // so the disk can file it — and be pressed twice without doubling its
+    // row — before it has ever been stored.
+    const id = saved?.id ?? newReplayId();
+    const meta = saved ?? readReplayMeta(tape, id);
+    replayRef.current = { id, meta, text, player: readTape(tape), plan, at: 0 };
+    setReplaying({ meta, kept: saved !== null });
+    status(`Replay — ${replayTitle(meta, replayStageName(meta.levelId))}`);
+    startStage(spec, "replay", undefined, plan ?? undefined);
+  };
+
+  /** KEEP THE REPLAY BEING WATCHED — the disk in the replay bar. Files the
+   * tape it is already driving, so what is kept is exactly what is on screen;
+   * pressing it twice replaces its own row rather than doubling it. */
+  const keepReplay = (): void => {
+    const replay = replayRef.current;
+    if (!replay) return;
+    setReplaying({ meta: putReplay(replay.meta, replay.text), kept: true });
+  };
+
+  /** WATCH THE RUN JUST DRIVEN — the results card's own press. The recorder
+   * is still holding the whole of it (`armTape`), so this seals it where the
+   * run ended and puts it straight back on the road. Nothing is stored: the
+   * disk in the replay bar is what keeps it, and a player who only wanted to
+   * see the corner they lost it on owes the roll nothing. */
+  const watchLastRun = (): void => {
+    const tape = tapeRef.current;
+    const end = tapeEndRef.current;
+    if (!tape || !end) return;
+    const rivalSplits: Record<string, number[]> = {};
+    const field = fieldRef.current;
+    if (field) for (const run of field.runs) rivalSplits[run.entry.crew.id] = run.splits;
+    startReplay(tape.seal({ ...end, rows: result?.rows ?? [], rivalSplits }), null);
   };
 
   /** THE BENCHMARK — the developer menu's stopwatch (game/benchmark.ts).
@@ -2986,7 +3041,7 @@ export function App() {
         // lonelier one — and this path never reaches `startStage`.
         if (!URL_PLACE.moment) {
           armGhostRef.current(spec, mode, levelId);
-          armTapeRef.current(spec, mode);
+          armTapeRef.current(spec, mode, levelId);
         }
         // The establishing shot is ten seconds of camera before a tooling
         // run has done anything, and every screenshot scene would sit
@@ -3046,7 +3101,12 @@ export function App() {
         // crew's whole stage: the same seconds a start costs, and the same
         // card over them (`race-loader.ts`).
         const active = runRef.current;
-        beginLoadRef.current(spec, active.mode, active.levelId);
+        // A REPLAY restarts from its own first step, with the field it was
+        // driven against re-entered off the tape rather than off the menu's
+        // settings — the apron and the stagger are part of the recording.
+        const replay = replayRef.current;
+        if (replay) replay.at = 0;
+        beginLoadRef.current(spec, active.mode, active.levelId, replay?.plan ?? undefined);
       };
       const camera = (): void => {
         if (menuRef.current) return;
@@ -3525,6 +3585,22 @@ export function App() {
               continue;
             }
             retiredRef.current = ev.reason;
+            // The tape's last line, on a run that never reached one. Booked
+            // here for the same reason a finish books it: past this the car
+            // is a wreck being looked at, and a replay that carried the
+            // looking would run for as long as the card was left up.
+            if (tapeRef.current && !tapeEndRef.current && menuRef.current === null) {
+              tapeEndRef.current = {
+                finished: false,
+                time: state.raceTime,
+                laps: state.laps,
+                lapTimes: [...state.lapTimes],
+                splits: [...state.checkpointTimes],
+                place: null,
+                of: null,
+                stats: { ...state.stats },
+              };
+            }
             stopMusic();
             const field = fieldRef.current;
             if (field) stopField(field);
@@ -3972,7 +4048,18 @@ export function App() {
           // never moves.
           const human = input.sample(TUNING.dt);
           if (autopilotRef.current && driving(human)) autopilotRef.current = false;
-          const driven = page || autopilotRef.current ? botInput(state) : human;
+          // A REPLAY HAS THE WHEEL, when one is on screen: the engine is
+          // handed the controls the recording was driven on rather than the
+          // ones anybody is pressing now, and everything else about the step
+          // — the field, the physics, the events — is the same code doing the
+          // same work. Past the end of the tape the reader hands back neutral,
+          // which is a car that has already crossed its line.
+          const replay = replayRef.current;
+          const driven = replay
+            ? replay.player.at(replay.at)
+            : page || autopilotRef.current
+              ? botInput(state)
+              : human;
           // R29 — the field takes the same tick, and takes it FIRST: the
           // player is the last car on the road, so a rival through a board on
           // this step was through it before them. They run from the FIRST
@@ -3990,7 +4077,12 @@ export function App() {
           // so the frame that skips is already a countdown frame — and the
           // field is pushed on by exactly what the player jumped, or the
           // stagger the whole classification rests on quietly shrinks.
-          if (state.phase === "intro" && wantsOff(human)) {
+          // …taken off the RECORDING while one is playing, on the step it was
+          // taken on. Without it a replay sits out an establishing shot the
+          // run walked out of, and every crew's stagger is that many seconds
+          // wrong for the rest of the stage.
+          const cut = replay ? replay.player.skipsAt(replay.at) : wantsOff(human);
+          if (state.phase === "intro" && cut) {
             // The camera is told FIRST, while the shot is still up: the
             // engine's skip is one instant jump — the field's stagger
             // depends on it being one — and the camera answers it by flying
@@ -4006,6 +4098,10 @@ export function App() {
             recorderRef.current?.skipped();
           }
           const events = step(state, driven);
+          // The recording walks forward with the engine it is driving — one
+          // step of the tape per step of the physics, which is the whole of
+          // why the car ends up in the same places.
+          if (replay) replay.at++;
           if (events.length > 0) handleEvents(state, events);
           // …and then the one place two cars can be in at once.
           if (running) rubField(running, state);
@@ -4238,6 +4334,16 @@ export function App() {
         }
       : null;
 
+  /** WATCH THE RUN AGAIN — the results card's own press. Offered on every run
+   * with a recording behind it and a clock that has stopped, whether it
+   * reached the line or ended against a tree, and never over a replay: the
+   * card at the end of one is the end of the recording, and there is nothing
+   * new to watch. */
+  const onReplay =
+    run.mode !== "replay" && tapeRef.current && tapeEndRef.current
+      ? (): void => watchLastRun()
+      : null;
+
   // R30 — WHETHER THERE IS ANYTHING TO WATCH. The same condition the sheet's
   // OUT rows are waiting out, read off the same state: a run with a field
   // entered, whose sheet has not landed yet. It is the whole of what the
@@ -4350,10 +4456,33 @@ export function App() {
           race={headsUp}
           locked={lockedBehind}
           onSaveRun={saveRun}
+          onReplay={onReplay}
+          replaying={replaying !== null}
           onSpectate={onSpectate}
           watching={watching}
           spectate={spectate}
         />
+      )}
+      {/* THE REPLAY STRIP, over everything a replay draws — the results card
+          at the end of the recording included, because the disk is most
+          likely to be wanted once the player has seen how it went. Outside
+          the HUD for the same reason the news column is: ALT takes the
+          chrome off so a frame can be judged on its pixels, and the way out
+          of a replay is not chrome. */}
+      {replaying && !menu && !bench && (
+        // In a HUD layer of its own rather than inside the one above: the
+        // strip is chrome and measures itself against the instrument panel
+        // (`--hud-tach`, stated once on `.hud`), but it has to stand whether
+        // or not the rest of the HUD is up — ALT takes that down, and the
+        // results card takes it down for itself.
+        <div className="hud pointer-events-none absolute inset-0 select-none">
+          <ReplayBar
+            title={replayTitle(replaying.meta, replayStageName(replaying.meta.levelId))}
+            line={replayLine(replaying.meta)}
+            onSave={replaying.kept ? null : keepReplay}
+            onLeave={goMainMenu}
+          />
+        </div>
       )}
       {/* Outside the HUD on purpose: ALT takes the game's chrome off so a
           frame can be judged on its pixels, and a frame nobody can place is
@@ -4415,6 +4544,19 @@ export function App() {
           mapDebug={options.developer ? mapDebug : null}
           onRoamLevel={loadRoamLevel}
           onBenchmark={startBenchmark}
+          onWatchReplay={(meta) => {
+            // The tape is a megabyte off disk and a menu row is a press, so
+            // the read is awaited here rather than in the page. A replay that
+            // has gone (a store cleared under the listing) says so and leaves
+            // the player on the menu.
+            void replayTape(meta.id).then((text) => {
+              if (text === null) {
+                status("Replay: no longer on this machine");
+                return;
+              }
+              startReplay(text, meta);
+            });
+          }}
         />
       )}
       {/* THE SAME CARD FOR BOTH WAYS THERE IS NOTHING TO LOOK AT: a race being
