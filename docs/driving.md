@@ -421,7 +421,7 @@ And the grade is felt on the CAR's own axes, not the road's. A road states its s
 | Gravel      | The baseline: full power, honest grip, dust off the rear when sideways — and a plume towed off the back wheels from 30 km/h up                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Sand        | The desert's bladed road (R40): a fifth less grip than gravel, a breakaway a fifth further out, half again the drag and some of the throttle swallowed — slower in a straight line, sideways sooner in every corner, and a slide that runs further and settles later. Same loose-surface rubber                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Snow        | Packed snow over whatever was laid: the alpine road above its snowline (R47), and every loose road a winter freezes (`climate.ts`). Three quarters of gravel's grip, a breakaway a sixth further out, a slide that runs further and settles later, a little more drag and a share of the throttle spun away — and the cold decides the rest through the sample's `bite`: glazed a degree or two under zero it drops toward the old alpine ice, and in deep cold it climbs most of the way back to gravel. It always sits between the two. Soft, so a landing or a roll is taken by the snow before the shell. Same loose-surface rubber                                                                              |
-| Snowfield   | The open country under a winter's blanket (`climate.ts`): half a metre of snow at freezing, a metre in the deep cold, which the car sinks `CLIMATE.blanket.ride` of the way into and PLOUGHS — three times gravel's drag, the wild's dig and more off the line, and the tyres held about as well as wet turf by the snow packing against the sidewalls. Slow rather than loose: leaving a snow road costs, and getting back is always possible                                                                                                                                                                                                                                                                       |
+| Snowfield   | The open country under a winter's blanket (`climate.ts`): half a metre of snow at freezing, a metre in the deep cold, which the car sinks `CLIMATE.blanket.ride` of the way into and PLOUGHS — three times gravel's drag, the wild's dig and more off the line, and the tyres held about as well as wet turf by the snow packing against the sidewalls. On top of all of that it is charged for the DEPTH it is pushing through (`TUNING.snow`, below): untouched powder holds a car to about 30 km/h, its own ruts let it run at nearly twice that. Slow rather than loose: leaving a snow road costs, and getting back is always possible                                                                          |
 | Ice         | A lake the cold has frozen solid, and the road the rally crosses one on (R48): standing water whose surface stands at or under `CLIMATE.ice` (-5 °C). THE LEAST GRIP IN THE GAME — about two thirds of gravel and well under the snow road's three quarters, because there is nothing on it to cut down into. It also rolls the freest of any surface, so a car that has stopped steering is still going exactly as fast as it was; it breaks away furthest out and settles slowest, so a slide on a lake is steered rather than caught; and it spins the throttle away worse than sand. And it GIVES almost nothing — a lake is a floor, so a car that goes over on one meets something very near as hard as tarmac |
 | **Asphalt** | A third more lateral grip, a sharper wheel to spend it with, and under two thirds of the breakaway angle: the corner that needed a slide is driven round, the drift has to be ASKED for and stays small when it comes — and it throws nothing at all until a tire is overwhelmed, then smokes it black                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -596,6 +596,57 @@ renderer keeps the heat, because it is the one thing about a tyre that is a
 history rather than an instant). The soot builds slowly on purpose: it is
 the reward for committing to a slide, not the price of turning the wheel.
 
+### Snow remembers (R47)
+
+Snow is the one surface in the game that CHANGES under the car
+(`engine/game/snowpack.ts`). A tyre does not brush it aside, it compresses
+it — from the hundred-odd kg/m³ a fresh fall settles at to the four to six
+hundred traffic works it up to — and since the mass has nowhere to go the
+same snow now stands at a fraction of its old height, and stays there. Four
+things follow, and together they are what a winter stage is about.
+
+- **A trail is a real hole in the ground.** Each pass takes the snow a
+  fixed share of the way toward its fully packed floor (`CLIMATE.pack`), so
+  a track deepens fast and then stops — the multipass compaction curve, and
+  the reason a road is worn rather than punched. The crown between the
+  wheels is untouched, because the car straddles it.
+- **The trail is FASTER.** What holds a car back in snow is the depth it
+  has to plough, and a worked track has almost none left. So a car follows
+  its own line out of a field, and follows the field's line out of a
+  corner. What it is charged is three things at once: compacting the column
+  (a force, the same at 10 m/s as at 30), bulldozing with the floorpan once
+  the snow is over the sills, and — the one that decides how fast a car can
+  go at all — throwing the snow aside, which grows with the square of the
+  speed.
+- **...and the trail HOLDS WORSE.** Measured on real winter roads, fresh
+  accumulating snow gives a tyre about 0.43 and the polished surface
+  traffic turns it into gives 0.2 to 0.3: the crystals a tread cuts down
+  into have been rolled into a floor it can only slide on. So the racing
+  line is the fast line and the loose line is the one that grips, and a
+  snow stage is that choice, corner by corner. The pivot is the swept crown
+  of a driven road, so a winter stage still holds exactly what it always
+  held on the line a car actually drives.
+- **A rut has WALLS.** The snow a wheel pressed down is gone and the snow
+  beside it is not, so a car sliding out of its own line has to climb a
+  shoulder. That is the tramline every winter driver knows: the ruts steer
+  the car, a lane change is asked for at a shallow angle, and asking for it
+  at a sharp one is how a car ends up in the field. It is charged against
+  the lateral speed alone — a rut costs a car going ALONG it nothing.
+
+None of it ever damages the car. A bank of snow is displaced rather than
+hit, so any rise that is only snow is given away before the contact model
+is asked anything (`GroundUnder.snowGive`) — which is the whole reason a
+rally car survives leaving a white road and does not survive leaving a dry
+one.
+
+The stage's own road arrives already worn. R16's five lines (`wearAt`) ARE
+the packing the traffic before this car left in it, so a snow road is a
+cover over the crown with two polished tracks cut through it and a bank at
+the lip where the blade pushed the field aside — deepest at the untouched
+edges, lower over the crown, lowest in the tracks. The blanket beside the
+road and the cover on it are one field to the physics, handed over across
+the verge on R16's own smoothstep.
+
 ## The road's cross-section
 
 A rally road is not a flat carpet ruled onto the landscape, and the car
@@ -623,7 +674,10 @@ ribbon, the terrain's verge and the physics all read):
   car settles into one and has to be steered out of it, and a car left to
   itself on the crown will drift off into a track. That curvature across
   the road is also what stops a gravel stage looking like a flat brown
-  ribbon. Asphalt polishes rather than ruts.
+  ribbon. Asphalt polishes rather than ruts. In a winter the same five
+  lines decide how much SNOW is left standing across the road (R47): the
+  tracks are worn down to a floor, the crown carries a cover, and the edges
+  no wheel touches keep nearly the whole of it.
 - **The mat.** Asphalt is laid ON the ground: the mat stands proud of the
   verge with its edge chippings spilled down the side, and the joint at
   each end of a sealed run ramps rather than steps.

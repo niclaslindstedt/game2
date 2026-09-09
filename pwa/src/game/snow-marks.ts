@@ -14,10 +14,28 @@
 //
 // So the trail is a swept strip, `SECTION` across (the cross-section of a
 // ploughed pair of ruts) and one stamp long per `SPACING` metres of travel.
-// How PROUD the banks and the crown stand is the snow's own depth where the
-// car is (`TerrainField.blanketAt`): a metre of powder off the road throws a
-// real bank, and a packed snow road, which has none to throw, leaves the
-// same trail drawn flat — the colour alone.
+//
+// WHAT IT IS DRAWING IS REAL. The engine's snow is deformable (`snowpack.ts`)
+// and the car's wheels have already packed this ground down by a measured
+// number of metres — so how proud the banks and the crown stand is that
+// number (`Snowpack.cutAt`), and a trail driven a second and a third time
+// stands deeper each time exactly as the physics under it does. A packed
+// snow ROAD, which has almost nothing left to give, draws the same trail
+// nearly flat — the colour alone — and that is not a special case but the
+// same reading.
+//
+// It is drawn as RELIEF ABOVE the ground rather than as a hole in it, and
+// that is a depth-buffer fact rather than a choice: the tiles are built at
+// the untouched snow's own top and never re-tessellated, so a floor sunk
+// under them is a floor the terrain hides. The rut therefore reads by its
+// banks and its crown standing over a floor left at the tile — which is
+// what the eye reads a rut by anyway.
+//
+// ...and the FLOOR'S COLOUR is how worked the snow is (`Snowpack.workAt`).
+// Packed snow is a polished floor where fresh snow is crystals, and it is
+// the darker, bluer, glassier of the two — which is the game telling the
+// driver, in the one place they are looking, that the fast line is also
+// the slippery one.
 //
 // Each car gets a RING of stamps: each is its own quads from the last stamp
 // to this one, so the ring wraps with no seam to hide and the oldest mark is
@@ -33,7 +51,7 @@
 // only ever lays what it is handed.
 
 import * as THREE from "three";
-import type { GameState } from "@engine";
+import { snowUnder, type GameState, type SnowUnder } from "@engine";
 
 /** Metres of travel between stamps. */
 const SPACING = 0.7;
@@ -49,13 +67,22 @@ const LIFT = 0.04;
  * and the banks thrown outside them are broken snow, which is BRIGHTER than
  * the field it came out of — freshly turned snow catches the light on every
  * facet, and that is what makes a trail read from behind. */
-const FLOOR = new THREE.Color(0x97a6b8);
-const RIM = new THREE.Color(0xd4dce6);
-const CROWN = new THREE.Color(0xeff4fa);
-const BANK = new THREE.Color(0xf7fbff);
+const FLOOR = new THREE.Color(0xa8b6c8);
+/** ...and what the floor becomes once traffic has worked it all the way
+ * down: a polished floor rather than a pressed one, darker and bluer
+ * again. The mix is the pack itself, so the racing line on a white stage
+ * darkens as it is driven. */
+const GLAZE = new THREE.Color(0x8e9db2);
+const RIM = new THREE.Color(0xcfd9e6);
+const CROWN = new THREE.Color(0xf6f9fc);
+const BANK = new THREE.Color(0xffffff);
 /** ...and where the strip meets the untouched field, in the field's own
  * white, so the trail has no drawn edge. */
-const EDGE = new THREE.Color(0xe6ecf4);
+const EDGE = new THREE.Color(0xeceff2);
+
+/** Half the track width the section below is drawn around, m — where the
+ * ruts are, and where the cut that sizes them is read. */
+const TRACK_HALF = 0.74;
 
 /** THE CROSS-SECTION of a ploughed pair of ruts: how far out from the car's
  * centreline each station stands, how far it rises (in ridge heights — see
@@ -86,14 +113,16 @@ const SECTION: { lat: number; rise: number; tone: THREE.Color }[] = [
 /** Quads per stamp — one between each pair of stations. */
 const SPANS = SECTION.length - 1;
 
-/** How high a ridge stands, m, for the snow lying here: a share of the
- * blanket's own depth, floored so a packed snow ROAD (which has no blanket
- * at all — it is bladed and driven) still draws its trail, flat, and capped
- * so a metre of powder does not throw a wall a car could hit. */
-const RIDGE = { of: 0.34, min: 0.012, max: 0.1 };
+/** How high a ridge stands, m, for the snow the car has actually displaced
+ * here: the metres the engine says this ground has been let down by
+ * (`Snowpack.cutAt`), since the snow that came out of the rut is the snow
+ * standing beside it. Floored so a packed snow ROAD — which has almost
+ * nothing left to give — still draws its trail, flat, and capped so a
+ * metre of powder does not throw a wall the car could hit. */
+const RIDGE = { min: 0.012, max: 0.1 };
 
-function ridgeOf(depth: number): number {
-  return Math.min(RIDGE.max, Math.max(RIDGE.min, depth * RIDGE.of));
+function ridgeOf(cut: number): number {
+  return Math.min(RIDGE.max, Math.max(RIDGE.min, cut));
 }
 
 /** How uneven the banks are, as a share of their own height. Snow does not
@@ -111,9 +140,35 @@ function jitter(x: number, z: number): number {
 /** One stamp's worth of section points, world space. */
 type Row = Float64Array;
 
+/** How far the snow has been let down UNDER THIS CAR'S WHEELS, m — the
+ * deeper of the two lines, which is the relief the trail is drawn with.
+ *
+ * Asked at the wheels and never at the middle, and that is not a detail:
+ * the middle of a car is the crown it STRADDLES. Nothing has ever driven
+ * there, the cut is exactly zero however many times the car has been over,
+ * and a trail sized off it is drawn dead flat on ground the wheels either
+ * side of it have ploughed a foot into. */
+function cutUnderWheels(state: GameState): number {
+  const car = state.car;
+  // The driver's right axis in world space is (cos h, -sin h).
+  const rx = Math.cos(car.heading) * TRACK_HALF;
+  const rz = -Math.sin(car.heading) * TRACK_HALF;
+  return Math.max(
+    state.snow.cutAt(car.x + rx, car.z + rz),
+    state.snow.cutAt(car.x - rx, car.z - rz),
+  );
+}
+
+/** Scratch: the snow under a stamp, and the floor's tone for it. One
+ * record each — this runs for every car that is laying a trail, every
+ * frame it moves a stamp's worth. */
+const UNDER: SnowUnder = { rest: 0, base: 0 };
+const FLOOR_NOW = new THREE.Color();
+
 type Ribbon = {
   mesh: THREE.Mesh;
   positions: Float32Array;
+  colors: Float32Array;
   head: number;
   laid: number;
   /** Where the last stamp was laid, and its section. */
@@ -128,6 +183,17 @@ type Ribbon = {
 
 export type SnowMarks = {
   group: THREE.Group;
+  /** THE LIGHT THE TRAIL IS DRAWN IN, set once a frame before laying: the
+   * same ambient the unlit dust takes (`Environment.dustTint`).
+   *
+   * The strip is a decal on a MeshBasic material — it carries its own
+   * colour and the scene's lights pass straight through it, exactly as
+   * they pass through a particle. Left untinted it is the one thing in a
+   * winter frame that does not know what time it is: authored to sit in
+   * the snow at noon, it reads as a stripe of white paint at dusk and as
+   * a lamp at night. One multiply fixes it, and it follows any retune of
+   * the weather for free. */
+  light: (tint: THREE.Color) => void;
   /** Lay this car's trail for the frame, if it is on snow and on its
    * wheels. `ground` is the DRAWN surface under a point. */
   lay: (state: GameState, ground: (x: number, z: number) => number) => void;
@@ -178,6 +244,9 @@ export function createSnowMarks(): SnowMarks {
         colors[(b + v) * 3 + 1] = c.g;
         colors[(b + v) * 3 + 2] = c.b;
       }
+      // ...seeded here and rewritten per stamp: how worked the snow under
+      // a stamp is is a fact about that stamp, and the floor's tone is the
+      // only thing on the strip that reads it.
     }
     // Parked under the world until laid.
     positions.fill(-1000);
@@ -192,6 +261,7 @@ export function createSnowMarks(): SnowMarks {
     return {
       mesh,
       positions,
+      colors,
       head: 0,
       laid: 0,
       lastX: 0,
@@ -246,10 +316,19 @@ export function createSnowMarks(): SnowMarks {
     // handed a new road: start a fresh run rather than drawing the leap.
     if (moved > SPACING * 6) r.joined = false;
     const now = new Float64Array(SECTION.length * 3);
-    cut(now, car, ridgeOf(state.terrain.blanketAt(car.x, car.z)), ground);
+    // What the engine's snow says about this patch: how far the wheels have
+    // let it down (the relief the trail is drawn with) and how worked it
+    // is (the floor's colour). One reading per stamp, at the car — the
+    // strip is under two metres across and the answer does not change
+    // across it by anything the eye could see.
+    snowUnder(state.track, state.terrain, state.nearIndex, car.x, car.z, UNDER);
+    const worked = state.snow.workAt(car.x, car.z, UNDER.base);
+    cut(now, car, ridgeOf(cutUnderWheels(state)), ground);
     if (r.joined) {
       const p = r.positions;
+      const c = r.colors;
       const last = r.last;
+      FLOOR_NOW.copy(FLOOR).lerp(GLAZE, worked);
       for (let span = 0; span < SPANS; span++) {
         const q = (r.head * SPANS + span) * 4;
         const a = span * 3;
@@ -263,11 +342,18 @@ export function createSnowMarks(): SnowMarks {
         put(1, last, b);
         put(2, now, b);
         put(3, now, a);
+        for (let v = 0; v < 4; v++) {
+          const st = SECTION[v === 1 || v === 2 ? span + 1 : span];
+          const tone = st.tone === FLOOR ? FLOOR_NOW : st.tone;
+          c[(q + v) * 3] = tone.r;
+          c[(q + v) * 3 + 1] = tone.g;
+          c[(q + v) * 3 + 2] = tone.b;
+        }
       }
       r.head = (r.head + 1) % STAMPS;
       r.laid = Math.min(STAMPS, r.laid + 1);
-      const attr = r.mesh.geometry.attributes.position as THREE.BufferAttribute;
-      attr.needsUpdate = true;
+      (r.mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+      (r.mesh.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
       r.mesh.visible = true;
     }
     r.lastX = car.x;
@@ -298,5 +384,9 @@ export function createSnowMarks(): SnowMarks {
     material.dispose();
   };
 
-  return { group, lay, forget, reset, dispose };
+  const light = (tint: THREE.Color): void => {
+    material.color.copy(tint);
+  };
+
+  return { group, light, lay, forget, reset, dispose };
 }

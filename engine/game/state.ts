@@ -10,6 +10,7 @@ import type { CarSpec, GearboxMode } from "./defs/cars.ts";
 import type { KerbField, TerrainField, Track, Underfoot, WildObstacle } from "../mapgen/index.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { SandState } from "./sandstorm.ts";
+import type { Snowpack } from "./snowpack.ts";
 import type { TrafficFleet } from "./traffic.ts";
 
 export type CarInput = {
@@ -906,6 +907,13 @@ export type GameState = {
   /** The landscape around the road — the ground the car rides once it
    * leaves the samples, with its water and its solid wild props. */
   terrain: TerrainField;
+  /** R47 — THE SNOW THIS RUN HAS WORKED DOWN, and the only part of the
+   * world the driving actually CHANGES (`snowpack.ts`). Snow remembers
+   * what drove over it: a car in a field leaves a rut it can follow back
+   * out, a second lap is driven on the first one's tracks, and a road
+   * arrives already worn into the two lines the traffic before the stage
+   * left in it. Empty and free on every green stage. */
+  snow: Snowpack;
   /** R26 — the marking standing beside the road: the posts the car flattens
    * and the anti-cut blocks it is thrown by. Placed here rather than by the
    * renderer because one of the two is SOLID, and a block the car is thrown

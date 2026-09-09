@@ -10,7 +10,7 @@
 
 import { STAGE_RULES, finishIndex, type Track, type Underfoot } from "../mapgen/index.ts";
 import { BLOCK, flatTrack, GROUP, GROUP_SHIFT, type FlatTrack } from "../mapgen/flat.ts";
-import { corridorOffset, crossOffset, ROAD_CROSS } from "../mapgen/road.ts";
+import { corridorOffset, crossOffset, ROAD_CROSS, snowSinkAt } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
 
@@ -493,13 +493,22 @@ export function locate(track: Track, x: number, z: number, hint: number, back = 
   return fix;
 }
 
-/** The corridor's height at a signed lateral offset from a sample's centre,
- * relative to its crown: the mat, the shoulder and the slope past it — or,
- * on a deck, the mat alone and nothing outside it. */
+/** The height the CAR RIDES AT, at a signed lateral offset from a sample's
+ * centre, relative to its crown: the mat, the shoulder and the slope past
+ * it — or, on a deck, the mat alone and nothing outside it — less however
+ * far a winter's snow lets the wheels down into itself (R47,
+ * `snowSinkAt`).
+ *
+ * The drawn road and the ridden one are the same surface on every stage
+ * but a white one. On a white one they are a hand's width apart, and the
+ * gap is the point: the world shows the top of the snow, the car is down
+ * inside it, and the two only meet in the wheel tracks, where the snow is
+ * already packed to a floor. */
 function profileOf(s: Track["samples"][number], lateral: number): number {
-  if (s.deck == null) return corridorOffset(s, lateral, s.width);
+  const sink = snowSinkAt(s, lateral, s.width);
+  if (s.deck == null) return corridorOffset(s, lateral, s.width) - sink;
   const half = s.width / 2;
-  return crossOffset(s, Math.max(-half, Math.min(half, lateral)), s.width);
+  return crossOffset(s, Math.max(-half, Math.min(half, lateral)), s.width) - sink;
 }
 
 /** How sharply the road's CROSS-SECTION curves under the car, 1/m —

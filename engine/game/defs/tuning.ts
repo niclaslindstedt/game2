@@ -2417,6 +2417,89 @@ export const TUNING = {
     natureDigSpeed: 35,
   },
 
+  /** WHAT DEPTH OF SNOW COSTS THE CAR. The surface rows above say what
+   * snow IS; this says what there being a lot of it does, which is a
+   * different question and the one that separates a white stage from a
+   * grey one with a white paint job (`snowpack.ts`, `CLIMATE.pack`).
+   *
+   * Every term is read off ONE number — `snowWade`, how much snow stands
+   * above where the wheels are riding, which is the snow the car is
+   * actually pushing out of the way. It is the whole blanket in fresh
+   * powder and almost nothing in a worn track, so a car that has been
+   * through here once finds it easier the second time, and one following
+   * somebody else's line finds it easier the first.
+   *
+   * All three are stated AT `ref`, which is what a car wades on the
+   * untouched blanket a stage at freezing lays (`CLIMATE.blanket`) — so
+   * an untouched winter stage is the stage it has always been, and
+   * everything here is a departure from it in one direction or the
+   * other. */
+  snow: {
+    /** The depth every number below is quoted at, m. */
+    ref: 0.2,
+    /** COMPACTING IT: the deceleration ploughing `ref` of snow costs at a
+     * crawl, m/s². Charged as a FORCE rather than as drag, because that is
+     * what it is — pressing the column under the tyre down to the density
+     * that will carry the car takes the same work at 10 m/s as at 30. It
+     * is what a car has to overcome to GET GOING in a field; what decides
+     * how fast it can then go is `sweep`. */
+    plough: 0.5,
+    /** ...and how it grows with depth. Snow's pressure–sinkage curve is a
+     * power law and the exponent is comfortably over 1 — twice the depth
+     * is nearly three times the resistance, which is why deep snow is a
+     * wall rather than a nuisance. */
+    exponent: 1.5,
+    /** ...and THE SNOW THROWN ASIDE, (m/s²) per (m/s)² at `ref` — the half
+     * of the resistance that grows with SPEED, because the snow in front of
+     * the car has to be got out of the way and getting it out of the way
+     * faster costs more. Compacting the column dominates at a crawl; past
+     * walking pace this is nearly all of it, and it is what puts a CEILING
+     * on deep snow rather than merely a tax on it. A car in a field is
+     * slow because it cannot go fast, which is what deep snow actually
+     * does to one — and a car in a worn track has almost nothing to throw
+     * and runs. That contrast is the whole game of a winter stage.
+     *
+     * It is what stops the model being a rounding error at pace: the
+     * constant terms are a couple of m/s² against an engine making eight,
+     * so without this a rally car simply drove through a metre of powder
+     * at a hundred. */
+    sweep: 0.0026,
+    /** THE BELLY, m. Past this the snow is over the sills and the car is
+     * bulldozing with its own floor instead of parting it with four
+     * wheels — the mobility limit every over-snow vehicle is designed
+     * around, and the reason a stuck car is stuck rather than slow. */
+    clearance: 0.3,
+    /** ...and what a metre of snow past the belly costs, m/s² per m. Kept
+     * modest on purpose: the brief for this surface is that leaving a snow
+     * road COSTS and that getting back is always possible (`surfaces`
+     * above), so the belly is a heavy tax on the deepest cold powder and
+     * never a wall a run ends against. */
+    bulldoze: 4,
+    /** THE WALL OF A RUT, (m/s²) per m of it. The snow a wheel pressed
+     * down is gone; the snow beside it is not, so a track has a shoulder,
+     * and a car sliding out of its own line has to climb it. This is the
+     * tramline every winter driver knows: the ruts steer the car, a lane
+     * change has to be asked for at a shallow angle, and asking for it at
+     * a sharp one is how a car ends up in the field. Read against the
+     * LATERAL speed alone — the wall does nothing to a car going along
+     * it, which is the whole point of it. */
+    wall: 24,
+    /** How far outboard of a wheel the wall is measured, m: past the tyre
+     * it pressed, into the snow it did not. */
+    wallOut: 0.7,
+    /** WHERE THE WHEELS THAT DO THE PACKING ARE, m from the car's middle:
+     * `wheelAt` across (half the track width), `axleAt` along (half the
+     * wheelbase). A rally car's track is about a metre and a half and its
+     * wheelbase a little under three, near enough for every car in the
+     * catalogue — and near enough is what is wanted, because these decide
+     * where a trail's two ruts and the crown between them fall, and a
+     * trail that changed shape with the car would stop reading as a trail
+     * the moment a field of them crossed. The renderer's own trail
+     * (`snow-marks.ts`) is drawn on the same track width. */
+    wheelAt: 0.74,
+    axleAt: 1.35,
+  },
+
   hills: {
     /** Fraction of real gravity felt along the road grade — climbing costs
      * speed, a descent gives it back. Kept arcade-soft so the top of a long

@@ -14,6 +14,7 @@ import {
   SEASONS,
   TUNING,
   blanketDepth,
+  packedDepth,
   createGame,
   defaultTemperature,
   fallsAsSnow,
@@ -27,6 +28,7 @@ import {
   rollSnowHabit,
   SNOW_HABITS,
   snowBite,
+  wearAt,
   snowHabits,
   snowlineOf,
   step,
@@ -300,10 +302,17 @@ describe("a stage in winter", () => {
     expect(drawn - ridden).toBeCloseTo(depth * (1 - CLIMATE.blanket.ride), 6);
     // ...and the bare country under both is the summer's.
     expect(drawn - depth).toBeCloseTo(dry.latticeAt(x, z), 6);
-    // On the road there is no blanket: the ribbon is the ground.
+    // On the road there is no BLANKET — that is the country's, and the
+    // corridor is cleared of it. What the road carries is its own cover
+    // (R47, `TrackSample.snow`): a fraction of the blanket, because it has
+    // been bladed and driven, and standing over the summer's ribbon rather
+    // than instead of it.
     const s = track.samples[i];
     expect(terrain.blanketAt(s.x, s.z)).toBe(0);
-    expect(terrain.groundAt(s.x, s.z)).toBeCloseTo(dry.groundAt(s.x, s.z), 6);
+    expect(s.snow).toBeGreaterThan(0);
+    expect(s.snow).toBeLessThan(depth);
+    const lying = packedDepth(s.snow, wearAt(0, s.width));
+    expect(terrain.groundAt(s.x, s.z)).toBeCloseTo(dry.groundAt(s.x, s.z) + lying, 6);
     // A summer country has none anywhere.
     expect(dry.blanketAt(x, z)).toBe(0);
   });

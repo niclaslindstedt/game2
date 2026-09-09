@@ -44,6 +44,18 @@ export type GroundUnder = {
   country: number;
   /** Ground elevation under the car before this step's move. */
   groundY: number;
+  /** R47 — HOW MUCH RISE IS ONLY SNOW, m: the depth of it standing under
+   * the wheels here (`snowpack.ts`). A face check charges a car for ground
+   * that came up faster than its wheels could climb, and snow is not that
+   * ground — a bank of it is displaced by the car rather than hit by it,
+   * which is the whole reason a rally car survives leaving a white road
+   * and does not survive leaving a dry one. So a rise up to this is
+   * absorbed before the contact model is asked anything: a berm at the
+   * verge, the wall of a rut being climbed out of sideways, and the
+   * shoulder a trail throws are none of them collisions.
+   *
+   * Absent off a winter stage, where it is the zero it has always been. */
+  snowGive?: number;
 };
 
 /** Where the car stands now: `centre` is the ground under its middle, `seat`
@@ -82,6 +94,23 @@ export type GroundContext = GroundUnder & {
    * under the middle, because the footprint's mean plunges as the front
    * wheels go over two metres before the middle does. */
   lip?: boolean;
+  /** R47 — HOW MUCH SNOW THE WHEELS ARE PLOUGHING here, m: what stands
+   * above the height they are riding at (`snowWade`, climate.ts). Zero on
+   * every stage but a white one, and near enough zero in a worn wheel
+   * track, which is the whole of what makes a track the fast line. What it
+   * costs is `TUNING.snow`. */
+  snowWade: number;
+  /** ...and HOW WORKED that snow is, 0 (never driven on) to 1 (as packed
+   * as traffic gets it). It is already spent in `hold` above — a polished
+   * track holds worse than the powder beside it — and the renderer reads
+   * it to know how dark to draw the trail. */
+  snowPack: number;
+  /** ...and THE WALL OF THE RUT the car is in, m: how much higher the snow
+   * stands just outboard of the wheels on the side the car is sliding
+   * toward than it does under them. Zero on flat snow. This is the
+   * tramline — a rut steers the car, and coming out of one sideways is
+   * climbing a bank. */
+  snowWall: number;
   /** Current wind velocity, world space m/s. */
   windX: number;
   windZ: number;
@@ -297,7 +326,10 @@ export function standOn(
   stats: RunStats,
 ): void {
   const run = Math.hypot(car.x - fromX, car.z - fromZ);
-  if (run > 1e-4 && at.seat - car.y > run * climbNow(car)) {
+  // R47 — the snow standing here is a rise the car is never charged for
+  // (`GroundUnder.snowGive`): it gives way, and what it costs is the
+  // ploughing already spent on it in car.ts, not a fold.
+  if (run > 1e-4 && at.seat - car.y > run * climbNow(car) + (under.snowGive ?? 0)) {
     hitFace(spec, car, under.groundAt, (at.seat - car.y) / run, fromX, fromZ, events, stats);
     // The contact gave part of the step back, so the car is no longer
     // standing where the seat above was measured.

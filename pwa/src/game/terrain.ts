@@ -216,9 +216,34 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // The snow is not the palette's: it is the one ground every country
   // paints the same, a cool off-white with a shaded blue-grey through it,
   // and it goes over whatever the country was doing under it.
-  const snow = new THREE.Color(0xeef2f7);
-  const snowShade = new THREE.Color(0xd2dbe6);
+  const snow = new THREE.Color(0xf8fbff);
+  const snowShade = new THREE.Color(0xc9daf2);
   const snowTone = new THREE.Color();
+  /** R47 — HOW MUCH BRIGHTER THAN ITS OWN PAINT SNOW RENDERS. Every other
+   * ground in the game is a dark material under a bright sky and comes out
+   * near the colour it was authored at. Snow is the opposite: it returns
+   * something like nine tenths of everything that lands on it, which is
+   * more than a material multiplied by a light can say. Painted at plain
+   * white it still arrives GREY — the ground detail map takes a few per
+   * cent off it and tints it warm, the key light is a warm sun, and a
+   * winter sun is low, so the diffuse term on flat ground is well under
+   * one. Measured on a taiga winter, white paint rendered #c4c4bb: a warm
+   * three-quarter grey, on the one surface a player would describe as
+   * white before anything else about it.
+   *
+   * So the tone is pushed PAST white and allowed to clip, which is what
+   * snow does to an eye and to a camera both. The shaded side still reads,
+   * because `snowShade` is a real blue-grey and the noise between them is
+   * what gives a snowfield its form; what clips is the lit side, which is
+   * the half that is supposed to be blinding.
+   *
+   * ...and the tone is COOL, for the same reason it is bright: the light
+   * it is standing under is a warm sun (`sunLight`, environment.ts) over a
+   * warm-flecked grit map, and a neutral white painted under both renders
+   * beige. Snow reads as snow when it is a touch bluer than the light
+   * falling on it, which is also what it really is — most of what fills a
+   * snowfield's shadows is sky. */
+  const SNOW_GLARE = 1.28;
   // R40 — the country's own rules: which regions quilt it, what its
   // unsealed road is made of, and the heights its zones stand at.
   const rules = biomeRules(track.knobs.biome);
@@ -445,7 +470,10 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
         const window = valueNoise(x, z, SNOW.patch, noiseSeed + 67);
         const cover = lie * clamp01((window - 0.55 + 0.55 * closed) / 0.22);
         if (cover > 0) {
-          snowTone.copy(snow).lerp(snowShade, valueNoise(x, z, 46, noiseSeed + 71) * 0.7);
+          snowTone
+            .copy(snow)
+            .lerp(snowShade, valueNoise(x, z, 46, noiseSeed + 71) * 0.55)
+            .multiplyScalar(SNOW_GLARE);
           out.lerp(snowTone, cover);
         }
       }

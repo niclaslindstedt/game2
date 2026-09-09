@@ -576,6 +576,12 @@ export type TerrainField = {
    * own surface comes from the track samples — this is what tells the
    * physics that a car exploring a spur is on tarmac, not in a field. */
   spurSurfaceAt: (x: number, z: number) => Surface | null;
+  /** Whether this country carries a winter's blanket ANYWHERE its ground
+   * stands (`snowyCountry`, climate.ts) — what everything that would
+   * otherwise have to probe the field to find out asks instead. False on
+   * every green stage and on the training ground, and a cheap no for the
+   * whole snow model there. */
+  snowy: boolean;
   /** THE WINTER'S BLANKET at a point, m (climate.ts): how deep the snow
    * the open country lies under is here — zero on and beside a road, on
    * the water, and everywhere the climate leaves the ground bare. The
@@ -3384,6 +3390,7 @@ export function createTerrain(track: Track): TerrainField {
     ceilingAt,
     coneAt,
     spurSurfaceAt,
+    snowy,
     blanketAt,
     iceAt,
     frozenWater: land.frozen,

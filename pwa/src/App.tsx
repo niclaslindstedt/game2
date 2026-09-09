@@ -1728,6 +1728,9 @@ export function App() {
       hour: spec.hour,
       weather: spec.weather,
       season: spec.season,
+      // R47 — the run's own snow, so a solid field cuts ONE set of tracks
+      // into it and everybody drives everybody's (`snowpack.ts`).
+      snow: gameRef.current?.snow,
     });
   };
 

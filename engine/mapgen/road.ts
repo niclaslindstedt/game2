@@ -28,6 +28,7 @@
 // three move together — which is the whole reason it is not three sets of
 // numbers in three files.
 
+import { packedDepth, snowWade } from "../game/climate.ts";
 import type { BridgeDeck, Surface, Track, TrackSample } from "./compile.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 
@@ -232,6 +233,21 @@ export type RoadShape = {
    * graded plane: no crown, no camber, no wheel tracks, because two roads
    * cannot each keep their own and still be one surface. */
   flat?: number;
+  /** R47 — how deep the UNTOUCHED snow lying on this piece of road stands,
+   * m: what a winter left on it, less everything the blade and the traffic
+   * before this car took (`roadSnow`, climate.ts). Zero on every road that
+   * is not a snow road, which is what keeps every other stage in the game
+   * exactly the stage it was.
+   *
+   * It is not laid flat. What decides how much of it is still standing at
+   * a given point across the road is how much has been DRIVEN over there
+   * — R16's five lines, `wearAt` — so a winter road is a cover over the
+   * crown with two tracks worn down through it and a deeper margin at the
+   * edges no wheel touches. That is the shape the eye reads a snow road
+   * by, and the shape the physics rides: the tracks are the low line and
+   * the fast line, and they are also the polished one (`snowGrip`). */
+  snow?: number;
+
   /** R17 — how far the MAT sits off the centerline, m, positive to the
    * right of travel. Zero everywhere but a junction's mouth, and the only
    * place in the model where a road's surfacing is not centred on the line
@@ -303,7 +319,45 @@ export function crossOffset(shape: RoadShape, lateral: number, width: number): n
   if (kind === "gravel" && t > ROAD_CROSS.berm.from) {
     y += ROAD_CROSS.berm.height * open * ((t - ROAD_CROSS.berm.from) / (1 - ROAD_CROSS.berm.from));
   }
-  return y;
+  // R47 — ...and the winter lying on top of all of it, thinned wherever
+  // the traffic before this car packed it down (`snowWear`). Added last
+  // because it is a LAYER: the road under it still has its crown, its
+  // tracks and its berm, and the snow sits on that shape rather than
+  // replacing it.
+  return y + packedDepth(shape.snow ?? 0, snowWear(lateral, width, open));
+}
+
+/** R47 — HOW FAR THE WHEELS RIDE BELOW THE DRAWN TOP of a snow road at a
+ * lateral offset, m and never negative. The layer `crossOffset` adds is
+ * what the world SHOWS; a car standing on loose snow is inside it, down on
+ * what its own weight has packed (`snowRide`, climate.ts), exactly as it
+ * is out in the blanket. So the physics reads the road's profile and takes
+ * this off it, and the difference between the two is the snow the sills
+ * are pushing through.
+ *
+ * Zero in the wheel tracks, where the snow is already a floor and there is
+ * nothing left to sink into — which is the whole reason the tracks are the
+ * fast line, and why a car put a wheel out of them climbs.
+ *
+ * `offset` is measured from the CENTERLINE, unshifted, because that is
+ * what the physics has; the mat's own shift is applied here. Past the mat
+ * the edge's answer is held: the verge carries the edge's snow out with
+ * it (`corridorOffset`), so it carries the edge's sink too. */
+export function snowSinkAt(shape: RoadShape, offset: number, width: number): number {
+  const snow = shape.snow ?? 0;
+  if (snow <= 0) return 0;
+  const half = width / 2;
+  const lateral = Math.max(-half, Math.min(half, offset - (shape.shift ?? 0)));
+  return snowWade(snow, snowWear(lateral, width, 1 - clamp01(shape.flat ?? 0)));
+}
+
+/** R47 — how worked the snow at a lateral offset already was before this
+ * car arrived, 0..1: the road's own wear pattern (`wearAt`), flattened
+ * onto a junction platform the way the paint is, because two roads that
+ * have been graded into one plane have one set of tracks between them and
+ * neither's own. */
+export function snowWear(lateral: number, width: number, open: number): number {
+  return wearAt(lateral, width) * open + 0.55 * (1 - open);
 }
 
 function clamp01(v: number): number {

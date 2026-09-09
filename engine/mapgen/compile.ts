@@ -37,6 +37,7 @@ import { buildableAt, createLandField } from "./land.ts";
 import { biomeRules } from "./biomes.ts";
 import {
   resolveClimate,
+  roadSnow,
   snowBite,
   snowlineOf,
   temperatureAt,
@@ -178,6 +179,12 @@ export type TrackSample = {
    * and the bot's plan both read it, so the corner on the pass is braked
    * for as the corner it is. */
   bite: number;
+  /** R47 — how deep the snow lying on this piece of road stands where
+   * nothing has driven on it, m; 0 on every surface but snow. Its shape
+   * across the width — a cover over the crown, worn away in the tracks —
+   * is `crossOffset`'s (road.ts), and how a car works it down further is
+   * `snowpack.ts`. */
+  snow: number;
   /** Set where the road is a bridge DECK: the surface is road, but there is
    * a channel of water under it instead of ground, and the kind says what
    * carries it — trunks and planks, or concrete piers (R13). */
@@ -2711,6 +2718,13 @@ function createCompiler(
                 ? "asphalt"
                 : loose;
         const bite = surface === "snow" ? snowBite(temperatureAt(track.climate, crown)) : 1;
+        // R47 — ...and how much of the winter is still LYING on it. A road
+        // is bladed and driven, so it carries a fraction of the blanket
+        // standing in the field beside it (`roadSnow`) — and that fraction
+        // is thinned again across the width by whatever wore the tracks
+        // into it (road.ts, `crossOffset`). Read at the crown's own height,
+        // like the bite, because both are facts about the air up here.
+        const snow = surface === "snow" ? roadSnow(temperatureAt(track.climate, crown)) : 0;
         const sample: TrackSample = {
           x: cursor.x,
           z: cursor.z,
@@ -2729,6 +2743,7 @@ function createCompiler(
             bumps(cursor.s, surface, bridge || dip !== null || deckY !== null || tunnel),
           surface,
           bite,
+          snow,
           deck: bridge ? ((built.crossing ?? "timber") as BridgeDeck) : null,
           tunnel,
           lift: 0,
