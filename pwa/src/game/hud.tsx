@@ -758,7 +758,15 @@ export function Hud({
           switching off the corner calls is a driver saying they know the
           stage, not one who wants to stay lost.
           WATCHING, the slot is the spectator's banner instead: there is
-          nobody in this car to call a corner to, and nobody to send home. */}
+          nobody in this car to call a corner to, and nobody to send home.
+          IN A REPLAY the corner and jump calls come off as well, and for the
+          same reason: a call is a WARNING, told to somebody who has not seen
+          the corner yet and has to decide what to do about it. Nobody
+          watching a recording is deciding anything — the car has already
+          taken the corner, and the sign over it is the one thing on screen
+          claiming otherwise. The way home and TURN AROUND stay: those are
+          not warnings but the story of a run that went off, which is
+          precisely what a replay of it is worth watching for. */}
       {spectate ? (
         <SpectateBanner {...spectate} />
       ) : (
@@ -768,7 +776,9 @@ export function Hud({
         ) : snap.wrongWay ? (
           <TurnAroundCall />
         ) : (
-          show.pacenotes && snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
+          !replaying &&
+          show.pacenotes &&
+          snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
         ))
       )}
 
