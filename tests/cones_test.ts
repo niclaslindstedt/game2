@@ -418,7 +418,9 @@ describe("the stone spilled at the road's edge (R16)", () => {
   /** Every tuft the spill grew over 300 samples of road, each against the
    * nearest sample: how far onto that road's mat it stands, and what that
    * road is surfaced with. */
-  const tufts = (on = track): { onto: number; surface: string; deck: boolean }[] => {
+  const tufts = (
+    on = track,
+  ): { onto: number; surface: string; deck: boolean; inside: boolean }[] => {
     const rng = createRng(0x51ed);
     const spill = buildRoadSpill(
       on,
@@ -435,17 +437,24 @@ describe("the stone spilled at the road's edge (R16)", () => {
     const [, grass] = spill.meshes;
     const m = new THREE.Matrix4();
     const at = new THREE.Vector3();
-    const found: { onto: number; surface: string; deck: boolean }[] = [];
+    const found: { onto: number; surface: string; deck: boolean; inside: boolean }[] = [];
+    const isSealed = (i: number): boolean =>
+      i >= 0 &&
+      i < on.samples.length &&
+      (on.samples[i].surface === "asphalt" || on.samples[i].deck != null);
     for (let i = 0; i < grass.count; i++) {
       grass.getMatrixAt(i, m);
       at.setFromMatrixPosition(m);
       let nearest = Infinity;
       let closest = on.samples[0];
-      for (const s of on.samples) {
+      let closestAt = 0;
+      for (let j = 0; j < on.samples.length; j++) {
+        const s = on.samples[j];
         const d = Math.hypot(s.x - at.x, s.z - at.z);
         if (d < nearest) {
           nearest = d;
           closest = s;
+          closestAt = j;
         }
       }
       // How far onto the MAT, measured across the road rather than as the
@@ -455,7 +464,21 @@ describe("the stone spilled at the road's edge (R16)", () => {
       const r = rightOf(closest.heading);
       const lateral = Math.abs((at.x - closest.x) * r.x + (at.z - closest.z) * r.z);
       const half = (closest.width ?? on.width) / 2;
-      found.push({ onto: half - lateral, surface: closest.surface, deck: closest.deck != null });
+      found.push({
+        onto: half - lateral,
+        surface: closest.surface,
+        deck: closest.deck != null,
+        // WELL INSIDE a sealed run, rather than at its mouth. A mat is
+        // often NARROWER than the loose road it interrupts — seed 2's is
+        // 14.5 m against the stage's 16.15 — so `onto`, which is measured
+        // against the NEAREST sample's own half-width, reads a tuft grown
+        // for the wide gravel verge as standing a metre onto the narrow mat
+        // it happens to be beside. The tuft is correct and the rule is not
+        // broken; the sample it was measured against is the wrong one. Two
+        // samples of sealed road either side is the road spacing the
+        // scatter jitters across.
+        inside: [-2, -1, 0, 1, 2].every((d) => isSealed(closestAt + d)),
+      });
     }
     spill.dispose();
     return found;
@@ -480,10 +503,21 @@ describe("the stone spilled at the road's edge (R16)", () => {
     // R17 — and the seed is SEARCHED for rather than named: the tarmac is a
     // public road laid on the bare country before the rally is routed over
     // it, so which seeds have any is the land's decision and not the dial's.
+    //
+    // ASPHALT OR A DECK, named rather than written as "not gravel". A road
+    // has six surfaces (`Surface`, compile.ts) and the loose ones are three
+    // of them, so "not gravel" also collects sand, snow, ice — and WATER,
+    // which is a ford. A ford is not a poured mat with an edge: it is a wet
+    // crossing the country grows right up to and leans over, so a tuft
+    // standing on it is correct and this assertion is not about it. The
+    // search used to land on a seed with real tarmac first and the bug was
+    // invisible; a rules change re-rolled the routes, seed 1 offered four
+    // samples of ford instead, and the suite reported a rule broken that
+    // was never being tested.
     let sealed: ReturnType<typeof tufts> = [];
     for (const seed of Array.from({ length: 24 }, (_, i) => i + 1)) {
       const grown = tufts(compileStage(seed, "medium", { asphalt: 1 }));
-      sealed = grown.filter((t) => t.surface !== "gravel" || t.deck);
+      sealed = grown.filter((t) => (t.surface === "asphalt" || t.deck) && t.inside);
       if (sealed.length > 0) break;
     }
     expect(sealed.length).toBeGreaterThan(0);

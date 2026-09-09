@@ -1090,15 +1090,28 @@ describe("progress and position", () => {
     state.car.u = 0;
     state.car.w = 0;
     let worst = 0;
+    let measured = 0;
     for (let i = 0; i < Math.round(8 / TUNING.dt); i++) {
       step(state, { ...NEUTRAL_INPUT, throttle: 0.6 });
       if (state.car.airborne || state.offRoad) continue;
       const road = locate(state.track, state.car.x, state.car.z, state.nearIndex);
+      // ...and ON THE CARRIAGEWAY, which `offRoad` alone does not say: it
+      // turns true only past the road edge PLUS the verge, so a car climbing
+      // the bank of a raised sealed section — R36's crossing stands its
+      // tarmac proud of the gravel — is still "on the road" for several
+      // frames while its wheels are most of a metre above the centreline.
+      // That height is the bank's and is perfectly real; it is simply not
+      // what this measures. Driving BACKWARDS down a stage puts the car on
+      // those edges constantly, which is the whole point of the fixture.
+      if (Math.abs(road.lateral) > state.track.width / 2) continue;
+      measured += 1;
       worst = Math.max(worst, Math.abs(state.car.y - road.elevation));
     }
     // The car rides the road it is on. It used to be handed the height of
     // the road it had REACHED, which on the stage this was reported from
-    // was thirteen metres over the closing straight and a lake under it.
+    // was thirteen metres over the closing straight and a lake under it —
+    // a mis-location that lands on the carriageway and so is still caught.
+    expect(measured).toBeGreaterThan(100);
     expect(worst).toBeLessThan(0.5);
   });
 });

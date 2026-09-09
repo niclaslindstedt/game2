@@ -91,6 +91,16 @@ describe("the road and the country", () => {
         const lat = side * (s.width / 2 + TUNING.offTrack.verge);
         const x = mid.x + right.x * lat;
         const z = mid.z + right.z * lat;
+        // R31/R34 — NOT where the road was cut through rock. A face the
+        // shaping could not take up at a climbable grade is declared
+        // through `cutAt`, and standing proud of the road is what a cut
+        // face IS: the country there is rock the blasting left, not ground
+        // the two readers disagree about. `cutAt` is the one declaration
+        // the props, the paint and the analysis all read, so it is what
+        // this reads too. (Seed 3's road runs through one at 3842 m, where
+        // the country stands 16 cm over the verge line and `cutAt` says so;
+        // everywhere else on the stage the two agree to a millimetre.)
+        if (terrain.cutAt(x, z) > 0) continue;
         const road = locate(track, x, z, i).elevation;
         const country = terrain.groundAt(x, z);
         worst = Math.max(worst, Math.abs(road - country));
