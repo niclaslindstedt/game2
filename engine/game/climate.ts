@@ -150,6 +150,70 @@ export const CLIMATE = {
    * the way the wild's own dig is (`surfaces.natureDig`). More than turf,
    * because the sump is in it. */
   dig: 0.7,
+  /** HOW SNOW PACKS UNDER A WHEEL — the whole of the deformation model
+   * (`snowpack.ts`), stated here because it is a fact about snow rather
+   * than about the car that drove over it.
+   *
+   * Snow is the one surface in the game that REMEMBERS. A tyre does not
+   * brush it aside: it compresses it, and the column under the contact
+   * patch goes from the hundred-odd kg/m³ a fresh fall settles at to the
+   * four to six hundred traffic works it up to. The mass does not go
+   * anywhere, so the same snow now stands a fraction of its old height —
+   * and stays there. That is a rut, and it is why the trail behind a car
+   * on a white stage is a real hole in the ground rather than a stain.
+   *
+   *   `floor` — how much of its untouched depth a FULLY worked column
+   *   still stands at. It is the density ratio: fresh over packed, near
+   *   enough 100/330 once the share the tyre throws sideways into the
+   *   banks is counted with the share it presses down.
+   *
+   *   `bite` — and how far one PASS takes it toward that floor. The first
+   *   pass does most of the work and every one after it does less, which
+   *   is the multipass compaction curve every rut in every material
+   *   follows: 0.45, 0.70, 0.83, 0.91… A road is worn, never punched.
+   *
+   *   `road` — what a road CARRIES, as a share of the blanket beside it.
+   *   A stage road has been bladed and driven before the car ever reached
+   *   it, so what lies on it is a fraction of the field's own depth — and
+   *   the fraction is what makes the three levels of a winter road read
+   *   from the seat: the bank at the lip, the cover over the crown, and
+   *   the two tracks worn down through it (`wearAt` is the pack the
+   *   traffic before this car left, R16's five lines).
+   *
+   *   `worn` — WHICH PACK THE SURFACE ROW IS ALREADY TUNED AT, and so the
+   *   line the polish below pivots about. It is the swept crown of a
+   *   driven road (`ROAD_CROSS.rut.centre`, which this matches on
+   *   purpose): the strip between the two tracks, driven over by
+   *   everything that ever used the road and grooved by none of it, which
+   *   is where a car on a rally stage actually puts its middle. Pivoting
+   *   here rather than at either end is what keeps a winter stage the
+   *   stage it was — the line the car drives holds exactly what it always
+   *   held — while the tracks either side of it lose and the untouched
+   *   snow outside them gains.
+   *
+   *   `polish` — and WHAT IT COSTS to drive in them. This is the fact
+   *   about snow that a game almost never says: a worked track holds
+   *   WORSE than the snow beside it. Measured on real winter roads,
+   *   accumulating fresh snow gives a tyre about 0.43, and the compacted,
+   *   polished surface traffic turns it into gives 0.2 to 0.3 — the
+   *   crystals that a tread cuts down into have been rolled into a floor
+   *   that it can only slide on. So the racing line is the fast line and
+   *   the LOOSE line is the one that holds, and a driver on a snow stage
+   *   is choosing between them corner by corner. It is a quarter of the
+   *   spread across a real winter road rather than the whole of it,
+   *   deliberately — the full 1.8 of the measured world inside one road's
+   *   width would be two different games laid side by side — but it is
+   *   spent BOTH ways about `worn`, so a worked track really does hold
+   *   less than this stage used to and not merely less than the powder
+   *   beside it. The temperature half of the same story is `bite` above:
+   *   it is the packed track that glazes.
+   *
+   *   `cell` — and the grain the memory is kept at, m. Small enough to
+   *   tell one wheel track from the other (they are a metre and a half
+   *   apart) and to leave a crown standing between them; big enough that
+   *   a stage's whole trail is tens of thousands of cells rather than
+   *   millions. */
+  pack: { floor: 0.3, bite: 0.45, road: 0.3, polish: 0.22, worn: 0.52, cell: 0.4 },
   /** The season's own temperature at the datum, per country, °C. The
    * taiga's is a boreal year at 62°N; the desert's a hot one at 33°N, its
    * winter the wet season the annuals grow on; the alpine's is the VALLEY
@@ -256,6 +320,62 @@ export function blanketDepth(temperature: number): number {
     B.shallow +
     (B.deep - B.shallow) * clamp01((CLIMATE.freeze - temperature) / (CLIMATE.freeze - B.deepAt))
   );
+}
+
+/** THE SNOW STILL STANDING where it has been worked to `pack`, m — the
+ * mass that fell, at the density traffic has left it at (`CLIMATE.pack`).
+ * `rest` is what lay here untouched. */
+export function packedDepth(rest: number, pack: number): number {
+  return rest * (1 - (1 - CLIMATE.pack.floor) * clamp01(pack));
+}
+
+/** ...and HOW FAR ABOVE THE BARE GROUND THE WHEELS STAND in it, m: the
+ * standing depth less the sink the car's own weight presses out of what is
+ * left loose in it (`CLIMATE.blanket.ride`).
+ *
+ * The two halves move opposite ways, and that is the model: untouched
+ * snow is deep and the car sinks `1 - ride` of the way into it, worked
+ * snow is shallow and the car rides on TOP of it. So the floor under the
+ * wheels descends pass after pass toward `pack.floor` of the original
+ * depth and stops — which is a rut, with a wall of untouched snow either
+ * side of it — while the snow the car has to WADE through (`snowWade`)
+ * falls away to nothing. Untouched snow answers `rest * ride` exactly, so
+ * a stage nobody has driven is the stage it always was. */
+export function snowRide(rest: number, pack: number): number {
+  const worked = clamp01(pack);
+  return packedDepth(rest, worked) * (1 - (1 - CLIMATE.blanket.ride) * (1 - worked));
+}
+
+/** ...and the snow the car is PLOUGHING there, m: what stands above where
+ * its wheels are riding. The one number the resistance is read off — it is
+ * the whole depth in fresh powder and nothing at all in a worn track,
+ * which is why a car follows its own trail out of a field. */
+export function snowWade(rest: number, pack: number): number {
+  return packedDepth(rest, pack) - snowRide(rest, pack);
+}
+
+/** One PASS over snow already worked to `pack`, at `share` of a full
+ * wheel's weight: how worked it is afterward. Diminishing returns, so a
+ * track deepens quickly and then stops (`CLIMATE.pack.bite`). */
+export function packedBy(pack: number, share: number): number {
+  const worked = clamp01(pack);
+  return worked + (1 - worked) * CLIMATE.pack.bite * clamp01(share);
+}
+
+/** How hard snow worked to `pack` holds, as a multiplier on the surface's
+ * own grip: 1 at the pack the row was tuned at (`CLIMATE.pack.worn`, the
+ * swept crown of a driven road), up to `polish` more in untouched snow and
+ * as much less in a track polished to a floor. */
+export function snowGrip(pack: number): number {
+  const P = CLIMATE.pack;
+  return Math.max(0.1, 1 + P.polish * (P.worn - clamp01(pack)));
+}
+
+/** How deep the snow lying ON A ROAD stands at this temperature, m — the
+ * blanket's own depth, less everything the blade and the traffic took
+ * (`CLIMATE.pack.road`). */
+export function roadSnow(temperature: number): number {
+  return CLIMATE.pack.road * blanketDepth(temperature);
 }
 
 /** Whether what falls at this temperature is snow. */

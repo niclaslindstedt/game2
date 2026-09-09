@@ -26,7 +26,8 @@ import { carById, gearedSpec, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { clipKerbs, clipSolids, collideCar } from "./collision.ts";
-import { snowBite, temperatureAt } from "./climate.ts";
+import { CLIMATE, snowBite, snowGrip, snowRide, snowWade, temperatureAt } from "./climate.ts";
+import { createSnowpack, snowUnder, type Snowpack, type SnowUnder } from "./snowpack.ts";
 import { stepCooling } from "./cooling.ts";
 import { calmSand, sandAt, sandWindSpeed, type SandState } from "./sandstorm.ts";
 import { beyondDriving } from "./damage.ts";
@@ -93,6 +94,17 @@ export type CreateGameOptions = {
   /** Inject a pre-compiled track (tests and tooling); defaults to the
    * generated stage for `seed` at `length`. */
   track?: ReturnType<typeof compileTrack>;
+  /** R47 — SHARE ONE STAGE'S SNOW with the runs already on it
+   * (`snowpack.ts`). A field of cars is a field of worlds — each crew has
+   * its own terrain, its own fallen trees, its own everything — but the
+   * snow is the one part of the world worth holding in common, because a
+   * trail nobody else can see is not a trail somebody left. Handed in, a
+   * crew drives the ruts the cars ahead of it cut and cuts its own for the
+   * cars behind; left out, the run gets a pack of its own. Only ever
+   * shared between crews that are STEPPED TOGETHER — a ghost's trace is
+   * written ahead of the clock, and its tracks would appear on a road
+   * nobody has reached yet. */
+  snow?: Snowpack;
   /** Race conditions. The start hour is presentation-only; weather sets the
    * wind band (TUNING.wind.speed); the season and the temperature are the
    * CLIMATE (climate.ts) — they reach the road, so a run handed a compiled
@@ -290,6 +302,11 @@ export function createGame(options: CreateGameOptions): GameState {
   plant(car, terrain.groundAt);
   return {
     seed: options.seed,
+    // R47 — the snow this run works down as it drives (`snowpack.ts`).
+    // White is the terrain's own answer plus the road's: a stage can run
+    // over a snowline without its country lying under a blanket, and the
+    // road it does that on still ruts.
+    snow: options.snow ?? createSnowpack(terrain.snowy || track.samples.some((s) => s.snow > 0)),
     traffic: createTraffic(track, terrain.carParks, options.seed, options.traffic ?? true),
     spec,
     track,
@@ -822,6 +839,10 @@ const GROUND: GroundContext = {
   slope: 0,
   slopeLat: 0,
   roadCurve: 0,
+  snowGive: 0,
+  snowWade: 0,
+  snowPack: 0,
+  snowWall: 0,
   lip: false,
   windX: 0,
   windZ: 0,
@@ -832,6 +853,118 @@ const GROUND: GroundContext = {
   groundAt: () => 0,
   country: 0,
 };
+
+/** The reader `groundAt` uses on a green stage: no snow has ever been
+ * worked anywhere, so nothing is taken off the ground and the whole model
+ * is one closure call that returns zero. */
+const ZERO_CUT = (): number => 0;
+
+/** Scratch for the snow under a point — one record, refilled, because the
+ * readers below run half a dozen times a step and a fresh object each
+ * would be a thousand allocations a second for two numbers. */
+const UNDER: SnowUnder = { rest: 0, base: 0 };
+
+/** R47 — THE SNOW AT ONE POINT: how worked it is, and how far above the
+ * bare ground it is therefore holding the wheels (`snowRide`). Written into
+ * the two scratch numbers below rather than returned, because the step asks
+ * it three times a tick. */
+let standPack = 0;
+let standRest = 0;
+let standRide = 0;
+function snowStand(state: GameState, index: number, x: number, z: number): void {
+  snowUnder(state.track, state.terrain, index, x, z, UNDER);
+  standRest = UNDER.rest;
+  standPack = standRest > 0 ? state.snow.workAt(x, z, UNDER.base) : 0;
+  standRide = standRest > 0 ? snowRide(standRest, standPack) : 0;
+}
+
+/** R47 — WHAT THE SNOW UNDER THE CAR IS DOING TO IT THIS STEP: how much of
+ * it the wheels are ploughing, how worked it is, how hard it therefore
+ * holds, and whether the car is in a rut with a wall to climb out of
+ * (`snowpack.ts`, `TUNING.snow`).
+ *
+ * EVERY READING IS TAKEN AT THE WHEELS, never at the car's middle, and that
+ * is the whole difference between a model and a decoration. The middle of a
+ * car is the crown it STRADDLES: nothing has ever driven there, it is
+ * untouched however many times the car has been over, and a plough depth
+ * read off it is the depth of snow the car is NOT in. Read there, a car
+ * driving back down its own ruts finds them exactly as heavy as fresh
+ * powder and there is no reason to follow anything.
+ *
+ * Read AFTER the two ground branches have said what surface the car is on
+ * and how hard it holds, because the polish is a multiplier on that: the
+ * surface row is tuned at the worked track's own grip, and this only ever
+ * hands grip back where nothing has driven. On a green stage it returns on
+ * its first line. */
+function readSnow(
+  state: GameState,
+  index: number,
+  ctx: GroundContext,
+  sinH: number,
+  cosH: number,
+): void {
+  ctx.snowGive = 0;
+  ctx.snowWade = 0;
+  ctx.snowPack = 0;
+  ctx.snowWall = 0;
+  if (!state.snow.white) return;
+  const car = state.car;
+  // The driver's right axis in world space is (cos h, -sin h).
+  const rx = cosH * T.snow.wheelAt;
+  const rz = -sinH * T.snow.wheelAt;
+  snowStand(state, index, car.x + rx, car.z + rz);
+  const rightRide = standRide;
+  const rightRest = standRest;
+  let pack = standPack;
+  let wade = standRest > 0 ? snowWade(standRest, standPack) : 0;
+  snowStand(state, index, car.x - rx, car.z - rz);
+  const leftRide = standRide;
+  pack = (pack + standPack) / 2;
+  wade = (wade + (standRest > 0 ? snowWade(standRest, standPack) : 0)) / 2;
+  if (rightRest <= 1e-3 && standRest <= 1e-3) return;
+  ctx.snowPack = pack;
+  ctx.snowWade = wade;
+  // Whatever snow is standing under the wheels is rise the face check
+  // gives away rather than charges for — the deeper of the two lines,
+  // because the car only has to be clear of one of them.
+  ctx.snowGive = Math.max(rightRide, leftRide);
+  ctx.hold *= snowGrip(pack);
+  // THE WALL, on the side the car is sliding TOWARD: a rut holds a car
+  // that is going along it and costs it nothing, and the shoulder behind a
+  // car sliding the other way is not in its way.
+  const side = car.w >= 0 ? 1 : -1;
+  const reach = T.snow.wheelAt + T.snow.wallOut;
+  snowStand(state, index, car.x + cosH * side * reach, car.z - sinH * side * reach);
+  ctx.snowWall = Math.max(0, standRide - (side > 0 ? rightRide : leftRide));
+}
+
+/** R47 — AND THE SNOW THE CAR HAS JUST DRIVEN OVER IS PACKED BY IT: four
+ * wheels, at the position the step left them.
+ *
+ * Charged by the DISTANCE covered rather than per tick, and that is the
+ * whole of what makes it a physical model instead of a timer. A pass over
+ * a cell is a pass whether the car crossed it at 40 m/s or crawled it, and
+ * a car standing still packs nothing more than it already has — where a
+ * per-tick charge would have a stationary car sink to the floor of the
+ * snow in a second and a car at speed leave almost no mark at all. */
+function carveSnow(state: GameState, index: number, moved: number): void {
+  const car = state.car;
+  const share = Math.min(1, moved / CLIMATE.pack.cell);
+  if (share <= 1e-4) return;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  const across = T.snow.wheelAt;
+  const along = T.snow.axleAt;
+  for (const lz of [along, -along]) {
+    for (const lx of [across, -across]) {
+      // Forward is (sin h, cos h) and right is (cos h, -sin h).
+      const x = car.x + sinH * lz + cosH * lx;
+      const z = car.z + cosH * lz - sinH * lx;
+      snowUnder(state.track, state.terrain, index, x, z, UNDER);
+      state.snow.carve(x, z, UNDER, share);
+    }
+  }
+}
 
 /** What this step multiplies the drive by, and the SPENDING of the mass
  * start's catch-up: past the end of its window a slot owes nothing more and
@@ -1006,18 +1139,29 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // the road the two branches below are reading the identical surface. A
   // DECK is the exception the ribbon is right about: past a parapet is air,
   // not a verge, and the lattice under a bridge is the river bed.
+  //
+  // R47 — ...and on a white stage, less however far the traffic has
+  // already worked the snow down here (`snowpack.ts`). Everything that
+  // DREW the world drew it at the untouched depth — the tiles, the road
+  // mesh, the shelf — so the trail is a hole taken out of the drawn
+  // ground rather than a shape either reader knows about, and it is
+  // taken out of BOTH of them at once, which is what keeps the seam at
+  // the verge a seam a car drives over.
+  const snow = state.snow;
+  const cut = snow.white ? snow.cutAt : ZERO_CUT;
   const groundAt = (x: number, z: number): number => {
     const fix = locate(track, x, z, preFix.index);
     const share = countryShare(track, fix);
-    if (share <= 0) return fix.elevation;
-    if (share >= 1) return terrain.groundAt(x, z);
-    return fix.elevation + (terrain.groundAt(x, z) - fix.elevation) * share;
+    const sank = cut(x, z);
+    if (share <= 0) return fix.elevation - sank;
+    if (share >= 1) return terrain.groundAt(x, z) - sank;
+    return fix.elevation + (terrain.groundAt(x, z) - fix.elevation) * share - sank;
   };
   const country = countryShare(track, preFix);
   // The ground under the car as the step BEGINS, read off that same one
   // surface: `wheelSpeed` divides the move by `dt`, so a pre-move height
   // from a different reader than the post-move one is the seam again.
-  const groundY = country <= 0 ? preFix.elevation : groundAt(car.x, car.z);
+  const groundY = country <= 0 ? preFix.elevation - cut(car.x, car.z) : groundAt(car.x, car.z);
   let ctx: GroundContext;
   if (preFix.offRoad) {
     // The wild: the terrain owns the ground — the RIDDEN lattice surface
@@ -1134,6 +1278,10 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.groundAt = groundAt;
     ctx.country = country;
   }
+  // R47 — ...and the winter on top of whichever of the two it was: how
+  // deep the snow the wheels are pushing through is, how worked it is,
+  // and what both do to the grip the branch above just settled.
+  readSnow(state, preFix.index, ctx, sinH, cosH);
 
   if (car.rolling) {
     // Past its outside wheels and turning: the body is a shape going over
@@ -1188,6 +1336,15 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const nose = Math.abs(rollTilt(car.pitch)) > T.attitude.pitchMax ? car.pitch : 0;
   if (!car.rolling && !car.airborne && !onItsWheels(car.roll, nose)) {
     state.overturned = { since: state.t };
+  }
+  // R47 — THE TRAIL. The wheels that have just been carried over the snow
+  // packed what they crossed, and it stays packed: the next lap, the next
+  // corner taken twice, and the way back out of the field are all driven
+  // on it. Only a car standing on its wheels leaves one — a car in the
+  // air is over the snow and a rolling one is throwing it about, and
+  // neither is pressing four contact patches into it.
+  if (state.snow.white && !car.airborne && !car.rolling) {
+    carveSnow(state, preFix.index, Math.hypot(car.x - prevX, car.z - prevZ));
   }
 
   const fix = locatePoint(track, car.x, car.z, state.nearIndex);

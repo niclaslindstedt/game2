@@ -106,6 +106,12 @@ export {
   SEASONS,
   blanketDepth,
   defaultTemperature,
+  packedBy,
+  packedDepth,
+  roadSnow,
+  snowGrip,
+  snowRide,
+  snowWade,
   fallsAsSnow,
   frostLine,
   icyCountry,
@@ -126,6 +132,7 @@ export {
   type ClimateChoice,
   type SnowHabit,
 } from "./game/climate.ts";
+export { createSnowpack, snowUnder, type Snowpack, type SnowUnder } from "./game/snowpack.ts";
 export { jumpArc, jumpFlight, jumpSize, type JumpArc, type JumpSize } from "./game/jump.ts";
 export {
   boardHalfWidth,
@@ -251,6 +258,8 @@ export {
   handoverAt,
   vergeOffset,
   wearAt,
+  snowSinkAt,
+  snowWear,
   rutAt,
   junctionDust,
   junctionFlat,

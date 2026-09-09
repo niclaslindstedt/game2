@@ -75,13 +75,51 @@ const D = TUNING.drift;
  * trenching it. The shape is the point: what the wild costs is TIME, never
  * a ceiling — past the dig speed nothing holds the car back but the
  * gearbox it brought, so a long run through open country ends wherever
- * the top gear ends. */
-function wildPull(surface: GroundContext["surface"], speed: number): number {
+ * the top gear ends.
+ *
+ * R47 — and what SNOW takes is charged on the DEPTH of it rather than on
+ * the fact of it (`ctx.snowWade`), quoted at the depth an untouched stage
+ * at freezing lies under (`TUNING.snow.ref`). A car in fresh powder is
+ * digging its sump a trench; the second time down its own trail there is
+ * almost nothing left to dig, and it gets the throttle back. That is the
+ * whole reason a trail is worth following. */
+function wildPull(ctx: GroundContext, speed: number): number {
   const dig =
-    surface === "nature" ? T.surfaces.natureDig : surface === "snowfield" ? CLIMATE.dig : 0;
-  if (dig === 0) return 1;
+    ctx.surface === "nature"
+      ? T.surfaces.natureDig
+      : ctx.surface === "snowfield"
+        ? CLIMATE.dig * clamp(ctx.snowWade / T.snow.ref, 0, 1)
+        : 0;
+  if (dig <= 0) return 1;
   const dug = 1 - clamp(Math.abs(speed) / T.surfaces.natureDigSpeed, 0, 1);
   return 1 - dig * dug;
+}
+
+/** R47 — WHAT PLOUGHING THE SNOW COSTS, m/s² of retardation. Three terms,
+ * and they are three different things happening to the same snow.
+ *
+ * COMPACTING it, which is what a tyre does to the column under it and
+ * takes the same work at 10 m/s as at 30 — a force, not a drag. Snow's
+ * pressure–sinkage curve is a power law, so twice the depth is nearly
+ * three times the work.
+ *
+ * BULLDOZING it, once the snow is over the sills and the car is parting it
+ * with its own floorpan instead of with four wheels — the mobility limit
+ * every over-snow vehicle is designed around, and the difference between a
+ * car that is slow and one that is stuck.
+ *
+ * ...and THROWING it aside, which is the only one of the three that grows
+ * with speed and therefore the only one that decides how fast a car can go
+ * in a field (`TUNING.snow.sweep`). */
+function ploughing(wade: number, speed: number): number {
+  if (wade <= 0) return 0;
+  const S = T.snow;
+  const deep = wade / S.ref;
+  return (
+    S.plough * Math.pow(deep, S.exponent) +
+    S.bulldoze * Math.max(0, wade - S.clearance) +
+    S.sweep * deep * speed * speed
+  );
 }
 
 /** One grounded physics step. Returns events emitted this step. */
@@ -135,7 +173,7 @@ export function stepGrounded(
    * either way, to simply go up the hill. */
   const driveBite = driveBiteOf(spec, surfaceGrip, ctx.slope);
   const surfaceDrag = T.surfaces.drag[ctx.surface];
-  const surfacePower = T.surfaces.power[ctx.surface] * wildPull(ctx.surface, car.u);
+  const surfacePower = T.surfaces.power[ctx.surface] * wildPull(ctx, car.u);
   // Everything the crashes have done, as the multipliers the rest of this
   // function drives through (damage.ts). Read once, never written back:
   // collision.ts owns the ledger, the handling model only spends it.
@@ -767,6 +805,25 @@ export function stepGrounded(
   // the standstill the retire rule is waiting for (damage.ts).
   if (hurt.coastBrake > 0 && !car.reversing) {
     car.u -= Math.sign(car.u) * Math.min(Math.abs(car.u), hurt.coastBrake * dt);
+  }
+  // R47 — ...and THE SNOW IN FRONT OF THE CAR, which is the same kind of
+  // number and the reason a winter stage is a different stage off the
+  // line (`ploughing`). Clamped against the speed the car actually has,
+  // so deep powder brings it to a stop and never drags it backwards.
+  if (ctx.snowWade > 0) {
+    const plough = ploughing(ctx.snowWade, Math.abs(car.u));
+    if (plough > 0) car.u -= Math.sign(car.u) * Math.min(Math.abs(car.u), plough * dt);
+  }
+  // R47 — THE WALL OF THE RUT, spent on the LATERAL speed alone. The snow
+  // a wheel pressed down is gone and the snow beside it is not, so a track
+  // has a shoulder and a car sliding out of its own line has to climb it.
+  // This is the tramline: the ruts hold the car in them, a lane change has
+  // to be asked for gently, and asking for it hard is how a car ends up in
+  // the field. It does nothing at all to a car going ALONG the rut, which
+  // is what separates it from grip.
+  if (ctx.snowWall > 0 && car.w !== 0) {
+    const climb = T.snow.wall * ctx.snowWall * dt;
+    car.w -= Math.sign(car.w) * Math.min(Math.abs(car.w), climb);
   }
   // Grade: gravity along the road — the hills push back (or push on). A
   // face steeper than the car can climb pushes back HARDER, which is what

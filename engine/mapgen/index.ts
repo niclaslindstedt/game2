@@ -54,6 +54,8 @@ export {
   handoverAt,
   vergeOffset,
   wearAt,
+  snowSinkAt,
+  snowWear,
   rutAt,
   junctionDust,
   junctionFlat,

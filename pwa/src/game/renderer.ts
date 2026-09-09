@@ -1305,6 +1305,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // that keeps `fx` is made of the car — the tyre smoke, the shards, the
     // spray, the grit a crash ploughs up.
     const groundFx = dustFx();
+    // The trail is a decal and takes no light of its own, so it is handed
+    // the same ambient the dust is (snow-marks.ts, `light`).
+    marks.light(environment.dustTint());
     if (DUST_RAISED[quality.dust].player) marks.lay(state, drawnGround(state));
     else marks.forget(state);
     // The engine tracks the driven surface — road fords AND the wild's

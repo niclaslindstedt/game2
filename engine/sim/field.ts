@@ -57,6 +57,7 @@ import { collideCars } from "../game/collision.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { GameEvent, GameState, Season, Weather } from "../game/state.ts";
 import { createGame, skipIntro, step } from "../game/step.ts";
+import type { Snowpack } from "../game/snowpack.ts";
 import type { Track } from "../mapgen/index.ts";
 import { botInput, type TrafficCar } from "./bot.ts";
 import { gridSize, headsUpField, massStartGrid, type GridSlot } from "./grid.ts";
@@ -175,6 +176,16 @@ export type FieldStage = {
   hour: number;
   weather: Weather;
   season: Season;
+  /** R47 — the player's own snow, so a SOLID field leaves ONE set of ruts
+   * in it: the crew ahead packs the line the player then drives, and the
+   * player packs the line the crew behind gets (`snowpack.ts`). Left out,
+   * every crew works its own copy and nobody sees anybody else's trail.
+   *
+   * Handed to solid crews only. A GHOST's sim is traced ahead of the clock
+   * — a whole stage of it in the first few seconds — so a ghost sharing
+   * the pack would lay its tracks down a road the player has not reached,
+   * which is a car that has not been there yet leaving marks. */
+  snow?: Snowpack;
 };
 
 /** How near a rival has to be before the contact model is asked about it, m.
@@ -306,6 +317,9 @@ function buildRun(
   const sim = createGame({
     seed: stage.seed,
     carId: entry.crew.carId,
+    // R47 — solid crews share the stage's snow and cut each other's ruts;
+    // ghosts, whose traces run ahead of the clock, never do.
+    snow: plan.contact ? stage.snow : undefined,
     // The crews with the hands take their own gears (`gearboxFor`), which
     // is where the head of a hard field finds its top end.
     gearbox: entry.gearbox,
