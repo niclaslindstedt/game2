@@ -209,14 +209,16 @@ describe("R45 — the grid", () => {
     // alias and so cannot import the rule. A restated number is only safe
     // while something holds the pair — and it is read out of the SOURCE
     // rather than imported, because a plain `.mjs` under `scripts/` carries
-    // no types and the import alone fails the typecheck.
+    // no types and the import alone fails the typecheck. The ink the map is
+    // drawn in is `level-map-ink.mjs`; the renderer beside it re-exports
+    // both numbers, so a caller sees no difference.
     const source = readFileSync(
-      new URL("../scripts/lib/level-map-render.mjs", import.meta.url),
+      new URL("../scripts/lib/level-map-ink.mjs", import.meta.url),
       "utf8",
     );
     const stated = (name: string): number => {
       const found = source.match(new RegExp(`export const ${name} = (-?[\\d.]+);`));
-      if (!found) throw new Error(`level-map-render.mjs no longer states ${name}`);
+      if (!found) throw new Error(`level-map-ink.mjs no longer states ${name}`);
       return Number(found[1]);
     };
     expect(stated("WAYLEAVE")).toBe(P.wayleave);

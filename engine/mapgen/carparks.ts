@@ -65,246 +65,40 @@
 // renderer only DRAWS what is decided here.
 
 import { cellKey } from "../lib/math.ts";
-import { smooth } from "../lib/noise.ts";
 import { createRng, type Rng } from "../lib/prng.ts";
-import { parkedSolids, type ParkedCar } from "./buildings.ts";
-import type { Surface, Track } from "./compile.ts";
-import type { LandField } from "./land.ts";
-import {
-  CELL,
-  createCountryMap,
-  routeCorridor,
-  walkFrom,
-  wayOut,
-  type CountryMap,
-} from "./carpark-map.ts";
-import {
-  signTrail,
-  standBack,
-  trailClearance,
-  walkTrail,
-  type Trail,
-  type TrailProbe,
-} from "./carpark-trail.ts";
+import { parkedSolids } from "./buildings.ts";
+import type { Track } from "./compile.ts";
+import { CELL, routeCorridor, walkFrom, wayOut, type CountryMap } from "./carpark-map.ts";
+import { signTrail, standBack, trailClearance, walkTrail } from "./carpark-trail.ts";
 import { corridorOffset, ROAD_CROSS, roadClearance } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 import type { WildObstacle } from "./solids.ts";
 import { SPUR, followStep, type ShelfBand, type SpurLine, type SpurSample } from "./spurs.ts";
 import { standHeads, type Stand } from "./stands.ts";
 
-const P = R.carPark;
+import {
+  bayLayout,
+  carParkTally,
+  carsFor,
+  JOIN_EASE,
+  JOIN_STRIDE,
+  JOIN_WINDOW,
+  NEAR_CELL,
+  P,
+  padHeight,
+  PLANE_RUN,
+  ROAD_MAX,
+  standKey,
+  wrap,
+  type Access,
+  type CarPark,
+  type CarParkContext,
+  type CarParkField,
+  type CarParkPad,
+} from "./carpark-plan.ts";
+import { createSiting } from "./carpark-site.ts";
 
-function clamp01(t: number): number {
-  return t < 0 ? 0 : t > 1 ? 1 : t;
-}
-
-function wrap(a: number): number {
-  let r = a;
-  while (r > Math.PI) r -= 2 * Math.PI;
-  while (r <= -Math.PI) r += 2 * Math.PI;
-  return r;
-}
-
-export type CarParkPad = {
-  x: number;
-  z: number;
-  y: number;
-  radius: number;
-  grade: { x: number; z: number };
-};
-
-/** The pad's plane at a point: its level at the centre, falling with its
- * grade. What the cars stand on, what the road runs onto, and what the
- * terrain grades the ground to. */
-export function padHeight(pad: CarParkPad, x: number, z: number): number {
-  return pad.y + pad.grade.x * (x - pad.x) + pad.grade.z * (z - pad.z);
-}
-
-/** What the lane out of a car park reaches. `arm` is an abandoned branch
- * (R17), `road` a public road the route never met (`publicroad.ts`), `park`
- * the lane out of an earlier car park — which reaches one of those itself —
- * and `map` the edge of the world, which is the honest answer where the
- * pocket of country the corner sits in carries no road at all. The search
- * prefers the first three and pays a detour for them (`RIM_PENALTY`). */
-export type CarParkAccess = "arm" | "road" | "park" | "map";
-
-export type CarPark = {
-  /** Arc position on the stage of the first stand it serves — what puts the
-   * car parks in order, and what an endless run prunes them by. */
-  atS: number;
-  /** The pad: a disc of graded gravel the terrain grades to the plane
-   * through `y` falling at `grade` (m per m, as a vector in the ground
-   * plane) — a car park on a hillside is a hillside with the cars parked
-   * across it, not a table cut into it. */
-  pad: CarParkPad;
-  /** The aisle's direction — the road arrives at the pad's centre along it,
-   * and the two rows of bays stand either side of it. */
-  heading: number;
-  /** How many bays the blade left — the cars, plus a couple of spaces. */
-  bays: number;
-  cars: ParkedCar[];
-  /** How many people the stands this pad serves hold, all told. What the
-   * cars were counted from, and what the analysis holds them to. */
-  heads: number;
-  /** The lane in: from the public road it leaves to the pad's centre. */
-  road: SpurLine;
-  access: CarParkAccess;
-  trails: Trail[];
-  /** A roll for what the plan does not dictate. */
-  roll: number;
-};
-
-/** Everything the placer has to ask about the world. Functions rather than
- * the terrain's own state, so the module can be driven from a test. */
-export type CarParkContext = {
-  /** R40 — what a bladed road in this country is made of. */
-  loose: Surface;
-  land: LandField;
-  /** Distance from a point to the nearest piece of ROUTE, its start and
-   * finish aprons included, m — or the caller's own reach where nothing is
-   * nearer than that. */
-  routeDistance: (x: number, z: number) => number;
-  /** Distance from a point to the nearest OTHER built thing's edge — a
-   * branch's or a drive's mat, a yard's or a lot's rim, a clearing — or
-   * Infinity when nothing is near. Negative on the thing itself. */
-  builtClearance: (x: number, z: number) => number;
-  /** Ground nothing may stand on or walk across: water, a stream's bed and
-   * banks, the flank of a guard's mound. */
-  blocked: (x: number, z: number) => boolean;
-  /** R31 — the highest the ground may stand at a point for the route's
-   * sake (the terrain's own cone), Infinity where no road reaches. */
-  ceilingAt: (x: number, z: number) => number;
-  /** The ground as the terrain shapes it — what a sign is footed on. */
-  heightAt: (x: number, z: number) => number;
-  /** Called with each car park the moment it is placed, BEFORE the next is
-   * tried: the terrain adds its road and its pad to its indexes here, so
-   * `builtClearance` keeps the next car park off this one. */
-  commit: (park: CarPark) => void;
-  /** The tally: called with the reason every time a candidate is refused.
-   * `carParkTally.note` when absent. */
-  note?: (why: string) => void;
-};
-
-export type CarParkField = {
-  carParks: CarPark[];
-  /** Serve every stand whose road is settled up to `upToS`, and hand back
-   * the ones the country refused — a stand with nowhere within a walk of it
-   * to park, or no way to drive to that place. Nobody is standing at those
-   * (R42), so the caller drops them. */
-  extend: (upToS: number, stands: readonly Stand[], ctx: CarParkContext) => Stand[];
-  /** Distance from a point to the nearest trail's edge, m — Infinity when
-   * none is near. The forest and the scatter keep off a trodden path. */
-  trailClearance: (x: number, z: number) => number;
-  /** Endless: forget the car parks the run has left far behind. */
-  pruneBefore: (s: number) => void;
-};
-
-/** How far a road out of a car park may run, m — a branch's own ceiling. */
-const ROAD_MAX = SPUR.length.max;
-
-/** How far outside the stage's own box a lane will go looking for a road to
- * join, m. The country map's lattice is grown to cover whichever roads
- * stand inside it; past this the road is somewhere the crowd drove FROM,
- * not somewhere a marshal ran a lane out to. */
-const LANE_REACH = 1000;
-
-/** Over how much of its last stretch a lane closes its height onto the
- * road it runs into, m — at least. A lane that meets the road standing
- * higher or lower than this can close at its own grade starts closing
- * further out (`layRoadOut`), because the alternative is arriving beside
- * the road and dropping onto it. */
-const JOIN_EASE = 48;
-/** How far the road that leaves a pad runs ON the pad's own plane before it
- * is allowed to bend away toward the country, m past the rim — so the
- * lane leaves the car park at the car park's own grade and the pad's
- * blend (`easeOntoPad`) has nothing to make up. */
-const PLANE_RUN = 8;
-/** One sample in this many of a road a lane may join goes into the coarse
- * picture the search steers by — a point every couple of dozen metres. */
-const JOIN_STRIDE = 6;
-
-/** How much of the joined road either side of the join a lane may close
- * on, m of that road's own arc.
- *
- * It is the R23 exemption for the road the lane is running INTO — inside it
- * the lane may come near that road, and near nothing else — so it has to be
- * long enough to cover the whole approach. A lane aiming at a public road
- * across open country runs at a shallow angle for the last few hundred
- * metres, and at a window of 120 m every one of the six approaches on seed 5
- * was refused for standing too close to the very road it was about to join. */
-const JOIN_WINDOW = 400;
-
-/** The TALLY: where a probe hangs its counter of refusals. A placement
- * that comes out sparse is refusing, not rolling low, and the terrain
- * field builds the context this module runs under, so a probe cannot hand
- * it one — it sets this instead. Null in the game, always. */
-export const carParkTally: { note: ((why: string) => void) | null } = { note: null };
-
-/** R42 — how many cars a crowd of `heads` arrived in, at `roll`'s carful
- * apiece. Both ends of `occupancy` bind: the answer is never fewer than the
- * cars it takes to carry them (`heads / max`) and never more than the cars
- * they could have filled (`heads / min`), so the count is always somewhere
- * a family-per-car reading of the crowd puts it. */
-export function carsFor(heads: number, roll: number): number {
-  const O = P.occupancy;
-  const perCar = O.min + (O.max - O.min) * clamp01(roll);
-  const cars = Math.ceil(heads / perCar);
-  return Math.max(1, Math.min(P.bays.most, cars));
-}
-
-/** The layout of the bays on a pad, from the count: how many stand in each
- * of the two rows, and the pad's radius round the whole of it. */
-export function bayLayout(bays: number): { perRow: number; length: number; width: number } {
-  const perRow = Math.ceil(bays / 2);
-  return {
-    perRow,
-    length: perRow * P.bays.pitch,
-    width: 2 * P.bays.depth + P.bays.aisle,
-  };
-}
-
-/** The bays of a car park, in row order: the row on the aisle's right first,
- * then the left, each from the back of the pad to the front. A bay is its
- * centre and the way a car nosed into it faces. The engine stands the cars
- * on these; the renderer paints the lines between them. */
-export function parkBays(park: {
-  pad: { x: number; z: number };
-  heading: number;
-  bays: number;
-}): { x: number; z: number; heading: number; row: -1 | 1; index: number }[] {
-  const { perRow } = bayLayout(park.bays);
-  const fx = Math.sin(park.heading);
-  const fz = Math.cos(park.heading);
-  const rx = Math.cos(park.heading);
-  const rz = -Math.sin(park.heading);
-  const lateral = P.bays.aisle / 2 + P.bays.depth / 2;
-  const out: { x: number; z: number; heading: number; row: -1 | 1; index: number }[] = [];
-  for (const row of [1, -1] as const) {
-    for (let i = 0; i < perRow; i++) {
-      const along = (i - (perRow - 1) / 2) * P.bays.pitch;
-      out.push({
-        x: park.pad.x + fx * along + rx * lateral * row,
-        z: park.pad.z + fz * along + rz * lateral * row,
-        heading: park.heading + (row * Math.PI) / 2,
-        row,
-        index: i,
-      });
-    }
-  }
-  return out;
-}
-
-/** A stand's key: a stand has no id, and the two finish banks either side
- * of the line share an arc position, so the facing tells them apart. */
-function standKey(stand: Stand): string {
-  return `${stand.s.toFixed(2)}/${stand.facing.toFixed(4)}`;
-}
-
-/** A point on a public road a car park may leave from. */
-type Access = { line: SpurLine; sample: SpurSample; kind: CarParkAccess; d: number };
-
-/** How big a cell the stand-off field is drawn on, m. */
-const NEAR_CELL = 64;
+export * from "./carpark-plan.ts";
 
 export function createCarParkField(track: Track): CarParkField {
   const carParks: CarPark[] = [];
@@ -399,366 +193,20 @@ export function createCarParkField(track: Track): CarParkField {
     return true;
   };
 
-  /** The country map round a place. A finite stage's box is the stage's
-   * own; an endless one has no box, so the map is the neighbourhood and a
-   * road that leaves it has left. Rebuilt for every car park, because the
-   * built things it keeps a road off change as each one is committed. */
-  const countryMap = (ctx: CarParkContext, near: { x: number; z: number }): CountryMap => {
-    const bounds = track.endless
-      ? {
-          minX: near.x - STREAMED_BOX,
-          maxX: near.x + STREAMED_BOX,
-          minZ: near.z - STREAMED_BOX,
-          maxZ: near.z + STREAMED_BOX,
-        }
-      : track.bounds;
-    // ...and how far past that box the LATTICE has to look. The tarmac a
-    // lane wants to reach is laid across the whole world (R17), and the box
-    // a rally folds itself into is a corner of it: measured over seeds 1-12
-    // at medium, the public road on a stage comes between 175 m and 970 m
-    // of the route, and a lattice that stopped at the escape covered none
-    // of it on ten of the twelve. Extended to whichever roads stand within
-    // `LANE_REACH` of the box, and no further — a lane is a lane, not a
-    // second stage's worth of road.
-    let nearest = Infinity;
-    for (const road of [...track.publicRoads, ...track.spurs]) {
-      for (let i = 0; i < road.samples.length; i += 8) {
-        const s = road.samples[i];
-        const out = Math.max(
-          bounds.minX - s.x,
-          s.x - bounds.maxX,
-          bounds.minZ - s.z,
-          s.z - bounds.maxZ,
-          0,
-        );
-        if (out < nearest) nearest = out;
-      }
-    }
-    const reach = nearest <= LANE_REACH ? nearest : 0;
-    return createCountryMap(
-      bounds,
-      {
-        routeDistance: ctx.routeDistance,
-        builtClearance: ctx.builtClearance,
-        blocked: ctx.blocked,
-        flooded: ctx.land.flooded,
-        corridor,
-      },
-      reach > 0 ? reach + 2 * CELL : undefined,
-    );
-  };
-
-  /** Every road a car park's lane may leave from, and the stretch of each
-   * that is open to it. Three kinds, and the walk over them is the same
-   * walk — what differs is only where a road STARTS being open:
-   *
-   *   an ARM, past its barrier and off the junction's platform, because a
-   *   car arrives from the outside world and never through the tape;
-   *   a PUBLIC ROAD the route never met, open along the whole of it —
-   *   nothing is shut on a road nobody closed;
-   *   and an earlier car park's own LANE, short of its pad, because a lane
-   *   that joins another at its far end is a lane that joins a car park.
-   *
-   * `each` is called with every open point; the two readers below want the
-   * nearest per road and the coarse picture respectively. */
-  const openRoads = (
-    each: (line: SpurLine, kind: CarParkAccess, sample: SpurSample) => void,
-  ): void => {
-    const walk = (line: SpurLine, kind: CarParkAccess, fromS: number, toS: number): void => {
-      for (let i = 0; i < line.samples.length; i += 2) {
-        const sample = line.samples[i];
-        if (sample.s < fromS || sample.s > toS) continue;
-        each(line, kind, sample);
-      }
-    };
-    for (const spur of track.spurs) {
-      if (spur.rail) continue;
-      walk(
-        spur,
-        "arm",
-        Math.max(R.junction.parting, (spur.block?.s ?? SPUR.block.from) + 30),
-        Infinity,
-      );
-    }
-    for (const road of track.publicRoads) walk(road, "road", 0, Infinity);
-    for (const park of carParks) {
-      const end = park.road.samples[park.road.samples.length - 1].s;
-      walk(park.road, "park", 30, end - park.pad.radius - 40);
-    }
-  };
-
-  /** The nearest open point of each road within `P.reach` of a place, the
-   * closest road first. */
-  const accessPoints = (from: { x: number; z: number }): Access[] => {
-    const best = new Map<SpurLine, Access>();
-    openRoads((line, kind, sample) => {
-      const d = Math.hypot(sample.x - from.x, sample.z - from.z);
-      if (d >= P.reach) return;
-      const had = best.get(line);
-      if (!had || d < had.d) best.set(line, { line, sample, kind, d });
-    });
-    return [...best.values()].sort((a, b) => a.d - b.d);
-  };
-
-  /** The nearest point on a road a lane may RUN INTO — an arm past its
-   * barrier, or an earlier car park's own road out — within `within`
-   * metres, or null. Strided: the answer is compared against a clearance
-   * in the tens of metres. */
-  const nearestJoin = (x: number, z: number, within: number): Access | null => {
-    let best: Access | null = null;
-    openRoads((line, kind, sample) => {
-      const d = Math.hypot(sample.x - x, sample.z - z);
-      if (d < within && (!best || d < best.d)) best = { line, sample, kind, d };
-    });
-    return best;
-  };
-
-  /** The roads a lane may run into, as a flat list of points every few
-   * samples — the coarse picture a search steers by. */
-  const joinPoints = (): number[] => {
-    const out: number[] = [];
-    let n = 0;
-    openRoads((_line, _kind, sample) => {
-      if (n++ % (JOIN_STRIDE / 2) === 0) out.push(sample.x, sample.z);
-    });
-    return out;
-  };
-
-  /** The points a pad is judged at: its centre and two rings. Sixteen a
-   * ring, because a stream is a few metres wide and eight would let one
-   * through between two probes. */
-  const padProbes = (x: number, z: number, radius: number): { x: number; z: number }[] => {
-    const out: { x: number; z: number }[] = [{ x, z }];
-    for (let k = 0; k < 16; k++) {
-      const a = (k / 16) * Math.PI * 2;
-      for (const r of [radius * 0.35, radius * 0.7, radius]) {
-        out.push({ x: x + Math.cos(a) * r, z: z + Math.sin(a) * r });
-      }
-    }
-    return out;
-  };
-
-  /** Is this a place a pad could be graded: clear of the route by the pad's
-   * margin, clear of every other built thing, dry, off the streams and the
-   * mounds, and no more than `level` off one plane anywhere across it —
-   * and not standing where the crowd already does. Returns the pad the
-   * place would take, or null. */
-  const padFits = (
-    ctx: CarParkContext,
-    x: number,
-    z: number,
-    radius: number,
-    stands: readonly Stand[],
-    /** The road the pad hangs off, exempt from the built-clearance test
-     * where the road's own mouth runs onto the pad. */
-    exempt: { x: number; z: number; heading: number } | null,
-  ): CarParkPad | null => {
-    const probes = padProbes(x, z, radius);
-    const refuse = (why: string): null => {
-      ctx.note?.(`pad:${why}`);
-      return null;
-    };
-    // A field off the course, not a lay-by beside it: the pad stands clear
-    // of the route by the walk in, and the crowd covers the rest on foot.
-    if (nearRoute(x, z)) return refuse("standoff");
-    const heights: number[] = [];
-    for (const p of probes) {
-      if (ctx.routeDistance(p.x, p.z) < corridor + P.pad.clear) return refuse("route");
-      if (ctx.blocked(p.x, p.z)) return refuse("blocked");
-      if (ctx.land.flooded(p.x, p.z, SPUR.shoreFreeboard)) return refuse("flooded");
-      // The road the pad is reached by runs through its rim: the probes
-      // on that road's own line are not standing on somebody else's.
-      let onRoad = false;
-      if (exempt) {
-        const rx = Math.cos(exempt.heading);
-        const rz = -Math.sin(exempt.heading);
-        const lateral = Math.abs((p.x - exempt.x) * rx + (p.z - exempt.z) * rz);
-        onRoad = lateral < P.road.width / 2 + ROAD_CROSS.reach + 1;
-      }
-      if (!onRoad && ctx.builtClearance(p.x, p.z) < 6) return refuse("built");
-      // The ground as the terrain has already SHAPED it, not the bare
-      // country: beside the road R31 has cut the hillside back to its cone,
-      // and a pad fitted to the hill that was there before the cut is a pad
-      // standing over the cone at its near rim, on every stage with any
-      // relief in it.
-      heights.push(ctx.heightAt(p.x, p.z));
-    }
-    // The plane the pad is graded to: the least-squares fit through the
-    // probes, which on two symmetric rings round the centre is the mean
-    // height and the moment of the heights about each axis. Held to a
-    // grade a car park can be parked on; steeper country than that is a
-    // hillside, and the residual says so.
-    let sum = 0;
-    let mx = 0;
-    let mz = 0;
-    let spread = 0;
-    probes.forEach((p, i) => {
-      sum += heights[i];
-      mx += heights[i] * (p.x - x);
-      mz += heights[i] * (p.z - z);
-      spread += (p.x - x) * (p.x - x);
-    });
-    const y = sum / probes.length;
-    const grade = { x: mx / spread, z: mz / spread };
-    const steep = Math.hypot(grade.x, grade.z);
-    if (steep > P.pad.maxGrade) {
-      grade.x *= P.pad.maxGrade / steep;
-      grade.z *= P.pad.maxGrade / steep;
-    }
-    const pad: CarParkPad = { x, z, y, radius, grade };
-    // R31 — and nowhere above the terrain's OWN cone: a pad is the floor
-    // on the cone (terrain.ts), so a plane standing over it is the wall
-    // beside the road the cone exists to take down. The terrain's cone and
-    // not a restatement of it at the verge's climb — the cut is made at
-    // the grade R34 gives the road, and a gentler copy refused half the
-    // country beside every road with relief in it.
-    let wall = false;
-    probes.forEach((p, i) => {
-      const level = padHeight(pad, p.x, p.z);
-      if (Math.abs(level - heights[i]) > P.pad.level) heights[i] = NaN;
-      if (level > ctx.ceilingAt(p.x, p.z)) wall = true;
-    });
-    if (heights.some((h) => Number.isNaN(h))) return refuse("level");
-    if (wall) return refuse("band");
-    // Never under the crowd: a pad's blend would regrade the ground a stand
-    // is standing on.
-    for (const stand of stands) {
-      const back = standBack(stand);
-      for (const q of [stand, back]) {
-        if (Math.hypot(q.x - x, q.z - z) < radius + 4) return refuse("stand");
-      }
-    }
-    for (const other of carParks) {
-      if (Math.hypot(other.pad.x - x, other.pad.z - z) < P.pad.apart) return refuse("apart");
-    }
-    return pad;
-  };
-
-  /** One step of a lane's height: the minor road's rule (`followStep`), at
-   * a car park lane's own grade. */
-  const profileStep = (y: number, slope: number, target: number): { y: number; slope: number } =>
-    followStep(y, slope, target, P.road.maxGrade);
-
-  /** The pad's plane's own slope along a heading, m per m — what a lane
-   * that leaves the pad along it is already climbing. */
-  const planeSlope = (pad: CarParkPad, heading: number): number =>
-    pad.grade.x * Math.sin(heading) + pad.grade.z * Math.cos(heading);
-
-  /** Is the lane, as it stands, a road end to end — no step in it steeper
-   * than a lane or a pad is built to? The last word on a lane, asked
-   * after the pad's blend: everything above lays the profile to arrive on
-   * the plane, and where the country gave it too short a run to, the blend
-   * turns what is left into a ramp. A lane that fails this is not built,
-   * and the search tries another way in (R42: reject, never repair). */
-  const gradesHold = (samples: SpurSample[]): boolean => {
-    const most = Math.max(P.road.maxGrade, P.pad.maxGrade) + 0.02;
-    for (let i = 1; i < samples.length; i++) {
-      const run = samples[i].s - samples[i - 1].s;
-      if (run <= 1e-6) return false;
-      if (Math.abs(samples[i].elevation - samples[i - 1].elevation) > most * run) return false;
-    }
-    return true;
-  };
-
-  /** Ease a lane's FIRST stretch off the road it leaves, so a car turning
-   * in rides that road's cross-section instead of dropping off it.
-   *
-   * A lane that is searched out over the country (`layRoadOut`) arrives at
-   * the road it joins on that road's CROWN — which on tarmac stands
-   * `asphaltLift` proud of the country and cambers away either side — and
-   * then carries on at its own height. The terrain lays the joined road's
-   * mat out to `ROAD_CROSS.reach` past its edge, so the lane's first few
-   * metres run across ground that is the road's, not theirs: a quarter of a
-   * metre of step at the mouth of every join, which the lane roller finds
-   * one metre in. `tryAccess` never had it because a lane leaving a road
-   * square is laid ON the cross-section from the start; this is the same
-   * thing for a lane that arrives at an angle, blended out over the mat so
-   * the lane's own profile takes over where the road's stops. */
-  const easeOffJoin = (
-    samples: SpurSample[],
-    join: { sample: SpurSample; line: SpurLine },
-  ): void => {
-    const at = join.sample;
-    const half = join.line.width / 2;
-    const lip = half + ROAD_CROSS.reach;
-    const shape = { surface: at.surface, lift: at.lift, flat: at.flat };
-    const rx = Math.cos(at.heading);
-    const rz = -Math.sin(at.heading);
-    for (const sample of samples) {
-      if (sample.s > lip) break;
-      const lateral = (sample.x - at.x) * rx + (sample.z - at.z) * rz;
-      const on =
-        at.elevation +
-        corridorOffset(shape, Math.max(-lip, Math.min(lip, lateral)), join.line.width);
-      // The road's own surface while the lane is on its mat, then handed
-      // back to the lane over the verge — the same hand-over R16 gives the
-      // ground beside any road.
-      const t = smooth(clamp01((Math.abs(lateral) - half) / ROAD_CROSS.reach));
-      sample.elevation = on * (1 - t) + sample.elevation * t;
-    }
-  };
-
-  /** Ease a road's last stretch onto the pad it runs onto, so the two are
-   * one piece of ground rather than a ramp meeting a table. The lanes are
-   * laid to arrive on the plane already (`profileStep` toward it on the
-   * way in, `PLANE_RUN` of it on the way out), so what is blended here is
-   * a residual, not a step. */
-  const easeOntoPad = (samples: SpurSample[], pad: CarParkPad): void => {
-    for (const sample of samples) {
-      const d = Math.hypot(sample.x - pad.x, sample.z - pad.z);
-      const level = padHeight(pad, sample.x, sample.z);
-      if (d <= pad.radius) sample.elevation = level;
-      else if (d < pad.radius + P.pad.blend) {
-        const t = smooth(clamp01((d - pad.radius) / P.pad.blend));
-        sample.elevation = level * (1 - t) + sample.elevation * t;
-      }
-    }
-  };
-
-  /** The world as a WALK sees it (`carpark-trail.ts`), which is the placer's
-   * own context minus everything only a road asks about. */
-  const trailProbe = (ctx: CarParkContext): TrailProbe => ({
-    routeDistance: ctx.routeDistance,
-    builtClearance: ctx.builtClearance,
-    blocked: ctx.blocked,
-    flooded: ctx.land.flooded,
-    heightAt: ctx.heightAt,
-    corridor,
-    note: ctx.note,
-  });
-
-  /** The cars, nosed into the bays. `park.cars` many of them, which is the
-   * crowd's own number (`carsFor`) — the spaces the blade left over stand
-   * empty, and which ones do is a roll. */
-  const fillBays = (
-    rng: Rng,
-    park: { pad: CarParkPad; heading: number; bays: number; count: number },
-  ): ParkedCar[] => {
-    const bays = parkBays(park);
-    const empty = new Set<number>();
-    while (empty.size < bays.length - park.count) empty.add(rng.int(0, bays.length - 1));
-    const cars: ParkedCar[] = [];
-    bays.forEach((bay, i) => {
-      if (empty.has(i)) return;
-      const fx = Math.sin(bay.heading);
-      const fz = Math.cos(bay.heading);
-      const rx = Math.cos(bay.heading);
-      const rz = -Math.sin(bay.heading);
-      const back = rng.range(-0.25, 0.25);
-      const side = rng.range(-0.2, 0.2);
-      const cx = bay.x + fx * back + rx * side;
-      const cz = bay.z + fz * back + rz * side;
-      cars.push({
-        x: cx,
-        z: cz,
-        y: padHeight(park.pad, cx, cz),
-        heading: bay.heading + rng.range(-0.08, 0.08),
-        roll: rng.next(),
-      });
-    });
-    return cars;
-  };
-
+  const {
+    countryMap,
+    accessPoints,
+    nearestJoin,
+    joinPoints,
+    padFits,
+    profileStep,
+    planeSlope,
+    gradesHold,
+    easeOffJoin,
+    easeOntoPad,
+    trailProbe,
+    fillBays,
+  } = createSiting({ track, corridor, nearRoute, carParks });
   /** A car park off an existing public road: the pad `approach` metres
    * square off the road on the stand's side, and a straight lane between. */
   const tryAccess = (
@@ -1364,11 +812,6 @@ export function createCarParkField(track: Track): CarParkField {
 
   return { carParks, extend, trailClearance: trailClearanceAt, pruneBefore };
 }
-
-/** How far round a place an endless stage's country map reaches, m — a
- * streamed stage has no box, so a road that gets this far from the stand
- * has left the neighbourhood, past the fog. */
-const STREAMED_BOX = 460;
 
 /** R42 — everything about a car park the car can HIT, as solids: every
  * parked car as two. Read by the terrain field that collides them and by

@@ -180,9 +180,15 @@ Make targets are the definition of green CI enforces).
 ## File size
 
 - Non-test source files stay under **1000 physical lines** (§20.5 of
-  `OSS_GAME_SPEC.md`). Past the cap, split by concern — sibling modules, extracted
-  helpers — rather than relaxing it. A file that big is nearly always doing
-  more than one thing.
+  `OSS_GAME_SPEC.md`), and `tests/file_size_test.ts` holds the whole tree to
+  it — a file pushed over the cap fails `make test` by name, so this is not a
+  rule to discover in review. Past the cap, split by concern — sibling
+  modules, extracted helpers — rather than relaxing it. A file that big is
+  nearly always doing more than one thing.
+- The §20.5.1 escape (`game-spec:allow-large-file: <reason>` in the first 20
+  lines) exists and no file in this tree uses it. Splitting was possible every
+  time; reach for the marker only for something GENERATED or vendored, and
+  never for "this one is hard".
 - Splitting a file is also the moment to prune it: an oversized module usually
   has history in it.
 
