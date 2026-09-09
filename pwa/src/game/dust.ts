@@ -20,7 +20,7 @@ import * as THREE from "three";
 
 import { type DriveLayout } from "@engine";
 
-import { DUST_LAMP_UNIFORMS, DUST_LAMPS } from "./dust-light.ts";
+import { DUST_LAMP_GLSL, DUST_LAMP_UNIFORMS, dustLampSum } from "./dust-light.ts";
 import { CRASH_THROW } from "./crash-throw.ts";
 import { billowTexture, puffTexture } from "./textures.ts";
 
@@ -673,6 +673,10 @@ export type Dust = {
  * swell that a STYLE cannot state, because in cold air the same pipe throws
  * a billowing white plume and in warm air a small dark wisp. The shader is
  * the one part of that neither cloud should own twice.
+ *
+ * The LAMP term is shared wider still — `dustLampSum` (dust-light.ts), which
+ * the falling snow reads from its own graft (snowfall.ts). A lamp is one
+ * answer; only what a substance makes of it differs.
  */
 export function graftDust(
   mat: THREE.PointsMaterial,
@@ -689,10 +693,7 @@ export function graftDust(
       .replace(
         "#include <common>",
         `#include <common>
-        uniform vec4 uDustLampSpot[ ${DUST_LAMPS} ];
-        uniform vec4 uDustLampFace[ ${DUST_LAMPS} ];
-        uniform vec3 uDustLampGlow[ ${DUST_LAMPS} ];
-        uniform int uDustLampCount;
+        ${DUST_LAMP_GLSL}
         varying vec3 vLamp;${
           puffy
             ? `
@@ -717,30 +718,7 @@ export function graftDust(
         };`
             : ""
         }
-        vLamp = vec3( 0.0 );
-        vec3 dustAt = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
-        for ( int i = 0; i < ${DUST_LAMPS}; i++ ) {
-          // The register is filled from the front, so past the count there
-          // is nothing but black — and a cone and a falloff per particle
-          // for each of those slots is a loop worth leaving.
-          if ( i >= uDustLampCount ) break;
-          vec4 lamp = uDustLampSpot[ i ];
-          vec3 away = dustAt - lamp.xyz;
-          float gap = length( away );
-          // Linear to the lamp's reach and nothing past it, squared so the
-          // light is concentrated at the tyre rather than spread evenly
-          // over the whole cone.
-          float fall = max( 0.0, 1.0 - gap / max( lamp.w, 0.001 ) );
-          vec4 aim = uDustLampFace[ i ];
-          // Soft-edged: a hard cone edge across a cloud is a straight line
-          // drawn on smoke, which is the one shape smoke never has.
-          float cone = smoothstep(
-            aim.w,
-            mix( aim.w, 1.0, 0.55 ),
-            dot( away / max( gap, 0.001 ), aim.xyz )
-          );
-          vLamp += uDustLampGlow[ i ] * cone * fall * fall;
-        }`,
+        vec3 dustAt = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;${dustLampSum("dustAt", "vLamp")}`,
       );
     if (cap > 0) {
       // After the attenuation, which is what the cap is for: the size has

@@ -1026,14 +1026,46 @@ export function rainTone(p: Preset): THREE.Color {
   return sky.multiplyScalar(0.45);
 }
 
-/** What colour a FLAKE reads as. A flake is not a lens: it is a white body
- * lit by whatever light there is, so it takes the sky's own light and goes
- * grey under a storm and blue at night rather than flipping sign the way
- * a drop does. Held off pure white so a daylight blizzard is a sheet of
- * grey-white against a white sky rather than a screen of blown-out dots. */
-export function snowTone(p: Preset): THREE.Color {
-  const light = new THREE.Color(p.hemiSky).multiplyScalar(Math.max(0.35, p.hemiIntensity));
-  return light.lerp(new THREE.Color(0xffffff), 0.45).multiplyScalar(0.92);
+/** How much of the sky's light a flake keeps once there is no daylight left
+ * to keep any of — the LIT sheet's floor: enough that it still falls past a
+ * lit window or a rival's tail lamps, far too little to compete with a
+ * beam. */
+const NIGHT_SNOW = 0.1;
+
+/** …and the UNLIT sheet's, which has to be far higher for the opposite
+ * reason: with no lamps reaching the flakes, the sky is the only thing that
+ * can show them, so a sheet honestly dark is a sheet nobody can tell is
+ * falling. */
+const UNLIT_SNOW = 0.35;
+
+/** What colour a FLAKE reads as IN THE SKY'S OWN LIGHT — the ambient half
+ * of it. `lit` says whether anything else is going to reach the flakes: on
+ * the DETAIL row's top stop the car's lamps are summed per flake on top of
+ * this (snowfall.ts), and below it this is all there is.
+ *
+ * A flake is not a lens: it is a white body lit by whatever light there is,
+ * so it takes the sky's own light and goes grey under a storm and blue at
+ * night rather than flipping sign the way a drop does. Held off pure white
+ * so a daylight blizzard is a sheet of grey-white against a white sky
+ * rather than a screen of blown-out dots.
+ *
+ * WHEN THE LAMPS ARE COMING, IT RIDES THE DAYLIGHT DOWN, and that is the
+ * whole reason a night blizzard reads as one. Snow is the brightest thing
+ * in the frame by day, and by night it is nothing at all until something
+ * lights it: what the driver sees is a cone of flakes burning in the beams
+ * against black air, and how hard that cone reads is the CONTRAST between
+ * the two, not how bright the lit half is. Floor the ambient at a grey and
+ * there is no contrast to have — every flake is already near white, the
+ * lamps add nothing a screen can show, and a blizzard at midnight comes out
+ * as the same flat sheet it is at noon.
+ *
+ * With no lamps coming there is no contrast to protect and the floor goes
+ * back up: the two stops are lit-and-dark against evenly-grey, which is the
+ * honest shape of that trade rather than one being the other dimmed. */
+export function snowTone(p: Preset, lit: boolean): THREE.Color {
+  const day = Math.max(lit ? NIGHT_SNOW : UNLIT_SNOW, dayLight(p));
+  const light = new THREE.Color(p.hemiSky).multiplyScalar(Math.max(0.35 * day, p.hemiIntensity));
+  return light.lerp(new THREE.Color(0xffffff), 0.45 * day).multiplyScalar(0.92);
 }
 
 /**

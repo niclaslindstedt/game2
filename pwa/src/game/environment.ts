@@ -254,6 +254,12 @@ export type Environment = {
    * row that changes what the whole world costs rather than what is in it.
    * Applies at once — the lights are standing in the scene already. */
   setLighting: (level: VideoSettings["lighting"]) => void;
+  /** THE DETAIL ROW's `snow` stop (settings.ts): whether the falling sheet
+   * is lit by the car lamps and drawn as crystals near the glass, or is
+   * plain dots. Applies at once — it is one shader on one sheet — and the
+   * sheet's own colour is re-read with it, because what the sky is worth to
+   * a flake depends on whether anything else is going to reach it. */
+  setSnowCrystals: (on: boolean) => void;
   /** Hang the PLAYER's lamps on the register the dust clouds are lit from
    * (dust-light.ts), at whatever strength the daylight and the grime on the
    * lenses leave them. The register is emptied by its one owner, the
@@ -452,6 +458,8 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   let meanWind = 0;
   /** How hard it is coming down this instant, 0..1. */
   let rainNow = 0;
+  /** The DETAIL row's `snow` stop, as the sheet and the tone both read it. */
+  let snowLit = false;
   let rangeScale = 1;
   /** Set while a view drives the fog in meters instead of by preset. */
   let absolute: { near: number; far: number } | null = null;
@@ -580,7 +588,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     hemi.groundColor.set(preset.hemiGround);
     restLight();
     rain.setTone(rainTone(preset));
-    snow.setTone(snowTone(preset));
+    snow.setTone(snowTone(preset, snowLit));
     horizon.paint(preset);
     storm.apply(preset);
     lamps.setStage(preset.lamps);
@@ -855,7 +863,8 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     shell.setFlash(surge);
     // The sheet rides the squall, and a strike lights it before it lights
     // anything else — the rain is the nearest thing to the lens there is.
-    const freezing = fallsAsSnow(temperatureAt(state.track.climate, cam.y)) ? 1 : 0;
+    const airAt = temperatureAt(state.track.climate, cam.y);
+    const freezing = fallsAsSnow(airAt) ? 1 : 0;
     flakes += (freezing - flakes) * Math.min(1, dt * 1.5);
     rain.setIntensity(effects > 0 ? rainNow * (1 - flakes) : 0);
     rain.setFlash(surge);
@@ -879,6 +888,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     sandAir.set(effects > 0 ? sandNow : 0, effects > 0 ? state.sand.approach : 0);
     sandAir.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
     snow.setIntensity(effects > 0 ? rainNow * flakes : 0);
+    // WHICH crystal is falling is the air's own answer (`snowHabits`): a
+    // stage at -6 falls as needles and columns where one at -15 falls as
+    // the six-armed dendrites, and a camera climbing a pass drives out of
+    // the one and into the other.
+    snow.setHabit(airAt);
     snow.setFlash(surge);
     snow.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
     if (surge > 0) {
@@ -963,6 +977,12 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     setLampsBroken: lamps.setBroken,
     setLampPlan: lamps.setPlan,
     setLighting,
+    setSnowCrystals: (on) => {
+      if (on === snowLit) return;
+      snowLit = on;
+      snow.setCrystals(on);
+      snow.setTone(snowTone(preset, snowLit));
+    },
     lightDust: (car) => {
       // The same switches the beams are on — the lamps are lit or they are
       // not, and what daylight, a caked lens and the crash leave of them is

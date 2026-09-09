@@ -3023,6 +3023,16 @@ export function App() {
                   hour: r.hour,
                   weather: r.weather,
                   season: r.season,
+                  // ...and the COLD, which is part of the ROAD rather than
+                  // of the weather over it (climate.ts): under freezing the
+                  // loose surface is snow, what falls is flakes, and under
+                  // `CLIMATE.ice` the lakes are a floor the route may be
+                  // drawn across. Left out, every `?temp=` link silently
+                  // gets the season's own temperature instead — which is
+                  // the one stage a link asking for a temperature is not
+                  // asking for, and the reason a cold stage cannot be
+                  // photographed or reported from a repro line at all.
+                  temperature: r.temperature,
                   skipCountdown: false,
                   // The back row, on a `?mode=headsup` grid or a Roam stage
                   // with opponents on it; alone on the line otherwise.

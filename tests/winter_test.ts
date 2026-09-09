@@ -24,7 +24,10 @@ import {
   resolveClimate,
   resolveKnobs,
   simulateStage,
+  rollSnowHabit,
+  SNOW_HABITS,
   snowBite,
+  snowHabits,
   snowlineOf,
   step,
   temperatureAt,
@@ -184,6 +187,60 @@ describe("the climate", () => {
     expect(weathersIn("desert", "winter")).toContain("rain");
     expect(weathersIn("desert", "winter")).toContain("storm");
     expect(weathersIn("taiga", "winter")).toEqual(BIOMES.taiga.weathers);
+  });
+
+  it("grows the crystal the temperature asks for — Nakaya's ladder", () => {
+    /** How much of the fall at `t` is one habit, 0..1. */
+    const share = (t: number, habit: (typeof SNOW_HABITS)[number]): number =>
+      snowHabits(t)[SNOW_HABITS.indexOf(habit)];
+    /** …and how much of it is rods rather than plates and stars. */
+    const rods = (t: number): number =>
+      share(t, "needle") + share(t, "column") + share(t, "capped");
+
+    for (const t of [1, 0, -2, -6, -10, -15, -20, -30, -60]) {
+      const w = snowHabits(t);
+      expect(w).toHaveLength(SNOW_HABITS.length);
+      expect(w.reduce((sum, v) => sum + v, 0)).toBeCloseTo(1, 6);
+      expect(Math.min(...w)).toBeGreaterThanOrEqual(0);
+    }
+
+    // The three rungs of the diagram, each judged against its neighbours
+    // rather than against a number: just under freezing the air makes
+    // plates, the rod band in the middle makes needles and columns, and
+    // around -15 it makes the six-armed crystals of the word.
+    expect(share(-1, "plate")).toBeGreaterThan(share(-1, "dendrite"));
+    expect(rods(-6.5)).toBeGreaterThan(0.5);
+    expect(rods(-6.5)).toBeGreaterThan(rods(-1));
+    expect(rods(-6.5)).toBeGreaterThan(rods(-15));
+    expect(share(-15, "dendrite") + share(-15, "fern")).toBeGreaterThan(
+      share(-6.5, "dendrite") + share(-6.5, "fern"),
+    );
+    // The flip back at the bitter end: no branches left, and what falls is
+    // the diamond dust of small plates and columns.
+    expect(share(-30, "fern")).toBe(0);
+    expect(share(-30, "plate") + share(-30, "column")).toBeCloseTo(1, 6);
+
+    // No band is ever ONE SHAPE — the crystals landing together grew
+    // through several degrees of the same cloud — so a sheet at any
+    // temperature is a mix rather than a repeated sprite. Three habits is
+    // the floor, and it holds at the bitter end too.
+    for (const t of [0, -2, -6, -10, -15, -20, -30, -50]) {
+      expect(snowHabits(t).filter((v) => v > 0.02).length).toBeGreaterThanOrEqual(2);
+      expect(Math.max(...snowHabits(t))).toBeLessThan(0.75);
+    }
+    // …and the rod band overlaps its neighbours on both sides rather than
+    // switching on at an edge, which is what stops a stage a degree either
+    // side of it looking like a different game.
+    for (const t of [-2, -6, -10]) expect(rods(t)).toBeGreaterThan(0);
+
+    // The roll walks the same weights: every roll lands on a real habit,
+    // and a habit with no weight is never drawn.
+    for (const roll of [0, 0.25, 0.5, 0.75, 0.999]) {
+      const at = rollSnowHabit(-15, roll);
+      expect(at).toBeGreaterThanOrEqual(0);
+      expect(at).toBeLessThan(SNOW_HABITS.length);
+      expect(snowHabits(-15)[at]).toBeGreaterThan(0);
+    }
   });
 });
 

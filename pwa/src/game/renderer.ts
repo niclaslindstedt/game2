@@ -600,6 +600,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // zone, and the whole app fails to start with a minified name in the
   // message and nothing pointing at this line.
   applyLighting();
+  // …and the DETAIL row's own share of the sheet standing in the scene, for
+  // the same reason `setVideo` sets it: the environment is built plain, and
+  // nothing else would tell it otherwise until the player opened OPTIONS.
+  environment.setSnowCrystals(quality.snow === "crystal");
   field.setCarDetail({
     ...carDetail("field"),
     exhaust: EXHAUST_SEEN[quality.exhaust].field,
@@ -835,6 +839,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // player's car wears rather than the field's.
     ghostCar?.setCrumple(CRUMPLE_SEEN[quality.crumple].player);
     mirror.setGlass(MIRROR_GLASS[quality.effects]);
+    // The falling snow, like the dust cloud below it: a sheet standing in
+    // the scene already, so this row applies to the run in progress.
+    environment.setSnowCrystals(quality.snow === "crystal");
     // Unlike the rest of the DETAIL row, the dust CLOUD is not geometry and
     // does not wait for the next stage: the pool is standing in the scene
     // already, so switching that row is switching it, mid-run included.

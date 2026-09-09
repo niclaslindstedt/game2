@@ -18,7 +18,7 @@
 // The PICTURE is the one place that grouping is drawn deliberately rather
 // than by default: eleven renderer levers, three player rows. RESOLUTION and
 // DISTANCE stand alone because they are separate costs a machine can be
-// separately short of, and the nine that decide how much world gets built
+// separately short of, and the ten that decide how much world gets built
 // ride one DETAIL row (`DETAIL_PRESETS`) because they are one judgement —
 // a simple game does not hand somebody a question about undergrowth
 // density. Which levers share a row is a design decision; see
@@ -248,7 +248,7 @@ export type AudioSettings = {
  * machine that is fill-bound gets the opposite. Buried inside one preset,
  * neither player could reach the lever that was theirs.
  *
- * The remaining nine are HOW MUCH WORLD IS DRAWN, and they are one row
+ * The remaining ten are HOW MUCH WORLD IS DRAWN, and they are one row
  * (`DETAIL_PRESETS`) because they are one judgement with one answer: they
  * all move together with how much headroom the machine has, and nobody has
  * an opinion about undergrowth density that is not also an opinion about
@@ -373,6 +373,31 @@ export type VideoSettings = {
    * sheds what the ledger had already lost, without throwing it — nothing
    * flies off a car for a wheel it lost a corner ago. */
   wheelLoss: "off" | "player" | "all";
+  /** HOW MUCH A FALLING SNOWFLAKE IS WORTH. Part of DETAIL, and it applies
+   * the instant it is set — nothing here is geometry, it is one sheet of
+   * point sprites and which shader is on it.
+   *
+   * Two stops, because the two things a flake can be given are one
+   * judgement and one bill. `plain` is a soft round dot in the sky's own
+   * light, which is what snow has always been and what a phone should be
+   * drawing. `crystal` is the pair that makes a blizzard: the flakes are
+   * LIT, summing the car-lamp register per particle in the vertex shader
+   * the way the dust clouds do (dust-light.ts), so a night stage is a cone
+   * of burning flakes in the beams instead of one flat sheet; and each one
+   * near the glass is drawn as the CRYSTAL its temperature grows
+   * (snow-crystal.ts) rather than as a blob.
+   *
+   * They ride one stop because they cost the same coin on the same
+   * thousands of sprites — a loop over the lamp register on every flake in
+   * the frame, and an atlas fetch and a bigger, alpha-blended sprite on the
+   * near ones — and because neither is worth having without the other: an
+   * unlit crystal at night is invisible, and a lit blob is a lit blob.
+   *
+   * Below the top stop the sheet also keeps its old floor of sky light
+   * (`snowTone`'s `lit`): with no lamps reaching the flakes there is
+   * nothing to see them by, and a night blizzard that is honestly dark is
+   * a night blizzard nobody can tell is falling. */
+  snow: "plain" | "crystal";
   /** How thickly the world is planted with the SOFT stuff — undergrowth,
    * shrubs, stumps. Part of DETAIL, and applies to the NEXT stage built.
    * The undergrowth only: the FOREST's own density is a generator dial the
@@ -952,7 +977,7 @@ export const DUST_LAMP_CARS: Record<VideoSettings["lighting"], number> = {
  * an opinion about undergrowth density — they have an opinion about whether
  * the game is smooth, and about which of the things making it unsmooth they
  * would rather keep. Five rows is what lets them answer that: RESOLUTION,
- * DISTANCE, LIGHTING and SKY are single levers, and DETAIL is the nine that
+ * DISTANCE, LIGHTING and SKY are single levers, and DETAIL is the ten that
  * are one judgement.
  *
  * The point of the split is that the five costs are NOT the same cost.
@@ -972,7 +997,7 @@ export const DUST_LAMP_CARS: Record<VideoSettings["lighting"], number> = {
  * Under one knob that trade could not be expressed at all. */
 export type Detail = "low" | "medium" | "high";
 
-/** The nine levers DETAIL owns. Named as a slice of `VideoSettings` rather
+/** The ten levers DETAIL owns. Named as a slice of `VideoSettings` rather
  * than restated, so adding another is a decision about which row it belongs
  * on instead of a silent omission from both. */
 export type DetailSettings = Pick<
@@ -986,6 +1011,7 @@ export type DetailSettings = Pick<
   | "ground"
   | "dust"
   | "exhaust"
+  | "snow"
 >;
 
 /** What each DETAIL stop is worth, cheapest first — the order the ladder is
@@ -1008,6 +1034,7 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     ground: "plain",
     dust: "off",
     exhaust: "off",
+    snow: "plain",
   },
   // The design point — every lever at the number the game was tuned on, and
   // everything that is per car spent on the one car it is worth the most
@@ -1025,6 +1052,7 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     ground: "normal",
     dust: "player",
     exhaust: "player",
+    snow: "plain",
   },
   // A machine with headroom: a thicker forest floor, stonier verges, and the
   // whole entry list furnished behind its glass, towing dust, wearing its
@@ -1041,6 +1069,7 @@ export const DETAIL_PRESETS: Record<Detail, DetailSettings> = {
     ground: "rich",
     dust: "all",
     exhaust: "all",
+    snow: "crystal",
   },
 };
 
@@ -1213,11 +1242,11 @@ export const PICTURE_LADDERS: { label: string; ladders: string[][] }[] = [
 ];
 
 /** Which DETAIL stop a set of video knobs IS: by exact match, else the stop
- * that agrees with the most of the nine, ties going to the CHEAPER picture
+ * that agrees with the most of the ten, ties going to the CHEAPER picture
  * because `DETAIL_PRESETS` is walked cheapest first. So a blob written on
  * another build's ladder — or on the old single QUALITY row — lands on the
  * picture it most resembles, and never on a heavier one than it asked for.
- * A blob with none of the nine in it is a blob with no opinion, which is
+ * A blob with none of the ten in it is a blob with no opinion, which is
  * MEDIUM: the design point, not the floor. */
 export function detailOf(video: Partial<VideoSettings>): Detail {
   const ids = Object.keys(DETAIL_PRESETS) as Detail[];
@@ -1764,7 +1793,7 @@ export function loadSettings(): Settings {
     }
     if (parsed.audio) Object.assign(settings.audio, parsed.audio);
     // Row by row, because the rows are independent: the single levers are
-    // checked against their own ladders and the other nine are snapped
+    // checked against their own ladders and the other ten are snapped
     // together onto a DETAIL stop. Checked rather than merged for the reason
     // the view is snapped to its ladders — a value off a ladder is a place
     // the menu could never put the player back to once they moved off it —

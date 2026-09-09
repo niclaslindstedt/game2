@@ -111,7 +111,10 @@ export {
   icyCountry,
   rainsIn,
   resolveClimate,
+  rollSnowHabit,
+  SNOW_HABITS,
   snowBite,
+  snowHabits,
   snowCoverAt,
   snowlineOf,
   snowyCountry,
@@ -120,6 +123,7 @@ export {
   weathersIn,
   type Climate,
   type ClimateChoice,
+  type SnowHabit,
 } from "./game/climate.ts";
 export { jumpArc, jumpFlight, jumpSize, type JumpArc, type JumpSize } from "./game/jump.ts";
 export {
