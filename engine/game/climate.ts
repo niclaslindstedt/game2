@@ -82,6 +82,43 @@ export const CLIMATE = {
    * goes over while the lake in the valley below it is still open, which
    * is the order a real thaw runs in, backwards. */
   ice: -5,
+  /** R48 — THE MOVING WATER, which is a different question and a colder
+   * one. A lake loses heat off a still surface and builds its sheet
+   * downward; a river is STIRRED, so the whole column stays at zero and
+   * the ice it makes is frazil — crystals carried in the flow that have to
+   * raft into pans and then bridge the channel before there is a cover at
+   * all. Two things follow, and they are the two numbers here:
+   *
+   *   `quiet` — a slow reach needs a good deal more cold than a lake
+   *   before it closes: the water has to give up the heat the mixing keeps
+   *   feeding back to the surface. River-ice practice counts it in
+   *   freezing degree-days — a cover bridges at around a hundred of them,
+   *   which is ten days near -10 — so -10 is the shorthand for "it has
+   *   been properly cold here for a fortnight" the way -5 is a lake's.
+   *
+   *   `open` — and past a certain speed it never closes AT ALL, however
+   *   cold it gets. A cover bridges under about 0.7 m/s of surface flow
+   *   and is torn out again over about 1.2; through Manning at the size of
+   *   these brooks that is a real fall of roughly 0.002 and 0.006 m per
+   *   metre. So the rapids and the chutes stand open all winter, which is
+   *   exactly what a northern river looks like in January: white from bank
+   *   to bank down the flats, and black water smoking at every drop.
+   *
+   * `open` is that 0.006 carried into DRAWN metres, which is where the
+   * number stops looking like river science. This country is built at a
+   * fraction of its real height — the same compression `lapse` above is
+   * scaled by, the alpine's permanent snow standing at 340 m for a range
+   * whose real line is nearer 2,800 — so every gradient in it is
+   * exaggerated by about eight, and a brook drawn falling five per cent is
+   * a real one falling well under one. Measured against the generator's own
+   * population (`make analyze` seeds, both countries), a drawn 0.05 puts
+   * the median reach just the wrong side of freezing and takes in the
+   * flats, the pools and the mouths — which is the picture wanted.
+   *
+   * Between the two the air has to be colder in proportion, reaching
+   * `hard` at `open`: a reach with real fall on it stays open unless the
+   * stage is dialled well down the range. */
+  river: { quiet: -10, hard: -25, open: 0.05 },
   /** Metres of height over the freezing line the cover takes to reach full
    * depth — a ragged margin rather than a contour drawn round the hill.
    * The paint's own fade (`SNOW.fade`, ground-rules.ts) is this number. */
@@ -342,6 +379,21 @@ export function rollSnowHabit(temperature: number, roll: number): number {
  * all reach the same answer from the same two numbers. */
 export function waterFrozen(climate: Climate, level: number): boolean {
   return temperatureAt(climate, level) <= CLIMATE.ice;
+}
+
+/** R48 — whether a REACH of moving water has frozen over: the air at the
+ * water's own level against what a reach of this FALL needs (`CLIMATE.river`
+ * — see there for why moving water is a colder question than a lake, and
+ * why a steep one is never asked).
+ *
+ * `fall` is the reach's gradient, m of drop per m along it. Zero is a pool
+ * and answers at `river.quiet`; anything at or over `river.open` answers no
+ * whatever the cold. */
+export function streamFrozen(climate: Climate, level: number, fall: number): boolean {
+  const R = CLIMATE.river;
+  if (!(fall < R.open)) return false;
+  const needs = R.quiet + (R.hard - R.quiet) * clamp01(fall / R.open);
+  return temperatureAt(climate, level) <= needs;
 }
 
 /** R48 — whether a country under this climate can hold ANY frozen water:

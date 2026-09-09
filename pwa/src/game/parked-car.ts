@@ -23,6 +23,7 @@ import * as THREE from "three";
 import { GeoBuilder } from "./flora-build.ts";
 import { LIVERY_COUNT, liveryFor } from "./car-livery.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
+import { snowCap } from "./snow-cap.ts";
 import { detailTexture } from "./textures.ts";
 
 export type ParkedBody = "hatch" | "saloon" | "estate" | "van" | "pickup";
@@ -75,8 +76,8 @@ const TINT = {
   bed: new THREE.Color(0x3a3a3a),
 };
 
-const carMaterial = shareOne(
-  () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
+const carMaterial = shareOne(() =>
+  snowCap(new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() })),
 );
 
 /** Successive rolls off one seed, so a single number can decide a whole

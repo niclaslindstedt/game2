@@ -17,6 +17,7 @@ import { createRng, type CropField, type Paddock, type Season } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
 import { buildFlora, type FloraPlacement } from "./flora.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
+import { snowCap } from "./snow-cap.ts";
 import { detailTexture } from "./textures.ts";
 
 /** The roundpole fence: a young spruce pole every few metres, two rails
@@ -38,10 +39,10 @@ const TINT = {
   hayDark: new THREE.Color(0x7f9540),
 };
 
-const fenceMaterial = shareOne(
-  () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
+const fenceMaterial = shareOne(() =>
+  snowCap(new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() })),
 );
-const postMaterial = shareOne(() => new THREE.MeshLambertMaterial({ color: TINT.pole }));
+const postMaterial = shareOne(() => snowCap(new THREE.MeshLambertMaterial({ color: TINT.pole })));
 const fieldMaterial = shareOne(
   () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
 );

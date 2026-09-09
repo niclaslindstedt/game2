@@ -52,6 +52,7 @@ import {
 import { frozenAt, plantZone } from "./ground-rules.ts";
 import { buildRoadSpill } from "./road-spill.ts";
 import { buildWild } from "./wild.ts";
+import { setSnowCap, snowCap } from "./snow-cap.ts";
 import { createArena } from "./arena.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
@@ -393,7 +394,9 @@ function buildScenery(
     rocks.push({ x, y, z, s: drop });
   }
   const rockGeo = new THREE.DodecahedronGeometry(1);
-  const rockMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) });
+  const rockMat = snowCap(
+    new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) }),
+  );
   const rockMesh = new THREE.InstancedMesh(rockGeo, rockMat, Math.max(1, rocks.length));
   rockMesh.count = rocks.length;
   const tint = new THREE.Color();
@@ -800,6 +803,11 @@ function disposeGroup(group: THREE.Group): void {
  * but cannot see is worse than any frame it would buy. */
 export function buildWorld(track: Track, density = 1, season: Season = "summer", stone = 1): World {
   const group = new THREE.Group();
+  // R47 — how cold this stage is, for everything standing in it: the load
+  // on the trees, the stone and the roofs is one uniform read by every
+  // material that wears it, and it is set HERE because it belongs to the
+  // stage rather than to any one thing in it (snow-cap.ts).
+  setSnowCap(track.knobs, track.climate);
   // R40 — the country the stage's dials name. The engine placed every
   // solid thing from the same id; this is what dresses it.
   const biome = biomeFor(track.knobs.biome);

@@ -19,6 +19,7 @@ import { createRng, type Season } from "@engine";
 import { GeoBuilder, floraPalette } from "./flora-build.ts";
 import { VARIANTS } from "./flora-species.ts";
 import { detailTexture } from "./textures.ts";
+import { snowCap } from "./snow-cap.ts";
 
 export { TRUNK_COLOR } from "./flora-build.ts";
 
@@ -134,7 +135,11 @@ function floraMaterials(): FloraMaterials {
   };
   solid.userData.shared = true;
   leafy.userData.shared = true;
-  materials = { solid, leafy };
+  // R47 — and both wear the winter's load (snow-cap.ts): a laden spruce is
+  // the same instanced spruce with white on the faces that look up, which
+  // is what keeps a snowed forest the same handful of draw calls the green
+  // one was.
+  materials = { solid: snowCap(solid), leafy: snowCap(leafy) };
   return materials;
 }
 

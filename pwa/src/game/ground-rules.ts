@@ -59,7 +59,23 @@ export const ROCK_SLOPE = { from: 0.88, band: 0.18 };
  * that would shed snow is rock a good way above the line, and anything
  * steeper than `slope.from` holds none at all. `patch` is the noise band
  * about the line where the rock still breaks through the cover, and
- * `patchFade` how far above the line those windows have closed. */
+ * `patchFade` how far above the line those windows have closed.
+ *
+ * R47 — ...and all of that is a rule about being NEAR THE LINE. It is the
+ * summer alpine's own rule: at the edge of the permanent snow the wind
+ * scours every face and the cover survives on the flats, which is what a
+ * summit reads as in July. A WINTER is not that. The cold brings the line
+ * down hundreds of metres under the whole country (`zonesUnder`), and by
+ * then the snow is on everything a slope can hold it on — a hillside at
+ * forty degrees is white to its top, and only rock too steep for anything
+ * to sit on is bare. So the face rule RELAXES with depth: `deep` is how
+ * far over the line the cover stops being a margin and becomes a winter,
+ * and `sheer` is the lean a face still sheds at when it has — a slope up to
+ * about sixty degrees holds it all, and past about seventy-five nothing
+ * does, which is the angle snow actually stops sitting at. Without it a
+ * winter stage is white flats between brown hillsides, which is the one
+ * thing a snowed country never looks like — and it is the paint
+ * disagreeing with the physics, which lays its blanket by height alone. */
 export const SNOW = {
   fade: CLIMATE.fade,
   lead: 10,
@@ -67,6 +83,8 @@ export const SNOW = {
   slope: { from: 0.84, band: 0.24 },
   patch: 22,
   patchFade: 70,
+  deep: 300,
+  sheer: 0.5,
 };
 
 /** THE ZONES UNDER A CLIMATE: the country's own, with its snowline brought
@@ -97,14 +115,20 @@ export function bareRock(y: number, normalY: number, zones: Zones): number {
 }
 
 /** How much of the ground lies under snow, 0..1, before the rock windows
- * the paint cuts in it: none in a country with no snowline, none on a face,
- * and a fade in over the first `SNOW.fade` metres above a line that climbs
- * with the ground's lean. The same rule for the tile paint and for what a
- * wheel throws up there. */
+ * the paint cuts in it: none in a country with no snowline, a fade in over
+ * the first `SNOW.fade` metres above a line that climbs with the ground's
+ * lean, and none at all on a face — until the ground stands far enough over
+ * the line that the margin has become a winter, at which point the lean
+ * stops mattering and only sheer rock is bare (`SNOW.deep`/`sheer`). The
+ * same rule for the tile paint and for what a wheel throws up there. */
 export function snowLie(y: number, normalY: number, zones: Zones): number {
   if (zones.snow === null) return 0;
-  const line = zones.snow - SNOW.lead + (1 - normalY) * SNOW.climb;
-  const lie = 1 - clamp01((SNOW.slope.from - normalY) / SNOW.slope.band);
+  // How deep into the cover this ground stands, 0 at the line and 1 well
+  // over it — the one number both halves of the face rule fade with.
+  const deep = clamp01((y - (zones.snow - SNOW.lead)) / SNOW.deep);
+  const line = zones.snow - SNOW.lead + (1 - normalY) * SNOW.climb * (1 - deep);
+  const sheds = SNOW.slope.from + (SNOW.sheer - SNOW.slope.from) * deep;
+  const lie = 1 - clamp01((sheds - normalY) / SNOW.slope.band);
   return clamp01((y - line) / SNOW.fade) * lie;
 }
 

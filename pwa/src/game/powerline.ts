@@ -47,6 +47,7 @@ import {
 import { GeoBuilder } from "./flora-build.ts";
 import type { GroundBeside } from "./road-mesh.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
+import { snowCap } from "./snow-cap.ts";
 import { detailTexture } from "./textures.ts";
 
 const P = STAGE_RULES.powerline;
@@ -92,8 +93,8 @@ const WIRE_HALF = 0.11;
  * proportionally more of them. */
 const WIRE_SEGMENT = 26;
 
-const steelMaterial = shareOne(
-  () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
+const steelMaterial = shareOne(() =>
+  snowCap(new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() })),
 );
 /** The wires: unlit and near-black, because a conductor against any sky is
  * a silhouette. Lighting one makes it flash as the camera turns, which is

@@ -23,6 +23,7 @@ import type { RailCrossing, Spur, SpurSample, Track } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
 import { rightOf } from "./ribbon.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
+import { snowCap } from "./snow-cap.ts";
 import { detailTexture } from "./textures.ts";
 import { box } from "./house.ts";
 
@@ -55,13 +56,15 @@ const TINT = {
   rim: new THREE.Color(0xc4261d),
 };
 
-const railMaterial = shareOne(
-  () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
+const railMaterial = shareOne(() =>
+  snowCap(new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() })),
 );
 
 /** The rails, ballast and crossing furniture all share the buildings'
  * speckled Lambert; the sleepers are instanced under a flat one. */
-const sleeperMaterial = shareOne(() => new THREE.MeshLambertMaterial({ color: TINT.sleeper }));
+const sleeperMaterial = shareOne(() =>
+  snowCap(new THREE.MeshLambertMaterial({ color: TINT.sleeper })),
+);
 
 /** A strip swept along the samples: a cross-section of (lateral, height)
  * pairs at every sample, stitched into a closed ribbon. Vertex-coloured by

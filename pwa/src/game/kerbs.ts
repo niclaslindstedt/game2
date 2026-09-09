@@ -40,6 +40,7 @@ import {
 } from "@engine";
 
 import { shareOne } from "../lib/shared-gpu.ts";
+import { snowCap } from "./snow-cap.ts";
 import { GeoBuilder } from "./flora-build.ts";
 import type { Ribbon } from "./ribbon.ts";
 import { rightOf } from "./ribbon.ts";
@@ -73,8 +74,8 @@ const STRIPE = 1.6;
 // of road draws the same little box, and a chunk being dropped must not
 // free the shape the road still standing is drawn from.
 
-const warnMaterial = shareOne(() => new THREE.MeshLambertMaterial({ color: ORANGE }));
-const whiteMaterial = shareOne(() => new THREE.MeshLambertMaterial({ color: WHITE }));
+const warnMaterial = shareOne(() => snowCap(new THREE.MeshLambertMaterial({ color: ORANGE })));
+const whiteMaterial = shareOne(() => snowCap(new THREE.MeshLambertMaterial({ color: WHITE })));
 
 /** A post: a plain square stake. The white band is a face split rather than
  * a texture — one more box would double the instance count for a stripe

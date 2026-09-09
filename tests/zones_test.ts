@@ -20,6 +20,7 @@ import {
   looseShades,
   plantZone,
   rockAt,
+  SNOW,
   snowAt,
 } from "../pwa/src/game/ground-rules.ts";
 
@@ -101,14 +102,32 @@ describe("the snow", () => {
     expect(snowAt(flat(snowline + 200), 0, 0, dials("alpine"))).toBe(1);
   });
 
-  it("leaves a steep face as rock well above the line", () => {
-    // A 60° face: no snow holds on it at all, at any height.
-    expect(snowAt(face(snowline + 100, 1.7), 0, 0, dials("alpine"))).toBe(0);
-    expect(rockAt(face(snowline + 100, 1.7), 0, 0, dials("alpine"))).toBe(1);
+  it("leaves a steep face as rock about the line", () => {
+    // A 60° face at the edge of the cover: nothing holds on it.
+    expect(snowAt(face(snowline + 20, 1.7), 0, 0, dials("alpine"))).toBe(0);
+    expect(rockAt(face(snowline + 20, 1.7), 0, 0, dials("alpine"))).toBe(1);
     // A moderate slope's own snowline stands higher than the flat's.
     const gentle = snowAt(flat(snowline + 20), 0, 0, dials("alpine"));
     const sloped = snowAt(face(snowline + 20, 0.45), 0, 0, dials("alpine"));
     expect(sloped).toBeLessThan(gentle);
+  });
+
+  it("R47 — but covers the faces too once the ground is DEEP in the cover", () => {
+    // The same 60° face, a winter's depth over the line rather than a
+    // margin above it: the wind-scoured edge of the permanent snow is one
+    // picture and a country under a winter is another, and the second one
+    // has no brown hillsides in it.
+    const deep = snowline + SNOW.deep;
+    expect(snowAt(face(deep, 1.7), 0, 0, dials("alpine"))).toBe(1);
+    // A moderate slope has stopped being distinguishable from the flat.
+    expect(snowAt(face(deep, 0.45), 0, 0, dials("alpine"))).toBe(1);
+    // ...and rock too steep for anything to sit on is still bare, which is
+    // the angle snow stops sitting at rather than a slope of any kind: a
+    // 72° face keeps most of its stone, and a cliff keeps all of it.
+    const steep = snowAt(face(deep, 3), 0, 0, dials("alpine"));
+    expect(steep).toBeGreaterThan(0);
+    expect(steep).toBeLessThan(0.4);
+    expect(snowAt(face(deep, 12), 0, 0, dials("alpine"))).toBe(0);
   });
 
   it("never falls in a country with no snowline", () => {
