@@ -168,12 +168,16 @@
 //       finds them somewhere to have parked — a corner with no such
 //       country behind it gets nobody.
 //   R28 A stage is SPLIT INTO CHECKPOINTS, roughly a quarter-minute of
-//       driving apart, and every one of them stands just past the EXIT of a
+//       driving apart, and every one of them stands at the EXIT of a
 //       corner — the tighter the better. A checkpoint is both a split
 //       (where the run is measured against whoever it is racing) and the
 //       place a lost, drowned or crashed car is put back on the road, so it
 //       belongs where the road has just asked the driver a question rather
 //       than in the middle of a straight where it would cost nothing.
+//       A corner tight enough to double back on itself takes its board the
+//       instant the curve finishes, with no run-out at all: the run-out is
+//       road a car that CUT the corner rejoins on, and a board it rejoins
+//       in front of is a split the shortcut books for free.
 //       Preferred, not required: past `checkpoint.forced` gaps' worth of
 //       road with no corner worth taking, a board goes down anyway. A
 //       kilometre of borrowed public road (R17) sweeps and asks nothing,
@@ -2165,9 +2169,10 @@ export const STAGE_RULES = {
    * goes without a board: nothing but a hairpin will do inside `early` of
    * the last one, a real corner will do past the target gap, and past
    * `late` any bend at all is taken rather than let the split drift. That
-   * ordering is the "prefer tight corners" rule — a board just past the
-   * exit of a hairpin is one a driver has to earn, and one they will feel
-   * being sent back to. */
+   * ordering is the "prefer tight corners" rule — a board a driver has to
+   * earn is one they will feel being sent back to. HOW FAR past the exit is
+   * `tight`'s question: a corner that sweeps past it takes its board on the
+   * exit itself, and everything gentler takes it `runOut` further on. */
   checkpoint: {
     /** Target gap between boards, seconds of driving. */
     spacing: 15,
@@ -2185,6 +2190,18 @@ export const STAGE_RULES = {
      * capped by the road that follows so it never lands in the next bend
      * (a turn takes its board on the exit itself). */
     runOut: 30,
+    /** ...but a corner sweeping at least THIS far, radians, gets NONE of
+     * that run-out: its board stands the instant the curve finishes.
+     *
+     * The run-out is road, and road past a corner is where a car that cut
+     * the corner rejoins. A board 30 m down it is one the cut is back on
+     * the road in time to drive through, so the shortcut books the split
+     * and costs nothing; a board on the exit itself is one only a car that
+     * came round the curve is in front of. Set at the sweep where a corner
+     * starts doubling back on itself and the inside becomes worth taking —
+     * a bend that barely bends has no inside to cut, and its board is
+     * better off reading as the corner's reward. */
+    tight: 1.9,
     /** ...and past THIS many gaps a board goes down wherever the road has
      * got to, corner or no corner.
      *

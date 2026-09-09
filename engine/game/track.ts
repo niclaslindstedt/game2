@@ -57,8 +57,8 @@ export function wayHome(state: GameState): WayHome {
 /** R28 — WHERE A RESPAWN PUTS THE CAR: the last split board it drove
  * through this lap, or the start line while it has passed none. A car that
  * drowned, wedged itself or gave up loses the road since that board and
- * drives it again — which is the whole reason the boards sit just past the
- * corners that are worth being sent back through. */
+ * drives it again — which is the whole reason the boards sit at the exits
+ * of the corners worth being sent back through. */
 export function lastCheckpoint(state: GameState): WayHome {
   const passed = state.checkpointsPassed;
   const board = passed > 0 ? state.track.checkpoints[passed - 1] : undefined;
