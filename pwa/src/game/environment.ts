@@ -125,6 +125,13 @@ const OCCLUSION_RATE = 1.4;
 const VEIL_RATE = 0.5;
 const VEIL_STEP = 0.025;
 
+/** …and how much faster the RIDGE RINGS go than the view does. They stand
+ * kilometres out where the fog is measured in hundreds of metres, so the
+ * air is finished with them long before it is finished with the trees: at
+ * the top of a snowfall this puts the whole chain into the fog, and a heavy
+ * shower still leaves a grey skyline rather than erasing one. */
+const RINGS_TAKEN = 1.45;
+
 /** WHAT THE AIR IS COLOURED INSIDE A SANDSTORM, and what the sky over it
  * goes to. Two tones and not one: the middle distance is the sand itself,
  * lit warm where the sun still gets through it, and the ceiling above is
@@ -544,7 +551,14 @@ export function createEnvironment(scene: THREE.Scene): Environment {
    * ceiling is held to two lines up. */
   const paintHorizon = (): void => {
     const air = fog.color.getHex();
-    horizon.paint(air === preset.fog ? preset : { ...preset, fog: air });
+    // How much of the chain the air has taken: what the weather and the
+    // sand have between them left of the view, against a range that stands
+    // a great deal further out than the fog ever reaches. Scaled past one
+    // because the rings are not AT the fog's own distance — by the time a
+    // blizzard has the view down to a third, a skyline two kilometres back
+    // is not a paler skyline, it is no skyline.
+    const taken = Math.min(1, (1 - Math.min(veilCut, sandSeen)) * RINGS_TAKEN);
+    horizon.paint(air === preset.fog ? preset : { ...preset, fog: air }, taken);
   };
 
   const applyRange = (): void => {
