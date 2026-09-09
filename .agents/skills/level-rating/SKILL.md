@@ -166,15 +166,47 @@ than the rung below it is not a harder stage, whatever `difficulty` says.
 **Try the conditions before you try the seeds.** An `hour`, a `weather` and a
 `season` are three levers that cost nothing, change nothing that was verified,
 and move `ladder.conditions` on their own. A seed change re-rolls the road, the
-previews, the sim times and the routes in the menu.
+previews, the sim times and the routes in the menu. One exception: a WINTER
+level is a different ROAD (R48 — the lakes freeze and the route may cross
+them), so `--season winter` on `make rate` and `make analyze` is not optional
+when a level is set in one.
+
+**THE SCORE SATURATES, SO SEARCH AGAINST A BRIEF RATHER THAN AGAINST THE
+SCORE.** Every ladder trait is a band, so a set that clears all nine reads 100.0
+however it clears them — and a search told to maximise the number lands every
+band on its edge: `spread` on its floor (the last stage asking barely more than
+the first), `step` on its ceiling, two rungs a thousandth apart. Hold a
+shortlist to a brief instead, and read the score as a pass mark:
+
+- every rung asks MORE than the one under it, by enough to feel (about 0.035)
+  and not so much it is a wall (`ladder.step`'s ceiling)
+- `spread` in the MIDDLE of its band, not on its floor
+- no seed twice in a country, and no two rungs under the same sky
+- as few `make analyze` errors as the slot allows
+
+**That last one is not a tiebreak, and it is the one the rating cannot see.**
+`make rate` assumes an analyzable road and reports honestly enormous numbers on
+one that is not; a pass chosen on the rating alone put a road carrying
+EIGHTY-ONE R-rule violations into a ladder at a rating of 84. Sweep
+`analyzeSeed`'s `errors` over the same candidates and carry it into the pick.
 
 **What a level change owes** (`CLAUDE.md`'s sync points):
 
 - `make previews` — the campaign's stage boxes and biome banners are generator
   OUTPUT. A re-seeded level leaves a picture of a stage that no longer exists.
+  A country's FIRST level owns its banner, and a banner is a LOOK test the
+  rating cannot make: open the JPEG.
 - `npm run sim` for the new stage, and the ladder's times in `campaign.ts`'s
   own header comment if they are quoted there.
-- `tests/campaign_test.ts` if the ladder's shape changed.
+- `tests/campaign_test.ts` if the ladder's shape changed — and note that a
+  country's own invariants live there (the alps start beside the snow and
+  their sprints come DOWN; the desert has sand and no water), so they are a
+  filter on the candidate pool, not a check at the end.
+- **Everything else that PINS A LEVEL ID.** A re-seeded level silently
+  invalidates them, and nothing fails: `pwa/src/game/benchmark-plan.ts` (the
+  stage the in-game benchmark runs, chosen by measurement) and
+  `scripts/store-shots/recipes.mjs` (each frame is a level plus a distance
+  along that exact road). `grep` for the ids before calling the change done.
 
 ---
 

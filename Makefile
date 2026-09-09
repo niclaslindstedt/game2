@@ -234,10 +234,15 @@ biomes:
 # the two ends, the ground's layers, and what the whole thing COST to build.
 # The measuring half of the generator loop — `make track` is the looking
 # half. Exits non-zero on any error finding.
+# SEASON= builds the road the cold builds (R48): below freezing the lakes
+# are solid and the route may cross them, so a winter level is a different
+# stage from the same seed and has to be checked as one.
 # `make analyze SEEDS=7` · `make analyze COUNT=24 ARGS=--checks`
+# `make analyze SEEDS=44 LENGTH=xlong SEASON=winter`
 analyze:
 	npm run analyze -- $(if $(SEEDS),--seeds $(SEEDS),) $(if $(COUNT),--count $(COUNT),) \
-		$(if $(LENGTH),--length $(LENGTH),) $(if $(SHAPE),--shape $(SHAPE),) $(ARGS)
+		$(if $(LENGTH),--length $(LENGTH),) $(if $(SHAPE),--shape $(SHAPE),) \
+		$(if $(SEASON),--season $(SEASON),) $(ARGS)
 
 # RATE generated stages as RALLY STAGES — is this road any GOOD, which is
 # where `make analyze` (is it BROKEN?) stops. Flow, pace, relief, features,
@@ -249,10 +254,13 @@ analyze:
 # `make rate SEEDS=38 ARGS=--traits` · `make rate COUNT=64`
 # `make rate COUNT=120 ARGS=--stats` · `make rate CAMPAIGN=1`
 # `make rate COUNT=200 ARGS="--pick 4"` · `make rate BIOME=desert LENGTH=long`
+# SEASON= rates the road the cold builds (R48) — what a winter level is.
+# The campaign audit reads each level's own season and needs no flag.
 rate:
 	npm run rate -- $(if $(SEEDS),--seeds $(SEEDS),) $(if $(COUNT),--count $(COUNT),) \
 		$(if $(LENGTH),--length $(LENGTH),) $(if $(SHAPE),--shape $(SHAPE),) \
-		$(if $(BIOME),--biome $(BIOME),) $(if $(CAMPAIGN),--campaign,) $(ARGS)
+		$(if $(BIOME),--biome $(BIOME),) $(if $(SEASON),--season $(SEASON),) \
+		$(if $(CAMPAIGN),--campaign,) $(ARGS)
 
 # Render the car models to a labeled contact sheet (previews/cars.png):
 # the chase-cam gaming angle plus turntable views, for the car-design

@@ -30,6 +30,7 @@
 // imports it, and the campaign it picks is a table of seeds somebody
 // committed.
 
+import type { ClimateChoice } from "../game/climate.ts";
 import { compileStage, type Track } from "../mapgen/compile.ts";
 import { createTerrain, type TerrainField } from "../mapgen/terrain.ts";
 import type { FiniteStageLength, StageKnobs, StageShape } from "../mapgen/rules.ts";
@@ -71,6 +72,13 @@ export type RateOptions = {
   length?: FiniteStageLength;
   shape?: StageShape;
   knobs?: Partial<StageKnobs>;
+  /** R48 — the cold the stage is driven under. A season is not dressing:
+   * below `CLIMATE.ice` the lakes freeze and a frozen lake is ground the
+   * route may cross, so a winter seed and a summer seed are two different
+   * roads. Rating a winter level as its summer road is rating a stage the
+   * player never drives. Defaults to summer, which is what a bare seed in a
+   * sweep is. */
+  climate?: ClimateChoice;
 };
 
 /** Rate a stage that has already been built, with a terrain field over it
@@ -124,7 +132,7 @@ export function rateTrack(
 /** Build a stage from a seed and rate it — the whole loop in one call. */
 export function rateSeed(seed: number, options: RateOptions = {}): StageRating {
   const length = options.length ?? "medium";
-  const track = compileStage(seed, length, options.knobs, options.shape);
+  const track = compileStage(seed, length, options.knobs, options.shape, options.climate);
   const terrain = createTerrain(track);
   // `createTerrain` syncs on construction, so the field has already caught
   // up with the whole stage here. Said out loud because it is a PRECONDITION

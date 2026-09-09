@@ -18,6 +18,7 @@
 //   npm run level -- --level 1 --focus 1200    # ...around 1200 m along the stage
 //   npm run level -- --seed 38 --length short  # any seed, on the default dials
 //   npm run level -- --seed 7 --shape circuit --asphalt 0.6 --water 0.9
+//   npm run level -- --seed 44 --length xlong --season winter
 //   npm run level -- --level 2 --json          # the features as data, too
 //   npm run level -- --list                    # the campaign's stages
 //
@@ -94,7 +95,12 @@ const size = Number(flag("size") ?? 1200);
 const span = Number(flag("span") ?? 240);
 
 // ── Build it ────────────────────────────────────────────────────────────
-const track = compileStage(seed, length, dials, shape);
+// R48 — a campaign level is built under its own season, and a bare seed
+// under whichever `--season` asked for: below freezing the lakes are solid
+// and the route may cross them, so the map of a winter stage is a map of a
+// different road.
+const climate = { season: level?.season ?? flag("season") ?? "summer" };
+const track = compileStage(seed, length, dials, shape, climate);
 const terrain = createTerrain(track);
 terrain.sync(track.length);
 const features = stageFeatures(track, terrain);

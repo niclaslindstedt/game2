@@ -470,8 +470,8 @@ export const SHOTS = [
     id: "pack",
     caption: "GET PAST THEM",
     // THE CLAIM: the field is not scenery — it is in the way. Taiga-1's first
-    // two calls come at 165 m and 204 m, an EASY RIGHT straight into a MEDIUM
-    // LEFT, which is the earliest place on the stage where fifteen cars that
+    // two calls come at 167 m and 217 m, an EASY LEFT straight into an EASY
+    // RIGHT, which is the earliest place on the stage where fifteen cars that
     // left together have to take the same line at once.
     //
     // Placed EARLY rather than driven from the grid. Both work and the placement
@@ -493,30 +493,29 @@ export const SHOTS = [
   {
     id: "drift",
     caption: "COMMIT TO THE SLIDE",
-    // THE CLAIM: the drift is the game. Loggers' Run at one in the afternoon in
+    // THE CLAIM: the drift is the game. Mill Bridge at one in the afternoon in
     // high summer, from the chase camera — the one rig that shows the car's
     // angle against a road it is not pointing down.
     //
     // THE LIGHT WAS CHOSEN AND IS NOT INTERCHANGEABLE. This was first staged on
-    // Granite Ridge, which the campaign runs in autumn rain at five in the
-    // afternoon: dramatic to drive, and the frame came back a dark brown field
-    // under a grey sky with a pair of tail lights in it. The stage that
-    // photographs is the bright one; weather goes in the `weather` frame, where
-    // being dark is the point.
+    // a long sprint the campaign runs in autumn rain at five in the afternoon:
+    // dramatic to drive, and the frame came back a dark brown field under a
+    // grey sky with a pair of tail lights in it. The stage that photographs is
+    // the bright one; weather goes in the `weather` frame, where being dark is
+    // the point.
     //
-    // Stood at 740 m, sixty metres short of T6 — a LONG MEDIUM LEFT of
-    // thirty-two metres' radius, the tightest corner on the stage
-    // (`make level LEVEL=taiga-1`). MEDIUM rather than hard, deliberately: the
-    // harness asks for the slide itself, and full lock into a sixteen-metre
-    // hairpin at a hundred is a spin — a different frame with a different
-    // caption.
+    // Stood at 650 m, sixty metres short of T5 — a LONG MEDIUM LEFT of
+    // thirty-two metres' radius (`make level LEVEL=taiga-1`). MEDIUM rather
+    // than hard, deliberately: the harness asks for the slide itself, and full
+    // lock into T3's twenty-metre hairpin at a hundred is a spin — a different
+    // frame with a different caption.
     //
     // `commitToTheCorner` then `holdTheSlide` are what make it a drift rather
     // than a tidy line; see the notes on both, and the measurements behind
     // them. The shutter is timed from the CATCH rather than from the input,
     // because how far the car has come round by the time the lock comes off is
     // this frame's whole subject.
-    params: { level: "taiga-1", at: "racing", s: "770", speed: "25", camera: "chase" },
+    params: { level: "taiga-1", at: "racing", s: "650", speed: "25", camera: "chase" },
     prepare: commitToTheCorner,
     trigger: holdTheSlide,
     captureAtS: 0.4,
@@ -526,10 +525,10 @@ export const SHOTS = [
     id: "air",
     caption: "LAND IT ALREADY TURNING",
     // THE CLAIM: the stages have jumps, and a jump is not a cutscene. Bajada's
-    // J1 sits at 946 m — a metre and a half of lip up a 9% ramp, on a straight,
-    // sixty-six metres before a HARD RIGHT — which is this caption written into
-    // the road. Placed at 860 m so the run arrives at it, and the field is
-    // brought forward with the placement, so there are cars on the ramp behind.
+    // J1 sits at 1428 m — two metres of lip up a 21% ramp, on a straight, sixty
+    // metres before a HARD RIGHT — which is this caption written into the road.
+    // Placed at 1342 m so the run arrives at it, and the field is brought
+    // forward with the placement, so there are cars on the ramp behind.
     //
     // Timed off the wheels LEAVING the ground, so the offset is how far into the
     // flight to shoot: arithmetic over the air time rather than a guess. The
@@ -542,7 +541,7 @@ export const SHOTS = [
     // air, and the shutter was past it. A tenth of a second is barely off the
     // trigger on purpose — `atAir` returns the instant the wheels leave, so
     // this is measured into the flight rather than towards it.
-    params: { level: "desert-1", at: "racing", s: "860", speed: "31", camera: "close" },
+    params: { level: "desert-1", at: "racing", s: "1342", speed: "31", camera: "close" },
     trigger: atAir,
     captureAtS: 0.1,
     sweepAtS: [0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6],
@@ -562,12 +561,12 @@ export const SHOTS = [
     // same radius, at NOON in high summer.
     //
     // THE HOUR IS WHY IT IS NOT SWITCHBACKS. That stage has the better
-    // geometry and the campaign runs it at half past five in the morning; the
-    // frame came back a grey dusk wash with a washed-out sky, which is the
-    // Granite Ridge mistake made a second time in the same set. The light is
-    // chosen before the geometry, every time. Being SHORT helps too: fifteen
-    // hundred metres is not enough road for the field to string out on, so the
-    // crews are still on the mountain with the player.
+    // geometry and the campaign runs it in the rain at eleven at night; the
+    // frame came back a dark wash with a washed-out sky, which is the same
+    // mistake made a second time in the same set. The light is chosen before
+    // the geometry, every time. Being SHORT helps too: fifteen hundred metres
+    // is not enough road for the field to string out on, so the crews are
+    // still on the mountain with the player.
     //
     // `drawdistance=far` is doing real work here rather than being tidy: the fog
     // preset is sized for a driver's eye a metre off the road, and a camera
@@ -581,16 +580,16 @@ export const SHOTS = [
   {
     id: "weather",
     caption: "DRIVE IT IN ANYTHING",
-    // THE CLAIM: the sky is not wallpaper. Summit to Valley is ten kilometres
-    // of wet tarmac dropping three hundred and fifty metres through a summer
-    // storm at seven in the evening — headlamps on, spray off the car in front,
-    // and a road surface that has stopped being gravel.
+    // THE CLAIM: the sky is not wallpaper. Summit to Valley is eleven
+    // kilometres dropping three hundred metres off the pass through a WINTER
+    // storm at eleven at night — headlamps on, snow coming across them, and a
+    // road surface that has stopped being gravel.
     //
     // The weather comes off the CAMPAIGN ROW rather than a `?weather=`
     // override, on purpose: this is the stage as a player meets it, and a storm
     // pinned onto a stage the campaign runs in the clear is a screenshot of a
     // build nobody plays.
-    params: { level: "alpine-4", at: "racing", s: "1980", speed: "26", camera: "chase" },
+    params: { level: "alpine-6", at: "racing", s: "1980", speed: "26", camera: "chase" },
     trigger: atNextCall,
     captureAtS: 1.6,
     sweepAtS: [0, 0.6, 1.2, 1.8, 2.5, 3.3, 4.2, 5.5],
