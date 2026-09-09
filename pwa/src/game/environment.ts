@@ -85,7 +85,7 @@ import {
 } from "./sky.ts";
 import { createSunShadows, type SunShadows } from "./car-shadow.ts";
 import { fogRangeFor, SKY_LOOK, type VideoSettings } from "./settings.ts";
-import { coverOf, squallOf, type Clap } from "./weather.ts";
+import { coverOf, precipReach, squallOf, type Clap } from "./weather.ts";
 import { glowTexture } from "./textures.ts";
 
 // Before any material compiles: three resolves the fog chunk at compile
@@ -111,6 +111,19 @@ const REMARCH_EVERY = 0.5 * (Math.PI / 180);
  * takes seconds to cross it; the light going with it in a frame would read
  * as a fault in the lamp. */
 const OCCLUSION_RATE = 1.4;
+
+/** How fast the distance closes as the rain thickens, 1/s, and how far the
+ * veil has to have moved before the fog is actually re-cut.
+ *
+ * Slower than the sheet itself on purpose. A squall arrives in a second
+ * and the drops thicken with it, but the AIR takes longer — the distance
+ * going with the gust frame for frame reads as the fog range being driven
+ * by something rather than as weather. The step is what keeps a number
+ * that moves every frame from re-deriving a preset's worth of colour every
+ * frame; a fortieth of the range is well under what an eye finds on a
+ * ridge two hundred metres out. */
+const VEIL_RATE = 0.5;
+const VEIL_STEP = 0.025;
 
 /** WHAT THE AIR IS COLOURED INSIDE A SANDSTORM, and what the sky over it
  * goes to. Two tones and not one: the middle distance is the sand itself,
@@ -475,6 +488,15 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   let meanWind = 0;
   /** How hard it is coming down this instant, 0..1. */
   let rainNow = 0;
+  /** WHAT THE WEATHER LEAVES OF THE VIEW, as a share of the fog's own reach
+   * (`precipReach`), and the last value the fog was actually cut to.
+   *
+   * The sheets of rain and snow reach a few tens of metres and stop; the
+   * rest of the frame is fog, so the fog IS how the weather reads past the
+   * bonnet. Held here beside the sand's pair for the same reason — the fog
+   * range and the fog's colour both read it, and it moves every frame. */
+  let veilNow = 1;
+  let veilCut = 1;
   /** The DETAIL row's `snow` stop, as the sheet and the tone both read it. */
   let snowLit = false;
   let rangeScale = 1;
@@ -498,9 +520,31 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     // The sky behind it goes with it: a ceiling still showing blue over a
     // brown middle distance is the one thing that gives a fog trick away.
     background.set(preset.zenith);
+    // A SNOWFALL IS A COLOUR TOO, and it is the flakes' own: what a driver
+    // sees a hundred metres into heavy snow is not a paler version of the
+    // country, it is the snow IN THE AIR. So the distance takes the tone
+    // the sheet is already drawn in (`snowTone`) rather than an authored
+    // white — which is what keeps a midnight blizzard a dark blue haze
+    // instead of a white wall lit by nothing. Rain gets none of this: the
+    // deck's own grey is already the colour of rain in the air, and the
+    // weather look has put it on the fog (`fogDeck`, sky-looks.ts).
+    const white = flakes * Math.min(1, rainNow);
+    if (white > 0.01) fog.color.lerp(snowTone(preset, snowLit), 0.75 * white);
     if (sandNow <= 0) return;
     fog.color.lerp(SAND_AIR, Math.min(1, sandNow * 1.15));
     background.lerp(SAND_SKY, Math.min(1, sandNow * 1.1));
+  };
+
+  /** THE SKY THE RIDGE RINGS STAND IN — the preset with whatever the air
+   * actually ended up being (the snow in it, the sand in it) put back on
+   * it. The rings are the far end of every sight line in the frame, so they
+   * are painted against the fog rather than against the preset's own: a
+   * white-out with a chain of dark peaks standing above it is the one thing
+   * that gives the whole trick away, and it is the same trap the deck's
+   * ceiling is held to two lines up. */
+  const paintHorizon = (): void => {
+    const air = fog.color.getHex();
+    horizon.paint(air === preset.fog ? preset : { ...preset, fog: air });
   };
 
   const applyRange = (): void => {
@@ -517,7 +561,16 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     // preference and not a sky: it is the air actually being full of the
     // ground, so it compounds with whatever the player and the weather
     // have already asked for rather than replacing either.
-    const range = fogRangeFor(preset.fogNear, preset.fogFar, rangeScale * sandSeen);
+    // The VEIL is applied to the preset rather than through the scale: it
+    // is the weather actually in the air, so it goes where a shorter
+    // preset would, under `MIN_FOG_FAR`'s floor rather than over it — the
+    // floor guards what the SETTING may take, and a downpour is allowed to
+    // be as short as a downpour is.
+    const range = fogRangeFor(
+      preset.fogNear * veilCut,
+      preset.fogFar * veilCut,
+      rangeScale * sandSeen,
+    );
     fog.near = range.near;
     fog.far = range.far;
   };
@@ -625,7 +678,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     restLight();
     rain.setTone(rainTone(preset));
     snow.setTone(snowTone(preset, snowLit));
-    horizon.paint(preset);
+    paintHorizon();
     storm.apply(preset);
     lamps.setStage(preset.lamps);
     // WHERE THE SPHERE OF STARS HAS TURNED TO this hour (starfield.ts) —
@@ -902,6 +955,20 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     const airAt = temperatureAt(state.track.climate, cam.y);
     const freezing = fallsAsSnow(airAt) ? 1 : 0;
     flakes += (freezing - flakes) * Math.min(1, dt * 1.5);
+    // WHAT THE SQUALL DOES TO THE DISTANCE. The sheets stop a few tens of
+    // metres out; everything past that is fog, so a downpour that does not
+    // move the fog is a downpour that stops at the bonnet. Eased rather
+    // than snapped — the air takes a moment to thicken, and the fog range
+    // is read by every material in the scene — and re-cut only when it has
+    // actually moved, because `applyRange` and `applyFogTone` are a
+    // preset's worth of colour work rather than two assignments.
+    veilNow += (precipReach(rainNow, flakes) - veilNow) * Math.min(1, dt * VEIL_RATE);
+    if (Math.abs(veilNow - veilCut) > VEIL_STEP) {
+      veilCut = veilNow;
+      applyRange();
+      applyFogTone();
+      paintHorizon();
+    }
     rain.setIntensity(effects > 0 ? rainNow * (1 - flakes) : 0);
     rain.setFlash(surge);
     rain.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
@@ -920,6 +987,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       sandSeen = seen;
       applyRange();
       applyFogTone();
+      paintHorizon();
     }
     sandAir.set(effects > 0 ? sandNow : 0, effects > 0 ? state.sand.approach : 0);
     sandAir.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);

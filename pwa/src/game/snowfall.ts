@@ -63,19 +63,48 @@ import { rollSnowHabit } from "@engine";
 import { DUST_LAMP_GLSL, DUST_LAMP_UNIFORMS, dustLampSum } from "./dust-light.ts";
 import { CRYSTAL_ATLAS, HABIT_SCALE, crystalAtlas } from "./snow-crystal.ts";
 
-/** How many flakes the box holds. Deliberately most of the way to twice
- * the rain's pool (rain.ts), because a drop and a flake are not read the
- * same way: a drop is drawn as a streak metres long and a handful of them
+/** How many flakes the box holds. Several times the rain's pool (rain.ts),
+ * because a drop and a flake are not read the same way: a drop is drawn as a streak metres long and a handful of them
  * are a downpour, where a flake is a dot and a handful of dots is a clear
  * night with something in the air. What the lamps make of this is the
  * reason it matters — a beam picks out the flakes IN it, so the wall in
  * front of the car is only ever as thick as the sheet is dense, and a
- * sparse sheet lights up as a scatter of sparks rather than as weather. */
-const POOL = 3400;
-/** Half-extent of the box around the camera, m. Flakes are seen further
- * than drops are — they are white, and they hang — so the box reaches a
- * little further than the rain's. */
-const BOX = 20;
+ * sparse sheet lights up as a scatter of sparks rather than as weather.
+ *
+ * How many of these the FRAME holds is not the pool but the pool against
+ * the box's reach: the count inside a view frustum out to a shell's wall
+ * works out proportional to `POOL * reach`, so shrinking the near box
+ * concentrates the flakes and makes each one bigger WITHOUT putting one
+ * more of them on screen. A denser blizzard is bought here and nowhere
+ * else. */
+const POOL = 6800;
+/** Half-extent of the TWO SHELLS around the camera, m — the same near/far
+ * split the rain is built on (rain.ts), and for the same reason, but the
+ * three ranges snow is read at are further apart than rain's:
+ *
+ *   NEAR — most of the pool in a tight box, which is where a flake is
+ *   drawn as the CRYSTAL it is (`CRYSTAL_AT`) and where the headlamps
+ *   reach. This is the wall the driver is pushing through.
+ *
+ *   FAR — the rest spread over nearly three times the reach: fine flakes,
+ *   dimmer, too small to hold a shape. Not weather on their own, and not
+ *   meant to be — they are the SPECKS IN THE HAZE, the thing that says the
+ *   white middle distance is moving.
+ *
+ *   BEYOND — the fog, closed right down by the snow itself
+ *   (`precipReach`, weather.ts) and tinted to the flakes' own colour.
+ *   Heavy snow is a WHITE-OUT: at some distance the individual flakes stop
+ *   being flakes and become the air, and drawing sub-pixel sprites out
+ *   there buys aliasing instead of weather.
+ *
+ * A flake keeps its shell for life and wraps inside it, so the near
+ * density holds however far the car travels. */
+const BOX = { near: 13, far: 36 };
+/** How much of the pool lives in the near shell. Heavier toward the near
+ * one than the rain's split: a flake is read as a body rather than as a
+ * streak, so the near sheet has to be dense enough to hide the road
+ * where the rain only has to hatch over it. */
+const NEAR_SHARE = 0.7;
 /** …and how far it reaches UNDER the camera and OVER it, m.
  *
  * Both are cut close, and the ceiling hardest, because the pool has to be
@@ -115,6 +144,23 @@ const FLUTTER = { swing: 0.35, rate: 2.1 };
  * with needs tens of pixels before it is a shape rather than a shimmer.
  * The ceiling below is what keeps that honest from the other end. */
 const SIZE = { light: 0.09, heavy: 0.26 };
+
+/** …and the slice of that range the FAR shell is cut from. Its flakes are
+ * the fine ones: a big habit thirty metres out is a soft blob the size of
+ * a near one, which reads as a second snowfall hanging in the middle
+ * distance rather than as the same one going away. */
+const FAR_SIZE = 0.4;
+
+/** What the far shell keeps of a flake's brightness. There is a great deal
+ * of snow-thickened air between it and the lens, and it is drawn against
+ * the white-out rather than against the road. */
+const FAR_TONE = 0.7;
+
+/** Where a flake starts fading out, as a share of its own shell's reach —
+ * so the near sheet hands over to the far one and the far one dissolves
+ * into the fog, instead of either ending on a ring of flakes blinking in
+ * and out at a fixed radius. */
+const FADE_FROM = 0.7;
 
 /** …and the biggest a flake may ever be drawn on screen, as a share of
  * half the frame's height. Without it the exaggeration above walks right
@@ -164,6 +210,21 @@ const TONE = { light: 0.7, heavy: 1 };
  * away into the dark. */
 const LAMP_GAIN = 8;
 
+/** THE HAND-OVER, in one line both programs paste: a flake dissolves over
+ * the outer stretch of its OWN shell's reach (`aReach`), so the near sheet
+ * gives way to the far specks and the far specks give way to the white-out
+ * without either ending on a ring of flakes blinking at a fixed radius.
+ *
+ * Horizontal only. A flake directly overhead is inside the sheet however
+ * high the box reaches, and fading it by the full distance would thin the
+ * snow out of the top of every frame. */
+const RIM_FADE_GLSL = `vec3 flakeWorld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
+        vRim = 1.0 - smoothstep(
+          aReach * ${FADE_FROM.toFixed(2)},
+          aReach,
+          length( flakeWorld.xz - cameraPosition.xz )
+        );`;
+
 export type Snowfall = {
   points: THREE.Points;
   /** Flakes per box, 0..1 (0 parks the whole system). */
@@ -212,6 +273,10 @@ export function createSnowfall(): Snowfall {
   const scale = new Float32Array(POOL);
   const spin = new Float32Array(POOL);
   const tumble = new Float32Array(POOL);
+  /** Which shell a flake lives in, as the half-extent it wraps inside, m.
+   * The shader reads it too — a flake fades against its OWN reach, not
+   * against a shared one, which is what lets the two shells hand over. */
+  const reach = new Float32Array(POOL);
   const base = new THREE.Color(0xf4f8ff);
   const tone = new THREE.Color(1, 1, 1);
   /** The air at the camera, °C — what `setHabit` is told and what every
@@ -232,17 +297,24 @@ export function createSnowfall(): Snowfall {
   };
 
   for (let i = 0; i < POOL; i++) {
-    flakes[i * 3] = (Math.random() * 2 - 1) * BOX;
+    // Interleaved rather than split front-and-back: `setIntensity` submits
+    // a PREFIX of the pool, so a shell parked at its end would be the
+    // first thing light snow lost — and light snow is exactly when the far
+    // specks are all there is to say it is snowing at all.
+    const far = i % 10 >= Math.round(NEAR_SHARE * 10);
+    const half = far ? BOX.far : BOX.near;
+    reach[i] = half;
+    flakes[i * 3] = (Math.random() * 2 - 1) * half;
     flakes[i * 3 + 1] = Math.random() * TALL;
-    flakes[i * 3 + 2] = (Math.random() * 2 - 1) * BOX;
-    size[i] = Math.random();
+    flakes[i * 3 + 2] = (Math.random() * 2 - 1) * half;
+    size[i] = far ? Math.random() * FAR_SIZE : Math.random();
     phase[i] = Math.random() * Math.PI * 2;
     spin[i] = Math.random() * Math.PI * 2;
     // Signed, so half the sheet turns each way.
     tumble[i] =
       (TUMBLE.slow + (TUMBLE.fast - TUMBLE.slow) * Math.random()) * (Math.random() < 0.5 ? -1 : 1);
     roll(i);
-    const bright = TONE.light + (TONE.heavy - TONE.light) * size[i];
+    const bright = (TONE.light + (TONE.heavy - TONE.light) * size[i]) * (far ? FAR_TONE : 1);
     colors[i * 3] = base.r * bright;
     colors[i * 3 + 1] = base.g * bright;
     colors[i * 3 + 2] = base.b * bright;
@@ -255,6 +327,7 @@ export function createSnowfall(): Snowfall {
   geo.setAttribute("aScale", new THREE.BufferAttribute(scale, 1));
   geo.setAttribute("aSpin", new THREE.BufferAttribute(spin, 1));
   geo.setAttribute("aTumble", new THREE.BufferAttribute(tumble, 1));
+  geo.setAttribute("aReach", new THREE.BufferAttribute(reach, 1));
 
   /** Built on the first frame the top stop is asked for, and never on a
    * machine that stays under it — half a megabyte of canvas nobody would
@@ -374,6 +447,7 @@ export function createSnowfall(): Snowfall {
     for (let i = 0; i < active; i++) {
       const fat = size[i];
       const fall = FALL.light + (FALL.heavy - FALL.light) * fat;
+      const half = reach[i];
       let x = flakes[i * 3];
       let y = flakes[i * 3 + 1];
       let z = flakes[i * 3 + 2];
@@ -383,18 +457,18 @@ export function createSnowfall(): Snowfall {
       z += (vz + Math.cos(t * 0.77) * FLUTTER.swing) * dt;
       if (y < 0) {
         y += TALL;
-        x = (Math.random() * 2 - 1) * BOX;
-        z = (Math.random() * 2 - 1) * BOX;
+        x = (Math.random() * 2 - 1) * half;
+        z = (Math.random() * 2 - 1) * half;
         // A flake that reaches the top of the box is a NEW flake, and the
         // air it grew in may have changed since the last one: this is the
         // only place the sheet's crystals turn over.
         roll(i);
         recut = true;
       }
-      if (x < -BOX) x += BOX * 2;
-      else if (x > BOX) x -= BOX * 2;
-      if (z < -BOX) z += BOX * 2;
-      else if (z > BOX) z -= BOX * 2;
+      if (x < -half) x += half * 2;
+      else if (x > half) x -= half * 2;
+      if (z < -half) z += half * 2;
+      else if (z > half) z -= half * 2;
       flakes[i * 3] = x;
       flakes[i * 3 + 1] = y;
       flakes[i * 3 + 2] = z;
@@ -470,17 +544,26 @@ function graftFlakes(
       // still comes off `aScale`, because a sheet of one size is a sheet of
       // stamps whatever else is switched off.
       shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", "#include <common>\n        attribute float aScale;")
+        .replace(
+          "#include <common>",
+          `#include <common>
+        attribute float aScale;
+        attribute float aReach;
+        varying float vRim;`,
+        )
         .replace("gl_PointSize = size;", "gl_PointSize = size * aScale;")
         .replace(
           "#include <fog_vertex>",
           `#include <fog_vertex>
-        gl_PointSize = min( gl_PointSize, scale * ${SIZE_CAP.toFixed(4)} );`,
+        gl_PointSize = min( gl_PointSize, scale * ${SIZE_CAP.toFixed(4)} );
+        ${RIM_FADE_GLSL}`,
         );
-      shader.fragmentShader = shader.fragmentShader.replace(
-        "#include <map_particle_fragment>",
-        "diffuseColor.a *= smoothstep( 0.5, 0.12, length( gl_PointCoord - 0.5 ) );",
-      );
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\n        varying float vRim;")
+        .replace(
+          "#include <map_particle_fragment>",
+          "diffuseColor.a *= vRim * smoothstep( 0.5, 0.12, length( gl_PointCoord - 0.5 ) );",
+        );
       return;
     }
     Object.assign(shader.uniforms, DUST_LAMP_UNIFORMS);
@@ -495,9 +578,11 @@ function graftFlakes(
         attribute float aScale;
         attribute float aSpin;
         attribute float aTumble;
+        attribute float aReach;
         varying vec3 vLamp;
         varying float vSpin;
         varying float vNear;
+        varying float vRim;
         varying vec2 vCell;`,
       )
       .replace(
@@ -517,7 +602,8 @@ function graftFlakes(
         gl_PointSize = min( gl_PointSize, scale * ${SIZE_CAP.toFixed(4)} );
         vNear = smoothstep( ${CRYSTAL_AT.dot.toFixed(1)}, ${CRYSTAL_AT.full.toFixed(
           1,
-        )}, gl_PointSize );`,
+        )}, gl_PointSize );
+        ${RIM_FADE_GLSL}`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -526,11 +612,12 @@ function graftFlakes(
         varying vec3 vLamp;
         varying float vSpin;
         varying float vNear;
+        varying float vRim;
         varying vec2 vCell;`,
       )
       .replace(
         "vec4 diffuseColor = vec4( diffuse, opacity );",
-        "vec4 diffuseColor = vec4( diffuse + vLamp, opacity );",
+        "vec4 diffuseColor = vec4( diffuse + vLamp, opacity * vRim );",
       )
       // The stock chunk samples the map straight, unrotated and with three's
       // own flip; all three are wrong for an atlas of turning crystals, so

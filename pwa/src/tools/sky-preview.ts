@@ -16,6 +16,7 @@
 import * as THREE from "three";
 import { calmSand, type GameState, type RaceEnv, type Season, type Weather } from "@engine";
 
+import { clearDustLamps } from "../game/dust-light.ts";
 import { createEnvironment } from "../game/environment.ts";
 import { hourLabel } from "../game/daylight.ts";
 import type { VideoSettings } from "../game/settings.ts";
@@ -44,6 +45,11 @@ type Row = {
   gust?: number;
   /** Hold the frame until a strike is at its brightest. */
   catchStrike?: boolean;
+  /** How cold the country is at the road, °C — the sheet stands in a mild
+   * autumn unless a row says otherwise. Under freezing what falls is SNOW
+   * rather than rain (`fallsAsSnow`, climate.ts), which is the one weather
+   * on this sheet that is not chosen by the sky at all. */
+  temperature?: number;
 };
 
 const ROWS: Row[] = [
@@ -88,6 +94,29 @@ const ROWS: Row[] = [
   { name: "storm — squall", weather: "storm", windSpeed: 7, sky: "full" },
   { name: "storm — black anvil", weather: "storm", windSpeed: 11, sky: "full" },
   { name: "storm — the strike", weather: "storm", windSpeed: 11, sky: "full", catchStrike: true },
+  // WHAT FALLS WHEN THE AIR IS UNDER FREEZING. Neither of these is a
+  // weather the sky can be set to — the two sheets are cross-faded off the
+  // air at the CAMERA (environment.ts) — so without a row pinning the
+  // climate cold, the snow and its white-out are drawn by nobody and
+  // reviewed by nobody. Two of them, because a snowfall is read as a
+  // ladder: a light one has to leave the country visible behind it, and a
+  // heavy one has to take it away.
+  {
+    name: "snow — a light fall",
+    weather: "rain",
+    windSpeed: 3.5,
+    sky: "full",
+    season: "winter",
+    temperature: -6,
+  },
+  {
+    name: "snow — a white-out",
+    weather: "storm",
+    windSpeed: 11,
+    sky: "full",
+    season: "winter",
+    temperature: -14,
+  },
 ];
 
 /** The hours photographed — a late-September day over the taiga, which
@@ -180,12 +209,32 @@ function plant(scene: THREE.Scene): void {
 async function main(): Promise<void> {
   const rows = chosen(ROWS, "rows", (row) => row.name.toLowerCase());
   const hours = chosen(HOURS, "hours", (hour) => String(hour));
-  const canvas = document.getElementById("stage") as HTMLCanvasElement;
   const width = CELL_W * hours.length;
   const height = CELL_H * rows.length;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setSize(width, height, true);
-  renderer.setScissorTest(true);
+  // ONE CELL IS ONE FRAME, and the sheet is pasted together out of them.
+  //
+  // The obvious harness renders every cell into one tall canvas behind a
+  // scissor, and for a sky that is drawn per view ray it makes no
+  // difference. It is wrong for anything sized in PIXELS: three hands a
+  // points material a `scale` off the DRAWING BUFFER's height, so a flake
+  // on a seven-row sheet came out seven times the size it is in the game
+  // — and a different size again on a twelve-row one, which is the same
+  // sheet disagreeing with itself. Rendering at the cell's own size and
+  // blitting the result puts every per-pixel thing (the flakes, the stars,
+  // the shader sky's own grids) at the size a player would see.
+  const canvas = document.getElementById("stage") as HTMLCanvasElement;
+  canvas.width = width;
+  canvas.height = height;
+  const sheet = canvas.getContext("2d") as CanvasRenderingContext2D;
+  const cell = document.createElement("canvas");
+  const renderer = new THREE.WebGLRenderer({
+    canvas: cell,
+    antialias: true,
+    // The blit reads the buffer after the render returns; without this the
+    // browser is free to have thrown it away by then.
+    preserveDrawingBuffer: true,
+  });
+  renderer.setSize(CELL_W, CELL_H, false);
 
   const labels = document.getElementById("labels") as HTMLDivElement;
   const addLabel = (text: string, col: number, row: number, dy = 0): void => {
@@ -217,6 +266,10 @@ async function main(): Promise<void> {
 
   const environment = createEnvironment(scene);
   environment.setEffects(1);
+  // The DETAIL row's top stop, so the sheet photographs the snow the game
+  // ships on its best setting: the flakes lit by the car's lamps and drawn
+  // as the crystals their temperature grows (snowfall.ts).
+  environment.setSnowCrystals(true);
   // There is no car in this scene, so there are no lamps: the pools they
   // would throw on the road are the one thing here that is not sky.
   environment.setLampsBroken(0, 0);
@@ -243,7 +296,7 @@ async function main(): Promise<void> {
         hour,
         weather: row.weather,
         season,
-        temperature: 12,
+        temperature: row.temperature ?? 12,
         windDir: 0.7,
         windSpeed: row.windSpeed,
         gustPhase: row.gust ?? 0.4,
@@ -252,7 +305,9 @@ async function main(): Promise<void> {
         sandSeed: 0,
       };
       state.env = env;
-      (state.track.climate as { season: Season }).season = season;
+      const climate = state.track.climate as { season: Season; temperature: number };
+      climate.season = season;
+      climate.temperature = row.temperature ?? 12;
       environment.setSkyLook(row.sky);
       environment.apply(env);
       // A steady quartering wind, which is what the sheet leans on.
@@ -274,6 +329,14 @@ async function main(): Promise<void> {
         // The lamps are aimed at the CAR, which in the game is ahead of and
         // below the camera; put it there or the pools start at the lens.
         state.car.z = z + 7;
+        // THE LAMPS THE FALLING WEATHER SEES. In the game the renderer
+        // refills this register every frame and the sheets of rain and
+        // snow read it (dust-light.ts); a harness that skips it
+        // photographs a night downpour with nothing lighting it, which is
+        // the half of the effect the driver actually spends the night
+        // looking at.
+        clearDustLamps();
+        environment.lightDust({ ...state.car, braking: false });
         environment.update(state, camera, STEP);
         // A flash is a fifth of a second in six seconds of sky, so the
         // strike row waits for one and photographs it at its brightest
@@ -299,10 +362,8 @@ async function main(): Promise<void> {
           camera.position.z + from.z * 60,
         );
       }
-      const y = height - (r + 1) * CELL_H;
-      renderer.setViewport(c * CELL_W, y, CELL_W, CELL_H);
-      renderer.setScissor(c * CELL_W, y, CELL_W, CELL_H);
       renderer.render(scene, camera);
+      sheet.drawImage(cell, c * CELL_W, r * CELL_H);
       if (r === 0) addLabel(hourLabel(hour), c, 0);
     });
     addLabel(row.name, 0, r, 20);

@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 import { TUNING, type RaceEnv } from "@engine";
 
 import { rainTone, skyFor, type Preset } from "../pwa/src/game/sky.ts";
-import { coverOf, squallOf } from "../pwa/src/game/weather.ts";
+import { coverOf, precipReach, squallOf } from "../pwa/src/game/weather.ts";
 
 /** A stage's conditions, with the wind — which is what everything wet is
  * scaled by — set by hand. */
@@ -183,5 +183,43 @@ describe("what colour the rain is", () => {
     };
     expect(against(white)).toBeLessThan(luminance(deckOf(white).overhead));
     expect(against(black)).toBeGreaterThan(luminance(deckOf(black).overhead));
+  });
+});
+
+describe("what the falling weather leaves of the view", () => {
+  it("takes nothing out of still air", () => {
+    expect(precipReach(0, 0)).toBe(1);
+    expect(precipReach(0, 1)).toBe(1);
+  });
+
+  it("shortens the view further the harder it comes down", () => {
+    const light = precipReach(0.3, 0);
+    const heavy = precipReach(1, 0);
+    expect(light).toBeLessThan(1);
+    expect(heavy).toBeLessThan(light);
+  });
+
+  it("closes snow down harder than rain — a white-out is not a shower", () => {
+    // The whole reason the two are separate numbers: at the same rate of
+    // fall a flake scatters light in every direction where a drop bends it
+    // onward, so heavy snow takes the country away and heavy rain only
+    // greys it.
+    expect(precipReach(1, 1)).toBeLessThan(precipReach(1, 0) * 0.75);
+  });
+
+  it("crosses over as the fall turns from drops to flakes", () => {
+    const half = precipReach(1, 0.5);
+    expect(half).toBeLessThan(precipReach(1, 0));
+    expect(half).toBeGreaterThan(precipReach(1, 1));
+  });
+
+  it("never closes the view entirely, and never opens it past the sky's own", () => {
+    for (const fall of [-1, 0, 0.5, 1, 2]) {
+      for (const snow of [-1, 0, 0.5, 1, 2]) {
+        const left = precipReach(fall, snow);
+        expect(left).toBeGreaterThan(0);
+        expect(left).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });

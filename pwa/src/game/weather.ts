@@ -69,6 +69,40 @@ export function squallOf(wind: { x: number; z: number }, meanSpeed: number): num
   return clamp01((gust - (1 - swing)) / (2 * swing));
 }
 
+/** WHAT IS LEFT OF THE VIEW under a downpour, at its very worst — the
+ * share of the fog's own reach that survives, for rain and for snow.
+ *
+ * Two numbers because they are two substances. Rain is water in a column
+ * of air: it greys the distance and takes the far ridge, and a driver can
+ * still see the corner after next. Snow is a WHITE-OUT — a flake scatters
+ * light in every direction where a drop bends it onward, and the sheet is
+ * three orders denser in bodies per cubic metre — so heavy snow closes the
+ * view down to the length of the straight, and that is the single most
+ * legible thing about driving in it. */
+const VEIL = { rain: 0.6, snow: 0.3 };
+
+/**
+ * HOW FAR THE VIEW RUNS THROUGH WHAT IS FALLING, as a share of the fog's
+ * own reach — 1 in still air, down to `VEIL` at the height of a squall.
+ *
+ * The weather LOOK already shortens the fog for the sky it is under
+ * (`fogNear`/`fogFar` in sky-looks.ts): that is the stage's own standing
+ * weather, decided once. This is the half that BREATHES — the squall
+ * riding through, thickening the sheet and taking the distance with it —
+ * and it is what makes a downpour read as rain from the far end of the
+ * frame rather than only as streaks on the lens. The two compound: a
+ * storm stage is short to begin with and closes right in when the gust
+ * arrives.
+ *
+ * `fall` is how hard it is coming down this instant (the preset's rain
+ * against the live squall) and `snow` how much of that is falling as
+ * flakes rather than drops, 0..1.
+ */
+export function precipReach(fall: number, snow: number): number {
+  const worst = VEIL.rain + (VEIL.snow - VEIL.rain) * clamp01(snow);
+  return 1 - (1 - worst) * clamp01(fall);
+}
+
 /**
  * ONE CLAP OF THUNDER, on its way from the strike that made it.
  *
