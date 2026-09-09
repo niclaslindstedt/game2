@@ -210,6 +210,7 @@ import {
   type RaceSettings,
 } from "./game/menu.tsx";
 import { MainMenu, type MenuPage } from "./game/main-menu.tsx";
+import { demoStage } from "./game/menu-demo.ts";
 import { BenchmarkCard } from "./game/menu-bench.tsx";
 import type { MapDebug } from "./game/menu-map-viewer.tsx";
 import type { MapRect, MapView } from "./game/map-pane.tsx";
@@ -702,29 +703,17 @@ function trainingSpec(carId: string): StageSpec {
   };
 }
 
-/** The stage the menu's demo is driving. Medium is the length that shows
- * the most road in the least time; the conditions are the player's own, so
- * the menu previews the weather they last chose to race in. */
-function demoStage(race: RaceSettings, seed: number): StageSpec {
-  return {
-    seed,
-    length: "medium",
-    shape: "sprint",
-    laps: 1,
-    knobs: race.knobs,
-    carId: race.carId,
-    hour: race.hour,
-    weather: race.weather,
-    season: race.season,
-    temperature: race.temperature,
-    sandstorms: race.sandstorms,
-    skipCountdown: true,
-    grid: null,
-  };
-}
-
-/** What a menu page wants standing behind it, and how it is framed. */
-function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed: number) {
+/** What a menu page wants standing behind it, and how it is framed.
+ *
+ * `standing` is the stage on screen, for the demo to take its road from —
+ * null where the demo is to roll one of its own (see `demoStage`). */
+function backdropFor(
+  page: MenuPage,
+  race: RaceSettings,
+  seed: number,
+  demoSeed: number,
+  standing: StageSpec | null,
+) {
   if (page.page === "roam") {
     return {
       camera: "map" as CameraMode,
@@ -743,10 +732,9 @@ function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed:
         skipCountdown: true,
         grid: null,
       } satisfies StageSpec,
-      driven: false,
     };
   }
-  return { camera: "drone" as CameraMode, stage: demoStage(race, demoSeed), driven: true };
+  return { camera: "drone" as CameraMode, stage: demoStage(race, demoSeed, standing) };
 }
 
 /** What a run is CALLED, for the line the log opens with. */
@@ -1000,6 +988,13 @@ export function App() {
   /** Which stage the menu's demo is on. It rolls forward every time the bot
    * finishes one, so a menu left open keeps showing new road. */
   const [demoSeed, setDemoSeed] = useState(() => dailySeed());
+  /** …and that roll is a ONE-SHOT instruction to the backdrop: build the
+   * demo's own road rather than take the one standing (`demoStage`). Consumed
+   * by the next backdrop, because past it the demo is simply on whatever is
+   * there — and because every OTHER way a backdrop is asked for (arriving at
+   * a menu page, changing a setting behind one) is one where the road already
+   * on screen is the road to keep. */
+  const demoRollRef = useRef(false);
   /** The run in progress: how it was entered, and which campaign level it
    * is, so a finish can record the clear. A `?start=1` link never passes
    * through `startStage`, so the discipline it opens in is settled here. */
@@ -1920,7 +1915,17 @@ export function App() {
   const showBackdrop = (page: MenuPage): void => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-    const backdrop = backdropFor(page, raceRef.current, seedRef.current, demoSeedRef.current);
+    // The demo's roll is spent here and nowhere else: what the backdrop is
+    // asked for after it is whatever this one leaves standing.
+    const rolled = demoRollRef.current;
+    demoRollRef.current = false;
+    const backdrop = backdropFor(
+      page,
+      raceRef.current,
+      seedRef.current,
+      demoSeedRef.current,
+      rolled ? null : stageRef.current,
+    );
     applyStageRef.current(backdrop.stage);
     renderer.setCamera(backdrop.camera);
   };
@@ -3394,6 +3399,7 @@ export function App() {
         for (const ev of events) {
           if (ev.type === "finish") {
             if (demo) {
+              demoRollRef.current = true;
               setDemoSeed((s) => s + 1);
               continue;
             }
@@ -3581,6 +3587,7 @@ export function App() {
             // at the top of its ledger, the second wheel leaving), and this
             // is only where the coasting stopped.
             if (demo) {
+              demoRollRef.current = true;
               setDemoSeed((s) => s + 1);
               continue;
             }
