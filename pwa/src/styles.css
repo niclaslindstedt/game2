@@ -6410,24 +6410,53 @@ a.menu-version:focus-visible {
   width: clamp(9rem, 30vw, 12rem);
 }
 
+/* THE WHOLE BAND IS THE PRESS, not the line drawn inside it. A range input
+   is hit-tested on its own BOX, so a fader sized to its 8 px line is a
+   fader with an 8 px target: the dot overhangs it and becomes the only part
+   of the row big enough to aim at, which is a control you have to CATCH
+   before you can set it. The element is therefore a finger-tall transparent
+   band with the line drawn on the runnable track inside it — the browser's
+   own press-anywhere-then-carry-on-dragging does the rest, at every height
+   the row has to give. It stays under the shortest row's content box (the
+   pause card's 2.1rem in landscape), so nothing grows. */
 .knob-range {
   flex: 1;
   min-width: 0;
-  height: 0.5rem;
+  height: 1.5rem;
+  margin: 0;
   appearance: none;
+  background: none;
+  cursor: pointer;
+}
+
+.knob-range::-webkit-slider-runnable-track {
+  height: 0.5rem;
   border-radius: 0.25rem;
   background: linear-gradient(
     to right,
     var(--hud-good) var(--fill),
     rgb(255 255 255 / 22%) var(--fill)
   );
-  cursor: pointer;
+}
+
+.knob-range::-moz-range-track {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: linear-gradient(
+    to right,
+    var(--hud-good) var(--fill),
+    rgb(255 255 255 / 22%) var(--fill)
+  );
 }
 
 .knob-range::-webkit-slider-thumb {
   appearance: none;
   width: 1rem;
   height: 1rem;
+  /* Onto the middle of the line: webkit hangs the thumb off the TRACK's top
+     edge, where Firefox centres it for you. Half the difference between the
+     line and the dot, border included — the box is content-box here. */
+  margin-top: calc((0.5rem - 1rem) / 2 - 2px);
   border-radius: 50%;
   background: var(--hud-ink);
   border: 2px solid var(--hud-shadow);

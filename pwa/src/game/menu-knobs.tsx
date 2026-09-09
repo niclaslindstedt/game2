@@ -138,8 +138,11 @@ export function StepRow<T extends string>({
 /** A CONTINUOUS setting — a volume, or how hard a stage is built — drawn as
  * the thing it is: a track with the level filled along it and its reading
  * beside it. The arrows step it a tenth at a time, which is what a pad
- * presses; the track itself is a real range input, so a thumb or a mouse
- * drags it. The reading is a WORD wherever the value has one — silence is
+ * presses; the track itself is a real range input, so a press anywhere
+ * along it puts the thumb where the finger landed and carries straight on
+ * into the drag — `.knob-range` gives it the band to be pressed ON, which
+ * a bare 8 px line is not. The reading is a WORD wherever the value has
+ * one — silence is
  * a thing people choose, and so is a savage road — which is why `read` is
  * a parameter and the volume's OFF/percent is only its default.
  *
