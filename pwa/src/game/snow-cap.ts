@@ -39,21 +39,38 @@ import { SNOW, zonesOf, zonesUnder } from "./ground-rules.ts";
  * would read as two. */
 const SNOW_WHITE = new THREE.Color(0xeef2f7);
 
-/** How much of a face's own colour the deepest load leaves showing. Not
- * zero: a spruce buried to pure white loses its silhouette against the
- * field behind it, and what makes a laden tree read as laden is the dark
- * under the white rather than the white itself. */
-const DEEPEST = 0.9;
+/** How much of a face's own colour the load leaves showing where it lies.
+ * Nearly none: snow is an opaque thing SITTING on a bough, not a wash over
+ * it — what keeps the tree readable is the bare dark BESIDE the load, which
+ * is `BREAKS`' business, not a translucent white. */
+const DEEPEST = 0.96;
 
 /** Where a face has to LOOK to hold snow, as the world normal's Y: nothing
  * on the sheer sides of a trunk or a wall, everything on a roof pitch, a
  * bough or the top of a stone. The band opens low on purpose — a spruce is
  * a cone and its flanks stand at sixty degrees, so a rule that only dressed
- * the near-horizontal would put snow on nothing in a spruce forest. And it
- * closes well short of straight up, so a flank still carries SOME of its
- * own colour: what makes a laden tree read as laden is the dark showing
- * through, and a spruce mixed all the way to white is a white cone. */
-const HOLDS = { from: 0.05, to: 0.72 };
+ * the near-horizontal would put snow on nothing in a spruce forest. */
+const HOLDS = { from: 0.05, to: 0.8 };
+
+/** HOW THE LOAD BREAKS UP, which is the whole difference between snow and
+ * a white wash.
+ *
+ * Snow does not fade out down a slope: it sits where it settled and STOPS,
+ * in lumps, with the dark of the bough showing between them. So the amount
+ * of snow a face wants — from its lean and its height — is not painted
+ * directly. It is compared against a THRESHOLD that wanders with a noise
+ * field, and what comes out is either snow or not, with a soft centimetre
+ * at the join. A face that wants it badly (the top of a stone, a roof, the
+ * flat of a bough) is under it everywhere; a face at the margin breaks into
+ * clumps and bare patches, which is what a laden spruce actually is.
+ *
+ * The noise is read in WORLD space, so two of the same instanced tree
+ * standing side by side wear different snow — the variety comes free, off
+ * where a plant is rather than out of a second geometry. `coarse` is the
+ * size of a clump in metres and `fine` the crumble along its edge; `edge`
+ * is how soft the join is, and `bite` how far the threshold is allowed to
+ * wander (at 0 it is a plain fade again). */
+const BREAKS = { coarse: 1.35, fine: 0.38, edge: 0.1, bite: 0.62 };
 
 /** THE STAGE'S OWN COLD, shared by every material wearing the cap — one
  * uniform object, set once when a stage is built, exactly as the breeze
@@ -97,10 +114,12 @@ export function snowCap<T extends THREE.Material>(material: T): T {
     already(shader, renderer);
     shader.uniforms.uSnowCap = uSnowCap;
     shader.uniforms.uSnowCapColor = uSnowCapColor;
-    // The world height of the vertex, taken AFTER everything that moves it
-    // — the breeze included — so a swaying tip carries its own snow.
+    // Where in the WORLD this vertex is, taken AFTER everything that moves
+    // it — the breeze included — so a swaying tip carries its own snow. The
+    // height decides how much snow it wants; the whole position is what the
+    // break-up is read at, which is why it is not just the Y.
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying float vSnowCapY;")
+      .replace("#include <common>", "#include <common>\nvarying vec3 vSnowCapAt;")
       .replace(
         "#include <project_vertex>",
         `{
@@ -108,7 +127,7 @@ export function snowCap<T extends THREE.Material>(material: T): T {
           #ifdef USE_INSTANCING
             snowCapPos = instanceMatrix * snowCapPos;
           #endif
-          vSnowCapY = ( modelMatrix * snowCapPos ).y;
+          vSnowCapAt = ( modelMatrix * snowCapPos ).xyz;
         }
         #include <project_vertex>`,
       );
@@ -122,9 +141,24 @@ export function snowCap<T extends THREE.Material>(material: T): T {
       .replace(
         "#include <common>",
         `#include <common>
-        varying float vSnowCapY;
+        varying vec3 vSnowCapAt;
         uniform vec3 uSnowCap;
-        uniform vec3 uSnowCapColor;`,
+        uniform vec3 uSnowCapColor;
+        // A value-noise field over the ground plane: cheap, tileless, and
+        // read where the surface actually STANDS, so the clumps belong to
+        // the place rather than to the model.
+        float snowCapHash( vec2 c ) {
+          return fract( sin( dot( c, vec2( 127.1, 311.7 ) ) ) * 43758.5453 );
+        }
+        float snowCapNoise( vec2 p ) {
+          vec2 i = floor( p );
+          vec2 f = fract( p );
+          f = f * f * ( 3.0 - 2.0 * f );
+          return mix(
+            mix( snowCapHash( i ), snowCapHash( i + vec2( 1.0, 0.0 ) ), f.x ),
+            mix( snowCapHash( i + vec2( 0.0, 1.0 ) ), snowCapHash( i + vec2( 1.0, 1.0 ) ), f.x ),
+            f.y );
+        }`,
       )
       .replace(
         "#include <normal_fragment_maps>",
@@ -132,9 +166,19 @@ export function snowCap<T extends THREE.Material>(material: T): T {
         {
           float snowLie = smoothstep( ${HOLDS.from.toFixed(2)}, ${HOLDS.to.toFixed(2)},
             normalize( ( vec4( normal, 0.0 ) * viewMatrix ).xyz ).y );
-          float snowCover = clamp( ( vSnowCapY - uSnowCap.x ) / uSnowCap.y, 0.0, 1.0 );
-          diffuseColor.rgb = mix( diffuseColor.rgb, uSnowCapColor,
-            snowLie * snowCover * uSnowCap.z );
+          float snowCover = clamp( ( vSnowCapAt.y - uSnowCap.x ) / uSnowCap.y, 0.0, 1.0 );
+          // How much snow this face WANTS...
+          float snowWants = snowLie * snowCover;
+          // ...against a threshold that wanders: clumps at the size of a
+          // shovelful, crumbling along their edges.
+          float snowBreak =
+            snowCapNoise( vSnowCapAt.xz * ${(1 / BREAKS.coarse).toFixed(3)} ) * 0.7 +
+            snowCapNoise( vSnowCapAt.xz * ${(1 / BREAKS.fine).toFixed(3)} ) * 0.3;
+          float snowEdge = ${((1 - BREAKS.bite) / 2).toFixed(3)} +
+            snowBreak * ${BREAKS.bite.toFixed(3)};
+          float snowOn = smoothstep( snowEdge - ${BREAKS.edge.toFixed(3)},
+            snowEdge + ${BREAKS.edge.toFixed(3)}, snowWants );
+          diffuseColor.rgb = mix( diffuseColor.rgb, uSnowCapColor, snowOn * uSnowCap.z );
         }`,
       );
   };
