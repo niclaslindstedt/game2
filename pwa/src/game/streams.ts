@@ -15,7 +15,7 @@
 import * as THREE from "three";
 import type { Stream } from "@engine";
 
-import { waterMaterial } from "./water-look.ts";
+import { iceMaterial, waterMaterial } from "./water-look.ts";
 
 export type { Stream };
 
@@ -50,11 +50,18 @@ function wetReach(
 /** The water surfaces: one ribbon per WET run of each piece of river, as
  * wide as the water is there, lifted a hair above the carved bed. Wears the
  * app's one water look (`water-look.ts`), which is what makes a stream and
- * the lake it runs into the same colour where they meet. */
+ * the lake it runs into the same colour where they meet.
+ *
+ * R48 — ...or the ICE look, on a reach the cold has closed (`Stream.frozen`,
+ * climate.ts). The piece already decides that for itself, and the piece is
+ * already a mesh, so the whole of the winter here is which material the
+ * ribbon is cut in: white sheet down the flats, open water at the drops and
+ * through the ford, and the two meeting along the river with no seam to
+ * draw because the geometry never knew the difference. */
 export function buildStreamMeshes(streams: Stream[], waterAt: WaterAt): THREE.Group {
   const group = new THREE.Group();
-  const mat = waterMaterial();
   for (const s of streams) {
+    const mat = s.frozen ? iceMaterial() : waterMaterial();
     const positions: number[] = [];
     const uvs: number[] = [];
     const indices: number[] = [];

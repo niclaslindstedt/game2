@@ -22,12 +22,20 @@ import {
   resolveKnobs,
   simulateStage,
   step,
+  streamFrozen,
   temperatureAt,
   waterFrozen,
   type Track,
 } from "@engine";
 
 import { stageTerrain, stageTrack } from "./support/stages.ts";
+
+/** Cold enough for the MOVING water too (`CLIMATE.river`) — a river asks
+ * for a good deal more than a lake, so the reaches only start closing well
+ * under `DEEP`. Wet, so there is river to close: the water dial buys the
+ * courses the freeze is about. */
+const HARD = { season: "winter" as const, temperature: -25 };
+const WET = { biome: "taiga" as const, water: 0.8 };
 
 /** Cold enough that every body in the taiga is over: the country's ceiling
  * stands 52 m over the datum, so a datum at -20 puts the whole of it — and
@@ -265,5 +273,127 @@ describe("a stage over frozen water", () => {
     });
     expect(r.finished).toBe(true);
     expect(r.time).toBeGreaterThan(30);
+  });
+});
+
+describe("R48 — the moving water", () => {
+  const R = CLIMATE.river;
+
+  it("asks a POOL for more cold than a lake, and gets it at river.quiet", () => {
+    const climate = { season: "winter" as const, temperature: 0 };
+    const quiet = -R.quiet / CLIMATE.lapse;
+    expect(temperatureAt(climate, quiet)).toBeCloseTo(R.quiet, 9);
+    expect(streamFrozen(climate, quiet, 0)).toBe(true);
+    expect(streamFrozen(climate, quiet - 1, 0)).toBe(false);
+    // ...and the lake at the same height went over long before it did: a
+    // river is stirred, and stirred water gives its heat up slowly.
+    expect(waterFrozen(climate, quiet)).toBe(true);
+    expect(R.quiet).toBeLessThan(CLIMATE.ice);
+  });
+
+  it("wants it colder the faster the reach runs, and never closes a rapid", () => {
+    const deep = { season: "winter" as const, temperature: R.hard };
+    const middling = { season: "winter" as const, temperature: (R.quiet + R.hard) / 2 };
+    // At the bottom of the ladder everything under the open fall goes.
+    expect(streamFrozen(deep, 0, 0)).toBe(true);
+    expect(streamFrozen(deep, 0, R.open * 0.99)).toBe(true);
+    // Halfway down it, only the gentler half of that.
+    expect(streamFrozen(middling, 0, R.open * 0.4)).toBe(true);
+    expect(streamFrozen(middling, 0, R.open * 0.7)).toBe(false);
+    // ...and a rapid stands open however cold the air gets, which is what
+    // an open lead below a drop is.
+    expect(streamFrozen({ season: "winter", temperature: -80 }, 0, R.open)).toBe(false);
+    expect(streamFrozen({ season: "winter", temperature: -80 }, 0, R.open * 2)).toBe(false);
+  });
+
+  it("is asked at the water's own level, so a reach on a shoulder goes first", () => {
+    const climate = resolveClimate(
+      { season: "winter", temperature: R.quiet + 4 },
+      resolveKnobs({ biome: "alpine" }),
+    );
+    expect(streamFrozen(climate, 0, 0)).toBe(false);
+    expect(streamFrozen(climate, 300, 0)).toBe(true);
+  });
+});
+
+/** Every stage in the sweep whose river the cold actually closed, with the
+ * reaches it closed — searched rather than pinned, because whether a seed
+ * has a slow reach is the country's business (see SEEDS above). */
+function frozenReaches(): { track: Track; frozen: number; open: number }[] {
+  const out: { track: Track; frozen: number; open: number }[] = [];
+  for (const seed of SEEDS) {
+    const track = stageTrack(seed, "medium", WET, "sprint", HARD);
+    const streams = stageTerrain(track).streams;
+    const frozen = streams.filter((s) => s.frozen).length;
+    if (frozen > 0) out.push({ track, frozen, open: streams.length - frozen });
+  }
+  return out;
+}
+
+describe("a river under a hard winter", () => {
+  it("closes its slow reaches and leaves its fast ones running", () => {
+    const iced = frozenReaches();
+    expect(iced.length).toBeGreaterThanOrEqual(3);
+    // Not ALL of it: a stage whose every reach went over would mean the
+    // fall had stopped mattering, which is the half of the rule that keeps
+    // a waterfall from being a pavement.
+    expect(iced.some((r) => r.open > 0)).toBe(true);
+    // ...and a summer closes nothing at all, on any of them.
+    for (const seed of SEEDS) {
+      const warm = stageTerrain(stageTrack(seed, "medium", WET));
+      expect(warm.streams.some((s) => s.frozen)).toBe(false);
+    }
+  });
+
+  it("turns a closed reach into ground with nothing left to drown in", () => {
+    const { track } = frozenReaches()[0];
+    const terrain = stageTerrain(track);
+    let checked = 0;
+    for (const stream of terrain.streams) {
+      if (!stream.frozen) continue;
+      for (const p of stream.points) {
+        const sheet = terrain.iceAt(p.x, p.z);
+        if (sheet === null) continue;
+        checked++;
+        // The sheet stands at the water's own surface — the freeze changes
+        // what the reach IS, never where it runs or how high it lies.
+        expect(sheet).toBeCloseTo(p.y, 6);
+        expect(terrain.waterAt(p.x, p.z)).toBe(null);
+        expect(terrain.groundAt(p.x, p.z)).toBeCloseTo(sheet, 1);
+        // Swept, like a lake: the blanket keeps off the channel.
+        expect(terrain.blanketAt(p.x, p.z)).toBeLessThan(0.1);
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it("holds the FORD open, so the road the compiler called water still is", () => {
+    // A crossing the stage wades is broken open by whatever uses it, and
+    // the road laid through it is water to the compiler: a sheet the
+    // physics called ground there would be a car driving on ice down a
+    // road that says it is wading.
+    let fords = 0;
+    for (const { track } of frozenReaches()) {
+      const terrain = stageTerrain(track);
+      for (const s of track.samples) {
+        if (s.surface !== "water") continue;
+        fords++;
+        expect(terrain.iceAt(s.x, s.z)).toBe(null);
+      }
+    }
+    expect(fords).toBeGreaterThan(0);
+  });
+
+  it("is still a stage the bot finishes", () => {
+    const { track } = frozenReaches()[0];
+    const r = simulateStage({
+      seed: track.seed,
+      length: "medium",
+      knobs: WET,
+      season: "winter",
+      temperature: HARD.temperature,
+      maxTime: 600,
+    });
+    expect(r.finished).toBe(true);
   });
 });

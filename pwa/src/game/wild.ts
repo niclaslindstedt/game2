@@ -28,6 +28,7 @@ import {
   understoryAround,
 } from "./planting.ts";
 import { frozenAt, plantZone } from "./ground-rules.ts";
+import { snowCap } from "./snow-cap.ts";
 import { LAKE_Y, type Terrain } from "./terrain.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -184,9 +185,14 @@ export function buildWild(
   const plants = buildFloraField(season);
   group.add(plants.group);
   const stoneGeo = stoneGeometry(biome.ground.bedrock, false);
-  const stoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) });
+  // R47 — the stone wears the winter's load like everything else standing
+  // (snow-cap.ts): a cap on the top of a boulder and on the shelves of an
+  // outcrop, nothing on their sheer sides.
+  const stoneMat = snowCap(
+    new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) }),
+  );
   const mossGeo = stoneGeometry(biome.ground.bedrock, true);
-  const mossMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mossMat = snowCap(new THREE.MeshLambertMaterial({ vertexColors: true }));
   let stoneMesh: THREE.InstancedMesh | null = null;
   let mossMesh: THREE.InstancedMesh | null = null;
 

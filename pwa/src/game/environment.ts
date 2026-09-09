@@ -32,9 +32,11 @@
 
 import * as THREE from "three";
 import {
+  biomeRules,
   fallsAsSnow,
   rainsIn,
   sandVisibility,
+  snowCoverAt,
   sunHourAt,
   temperatureAt,
   type BiomeId,
@@ -422,6 +424,21 @@ export function createEnvironment(scene: THREE.Scene): Environment {
 
   // ── Lights ───────────────────────────────────────────────────────────────
   const hemi = new THREE.HemisphereLight(0xffffff, 0xb0a894, 0.95);
+  /** R47 — THE BOUNCE OFF THE SNOW. The hemisphere's lower half is the
+   * light coming back UP off the ground, and what the ground is decides how
+   * much of it there is: bare country returns about a fifth of what falls
+   * on it, snow returns most of it. That is the whole reason a snowfield
+   * looks bright under a sun too low to light anything else, why its
+   * shadows are soft, and why they are BLUE — what fills them is skylight
+   * bounced off white.
+   *
+   * Without it a winter is a beige country: the paint is white, the low
+   * sun is warm and weak, and nothing lifts the shadow side of anything.
+   * `lift` is how much the hemisphere gains where the ground is fully
+   * white, and `tone` the colour it returns — the snow's own, cooled,
+   * because the sky it is reflecting is blue. */
+  const BOUNCE = { lift: 0.38, tone: new THREE.Color(0xdfe9f5) };
+  const bounceGround = new THREE.Color();
   const sunLight = new THREE.DirectionalLight(0xfff2d8, 1.5);
   sunLight.target.position.set(0, 0, 0);
   // The shadows hang off the sun. The light is always placed RELATIVE to
@@ -528,10 +545,29 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     return sunIsKey ? ridgeThrough * (1 - 0.75 * occlusion) : 1;
   };
 
+  /** R47 — how white the ground under this sky is, 0..1: the cover at the
+   * country's own FLOOR (climate.ts), so the bounce only arrives once even
+   * the low ground has gone over rather than when a summit has. Read off
+   * the country's own zone row, which is right whatever the altitude dial
+   * did to it — in a winter the climate's frost line is the lower of the
+   * two and decides this on its own. */
+  const whiteGround = (): number => {
+    if (!ground) return 0;
+    return snowCoverAt(
+      { season: env.season, temperature: env.temperature },
+      biomeRules(biome).land.zones,
+      ground.floor,
+    );
+  };
+
+  /** The hemisphere the preset asks for, with the snow's bounce added. */
+  const hemiNow = (): number => preset.hemiIntensity * (1 + BOUNCE.lift * whiteGround());
+
   /** Put the preset's own key light back on the scene. */
   const restLight = (): void => {
     hemi.color.set(preset.hemiSky);
-    hemi.intensity = preset.hemiIntensity;
+    hemi.groundColor.copy(bounceGround.set(0xb0a894).lerp(BOUNCE.tone, whiteGround()));
+    hemi.intensity = hemiNow();
     sunLight.color.set(preset.sun);
     sunLight.intensity = preset.sunIntensity * beamNow();
     sunLight.position.copy(sunLight.target.position).addScaledVector(keyV, 300);
@@ -901,7 +937,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       // burns, which is what puts the far side of a tree in shadow and
       // sells the flash as a place rather than as a screen wash.
       hemi.color.set(FLASH_COLOR);
-      hemi.intensity = preset.hemiIntensity + 2.2 * surge;
+      hemi.intensity = hemiNow() + 2.2 * surge;
       sunLight.color.set(FLASH_COLOR);
       sunLight.intensity = preset.sunIntensity + 1.8 * surge;
       sunLight.position.copy(sunLight.target.position).addScaledVector(storm.from(), 300);

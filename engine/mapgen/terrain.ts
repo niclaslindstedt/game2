@@ -57,7 +57,9 @@ import {
   icyCountry,
   snowlineOf,
   snowyCountry,
+  streamFrozen,
   temperatureAt,
+  type Climate,
 } from "../game/climate.ts";
 import { createPropField } from "./props.ts";
 import { bridgeParapets, tunnelTrench, tunnelWalls, type WildObstacle } from "./solids.ts";
@@ -111,6 +113,14 @@ export type Stream = {
    * bank any point could owe it, so a query over flat country is rejected
    * on the nine-metre bank and not the fifty-metre one. */
   bedMin: number;
+  /** R48 — TRUE WHERE THE COLD HAS CLOSED THIS REACH: the sheet is the
+   * ground the car drives on, nothing drowns in it, and the renderer draws
+   * ice over it instead of water (`streamFrozen`, climate.ts).
+   *
+   * Per PIECE rather than per point, because a piece is a hundred metres of
+   * river and that is the scale a reach freezes at: a river goes over in
+   * its flats and stands open at its drops, and both are pieces. */
+  frozen: boolean;
 };
 
 /** How far below the water surface a ford's bed is carved, meters. */
@@ -133,10 +143,50 @@ const WADE_LIP = 0.2;
  * testing, few enough that a test which passes has little left to walk. */
 const RIVER_CHUNK = 8;
 
+/** R48 — WHETHER A PIECE OF RIVER HAS FROZEN OVER, under a climate: its own
+ * fall against `streamFrozen`'s rule (climate.ts), asked at the water's own
+ * level because the air is a field and a reach on a shoulder goes over
+ * while the one in the valley below it is still running.
+ *
+ * The FALL is the piece end to end — its drop over its run — rather than
+ * the steepest step in it: what decides whether a cover can bridge is how
+ * fast the reach flows, and a hundred metres of river has one speed.
+ *
+ * ...except at a FORD, which is held open. A crossing the stage wades is
+ * broken open by whatever uses it and re-opened by the current under it as
+ * fast as it closes, which is what a winter ford is; and the road laid
+ * through it is water to the compiler, so a sheet the physics called ground
+ * there would be a car driving on ice down a road that says it is wading.
+ * A BRIDGED crossing is not that: the water runs its own course metres
+ * below the deck and freezes like any other reach, and neither is a
+ * CULVERT, which carries the stream in a pipe under the road's own fill and
+ * puts nothing on the surface for a wheel to break. */
+function freezeReach(
+  points: Stream["points"],
+  anchor: RiverAnchor,
+  near: number,
+  climate?: Climate,
+): boolean {
+  if (climate === undefined || points.length < 2) return false;
+  const wades = !anchor.bridged && anchor.culvert !== true;
+  if (wades && near < anchor.edge + anchor.halfWidth) return false;
+  let run = 0;
+  let level = 0;
+  for (let i = 0; i < points.length; i++) {
+    level += points[i].y;
+    if (i > 0) run += Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z);
+  }
+  if (run <= 0) return false;
+  const drop = Math.abs(points[0].y - points[points.length - 1].y);
+  return streamFrozen(climate, level / points.length, drop / run);
+}
+
 /** Cut one traced river into the pieces every consumer actually queries:
  * a short polyline with its own bounding box. Consecutive pieces overlap
- * by a point, so the water is continuous across the seam. */
-function sliceRiver(river: River): Stream[] {
+ * by a point, so the water is continuous across the seam. `climate` is the
+ * cold each piece is asked against (R48); omitted, nothing is frozen —
+ * which is what a summer and every tool that only wants the water want. */
+function sliceRiver(river: River, climate?: Climate): Stream[] {
   const out: Stream[] = [];
   const points = river.points;
   for (let i = 0; i + 1 < points.length; i += RIVER_CHUNK - 1) {
@@ -177,7 +227,10 @@ function sliceRiver(river: River): Stream[] {
       minZ: minZ - pad,
       maxZ: maxZ + pad,
       bedMin,
+      frozen: false,
     });
+    const piece = out[out.length - 1];
+    piece.frozen = freezeReach(piece.points, bestAnchor, bestD, climate);
   }
   return out;
 }
@@ -318,8 +371,13 @@ export function computeStreams(
   farHeight: (x: number, z: number) => number,
   standingAt: StandingWater,
   roadClear?: RoadClear,
+  /** R48 — the cold the reaches are asked against; omitted, none is
+   * frozen. */
+  climate?: Climate,
 ): Stream[] {
-  return traceRivers(seed, anchors, farHeight, standingAt, roadClear).flatMap(sliceRiver);
+  return traceRivers(seed, anchors, farHeight, standingAt, roadClear).flatMap((river) =>
+    sliceRiver(river, climate),
+  );
 }
 
 /** Distance from a point to the water's centerline, plus the surface
@@ -395,11 +453,15 @@ export function inStream(streams: Stream[], x: number, z: number, margin: number
 }
 
 /** Water surface height of a stream at a point, or null when the point is
- * not over stream water. */
-function streamWaterAt(streams: Stream[], x: number, z: number): number | null {
+ * not over stream water. R48 — `frozen` picks WHICH water is asked for: the
+ * reaches the cold has closed, or the ones still running. The two are asked
+ * separately because they are different things underfoot — one is a floor
+ * and the other is a drowning — and a point is only ever over one of them. */
+function streamWaterAt(streams: Stream[], x: number, z: number, frozen: boolean): number | null {
   let best: number | null = null;
   let bestD = Infinity;
   for (const s of streams) {
+    if (s.frozen !== frozen) continue;
     if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
     const { d, waterY, width } = nearestOnStream(s, x, z);
     // The NEAREST water wins, not the first found: two reaches of the same
@@ -2784,7 +2846,10 @@ export function createTerrain(track: Track): TerrainField {
     // The body covering THIS point, at its own level — the same reading the
     // compiler classified the road's samples with, so the ground the car
     // stands on and the surface it is told it is on are the same number.
-    const level = land.iceAt(x, z);
+    // R48 — a RIVER the cold has closed is the same floor: whichever of the
+    // two is here, and the reach is asked first because a river running
+    // into a lake lies over the lake's own shore.
+    const level = streamWaterAt(streams, x, z, true) ?? land.iceAt(x, z);
     if (level === null) return null;
     // ...but only where the world SHOWS the lake. The road builds its own
     // shoulder out over the first stride of a crossing, and on that
@@ -2806,11 +2871,12 @@ export function createTerrain(track: Track): TerrainField {
     // a lake dry on top and wet either side of it.
     // R48 — a body the cold has frozen solid is not water at all: it is
     // the ground the car is standing on. Nothing drowns in it and nothing
-    // splashes. A STREAM still runs — the freeze is the STANDING water's,
-    // and a ford is moving water that never gets the chance.
+    // splashes. A REACH of river the cold has closed is the same floor,
+    // and its open reaches — the drops, and the ford the stage wades —
+    // are still exactly the water they were in summer (`freezeReach`).
     if (iceAt(x, z) !== null) return null;
     const lake = land.water.shoreLevelAt(x, z);
-    const surface = lake !== null && ground < lake ? lake : streamWaterAt(streams, x, z);
+    const surface = lake !== null && ground < lake ? lake : streamWaterAt(streams, x, z, false);
     if (surface === null || ground >= surface - 0.02) return null;
     // R47 — water over a BORE is on the mountain, not on the road under
     // it: a stream crossing the ground over a tunnel is twenty metres
@@ -3190,7 +3256,7 @@ export function createTerrain(track: Track): TerrainField {
         track.bounds,
       )) {
         rivers.push(river);
-        streams.push(...sliceRiver(river));
+        streams.push(...sliceRiver(river, climate));
       }
       streamScan = samples.length;
       // The branches the compiler forked off at the paving junctions (R17),

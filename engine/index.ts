@@ -118,6 +118,7 @@ export {
   snowCoverAt,
   snowlineOf,
   snowyCountry,
+  streamFrozen,
   temperatureAt,
   waterFrozen,
   weathersIn,

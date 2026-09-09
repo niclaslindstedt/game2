@@ -25,6 +25,7 @@ import * as THREE from "three";
 import type { HousePlan, RoofKind, WallPaint } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
+import { snowCap } from "./snow-cap.ts";
 import { detailTexture } from "./textures.ts";
 
 /** A roof with a pitch to it — everything the plan can ask for but flat,
@@ -91,9 +92,11 @@ export const HOUSE = {
 } as const;
 
 /** One material for every building: vertex colours under the world's
- * speckle, lit by the scene. */
-export const houseMaterial = shareOne(
-  () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
+ * speckle, lit by the scene — and R47's snow on whatever of it looks up,
+ * which on a building is the ROOF (snow-cap.ts). A white roof over a red
+ * wall is most of what a northern winter looks like from a road. */
+export const houseMaterial = shareOne(() =>
+  snowCap(new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() })),
 );
 
 /** A box by its centre and size — the one shape a house is mostly made of. */
