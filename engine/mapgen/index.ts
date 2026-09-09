@@ -64,9 +64,9 @@ export {
   roadClearance,
   type RoadShape,
 } from "./road.ts";
+export { buildSpur } from "./spur-build.ts";
 export {
   SPUR,
-  buildSpur,
   placeBlock,
   spurReach,
   type BlockKind,
