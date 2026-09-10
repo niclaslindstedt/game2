@@ -203,6 +203,11 @@ export async function showcaseShots(shot) {
       ...CLEAN,
       mode: "headsup",
       camera: "tv",
+      // ...and HELD on the tripods. The TV mode is a broadcast in play — the
+      // chase boom down the road, cutting trackside for a corner — and a
+      // still staged at a fixed point on a fixed seed has to come off the
+      // same lens every time it is taken (camera-tv-cut.ts).
+      tvstand: "1",
       bot: "1",
       length: "short",
       seed: "38",
@@ -398,6 +403,7 @@ export async function showcaseShots(shot) {
       ...CLEAN,
       rivals: "4",
       camera: "tv",
+      tvstand: "1",
       // Stood partway down the stage rather than driven there: this is the only
       // frame in the set paying for the lens pass on top of a software-rendered
       // one, so it is the slowest scene here and the least able to afford the

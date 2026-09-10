@@ -9,12 +9,14 @@
 // WATCHER has that a driver does not are the answers to "what am I looking
 // at" and "keep this".
 //
-// BOTTOM CENTRE, which is the one strip of a driving frame nothing else
-// claims: the clock is top-left, the route and the place top-right, the news
-// column bottom-right, and the thumb zones are down on a replay because there
-// is nothing to steer. It stays up for the whole recording, the results card
-// included — the disk is most likely to be wanted at the end, when the player
-// has just seen how it went.
+// TOP CENTRE, where the spectator's banner stands (hud-spectate.tsx) and for
+// the same reason: both name what is being watched rather than saying
+// anything about the driving, and both belong to a frame nobody is steering.
+// The corners either side stay claimed — the clock top-left, the route and
+// the place top-right — and the bar is centred between them, giving up its
+// second line before it reaches either. It stays up for the whole recording,
+// the results card included — the disk is most likely to be wanted at the
+// end, when the player has just seen how it went.
 //
 // THE DISK IS THE WHOLE OFFER. A run watched from the results card is not
 // stored until it is pressed: somebody who only wanted to see the corner they

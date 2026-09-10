@@ -43,6 +43,7 @@ import {
 } from "@engine";
 
 import type { ComponentChildren } from "preact";
+import { useState } from "react";
 
 import { playToggle, playUi } from "./audio/ui.ts";
 import { manualGain } from "./car-stats.ts";
@@ -798,6 +799,11 @@ type PauseProps = {
   onResume: () => void;
   onRestart: () => void;
   onMainMenu: () => void;
+  /** WATCH THE RUN SO FAR — put the drive up to this moment straight back on
+   * the road (app-play.ts). It ENDS the run, which is why it asks; null when
+   * there is nothing behind the press — no recording armed, or the thing
+   * being watched is already one. */
+  onWatchReplay: (() => void) | null;
   /** The player's options, for the knobs on the card. Every change applies
    * to the run standing behind the scrim the moment it is made. */
   settings: Settings;
@@ -819,10 +825,27 @@ export function PauseMenu({
   onResume,
   onRestart,
   onMainMenu,
+  onWatchReplay,
   settings,
   onSettings,
 }: PauseProps) {
   const set = (patch: Partial<Settings>): void => onSettings({ ...settings, ...patch });
+  /** Whether WATCH REPLAY has been pressed once and is now asking.
+   *
+   * THE ONE PRESS ON THIS CARD THAT ASKS, and it asks because it is the only
+   * one whose cost is not written on it. RESTART STAGE and MAIN MENU say
+   * exactly what they do and a player pressing either has decided to stop
+   * driving; WATCH REPLAY sounds like something you do BESIDE a run, and it
+   * is not — a replay is a run, the app stands one stage at a time, and
+   * taking the tape means giving the drive up. So the row says so and takes
+   * the second press, rather than a card of its own: a dialog over a dialog
+   * is a modal to dismiss for a player who only mis-aimed for the minimap,
+   * and the ask is one line of the row they are already looking at.
+   *
+   * Nothing has to disarm it: every way out of this card unmounts it —
+   * resuming, restarting, leaving, and the press itself — so a question
+   * nobody answered is gone by the time the card is opened again. */
+  const [asking, setAsking] = useState(false);
   return (
     <div className="hud-menu-wrap pointer-events-auto" onPointerDown={onResume} role="presentation">
       <div className="hud-menu hud-pause" onPointerDown={(e) => e.stopPropagation()}>
@@ -885,13 +908,32 @@ export function PauseMenu({
             onChange={(music) => set({ audio: { ...settings.audio, music } })}
           />
         </div>
-        <button
-          type="button"
-          className="hud-pause-act"
-          onClick={() => {
-            onRestart();
-          }}
-        >
+        {/* WATCH REPLAY stands FIRST of the three, above the two presses
+            that end the run without showing the player anything. All three
+            end it; this is the only one that hands something back for it,
+            and a player who has stopped mid-stage to look at what just
+            happened is reaching for exactly this. */}
+        {onWatchReplay && (
+          <button
+            type="button"
+            className={`hud-pause-act ${asking ? "hud-pause-asking" : ""}`}
+            onClick={() => {
+              playUi("select");
+              if (!asking) {
+                setAsking(true);
+                return;
+              }
+              setAsking(false);
+              onWatchReplay();
+            }}
+          >
+            WATCH REPLAY
+            <span className="hud-pause-cost">
+              {asking ? "PRESS AGAIN — THIS ENDS THE RUN" : "ENDS THE RUN"}
+            </span>
+          </button>
+        )}
+        <button type="button" className="hud-pause-act" onClick={onRestart}>
           RESTART STAGE
         </button>
         <button

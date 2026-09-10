@@ -74,6 +74,11 @@ async function main(): Promise<void> {
   // Every view a run can be watched from, not just the eight a stage is
   // driven from: the steps on and off the TV gallery are steps a replay
   // takes, and they are the two most likely to cut (settings.ts).
+  //
+  // The TV step photographs whichever of that mode's TWO cameras is up when
+  // the sheet reaches it — the trackside tripods on a corner, the chase boom
+  // between them (camera-tv-cut.ts). That is the honest picture of what the
+  // key gets you, and it is the reason the tile is worth reading twice.
   const ladder = WATCHING_CAMERAS.map((cam) => cam.id);
   renderer.setCamera(ladder[0]);
   renderer.skipIntroShot();

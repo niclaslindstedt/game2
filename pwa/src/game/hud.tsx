@@ -25,7 +25,7 @@ import {
   type NextStage,
 } from "./hud-finish.tsx";
 import { SpectateBanner, SpectateGap, type SpectateProps } from "./hud-spectate.tsx";
-import { MirrorSwitch, type GlassSlot } from "./hud-mirror.tsx";
+import { MirrorSwitch, glassSlot, type GlassSlot } from "./hud-mirror.tsx";
 import { Minimap } from "./minimap.tsx";
 import type { HudMinimap } from "./minimap-view.ts";
 import { CarHealthPanel } from "./hud-health.tsx";
@@ -545,16 +545,15 @@ export function Hud({
   // with a controller in its hands the pad is.
   const thumbs = deviceControls().touch && !padDriving;
   // WHAT THE MIRROR IS DOING over this frame — the switch that is drawn, and
-  // the clearance everything hanging under it takes. It has to agree with the
-  // renderer, which puts no glass up under a camera nobody drives from, on
-  // somebody else's car, or past the line: a slot that cleared a mirror which
-  // was not there would leave the co-driver's calls halfway down the screen.
-  const glass: GlassSlot =
-    !show.mirror || spectate || flying || snap.phase === "finished" || snap.phase === "retired"
-      ? "off"
-      : mirrorLive
-        ? "live"
-        : "blank";
+  // the clearance everything hanging under it takes (`glassSlot` owns the
+  // rule; the replay strip's own layer reads the same one).
+  const glass: GlassSlot = glassSlot({
+    mirror: show.mirror,
+    spectating: spectate !== null,
+    flying,
+    phase: snap.phase,
+    live: mirrorLive,
+  });
   /** The results card, wherever it ends up being drawn — and the same card
    * with no result on it, over a car that stopped short of the line. */
   const over =
@@ -610,7 +609,10 @@ export function Hud({
   // come off `--split-top` in styles.css, and the mirror is the one thing
   // that can push it down. It is stated once, on the root, rather than as a
   // class on each instrument — a custom property cascades to descendants, so
-  // two readings placed off one number can never drift apart.
+  // two readings placed off one number can never drift apart. `data-replay`
+  // is the second thing that can claim the head of that stack: the replay
+  // bar stands across the top of the frame, and where the glass has already
+  // pushed the stack down the bar goes in front of it.
   return (
     <div
       className="hud pointer-events-none absolute inset-0 select-none"
@@ -620,6 +622,7 @@ export function Hud({
       data-drift={snap.drifting && snap.phase === "racing" ? "1" : undefined}
       data-glass={glass === "off" ? undefined : "1"}
       data-seated={seated ? "1" : undefined}
+      data-replay={replaying ? "1" : undefined}
     >
       {/* THE MIRROR IS ITS OWN SWITCH: press the glass to put the rear view
           out, press the grey it leaves behind to bring it back. Only where

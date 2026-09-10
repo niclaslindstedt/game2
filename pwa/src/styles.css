@@ -730,14 +730,26 @@ body {
      it is the last thing in this stack, and what it does not use is road. */
   --pace-sign: clamp(2.4rem, 9vmin, 4.2rem);
   --pace-pad: 0.25rem;
-  --split-top: 11%;
+  /* WHERE THE STACK STARTS, and what is standing in front of it. The head is
+     the mirror's business (the two rules below); the band is the replay bar's,
+     which hangs at the same place and is the only other thing that ever
+     claims it. Stated apart so neither has to know the other's number. */
+  --hud-top: 11%;
+  /* ...and how tall the replay bar is when it stands at that head, measured
+     at the top of its own clamps so the figure clears it at every size. Zero
+     until one is up, and only where the bar is actually in the stack — with
+     the frame's top edge free it takes that instead and the stack is
+     untouched. */
+  --replay-height: 3.9rem;
+  --replay-band: 0rem;
+  --split-top: calc(var(--hud-top) + var(--replay-band));
   --pace-top: calc(var(--split-top) + var(--split-band));
 }
 
 /* With a mirror up — showing the road or blanked, since the dead glass takes
    exactly the room the picture did — the whole stack drops below it. */
 .hud[data-glass] {
-  --split-top: calc(var(--glass-bottom) + 1.4vh);
+  --hud-top: calc(var(--glass-bottom) + 1.4vh);
 }
 
 /* FROM THE SEAT the strip is not drawn: the rear view is in the mirror
@@ -747,7 +759,7 @@ body {
    the co-driver's call is printed across the one piece of glass the driver
    reads the road behind off. */
 .hud[data-glass][data-seated] {
-  --split-top: 30vh;
+  --hud-top: 30vh;
 }
 
 /* The glass as something to PRESS (hud-mirror.tsx). Showing the road, this is
@@ -1990,14 +2002,25 @@ body {
    The one strip on screen while a recorded run is being watched
    (hud-replay.tsx).
 
-   A LOWER THIRD: left-hand side, STOOD ON the instrument panel rather than
-   across it. Every other corner of a driving frame is claimed — the clock
-   top-left, the route and the place top-right, the news column bottom-right,
-   the dial and the speed along the whole foot — and the thumb zones are the
-   only thing that is NOT there on a replay, because there is nothing to
-   steer. So the strip takes the space they leave, which is also where a
-   broadcast puts the same caption. Its height comes off `--hud-tach`, the
-   panel's own, exactly as the news column's does in portrait.
+   ACROSS THE TOP, CENTRED, exactly where the spectator's banner stands
+   (`.hud-spectate`) — and for the same reason. Both name what is being
+   watched rather than telling the watcher anything about the driving, and
+   both belong to a frame nobody is steering; a caption that says what this
+   is belongs at the head of the picture, not tucked into a corner of it. It
+   also takes the two presses out of the instrument panel's own half of the
+   frame, where a thumb reaching for SAVE was reaching across the dial.
+
+   The corners either side stay claimed — the clock top-left, the route and
+   the place top-right — and the bar is centred between them; on anything
+   narrow it gives up its second line and the disk's word before it reaches
+   either (the two queries at the foot of this block).
+
+   THE ONE THING IT CANNOT SIT OVER IS THE GLASS. The rear-view strip hangs
+   across the middle of the same edge, so where it is up the bar takes the
+   head of the stack under it (`--hud-top`) and the split's flash drops by
+   the bar's own band (`--replay-band`) instead. From the seat there is no
+   strip up there at all — the rear view is in the windscreen — so the bar
+   keeps the top edge and nothing moves.
 
    It stands over the results card at the end of the recording, which is the
    moment the disk is most likely to be wanted — so its stack order has to
@@ -2005,8 +2028,9 @@ body {
    sheet clear it. */
 .hud-replay {
   position: absolute;
-  left: max(1rem, env(safe-area-inset-left));
-  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + var(--hud-tach) + 0.4rem);
+  top: max(0.6rem, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 6;
   display: flex;
   align-items: center;
@@ -2017,6 +2041,24 @@ body {
   border-radius: 0.7rem;
   background: rgb(12 18 32 / 72%);
   backdrop-filter: blur(6px);
+}
+
+/* WITH A STRIP OF GLASS ACROSS THE TOP the bar cannot have the edge, so it
+   takes the head of the stack under it instead — the same number the split
+   and the calls hang from — and they drop by the bar's band. From the SEAT
+   there is no strip up there (the rear view is in the windscreen), so the
+   rule is written against exactly the case that has one.
+
+   The band is a fixed figure rather than the box measured: the bar's own type
+   is clamped, so what it asks for at the top of those clamps is the only
+   number that clears it at every size, and a couple of spare millimetres over
+   the split is cheaper than a second copy of the sum. */
+.hud[data-glass]:not([data-seated]) .hud-replay {
+  top: var(--hud-top);
+}
+
+.hud[data-glass][data-replay]:not([data-seated]) {
+  --replay-band: var(--replay-height);
 }
 
 .hud-replay-text {
@@ -2084,6 +2126,24 @@ body {
   border-color: rgb(255 255 255 / 25%);
 }
 
+/* HELD UPRIGHT there is no free strip at the very top and none beside the
+   dock either — the clock takes the left of that line, the minimap dock the
+   right, and the bar is nearly the width of the screen. So it drops to the
+   head of the stack, which in portrait is already measured below the WHOLE
+   dock, and the stack drops by its band as it does under the glass. Written
+   against `:not([data-glass])` so it ties with the glass rule above rather
+   than fighting it: a strip of glass on a phone hangs lower again, and the
+   bar goes under that instead. */
+@media (orientation: portrait) {
+  .hud:not([data-glass]) .hud-replay {
+    top: var(--hud-top);
+  }
+
+  .hud[data-replay]:not([data-glass]) {
+    --replay-band: var(--replay-height);
+  }
+}
+
 /* On a narrow screen the strip is the stage name and the two presses. The
    line under it is the first thing to go — the picture is already saying most
    of what it says — and the disk's word goes with it, leaving the mark. */
@@ -2097,10 +2157,10 @@ body {
   }
 }
 
-/* The line goes on anything SHORT as well as on anything narrow. A phone
-   held sideways has no vertical room: the instrument panel is a third of the
-   frame, so standing on it puts the strip level with the co-driver's calls,
-   and a two-row strip is wide enough to reach them. One row is not. */
+/* The line goes on anything SHORT as well as on anything narrow. A phone held
+   sideways has the corner calls and the split coming down the middle of the
+   frame a couple of centimetres under the bar, and every row the bar keeps is
+   a row of that stack pushed further down a screen that has none to give. */
 @media (width <= 30rem), (height <= 26rem) {
   .hud-replay-line {
     display: none;
@@ -2950,14 +3010,14 @@ body {
      gained or lost up there moves this with it. The band moves, not the strip
      — `--pace-top` follows it, so the split and the calls stay stacked. */
   .hud {
-    --split-top: calc(var(--hud-health-top) + var(--hud-health) + 0.2rem);
+    --hud-top: calc(var(--hud-health-top) + var(--hud-health) + 0.2rem);
   }
 
   /* ...and below the GLASS when the glass is up, which on a phone hangs
      lower and wider than the dock the rule above clears. Its own selector is
      one specificity step above that one, so it wins wherever it is written. */
   .hud[data-glass] {
-    --split-top: calc(var(--glass-bottom) + 1.4vh);
+    --hud-top: calc(var(--glass-bottom) + 1.4vh);
   }
 
   .hud-speed {
@@ -3546,6 +3606,41 @@ body {
 .hud-pause-act:active {
   background: rgb(255 210 62 / 75%);
   color: var(--hud-shadow);
+}
+
+/* WHAT A PRESS COSTS, under the words that name it. The pause card's other
+   two acts say their own cost — RESTART STAGE and MAIN MENU are what they
+   sound like — and WATCH REPLAY does not: it sounds like something done
+   BESIDE a run, and it ends one (menu.tsx). So the row carries a second
+   line, quieter than the first because it is the caveat and not the offer,
+   and the button becomes a column to hold it. */
+.hud-pause-act:has(.hud-pause-cost) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.hud-pause-cost {
+  font-size: 0.62em;
+  letter-spacing: 0.14em;
+  opacity: 0.7;
+}
+
+/* ASKED, and waiting on the second press. The row goes to the same amber
+   every press on this card flashes on the way down, so the state the card is
+   in is the colour a thumb already associates with "this one is happening" —
+   and the caveat comes up to full strength, because it is now the question
+   rather than the footnote. Nothing moves: a row that grew or shifted under
+   a thumb already on it would take the second press somewhere else. */
+.hud-pause-asking {
+  border-color: rgb(255 210 62 / 85%);
+  background: rgb(255 210 62 / 18%);
+}
+
+.hud-pause-asking .hud-pause-cost {
+  color: var(--hud-good);
+  opacity: 1;
 }
 
 /* ── The main menu ───────────────────────────────────────────────────────

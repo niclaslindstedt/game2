@@ -131,6 +131,7 @@ export function usePlayActions(store: RunStore, arming: RunArming) {
     setRace,
     setReplaying,
     setRun,
+    standingRef,
     tapeEndRef,
     tapeRef,
   } = store;
@@ -483,6 +484,45 @@ export function usePlayActions(store: RunStore, arming: RunArming) {
     startReplay(tape.seal({ ...end, rows: result?.rows ?? [], rivalSplits }), null);
   };
 
+  /** WATCH THE RUN SO FAR — the pause card's own press, and the one thing on
+   * that card that is neither a way back to the road nor a way off it.
+   *
+   * IT ENDS THE RUN, and that is not a limitation worked around: a replay IS
+   * a run (`startStage` with `mode: "replay"`), it stands the stage up again
+   * around the recording, and the app has one stage standing at a time. The
+   * alternative — holding the drive somewhere and putting it back afterwards —
+   * would be an engine state to freeze, a field of rivals mid-stage to freeze
+   * with it, and a clock that has to come back saying exactly what it said,
+   * for a press whose whole point is that the player has already decided the
+   * run is over. So the card ASKS before it does it (menu.tsx), and what it
+   * hands back is the drive up to the moment of the press.
+   *
+   * The tape is sealed where the car is standing rather than at a line it
+   * never reached: `finished: false`, the clock as it reads, the splits and
+   * the laps that were actually taken. No result sheet — the run has no
+   * result — so nothing is offered to compare against, which is the same
+   * tape a run that ended against a tree seals. */
+  const watchRunSoFar = (): void => {
+    const tape = tapeRef.current;
+    const state = gameRef.current;
+    if (!tape || !state) return;
+    startReplay(
+      tape.seal({
+        finished: false,
+        time: state.raceTime,
+        laps: state.laps,
+        lapTimes: [...state.lapTimes],
+        splits: [...state.checkpointTimes],
+        place: standingRef.current?.place ?? null,
+        of: standingRef.current?.of ?? null,
+        stats: { ...state.stats },
+        rows: [],
+        rivalSplits: {},
+      }),
+      null,
+    );
+  };
+
   /** THE BENCHMARK — the developer menu's stopwatch (game/benchmark.ts).
    *
    * It is a RUN in every sense the renderer and the engine care about: the
@@ -653,6 +693,7 @@ export function usePlayActions(store: RunStore, arming: RunArming) {
     startReplay,
     keepReplay,
     watchLastRun,
+    watchRunSoFar,
     benchmarkStage,
     startBenchmark,
     leaveBenchmark,

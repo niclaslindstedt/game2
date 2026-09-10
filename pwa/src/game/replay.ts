@@ -191,8 +191,15 @@ export function replayTitle(meta: ReplayMeta, stageName: string | null): string 
 }
 
 /** ...and the line under it: what it was driven in, how it went, and how long
- * the recording is. A retirement says so instead of printing a stage time
- * nobody set. */
+ * the recording is.
+ *
+ * A run that never reached the line prints the clock it DID reach, marked as
+ * what it is. It used to say RETIRED, which was a guess and is now often
+ * wrong: a tape is sealed unfinished by a retirement, by a car that stopped
+ * short, and — since the pause card started offering one — by a player who
+ * simply wanted to see what had happened so far. Those are three different
+ * things and the listing knows which of them it is looking at for none of
+ * them, so it states the one fact it has instead of naming a cause. */
 export function replayLine(meta: ReplayMeta): string {
   // The catalog is asked rather than told: a replay kept in a build that has
   // since dropped a car is still a replay worth listing, and a row that threw
@@ -201,7 +208,7 @@ export function replayLine(meta: ReplayMeta): string {
   return [
     replayMode(meta),
     car ? car.name.toUpperCase() : meta.carId.toUpperCase(),
-    meta.finished ? formatTime(meta.time) : "RETIRED",
+    meta.finished ? formatTime(meta.time) : `${formatTime(meta.time)} UNFINISHED`,
     meta.place !== null && meta.of !== null ? `${ordinal(meta.place)} OF ${meta.of}` : null,
   ]
     .filter((word): word is string => Boolean(word))

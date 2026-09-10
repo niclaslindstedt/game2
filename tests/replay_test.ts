@@ -199,8 +199,10 @@ describe("what a kept replay is listed as", () => {
     const line = replayLine(meta({ finished: true, time: 91.5, place: 3, of: 15 }));
     expect(line).toContain("CAMPAIGN");
     expect(line).toContain("3RD OF 15");
-    // A retirement says so instead of printing a stage time nobody set.
-    expect(replayLine(meta({ finished: false }))).toContain("RETIRED");
+    // A run that never reached the line says how far it got rather than
+    // guessing at why it stopped: the tape cannot tell a retirement from a
+    // player who pressed WATCH REPLAY at the pause card.
+    expect(replayLine(meta({ finished: false }))).toContain("UNFINISHED");
   });
 
   it("names a car the catalog has dropped rather than throwing over it", () => {

@@ -45,6 +45,7 @@ import {
   URL_MAP_POSE,
   URL_PLACE,
   URL_POSE,
+  URL_TV_STAND,
 } from "./app-url.ts";
 import { driving, TRACE_PERIOD, wantsOff } from "./app-start.ts";
 import { fieldCars, gridSlotFor, startCamera, trainingSpec } from "./app-race.ts";
@@ -203,6 +204,10 @@ export function startRun(store: RunStore, actions: RunActions): (() => void) | u
     // reason: a tool shooting a wide panorama needs the frame it asked for
     // on the first frame, not the design lens for a beat and then its own.
     renderer.setFreeFov(URL_FREE_FOV);
+    // ...and a scripted still that wants the TV mode's TRIPODS rather than
+    // its broadcast, for the same reason again: a director that chooses per
+    // corner cannot be photographed twice (camera-tv-cut.ts).
+    if (URL_TV_STAND) renderer.pinTvStand();
     // ...and how far it may SEE, for a still that is looking at kilometres.
     renderer.setAir(URL_AIR);
     // Thunder arrives seconds after the flash that made it (storm.ts), so

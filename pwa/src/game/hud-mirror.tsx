@@ -48,6 +48,34 @@ import { useEffect, useRef, useState } from "react";
  * co-driver's calls below the glass off that one attribute. */
 export type GlassSlot = "live" | "blank" | "off";
 
+/** WHAT THE MIRROR IS DOING over a frame, from the five facts that decide
+ * it. Stated here rather than where it is drawn because TWO layers place
+ * themselves off it — the HUD's own root, and the replay strip's layer
+ * beside it (App.tsx), which is chrome that has to stand whether or not the
+ * HUD does and still may not be printed across the glass. A second copy of
+ * this expression is a bug the day one of the five moves.
+ *
+ * It has to agree with the renderer, which puts no glass up under a camera
+ * nobody drives from, on somebody else's car, or past the line: a slot that
+ * cleared a mirror which was not there would leave the co-driver's calls
+ * halfway down the screen. */
+export function glassSlot(parts: {
+  /** Whether the game has a mirror at all (OPTIONS ▸ HUD). */
+  mirror: boolean;
+  /** Whether the camera is on somebody else's car. */
+  spectating: boolean;
+  /** ...or off every car, in god mode. */
+  flying: boolean;
+  /** The run's phase — past the line there is nothing behind worth showing. */
+  phase: string;
+  /** ...and whether the glass the game HAS is showing anything for now. */
+  live: boolean;
+}): GlassSlot {
+  const { mirror, spectating, flying, phase, live } = parts;
+  if (!mirror || spectating || flying || phase === "finished" || phase === "retired") return "off";
+  return live ? "live" : "blank";
+}
+
 /** How long the label stands over a mirror that has just come back on, ms.
  * Matched to the fade in styles.css: the words are gone from the DOM on the
  * frame the animation finishes, so nothing is left half-transparent over the
