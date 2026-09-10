@@ -333,9 +333,11 @@ export function usePlayActions(store: RunStore, arming: RunArming) {
     // A REPLAY OPENS ON THE TV GALLERY. It is the one view built for watching
     // rather than driving — fixed tripods on the outside of every corner,
     // the car arriving at the lens (camera-tv.ts) — and a recording is
-    // exactly the thing there is nothing to drive in. The ladder is still
-    // there: the camera key walks off it the moment the player wants a
-    // different angle, and `?camera=` still wins for the tooling.
+    // exactly the thing there is nothing to drive in, which is also why it is
+    // the only run whose camera key reaches it at all. The rest of the ladder
+    // is still there: the key walks off the gallery the moment the player
+    // wants a different angle and back onto it after, and `?camera=` still
+    // wins for the tooling.
     pickPlayCamera(startCamera(mode === "replay" ? "tv" : optionsRef.current.camera));
     audioRef.current?.setView(playCameraRef.current);
     // The god-mode effect owns the camera while it is flying; setting a play

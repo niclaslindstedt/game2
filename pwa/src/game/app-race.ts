@@ -23,7 +23,7 @@ import { gridSize, raceLaps, type PlayMode, type RaceSettings } from "./menu.tsx
 import { type MenuPage } from "./main-menu.tsx";
 import { demoStage } from "./menu-demo.ts";
 import { TRAINING_LEVEL, TRAINING_LOCATION } from "./training.ts";
-import { PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
+import { WATCHING_CAMERAS, type PlayCamera } from "./settings.ts";
 
 /** THE TRAINING GROUND as a stage spec. There is only one of it — the
  * place is authored (`mapgen/arena.ts`), the conditions are fixed, and the
@@ -153,8 +153,13 @@ export function runDifficulty(race: RaceSettings, mode: PlayMode): Difficulty {
 /** The camera a run opens on: the player's own choice from OPTIONS, unless
  * the tooling pins one with `?camera=` the way it pins the seed — a shot of
  * a given angle should not depend on what is in the screenshot machine's
- * local storage. */
+ * local storage.
+ *
+ * The pin reaches every view a run can be WATCHED from, the TV gallery
+ * included, which is wider than the ladder OPTIONS offers: a scripted scene
+ * is staged rather than driven, and the trackside tripods are what a shot of
+ * a car arriving sideways is taken from (settings.ts). */
 export function startCamera(chosen: PlayCamera): PlayCamera {
   const param = new URLSearchParams(location.search).get("camera");
-  return PLAY_CAMERAS.some((cam) => cam.id === param) ? (param as PlayCamera) : chosen;
+  return WATCHING_CAMERAS.some((cam) => cam.id === param) ? (param as PlayCamera) : chosen;
 }
