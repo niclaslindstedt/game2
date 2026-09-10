@@ -6,11 +6,23 @@
 // with a soft halo, stars, a horizon of ridge silhouettes, and the cars'
 // lamps coming up through their two stops as the light goes.
 //
-// THE SUN MOVES. One minute of racing is one hour of sun (`sunHourAt`), so
-// the preset is not applied once per stage but re-read a few times a
-// second off the race clock, and everything hung on it — the lights, the
-// dome, the ridges, the fog, the lamps' switch — follows. A stage started
-// at sunset is driven down the ladder into the dark without a cut.
+// THE SUN MOVES, and it moves FAST: one minute of racing is one hour of sun
+// (`sunHourAt`), which through a spring sunrise is ten degrees of elevation
+// a minute. So the preset is not applied once per stage but read off the
+// race clock, and everything hung on it — the lights, the dome, the ridges,
+// the fog, the lamps' switch — follows. A stage started at sunset is driven
+// down the ladder into the dark without a cut.
+//
+// Which is the whole difficulty: at that pace nothing here may arrive in
+// STEPS. The frame is split in two for it. `advance` is the light itself —
+// the palette, the air's colour and reach, the mist, the dome's uniforms —
+// and runs every frame, because half of what is done with the sun is a
+// steep function of its elevation (a ridge cutting the beam, a cloud sea
+// catching the first of it) and a sun delivered four times a second walked
+// those up a tenth at a time. `repaint` is everything that has to be LAID
+// DOWN again rather than told a number — the ridges' vertex colours, the
+// stars, the cars' paint — and runs at `RELIGHT_EVERY`, where a step is a
+// shade of 255 and no eye finds it.
 //
 // Two skies, one switch (`SKY_LOOK`, the video options' SKY lever):
 //
@@ -45,10 +57,10 @@ import {
 } from "@engine";
 
 import { createCarLamps } from "./car-lamps.ts";
-import { GLASS_SKY, SKYLINE } from "./car/glass-reflect.ts";
+import { glassSky } from "./car/glass-reflect.ts";
 import { createClouds } from "./clouds.ts";
 import { dressSky, sunOcclusion, type SkyDressing } from "./cloud-field.ts";
-import { horizonCrossing, litAt, sunAt } from "./daylight.ts";
+import { horizonCrossing, hoursToTurn, litAt, sunAt } from "./daylight.ts";
 import { lightDust as hangDustLamps } from "./dust-light.ts";
 import {
   HEIGHT_FOG,
@@ -64,7 +76,7 @@ import { createNightSky } from "./night-sky.ts";
 import { createRain } from "./rain.ts";
 import { createSandAir } from "./sand-air.ts";
 import { createSnowfall } from "./snowfall.ts";
-import { createSkyShell, litLayers } from "./sky-shader.ts";
+import { createSkyShell, litLayers, type DrawnLayer } from "./sky-shader.ts";
 import { SKY_ORDER, drawAsBackdrop } from "./sky-depth.ts";
 import { createStorm } from "./storm.ts";
 import { skyTurnAt, turnBasis } from "./starfield.ts";
@@ -263,6 +275,13 @@ export function createEnvironment(scene: THREE.Scene): Environment {
    * because the sky it is reflecting is blue. */
   const BOUNCE = { lift: 0.38, tone: new THREE.Color(0xdfe9f5) };
   const bounceGround = new THREE.Color();
+  /** Scratch for the mist's two tones and the sun in it — `advance` mixes
+   * them every frame, and a colour apiece a frame is a colour apiece a
+   * frame. */
+  const mistLit = new THREE.Color();
+  const mistShade = new THREE.Color();
+  const mistSun = new THREE.Color();
+  const airTone = new THREE.Color();
   const sunLight = new THREE.DirectionalLight(0xfff2d8, 1.5);
   sunLight.target.position.set(0, 0, 0);
   // The shadows hang off the sun. The light is always placed RELATIVE to
@@ -282,7 +301,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   let skyShown = true;
   let preset: Preset = skyAt(env, biome, env.hour);
   let dressing: SkyDressing = { layers: [] };
-  /** The sun's clock at the last re-light, hours. */
+  /** The sun's clock: where it stands THIS frame, and where it stood at
+   * the last repaint (`repaint`, `RELIGHT_EVERY`). */
+  let hourNow = env.hour;
   let litHour = env.hour;
   /** Where the camera stood last frame — the deck's altitude and the
    * contrails' light are read against it. */
@@ -300,7 +321,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   /** How hard it is coming down this instant, 0..1. */
   let rainNow = 0;
   /** WHAT THE WEATHER LEAVES OF THE VIEW, as a share of the fog's own reach
-   * (`precipReach`), and the last value the fog was actually cut to.
+   * (`precipReach`), and the last value the RIDGE RINGS were painted for.
    *
    * The sheets of rain and snow reach a few tens of metres and stop; the
    * rest of the frame is fog, so the fog IS how the weather reads past the
@@ -314,9 +335,17 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   /** Set while a view drives the fog in meters instead of by preset. */
   let absolute: { near: number; far: number } | null = null;
   /** The country's shadow, marched off the heightfield — for a sky that
-   * draws it, over a stage that has one. */
+   * draws it, over a stage that has one. The map holds it at TWO moments
+   * of the sun and the frame reads between them, so these are the hour the
+   * near half was marched for and how much of the clock the pair covers
+   * (0 while there is no pair yet, which asks for one on the next frame). */
   let march: ShadowMarch | null = null;
-  const marchedSun = new THREE.Vector3(0, -1, 0);
+  let shadowFrom = 0;
+  let shadowSpan = 0;
+  /** Scratch: where the disc parks, and where the far end of the shadow's
+   * bracket stands. */
+  const sunPark = new THREE.Vector3();
+  const bracketB = new THREE.Vector3();
 
   /** THE COLOUR OF THE AIR — the sky's own, with the sand in it.
    *
@@ -385,8 +414,8 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     // floor guards what the SETTING may take, and a downpour is allowed to
     // be as short as a downpour is.
     const range = fogRangeFor(
-      preset.fogNear * veilCut,
-      preset.fogFar * veilCut,
+      preset.fogNear * veilNow,
+      preset.fogFar * veilNow,
       rangeScale * sandSeen,
     );
     fog.near = range.near;
@@ -456,7 +485,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   /** THE MIST, into the fog's uniforms — lying in the valleys at dawn, or
    * not at all. */
   const applyMist = (): void => {
-    const sun = sunAt(litHour, env.season, biome);
+    const sun = sunAt(hourNow, env.season, biome);
     const drawn = look.mist && skyShown && ground !== null;
     const mist = mistFor({
       sunUp: sun.elevation,
@@ -474,24 +503,70 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     // How much of the mist is the lit tone: what the sun reaches at the
     // sheet's own height.
     HEIGHT_FOG.mist.w = litAt(mist.top, preset.sunUp) * beamNow();
-    const lit = new THREE.Color(preset.cloud).lerp(new THREE.Color(preset.fog), 0.35);
-    const shade = new THREE.Color(preset.cloudShade).lerp(new THREE.Color(preset.fog), 0.5);
+    const air = airTone.set(preset.fog);
+    const lit = mistLit.set(preset.cloud).lerp(air, 0.35);
     Object.assign(HEIGHT_FOG.mistLit, { x: lit.r, y: lit.g, z: lit.b });
+    const shade = mistShade.set(preset.cloudShade).lerp(air, 0.5);
     Object.assign(HEIGHT_FOG.mistShade, { x: shade.r, y: shade.g, z: shade.b });
-    const sunColor = new THREE.Color(preset.sun);
+    const sunColor = mistSun.set(preset.sun);
     Object.assign(HEIGHT_FOG.sunColor, { x: sunColor.r, y: sunColor.g, z: sunColor.b });
   };
 
-  /** RE-READ THE SKY for the sun at `hour`, and hang everything on it. */
-  const relight = (hour: number): void => {
-    litHour = hour;
+  /** HOW MUCH SUN A DRAWN SHEET GETS at its own altitude — a cirrus sheet
+   * burns after the cumulus under it has gone grey, and a lid is lit from
+   * above whatever the hour. Written by `shell.apply` as a flat one, so
+   * every call to it is followed by one of these. */
+  const litShare = (layer: DrawnLayer["layer"]): number =>
+    layer.deck ? 1 : litAt(layer.altitude, preset.sunUp);
+
+  /** THE SUN AT THIS INSTANT, and everything cheap enough to hang on it
+   * every frame: the palette itself, the colour and reach of the air, the
+   * dome's uniforms, the mist.
+   *
+   * This is the half of a relight that is a handful of arithmetic and a
+   * few dozen uniform writes, and it is the half that CANNOT wait for the
+   * repaint's cadence. Half of what the frame does with the sun is a steep
+   * function of its elevation — the ridge cutting the beam, how much of
+   * the sun a cloud sea at its own altitude still sees (`litAt`, a ramp
+   * six tenths of a degree wide), where the country's shadow falls — and
+   * the sun climbs ten degrees a MINUTE of racing through a spring
+   * sunrise. Fed a sun that arrives four times a second, every one of
+   * those walks up in steps a tenth of itself high: the valley mist stops
+   * lighting up and starts flickering on. */
+  const advance = (hour: number): void => {
+    hourNow = hour;
     preset = skyAt(env, biome, hour);
     sunV.copy(sunDir(preset.sunUp, preset.sunBearing));
     keyV.copy(sunDir(preset.sunElevation, preset.sunAzimuth));
-    dressing = dressSky(env, biome, coverOf(env), deckAltitude());
-    rainNow = preset.rain;
     applyFogTone();
     applyRange();
+    applyMist();
+    if (look.shader) {
+      shell.apply(preset, dressing, look);
+      litLayers(shell, litShare);
+    } else {
+      // The disc and halo park where the light comes from.
+      const at = sunPark.copy(keyV).multiplyScalar(DOME_RADIUS * 0.86);
+      disc.position.copy(at);
+      disc.scale.setScalar(preset.discSize || 0.001);
+      discMat.color.set(preset.disc);
+      halo.position.copy(at);
+      halo.scale.setScalar(preset.haloSize);
+      haloMat.color.set(preset.halo);
+      haloMat.opacity = preset.haloOpacity;
+    }
+  };
+
+  /** …and the DEAR half: everything that has to be laid down again rather
+   * than merely told a new number — the ridge rings' eighteen hundred
+   * vertex colours, the dome's, the cloud dressing, the stars, and the
+   * paint on every car in the field. At `RELIGHT_EVERY`, which is the step
+   * at which none of them moves by anything an eye can find. */
+  const repaint = (hour: number): void => {
+    litHour = hour;
+    advance(hour);
+    dressing = dressSky(env, biome, coverOf(env), deckAltitude());
+    rainNow = preset.rain;
     hemi.groundColor.set(preset.hemiGround);
     restLight();
     rain.setTone(rainTone(preset));
@@ -506,22 +581,12 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     if (look.shader) {
       shell.setTurn(turnBasis(turn));
       shell.apply(preset, dressing, look);
-      litLayers(shell, (layer) => (layer.deck ? 1 : litAt(layer.altitude, preset.sunUp)));
+      litLayers(shell, litShare);
     } else {
       paintDome(preset);
       clouds.apply(preset, dressing);
       night.apply(preset, turn, keyV);
-      // The disc and halo park where the light comes from.
-      const at = keyV.clone().multiplyScalar(DOME_RADIUS * 0.86);
-      disc.position.copy(at);
-      disc.scale.setScalar(preset.discSize || 0.001);
-      discMat.color.set(preset.disc);
-      halo.position.copy(at);
-      halo.scale.setScalar(preset.haloSize);
-      haloMat.color.set(preset.halo);
-      haloMat.opacity = preset.haloOpacity;
     }
-    applyMist();
     applyVisibility();
     // ...and the surfaces the scene's own lights cannot reach: the cars are
     // fullbright and carry their light as a tint, so the only thing that
@@ -540,19 +605,19 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     // to sit on rather than a wall of rock.
     horizon.turnTo(horizonCrossing(env.hour, env.season, biome));
     occlusion = 0;
-    relight(env.hour);
+    repaint(env.hour);
   };
 
   const setGround = (next: Ground | null): void => {
     ground = next;
     march = next ? createShadowMarch(next.heightAt, SHADOW_CELLS, SHADOW_SPAN) : null;
-    marchedSun.set(0, -1, 0);
-    relight(litHour);
+    shadowSpan = 0;
+    repaint(litHour);
   };
 
   const setSkyLook = (level: VideoSettings["sky"]): void => {
     look = SKY_LOOK[level];
-    relight(litHour);
+    repaint(litHour);
   };
 
   const setRange = (scale: number): void => {
@@ -599,20 +664,54 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   /** What to tell when the light has moved — see `onRelight`. */
   let relit: () => void = () => {};
 
+  /** THE SUN'S DIRECTION AT AN HOUR, into `out` — the REAL sun, wherever
+   * it is, which is what casts the shadow the march follows. */
+  const sunAtHour = (out: THREE.Vector3, hour: number): THREE.Vector3 => {
+    const sun = sunAt(hour, env.season, biome);
+    return out.copy(sunDir(sun.elevation, sun.azimuth));
+  };
+
   /** THE COUNTRY'S SHADOW: re-sample the heights when the camera has
-   * walked far enough, re-march when the sun has moved far enough, and
-   * hand the fog the map's frame. */
+   * walked far enough, march a fresh pair when the sun has crossed the one
+   * being read, and hand the fog the map's frame and how far through that
+   * pair the sun now stands.
+   *
+   * The pair is what keeps the terminator moving: a march is three
+   * milliseconds, far too dear to redo every frame, and half a degree of
+   * sun — the interval it is worth redoing at — slides a ridge's shadow
+   * further down a valley wall than the shader's own penumbra is deep. So
+   * the far half is marched for where the sun will be at the END of the
+   * interval, and the frame reads between the two. */
   const marchShadow = (cam: THREE.Vector3): void => {
     if (!march || !look.mountainShadow || !skyShown) {
       HEIGHT_FOG.shadowFrame.w = 0;
       return;
     }
+    // The window first: when it has moved, `focus` has marched both halves
+    // again over the new heights, at the same pair of moments.
     const moved = march.focus(cam.x, cam.z);
-    if (moved || marchedSun.angleTo(sunV) > REMARCH_EVERY) {
-      if (!moved) march.march(sunV);
-      marchedSun.copy(sunV);
+    // Then how far through the pair the sun stands. Modulo the day, so a
+    // clock that has wrapped past midnight — or a run started again —
+    // lands past the far end and lays a fresh pair rather than reading one
+    // backwards.
+    let through = shadowSpan > 0 ? ((hourNow - shadowFrom + 24) % 24) / shadowSpan : 1;
+    if (through >= 1) {
+      // A pair that the sun has merely walked off the end of carries its
+      // far half over as the new near one, which is half the marching; one
+      // that never existed, or that a jumped clock has left nowhere near
+      // the sun, is laid from scratch.
+      const fresh = shadowSpan <= 0 || through > 1.5;
+      shadowFrom = hourNow;
+      shadowSpan = hoursToTurn(REMARCH_EVERY, hourNow, env.season, biome);
+      const then = sunAtHour(bracketB, hourNow + shadowSpan);
+      if (fresh) march.march(sunV, then);
+      else march.advance(then);
+      through = 0;
+      writeShadowMap(march.data);
+    } else if (moved) {
       writeShadowMap(march.data);
     }
+    HEIGHT_FOG.shadowRange.z = through;
     HEIGHT_FOG.shadowFrame.x = march.originX;
     HEIGHT_FOG.shadowFrame.y = march.originZ;
     HEIGHT_FOG.shadowFrame.z = 1 / march.span;
@@ -622,55 +721,16 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     HEIGHT_FOG.shadowRange.y = march.hi - march.lo;
   };
 
-  /** THE SKY IN THE CARS' WINDOWS (car/glass-reflect.ts), on the same terms
-   * the mist and the cloud shadows are written on: one block of numbers,
-   * shared by reference with every pane on the road.
-   *
-   * All of it is the sky the dome is already drawing — its two colours this
-   * hour, the cloud tone, the lid's underside where there is one, and the
-   * lowest sheet's own coverage and drift — so a window shows the weather
-   * that is actually overhead rather than a picture of some other one. The
-   * SUN is not written here: the glass reads `HEIGHT_FOG.sun` by reference,
-   * which the frame below sets once for everything that needs it. */
-  const glassSky = (cam: THREE.Vector3): void => {
-    // Under a deck the sky IS the lid: its underside overhead, and the light
-    // that gets in under its rim at the horizon.
-    const zenith = new THREE.Color(preset.deck ? preset.deck.overhead : preset.zenith);
-    const horizon = new THREE.Color(preset.deck ? preset.deck.rim : preset.horizon);
-    Object.assign(GLASS_SKY.zenith, { x: zenith.r, y: zenith.g, z: zenith.b });
-    Object.assign(GLASS_SKY.horizon, { x: horizon.r, y: horizon.g, z: horizon.b });
-    const cloud = new THREE.Color(preset.cloud);
-    Object.assign(GLASS_SKY.cloud, { x: cloud.r, y: cloud.g, z: cloud.b });
-    // The land, at the distance a reflected horizon is always at: the
-    // hemisphere's own ground colour, washed most of the way into the fog —
-    // and the trees on it as the same tone with the light taken out of it.
-    const fogTone = new THREE.Color(preset.fog);
-    const ground = new THREE.Color(preset.hemiGround).lerp(fogTone, 0.45);
-    Object.assign(GLASS_SKY.ground, { x: ground.r, y: ground.g, z: ground.b });
-    const trees = new THREE.Color(preset.hemiGround).multiplyScalar(0.4).lerp(fogTone, 0.3);
-    Object.assign(GLASS_SKY.trees, { x: trees.r, y: trees.g, z: trees.b });
-    GLASS_SKY.look.y = SKYLINE[biome];
-    // The sheet a window can actually see through: the lowest one over the
-    // eye, at the coverage and the offsets the dome is drawing it at. A lid
-    // is not one — it is the sky itself up there, and the pane has it in the
-    // two colours above — so what it contributes is the ragged relief of its
-    // own underside.
-    const over = shell.layers().find(({ layer }) => !layer.deck && layer.altitude > cam.y);
-    if (!skyShown) GLASS_SKY.look.x = 0;
-    else if (preset.deck) GLASS_SKY.look.x = 0.3 * preset.deck.relief;
-    else GLASS_SKY.look.x = over ? over.layer.coverage : 0;
-    // The drift, off the layer's own offset and its own cell size, so what
-    // slides through a window keeps pace with what is overhead.
-    const pitch = over ? 1 / over.layer.scale : 0;
-    GLASS_SKY.look.z = over ? over.offsetX * pitch : 0;
-    GLASS_SKY.look.w = over ? over.offsetZ * pitch : 0;
-  };
+  /** THE SHEET OVER THE EYE: the lowest one the dome is drawing above `y`,
+   * or null under an open sky. What throws a shadow on the ground, and what
+   * a window can see through. */
+  const sheetOver = (y: number): DrawnLayer | null =>
+    shell.layers().find(({ layer }) => !layer.deck && layer.altitude > y) ?? null;
 
   /** THE CLOUDS' SHADOW on the ground: the lowest sheet over the eye,
    * read by the fog chunk at the same offsets the dome draws it at. */
   const shadeByClouds = (cam: THREE.Vector3): void => {
-    const drawn = shell.layers();
-    const over = drawn.find(({ layer }) => !layer.deck && layer.altitude > cam.y);
+    const over = sheetOver(cam.y);
     if (!over || !look.cloudShadow || !skyShown) {
       HEIGHT_FOG.cloudB.w = 0;
       return;
@@ -704,10 +764,13 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     disc.lookAt(cam);
     halo.lookAt(cam);
 
-    // THE SUN'S CLOCK: re-read the sky when it has moved far enough.
+    // THE SUN'S CLOCK. Where the sun IS is read every frame; what it
+    // PAINTS is laid down again only when it has moved far enough to be
+    // worth the vertices (`advance` and `repaint`).
     const hour = sunHourAt(state.env, state.t);
     const moved = Math.abs(hour - litHour);
-    if (Math.min(moved, 24 - moved) >= RELIGHT_EVERY) relight(hour);
+    if (Math.min(moved, 24 - moved) >= RELIGHT_EVERY) repaint(hour);
+    else advance(hour);
 
     // The weather breathes with the gust that carries it: the squall is the
     // downdraught, so the sheet thickens exactly as the car is shoved.
@@ -777,14 +840,12 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     // metres out; everything past that is fog, so a downpour that does not
     // move the fog is a downpour that stops at the bonnet. Eased rather
     // than snapped — the air takes a moment to thicken, and the fog range
-    // is read by every material in the scene — and re-cut only when it has
-    // actually moved, because `applyRange` and `applyFogTone` are a
-    // preset's worth of colour work rather than two assignments.
+    // is read by every material in the scene. The fog itself takes it the
+    // frame it moves (`advance`); what waits for the step is the RIDGE
+    // RINGS, which are eighteen hundred vertices laid again.
     veilNow += (precipReach(rainNow, flakes) - veilNow) * Math.min(1, dt * VEIL_RATE);
     if (Math.abs(veilNow - veilCut) > VEIL_STEP) {
       veilCut = veilNow;
-      applyRange();
-      applyFogTone();
       paintHorizon();
     }
     rain.setIntensity(effects > 0 ? rainNow * (1 - flakes) : 0);
@@ -803,8 +864,6 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     if (seen !== sandSeen || state.sand.sand !== sandNow) {
       sandNow = state.sand.sand;
       sandSeen = seen;
-      applyRange();
-      applyFogTone();
       paintHorizon();
     }
     sandAir.set(effects > 0 ? sandNow : 0, effects > 0 ? state.sand.approach : 0);
@@ -835,7 +894,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     }
     marchShadow(cam);
     shadeByClouds(cam);
-    glassSky(cam);
+    glassSky(preset, biome, skyShown, sheetOver(cam.y));
     // Last, so the map is built around wherever the light ended up.
     shadows.follow(state.car, camera);
   };
@@ -888,7 +947,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     snowing: () => flakes,
     flash: () => storm.surge(),
     flashFrom: () => storm.from(),
-    sunHour: () => litHour,
+    sunHour: () => hourNow,
     setEffects: (scale) => {
       effects = scale;
     },

@@ -2,7 +2,10 @@
 // THE SHADOW THE COUNTRY THROWS — the march off a heightfield toward the
 // sun (mountain-shadow.ts) that says, for every cell round the camera,
 // below what height the ground is in a mountain's shadow. The GPU reads
-// the bytes; this reads the same bytes here.
+// the bytes; this reads the same bytes here — TWO a cell, the shadow at
+// either end of the interval the frame is drawing inside, which is what
+// stops a terminator that moves eight metres between marches from getting
+// there in one frame.
 
 import { describe, expect, it } from "vitest";
 
@@ -59,7 +62,7 @@ describe("the country's shadow", () => {
         const x = march.originX + ((i + 0.5) * march.span) / march.size;
         const z = march.originZ + ((j + 0.5) * march.span) / march.size;
         const ceiling = march.ceilingAt(x, z);
-        const byte = march.data[j * march.size + i];
+        const byte = march.data[2 * (j * march.size + i)];
         const decoded = march.lo + (byte / 255) * (march.hi - march.lo);
         // The bytes span the window's own heights: a ceiling under the
         // lowest ground is as good as none, and one over the highest as
@@ -68,6 +71,39 @@ describe("the country's shadow", () => {
         expect(Math.abs(decoded - held)).toBeLessThan(2);
       }
     }
+  });
+
+  it("brackets the sun with two marches, and crosses between them in a sweep", () => {
+    const march = createShadowMarch(ridge, 64, 2400);
+    march.focus(0, 0);
+    // The pair a frame reads inside: where the shadow stands now, and
+    // where it will stand half a degree of sun later.
+    march.march(sunFromEast(3), sunFromEast(3.5));
+    const cell = (x: number, z: number): number =>
+      2 *
+      (Math.floor((z - march.originZ) / (march.span / march.size)) * march.size +
+        Math.floor((x - march.originX) / (march.span / march.size)));
+    // Half a degree moves this ceiling further than the shader's own
+    // penumbra is deep — which is the whole reason for the pair.
+    const at = cell(-700, 0);
+    const height = (byte: number): number => march.lo + (byte / 255) * (march.hi - march.lo);
+    const from = height(march.data[at]);
+    const to = height(march.data[at + 1]);
+    expect(Math.abs(from - to)).toBeGreaterThan(4);
+    // Read between them, sixty times a second over the seconds of racing
+    // that half a degree of a sunrise takes, no step is anywhere near it.
+    const STEPS = 180;
+    let worst = 0;
+    for (let k = 1; k <= STEPS; k++) {
+      const was = from + ((to - from) * (k - 1)) / STEPS;
+      const now = from + ((to - from) * k) / STEPS;
+      worst = Math.max(worst, Math.abs(now - was));
+    }
+    expect(worst).toBeLessThan(0.5);
+    // And the step off the end of one pair onto the next is not a step at
+    // all: the far half becomes the near one, unchanged.
+    march.advance(sunFromEast(4));
+    expect(height(march.data[at])).toBeCloseTo(to, 6);
   });
 
   it("re-centres only once the camera has walked far enough", () => {

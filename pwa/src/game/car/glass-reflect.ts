@@ -51,6 +51,8 @@ import type { BiomeId } from "@engine";
 
 import { graftShader } from "../car-surface.ts";
 import { HEIGHT_FOG } from "../height-fog.ts";
+import { type DrawnLayer } from "../sky-shader.ts";
+import { type Preset } from "../sky.ts";
 
 type V3 = { x: number; y: number; z: number };
 type V4 = { x: number; y: number; z: number; w: number };
@@ -94,6 +96,59 @@ export const SKYLINE: Record<BiomeId, number> = {
   desert: 0.018,
   alpine: 0.13,
 };
+
+/** THE SKY A WINDOW IS SHOWING, into the block above — written by the
+ * environment every frame, on the same terms the height fog's numbers are:
+ * one object, shared by reference with every pane on the road.
+ *
+ * All of it is the sky the dome is already drawing — its two colours this
+ * hour, the cloud tone, the lid's underside where there is one, and the
+ * `over` sheet's own coverage and drift — so a window shows the weather
+ * that is actually overhead rather than a picture of some other one. The
+ * SUN is not written here: the glass reads `HEIGHT_FOG.sun` by reference,
+ * which the frame sets once for everything that needs it. */
+export function glassSky(
+  p: Preset,
+  biome: BiomeId,
+  shown: boolean,
+  /** The lowest sheet over the eye — what a window can actually see
+   * through — or null for an open sky over it. */
+  over: DrawnLayer | null,
+): void {
+  // Under a deck the sky IS the lid: its underside overhead, and the light
+  // that gets in under its rim at the horizon.
+  const zenith = SKY_TONE.set(p.deck ? p.deck.overhead : p.zenith);
+  Object.assign(GLASS_SKY.zenith, { x: zenith.r, y: zenith.g, z: zenith.b });
+  const horizon = SKY_TONE.set(p.deck ? p.deck.rim : p.horizon);
+  Object.assign(GLASS_SKY.horizon, { x: horizon.r, y: horizon.g, z: horizon.b });
+  const cloud = SKY_TONE.set(p.cloud);
+  Object.assign(GLASS_SKY.cloud, { x: cloud.r, y: cloud.g, z: cloud.b });
+  // The land, at the distance a reflected horizon is always at: the
+  // hemisphere's own ground colour, washed most of the way into the fog —
+  // and the trees on it as the same tone with the light taken out of it.
+  const air = AIR_TONE.set(p.fog);
+  const ground = SKY_TONE.set(p.hemiGround).lerp(air, 0.45);
+  Object.assign(GLASS_SKY.ground, { x: ground.r, y: ground.g, z: ground.b });
+  const trees = SKY_TONE.set(p.hemiGround).multiplyScalar(0.4).lerp(air, 0.3);
+  Object.assign(GLASS_SKY.trees, { x: trees.r, y: trees.g, z: trees.b });
+  GLASS_SKY.look.y = SKYLINE[biome];
+  // A lid is not a sheet a pane sees through — it is the sky itself up
+  // there, and the window has it in the two colours above — so what it
+  // contributes is the ragged relief of its own underside.
+  if (!shown) GLASS_SKY.look.x = 0;
+  else if (p.deck) GLASS_SKY.look.x = 0.3 * p.deck.relief;
+  else GLASS_SKY.look.x = over ? over.layer.coverage : 0;
+  // The drift, off the layer's own offset and its own cell size, so what
+  // slides through a window keeps pace with what is overhead.
+  const pitch = over ? 1 / over.layer.scale : 0;
+  GLASS_SKY.look.z = over ? over.offsetX * pitch : 0;
+  GLASS_SKY.look.w = over ? over.offsetZ * pitch : 0;
+}
+
+/** Scratch for the mixes above — a frame's worth of tones, not a frame's
+ * worth of colours. */
+const SKY_TONE = new THREE.Color();
+const AIR_TONE = new THREE.Color();
 
 /** What a pane shows of the world square-on, and how fast that climbs as the
  * view goes glancing (Schlick's own shape, on the falloff the per-frame

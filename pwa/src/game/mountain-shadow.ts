@@ -21,6 +21,16 @@
 // re-sampled when the camera has walked a quarter of the way across it, so
 // an endless stage is covered as it streams.
 //
+// A FEW SECONDS IS A LONG TIME FOR A SHADOW. The sun climbs ten degrees a
+// minute of racing through a spring sunrise, and half a degree of it slides
+// a ridge's shadow eight metres down the valley wall — twice the softness
+// the shader gives its edge, so a map that simply jumped to the new answer
+// jumped, and the whole valley (and the mist filling it) changed brightness
+// in one frame every few seconds. So the map holds the shadow at TWO
+// moments of the sun, one either side of the one being drawn, and the frame
+// reads BETWEEN them: two bytes a cell rather than one, and the terminator
+// sweeps down the wall at the pace the sun actually moves.
+//
 // DOM-free and three-free: the environment wraps the bytes in a texture
 // (height-fog.ts reads it on the GPU) and `tests/mountain_shadow_test.ts`
 // reads them here.
@@ -29,9 +39,12 @@ export type ShadowMarch = {
   /** Cells per side, and metres per side. */
   size: number;
   span: number;
-  /** The shadow ceiling per cell, encoded 0..255 over `lo`..`hi` (m over
-   * the sea): a cell's ground is in shadow where its height is under the
-   * ceiling; 255 is a cell in shadow at any height (the sun is down). */
+  /** The shadow ceiling per cell at the two moments of the sun the pair
+   * brackets, TWO BYTES A CELL — the near half first, the far half second
+   * — each encoded 0..255 over `lo`..`hi` (m over the sea): a cell's
+   * ground is in shadow where its height is under the ceiling, and 255 is
+   * a cell in shadow at any height (the sun is down). What the frame draws
+   * is the mix of the two the sun's own clock stands at. */
   data: Uint8Array;
   /** The window's south-west corner, world m. */
   originX: number;
@@ -40,16 +53,26 @@ export type ShadowMarch = {
   lo: number;
   hi: number;
   /** Re-centre the window on a point if it has drifted far enough, and
-   * re-sample the heights. Returns whether it did. */
+   * re-sample the heights. Returns whether it did — both halves are
+   * marched again for the pair of suns they already stood at. */
   focus: (x: number, z: number) => boolean;
-  /** Recompute every cell's ceiling for a sun in this direction (unit,
-   * pointing AT the sun). Below the horizon everything is in shadow. */
-  march: (sun: { x: number; y: number; z: number }) => void;
-  /** The ceiling at a world point, m — the nearest cell's. */
+  /** Recompute BOTH halves: the ceiling for a sun in this direction (unit,
+   * pointing AT the sun), and the one it will have when the sun reaches
+   * `then` — the same sun, and a pair with nothing between them, when
+   * `then` is left out. Below the horizon everything is in shadow. */
+  march: (sun: Dir, then?: Dir) => void;
+  /** …and the step between two of those, at half the work: what was the
+   * FAR half becomes the near one, and only the new far half is marched. */
+  advance: (then: Dir) => void;
+  /** The ceiling at a world point, m — the nearest cell's, on the NEAR
+   * half, which is where the shadow stood when the pair was last laid. */
   ceilingAt: (x: number, z: number) => number;
   /** Whether `(x, y, z)` is in the shadow of the country. */
   shadowed: (x: number, y: number, z: number) => boolean;
 };
+
+/** A direction to the sun — a unit vector, pointing at it. */
+type Dir = { x: number; y: number; z: number };
 
 /** How far the march follows a ray toward the sun, in cells. Past this a
  * mountain would have to be higher than any this generator builds to
@@ -67,8 +90,11 @@ export function createShadowMarch(
 ): ShadowMarch {
   const cell = span / size;
   const heights = new Float32Array(size * size);
-  const ceiling = new Float32Array(size * size);
-  const data = new Uint8Array(size * size);
+  /** The two halves of the pair, as heights: where the shadow's ceiling
+   * stands at the near end of the bracket and at the far end. */
+  const near = new Float32Array(size * size);
+  const far = new Float32Array(size * size);
+  const data = new Uint8Array(size * size * 2);
   const map: ShadowMarch = {
     size,
     span,
@@ -79,13 +105,16 @@ export function createShadowMarch(
     hi: 1,
     focus: () => false,
     march: () => {},
+    advance: () => {},
     ceilingAt: () => 0,
     shadowed: () => false,
   };
   let centred = false;
   let centreX = 0;
   let centreZ = 0;
-  let lastSun = { x: 0, y: -1, z: 0 };
+  const DOWN = { x: 0, y: -1, z: 0 };
+  let atNear: Dir = DOWN;
+  let atFar: Dir = DOWN;
 
   const sample = (): void => {
     let lo = Infinity;
@@ -102,38 +131,23 @@ export function createShadowMarch(
     map.hi = Math.max(hi, lo + 1);
   };
 
+  /** Both halves into the bytes, interleaved — the pair is read with one
+   * fetch on the GPU, so the two ceilings of a cell lie side by side. */
   const encode = (): void => {
     const range = map.hi - map.lo;
     for (let k = 0; k < size * size; k++) {
-      const v = ((ceiling[k] - map.lo) / range) * 255;
-      data[k] = v <= 0 ? 0 : v >= 255 ? 255 : Math.round(v);
+      const a = ((near[k] - map.lo) / range) * 255;
+      const b = ((far[k] - map.lo) / range) * 255;
+      data[2 * k] = a <= 0 ? 0 : a >= 255 ? 255 : Math.round(a);
+      data[2 * k + 1] = b <= 0 ? 0 : b >= 255 ? 255 : Math.round(b);
     }
   };
 
-  map.focus = (x, z) => {
-    if (
-      centred &&
-      Math.abs(x - centreX) < span * RECENTRE &&
-      Math.abs(z - centreZ) < span * RECENTRE
-    ) {
-      return false;
-    }
-    centred = true;
-    centreX = x;
-    centreZ = z;
-    map.originX = x - span / 2;
-    map.originZ = z - span / 2;
-    sample();
-    map.march(lastSun);
-    return true;
-  };
-
-  map.march = (sun) => {
-    lastSun = sun;
-    if (!centred) return;
+  /** One half's worth of march: every cell's ceiling for a sun in this
+   * direction, into `out`. */
+  const walk = (out: Float32Array, sun: Dir): void => {
     if (sun.y <= 0.002) {
-      ceiling.fill(Infinity);
-      data.fill(255);
+      out.fill(Infinity);
       return;
     }
     // Along the ground toward the sun, one cell at a time, the ray
@@ -159,9 +173,51 @@ export function createShadowMarch(
           const h = heights[cj * size + ci] - drop;
           if (h > top) top = h;
         }
-        ceiling[j * size + i] = top;
+        out[j * size + i] = top;
       }
     }
+  };
+
+  map.focus = (x, z) => {
+    if (
+      centred &&
+      Math.abs(x - centreX) < span * RECENTRE &&
+      Math.abs(z - centreZ) < span * RECENTRE
+    ) {
+      return false;
+    }
+    centred = true;
+    centreX = x;
+    centreZ = z;
+    map.originX = x - span / 2;
+    map.originZ = z - span / 2;
+    sample();
+    // The window moved, not the sun: the pair stands where it stood, and
+    // both halves are marched again over the new heights so the frame
+    // carries on reading between the same two moments.
+    map.march(atNear, atFar);
+    return true;
+  };
+
+  map.march = (sun, then) => {
+    // COPIED, not held: the caller's vector is a scratch it moves the sun
+    // about in every frame, and a window that re-centres later has to be
+    // able to march the pair it was actually standing at.
+    atNear = { x: sun.x, y: sun.y, z: sun.z };
+    atFar = then ? { x: then.x, y: then.y, z: then.z } : atNear;
+    if (!centred) return;
+    walk(near, sun);
+    if (then) walk(far, then);
+    else far.set(near);
+    encode();
+  };
+
+  map.advance = (then) => {
+    atNear = atFar;
+    atFar = { x: then.x, y: then.y, z: then.z };
+    if (!centred) return;
+    near.set(far);
+    walk(far, then);
     encode();
   };
 
@@ -170,7 +226,7 @@ export function createShadowMarch(
     const i = Math.floor((x - map.originX) / cell);
     const j = Math.floor((z - map.originZ) / cell);
     if (i < 0 || j < 0 || i >= size || j >= size) return -Infinity;
-    return ceiling[j * size + i];
+    return near[j * size + i];
   };
 
   map.shadowed = (x, y, z) => y < map.ceilingAt(x, z);

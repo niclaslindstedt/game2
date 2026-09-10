@@ -18,14 +18,26 @@ import { type Clap } from "./weather.ts";
  * same colour at dawn as it is at midnight. */
 export const FLASH_COLOR = 0xdfe9ff;
 
-/** How far the sun has to move before the sky is re-read, hours: fifteen
- * seconds of sun, a quarter of a second of racing. The lights and the
- * shader's uniforms are cheap and the ridges are eighteen hundred vertices;
- * at this step the colours change by nothing an eye can see. */
+/** How far the sun has to move before the sky is PAINTED again, hours:
+ * fifteen seconds of sun, a quarter of a second of racing.
+ *
+ * Only the dear half waits for this — the ridge rings' eighteen hundred
+ * vertex colours, the dome's, the stars, the paint on every car in the
+ * field — and at this step none of them moves by more than a shade or two
+ * of 255, which is nothing an eye can find. Where the sun IS is read every
+ * frame instead (`advance`): half of what the frame does with it is a
+ * steep function of the elevation, and a sun that arrived four times a
+ * second walked those up in visible steps. */
 export const RELIGHT_EVERY = 1 / 240;
 
 /** How far the sun has to move before the country's shadow is marched
- * again, radians — half a degree, two seconds of racing. */
+ * again, radians — half a degree, a few seconds of racing.
+ *
+ * The march is three milliseconds, so this is as often as it can be
+ * afforded; half a degree of sun is also further than the shadow's own
+ * penumbra is deep, which is why the map brackets the sun with two of them
+ * and the frame reads between (mountain-shadow.ts) rather than stepping
+ * from one to the next. */
 export const REMARCH_EVERY = 0.5 * (Math.PI / 180);
 
 /** How fast the key light follows a cloud across the sun, 1/s. A cumulus
@@ -34,14 +46,15 @@ export const REMARCH_EVERY = 0.5 * (Math.PI / 180);
 export const OCCLUSION_RATE = 1.4;
 
 /** How fast the distance closes as the rain thickens, 1/s, and how far the
- * veil has to have moved before the fog is actually re-cut.
+ * veil has to have moved before the RIDGE RINGS are painted again.
  *
  * Slower than the sheet itself on purpose. A squall arrives in a second
  * and the drops thicken with it, but the AIR takes longer — the distance
  * going with the gust frame for frame reads as the fog range being driven
- * by something rather than as weather. The step is what keeps a number
- * that moves every frame from re-deriving a preset's worth of colour every
- * frame; a fortieth of the range is well under what an eye finds on a
+ * by something rather than as weather. The fog itself takes the eased
+ * value the frame it moves; the step is what keeps a number that moves
+ * every frame from laying eighteen hundred vertex colours down every
+ * frame, and a fortieth of the range is well under what an eye finds on a
  * ridge two hundred metres out. */
 export const VEIL_RATE = 0.5;
 export const VEIL_STEP = 0.025;
@@ -168,7 +181,7 @@ export type Environment = {
   flash: () => number;
   /** …and which way the strike lighting it is coming from. */
   flashFrom: () => THREE.Vector3;
-  /** The sun's clock as last read, hours 0..24 — for the overlay. */
+  /** The sun's clock this frame, hours 0..24 — for the overlay. */
   sunHour: () => number;
   /** The transient-FX budget, 0..1 — the video options' own scale. At
    * nothing the rain comes off entirely, which is what the low setting
