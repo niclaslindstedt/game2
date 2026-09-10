@@ -29,8 +29,8 @@ import {
 import { clamp } from "../pwa/src/lib/angles.ts";
 
 import {
+  DRIVING_MODES,
   PLAY_MODES,
-  RIDING_MODES,
   createGameCamera,
   type CameraMode,
 } from "../pwa/src/game/camera.ts";
@@ -210,7 +210,7 @@ describe("chase camera over a cliff", () => {
     // job rather than losing the car. That it does not lose it is the next
     // test's rule, in the terms that actually apply to a fixed lens — the
     // FRAME.
-    for (const mode of RIDING_MODES) {
+    for (const mode of DRIVING_MODES) {
       const { level, fall, fallen } = freefall(mode);
       expect(fallen).toBeGreaterThan(40);
       const settled = level.ranges[level.ranges.length - 1];
@@ -1641,6 +1641,83 @@ function stepsFailing(check: (frames: Frame[]) => boolean, hold: number): string
   );
 }
 
+/** The whole ladder walked with the camera key from `from`, one press at a
+ * time, until it comes back to where it started or has plainly not got a
+ * wrap in it. `watching` is the replay's ladder (camera.ts). */
+function pressAround(from: CameraMode, watching: boolean): CameraMode[] {
+  const cam = createGameCamera(1600, 900);
+  cam.setMode(from);
+  const walked: CameraMode[] = [];
+  for (let i = 0; i < PLAY_MODES.length + 1; i++) {
+    cam.cycle(watching);
+    const at = cam.mode();
+    if (at === from) break;
+    walked.push(at);
+  }
+  return walked;
+}
+
+describe("the camera key's ladder", () => {
+  it("never reaches the TV cam in a run, from any view the run can be driven from", () => {
+    // The rule the TV cam's whole placement rests on: its tripods frame the
+    // corner for an audience, so the road past it is off the shot and the
+    // cut lands where a driver most needs to be reading ahead
+    // (camera-tv.ts). A stage is therefore never driven from it — not from
+    // the first press, and not from the eighth.
+    for (const from of DRIVING_MODES) {
+      expect(pressAround(from, false), from as string).not.toContain("tv");
+    }
+  });
+
+  it("walks every driving view and comes back round, in a run and in a replay alike", () => {
+    // The wrap is what makes the key a ladder rather than a dead end, and
+    // nothing on either ladder may be unreachable from anywhere else on it.
+    for (const from of DRIVING_MODES) {
+      expect(new Set(pressAround(from, false)), from as string).toEqual(
+        new Set(DRIVING_MODES.filter((mode) => mode !== from)),
+      );
+      expect(new Set(pressAround(from, true)), from as string).toEqual(
+        new Set(PLAY_MODES.filter((mode) => mode !== from)),
+      );
+    }
+  });
+
+  it("reaches the TV cam in a replay, and steps back off it onto the ladder", () => {
+    // A recording is the one run nobody is steering, so the gallery is on
+    // the end of its ladder — and a player who wants a different angle
+    // mid-replay has to be able to leave it again.
+    expect(pressAround("top", true)).toContain("tv");
+    const cam = createGameCamera(1600, 900);
+    cam.setMode("tv");
+    cam.cycle(true);
+    expect(DRIVING_MODES).toContain(cam.mode());
+  });
+
+  it("lands a scripted shot pinned on the TV cam back on the driving ladder", () => {
+    // `?camera=tv` puts a shot harness on the gallery in a run that is not a
+    // replay (`startCamera`). The key is not a dead end there either: it
+    // steps onto the head of the ladder rather than doing nothing.
+    const cam = createGameCamera(1600, 900);
+    cam.setMode("tv");
+    cam.cycle(false);
+    expect(cam.mode()).toBe(DRIVING_MODES[0]);
+  });
+
+  it("is a no-op from the overhead views, on either ladder", () => {
+    // The drone and the map are the menu's own framing; walking one onto a
+    // driving camera would leave a menu page standing over a shot nobody
+    // asked for.
+    for (const watching of [false, true]) {
+      for (const mode of ["drone", "map"] as CameraMode[]) {
+        const cam = createGameCamera(1600, 900);
+        cam.setMode(mode);
+        cam.cycle(watching);
+        expect(cam.mode(), mode as string).toBe(mode);
+      }
+    }
+  });
+});
+
 describe("changing view", () => {
   it("is a move and never a cut, at every step of the ladder", () => {
     // A cut spends the WHOLE distance between the two poses in one frame.
@@ -1690,7 +1767,7 @@ describe("changing view", () => {
       return Math.max(...behind) <= Math.max(behind[0], behind[behind.length - 1]) + 0.5;
     };
     const rides = ([from, to]: [CameraMode, CameraMode]): boolean =>
-      RIDING_MODES.includes(from) && RIDING_MODES.includes(to);
+      DRIVING_MODES.includes(from) && DRIVING_MODES.includes(to);
     const failing = LADDER.filter(rides)
       .filter(([from, to]) => !kept(walkTo(from, to, 90)))
       .map(([from, to]) => `${from}->${to}`);
@@ -1779,7 +1856,7 @@ describe("the crew put back at the last board", () => {
     // off the car that are held to it: a TV tripod is planted in the world
     // and the car drives away from it, which reads as several metres of
     // travel a frame and is the camera doing its job.
-    const drifting = RIDING_MODES.filter((view) => {
+    const drifting = DRIVING_MODES.filter((view) => {
       const frames = respawnDrive(view, 90);
       return frames[0].at.distanceTo(frames[frames.length - 1].at) > 0.5;
     });
@@ -1799,7 +1876,7 @@ describe("the crew put back at the last board", () => {
     // The frame-to-frame movement of a stood shot is the car creeping
     // forward under it at walking pace and nothing else. A boom unwinding
     // half a turn crosses metres per frame at the start of it.
-    const swinging = RIDING_MODES.filter((view) => {
+    const swinging = DRIVING_MODES.filter((view) => {
       const frames = respawnDrive(view, 90);
       let worst = 0;
       for (let i = 1; i < frames.length; i++) {

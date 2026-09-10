@@ -36,7 +36,7 @@ import { lastInitials, loadBoard, placeOn } from "./scores.ts";
 import { readLive, takeSnapshot } from "./snapshot.ts";
 import { findLevel, loadProgress, recordFinish, recordResult } from "./campaign.ts";
 import { saveGhost } from "./ghost.ts";
-import { PLAY_CAMERAS } from "./settings.ts";
+import { WATCHING_CAMERAS } from "./settings.ts";
 import { formatTime } from "../lib/util.ts";
 import { stopMusic } from "./audio/music.ts";
 import { runRumble } from "./haptics.ts";
@@ -155,8 +155,13 @@ export function createRunEvents(store: RunStore, actions: RunActions, renderer: 
     // never measured for. Both ways of watching it are from outside,
     // and both are already standing in the one view that is.
     if (spectateRef.current) return;
-    const mode = renderer.cycleCamera();
-    const play = PLAY_CAMERAS.find((cam) => cam.id === mode);
+    // A REPLAY WALKS ONE RUNG FURTHER. The TV gallery is off the ladder a
+    // stage is driven from — its tripods show an audience the corner rather
+    // than showing a driver the road (camera-tv.ts) — but a recording is
+    // exactly the run nobody is steering, so it belongs on the end of the
+    // ladder there and only there.
+    const mode = renderer.cycleCamera(replayRef.current !== null);
+    const play = WATCHING_CAMERAS.find((cam) => cam.id === mode);
     // Remembered only when it IS a play camera: the ladder never walks
     // onto the overhead views, and the one god mode lands back on has to
     // be a camera somebody can drive from.

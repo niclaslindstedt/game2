@@ -124,29 +124,32 @@ import { createMapCamera, type MapPose } from "./camera-map.ts";
 import { createStartCamera } from "./camera-start.ts";
 import { createTvCamera } from "./camera-tv.ts";
 import { createSweepCamera } from "./camera-sweep.ts";
-import { DEFAULT_SETTINGS, PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
+import { DEFAULT_SETTINGS, PLAY_CAMERAS, WATCHING_CAMERAS, type PlayCamera } from "./settings.ts";
 
 /** `free` is god mode: the developer tool that takes the lens off the car
  * and flies it (camera-free.ts). It is not on the ladder the camera key
  * walks, for the same reason the drone and the map are not — it is placed
  * deliberately or not at all. */
 export type CameraMode = PlayCamera | "drone" | "map" | "free";
-/** The modes the camera key walks, in the order it walks them — the same
- * nose-backwards ladder the options screen lists, so the key and the
- * setting never disagree about what "the next camera" means. */
-export const PLAY_MODES: CameraMode[] = PLAY_CAMERAS.map((cam) => cam.id);
-/** The play modes whose POSE IS HUNG OFF THE CAR — every one but the TV cam,
- * whose tripods are planted in the world and stay there (camera-tv.ts).
+/** Every mode a play camera can put the lens in — the driving ladder, and
+ * the TV gallery that only a replay walks onto (settings.ts). This is the
+ * subject of anything about the LADDER itself: the order, the wrap, and that
+ * a step between any two of them is a move and not a cut. */
+export const PLAY_MODES: CameraMode[] = WATCHING_CAMERAS.map((cam) => cam.id);
+/** The modes the camera key walks IN A RUN, in the order it walks them — the
+ * same nose-backwards ladder the options screen lists, so the key and the
+ * setting never disagree about what "the next camera" means.
  *
- * It is exported because it is the honest subject of a whole class of rule:
- * that the lens is carried with the car through a view change, that a respawn
- * costs the player no swing, that the shot is stood where the car is rather
- * than flown round to it. Every one of those is measured in the CAR'S frame,
- * and in the car's frame a camera standing still on a bank moves at the speed
- * of the car — so stating any of them over `PLAY_MODES` asks a tripod to be a
- * boom. Anything about the LADDER itself (the order, the wrap, that a step
- * between two driveable views is a move and not a cut) is still every mode. */
-export const RIDING_MODES: CameraMode[] = PLAY_MODES.filter((mode) => mode !== "tv");
+ * They are also, exactly, the play modes whose POSE IS HUNG OFF THE CAR: the
+ * TV cam's tripods are planted in the world and stay there (camera-tv.ts),
+ * which is both why it is not on this ladder and why it is not the subject of
+ * a whole class of rule — that the lens is carried with the car through a
+ * view change, that a respawn costs the player no swing, that the shot is
+ * stood where the car is rather than flown round to it. Every one of those is
+ * measured in the CAR'S frame, and in the car's frame a camera standing still
+ * on a bank moves at the speed of the car, so stating any of them over
+ * `PLAY_MODES` asks a tripod to be a boom. */
+export const DRIVING_MODES: CameraMode[] = PLAY_CAMERAS.map((cam) => cam.id);
 
 /** The modes camera-eye.ts owns — the ones taken from inside the car. */
 const IN_CAR: InCarCamera[] = ["bumper", "hood", "cockpit"];
@@ -240,8 +243,11 @@ export type GameCamera = {
   placeMap: (pose: Partial<MapPose>) => void;
   holdMap: (held: boolean) => void;
   mapPose: () => MapPose;
-  /** Advance to the next PLAYABLE mode; a no-op read while overhead. */
-  cycle: () => CameraMode;
+  /** Advance to the next PLAYABLE mode; a no-op read while overhead. The
+   * ladder is the eight views a stage is driven from, unless the run is one
+   * nobody is steering — a replay — in which case it also walks the TV
+   * gallery (`DRIVING_MODES`, `PLAY_MODES`). */
+  cycle: (watching?: boolean) => CameraMode;
   /** God mode's rig, and the channel its controls write into. The move is
    * rewritten by the app every frame and CONSUMED by `update` — the look
    * deltas and the wheel steps are per-frame accumulators, so leaving them
@@ -888,13 +894,17 @@ export function createGameCamera(width: number, height: number): GameCamera {
       restand = true;
       planted = false;
     },
-    cycle: () => {
+    cycle: (watching = false) => {
       // Genuinely a no-op from the overhead views: the drone and the map are
       // the menu's own framing, and walking them onto a driving camera would
       // leave a menu page standing over a shot nobody asked for.
-      const at = PLAY_MODES.indexOf(mode);
-      if (at < 0) return mode;
-      takeView(PLAY_MODES[(at + 1) % PLAY_MODES.length]);
+      if (!PLAY_MODES.includes(mode)) return mode;
+      const ladder = watching ? PLAY_MODES : DRIVING_MODES;
+      // `indexOf` is -1 for the TV cam on the DRIVING ladder — the one way to
+      // be sat on it in a run is a scripted shot pinning it with `?camera=`
+      // — and the step off it is onto the head of the ladder, which is where
+      // -1 + 1 already lands.
+      takeView(ladder[(ladder.indexOf(mode) + 1) % ladder.length]);
       return mode;
     },
     setEyes: (next) => {

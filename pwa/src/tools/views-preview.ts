@@ -17,7 +17,7 @@ import * as THREE from "three";
 import { TUNING, botInput, createGame, step, type GameState } from "@engine";
 
 import { createRenderer } from "../game/renderer.ts";
-import { DEFAULT_SETTINGS, PLAY_CAMERAS } from "../game/settings.ts";
+import { DEFAULT_SETTINGS, WATCHING_CAMERAS } from "../game/settings.ts";
 
 declare global {
   interface Window {
@@ -71,7 +71,10 @@ async function main(): Promise<void> {
   renderer.resize();
   renderer.setGame(game);
 
-  const ladder = PLAY_CAMERAS.map((cam) => cam.id);
+  // Every view a run can be watched from, not just the eight a stage is
+  // driven from: the steps on and off the TV gallery are steps a replay
+  // takes, and they are the two most likely to cut (settings.ts).
+  const ladder = WATCHING_CAMERAS.map((cam) => cam.id);
   renderer.setCamera(ladder[0]);
   renderer.skipIntroShot();
 

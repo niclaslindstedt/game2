@@ -41,7 +41,10 @@ import { renderHeightOf } from "./desktop-video.ts";
  * from — the menu's drone and the Roam map are placed by the app and are
  * not offered here. The geometry behind each name lives in camera.ts (the
  * three inside the car in camera-eye.ts); this is the vocabulary the
- * player picks from. */
+ * player picks from.
+ *
+ * `tv` is in the type and not in `PLAY_CAMERAS`: a run can be WATCHED from
+ * it and never driven from it — see `WATCHING_CAMERAS`. */
 export type PlayCamera =
   "bumper" | "hood" | "cockpit" | "close" | "chase" | "far" | "heli" | "top" | "tv";
 
@@ -57,9 +60,21 @@ export const PLAY_CAMERAS: { id: PlayCamera; label: string }[] = [
   { id: "far", label: "FAR" },
   { id: "heli", label: "HELI" },
   { id: "top", label: "TOP" },
-  // The one view that is not hung off the car at all: a gallery of fixed
-  // trackside tripods the director cuts between (camera-tv.ts). Last on the
-  // ladder because it is the furthest thing from sitting in the car.
+];
+
+/** …and the views a run can be WATCHED from, which is the same ladder with
+ * the TV gallery on the end of it.
+ *
+ * THE TV CAM IS NOT A VIEW ANYBODY DRIVES FROM (camera-tv.ts). Its tripods
+ * are planted in the world before the run starts and nothing follows the
+ * car: the shot is chosen for what it shows an audience, so the road ahead
+ * is off the frame exactly when a driver most needs it. That makes it the
+ * best seat in the game for a recording and an unfair one for a stage, so
+ * it is off the options page and off the ladder the camera key walks in a
+ * run, and reachable in the two places nobody is steering — a replay
+ * (`app-play.ts`) and a scripted shot pinning it with `?camera=tv`. */
+export const WATCHING_CAMERAS: { id: PlayCamera; label: string }[] = [
+  ...PLAY_CAMERAS,
   { id: "tv", label: "TV" },
 ];
 

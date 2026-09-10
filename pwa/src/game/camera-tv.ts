@@ -35,9 +35,15 @@
 //   up the road with its tail lights on. It is the difference between a
 //   broadcast camera and a security one, and it is one number.
 //
-// It is a camera on the ladder, not a replay mode: the camera key reaches it
-// and a stage can be driven from it, the way a top-down view can be driven
-// from. It is also the shot the screenshot harness stages a drift into.
+// ALL THREE ARE CHOICES MADE FOR AN AUDIENCE, WHICH IS WHY NOBODY DRIVES FROM
+// IT. A shot framed on the corner the car is arriving at is a shot with the
+// road beyond it off the frame, and the cut to the next stand lands at the
+// moment the driver most needs to already be reading it. So this camera is
+// off the ladder the camera key walks in a run and off the options page
+// (`PLAY_CAMERAS` in settings.ts), and reachable in the two places nobody is
+// steering: a REPLAY, which opens on it and walks back onto it with the
+// camera key (`WATCHING_CAMERAS`), and a scripted shot pinning it with
+// `?camera=tv` — it is the shot the screenshot harness stages a drift into.
 
 import * as THREE from "three";
 import { clamp } from "../lib/angles.ts";

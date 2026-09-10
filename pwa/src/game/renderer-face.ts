@@ -202,7 +202,10 @@ export type GameRenderer = {
    * the field stops raising a second cloud off the car the frame is already
    * raising one off. Null puts the lens back on the player's car. */
   spectate: (run: RivalRun | null) => void;
-  cycleCamera: () => CameraMode;
+  /** Walk the camera key's ladder one step. `watching` opens the TV gallery
+   * on the end of it — true for a replay, where nobody is steering and the
+   * one view built for watching is the point (camera.ts). */
+  cycleCamera: (watching: boolean) => CameraMode;
   /** God mode's controls for this frame — what the free camera should do
    * with `dt` worth of held keys and mouse travel. Written straight into
    * the camera's own channel; ignored in every other mode. */

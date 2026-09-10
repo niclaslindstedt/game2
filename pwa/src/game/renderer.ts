@@ -106,7 +106,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       const onto = run ? run.state : live.game;
       if (onto) chase.retake(onto, run !== null);
     },
-    cycleCamera: () => chase.cycle(),
+    cycleCamera: (watching) => chase.cycle(watching),
     flyCamera: (move) => {
       // The look deltas and the wheel steps ACCUMULATE until the camera
       // consumes them, so a frame the camera skipped is a nudge that still
