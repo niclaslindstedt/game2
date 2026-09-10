@@ -144,6 +144,10 @@ export type GameRenderer = {
    * `?freefov=` asks for, so a tool can shoot a wide panorama without the
    * horizontal field opening up into a fisheye. 0 restores the design lens. */
   setFreeFov: (deg: number) => void;
+  /** Hold the TV mode on its trackside tripods rather than letting its
+   * director cut between them and the boom (camera-tv-cut.ts) — the pin a
+   * scripted still needs to come off the same lens every time. */
+  pinTvStand: () => void;
   /** OPEN THE AIR to `far` metres — what `?air=` asks for. Moves the three
    * numbers that decide how much country is on screen together, because
    * moving one alone does nothing: the fog (or the country fades out), the

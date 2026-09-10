@@ -76,6 +76,14 @@
 // turns to watch it go (camera-finish.ts). This file owns WHEN each of the
 // two has the frame; they own what the shot is.
 //
+// AND ONE MODE IS TWO CAMERAS. The TV mode (camera-tv.ts) is only ever
+// reached where nobody is steering, and there it runs the stage the way a
+// broadcast does: the chase boom down the road, cutting to a tripod for a
+// tight corner and flying back onto the boom at the exit. camera-tv-cut.ts
+// owns which of the two has the frame and why the two edits are different
+// gestures; this file owns the wiring — the edit is taken at the top of
+// `update`, and `placeFor` only stands whichever camera won it.
+//
 // A CRASH IS NOT ONE OF THEM. The player keeps the camera they were driving
 // with, and it keeps the framing it had on the frame the car went over: the
 // outside rigs HOLD (`holding` in `updateChase`) and go on tracking the car
@@ -95,34 +103,21 @@ import {
   NEUTRAL_TUNING,
   createEyeCamera,
   soften,
-  type CarEyes,
   type EyeTuning,
   type InCarCamera,
 } from "./camera-eye.ts";
-import {
-  NEUTRAL_MOVE,
-  createFreeFly,
-  poseOf,
-  type FreeFlyMove,
-  type FreeFlyPose,
-  type FreeFlyRig,
-} from "./camera-free.ts";
+import { NEUTRAL_MOVE, createFreeFly, poseOf, type FreeFlyMove } from "./camera-free.ts";
 import { createViewChange } from "./camera-change.ts";
 import { createDroneCamera } from "./camera-drone.ts";
 import { createCameraFeel } from "./camera-feel.ts";
 import { createFinishCamera } from "./camera-finish.ts";
 import { CHASE_CLEARANCE, FLOOR, HEIGHT_SPRING, SLACK, groundOver } from "./camera-ground.ts";
-import {
-  CAMERA_SHAKE,
-  fadeShake,
-  inCarBlow,
-  outsideBlow,
-  rattleAt,
-  type ShakeSource,
-} from "./camera-shake.ts";
+import { CAMERA_SHAKE, fadeShake, inCarBlow, outsideBlow, rattleAt } from "./camera-shake.ts";
 import { createMapCamera, type MapPose } from "./camera-map.ts";
 import { createStartCamera } from "./camera-start.ts";
 import { createTvCamera } from "./camera-tv.ts";
+import { TV_CUT, createTvCut } from "./camera-tv-cut.ts";
+import type { GameCamera } from "./camera-face.ts";
 import { createSweepCamera } from "./camera-sweep.ts";
 import { DEFAULT_SETTINGS, PLAY_CAMERAS, WATCHING_CAMERAS, type PlayCamera } from "./settings.ts";
 
@@ -160,6 +155,14 @@ const IN_CAR: InCarCamera[] = ["bumper", "hood", "cockpit"];
  * because a tripod has no standoff, no swing and no floor to keep off
  * (camera-tv.ts). */
 export type ChaseCamera = Exclude<PlayCamera, InCarCamera | "tv">;
+
+/** WHICH BOOM THE TV MODE RUNS THE ROAD ON. Between the corners the TV mode
+ * is not a tripod at all — it is the chase view, the one the game is actually
+ * driven from and the one the speed lives in (camera-tv-cut.ts owns when).
+ * `chase` and not `far` or `heli`: the point of the road between two corner
+ * cameras is the DRIVE, and a shot stood further back is a shot with less of
+ * it in. */
+const TV_BOOM: ChaseCamera = "chase";
 
 /** Far plane while driving, m — comfortably past the widest fog ceiling. The
  * map view solves its own, along with its own near plane, because a stage is
@@ -222,102 +225,10 @@ const DEG = Math.PI / 180;
 const SPRING_STEP = 1 / 90;
 
 export type { MapPose };
-
-export type GameCamera = {
-  camera: THREE.PerspectiveCamera;
-  mode: () => CameraMode;
-  /** How far the TV cam's live tripod is from the car, m — the distance its
-   * shot is focused at, for the one pass in the game that has a focal plane
-   * (camera-tv-lens.ts). Meaningless, and never read, in any other mode. */
-  tvFocus: () => number;
-  /** THE MAP VIEW (camera-map.ts): the whole stage from the sky, and the
-   * handles the Roam page steers it by — turn, tilt, zoom, pan, and the
-   * framing a link can park it on. Exposed one method at a time rather than
-   * as the rig itself, so the app talks to ONE camera whatever mode is up. */
-  mapRange: () => number;
-  setMode: (mode: CameraMode) => void;
-  nudgeMap: (dAz: number, dPitch: number, zoomBy: number) => void;
-  panMap: (dxFrac: number, dyFrac: number) => void;
-  resetMap: () => void;
-  reframeMap: () => void;
-  placeMap: (pose: Partial<MapPose>) => void;
-  holdMap: (held: boolean) => void;
-  mapPose: () => MapPose;
-  /** Advance to the next PLAYABLE mode; a no-op read while overhead. The
-   * ladder is the eight views a stage is driven from, unless the run is one
-   * nobody is steering — a replay — in which case it also walks the TV
-   * gallery (`DRIVING_MODES`, `PLAY_MODES`). */
-  cycle: (watching?: boolean) => CameraMode;
-  /** God mode's rig, and the channel its controls write into. The move is
-   * rewritten by the app every frame and CONSUMED by `update` — the look
-   * deltas and the wheel steps are per-frame accumulators, so leaving them
-   * standing would spin the camera forever. */
-  free: FreeFlyRig;
-  freeMove: FreeFlyMove;
-  /** Fly the free camera on a clock of its own, for a frame whose world is
-   * being held still — god mode stops the run under it and draws it with
-   * dt 0, which is a dt the flight cannot take its own step from. A no-op
-   * in every other mode. */
-  flyOnly: (dt: number) => void;
-  /** Where the camera is standing and what it is looking at, whatever mode
-   * is up — what the debug overlay prints and the repro line carries. */
-  pose: () => FreeFlyPose;
-  /** Put a different LENS on god mode's camera, deg of vertical fov; 0 or
-   * less puts the design lens back. For tools shooting a frame the design
-   * number was not authored for — see `freeFov`. */
-  setFreeFov: (deg: number) => void;
-  /** How far the camera may SEE, m — the far plane, with a near plane scaled
-   * under it to keep the depth buffer honest. 0 or less restores the driving
-   * pair. See `reachFar`. */
-  setReach: (far: number) => void;
-  /** Where the three in-car views mount on the car now on the stage,
-   * body-local m — pushed when the car's meshes are built, because every one
-   * of them is read off that car's own silhouette. */
-  setEyes: (eyes: CarEyes) => void;
-  /** The player's seat, lens and head-motion settings for the in-car views
-   * (OPTIONS ▸ VIEW). */
-  setViewTuning: (tuning: EyeTuning) => void;
-  /** The driver has thrown the establishing shot away. The engine's own skip
-   * is instant; this lets the camera fly the rest of the shot at speed
-   * instead of cutting (camera-start.ts). */
-  skipStartShot: () => void;
-  /** Rewind the establishing shot for a new run. */
-  resetStartShot: () => void;
-  /** PUT THE LENS ON THIS CAR, wherever it has been. The spectator feed hands
-   * `update` another crew's game entirely (App.tsx), so every reading the rig
-   * carries — its yaw, its floor, its sway, and above all the flying finish's
-   * PLANT, which is taken from wherever the camera was standing — belongs to
-   * a different road. This drops all of it and stands the rig around `state`
-   * in one call, with no time in it.
-   *
-   * `fly` makes the change a flight back up the road over the country
-   * between the two rather than a cut (camera-sweep.ts) — which is what a
-   * spectator
-   * CHANGING crew wants, and what standing the feed down does not: the
-   * results card is the destination there, and a shot nobody is going to look
-   * at is not worth a second. */
-  retake: (state: GameState, fly?: boolean) => void;
-  /** THE CAR HAS BEEN PICKED UP AND PUT DOWN ON THE SAME RUN — a respawn:
-   * drowned, driven off the map, or the reset button pressed. Everything a
-   * rig carries from frame to frame is an angle, a standoff and a floor
-   * measured where the car WAS, and the car is now back at the last split
-   * board, quite possibly facing the way it came. Eased across that gap the
-   * boom spends the best part of a second swinging round the car to find the
-   * stage again — which is the game taking the camera away at the exact
-   * moment the player asked for it back. So the readings are dropped and the
-   * shot is STOOD where the car is, in the one frame the press cost. */
-  replant: () => void;
-  update: (state: GameState, dt: number) => void;
-  /** Hand the shot a blow. `dir` is the world direction it came FROM the
-   * car's middle toward — the in-car views throw the driver's head along it
-   * and let the neck spend the impulse, which is the only thing in an in-car
-   * frame that says the car hit something. `source` says what KIND of blow it
-   * was, and camera-shake.ts decides from that how much of it each family of
-   * camera takes: an outside rig takes none of a `contact`, because the car
-   * is the thing that ran into the tree and the car is what is in frame. */
-  kick: (strength: number, dir?: { x: number; y: number; z: number }, source?: ShakeSource) => void;
-  resize: (width: number, height: number) => void;
-};
+/** WHAT THE CAMERA IS FROM OUTSIDE, re-exported from where it is stated so
+ * every caller can go on importing it from the module that builds one
+ * (camera-face.ts). */
+export type { GameCamera } from "./camera-face.ts";
 
 export function createGameCamera(width: number, height: number): GameCamera {
   const camera = new THREE.PerspectiveCamera(60, width / height, DRIVING_NEAR, DRIVING_FAR);
@@ -404,6 +315,9 @@ export function createGameCamera(width: number, height: number): GameCamera {
   /** The menu's backdrop, flown (camera-drone.ts). */
   const drone = createDroneCamera();
   const tv = createTvCamera();
+  /** …and the director standing over it, deciding corner by corner whether
+   * the tripods or the boom have the frame (camera-tv-cut.ts). */
+  const tvCut = createTvCut();
   /** What the outside rigs CONVEY of the car over their framing — grip as
    * height, attitude as tilt, speed as a tremor (camera-feel.ts). */
   const feel = createCameraFeel();
@@ -691,8 +605,13 @@ export function createGameCamera(width: number, height: number): GameCamera {
     else if (mode === "drone") {
       fov = drone.update(camera, state, groundSlack(state.car.y, dt), orbit, dt);
     } else if (mode === "map") fov = map.update(camera, state, dt);
-    else if (mode === "tv") fov = tv.update(camera, state, dt);
-    else updateChase(CHASE_RIGS[mode as ChaseCamera], state, dt);
+    else if (mode === "tv") {
+      // THE TV MODE IS TWO CAMERAS. The tripods have the corners and the
+      // chase boom has the road between them; `update` has already made the
+      // frame's edit, so all this does is place whichever one won it.
+      if (tvCut.trackside()) fov = tv.update(camera, state, dt, tvCut.from());
+      else updateChase(CHASE_RIGS[TV_BOOM], state, dt);
+    } else updateChase(CHASE_RIGS[mode as ChaseCamera], state, dt);
   };
 
   /** What a view owns of the LENS rather than of the pose: the near plane the
@@ -741,18 +660,59 @@ export function createGameCamera(width: number, height: number): GameCamera {
       restand = true;
       planted = false;
     }
+    // The TV mode OPENS on the boom — its director always starts the road
+    // between two corners rather than on a tripod (camera-tv-cut.ts) — so
+    // arriving on it is arriving on the boom, and leaving it drops an edit
+    // that belongs to a mode nobody is in any more.
+    if (next === "tv" || mode === "tv") {
+      tvCut.drop();
+      restand = true;
+      planted = false;
+    }
     mode = next;
   };
 
   const update = (state: GameState, dt: number): void => {
     shake = fadeShake(shake, dt);
     orbit += dt;
-    drawnAround = state;
     // The finish owns the shot in every mode a player can drive from.
     // Overhead it does not: the drone is the menu's backdrop, where a bot
     // finishes a stage every couple of minutes and nobody is watching it
     // arrive, and the map view is not a camera anybody is driving under.
     const watching = state.phase === "rollout" || state.phase === "finished";
+    // THE TV MODE'S OWN EDIT, taken here and nowhere else — before
+    // `drawnAround` moves on, because the hand-back off a tripod is flown
+    // from the frame that is on screen and that frame belongs to the car of
+    // the step before. Everything the edit costs is spent in this block; the
+    // placing below only reads which camera won (camera-tv-cut.ts).
+    if (mode === "tv" && watching) {
+      // ...except past the line, where the shot belongs to the flying finish
+      // and plants itself wherever the lens was standing (camera-finish.ts).
+      // There is nothing left to edit, and standing the director down is also
+      // what takes the tripod's focal plane off a shot it was never solved
+      // for (`tvTrackside`).
+      tvCut.drop();
+    } else if (mode === "tv") {
+      const edit = tvCut.step(state, tv.cues(state));
+      if (edit === "cut") {
+        // Going to the corner is a CUT, so nothing is flown and the gallery
+        // is told to snap its pan and its zoom: the aim and the lens it was
+        // holding are readings of a car half a stage back.
+        change.reset();
+        tv.drop();
+      } else if (edit === "back" && drawnAround) {
+        // …and coming back is a MOVE, off the tripod and onto the boom. The
+        // boom is STOOD around the car rather than eased onto it, for the
+        // reason every arrival on it is: its yaw, its standoff and its floor
+        // were last read a corner ago, and a destination still travelling is
+        // one the flight can only chase.
+        changeFrom = mode;
+        change.start(camera, fov, drawnAround.car, TV_CUT.back);
+        restand = true;
+        planted = false;
+      }
+    }
+    drawnAround = state;
     const inCar = !watching && IN_CAR.includes(mode as InCarCamera) ? (mode as InCarCamera) : null;
     // The map view solves BOTH of its planes from the stage it is framing
     // (camera-map.ts); every other camera stands in the world and takes the
@@ -818,6 +778,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
     camera,
     mode: () => mode,
     tvFocus: tv.focus,
+    tvTrackside: () => mode === "tv" && tvCut.trackside() && !change.flying(),
+    pinTvStand: tvCut.pin,
     mapRange: map.range,
     free,
     freeMove,
@@ -870,8 +832,11 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // dropped and the rig is stood around THIS car again first.
       finishShot.reset();
       // A change of SEAT on the road the lens is leaving means nothing on the
-      // road it is going to.
+      // road it is going to — and neither does the TV director's edit, whose
+      // corner is kilometres from the one this car is on.
       change.reset();
+      tvCut.drop();
+      tv.drop();
       // Everything the rig carries from frame to frame, hung back on the car
       // rather than eased across the gap: an angle, a standoff, a floor and a
       // spring that all belonged to a different road.
@@ -890,6 +855,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // `planted` is what stands the standoff and the lens rather than
       // easing them out of a shot that ended.
       change.reset();
+      tvCut.drop();
+      tv.drop();
       eye.reseat();
       restand = true;
       planted = false;
@@ -915,6 +882,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // flown down to, and nobody starts a run mid-plunge.
       eye.setEyes(next);
       change.reset();
+      tvCut.drop();
       restand = true;
     },
     setViewTuning: (next) => {

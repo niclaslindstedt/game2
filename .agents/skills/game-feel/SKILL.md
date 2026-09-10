@@ -102,6 +102,7 @@ The camera is this skill's own subsystem. One row per question:
 | Question | Where |
 | --- | --- |
 | Where the camera stands OUTSIDE the car | `CHASE_RIGS` in `pwa/src/game/camera.ts` — one row per angle |
+| Which of the TV mode's TWO cameras has the frame | `camera-tv-cut.ts` — the tripods own the tight corners, the chase boom owns the road between them. The two edits are not the same gesture: television CUTS to the corner camera and MOVES back onto the boom. `?tvstand=1` pins the gallery for a scripted still |
 | What the outside camera CONVEYS (grip, attitude, flight, pace) | `CAMERA_FEEL` in `camera-feel.ts` — DOM-free: grip as height (`hover` per rig), a degree or two of tilt, the flight path as the ROD's own angle (`flight` per rig), a tremor past the gears |
 | What the outside camera does while the car is IN THE AIR | the ROD turns (`flight` in `camera-feel.ts`) — it lies along the car's own path, dipping under a climbing car and swinging over a falling one, and the AIM turns with it. Its LENGTH never changes, so the car is the same size off a cliff as on the road. Sprung and under-damped, so it winds on with weight and bounces once through level at the landing. `make aircam` photographs it |
 | What an outside rig may STAND on (floor, play) | `camera-ground.ts` — read over a footprint, sunk at a bounded rate, except under a car in free fall, which may always outrun the ceiling |

@@ -96,8 +96,19 @@ export type ViewChange = {
    * car THAT frame was drawn around — the pose is held relative to it, so
    * it has to be the one it was taken from and not the one a step of
    * physics later, or the move opens with the lens standing still for a
-   * frame while the car drives half a metre out from under it. */
-  start: (camera: THREE.PerspectiveCamera, fov: number, car: GameState["car"]) => void;
+   * frame while the car drives half a metre out from under it.
+   *
+   * `beat` overrides how long the move is given, s. Left off, the length is
+   * sized to how far the lens has to travel, which is what a player changing
+   * seat wants. A caller flying a SHOT rather than a seat change — the TV
+   * mode's hand-back off a tripod (camera-tv-cut.ts) — is making a decision
+   * about the picture instead, and states it. */
+  start: (
+    camera: THREE.PerspectiveCamera,
+    fov: number,
+    car: GameState["car"],
+    beat?: number,
+  ) => void;
   /** Whether the move still owns the frame. */
   flying: () => boolean;
   /** How far through it, eased 0..1 — what the caller blends the per-view
@@ -120,8 +131,10 @@ export type ViewChange = {
 export function createViewChange(): ViewChange {
   /** How far through the move, 0..1. One means there is no move. */
   let at = 1;
-  /** …and how long this one is given, s. */
+  /** …and how long this one is given, s, with the length the caller asked
+   * for beside it — zero for "size it to the distance". */
   let span = TIME_MIN;
+  let asked = 0;
   /** How far the lens has to travel, m — read once, on the first frame of
    * the move, because that is when the destination first exists; the beat
    * and the ground guard are then fixed while the car drives on. */
@@ -150,7 +163,7 @@ export function createViewChange(): ViewChange {
       at = 1;
       measuring = false;
     },
-    start: (camera, fov, car) => {
+    start: (camera, fov, car, beat = 0) => {
       // Straight into the car's axes, against the car the frame was drawn
       // around: from here on the start pose travels with it.
       const dx = camera.position.x - car.x;
@@ -163,6 +176,7 @@ export function createViewChange(): ViewChange {
         .premultiply(heading.setFromAxisAngle(UP, car.heading).invert());
       fromFov = fov;
       at = 0;
+      asked = beat;
       measuring = true;
     },
     fly: (camera, state, rigFov, dt) => {
@@ -178,7 +192,7 @@ export function createViewChange(): ViewChange {
           camera.position.y - (car.y + from.y),
           camera.position.z - (car.z + from.z * fwdZ - from.x * fwdX),
         );
-        span = clamp(TIME_MIN + travel / TIME_SPAN, TIME_MIN, TIME_MAX);
+        span = asked > 0 ? asked : clamp(TIME_MIN + travel / TIME_SPAN, TIME_MIN, TIME_MAX);
         measuring = false;
       }
       at = Math.min(1, at + dt / span);

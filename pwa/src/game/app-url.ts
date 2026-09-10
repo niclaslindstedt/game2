@@ -209,6 +209,22 @@ export const URL_AIR = (() => {
   return raw !== null && Number.isFinite(m) && m > 0 && m <= 20000 ? m : 0;
 })();
 
+/** ?tvstand= — hold the TV mode on its TRIPODS for the whole stage.
+ *
+ * The mode is normally a broadcast: the chase boom down the road, cutting to
+ * a trackside camera for a tight corner and flying back out at the exit
+ * (camera-tv-cut.ts). That is what a replay wants and the opposite of what a
+ * SCRIPTED STILL wants — a frame staged at a given point on a given seed has
+ * to come from the same lens every time it is taken, and a director choosing
+ * per corner makes the showcase's trackside shots a coin toss between a
+ * tripod and a boom. So the harness pins the gallery outright, the way it
+ * pins the seed and the hour (scripts/lib/shots-showcase.mjs).
+ *
+ * A pin, not a setting: nothing in the game offers it, because a player
+ * watching a whole stage from tripods is the thing the director exists to
+ * stop. */
+export const URL_TV_STAND = new URLSearchParams(location.search).get("tvstand") === "1";
+
 /** ...and where a `?m…=` link wants the ROAM MAP framed. Read once for the
  * same reason: it names the picture the link was cut from, and re-applying
  * it every frame would make the map impossible to move. */

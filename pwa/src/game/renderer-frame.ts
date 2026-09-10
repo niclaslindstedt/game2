@@ -705,10 +705,12 @@ export function createFrame(parts: RenderScene, fx: ReturnType<typeof createEven
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, w, h);
       // THE TV CAM'S LENS, and the only place the world is not drawn straight
-      // to the canvas. It is stood up on the first frame the camera is up and
-      // given back the moment it is not, so every other view costs nothing —
-      // not the pass, not the target (`camera-tv-lens.ts`).
-      const bokeh = chase.mode() === "tv" && TV_BOKEH[live.quality.effects];
+      // to the canvas. It is stood up on the first frame a TRIPOD has and
+      // given back the moment one does not, so every other view costs nothing
+      // — not the pass, not the target (`camera-tv-lens.ts`). The TV mode
+      // spends most of a stage on the chase boom, which has no focal plane
+      // worth solving, so the switch is `tvTrackside` and not the mode.
+      const bokeh = chase.tvTrackside() && TV_BOKEH[live.quality.effects];
       if (bokeh) {
         mut.tvLens ??= createTvLens();
         mut.tvLens.draw(renderer, scene, chase.camera, chase.tvFocus(), w, h);

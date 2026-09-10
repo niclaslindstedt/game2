@@ -58,6 +58,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     holdMap: (held) => chase.holdMap(held),
     placeMap: (pose) => chase.placeMap(pose),
     setFreeFov: (deg) => chase.setFreeFov(deg),
+    pinTvStand: () => chase.pinTvStand(),
     setAir: (far) => {
       chase.setReach(far);
       // The GROUND has to be built before any of the rest matters: opening

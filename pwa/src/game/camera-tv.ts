@@ -44,6 +44,15 @@
 // steering: a REPLAY, which opens on it and walks back onto it with the
 // camera key (`WATCHING_CAMERAS`), and a scripted shot pinning it with
 // `?camera=tv` — it is the shot the screenshot harness stages a drift into.
+//
+// AND IT IS NOT THE WHOLE OF WHAT THE TV MODE SHOWS. A broadcast does not
+// leave a rally car on a tripod down a five-kilometre stage: between the
+// corners it is on the helicopter or on the car, and it cuts to the
+// trackside camera for the corner. So the tripods here own the CORNERS and
+// the chase boom owns the road between them; which of the two has the frame
+// is camera-tv-cut.ts's decision, made off the `cues` this file publishes,
+// and everything below is what a tripod does once it has been given the
+// frame.
 
 import * as THREE from "three";
 import { clamp } from "../lib/angles.ts";
@@ -174,7 +183,39 @@ type TvStand = {
   x: number;
   y: number;
   z: number;
+  /** The bend this stand is watching — where it turns in, m along the stage,
+   * and the tightest it gets, 1/m. Null on a jump's landing stand and on a
+   * gap filler, neither of which is a corner. Read by nothing in this file:
+   * it exists so a director outside it can tell a shot of a CORNER from a
+   * camera that simply had a stretch of road to fill (camera-tv-cut.ts). */
+  bend: TvBend | null;
 };
+
+type TvBend = { at: number; tight: number };
+
+/** A stretch of stage the gallery has a CORNER shot for — one bend and every
+ * stand watching it, as the one thing a director has to decide from: how
+ * tight it gets, where it turns in, and where the last lens on it lets go. */
+export type TvCue = {
+  /** Where the bend turns in, m along the stage. Also its NAME: a stage has
+   * only one bend starting at any given arc, so this is what a shot already
+   * running is recognised by from one frame to the next. */
+  at: number;
+  /** The tightest the bend gets, 1/m. */
+  tight: number;
+  /** Where the FIRST lens watching it stands, m — what a director hands back
+   * as `from` to open the shot on the corner's own camera, and the range the
+   * arrival is worth judging against. */
+  first: number;
+  /** Where the last stand watching it lets go, m — the stand's own arc plus
+   * the `hold` the director already spends on a departing car. */
+  until: number;
+};
+
+/** The gallery: every tripod along the stage, and the corners among them
+ * worth leaving a boom for. Kept together because they are planned in one
+ * walk of the road and an entry dropped from one belongs in neither. */
+type Gallery = { stands: TvStand[]; cues: TvCue[] };
 
 /** Which way is RIGHT of a heading, as the rest of the renderer reads it:
  * forward is (sin h, cos h), so right is its derivative in h. A positive
@@ -211,7 +252,7 @@ function standAt(state: GameState, index: number, side: number): TvStand | null 
     Math.max(groundOver(state, x, z) + TV.lift, sample.elevation + TV.overRoad),
     sample.elevation + TV.overRoadMax,
   );
-  return { s: sample.s, x, y, z };
+  return { s: sample.s, x, y, z, bend: null };
 }
 
 /** The sample nearest an arc position, by search rather than by dividing
@@ -230,7 +271,7 @@ function indexAtS(track: Track, s: number): number {
 }
 
 /** Walk `[from, samples.length)` and plant the gallery over it, appending to
- * `stands` in stage order.
+ * `gallery` in stage order.
  *
  * On an endless stage this is called again for each new kilometre as it
  * streams, and the bend the walk was in the middle of when it ran out of road
@@ -249,35 +290,43 @@ function indexAtS(track: Track, s: number): number {
  * a synthetic test rig with no corners in it at all — leaves the director
  * with nothing to cut to.
  */
-function planStands(state: GameState, from: number, stands: TvStand[]): number {
+function planStands(state: GameState, from: number, gallery: Gallery): number {
+  const { stands, cues } = gallery;
   const track = state.track;
   const samples = track.samples;
   const step = Math.max(1e-3, track.step);
   const found: TvStand[] = [];
-  const add = (stand: TvStand | null): void => {
-    if (stand) found.push(stand);
+  const add = (stand: TvStand | null, bend: TvBend | null = null): void => {
+    if (!stand) return;
+    stand.bend = bend;
+    found.push(stand);
   };
-  /** Where the bend under the cursor started, and which way it goes; null on
-   * straight road. */
-  let run: { at: number; sign: number } | null = null;
+  /** Where the bend under the cursor started, which way it goes, and the
+   * tightest it has got — the last of those is nothing to this file and
+   * everything to a director choosing which corners are worth a shot. */
+  let run: { at: number; sign: number; peak: number } | null = null;
   for (let i = from; i < samples.length; i += 1) {
     const sample = samples[i];
     const k = sample.curvature;
     const sign = Math.sign(k);
     if (run && (sign !== run.sign || Math.abs(k) < TV.corner * TV.release)) {
       const held = sample.s - samples[run.at].s;
+      const bend: TvBend = { at: samples[run.at].s, tight: run.peak };
       // Planted on the OUTSIDE — away from where the crowd stands, and into
       // the path of everything the outside rear throws. A long bend earns a
       // stand partway through it as well; the EXIT is the one every corner
       // gets, because that is where a car arrives already sideways.
       if (held >= TV.runLong) {
         const into = Math.min(held * TV.midShare, TV.midMax);
-        add(standAt(state, run.at + Math.round(into / step), -run.sign));
+        add(standAt(state, run.at + Math.round(into / step), -run.sign), bend);
       }
-      if (held >= TV.runMin) add(standAt(state, i + Math.round(TV.exitPast / step), -run.sign));
+      if (held >= TV.runMin) {
+        add(standAt(state, i + Math.round(TV.exitPast / step), -run.sign), bend);
+      }
       run = null;
     }
-    if (!run && Math.abs(k) >= TV.corner) run = { at: i, sign };
+    if (!run && Math.abs(k) >= TV.corner) run = { at: i, sign, peak: Math.abs(k) };
+    else if (run) run.peak = Math.max(run.peak, Math.abs(k));
     // A jump is its own kind of camera: beside the landing, with the car
     // coming over the lip at it.
     if (sample.jump) add(standAt(state, i + Math.round(TV.jumpPast / step), i % 2 === 0 ? 1 : -1));
@@ -292,6 +341,18 @@ function planStands(state: GameState, from: number, stands: TvStand[]): number {
     if (stands.length > 0 && stand.s < stands[stands.length - 1].s) return;
     stands.push(stand);
     lastS = stand.s;
+    // The corner's own entry is written HERE rather than up in the walk,
+    // because a stand can still be dropped between the two — for crowding a
+    // neighbour or for arriving out of order — and a cue whose stands were
+    // all refused is a shot with no camera in it. Two stands on one bend
+    // extend the one cue rather than making a second: what the director is
+    // choosing is the CORNER, and the cut between the pair watching it is
+    // the gallery's own business.
+    const bend = stand.bend;
+    if (!bend) return;
+    const last = cues[cues.length - 1];
+    if (last && last.at === bend.at) last.until = stand.s + TV.hold;
+    else cues.push({ at: bend.at, tight: bend.tight, first: stand.s, until: stand.s + TV.hold });
   };
   const fillTo = (s: number): void => {
     if (!Number.isFinite(lastS)) return;
@@ -323,8 +384,27 @@ function planStands(state: GameState, from: number, stands: TvStand[]): number {
 
 export type TvCamera = {
   /** Stand the gallery for this frame and cut to whichever tripod owns the
-   * car. Returns the design fov (horizontal reference) the shot wants. */
-  update: (camera: THREE.PerspectiveCamera, state: GameState, dt: number) => number;
+   * car. Returns the design fov (horizontal reference) the shot wants.
+   *
+   * `from` is the earliest stand, by arc, the gallery may use — how a
+   * director opens a shot on the camera it MEANT (camera-tv-cut.ts). Without
+   * it the gallery hands back the next tripod down the road whatever that
+   * is, which on the run-up to a corner is as often a gap filler twenty
+   * metres ahead: a lens the car is past before the shot has read, and then
+   * a second cut. Left off, every stand is fair game, which is what a whole
+   * stage watched from the gallery wants. */
+  update: (camera: THREE.PerspectiveCamera, state: GameState, dt: number, from?: number) => number;
+  /** Every CORNER the gallery has a shot for, in stage order — the road as a
+   * director outside this file reads it (camera-tv-cut.ts). Stands the
+   * gallery if it is not standing yet, so it can be asked on a frame the
+   * tripods do not own. */
+  cues: (state: GameState) => readonly TvCue[];
+  /** Forget which tripod is live, so the next `update` lands as a CUT: the
+   * aim and the lens are snapped rather than eased. Wanted whenever
+   * something else has had the frame in between — the pan and the zoom are
+   * readings of a car that was in shot, and a car that has driven half a
+   * corner since is not it. */
+  drop: () => void;
   /** How far the live stand is from the car, m — the distance the shot is
    * FOCUSED at (camera-tv-lens.ts). Stated here rather than measured again
    * by the renderer because this is the range the lens already solved its
@@ -339,7 +419,7 @@ export function createTvCamera(): TvCamera {
    * is an index and the walk resumes from it. */
   let plannedFor: Track | null = null;
   let planned = 0;
-  let stands: TvStand[] = [];
+  let gallery: Gallery = { stands: [], cues: [] };
   /** Which tripod is live, and the aim and the lens it is holding. Both are
    * SNAPPED on a cut and eased the rest of the time: a cut is a new camera,
    * and easing across one would fly the lens down the road between two
@@ -351,17 +431,30 @@ export function createTvCamera(): TvCamera {
    * lens's focal distance, which are the same number by construction. */
   let range = 50;
 
+  /** Stand the gallery over whatever road has arrived, and hand it back. A
+   * new stage drops the old one; an endless one resumes the walk from the
+   * sample it ran out of road at. */
+  const plan = (state: GameState): Gallery => {
+    const track = state.track;
+    if (track !== plannedFor) {
+      plannedFor = track;
+      gallery = { stands: [], cues: [] };
+      planned = 0;
+      live = -1;
+    }
+    if (planned < track.samples.length) planned = planStands(state, planned, gallery);
+    return gallery;
+  };
+
   return {
     focus: () => range,
-    update: (camera, state, dt) => {
+    cues: (state) => plan(state).cues,
+    drop: () => {
+      live = -1;
+    },
+    update: (camera, state, dt, from = -Infinity) => {
       const track = state.track;
-      if (track !== plannedFor) {
-        plannedFor = track;
-        stands = [];
-        planned = 0;
-        live = -1;
-      }
-      if (planned < track.samples.length) planned = planStands(state, planned, stands);
+      const stands = plan(state).stands;
 
       const car = state.car;
       // Where the car is along the stage. `nearIndex` is the sample it is
@@ -375,7 +468,7 @@ export function createTvCamera(): TvCamera {
       // is coming TOWARD. Everything else falls out of it: the car arriving
       // out of the distance, the cut landing as it goes by, and a circuit
       // re-using the same gallery on every lap.
-      let next = stands.findIndex((stand) => stand.s + TV.hold >= s);
+      let next = stands.findIndex((stand) => stand.s >= from && stand.s + TV.hold >= s);
       if (next < 0) next = stands.length - 1;
       if (next < 0) {
         // No gallery at all, which is a stage with no samples under the

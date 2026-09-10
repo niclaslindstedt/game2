@@ -36,6 +36,7 @@ import { saveRunTape, type RunTapeEnd } from "./game/run-tape.ts";
 import { replayLine, replayTitle } from "./game/replay.ts";
 import { replayTape } from "./game/replay-store.ts";
 import { ReplayBar } from "./game/hud-replay.tsx";
+import { glassSlot } from "./game/hud-mirror.tsx";
 import { replayStageName } from "./game/menu-replays.tsx";
 import { recordScore, rememberInitials } from "./game/scores.ts";
 import { PauseMenu, gridSize } from "./game/menu.tsx";
@@ -146,6 +147,7 @@ export function App() {
     startReplay,
     keepReplay,
     watchLastRun,
+    watchRunSoFar,
     startBenchmark,
     leaveBenchmark,
     applyRace,
@@ -522,6 +524,18 @@ export function App() {
       ? (): void => watchLastRun()
       : null;
 
+  /** WATCH THE RUN SO FAR — the same offer, mid-stage, off the pause card.
+   * Offered on any run with a recording behind it that has not stopped yet:
+   * over a replay there is nothing new to watch, once the clock has stopped
+   * the results card is already offering it with a result on it, and a tape
+   * with no steps on it — the card opened during the countdown — is a
+   * recording of nothing. The card asks before it takes it, because it ends
+   * the run (menu.tsx). */
+  const onWatchSoFar =
+    run.mode !== "replay" && tapeRef.current?.steps() && !tapeEndRef.current
+      ? (): void => watchRunSoFar()
+      : null;
+
   // R30 — WHETHER THERE IS ANYTHING TO WATCH. The same condition the sheet's
   // OUT rows are waiting out, read off the same state: a run with a field
   // entered, whose sheet has not landed yet. It is the whole of what the
@@ -649,11 +663,30 @@ export function App() {
           of a replay is not chrome. */}
       {replaying && !menu && !bench && (
         // In a HUD layer of its own rather than inside the one above: the
-        // strip is chrome and measures itself against the instrument panel
-        // (`--hud-tach`, stated once on `.hud`), but it has to stand whether
-        // or not the rest of the HUD is up — ALT takes that down, and the
-        // results card takes it down for itself.
-        <div className="hud pointer-events-none absolute inset-0 select-none">
+        // strip is chrome and places itself off the same numbers `.hud`
+        // carries, but it has to stand whether or not the rest of the HUD is
+        // up — ALT takes that down, and the results card takes it down for
+        // itself.
+        <div
+          className="hud pointer-events-none absolute inset-0 select-none"
+          // The strip stands across the TOP of the frame, which is also where
+          // the rear-view glass hangs — so this layer reads the same two flags
+          // the HUD's own root does (`glassSlot`, hud-mirror.tsx) and the bar
+          // drops under the glass wherever there is a strip of it. From the
+          // seat there is none: the rear view is in the windscreen.
+          data-glass={
+            glassSlot({
+              mirror: hudParts.mirror,
+              spectating: spectate !== null,
+              flying: godActive,
+              phase: (watchFace ? watchFace.snap : snap)?.phase ?? "",
+              live: mirrorLive,
+            }) === "off"
+              ? undefined
+              : "1"
+          }
+          data-seated={hudCamera === "cockpit" && !godActive ? "1" : undefined}
+        >
           <ReplayBar
             title={replayTitle(replaying.meta, replayStageName(replaying.meta.levelId))}
             line={replayLine(replaying.meta)}
@@ -692,6 +725,7 @@ export function App() {
           onResume={() => setPaused(false)}
           onRestart={() => actionsRef.current.restart()}
           onMainMenu={goMainMenu}
+          onWatchReplay={onWatchSoFar}
           settings={options}
           onSettings={applyOptions}
         />
