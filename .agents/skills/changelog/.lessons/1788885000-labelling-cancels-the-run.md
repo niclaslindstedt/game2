@@ -27,10 +27,16 @@ not to re-run or fix anything.**
 The same thing happens on any second push in quick succession, for the same
 reason — so it is worth recognising rather than re-deriving.
 
-**Avoid it by settling the label at PR-CREATION time**, not after. The call is
-already made by then: the `changelog` skill's whole job is deciding fragment vs
-label before the PR exists, so applying it with the create call costs nothing
-and saves a cancelled run plus a false alarm. If the PR body claims
-`no-changelog`, the label has to actually be on it — CI enforces the pair, and
-a body that says one thing while the labels say another is the failure this
-lesson's author walked into.
+**Avoid it by settling the label at PR-CREATION time** where the tooling
+allows: `gh pr create --label no-changelog` costs nothing, since the call is
+already made by then.
+
+**In a remote/managed session it is NOT avoidable.** The GitHub MCP
+`create_pull_request` tool takes no `labels` argument, so the label must be a
+second call (`issue_write`, `method: update`), which always lands after the
+`opened` run has started and always cancels it. Expect one cancelled run and
+one false `tests` failure on every `no-changelog` PR opened that way; confirm
+the newer run on the same head is green and let the stale red stand.
+
+And the label must actually be on a PR whose body claims it — CI enforces the
+pair.
