@@ -839,12 +839,17 @@ not a mistake anymore; it is exploration:
   gravel on a graded one, and neither of them the rough ground's cap. It
   runs off the map; where it goes is between the player and the horizon.
 - **The ends of the stage** — off the road is not only sideways. The stage
-  is drawn and shelved for one APRON (30 m) past each end — the run-up
-  before the start gate and the run-off past the flying finish — and that
-  apron is road: flat at the gate's own height, with the terrain's shelf
-  under it. Past it the stage is over and the terrain owns the ground, the
-  same as if the car had driven off the side. Reverse away from the start
-  line for long enough and the country takes over, hills and all.
+  is drawn and shelved for one APRON (`startZone.apron`) past each end —
+  the run-up before the start gate and the run-off past the flying finish —
+  and that apron is road: flat at the gate's own height, with the terrain's
+  shelf under it. Past it the stage is over and the terrain owns the ground,
+  the same as if the car had driven off the side. Reverse away from the
+  start line for long enough and the country takes over, hills and all. A
+  CIRCUIT has neither end (R22): the road behind its start line is the
+  closing straight and the road past it is the opening one, each on a grade
+  of its own, so no apron is drawn there and the terrain shelves none —
+  a level slab over a lap that is falling away is a step in mid-road with
+  nothing drawn on it to warn anybody it is there.
 - **Solid props and the forest** — the wild scatters boulders and fallen
   trunks, loose rock litter, cut stumps under the woods, ROCKY OUTCROPS
   (five to ten stones bedded into one steep hillside, strung along the

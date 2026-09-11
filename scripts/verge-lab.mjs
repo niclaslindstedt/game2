@@ -35,6 +35,7 @@
 //   node scripts/verge-lab.mjs                     the standard set
 //   node scripts/verge-lab.mjs --car=coupe         ...in another car
 //   node scripts/verge-lab.mjs --seeds=9,1         ...off other ground
+//   node scripts/verge-lab.mjs --shape=circuit     ...off a lap stage
 //   node scripts/verge-lab.mjs --speed=20          ...at another pace
 //   node scripts/verge-lab.mjs --table             numbers only, no picture
 //
@@ -61,6 +62,13 @@ const has = (name) => process.argv.includes(`--${name}`);
 
 const CAR = arg("car", "compact");
 const SPEED = Number(arg("speed", "28"));
+/** Which stage the car leaves. A LAP stage is worth asking for by name:
+ * its two ends are each other's road (R22), which is the one place in the
+ * world where two stretches of stage share the ground the car is standing
+ * on — so if either reader is ever going to disagree with the other about
+ * what is under a car, it is there. */
+const SHAPE = arg("shape", "sprint");
+const LENGTH = arg("length", "short");
 const SEEDS = arg("seeds", "1,9,4")
   .split(",")
   .map((s) => Number(s.trim()));
@@ -86,7 +94,7 @@ const AFTER = 0.42;
  * after it. Everything the picture needs is read from OUTSIDE the engine,
  * so the lab measures the shipping model rather than a copy of it. */
 function driveOff(seed, side, hold) {
-  const state = createGame({ seed, length: "short", carId: CAR });
+  const state = createGame({ seed, length: LENGTH, shape: SHAPE, carId: CAR });
   skipIntro(state);
   const car = state.car;
   const track = state.track;
@@ -462,7 +470,7 @@ if (!has("table")) {
   canvas.text("RIBBON", 780, 10, INK.ribbon, 1);
   canvas.text("AIRBORNE", 856, 10, INK.air, 1);
   runs.forEach((run, i) => drawRun(canvas, run, 28 + i * PANEL.h));
-  const file = join(outDir, `verge-${CAR}.png`);
+  const file = join(outDir, `verge-${CAR}${SHAPE === "sprint" ? "" : `-${SHAPE}`}.png`);
   writeFileSync(file, canvas.toPng());
   console.log(`${file}\n`);
 }

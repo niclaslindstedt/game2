@@ -87,6 +87,12 @@ export function createShelving(
     };
     // The two ends are not the same length: the run-up carries whatever grid
     // is standing on it (`track.startApron`), the run-off is the rule book's.
+    // Both stand on EVERY shape, including the two ends `apronReach` gives
+    // a circuit nothing at (R22): here the spine is what keeps a BRANCH off
+    // the start line, which is worth keeping whether or not there is dirt
+    // laid on it, and it decides where a branch may run rather than where
+    // the ground is — narrowing it would re-roll every circuit for nothing
+    // the player can see.
     type StageEnd = {
       x: number;
       z: number;

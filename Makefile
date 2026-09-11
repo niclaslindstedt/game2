@@ -158,9 +158,10 @@ crash:
 # throw, not a shape. Required before/after any change to the ground under
 # the car — `game/ground.ts`, the road/wild swap in `game/step.ts`, R16's
 # hand-over — and after anything that moves the terrain beside a road.
-# `make verge CAR=coupe` · `make verge ARGS="--seeds=3,7 --speed=20 --table"`
+# `make verge CAR=coupe` · `make verge SHAPE=circuit`
+# `make verge ARGS="--seeds=3,7 --speed=20 --table"`
 verge:
-	npm run verge -- $(if $(CAR),--car=$(CAR),) $(ARGS)
+	npm run verge -- $(if $(CAR),--car=$(CAR),) $(if $(SHAPE),--shape=$(SHAPE),) $(ARGS)
 
 # Record a bot run to a run tape (runs/*.jsonl): a whole drive written down
 # as the controls that drove it. `make record SEED=42 CAR=compact

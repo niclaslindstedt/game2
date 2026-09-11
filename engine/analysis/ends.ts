@@ -29,7 +29,7 @@
 // rules and disagrees with the game is worse than no check at all.
 
 import { TUNING } from "../game/defs/tuning.ts";
-import { gateHalfWidth } from "../game/track.ts";
+import { gateHalfWidth, locate } from "../game/track.ts";
 import { APRON_HOLDS, GRID_MAX, massStartGrid } from "../sim/grid.ts";
 import { finishIndex, type Track } from "../mapgen/compile.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
@@ -118,7 +118,6 @@ export function analyzeEnds(track: Track, terrain: TerrainField): MetricReport {
   let offRoad = 0;
   let obstructed = 0;
   let worstTilt = 0;
-  const gridY = terrain.groundAt(track.samples[0].x, track.samples[0].z);
   for (const slot of grid) {
     const at = slotAt(track, slot.back, slot.lateral);
     if (Math.abs(slot.lateral) + body > half) {
@@ -147,17 +146,21 @@ export function analyzeEnds(track: Track, terrain: TerrainField): MetricReport {
         value: solids.length,
       });
     }
-    // The apron is one straight plane, so a slot standing well off the
-    // start gate's own height means the ground under the grid is not the
-    // ground the cars are placed on.
-    const tilt = Math.abs(terrain.groundAt(at.x, at.z) - gridY);
+    // A car is placed at the ROAD's height under it and the terrain is what
+    // it then stands on, so the two disagreeing is a car dropped onto the
+    // grid or buried in it. Against the road and not against the GATE,
+    // because only a sprint's apron is one level plane: a circuit stands
+    // its grid on the closing straight (R22), which is road on a grade of
+    // its own, and measuring that against the line calls a perfectly good
+    // 2% straight a metre of tilt.
+    const tilt = Math.abs(terrain.groundAt(at.x, at.z) - locate(track, at.x, at.z, 0).elevation);
     if (tilt > worstTilt) worstTilt = tilt;
   }
   if (worstTilt > E.apronStep) {
     findings.push({
       code: "ends.apron",
       severity: "warn",
-      message: `the apron under the grid is ${worstTilt.toFixed(2)} m out of level end to end`,
+      message: `the ground under the grid stands ${worstTilt.toFixed(2)} m off the road it is parked on`,
       at: slotAt(track, STAGE_RULES.startZone.apron, 0),
       value: worstTilt,
     });
@@ -179,7 +182,7 @@ export function analyzeEnds(track: Track, terrain: TerrainField): MetricReport {
     },
     {
       id: "apron",
-      label: "the apron under the grid is level",
+      label: "the ground under the grid is the road the cars stand on",
       score: under(worstTilt, E.apronStep, E.apronStep * 4),
       weight: 1,
       value: worstTilt,
