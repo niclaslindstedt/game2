@@ -31,6 +31,7 @@ import type { Biome, RegionGround } from "./biome.ts";
 // The rock line, the snowline and the slope rule are stated once, DOM-free,
 // so the dust and the tests read the same rule the tiles are painted with.
 import { ROCK_SLOPE, SNOW, rockAt, snowAt, snowLie, zonesUnder } from "./ground-rules.ts";
+import { sandRipple } from "./sand-ripple.ts";
 // R16 — the ground beside a road takes the ROAD's own edge tone and the
 // SPILL's own noise field, so the ribbon's dissolve, the scattered stones
 // and this wash all hand over along one boundary.
@@ -190,7 +191,14 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // 14 m vertices, where per-vertex speckle can't reach. UVs are world
   // meters / 16, so the grain runs continuous across tile seams.
   const groundTex = detailTexture();
+  // R40 — a country whose loose ground is SAND wears the wind on it: the
+  // ripple field and the sheen that are what an eye identifies sand by
+  // (`sand-ripple.ts`). Grafted onto the ground's own material rather than
+  // given one of its own, so the tiles stay a single draw and the paint,
+  // the detail grain and the height fog are all still the ones every other
+  // country uses. Nothing at all on ground the wind never sorted.
   const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: groundTex });
+  if (biomeRules(track.knobs.biome).loose === "sand") sandRipple(groundMat);
   // The app's one water look, shared with the fords and the streams — never
   // disposed here, because it is not this module's to free.
   const waterMat = waterMaterial();
