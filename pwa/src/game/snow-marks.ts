@@ -123,9 +123,22 @@ const SPANS = SECTION.length - 1;
  * here: the metres the engine says this ground has been let down by
  * (`Snowpack.cutAt`), since the snow that came out of the rut is the snow
  * standing beside it. Floored so a packed snow ROAD — which has almost
- * nothing left to give — still draws its trail, flat, and capped so a
- * metre of powder does not throw a wall the car could hit. */
-const RIDGE = { min: 0.012, max: 0.1 };
+ * nothing left to give — still draws its trail, flat.
+ *
+ * The CEILING is the deepest rut the snow can physically give: a column
+ * worked all the way down stands at `CLIMATE.pack.floor` of what it did,
+ * and the wheels ride `blanket.ride` of the way up what is left, so the
+ * most any ground can be let down by is `rest * (ride - floor)` — 0.48 m
+ * under the deepest permanent field (`blanket.pile`). Set just under it,
+ * so the cap almost never binds and the trail is sized by the snow rather
+ * than by this number.
+ *
+ * It is a LOOK, not a solid: the strip is a `MeshBasicMaterial` with no
+ * collider and nothing can hit it, so there is no depth of powder at which
+ * drawing the real bank becomes a hazard — only one at which it stops
+ * being drawn, which is what a cap sized for a half-metre blanket did once
+ * the permanent snowfields arrived. */
+const RIDGE = { min: 0.012, max: 0.45 };
 
 function ridgeOf(cut: number): number {
   return Math.min(RIDGE.max, Math.max(RIDGE.min, cut));
