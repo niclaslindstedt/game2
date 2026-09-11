@@ -370,13 +370,57 @@ export const LAND_RULES = {
      * a sand sea looks like from the ground and what the bare fold does
      * not — the bare fold is a corrugation, every metre of it on a slope.
      *
-     * It is held LOW because all of the exponent's curvature lands on the
-     * CREST, and curvature is the one thing the drawn lattice cannot hold:
-     * a ridge that turns over inside a 14 m cell reads back as a bump on
-     * the verge rather than as a dune. Measured over eight desert seeds at
-     * the dial's rest, the verge's bump tally ran 97 findings at 1, 102 at
-     * 1.25 and 133 at 1.6 — the interdune corridors are worth a hundred,
-     * the sharper ridge is not worth a hundred and thirty. */
+     * WHAT HOLDS IT DOWN IS REPOSE, not the lattice — and the value is
+     * still 1.25 only because of the last paragraph here.
+     *
+     * It was held at 1.25 on the belief that the exponent's curvature —
+     * which does all land on the crest — turns the ridge over inside a
+     * 14 m ground cell. That is not what this field does at any dial
+     * position. The sand's period across the wind runs from 300 m at the
+     * dial's rest to 934 m at the top (`spread` grows it faster than the
+     * height), which is twenty-one to sixty-seven ground cells; the dune
+     * term's own worst departure from the surface drawn between its
+     * corners measures 0.31 m at rest and 0.15 m at the top of the dial —
+     * it gets SMALLER as the dial rises. The lattice holds this shape
+     * easily. (The lattice IS a real constraint on the PERIOD, which is
+     * what `floor` below is for; it is simply not the one on this
+     * exponent.)
+     *
+     * The verge's bump tally that pinned it was measuring the road. On
+     * eight desert seeds with the sand dialled AWAY entirely the same
+     * tally still reads 96 findings, and across 1.25 → 2 → 2.5, at two
+     * shapes and three dial positions, it does not move at all at dials
+     * 0.6 and 1 — the same 47 and the same 121 either side of a dune field
+     * whose sampled volume changes by 8%. Those bumps are the road's own
+     * rollers and the rock under them, and they were never about the sand.
+     *
+     * The ceiling that IS real is the angle of repose: about 34°, 0.67 m
+     * per m, the steepest face dry sand holds before it pours
+     * (`budgets.ts`'s desert `soilSteep`). Measured on the SAND'S OWN
+     * surface — the country with the dial on, less the same country with
+     * it off, which is the sand and nothing else — over twenty seeds at
+     * the top of the dial, where it stands steepest:
+     *
+     *     crest   1.25    1.6     2       2.5
+     *     face    0.449   0.508   0.569   0.638
+     *     spare    33%     24%     15%      5%
+     *
+     * So there is a third of the ceiling spare, and 2 is where the sand
+     * sea stops being a corrugation: the share of it lying below a tenth
+     * of the tallest dune goes from 9% to 16% at the top of the dial and
+     * from 37% to 44% at its rest.
+     *
+     * WHAT STOPS IT BEING 2 IS THE RAILWAY. A level crossing's approach
+     * arms follow the country without a grade limit of their own, so a
+     * steeper dune flank under one lays track up it: at 2, desert seed 3
+     * puts an entry arm at 28% over a 4 m crest, where the same arm
+     * reported nothing at all at 1.25. The hole is not the sand's — the
+     * alpine already ships five such errors over twenty-four seeds, on
+     * grades up to 12% — but 28% is more than double anything in the game
+     * now, and it arrives once in twenty-four desert seeds. Grade the arms
+     * and this number can go to 2; `dunes_test` holds the sand to repose
+     * over twenty seeds and goes red just under 3, so the ceiling above is
+     * guarded whatever it is set to. */
     crest: 1.25,
     /** The shortest period the sand is ever drawn at, m — the floor under
      * `spread`'s shrinking. The ground is TRIANGULATED on a 14 m lattice

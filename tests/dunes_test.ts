@@ -48,9 +48,50 @@ function deepestSand(seed: number, dial: number): number {
   return deepest;
 }
 
-/** ...and the steepest face the sand puts on that same lattice, m per m. */
+/** ...and the steepest face the sand puts on that same lattice, m per m.
+ *
+ * Off the SAND, the way `deepestSand` reads the depth: the country with the
+ * dial on, less the same country with it off. Read off `surfaceAt` alone it
+ * is not the sand's face, it is the sand's face PLUS whatever the rock was
+ * already doing under it — and the rock is doing plenty. The same walk over
+ * a desert with no sand in it at all comes back at 0.49 m per m, which is
+ * three quarters of the sand's whole budget spent before a grain is placed;
+ * a check written that way reports the geology and calls it repose. */
 function steepestSand(seed: number, dial: number): number {
-  const g = createGeology(seed, resolveKnobs({ biome: "desert", dunes: dial }));
+  const on = createGeology(seed, resolveKnobs({ biome: "desert", dunes: dial }));
+  const off = bareRock(seed);
+  const sand = (x: number, z: number): number => on.surfaceAt(x, z) - off.surfaceAt(x, z);
+  let worst = 0;
+  for (let x = -SPAN; x <= SPAN; x += STEP) {
+    for (let z = -SPAN; z <= SPAN; z += STEP) {
+      const here = sand(x, z);
+      const grade = Math.hypot(sand(x + STEP, z) - here, sand(x, z + STEP) - here);
+      worst = Math.max(worst, grade / STEP);
+    }
+  }
+  return worst;
+}
+
+/** The same country with the sand dialled away, kept: it does not depend on
+ * the dial, and building one is the most expensive thing here. */
+const BARE = new Map<number, ReturnType<typeof createGeology>>();
+function bareRock(seed: number): ReturnType<typeof createGeology> {
+  let g = BARE.get(seed);
+  if (!g) {
+    g = createGeology(seed, resolveKnobs({ biome: "desert", dunes: 0 }));
+    BARE.set(seed, g);
+  }
+  return g;
+}
+
+/** The steepest face of a WHOLE desert surface, sand and rock together —
+ * what reading `surfaceAt` on its own gives you, and the control the check
+ * above needs. */
+function steepestSurface(seed: number, dial: number): number {
+  const g =
+    dial === 0
+      ? bareRock(seed)
+      : createGeology(seed, resolveKnobs({ biome: "desert", dunes: dial }));
   let worst = 0;
   for (let x = -SPAN; x <= SPAN; x += STEP) {
     for (let z = -SPAN; z <= SPAN; z += STEP) {
@@ -106,11 +147,52 @@ describe("R40 — the dune dial", () => {
     // the period grows with the height at all (`STAGE_RULES.dunes.spread`)
     // — and it is measured on the DRAWN lattice, because that is the
     // surface the car rides and the analysis reads.
-    for (const dial of [0.22, 0.6, 1]) {
-      for (const seed of [1, 2]) {
+    //
+    // Over a SPREAD of seeds, not a pair. Where the sand stands steepest is
+    // a fact about where one seed put its ergs, and two seeds is not a
+    // sample: the worst of the twenty below is seed 16, which the old pair
+    // never looked at.
+    //
+    // The spread is spent at the TOP of the dial, because that is where the
+    // sand stands steepest: `spread` grows the period more slowly than the
+    // height, so each step up the dial is a steeper field. The lower stops
+    // are walked on a few seeds each rather than all twenty — the same
+    // question, an order of magnitude cheaper to keep asking.
+    //
+    // Not asserted as a monotone ladder in the dial, though it nearly is:
+    // the erg MASK is rescaled by the same growth as the period, so the
+    // steepest point in the country is not the same point at two dial
+    // positions, and on some seeds a lower stop finds a slightly worse one.
+    // Repose is the rule; the ordering is not.
+    for (let seed = 1; seed <= 20; seed++) {
+      expect(steepestSand(seed, 1)).toBeLessThan(0.67);
+    }
+    for (const dial of [0.22, 0.6]) {
+      for (const seed of [1, 2, 16]) {
         expect(steepestSand(seed, dial)).toBeLessThan(0.67);
       }
     }
+  });
+
+  it("measures the SAND against repose, and not the rock it lies on", () => {
+    // The guard on the check above. Repose is a rule about a material, so
+    // the walk has to be over that material's own surface — and the easiest
+    // way to get this wrong is to read `surfaceAt` and call the answer
+    // sand. The bare desert is already at three quarters of the ceiling
+    // before the wind has put anything on it, so a check that drifted back
+    // to the whole surface would be mostly reporting geology, and would go
+    // red for a country that had done nothing wrong.
+    const rock = Math.max(...[1, 2, 16].map((seed) => steepestSurface(seed, 0)));
+    expect(rock).toBeGreaterThan(0.4);
+    expect(rock).toBeLessThan(0.67);
+    // ...and the trap itself, stated as the fact that makes it a trap: at
+    // the top of the dial there is a seed whose WHOLE surface is past the
+    // sand's ceiling while the sand on it is comfortably under. Read the
+    // surface and this country is refused for a wall it has not built.
+    const whole = steepestSurface(16, 1);
+    const sand = steepestSand(16, 1);
+    expect(whole).toBeGreaterThan(0.67);
+    expect(sand).toBeLessThan(0.67 * 0.9);
   });
 
   it("never draws the sand at a period the lattice cannot hold", () => {
