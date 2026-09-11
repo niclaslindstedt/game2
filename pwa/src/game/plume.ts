@@ -139,17 +139,32 @@ export function createPlume(gain = 1): Plume {
     // Spread rides with pace beside the count: a thinned cloud inside an
     // unchanged spread is the same wide cloud with gaps torn in it.
     for (let n = 0; n < puffs; n++) {
-      const along = Math.random() < rear ? -AXLE.rear : AXLE.front;
-      const side = Math.random() < 0.5 ? -AXLE.side : AXLE.side;
+      // R47 — SNOW OVER THE BONNET DOES NOT COME OFF THE WHEELS. What the
+      // car is parting has to go somewhere, and past the bonnet line it goes
+      // up the glass and over the roof rather than washing down the flanks —
+      // so that share of the cloud is born at the NOSE and thrown upward
+      // (`PlumeGround.throw`, ground-tint.ts). Rolled per puff rather than
+      // blended, so a car wading its bonnet throws some of both: the
+      // shoulder wash at the wheels and the break over the top.
+      const over = ground.throw > 0 && Math.random() < ground.throw;
+      const along = over ? PLUME.bow.at : Math.random() < rear ? -AXLE.rear : AXLE.front;
+      const side = over
+        ? (Math.random() * 2 - 1) * PLUME.bow.wide
+        : Math.random() < 0.5
+          ? -AXLE.side
+          : AXLE.side;
       const jx = (Math.random() * 2 - 1) * PLUME.scatter;
       const jz = (Math.random() * 2 - 1) * PLUME.scatter;
+      const height = over
+        ? AXLE.height + PLUME.bow.up * (0.4 + 0.6 * Math.random()) * ground.throw
+        : AXLE.height + Math.random() * PLUME.lift;
       cloud.spawn(
         car.x + fwdX * along + rightX * side + jx,
-        car.y + AXLE.height + Math.random() * PLUME.lift,
+        car.y + height,
         car.z + fwdZ * along + rightZ * side + jz,
         ground.tint,
         1,
-        PLUME.spread * pace,
+        PLUME.spread * pace * (over ? PLUME.bow.spread : 1),
         vx,
         vz,
       );

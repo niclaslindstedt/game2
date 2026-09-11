@@ -14,7 +14,7 @@
 // whoever owns the effect.
 
 import * as THREE from "three";
-import { biomeRules, type BiomeId } from "@engine";
+import { TUNING, biomeRules, type BiomeId } from "@engine";
 
 import { biomeFor } from "./biome.ts";
 import { type DustTint } from "./dust.ts";
@@ -193,7 +193,49 @@ export type PlumeGround = {
   /** How much of this ground is actually loose dust, 0..1 — the cloud's own
    * density on top of everything pace already decides. */
   amount: number;
+  /** R47 — HOW MUCH OF IT IS GOING OVER THE CAR rather than trailing off
+   * the wheels, 0..1.
+   *
+   * Every other ground in the game is LIFTED: a wheel shears grit off a
+   * surface it is running along, and what comes up hangs behind. Deep snow
+   * is not lifted, it is PARTED — the car is inside it, and what it shoulders
+   * aside has to go somewhere. Under the bonnet line that is a wash down the
+   * flanks and the plume behind is the whole of it; over the bonnet line it
+   * comes up the glass and breaks across the roof, and a car in snow over its
+   * own hood is driving in a cloud of its own making.
+   *
+   * So this is the share of the cloud born at the NOSE and thrown UPWARD
+   * instead of at the axles and dragged back (`plume.ts`). Zero on every
+   * other ground, which is what keeps a gravel stage's cloud exactly the
+   * cloud it always was. */
+  throw: number;
 } | null;
+
+/** R47 — THE TWO DEPTHS THE DEEP-SNOW CLOUD IS READ BETWEEN, m of snow
+ * standing above where the wheels are riding (`snowWade`).
+ *
+ * `sills` is where the BODY starts parting snow rather than the wheels
+ * running through it. It is `TUNING.snow.clearance` and not a number of its
+ * own, because it is the same fact the engine already charges bulldozing
+ * from: past the sills the car is shouldering the snow aside with its
+ * floorpan. Under it, whatever comes up is off the wheels and the towed
+ * plume is the whole of the effect.
+ *
+ * `bonnet` is where what the car is parting has climbed the glass, and the
+ * cloud stops being a wake and becomes weather the driver is looking
+ * through. It sits at the top of what the snow can actually stand at — the
+ * deepest permanent field wades about 0.64 m — so the effect uses the whole
+ * range the game can produce instead of saving its best for a depth that
+ * never occurs.
+ *
+ * A number about THE CAR rather than about any one car: the catalogue's
+ * bonnets sit within a hand's width of each other, and a cloud that changed
+ * shape with the car would read as a bug rather than as a difference. */
+const PARTS = { sills: TUNING.snow.clearance, bonnet: 0.6 };
+
+function clamp01(t: number): number {
+  return t < 0 ? 0 : t > 1 ? 1 : t;
+}
 
 export function plumeGround(
   biome: BiomeId,
@@ -201,24 +243,39 @@ export function plumeGround(
   wet: boolean,
   rock: () => number,
   snow: () => number = () => 0,
+  wade: () => number = () => 0,
 ): PlumeGround {
-  if (surface === "snow") return { tint: SNOW_POWDER, amount: 1 };
-  // Deep snow is all powder, and a car ploughing it throws the most.
-  if (surface === "snowfield") return { tint: SNOW_POWDER, amount: 1 };
+  if (surface === "snow") return { tint: SNOW_POWDER, amount: 1, throw: 0 };
+  // R47 — DEEP SNOW IS PARTED, NOT LIFTED, so what it throws is decided by
+  // how much of it the car is actually shouldering aside (`snowWade`) rather
+  // than by the fact of being on snow at all. A dusting washes off the
+  // flanks; snow over the bonnet comes up the glass and breaks over the
+  // roof, and there is more of it the deeper it gets — which is the whole
+  // difference between crossing a white field and ploughing one.
+  if (surface === "snowfield") {
+    const deep = wade();
+    return {
+      tint: SNOW_POWDER,
+      amount: clamp01(0.35 + 0.65 * (deep / PARTS.bonnet)),
+      throw: clamp01((deep - PARTS.sills) / (PARTS.bonnet - PARTS.sills)),
+    };
+  }
   // R48 — and a frozen lake lifts nothing at all. There is no loose
   // material on a swept sheet to hang in the air behind the car: what a
   // sliding tyre scrapes off it is thrown, not lifted (`groundTint`).
   if (surface === "ice") return null;
   if (surface === "water" || surface === "asphalt" || wet) return null;
-  if (surface !== "nature") return { tint: grit(biome), amount: 1 };
+  if (surface !== "nature") return { tint: grit(biome), amount: 1, throw: 0 };
   // ...and a snowfield is powder with nothing binding it either: the
   // share of the ground under snow is the share of the cloud that is snow.
   const white = snow();
-  if (white > 0 && Math.random() < white) return { tint: SNOW_POWDER, amount: 0.6 + 0.4 * white };
+  if (white > 0 && Math.random() < white)
+    return { tint: SNOW_POWDER, amount: 0.6 + 0.4 * white, throw: 0 };
   // R40 — off a road bladed out of SAND the ground is loose sand with
   // nothing binding it, which is the one case where the WILD lifts a
   // cloud: the turf rule above is a rule about turf, and there is none.
-  if (biomeRules(biome).loose === "sand") return { tint: grit(biome), amount: 0.7 + 0.3 * rock() };
+  if (biomeRules(biome).loose === "sand")
+    return { tint: grit(biome), amount: 0.7 + 0.3 * rock(), throw: 0 };
   const bare = rock();
-  return bare > 0 ? { tint: groundTints(biome).stone, amount: bare } : null;
+  return bare > 0 ? { tint: groundTints(biome).stone, amount: bare, throw: 0 } : null;
 }
