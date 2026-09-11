@@ -13,11 +13,12 @@
 // surface is the terrain's, and the animals are `livestock.ts`.
 
 import * as THREE from "three";
-import { createRng, type CropField, type Paddock, type Season } from "@engine";
+import { createRng, type CropField, type Paddock, type Season, type Track } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
 import { buildFlora, type FloraPlacement } from "./flora.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { snowCap } from "./snow-cap.ts";
+import { underSnow } from "./ground-rules.ts";
 import { detailTexture } from "./textures.ts";
 
 /** The roundpole fence: a young spruce pole every few metres, two rails
@@ -218,13 +219,13 @@ export function buildField(
  * sways with the rest of the country, thin enough that the animals read
  * and thick enough that the ground does not read as a lawn. */
 export function buildMeadow(
+  track: Track,
   paddock: Paddock,
   heightAt: (x: number, z: number) => number,
-  seed: number,
   season: Season,
 ): THREE.Group | null {
   const { rect } = paddock;
-  const rng = createRng((seed ^ 0x7e3a1c9b ^ Math.round(rect.x * 3 + rect.z)) >>> 0);
+  const rng = createRng((track.seed ^ 0x7e3a1c9b ^ Math.round(rect.x * 3 + rect.z)) >>> 0);
   const fwd = { x: Math.sin(rect.heading), z: Math.cos(rect.heading) };
   const right = { x: Math.cos(rect.heading), z: -Math.sin(rect.heading) };
   const count = Math.round((rect.width * rect.depth) / 14);
@@ -234,10 +235,14 @@ export function buildMeadow(
     const v = rng.range(-rect.width / 2 + 1, rect.width / 2 - 1);
     const x = rect.x + right.x * u + fwd.x * v;
     const z = rect.z + right.z * u + fwd.z * v;
+    const y = heightAt(x, z);
+    // R47 — a grazed paddock is under the snow with the rest of the
+    // country, and the fence around it is what says a paddock is there.
+    if (underSnow(track.knobs, track.climate, y)) continue;
     placements.push({
       id: rng.chance(0.85) ? "tallGrass" : "heathShrub",
       x,
-      y: heightAt(x, z),
+      y,
       z,
       scale: rng.range(0.55, 0.9),
       spin: rng.range(0, Math.PI * 2),

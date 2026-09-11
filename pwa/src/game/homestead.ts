@@ -138,7 +138,7 @@ export function buildHomestead(
     }
     if (farm.paddock) {
       group.add(buildFence(farm.paddock, beside.heightAt, rand));
-      const meadow = buildMeadow(farm.paddock, beside.heightAt, track.seed, season);
+      const meadow = buildMeadow(track, farm.paddock, beside.heightAt, season);
       if (meadow) group.add(meadow);
     }
     if (farm.field) {

@@ -26,7 +26,7 @@ import type { ConeField } from "./cones.ts";
 import { GeoBuilder } from "./flora-build.ts";
 import { parkedCarGeometry, parkedCarSpec } from "./parked-car.ts";
 import { buildRoad, buildSkirts, type GroundBeside } from "./road-mesh.ts";
-import { frozenAt, plantZone } from "./ground-rules.ts";
+import { underSnow } from "./ground-rules.ts";
 import { BANK, EDGE, FLOOR } from "./snow-marks.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture, gravelTexture, parkingSignTexture, trailSignTexture } from "./textures.ts";
@@ -239,8 +239,7 @@ export function buildCarPark(
   // Whether the ground at a height is under snow — the planting's own
   // question (`ground-rules.ts`), asked here so the crowd's path is made of
   // the same thing the field beside it is.
-  const frozen = (y: number): boolean =>
-    plantZone(track.knobs, y, false) === "snow" || frozenAt(track.knobs, track.climate, y);
+  const frozen = (y: number): boolean => underSnow(track.knobs, track.climate, y);
 
   // The lane in: a hair under the road it leaves where the two overlap at
   // the mouth, with its skirt hanging from its own lip.
