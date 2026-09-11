@@ -1,35 +1,35 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE TRAIL A CAR PLOUGHS THROUGH SNOW — what is left behind it on a snow
-// road or a snowfield (climate.ts). Nothing on a gravel road records a car
-// having passed; snow does, and a white stage with no trail on it is a
-// stage nobody has driven.
+// THE TRAIL A CAR PRESSES INTO SNOW — what is left behind it on a snow road
+// or a snowfield (climate.ts). Nothing on a gravel road records a car having
+// passed; snow does, and a white stage with no trail on it is a stage nobody
+// has driven.
 //
-// It is not two dark stripes. A car in deep snow does what a plough does:
-// each tyre cuts a floor down to what it packed, the snow it displaced is
-// thrown out to the SIDE and stands in a bank along the outside of each
-// track, and the strip between the wheels — which nothing drove over,
-// because the car straddles it — is left standing as a CROWN. From the
-// chase camera that is the whole read: two dark furrows, a white ridge
-// between them, and a broken white bank down each edge.
+// It is not two dark stripes, and it is not a ploughed lane either. What a
+// car leaves in deep snow is the shape of the CAR: the body presses a broad
+// floor at about its own clearance, because the snow under it has to come
+// down for the car to be where it is, and the four tyres cut a furrow into
+// that floor on each side, down to whatever they packed. Between them the
+// strip the car STRADDLES stays up at the body's own level and reads as a
+// CROWN. From the chase camera the whole trail is that: a wide trough, two
+// dark furrows in its floor, and a pale ridge running between them.
 //
-// So the trail is a swept strip, `SECTION` across (the cross-section of a
-// ploughed pair of ruts) and one stamp long per `SPACING` metres of travel.
+// So the trail is a swept strip, `SECTION` across (the cross-section of that
+// pair of ruts) and one stamp long per `SPACING` metres of travel.
 //
-// WHAT IT IS DRAWING IS REAL. The engine's snow is deformable (`snowpack.ts`)
-// and the car's wheels have already packed this ground down by a measured
-// number of metres — so how proud the banks and the crown stand is that
-// number (`Snowpack.cutAt`), and a trail driven a second and a third time
-// stands deeper each time exactly as the physics under it does. A packed
-// snow ROAD, which has almost nothing left to give, draws the same trail
-// nearly flat — the colour alone — and that is not a special case but the
-// same reading.
+// WHAT IT IS DRAWING IS REAL. The engine's snow is deformable
+// (`snowpack.ts`) and the car's wheels have already pressed this ground down
+// by a measured number of metres (`Snowpack.sunkAt`) — and a trail driven a
+// second and a third time deepens exactly as the physics under it does.
 //
-// It is drawn as RELIEF ABOVE the ground rather than as a hole in it, and
-// that is a depth-buffer fact rather than a choice: the tiles are built at
-// the untouched snow's own top and never re-tessellated, so a floor sunk
-// under them is a floor the terrain hides. The rut therefore reads by its
-// banks and its crown standing over a floor left at the tile — which is
-// what the eye reads a rut by anyway.
+// THE GROUND ITSELF DOES MOST OF IT. The coat of snow off the road is a mesh
+// that bends (`snow-mantle.ts`), so the trough is a real hole in the drawn
+// world and this strip is laid IN it, on the coat's own surface
+// (`coatHeightAt`). What is left for the section to stand up is only what
+// the coat had no room to show — a couple of centimetres off the road, and
+// on a snow ROAD, whose mat is one mesh built when the stage was and cannot
+// bend at all, the whole of a rut that was never more than that deep.
+// Nothing here may ever be drawn BELOW the ground it is laid on: a floor
+// under the ground mesh is a floor the depth buffer throws away.
 //
 // ...and the FLOOR'S COLOUR is how worked the snow is (`Snowpack.workAt`).
 // Packed snow is a polished floor where fresh snow is crystals, and it is
@@ -40,9 +40,8 @@
 // Each car gets a RING of stamps: each is its own quads from the last stamp
 // to this one, so the ring wraps with no seam to hide and the oldest mark is
 // simply the next one overwritten. Laid on the DRAWN ground — the road's
-// ribbon, or the top of the blanket off it — lifted a few centimetres so it
-// draws over the tile without fighting it, and never sunk below it, because
-// a floor under the ground mesh is a floor the depth buffer throws away.
+// ribbon, or the coat's own sagging surface off it — lifted a few
+// centimetres so it draws over what is under it without fighting it.
 //
 // Whose trail is drawn is the DUST row's call (settings.ts, `TRAIL_LEFT`),
 // which is the same question about the same wheels — but it is NOT the same
@@ -59,6 +58,8 @@
 
 import * as THREE from "three";
 import { snowUnder, type GameState, type SnowUnder } from "@engine";
+
+import { coatHeightAt, coatSagAt } from "./snow-mantle.ts";
 
 /** Metres of travel between stamps. */
 const SPACING = 0.7;
@@ -97,68 +98,79 @@ export const EDGE = new THREE.Color(0xeceff2);
  * ruts are, and where the cut that sizes them is read. */
 const TRACK_HALF = 0.74;
 
-/** THE CROSS-SECTION of a ploughed pair of ruts: how far out from the car's
- * centreline each station stands, how far it rises (in ridge heights — see
- * `ridgeOf`), and what colour it is. A rally car's track is about a metre
- * and a half, near enough for every car in the catalogue, so the ruts sit
- * at ±0.74 m and everything else is built around them.
+/** THE CROSS-SECTION OF A CAR'S TRACK: how far out from the car's centreline
+ * each station stands, how far it rises (in ridge heights — see `ridgeOf`),
+ * and what colour it is. A rally car's track is about a metre and a half,
+ * near enough for every car in the catalogue, so the ruts sit at ±0.74 m and
+ * everything else is built around them.
+ *
+ * The shape is the CAR, read from the middle out: the crown the body pressed
+ * and straddled, a furrow under each wheel, the little the tyres pushed out
+ * past themselves, and then the untouched field. It is deliberately NOT a
+ * snowplough's cross-section — no wall of thrown snow down either side —
+ * because the thing that made the mark was a car, and the deep trough it
+ * sits in is drawn by the coat under it rather than implied by banks over
+ * it (`ridgeOf`).
  *
  * Both ends come back down to the ground, so the strip meets the field
  * rather than floating a lip along its edge. */
 const SECTION: { lat: number; rise: number; tone: THREE.Color }[] = [
   { lat: -1.34, rise: 0, tone: EDGE },
-  { lat: -1.05, rise: 1.55, tone: BANK },
-  { lat: -0.9, rise: 0.65, tone: RIM },
+  // What the tyre pushed out past itself — the low shoulder outside a rut,
+  // and never more than that: this is the station that used to stand three
+  // times as proud and turn every trail into a bladed lane.
+  { lat: -1.05, rise: 0.55, tone: BANK },
+  { lat: -0.9, rise: 0.45, tone: RIM },
   // The rut has a FLOOR, not a crease: a tyre presses a flat band the width
   // of itself and a little more, and a section that touches the floor
   // colour at one station draws two hairlines nobody reads at speed.
   { lat: -0.86, rise: 0, tone: FLOOR },
   { lat: -0.62, rise: 0, tone: FLOOR },
-  { lat: -0.56, rise: 0.65, tone: RIM },
-  // R47 — THE CROWN IS PRESSED, not untouched. The car straddles this strip
-  // so no wheel has been over it, but the CHASSIS has: the body parts the
-  // snow along the line its nose sweeps before the wheels ever reach it
-  // (`TUNING.snow.chassis`), and what it leaves is a broad floor with the
-  // two ruts cut into it. Measured on the campaign's alpine circuit over
+  { lat: -0.56, rise: 0.45, tone: RIM },
+  // R47 — THE CROWN IS PRESSED, not untouched, and it is the station the
+  // whole trail reads by. The car straddles this strip so no wheel has been
+  // over it, but the CHASSIS has: the body parts the snow along the line its
+  // nose sweeps before the wheels ever reach it (`TUNING.snow.chassis`), and
+  // what it leaves is a broad floor at about the car's own clearance with
+  // the two ruts cut into it. Measured on the campaign's alpine circuit over
   // three different lines through the deepest field, the crown stands at
-  // 0.85, 0.87 and 0.86 of the rut's own depth above the rut floor — so it
-  // is a crown, clearly, and nothing like the wall of thrown snow beside it.
-  // Drawn level with the untouched field, as it was, it read as a ridge the
-  // car had somehow driven around.
+  // 0.85, 0.87 and 0.86 of the rut's own depth above the rut floor — so this
+  // is the one station that is the CAR's shape rather than the snow's, and
+  // it is what says a car went through here and these were its wheels.
   { lat: 0, rise: 0.86, tone: CROWN },
-  { lat: 0.56, rise: 0.65, tone: RIM },
+  { lat: 0.56, rise: 0.45, tone: RIM },
   { lat: 0.62, rise: 0, tone: FLOOR },
   { lat: 0.86, rise: 0, tone: FLOOR },
-  { lat: 0.9, rise: 0.65, tone: RIM },
-  { lat: 1.05, rise: 1.55, tone: BANK },
+  { lat: 0.9, rise: 0.45, tone: RIM },
+  { lat: 1.05, rise: 0.55, tone: BANK },
   { lat: 1.34, rise: 0, tone: EDGE },
 ];
 /** Quads per stamp — one between each pair of stations. */
 const SPANS = SECTION.length - 1;
 
-/** How high a ridge stands, m, for the snow the car has actually displaced
- * here: the metres the engine says this ground has been let down by
- * (`Snowpack.cutAt`), since the snow that came out of the rut is the snow
- * standing beside it. Floored so a packed snow ROAD — which has almost
- * nothing left to give — still draws its trail, flat.
+/** How high the section stands above the ground it is laid on, m — WHAT THE
+ * GROUND ITSELF COULD NOT SHOW.
  *
- * The CEILING is the deepest rut the snow can physically give: a column
- * worked all the way down stands at `CLIMATE.pack.floor` of what it did,
- * and the wheels ride `blanket.ride` of the way up what is left, so the
- * most any ground can be let down by is `rest * (ride - floor)` — 0.48 m
- * under the deepest permanent field (`blanket.pile`). Set just under it,
- * so the cap almost never binds and the trail is sized by the snow rather
- * than by this number.
+ * The drawn snow sinks under a car now: the coat is a mesh and it bends
+ * (`snow-mantle.ts`), so most of a trail is a hole in the ground rather
+ * than a shape laid over it, and this strip only has to carry the part the
+ * coat had no room for. Off the road in deep powder that is nearly nothing
+ * and the trail IS the trough — a broad floor the body pressed, with two
+ * furrows and a crown between them. On a snow ROAD it is the whole of the
+ * rut, because the mat is one mesh built when the stage was and it cannot
+ * bend at all; a snow road's cover is thin and already worn, so the whole
+ * of the rut is a few centimetres.
  *
- * It is a LOOK, not a solid: the strip is a `MeshBasicMaterial` with no
- * collider and nothing can hit it, so there is no depth of powder at which
- * drawing the real bank becomes a hazard — only one at which it stops
- * being drawn, which is what a cap sized for a half-metre blanket did once
- * the permanent snowfields arrived. */
-const RIDGE = { min: 0.012, max: 0.45 };
+ * `max` is low ON PURPOSE, and it is the rule the trail is judged against:
+ * a car in snow leaves a TRACK — the body's clearance and the tyres — and
+ * never the walls of thrown snow a snowplough leaves behind it. Past a few
+ * centimetres the section stops reading as a car's mark and starts reading
+ * as a bladed lane, which is the wrong vehicle entirely. `min` keeps a
+ * hairline, so a road worked to a floor still draws its trail. */
+const RIDGE = { min: 0.012, max: 0.08 };
 
-function ridgeOf(cut: number): number {
-  return Math.min(RIDGE.max, Math.max(RIDGE.min, cut));
+function ridgeOf(sunk: number, sag: number): number {
+  return Math.min(RIDGE.max, Math.max(RIDGE.min, sunk - sag));
 }
 
 /** How uneven the banks are, as a share of their own height. Snow does not
@@ -176,22 +188,27 @@ function jitter(x: number, z: number): number {
 /** One stamp's worth of section points, world space. */
 type Row = Float64Array;
 
-/** How far the snow has been let down UNDER THIS CAR'S WHEELS, m — the
- * deeper of the two lines, which is the relief the trail is drawn with.
+/** How far the SNOW'S SURFACE has come down under this car's wheels, m —
+ * the deeper of the two lines, which is how deep the rut here actually is.
+ *
+ * `sunkAt` and not `cutAt`, for the reason `snowpack.ts` states: the wheels
+ * sink by only the loose share of what the packing took out of the column,
+ * while the top of the snow loses the whole of it, and a rut drawn off the
+ * wheels' number is a rut several times shallower than the one the car
+ * demonstrably left.
  *
  * Asked at the wheels and never at the middle, and that is not a detail:
- * the middle of a car is the crown it STRADDLES. Nothing has ever driven
- * there, the cut is exactly zero however many times the car has been over,
- * and a trail sized off it is drawn dead flat on ground the wheels either
- * side of it have ploughed a foot into. */
-function cutUnderWheels(state: GameState): number {
+ * the middle of a car is the crown it STRADDLES. No wheel has ever been
+ * there, so a trail sized off it is drawn dead flat on ground the wheels
+ * either side of it have pressed a foot into. */
+function sunkUnderWheels(state: GameState): number {
   const car = state.car;
   // The driver's right axis in world space is (cos h, -sin h).
   const rx = Math.cos(car.heading) * TRACK_HALF;
   const rz = -Math.sin(car.heading) * TRACK_HALF;
   return Math.max(
-    state.snow.cutAt(car.x + rx, car.z + rz),
-    state.snow.cutAt(car.x - rx, car.z - rz),
+    state.snow.sunkAt(car.x + rx, car.z + rz),
+    state.snow.sunkAt(car.x - rx, car.z - rz),
   );
 }
 
@@ -247,12 +264,20 @@ export type SnowMarks = {
 export function drawnGround(state: GameState): (x: number, z: number) => number {
   const t = state.terrain;
   const snow = state.snow;
-  // ...LESS WHATEVER THE CAR HAS ALREADY TAKEN OUT OF IT. The coat is drawn
-  // sagging into the trough a car ploughed (`snow-mantle.ts`), so a mark
-  // laid at the untouched top would hang in the air over the very trench it
-  // is supposed to be lying in.
-  return (x, z) =>
-    Math.max(t.groundAt(x, z), t.latticeAt(x, z) - (snow.white ? snow.sunkAt(x, z) : 0));
+  if (!snow.white) return (x, z) => Math.max(t.groundAt(x, z), t.latticeAt(x, z));
+  // ...WHICH SAGS INTO THE TROUGH THE CAR PRESSED. Off the road the coat is
+  // a mesh that bends (`snow-mantle.ts`), so a mark laid at the untouched
+  // top would hang in the air over the very trench it is supposed to be
+  // lying in.
+  //
+  // Read off the COAT (`coatHeightAt`) and never off the pack under it,
+  // which is the trap this walked into once already: the pack answers at
+  // the 0.4 m grain a wheel carves at, the coat is drawn on a 2.5 m grid,
+  // and a mark that follows the fine rut goes UNDER the coarse sheet
+  // wherever the sheet's own average is the deeper of the two — which is a
+  // trail drawn inside the ground. The coat is the ground here. Anything
+  // finer than it is this strip's to draw, standing on it.
+  return (x, z) => Math.max(t.groundAt(x, z), coatHeightAt(t, snow, x, z));
 }
 
 export function createSnowMarks(): SnowMarks {
@@ -278,7 +303,20 @@ export function createSnowMarks(): SnowMarks {
       const b = q * 4;
       // Corners: 0 = last outer, 1 = last inner, 2 = this inner, 3 = this
       // outer, where outer and inner are the two stations this quad spans.
-      index.set([b, b + 1, b + 2, b, b + 2, b + 3], q * 6);
+      //
+      // WOUND TO FACE UP, and it has to be spelled out because getting it
+      // wrong costs the whole trail and looks exactly like not drawing one.
+      // The section runs left to right across the car and the stamps run
+      // forward along it, and in this world's handedness those two axes
+      // cross DOWNWARD — the driver's right is (cos h, -sin h) and forward
+      // is (sin h, cos h), so `right × forward` is -y whichever way the car
+      // is pointing. Taken in section order the quad therefore faces into
+      // the ground, and a front-face material throws away every triangle in
+      // the mesh: the trail was laid, correct, and complete, and nothing was
+      // ever on screen. Reversed here, once, rather than by drawing both
+      // sides — a mark lies on the ground and there is no under-side of it
+      // to see.
+      index.set([b, b + 2, b + 1, b, b + 3, b + 2], q * 6);
       const span = q % SPANS;
       for (let v = 0; v < 4; v++) {
         const c = SECTION[v === 1 || v === 2 ? span + 1 : span].tone;
@@ -365,7 +403,12 @@ export function createSnowMarks(): SnowMarks {
     // across it by anything the eye could see.
     snowUnder(state.track, state.terrain, state.nearIndex, car.x, car.z, UNDER);
     const worked = state.snow.workAt(car.x, car.z, UNDER.base);
-    cut(now, car, ridgeOf(cutUnderWheels(state)), ground);
+    // ...and how far the ground under this stamp has ALREADY come down for
+    // the same car, so the section only stands up the part that is left.
+    // Zero on the road, where nothing under the car can bend and the whole
+    // rut is this strip's to draw.
+    const sag = coatSagAt(state.terrain, state.snow, car.x, car.z);
+    cut(now, car, ridgeOf(sunkUnderWheels(state), sag), ground);
     if (r.joined) {
       const p = r.positions;
       const c = r.colors;

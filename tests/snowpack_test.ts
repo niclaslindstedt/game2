@@ -9,6 +9,7 @@
 // FASTER and LOOSER than the snow beside it. Every test here is half of
 // that, and the two halves are why a winter stage is a stage about lines.
 
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -37,6 +38,8 @@ import {
   type Track,
 } from "@engine";
 
+import { coatHeightAt, coatRoom } from "../pwa/src/game/snow-mantle.ts";
+import { createSnowMarks, drawnGround } from "../pwa/src/game/snow-marks.ts";
 import { stageTerrain, stageTrack } from "./support/stages.ts";
 
 const SEED = 41;
@@ -186,21 +189,21 @@ describe("the snow lying on a road", () => {
   });
 });
 
-describe("a car on a snowfield", () => {
-  /** Put a run's car out in the untouched blanket, pointed down the stage,
-   * at `speed`. */
-  const inField = (track: Track, speed: number): { state: GameState; x: number; z: number } => {
-    const { x, z, i } = field(track, track.width / 2 + 26);
-    const state = createGame({ seed: SEED, track, skipCountdown: true });
-    state.car.x = x;
-    state.car.z = z;
-    state.car.heading = track.samples[i].heading;
-    state.car.u = speed;
-    state.car.y = state.terrain.groundAt(x, z);
-    state.nearIndex = i;
-    return { state, x, z };
-  };
+/** Put a run's car out in the untouched blanket, pointed down the stage,
+ * at `speed`. */
+function inField(track: Track, speed: number): { state: GameState; x: number; z: number } {
+  const { x, z, i } = field(track, track.width / 2 + 26);
+  const state = createGame({ seed: SEED, track, skipCountdown: true });
+  state.car.x = x;
+  state.car.z = z;
+  state.car.heading = track.samples[i].heading;
+  state.car.u = speed;
+  state.car.y = state.terrain.groundAt(x, z);
+  state.nearIndex = i;
+  return { state, x, z };
+}
 
+describe("a car on a snowfield", () => {
   it("works the snow down where its wheels went, and nowhere else", () => {
     const track = winter();
     const { state, x, z } = inField(track, 16);
@@ -375,5 +378,108 @@ describe("the pack itself", () => {
     }
     expect(pack.worked).toBeGreaterThan(10000);
     expect(pack.cutAt(0.74, 3000)).toBeGreaterThan(0);
+  });
+});
+
+describe("what the snow a car pressed is DRAWN as", () => {
+  /** The GROUND TILES' own surface at a point, m — the country's 14 m
+   * lattice with the snow on it, laid `coatRoom` under the untouched top so
+   * the coat above has somewhere to sink to (`terrain.ts` samples exactly
+   * this; it is restated here because that module is a renderer and this
+   * relationship is the whole reason the trail is visible). */
+  const tileAt = (state: GameState, x: number, z: number): number =>
+    state.terrain.heightAt(x, z) - coatRoom(state.terrain.blanketAt(x, z));
+
+  /** A trail pressed into the deepest blanket beside the road, and the axis
+   * across it. */
+  const pressed = (): { state: GameState; across: (out: number) => { x: number; z: number } } => {
+    const track = winter();
+    const { state } = inField(track, 16);
+    for (let i = 0; i < 120; i++) step(state, NEUTRAL_INPUT);
+    const rx = Math.cos(state.car.heading);
+    const rz = -Math.sin(state.car.heading);
+    const mid = { x: (state.car.x + state.car.x) / 2, z: state.car.z };
+    return { state, across: (out) => ({ x: mid.x + rx * out, z: mid.z + rz * out }) };
+  };
+
+  it("sinks the coat where the car went, and never past the room under it", () => {
+    const { state, across } = pressed();
+    expect(state.snow.worked).toBeGreaterThan(0);
+    let sank = 0;
+    for (let out = -4; out <= 4.001; out += 0.25) {
+      const { x, z } = across(out);
+      const coat = coatHeightAt(state.terrain, state.snow, x, z);
+      const sink = state.terrain.latticeAt(x, z) - coat;
+      sank = Math.max(sank, sink);
+      // THE ONE INVARIANT THE WHOLE PICTURE RESTS ON: the tiles are laid a
+      // room under the untouched top, so the coat may spend that room and
+      // not a centimetre more. A coat below the tile is a coat the depth
+      // buffer throws away — which is what a car flattening a third of a
+      // metre of powder used to leave behind it: nothing.
+      expect(sink).toBeLessThanOrEqual(coatRoom(state.terrain.blanketAt(x, z)) + 0.02);
+      expect(sink).toBeGreaterThan(-0.05);
+    }
+    // ...and it DID sink: a car went through here, and the drawn snow says so.
+    expect(sank).toBeGreaterThan(0.05);
+  });
+
+  it("draws the trail's every triangle FACING UP", () => {
+    // The section runs across the car and the stamps run along it, and those
+    // two axes cross downward in this world's handedness — so a strip wound
+    // in section order faces into the ground and a front-face material
+    // throws the whole mesh away. Laid, correct, complete, and never once on
+    // screen: the failure looks exactly like not drawing a trail at all,
+    // which is why it is worth a test rather than a comment.
+    const track = winter();
+    const { state } = inField(track, 16);
+    const marks = createSnowMarks();
+    for (let i = 0; i < 240; i++) {
+      step(state, NEUTRAL_INPUT);
+      marks.lay(state, drawnGround(state));
+    }
+    const mesh = marks.group.children[0] as THREE.Mesh | undefined;
+    expect(mesh).toBeDefined();
+    const geo = mesh!.geometry as THREE.BufferGeometry;
+    const p = geo.getAttribute("position").array as ArrayLike<number>;
+    const index = geo.getIndex()!.array as ArrayLike<number>;
+    let faces = 0;
+    for (let t = 0; t < index.length; t += 3) {
+      const a = index[t] * 3;
+      const b = index[t + 1] * 3;
+      const c = index[t + 2] * 3;
+      // Nothing laid yet: the ring parks its unwritten stamps under the world.
+      if (p[a + 1] < -999) continue;
+      const ux = p[b] - p[a];
+      const uy = p[b + 1] - p[a + 1];
+      const uz = p[b + 2] - p[a + 2];
+      const vx = p[c] - p[a];
+      const vy = p[c + 1] - p[a + 1];
+      const vz = p[c + 2] - p[a + 2];
+      const ny = uz * vx - ux * vz;
+      // Degenerate quads (a stamp laid on the spot) have no facing at all.
+      if (Math.abs(ny) < 1e-9 && Math.abs(uy) + Math.abs(vy) < 1e-9) continue;
+      expect(ny).toBeGreaterThan(-1e-9);
+      faces++;
+    }
+    expect(faces).toBeGreaterThan(100);
+    marks.dispose();
+  });
+
+  it("leaves the ground alone where there is no snow to press", () => {
+    // The room is taken out of the snow and never out of the country, so a
+    // green stage, a bladed road's corridor and the ice on a lake are drawn
+    // exactly where they always were.
+    expect(coatRoom(0)).toBe(0);
+    const track = winter();
+    const state = createGame({ seed: SEED, track, skipCountdown: true });
+    const s = track.samples[60];
+    expect(state.terrain.blanketAt(s.x, s.z)).toBe(0);
+    expect(tileAt(state, s.x, s.z)).toBe(state.terrain.heightAt(s.x, s.z));
+    // ...and where there IS snow, the room never asks for more than the
+    // column has to give.
+    const deep = field(track, track.width / 2 + 26);
+    const rest = state.terrain.blanketAt(deep.x, deep.z);
+    expect(coatRoom(rest)).toBeLessThanOrEqual(rest * (1 - CLIMATE.pack.floor) + 1e-9);
+    expect(coatRoom(rest)).toBeGreaterThan(0);
   });
 });

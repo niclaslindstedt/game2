@@ -16,9 +16,17 @@
 // bare country: a sheet whose height is the blanket the engine put there
 // (`TerrainField.blanketAt`, sampled on the same fine grid the physics
 // reads) less whatever the wheels have packed out of it
-// (`Snowpack.cutAt`). That last term is why the sheet is rebuilt rather
+// (`Snowpack.sunkAt`). That last term is why the sheet is rebuilt rather
 // than built once — a car driving through deep snow WARPS it, and the
 // trough behind it is this mesh bending, not a decal laid over it.
+//
+// AND IT NEEDS ROOM TO BEND INTO (`coatRoom`). The ground tiles are drawn
+// UNDER this sheet by exactly that much, because a sheet that sinks below
+// them is a sheet the depth buffer throws away: with the tiles left at the
+// top of the untouched snow, every trough this mesh bent went behind them
+// and a stage full of driven snow drew back as flat white ground with two
+// stripes on it. Nothing here may ever go below `bareLatticeAt + rest -
+// coatRoom(rest)`, and nothing that lies on the coat may either.
 //
 // IT FOLLOWS THE CAR. A coat over the whole country would be a million
 // triangles of ground nobody is near; a square `REACH` metres across,
@@ -34,7 +42,7 @@
 // either side can make the picture and the physics disagree.
 
 import * as THREE from "three";
-import { CLIMATE, type Snowpack, type TerrainField } from "@engine";
+import { CLIMATE, TUNING, type Snowpack, type TerrainField } from "@engine";
 
 import { SUN_DIR } from "./sun-dir.ts";
 
@@ -66,9 +74,130 @@ const FRESH_REACH = 18;
  * far more than the sheet's own 2.5 m grid can show. */
 const WORK_REDRAW = 24;
 
+/** THE ROOM UNDER THE COAT, m — how far the drawn snow may be pressed
+ * before it reaches the ground the rest of the world is drawn at.
+ *
+ * The country's tiles are a fourteen-metre lattice, and on a white stage
+ * they are laid THIS FAR UNDER the top of the untouched snow
+ * (`terrain.ts`). That is not a fudge, it is the whole reason the coat can
+ * show anything at all. A sheet that sinks below the tile is a sheet the
+ * depth buffer throws away — so with the tile still drawn at the height the
+ * snow used to stand at, a car that had flattened a third of a metre of
+ * powder left a trough standing UNDER the ground, and the only thing left
+ * of its trail was the colour. The snow remembered and nothing showed it.
+ *
+ * It is the car's own BELLY (`TUNING.snow.clearance`): the deepest snow a
+ * body can press and still be riding over it rather than bulldozing it, and
+ * so the deepest mark a car can leave that is a TRACK rather than a trench.
+ * Snow deeper than that is drawn pressed to here and no further — what is
+ * given up is the bottom of a hole nobody can see into anyway. */
+export const COAT_ROOM = TUNING.snow.clearance;
+
+/** ...and the room under a given depth of snow, m: never more than the
+ * column itself has to give (`CLIMATE.pack.floor` is what a fully worked
+ * one still stands at), so a thin cover leaves a thin room and bare ground
+ * — the road's corridor, the water, every green stage — leaves none at all.
+ * That last part is what keeps the tiles exactly where they always were
+ * everywhere the snow is not. */
+export function coatRoom(rest: number): number {
+  return Math.min(COAT_ROOM, Math.max(0, rest) * (1 - CLIMATE.pack.floor));
+}
+
+/** How far in from the sheet's rim the coat comes back down to the tiles, m.
+ * Past the rim the TILES are the snow, and they are laid `coatRoom` under
+ * its top — so a coat that kept its full depth to the last row would stand
+ * a belly's worth proud of them and ring the car with a low cliff wherever
+ * the snow is deep. Brought down to meet them instead, the seam is a
+ * hillside a hand's breadth shallower a hundred metres away, which is not a
+ * thing anybody can see. */
+const RIM_FADE = 15;
+
 /** How far the sheet is lifted off the bare ground, m — enough that a
  * shallow cover still wins the depth test over the tile under it. */
 const LIFT = 0.02;
+
+/** HOW FAR THE SNOW'S SURFACE HAS COME DOWN at a point, m, averaged over
+ * one cell of the sheet — four taps at the quarter points, which is the
+ * coarsest average that cannot fall entirely between two wheel ruts.
+ *
+ * `sunkAt` and not `cutAt`: the wheels sink by only the loose share of what
+ * the packing took out of the column, while the top of the snow loses the
+ * whole of it. This sheet IS the top of the snow. Drawn off the wheels'
+ * number it sank by a few centimetres where the car had flattened a third
+ * of a metre, which is a car leaving no mark on snow it had demonstrably
+ * ploughed.
+ *
+ * Averaged rather than read at the point, and that is deliberate: a wheel
+ * rut is about 0.75 m wide and the pair of them 1.5 m apart, which is finer
+ * than this sheet can hold. Point-sampled, a vertex either lands in a rut
+ * or misses it and the coat dimples at random instead of sagging. Averaged,
+ * the sheet carries the BROAD depression a driven-over patch of snow has —
+ * the trough the body pressed — and `snow-marks.ts` draws the two furrows
+ * in the floor of it. Each surface then says the thing it can say. */
+function meanSunk(snow: Snowpack, x: number, z: number): number {
+  const q = STEP / 4;
+  return (
+    (snow.sunkAt(x - q, z - q) +
+      snow.sunkAt(x + q, z - q) +
+      snow.sunkAt(x - q, z + q) +
+      snow.sunkAt(x + q, z + q)) /
+    4
+  );
+}
+
+/** ...and as much of it as the coat has ROOM to show, m — what the drawn
+ * snow at a point has actually come down by. Everything that lies on the
+ * coat asks for this rather than the pack, because a mark sunk by more than
+ * the coat sank is a mark under the coat. */
+export function coatSagAt(
+  field: TerrainField,
+  snow: Snowpack | null,
+  x: number,
+  z: number,
+): number {
+  if (!snow || !snow.white) return 0;
+  const rest = field.blanketAt(x, z);
+  if (rest <= 0) return 0;
+  return Math.min(meanSunk(snow, x, z), coatRoom(rest));
+}
+
+/** THE HEIGHT OF THE DRAWN COAT at a point, m — read the way the sheet
+ * draws it rather than off the snow itself.
+ *
+ * The sheet's vertices sit on a FIXED world lattice `STEP` metres apart
+ * (`update` snaps its corner to it, so the coat does not shimmer as the car
+ * drives along it), and between them the mesh is flat. So this is the same
+ * surface, sampled: a bilinear over the four lattice corners the point
+ * falls between.
+ *
+ * Anything that has to LIE ON the coat reads it here. The alternative —
+ * asking the pack directly, which answers at the 0.4 m grain a wheel
+ * actually carves at — puts a fine rut UNDER a coarse sheet at every point
+ * where the sheet's average is deeper than the rut beside it, and a thing
+ * under the coat is a thing the coat hides. */
+export function coatHeightAt(
+  field: TerrainField,
+  snow: Snowpack | null,
+  x: number,
+  z: number,
+): number {
+  const gx = x / STEP;
+  const gz = z / STEP;
+  const i = Math.floor(gx);
+  const j = Math.floor(gz);
+  const fx = gx - i;
+  const fz = gz - j;
+  const at = (di: number, dj: number): number => {
+    const vx = (i + di) * STEP;
+    const vz = (j + dj) * STEP;
+    return field.bareLatticeAt(vx, vz) + field.blanketAt(vx, vz) - coatSagAt(field, snow, vx, vz);
+  };
+  const a = at(0, 0);
+  const b = at(1, 0);
+  const c = at(0, 1);
+  const d = at(1, 1);
+  return (a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz;
+}
 
 /** The snow's own white, and what it becomes where a wheel has worked it.
  * Fresh snow is very slightly blue rather than pure white: a white that
@@ -219,27 +348,6 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
   let workedAt = -1;
   const tint = new THREE.Color();
 
-  /** How far the snow's SURFACE has come down, averaged over one cell of the
-   * sheet — four taps at the quarter points, which is the coarsest average
-   * that cannot fall entirely between two wheel ruts.
-   *
-   * `sunkAt` and not `cutAt`: the wheels sink by only the loose share of
-   * what the packing took out of the column, while the top of the snow
-   * loses the whole of it. This sheet IS the top of the snow. Drawn off the
-   * wheels' number it sank by a few centimetres where the car had flattened
-   * a third of a metre, which is a car leaving no mark on snow it had
-   * demonstrably ploughed. */
-  const cutAround = (snow: Snowpack, x: number, z: number): number => {
-    const q = STEP / 4;
-    return (
-      (snow.sunkAt(x - q, z - q) +
-        snow.sunkAt(x + q, z - q) +
-        snow.sunkAt(x - q, z + q) +
-        snow.sunkAt(x + q, z + q)) /
-      4
-    );
-  };
-
   /** Re-sample part of the sheet: the rows and columns `[i0, i1] x [j0, j1]`,
    * which is the whole of it when the anchor has moved and a patch around
    * the car when only the snow under it has changed. */
@@ -258,17 +366,19 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
         const x = originX + i * STEP;
         const k = j * N + i;
         const rest = field.blanketAt(x, z);
-        // What the wheels have taken out of it — averaged ACROSS THE CELL
-        // rather than read at the vertex. A wheel rut is about 0.75 m wide
-        // and the pair of them 1.5 m apart, which is finer than this sheet
-        // can hold: point-sampled, a vertex either lands in a rut or misses
-        // it, and the coat dimples at random instead of sagging. Averaged,
-        // the sheet carries the BROAD depression a driven-over patch of
-        // snow has, and `snow-marks.ts` draws the two ruts themselves at
-        // the resolution they actually need. Each surface then says the
-        // thing it can say, and neither contradicts the other.
-        const cut = rest > 0 && snow ? cutAround(snow, x, z) : 0;
-        const depth = Math.max(0, rest - cut);
+        // What the wheels have taken out of it (`meanSunk`), and how much of
+        // that there is room to SHOW: the tiles under this sheet are laid
+        // `coatRoom` beneath the untouched top, and a vertex pressed past
+        // them is a vertex behind them.
+        const raw = rest > 0 && snow ? meanSunk(snow, x, z) : 0;
+        const room = coatRoom(rest);
+        const cut = Math.min(raw, room);
+        // ...and at the SHEET'S RIM the coat comes down to the tiles, which
+        // is where the same snow is drawn a metre further out. Inside the
+        // fade this is exactly `rest - cut`; at the last row it is the
+        // tile's own height, so the two surfaces meet instead of stepping.
+        const edge = Math.min(1, (Math.min(i, N - 1 - i, j, N - 1 - j) * STEP) / RIM_FADE);
+        const depth = Math.max(0, rest - room + (room - cut) * edge);
         const y = field.bareLatticeAt(x, z) + depth + LIFT;
         H[k] = y;
         positions[k * 3] = x;
@@ -277,7 +387,10 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
         depths[k] = depth;
         // Worked snow is the darker, bluer of the two: what the wheels
         // pressed down is a floor, and the field beside it is crystals.
-        const worked = rest > 1e-3 ? Math.min(1, cut / (rest * CLIMATE.blanket.ride)) : 0;
+        // Off the RAW fall rather than the drawn one — how worked a patch of
+        // snow is is a fact about the snow, and it goes on darkening after
+        // the coat has run out of room to sink any further.
+        const worked = rest > 1e-3 ? Math.min(1, raw / (rest * CLIMATE.blanket.ride)) : 0;
         tint.copy(FRESH).lerp(PACKED, worked);
         colors[k * 3] = tint.r;
         colors[k * 3 + 1] = tint.g;
