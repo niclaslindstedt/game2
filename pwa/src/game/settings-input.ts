@@ -66,6 +66,41 @@ export const DEFAULT_KEYS: KeyBindings = {
   screenshot: ["Enter"],
 };
 
+/** Actions the browser must not also act on EVEN WHILE A CARD OWNS THE
+ * SCREEN: the arrows and space scroll the page, which on a keyboard-driven
+ * game means the whole shell jumps — under a card as much as on the road. */
+const SCROLLERS: KeyAction[] = ["left", "right", "throttle", "brake", "handbrake"];
+
+/** Whether the browser may still do whatever IT would have done with a key
+ * the game has just acted on — the twin of text-interaction.ts's
+ * `browserKeepsTouch`, and the same shape of question.
+ *
+ * The answer is no while the run owns the screen, because the browser's last
+ * resort for a key it has no other use for is to PRESS WHATEVER HAS FOCUS.
+ * Every surface the player presses in this game is a `<button>` and a mouse
+ * press focuses the one it lands on, so a driver who reached for the HUD's
+ * way back to the road leaves the keyboard aimed at that button for the rest
+ * of the stage: ENTER then takes the picture it is bound to AND throws the
+ * run back to the last board. second-finger.ts already refuses to focus the
+ * buttons IT presses, for exactly this reason; this is the same rule for the
+ * presses the browser makes itself.
+ *
+ * Two things are the browser's whatever the game has done with them. A CARD
+ * on screen hands the keyboard back, because there DOM focus is the menu
+ * cursor and ENTER on the row it is standing on has to press that row. And a
+ * CHORD was never the car's to begin with: ⌘R reloads and CTRL+C copies, and a
+ * page that prevents those breaks them. ALT is not a chord here — it is the
+ * game's own modifier, HELD to take the chrome off, so ALT+ENTER is the
+ * game's press and is spent like any other.
+ *
+ * Only the scrolling keys survive both: a shell that jumps is a shell that
+ * jumps under a card as much as on the road. A key nothing is bound to is
+ * never asked about — it is the browser's, run or no run. */
+export function browserKeepsKey(actions: KeyAction[], cardUp: boolean, chord: boolean): boolean {
+  if (actions.some((action) => SCROLLERS.includes(action))) return false;
+  return cardUp || chord;
+}
+
 /** Where a pad action reads from. A button index under the browser's
  * gamepad mapping, or an axis and the direction along it that counts as
  * pressed — the shoulder triggers are buttons under the W3C standard

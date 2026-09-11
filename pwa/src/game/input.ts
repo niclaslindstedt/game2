@@ -45,6 +45,7 @@ import {
 } from "./gamepad.ts";
 import { snapPedal, snapSteer } from "./ghost.ts";
 import {
+  browserKeepsKey,
   DEFAULT_KEYS,
   DEFAULT_PAD,
   type KeyAction,
@@ -214,10 +215,6 @@ const KEY_STEER_RELEASE = 9;
 /** Below this the centred keyboard axis snaps to exactly zero. */
 const KEY_STEER_SNAP = 0.02;
 
-/** Actions the browser must not also act on: the arrows and space scroll
- * the page, which on a keyboard-driven game means the whole shell jumps. */
-const SWALLOWED: KeyAction[] = ["left", "right", "throttle", "brake", "handbrake"];
-
 /** Which control sections are worth showing. A desktop has no thumbs to
  * assign and a phone has no keys to rebind, so each surface only offers
  * what the device it is running on can actually use — a laptop with a
@@ -369,6 +366,11 @@ export function createInput(target: Window = window): InputManager {
     const actions = byCode.get(e.code);
     if (!actions) return;
     downCodes.add(e.code);
+    // A KEY THAT IS THE CAR'S IS NOT ALSO THE BROWSER'S: a bound key is spent
+    // here and goes no further, or the press that takes a picture also presses
+    // whatever the last mouse press left focused. `browserKeepsKey` owns the
+    // rule and says why; `navigating` is the card question it asks.
+    if (!browserKeepsKey(actions, navigating, e.ctrlKey || e.metaKey)) e.preventDefault();
     for (const action of actions) {
       held.add(action);
       if (action === "shiftUp") shiftUp = true;
@@ -382,7 +384,6 @@ export function createInput(target: Window = window): InputManager {
       ) {
         actionHandler?.(action);
       } else if (action === "menu") actionHandler?.("menu");
-      if (SWALLOWED.includes(action)) e.preventDefault();
     }
   };
   const onKeyUp = (e: KeyboardEvent): void => {
