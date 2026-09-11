@@ -36,6 +36,8 @@
 import * as THREE from "three";
 import { CLIMATE, type Snowpack, type TerrainField } from "@engine";
 
+import { SUN_DIR } from "./sun-dir.ts";
+
 /** The grid the coat is drawn on, m. Two metres is the blanket's own
  * sampling grid (`SNOW_CELL`), so the sheet resolves every edge the engine
  * actually put in the field and nothing finer is there to find. */
@@ -70,12 +72,6 @@ const LIFT = 0.02;
 const FRESH = new THREE.Color(0xf4f8ff);
 const PACKED = new THREE.Color(0xb9c6d6);
 
-/** WHERE THE SUN IS, for the glitter — a shared vector the environment
- * writes every frame, exactly as it writes the height fog's (`HEIGHT_FOG`).
- * The mantle cannot ask the environment for it: the world is built without
- * one, and a light that arrived a frame late would pop. */
-export const SNOW_SUN = new THREE.Vector3(0, 1, 0);
-
 /** THE SNOW SHADER, grafted onto a Lambert material rather than written
  * from nothing — the lights, the shadows and the game's own height fog are
  * all in the built-in one already (`height-fog.ts` grafts itself into
@@ -103,7 +99,7 @@ export const SNOW_SUN = new THREE.Vector3(0, 1, 0);
 function snowMaterial(): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({ vertexColors: true, fog: true });
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.uSun = { value: SNOW_SUN };
+    shader.uniforms.uSun = { value: SUN_DIR };
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
