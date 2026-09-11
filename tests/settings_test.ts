@@ -19,6 +19,7 @@ import {
   RESOLUTION_SCALE,
   DUST_LAMP_CARS,
   DUST_RAISED,
+  TRAIL_LEFT,
   EXHAUST_SEEN,
   fogRangeFor,
   freshSettings,
@@ -334,6 +335,45 @@ describe("who raises dust at each DETAIL stop", () => {
       const over = walk[i]!;
       expect(over.player || !under.player).toBe(true);
       expect(over.field || !under.field).toBe(true);
+    }
+  });
+});
+
+// The same row read for what a wheel LEAVES rather than what it throws. The
+// two records deliberately disagree at the bottom, and that disagreement is
+// the rule rather than an oversight — so it is asserted rather than left as
+// the absence of a gate in the renderer.
+describe("whose trail is left in the snow at each DETAIL stop", () => {
+  it("keeps the driven car's ruts at every stop, LOW included", () => {
+    for (const id of ["low", "medium", "high"] as const) {
+      expect(TRAIL_LEFT[DETAIL_PRESETS[id].dust].player).toBe(true);
+    }
+  });
+
+  // What the row still decides: one mesh per rival in range is where this
+  // stops being nearly free, so the FIELD's ruts walk the dust's own ladder.
+  it("leaves the field's ruts to the stop that gives the field a cloud", () => {
+    for (const id of ["low", "medium", "high"] as const) {
+      const stop = DETAIL_PRESETS[id].dust;
+      expect(TRAIL_LEFT[stop].field).toBe(DUST_RAISED[stop].field);
+    }
+  });
+
+  // The reason the records differ AT ALL is the bottom stop: a phone that
+  // asked for no particles is still driving through snow that the engine is
+  // really compressing, and a car catching on nothing visible reads as a
+  // bug. If this ever matches the dust again, the split has been undone.
+  it("differs from the dust exactly where the dust takes the player's away", () => {
+    const off = DETAIL_PRESETS.low.dust;
+    expect(DUST_RAISED[off].player).toBe(false);
+    expect(TRAIL_LEFT[off].player).toBe(true);
+  });
+
+  // ...and it never dresses a rival's snow in ruts the driven car is not
+  // cutting, for the reason the dust never does.
+  it("never marks the field's snow while the driven car leaves none", () => {
+    for (const audience of Object.values(TRAIL_LEFT)) {
+      expect(audience.field && !audience.player).toBe(false);
     }
   });
 });

@@ -44,11 +44,18 @@
 // draws over the tile without fighting it, and never sunk below it, because
 // a floor under the ground mesh is a floor the depth buffer throws away.
 //
-// Whose trail is drawn is the DUST row's call (settings.ts, `DUST_RAISED`),
-// which is the same question: what a car throws off the ground and what it
-// leaves on it are one budget. The player's on MEDIUM, everybody's on
-// HIGH, nobody's on LOW — and the renderer asks per car, so this module
-// only ever lays what it is handed.
+// Whose trail is drawn is the DUST row's call (settings.ts, `TRAIL_LEFT`),
+// which is the same question about the same wheels — but it is NOT the same
+// budget, and that is the whole of why it has its own record. What a car
+// throws off the ground is sprites, spawned per frame per car for as long as
+// anybody is driving. What it LEAVES on the ground is this: one mesh, built
+// the first time that car touches snow and never again, a ring of stamps
+// rewritten in place. A stage with no snow on it never allocates one.
+//
+// So the car being driven marks the snow at every stop of the row, `off`
+// included, and only the FIELD's ruts — one mesh per rival in range — are
+// the row's to put away. The renderer asks per car, so this module only ever
+// lays what it is handed.
 
 import * as THREE from "three";
 import { snowUnder, type GameState, type SnowUnder } from "@engine";
