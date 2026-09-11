@@ -7,8 +7,9 @@
 // skirts and mat as a homestead's drive), the pad as a disc of gravel on
 // the plane the terrain graded, the cars as ONE merged mesh of the
 // parked-car boxes (`parked-car.ts` promised a car park of these, and this
-// is it), the trails as trodden strips of earth laid on the ground, the
-// arrow boards beside them, and the P at the gate.
+// is it), the trails as strips of whatever the crowd trod them into — bare
+// earth on green ground, a trough pressed into the snow on a white stage —
+// the arrow boards beside them, and the P at the gate.
 //
 // Nothing is PAINTED on the pad. A rally spectator car park is a field a
 // marshal opened and a blade ran over once: what marks it out is the gravel
@@ -25,6 +26,8 @@ import type { ConeField } from "./cones.ts";
 import { GeoBuilder } from "./flora-build.ts";
 import { parkedCarGeometry, parkedCarSpec } from "./parked-car.ts";
 import { buildRoad, buildSkirts, type GroundBeside } from "./road-mesh.ts";
+import { frozenAt, plantZone } from "./ground-rules.ts";
+import { BANK, EDGE, FLOOR } from "./snow-marks.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture, gravelTexture, parkingSignTexture, trailSignTexture } from "./textures.ts";
 
@@ -42,18 +45,27 @@ const builtMaterial = shareOne(
   () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
 );
 
-/** The trail: trodden earth, drawn a hair over the ground and pulled toward
- * the eye by the offset so the lattice under it never wins the depth test
- * across a slope. */
+/** The trail, drawn a hair over the ground and pulled toward the eye by the
+ * offset so the lattice under it never wins the depth test across a slope.
+ *
+ * Its colour is per-vertex because the trail is made of whatever it was
+ * trodden into: bare earth where the crowd wore the turf off, and PACKED
+ * SNOW where the same boots went over a snowfield (`EARTH` against
+ * `snow-marks.ts`'s `FLOOR`). A trail that crossed the snowline in one
+ * material was a strip of mud laid across a white hillside, which is the
+ * one thing a path through snow never looks like. */
 const trailMaterial = shareOne(
   () =>
     new THREE.MeshLambertMaterial({
-      color: 0x8a7350,
+      vertexColors: true,
       polygonOffset: true,
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
     }),
 );
+
+/** What a trail is worn into, where there is no snow on it. */
+const EARTH = new THREE.Color(0x8a7350);
 
 const TINT = {
   post: new THREE.Color(0x8b7355),
@@ -64,8 +76,19 @@ const TINT = {
 const PAD_LIFT = 0.04;
 
 /** The trail's strip: its width is the engine's; this is how far above the
- * ground it lies and how finely it follows the ground between samples. */
-const TRAIL = { lift: 0.05, step: 1.5 };
+ * ground it lies and how finely it follows the ground between samples.
+ *
+ * `bank` and `rise` are the SNOW half of it. A crowd walking to a stand
+ * does not shovel a snowfield, it treads it — so the path is a trough,
+ * pressed down with the snow it displaced standing along both sides, and
+ * those two numbers are that shoulder: how far out it reaches and how proud
+ * it stands. Drawn as RELIEF ABOVE the ground for the reason `snow-marks.ts`
+ * draws a rut that way — the ground tiles are built at the untouched snow's
+ * own top and never re-tessellated, so a floor sunk under them is a floor
+ * the terrain hides, and what the eye reads a trough by is the banks
+ * anyway. Both are zero off the snow, where the strip is the flat ribbon of
+ * trodden earth it has always been. */
+const TRAIL = { lift: 0.05, step: 1.5, bank: 0.55, rise: 0.22 };
 
 /** An arrow board: the post it stands on and the board's size, m. */
 const SIGN = { post: { w: 0.09, h: 1.7 }, board: { w: 0.8, h: 0.4 } };
@@ -122,12 +145,20 @@ function board(
   return group;
 }
 
-/** The strip of trodden earth from the pad to a stand, on the ground. */
+/** The path from the pad to a stand: trodden earth on green ground, and a
+ * trough pressed into the snow where the country is white (`TRAIL`).
+ *
+ * `frozen` answers whether the ground at a height is under snow — the same
+ * question the planting asks before it puts anything on it
+ * (`ground-rules.ts`), so the path turns white exactly where the country
+ * does and nothing has to be told twice. */
 function buildTrail(
   samples: readonly { x: number; z: number }[],
   heightAt: (x: number, z: number) => number,
+  frozen: (y: number) => boolean,
 ): THREE.Mesh {
   const positions: number[] = [];
+  const colors: number[] = [];
   const indices: number[] = [];
   const half = P.trail.width / 2;
   // Resampled finer than the engine's own step, so the strip lies on the
@@ -144,6 +175,19 @@ function buildTrail(
     }
   }
   points.push(samples[samples.length - 1]);
+  // The cross-section, out from the centreline: the trodden floor, then the
+  // shoulder of displaced snow, then the untouched field it dies into. On
+  // green ground every rise is zero and this collapses to the flat ribbon
+  // the strip has always been, two skirts wider.
+  const SECTION = [
+    { lat: -(half + TRAIL.bank), rise: 0, tone: EDGE },
+    { lat: -(half + TRAIL.bank / 2), rise: 1, tone: BANK },
+    { lat: -half, rise: 0, tone: FLOOR },
+    { lat: half, rise: 0, tone: FLOOR },
+    { lat: half + TRAIL.bank / 2, rise: 1, tone: BANK },
+    { lat: half + TRAIL.bank, rise: 0, tone: EDGE },
+  ];
+  const across = SECTION.length;
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     const prev = points[Math.max(0, i - 1)];
@@ -151,18 +195,30 @@ function buildTrail(
     const heading = Math.atan2(next.x - prev.x, next.z - prev.z);
     const rx = Math.cos(heading);
     const rz = -Math.sin(heading);
-    for (const side of [-1, 1]) {
-      const x = p.x + rx * half * side;
-      const z = p.z + rz * half * side;
-      positions.push(x, heightAt(x, z) + TRAIL.lift, z);
+    for (const cut of SECTION) {
+      const x = p.x + rx * cut.lat;
+      const z = p.z + rz * cut.lat;
+      const ground = heightAt(x, z);
+      const white = frozen(ground);
+      positions.push(x, ground + TRAIL.lift + (white ? cut.rise * TRAIL.rise : 0), z);
+      // The floor is what the boots pressed down; the shoulder is the snow
+      // they pushed aside, which is brighter than the field it came out of
+      // for the reason a car's own bank is.
+      const tone = white ? cut.tone : EARTH;
+      colors.push(tone.r, tone.g, tone.b);
     }
     if (i > 0) {
-      const k = i * 2;
-      indices.push(k - 2, k, k - 1, k - 1, k, k + 1);
+      const row = i * across;
+      for (let c = 0; c + 1 < across; c++) {
+        const a = row - across + c;
+        const b = row + c;
+        indices.push(a, b, a + 1, a + 1, b, b + 1);
+      }
     }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return new THREE.Mesh(geo, trailMaterial());
@@ -180,6 +236,11 @@ export function buildCarPark(
   // draws the same cars.
   const rng = createRng((track.seed ^ 0x5c31a9e7 ^ Math.round(park.atS)) >>> 0);
   const rand = () => rng.next();
+  // Whether the ground at a height is under snow — the planting's own
+  // question (`ground-rules.ts`), asked here so the crowd's path is made of
+  // the same thing the field beside it is.
+  const frozen = (y: number): boolean =>
+    plantZone(track.knobs, y, false) === "snow" || frozenAt(track.knobs, track.climate, y);
 
   // The lane in: a hair under the road it leaves where the two overlap at
   // the mouth, with its skirt hanging from its own lip.
@@ -221,7 +282,7 @@ export function buildCarPark(
 
   // The trails, and the boards along them.
   for (const trail of park.trails) {
-    group.add(buildTrail(trail.samples, beside.heightAt));
+    group.add(buildTrail(trail.samples, beside.heightAt, frozen));
     for (const sign of trail.signs) group.add(plantSign(sign, park.atS, cones, rand, beside));
   }
 

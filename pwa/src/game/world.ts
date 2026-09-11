@@ -61,6 +61,7 @@ import {
   chunkSamples,
   type GroundBeside,
 } from "./road-mesh.ts";
+import { createSnowMantle } from "./snow-mantle.ts";
 
 import {
   buildBridges,
@@ -196,6 +197,15 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   // nothing about which half of it to go after.
   terrain.group.name = "terrain";
   group.add(terrain.group);
+  // R47 — THE COAT. The ground's own lattice is too coarse to hold a
+  // winter's blanket (`snow-mantle.ts` says why), so on a white country the
+  // snow is laid over it as a surface of its own, following the car. Null
+  // on every green stage, and nothing anywhere pays for it there.
+  const mantle = createSnowMantle(terrain.field);
+  if (mantle) {
+    mantle.object.name = "snow";
+    group.add(mantle.object);
+  }
   terrain.sync(track, 0, track.samples[0].x, track.samples[0].z);
   // R16 — what the road's outer band hands over TO. The ribbon reads the
   // ground's height so the two meshes meet at the corridor's lip, and its
@@ -616,6 +626,10 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
 
   const update = (state: GameState, dt: number, knocked?: (speed: number) => void): void => {
     terrain.update(dt);
+    // The coat is re-laid where the car now is, and re-laid again whenever
+    // the wheels have worked more of it — which is what puts the trough
+    // behind the car into the snow rather than onto it.
+    mantle?.update(state.car.x, state.car.z, state.snow);
     // R41 — the trains, posed off the stage clock the engine times them on.
     if (state.track.rails.length > 0) trains.update(state.track, state.t);
     // The breeze is ONE uniform over the world's shared leafy material, so
@@ -633,6 +647,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   };
 
   const dispose = (): void => {
+    mantle?.dispose();
     crowd?.dispose();
     trains.dispose();
     traffic.dispose();

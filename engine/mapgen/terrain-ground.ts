@@ -15,7 +15,7 @@ import { cellKey } from "../lib/math.ts";
 import { smooth } from "../lib/noise.ts";
 import type { Surface, Track } from "./compile.ts";
 import type { CarParkField } from "./carparks.ts";
-import { GROUND_CELL, TILE_SINK } from "./lattice.ts";
+import { GROUND_CELL, SNOW_CELL, TILE_SINK } from "./lattice.ts";
 import { handoverAt, ROAD_CROSS } from "./road.ts";
 import { landOf, STAGE_RULES as R } from "./rules.ts";
 import type { SpurIndex } from "./spur-index.ts";
@@ -32,6 +32,7 @@ import {
 } from "./terrain-streams.ts";
 import {
   blanketDepth,
+  permanentPack,
   CLIMATE,
   icyCountry,
   snowlineOf,
@@ -309,37 +310,43 @@ export function createGround(
   // (new streams carved, the endless prune re-anchoring the corridor).
   let cornerCache = new Map<number, number>();
   let blanketCache = new Map<number, number>();
+  /** THE GROUND'S OWN CORNER — the bare country, with no snow in it. The
+   * blanket is deliberately NOT baked in here: this lattice is 14 m between
+   * corners, and a winter's coat has an EDGE (the bank at a ploughed road's
+   * lip, `blanket.verge` — four metres) that falls between two of them and
+   * is erased. Snow laid on this grid is a swell in the ground rather than
+   * something lying on it, which is a white paint job and not a snowfield.
+   * It is composed on top instead, on a lattice fine enough to hold a
+   * bank (`SNOW_CELL`). */
   const cornerHeight = (i: number, j: number): number => {
     const key = cellKey(i, j);
     const hit = cornerCache.get(key);
     if (hit !== undefined) return hit;
-    if (cornerCache.size > 8192) {
-      cornerCache = new Map();
-      blanketCache = new Map();
-    }
-    // The snow on the corner is cached beside its height — the lattice
-    // the car rides is sunk into the blanket by `groundAt`, and it asks
-    // how deep the blanket is at every step.
+    if (cornerCache.size > 8192) cornerCache = new Map();
     const bare = bareHeightAt(i * GROUND_CELL, j * GROUND_CELL);
-    const snow = blanketOver(i * GROUND_CELL, j * GROUND_CELL, bare);
-    cornerCache.set(key, bare + snow);
-    blanketCache.set(key, snow);
-    return bare + snow;
+    cornerCache.set(key, bare);
+    return bare;
   };
+  /** ...and the SNOW's own corner, on its own much finer grid. Cached for
+   * the same reason the ground's is — `groundAt` asks for it at every wheel
+   * of every step — and cleared with it. */
   const cornerBlanket = (i: number, j: number): number => {
     const key = cellKey(i, j);
-    let hit = blanketCache.get(key);
-    if (hit === undefined) {
-      cornerHeight(i, j);
-      hit = blanketCache.get(key) ?? 0;
-    }
-    return hit;
+    const hit = blanketCache.get(key);
+    if (hit !== undefined) return hit;
+    if (blanketCache.size > 65536) blanketCache = new Map();
+    const x = i * SNOW_CELL;
+    const z = j * SNOW_CELL;
+    const snow = blanketOver(x, z, bareLatticeAt(x, z));
+    blanketCache.set(key, snow);
+    return snow;
   };
 
   // Each lattice cell splits into two triangles along the same diagonal the
   // renderer's tile indexing uses — (i+1,j) to (i,j+1) — so this is the
-  // exact drawn surface, not an approximation of it.
-  const latticeAt = (x: number, z: number): number => {
+  // exact ground surface, not an approximation of it. THE BARE COUNTRY:
+  // what the snow is laid on, and what a green stage's lattice always was.
+  const bareLatticeAt = (x: number, z: number): number => {
     const gx = x / GROUND_CELL;
     const gz = z / GROUND_CELL;
     const i = Math.floor(gx);
@@ -356,14 +363,21 @@ export function createGround(
     );
   };
 
-  /** The winter's blanket under a point, m, interpolated across the same
-   * triangles the lattice is (climate.ts) — zero everywhere the country is
+  /** The winter's blanket over a point, m — zero everywhere the country is
    * not under snow, on the road and its verge, on the water, and in a
-   * country that has no winter. */
+   * country that has no winter.
+   *
+   * On `SNOW_CELL` rather than on the ground's own 14 m lattice, because
+   * the blanket has an EDGE and the ground does not: the bank at a ploughed
+   * road's lip stands up over `blanket.verge` metres, and a grid that
+   * cannot resolve four metres cannot draw it at all. Everything reads the
+   * snow through here — the drawn surface, the surface the car stands on,
+   * and the mantle the renderer lays — so the three can never disagree
+   * about where the snow is. */
   const blanketAt = (x: number, z: number): number => {
     if (!snowy) return 0;
-    const gx = x / GROUND_CELL;
-    const gz = z / GROUND_CELL;
+    const gx = x / SNOW_CELL;
+    const gz = z / SNOW_CELL;
     const i = Math.floor(gx);
     const j = Math.floor(gz);
     const fx = gx - i;
@@ -378,13 +392,19 @@ export function createGround(
     );
   };
 
+  /** THE SURFACE THE WORLD SHOWS: the bare country with the winter's
+   * blanket lying on it. What the ground mesh, the mantle and everything
+   * standing on the ground are drawn at — and the top of the snow the car
+   * is sunk into, never the floor it rides on (`groundAt`). */
+  const latticeAt = (x: number, z: number): number =>
+    snowy ? bareLatticeAt(x, z) + blanketAt(x, z) : bareLatticeAt(x, z);
+
   const groundAt = (x: number, z: number): number => {
     // R48 — over a body the cold has frozen SOLID the ground is the sheet.
     // It is a floor and it is flat, and it stands over the bed the lattice
     // draws: a car crossing a frozen lake drives on the ice, and there is
     // no lake under it as far as the wheels are concerned.
     const ice = iceAt(x, z);
-    const lattice = ice ?? latticeAt(x, z);
     // Beside a road the DRAWN surface is the ribbon, not the tile under it
     // — its crown, its wheel tracks, its shoulder (R16). The lattice is 14 m
     // between corners and could not hold any of that, so out to the shoulder
@@ -392,13 +412,16 @@ export function createGround(
     // tiles, and by the corridor's lip they have it.
     //
     // ...and under a winter's blanket the car rides INSIDE the drawn
-    // surface, not on it: the lattice carries the snow at its full depth,
-    // and the wheels stand on what they have packed of it
+    // surface, not on it: the mantle stands at the blanket's full depth and
+    // the wheels stand on what they have packed of it
     // (`CLIMATE.blanket.ride`) — the rest is the sills ploughing through.
-    const sink = snowy ? blanketAt(x, z) * (1 - CLIMATE.blanket.ride) : 0;
+    // Composed onto the bare ground rather than taken back off a lattice
+    // that already carries it, so the drawn snow and the ridden snow are
+    // the same number read twice however finely either is sampled.
+    const stood = ice ?? bareLatticeAt(x, z) + (snowy ? blanketAt(x, z) * CLIMATE.blanket.ride : 0);
     const corridor = corridorGround(x, z);
-    if (!corridor) return lattice - sink;
-    return corridor.y * corridor.hand + (lattice - sink) * (1 - corridor.hand);
+    if (!corridor) return stood;
+    return corridor.y * corridor.hand + stood * (1 - corridor.hand);
   };
 
   /** The ROAD standing over a point: the height of the ribbon the car
@@ -535,6 +558,19 @@ export function createGround(
    * loose yes, because it asks about the country's ceiling rather than
    * about the lakes, which lie well under it. */
   const freezes = track.arena === null && icyCountry(climate, zones);
+  /** R42/R47 — how much of the blanket survives a WALKED path at a point,
+   * `pack.floor`..1: the snow pressed down where the crowd walks out to a
+   * stand, standing at full depth everywhere they do not. A fast 1 on every
+   * stage that has no car park, which is most of them. */
+  const troddenAt = (x: number, z: number): number => {
+    if (carParks.carParks.length === 0) return 1;
+    const trail = carParks.trailClearance(x, z);
+    const V = CLIMATE.blanket.verge;
+    if (trail >= V) return 1;
+    const F = CLIMATE.pack.floor;
+    return F + (1 - F) * clamp01(trail / V);
+  };
+
   const blanketOver = (x: number, z: number, bare: number): number => {
     if (!snowy) return 0;
     const cover = clamp01((bare - snowline) / CLIMATE.fade);
@@ -546,9 +582,12 @@ export function createGround(
       clear = clamp01((near.d - lipAt(near.index)) / V);
       if (clear <= 0) return 0;
     }
-    const spur = spurClearance(x, z);
-    if (spur < V) {
-      clear = Math.min(clear, clamp01(spur / V));
+    // BLADED — an abandoned mat, a homestead's drive, the rim of its yard.
+    // A machine pushed the snow off these and the ground under them is
+    // bare, exactly as the stage's own corridor is.
+    const built = builtClearance(x, z);
+    if (built < V) {
+      clear = Math.min(clear, clamp01(built / V));
       if (clear <= 0) return 0;
     }
     const lake = land.water.shoreLevelAt(x, z);
@@ -557,7 +596,29 @@ export function createGround(
       if (clear <= 0) return 0;
     }
     if (inStream(streams, x, z, 1)) return 0;
-    return blanketDepth(temperatureAt(climate, bare)) * cover * smooth(clear);
+    // The deeper of what THIS WINTER laid and what NEVER MELTED: the cold's
+    // own depth at this height, against the permanent field's above the
+    // country's own snowline. Two different sources, so the deeper wins
+    // rather than the two adding — a green country's cold snap is the
+    // blanket it always was, and a snowfield is the metres it actually is.
+    // `cover` is the WINTER's own fade — how much of this season's fall has
+    // settled at a height near the freezing line — and it belongs to that
+    // half alone. The permanent field carries its own ramp with height
+    // above the line (`permanentPack`), so multiplying it by `cover` too
+    // fades one thing in twice and leaves a snowfield as a thin dusting
+    // over most of the ground anyone actually drives on.
+    const rest = Math.max(
+      blanketDepth(temperatureAt(climate, bare)) * cover,
+      permanentPack(zones.snow === null ? -Infinity : bare - zones.snow),
+    );
+    // R42 — ...and a CROWD'S PATH is TRODDEN, not bladed. Nobody shovels
+    // the walk out to a spectator bank: they tread it, and what that leaves
+    // is the snow still lying there pressed down to the floor traffic works
+    // it to (`CLIMATE.pack.floor` — the same floor a wheel packs a rut to,
+    // because it is the same fact about snow). So a path across a white
+    // field is a path IN the snow — a white trough between two standing
+    // banks — and never the strip of bare earth a bladed clearance leaves.
+    return rest * smooth(clear) * smooth(troddenAt(x, z));
   };
   const heightAt = (x: number, z: number): number => {
     const bare = bareHeightAt(x, z);
@@ -637,6 +698,7 @@ export function createGround(
     corridorGround,
     cornerHeight,
     cornerBlanket,
+    bareLatticeAt,
     latticeAt,
     blanketAt,
     groundAt,
@@ -662,6 +724,7 @@ export function createGround(
      * height that is no longer under anything. */
     clearCornerCache: (): void => {
       cornerCache = new Map();
+      blanketCache = new Map();
     },
   };
 }

@@ -105,6 +105,7 @@ export {
   CLIMATE,
   SEASONS,
   blanketDepth,
+  permanentPack,
   defaultTemperature,
   packedBy,
   packedDepth,

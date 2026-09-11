@@ -22,6 +22,23 @@
  * the triangles drawn — see `TerrainField.groundAt`. */
 export const GROUND_CELL = 14;
 
+/** R47 — the grid the WINTER'S BLANKET is sampled on, m, and much finer
+ * than the ground's.
+ *
+ * The paragraph above is the reason. The ground may be coarse because the
+ * country has no edges in it — a hillside is the same hillside either side
+ * of a fourteen-metre step. Snow is not like that: it is a LAYER with a
+ * boundary, and the boundary is the thing the eye reads it by. The bank at
+ * a ploughed road's lip stands up over `CLIMATE.blanket.verge` — four
+ * metres — so on the ground's own lattice it falls between two corners and
+ * is erased, which leaves a winter stage as flat white ground rather than
+ * as a country with a coat on it.
+ *
+ * Two metres holds that bank in two samples and a rut in one. It is only
+ * ever asked about where a country is actually white, and it is cached the
+ * way the ground's corners are, so a green stage pays nothing for it. */
+export const SNOW_CELL = 2;
+
 /** How far under the drawn ribbon the ground TILES are pinned, m. The road
  * mesh draws the whole corridor — mat, shoulder, ditch, lip (R16) — on a
  * 2 m sample spacing the ground lattice could never hold, so the lattice
