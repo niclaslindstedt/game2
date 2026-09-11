@@ -53,7 +53,10 @@ export const HEIGHT_FOG = {
    * and how much of the ground's light a shadow takes (the beam's share,
    * 0 for none — which also switches the lookup off). */
   shadowFrame: { x: 0, y: 0, z: 1 / SHADOW_SPAN, w: 0 } as V4,
-  /** The range the map's bytes span: lo and hi, m over the sea. */
+  /** The range the map's bytes span: lo and the height they cover, m over
+   * the sea; then HOW FAR THROUGH THE PAIR the sun stands, 0..1 — the map
+   * holds the shadow at two moments either side of this one and the frame
+   * reads between them (mountain-shadow.ts). */
   shadowRange: { x: 0, y: 1, z: 0, w: 0 } as V4,
   /** The cumulus layer's shadow on the ground: altitude, 1/scale, and the
    * layer's drift offset; and its coverage, sharpness, a spare and the
@@ -64,11 +67,14 @@ export const HEIGHT_FOG = {
   /** The layer's streak axis (the wind's unit vector), its stretch, and
    * its seed's offset along the streak (`seed × 13.7`, as `cloudUv`). */
   cloudC: { x: 1, y: 0, z: 1, w: 0 } as V4,
+  /** Two bytes a cell: the near half of the pair in red, the far half in
+   * green. A row is `2 × SHADOW_CELLS` bytes, which has to stay a multiple
+   * of the four three unpacks textures at. */
   shadowMap: new THREE.DataTexture(
-    new Uint8Array(SHADOW_CELLS * SHADOW_CELLS),
+    new Uint8Array(SHADOW_CELLS * SHADOW_CELLS * 2),
     SHADOW_CELLS,
     SHADOW_CELLS,
-    THREE.RedFormat,
+    THREE.RGFormat,
     THREE.UnsignedByteType,
   ),
 };
@@ -136,11 +142,14 @@ float mistAmount( float y0, float y1, float len ) {
   }
   return 1.0 - exp( - hfMist.z * len * mean );
 }
-// The ceiling of the mountain's shadow over a point on the ground, m.
+// The ceiling of the mountain's shadow over a point on the ground, m —
+// read between the two moments of the sun the map brackets, so the
+// terminator sweeps down a valley wall instead of jumping down it every
+// time the march is redone.
 float shadowCeiling( vec2 xz ) {
   vec2 uv = ( xz - hfShadowFrame.xy ) * hfShadowFrame.z;
-  float v = texture2D( hfShadowMap, uv ).r;
-  return hfShadowRange.x + v * hfShadowRange.y;
+  vec2 v = texture2D( hfShadowMap, uv ).rg;
+  return hfShadowRange.x + mix( v.x, v.y, hfShadowRange.z ) * hfShadowRange.y;
 }
 // 1 where a point is in the country's shadow, softened over a few metres
 // so the edge is a penumbra rather than a staircase of cells.

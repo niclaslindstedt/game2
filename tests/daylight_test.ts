@@ -25,13 +25,26 @@ import {
   hourOfStop,
   hourOfWord,
   hourStop,
+  hoursToTurn,
   litAt,
   moonAt,
   nightNow,
   parseHour,
+  sunApart,
   sunAt,
   LAMPS_UNDER,
 } from "../pwa/src/game/daylight.ts";
+
+/** The Alps at First Light: a spring stage started at 4:00, driven up
+ * through the sunrise — the fastest the sun ever moves in this game, and
+ * the case everything downstream of it has to survive. */
+const FIRST_LIGHT = { hour: 4, season: "spring" as const, biome: "alpine" as const };
+
+/** How much sun the top of that stage's cloud sea sees at race time `t`. */
+function litSea(t: number): number {
+  const hour = sunHourAt(FIRST_LIGHT, t);
+  return litAt(1800, sunAt(hour, FIRST_LIGHT.season, FIRST_LIGHT.biome).elevation);
+}
 
 const DEG = Math.PI / 180;
 
@@ -204,5 +217,50 @@ describe("the dark the instruments dip for", () => {
     expect(nightNow(env, 0, "taiga")).toBe(false);
     // An hour of sun a minute of racing: four minutes in, the sun has gone.
     expect(nightNow(env, 4 * SUN_SECONDS_PER_HOUR, "taiga")).toBe(true);
+  });
+});
+
+describe("how fast the sun moves", () => {
+  it("climbs ten degrees a minute of racing through a spring sunrise", () => {
+    const at = (t: number): number =>
+      sunAt(sunHourAt(FIRST_LIGHT, t), FIRST_LIGHT.season, FIRST_LIGHT.biome).elevation / DEG;
+    // Four in the morning is under the horizon; a minute of racing later
+    // the sun is well up, which is an hour of it.
+    expect(at(0)).toBeLessThan(0);
+    expect(at(SUN_SECONDS_PER_HOUR) - at(0)).toBeGreaterThan(9);
+  });
+
+  it("crosses what a cloud sea reads as sunlight in a step a frame can follow", () => {
+    // `litAt` is a ramp six tenths of a degree wide — a whole cloud sea
+    // going from shade to lit — and that sunrise crosses it in about three
+    // seconds of racing. Read once a FRAME it moves by a fiftieth at a
+    // time, which is a sweep.
+    let perFrame = 0;
+    let perRepaint = 0;
+    for (let t = 0; t < 90; t += 1 / 60) {
+      perFrame = Math.max(perFrame, Math.abs(litSea(t + 1 / 60) - litSea(t)));
+      perRepaint = Math.max(perRepaint, Math.abs(litSea(t + 0.25) - litSea(t)));
+    }
+    expect(perFrame).toBeLessThan(0.02);
+    // ...and read at the cadence the sky is PAINTED at instead — a quarter
+    // of a second — it arrives in tenths, which is the staircase the split
+    // in environment.ts exists to keep out of the mist.
+    expect(perRepaint).toBeGreaterThan(0.05);
+  });
+
+  it("hands back the step of the clock it takes to turn a given angle", () => {
+    for (const hour of [4, 5, 9, 12, 18]) {
+      const step = hoursToTurn(0.5 * DEG, hour, FIRST_LIGHT.season, FIRST_LIGHT.biome);
+      const moved = sunApart(
+        sunAt(hour, FIRST_LIGHT.season, FIRST_LIGHT.biome),
+        sunAt(hour + step, FIRST_LIGHT.season, FIRST_LIGHT.biome),
+      );
+      // Half a degree, give or take the arc's own curvature over it —
+      // unless the cap bit, which is a sun that has all but stopped.
+      if (step < 1) expect(moved / DEG).toBeCloseTo(0.5, 1);
+      else expect(moved / DEG).toBeLessThan(0.5);
+    }
+    // A sun that never moves is never chased: the cap holds.
+    expect(hoursToTurn(90 * DEG, 12, "summer", "taiga")).toBe(1);
   });
 });

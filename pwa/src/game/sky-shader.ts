@@ -39,6 +39,10 @@ const AUTHORED_AT = DOME_RADIUS * 0.86;
  * stacked at once. */
 export type SkyLook = { octaves: number; sunlit: boolean; layers: number };
 
+/** A layer as the dome is actually drawing it: the chart's own row, and
+ * how far the wind has carried it along its lattice. */
+export type DrawnLayer = { layer: CloudLayer; offsetX: number; offsetZ: number };
+
 /** How deep the SUNLIT sample reads. Two octaves shallower than the sheet
  * itself: it is differenced against the first sample to find which way the
  * cloud's surface faces, and a difference of two fine octaves is noise
@@ -282,7 +286,7 @@ export type SkyShell = {
   setFlash: (surge: number) => void;
   /** The layers as drawn, with their live offsets — for the CPU to ask
    * the same field how much cloud is over the sun. */
-  layers: () => { layer: CloudLayer; offsetX: number; offsetZ: number }[];
+  layers: () => DrawnLayer[];
   wind: () => { x: number; z: number };
   dispose: () => void;
 };

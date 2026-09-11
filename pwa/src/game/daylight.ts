@@ -153,6 +153,31 @@ export function sunAt(hour: number, season: Season, biome: BiomeId): SunPlace {
   return { elevation, azimuth: SOUTH + fromSouth, rising: h < 0, hour };
 }
 
+/** How far apart two suns stand, radians — the angle between the two
+ * directions on the sphere. */
+export function sunApart(a: SunPlace, b: SunPlace): number {
+  const cos =
+    Math.sin(a.elevation) * Math.sin(b.elevation) +
+    Math.cos(a.elevation) * Math.cos(b.elevation) * Math.cos(a.azimuth - b.azimuth);
+  return Math.acos(clamp(cos, -1, 1));
+}
+
+/** THE STEP OF THE CLOCK OVER WHICH THE SUN TURNS `angle` radians from
+ * `hour`, hours — how far AHEAD something too dear to redo every frame can
+ * be worked out for.
+ *
+ * A fixed step of the clock would be wrong at both ends of the day: at
+ * these latitudes the sun climbs ten degrees a minute of racing through a
+ * spring sunrise and hardly moves at all either side of a midsummer noon,
+ * so a step that brackets the sunrise properly would redo a still sun a
+ * hundred times for nothing. Capped at an hour for a sun that has
+ * effectively stopped. */
+export function hoursToTurn(angle: number, hour: number, season: Season, biome: BiomeId): number {
+  const PROBE = 1 / 60;
+  const moved = sunApart(sunAt(hour, season, biome), sunAt(hour + PROBE, season, biome));
+  return moved > 1e-5 ? Math.min(1, (PROBE * angle) / moved) : 1;
+}
+
 /** The sun's place at race time `t` on a run's conditions. */
 export function sunNow(env: Pick<RaceEnv, "hour" | "season">, t: number, biome: BiomeId): SunPlace {
   return sunAt(sunHourAt(env, t), env.season, biome);
