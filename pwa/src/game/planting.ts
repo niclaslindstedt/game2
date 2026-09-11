@@ -7,11 +7,11 @@
 // road chunk carries (world.ts) and the open country beyond it (wild.ts) —
 // so both answer "what grows here" the same way.
 
-import { LAKE_Y, biomeRules, type StageKnobs, type WildObstacle } from "@engine";
+import { LAKE_Y, biomeRules, type Climate, type StageKnobs, type WildObstacle } from "@engine";
 
 import type { Biome, Community, FloraMix } from "./biome.ts";
 import type { FloraPlacement } from "./flora.ts";
-import { plantZone } from "./ground-rules.ts";
+import { plantZone, underSnow } from "./ground-rules.ts";
 
 /** The community a grove-quilt index names — the quilt itself lives in the
  * ENGINE's prop field (terrain.field.groveAt), because the trunks it
@@ -209,6 +209,10 @@ export type Understory = {
   biome: Biome;
   /** The stage's dials — `mixAt` reads the country's bands off them. */
   knobs: StageKnobs;
+  /** ...and its cold, which is what decides whether the skirt is there at
+   * all: the trunk stands through a winter, its undergrowth is buried by
+   * one (`underSnow`). */
+  climate: Climate;
   rng: () => number;
   groundAt: (x: number, z: number) => number;
   /** Ground nothing may grow on — the road with its aprons, the streams. */
@@ -223,7 +227,7 @@ export function understoryAround(
   riparian: boolean,
   ctx: Understory,
 ): FloraPlacement[] {
-  const { biome, knobs, rng, groundAt, blocked } = ctx;
+  const { biome, knobs, climate, rng, groundAt, blocked } = ctx;
   const out: FloraPlacement[] = [];
   if (rng() > UNDERSTORY_SHARE) return out;
   const grove = tree.grove ?? 0;
@@ -246,6 +250,9 @@ export function understoryAround(
     if (blocked(x, z)) continue;
     const y = groundAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
+    // R47 — and the snow buries a skirt the way it buries any other ground
+    // cover, however deep in the shelter of the trunk it grew.
+    if (underSnow(knobs, climate, y)) continue;
     out.push({ id: pickFlora(mix, roll), x, y, z, scale, spin });
   }
   return out;

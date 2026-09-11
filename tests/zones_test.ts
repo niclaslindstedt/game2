@@ -12,7 +12,15 @@
 // arithmetic — which is what lets this suite read them.
 import { describe, expect, it } from "vitest";
 
-import { BIOMES, LAKE_Y, biomeRules, resolveKnobs, type StageKnobs } from "@engine";
+import {
+  BIOMES,
+  CLIMATE,
+  LAKE_Y,
+  biomeRules,
+  resolveClimate,
+  resolveKnobs,
+  type StageKnobs,
+} from "@engine";
 
 import { BIOMES as LOOKS } from "../pwa/src/game/biome.ts";
 import {
@@ -22,6 +30,7 @@ import {
   rockAt,
   SNOW,
   snowAt,
+  underSnow,
 } from "../pwa/src/game/ground-rules.ts";
 
 /** The dials the readers now take: R47's ALTITUDE moves the bands, so what
@@ -167,6 +176,68 @@ describe("what is planted where", () => {
     expect(plantZone(dials("nowhere"), 56, false)).toBe("highland");
     // A dry country has no shore however low its pans lie.
     expect(plantZone(dials("desert"), LAKE_Y + 1, false)).toBe("community");
+  });
+});
+
+describe("nothing soft grows out of snow", () => {
+  // `underSnow` is the one question every app-side planting pass asks — the
+  // ground-cover bands, the verge's fringe, the brush between the trunks,
+  // the skirt round one and the paddock's grass. A green blade standing out
+  // of a snowfield is the loudest way a winter reads as a bleached summer,
+  // and every one of those passes forgetting it independently is what this
+  // holds.
+  const climate = (biome: string, season: "summer" | "winter", temperature?: number) =>
+    resolveClimate({ season, temperature }, dials(biome));
+
+  it("takes the alp's grass off its permanent snow while the valley is still in July", () => {
+    const knobs = dials("alpine");
+    const summer = climate("alpine", "summer");
+    const snow = BIOMES.alpine.land.zones.snow as number;
+    // The air up there is well above freezing — what buries the grass is
+    // the country's own permanent line, not the temperature.
+    expect(summer.temperature).toBeGreaterThan(CLIMATE.freeze);
+    expect(underSnow(knobs, summer, snow + 1)).toBe(true);
+    expect(underSnow(knobs, summer, snow + 300)).toBe(true);
+    // ...and the pasture below it is untouched.
+    expect(underSnow(knobs, summer, snow - 40)).toBe(false);
+    expect(underSnow(knobs, summer, 0)).toBe(false);
+  });
+
+  it("takes it off the whole country once the air freezes, hundreds of metres lower", () => {
+    const knobs = dials("alpine");
+    const winter = climate("alpine", "winter");
+    expect(winter.temperature).toBeLessThan(CLIMATE.freeze);
+    // The same valley floor that grew hay in July.
+    expect(underSnow(knobs, winter, 0)).toBe(true);
+    expect(underSnow(knobs, winter, 100)).toBe(true);
+  });
+
+  it("reads the TEMPERATURE, not the season — a cold spring buries the same ground a mild one grows", () => {
+    const knobs = dials("taiga");
+    // The taiga has no permanent snow at all, so the only line here is the
+    // one the cold draws: a spring at -6 °C is under the blanket to its
+    // valley floor, the same spring at its own temperature is not.
+    expect(BIOMES.taiga.land.zones.snow).toBeNull();
+    expect(underSnow(knobs, resolveClimate({ season: "spring", temperature: -6 }, knobs), 0)).toBe(
+      true,
+    );
+    expect(underSnow(knobs, resolveClimate({ season: "spring" }, knobs), 0)).toBe(false);
+    // ...and the line the cold draws is a HEIGHT, so a stage that starts
+    // just under freezing grows grass on its floor and none on its tops.
+    const marginal = resolveClimate({ season: "spring", temperature: 1 }, knobs);
+    expect(underSnow(knobs, marginal, 0)).toBe(false);
+    expect(underSnow(knobs, marginal, 200)).toBe(true);
+  });
+
+  it("leaves the trees to stand through it", () => {
+    // The rule is the ground cover's, not the forest's: a spruce wood stands
+    // through its winter wearing the load (`snow-cap.ts`), which is why
+    // `plantZone` — what a TRUNK is dressed from — keeps the country's own
+    // line and answers "community" on a valley floor the cold has whitened.
+    const knobs = dials("alpine");
+    const winter = climate("alpine", "winter");
+    expect(underSnow(knobs, winter, 0)).toBe(true);
+    expect(plantZone(knobs, 0, false)).not.toBe("snow");
   });
 });
 

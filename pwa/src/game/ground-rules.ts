@@ -98,9 +98,10 @@ export function zonesUnder(climate: Climate, zones: Zones): Zones {
   return snow === zones.snow ? zones : { ...zones, snow: Number.isFinite(snow) ? snow : null };
 }
 
-/** Whether the ground at a height is under a winter's snow — where the
- * ground cover is not planted, because it is under the blanket. */
-export function frozenAt(knobs: StageKnobs | undefined, climate: Climate, y: number): boolean {
+/** Whether the ground at a height is under a winter's snow — the blanket
+ * the cold lays wherever it freezes, which in a hard one is the whole
+ * country (`snowlineOf`, climate.ts). */
+function frozenAt(knobs: StageKnobs | undefined, climate: Climate, y: number): boolean {
   return snowCoverAt(climate, zonesOf(knobs), y) > 0.5;
 }
 
@@ -187,6 +188,27 @@ export function plantZone(knobs: StageKnobs, y: number, riparian: boolean): Plan
   if (riparian) return "riparian";
   if (y > rock.from) return "highland";
   return "community";
+}
+
+/** R47 — WHETHER THE GROUND AT A HEIGHT IS UNDER SNOW, and so grows nothing
+ * soft: over the country's own permanent line, or under the blanket the
+ * cold has brought down hundreds of metres below it. The one question every
+ * app-side planting pass asks — the ground-cover bands, the verge's own
+ * fringe, the brush between the trunks, the skirt round one, and the crowd's
+ * path through it — because a green blade standing out of a snowfield is the
+ * single loudest way for a winter to read as a summer with the colour turned
+ * down.
+ *
+ * It is a TEMPERATURE rule as much as a height one: the line it measures
+ * from is the lower of the country's permanent snow and the height this
+ * stage's air freezes at (`snowlineOf`, climate.ts), so the same alp grows
+ * grass to its shoulders in July and none at all in January.
+ *
+ * The TREES are deliberately not held to it (`mixAt`, planting.ts): a spruce
+ * wood stands through its winter wearing the load (`snow-cap.ts`), and what
+ * is buried is the ground cover at its foot. */
+export function underSnow(knobs: StageKnobs, climate: Climate, y: number): boolean {
+  return plantZone(knobs, y, false) === "snow" || frozenAt(knobs, climate, y);
 }
 
 // ── The grit ────────────────────────────────────────────────────────────

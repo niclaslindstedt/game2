@@ -27,7 +27,7 @@ import {
   treePlacement,
   understoryAround,
 } from "./planting.ts";
-import { frozenAt, plantZone } from "./ground-rules.ts";
+import { underSnow } from "./ground-rules.ts";
 import { snowCap } from "./snow-cap.ts";
 import { LAKE_Y, type Terrain } from "./terrain.ts";
 
@@ -280,6 +280,7 @@ export function buildWild(
     const understory = {
       biome,
       knobs: track.knobs,
+      climate: track.climate,
       rng: () => rng.next(),
       groundAt: heightAt,
       blocked: (x: number, z: number): boolean => inStream(field.streams, x, z, 1),
@@ -302,6 +303,8 @@ export function buildWild(
       if (inStream(field.streams, x, z, 1.5)) continue;
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
+      // R47 — nothing soft comes up through snow, the winter's included.
+      if (underSnow(track.knobs, track.climate, y)) continue;
       const soft = softMix(
         mixAt(biome, track.knobs, { y, riparian: riparian(x, z), grove: field.groveAt(x, z) }),
       );
@@ -327,9 +330,7 @@ export function buildWild(
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
       // R47 — nothing grows under the snow, the winter's included.
-      if (plantZone(track.knobs, y, false) === "snow" || frozenAt(track.knobs, track.climate, y)) {
-        continue;
-      }
+      if (underSnow(track.knobs, track.climate, y)) continue;
       placements.push({
         id: pickFlora(community.undergrowth ?? biome.undergrowth, roll),
         x,

@@ -37,7 +37,7 @@ import {
   treePlacement,
   understoryAround,
 } from "./planting.ts";
-import { frozenAt, plantZone } from "./ground-rules.ts";
+import { underSnow } from "./ground-rules.ts";
 import { buildRoadSpill } from "./road-spill.ts";
 import { snowCap } from "./snow-cap.ts";
 import { LAKE_Y, type Terrain } from "./terrain.ts";
@@ -175,6 +175,7 @@ export function buildScenery(
   const understory = {
     biome,
     knobs: track.knobs,
+    climate: track.climate,
     rng: () => rng.next(),
     groundAt: heightAt,
     blocked: (x: number, z: number): boolean =>
@@ -214,6 +215,8 @@ export function buildScenery(
     if (inStream(field.streams, x, z, 1.5)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
+    // R47 — nothing soft comes up through snow, the winter's included.
+    if (underSnow(track.knobs, track.climate, y)) continue;
     const soft = softMix(
       mixAt(biome, track.knobs, { y, riparian: riparian(x, z), grove: field.groveAt(x, z) }),
     );
@@ -262,9 +265,7 @@ export function buildScenery(
       const shore = onShore(y);
       if (!shore && y < LAKE_Y + 1.2) continue;
       // R47 — nothing grows under the snow, the winter's included.
-      if (plantZone(track.knobs, y, false) === "snow" || frozenAt(track.knobs, track.climate, y)) {
-        continue;
-      }
+      if (underSnow(track.knobs, track.climate, y)) continue;
       flora.push({
         id: pickFlora(
           shore ? biome.shoreCover : (community.undergrowth ?? biome.undergrowth),
@@ -298,6 +299,10 @@ export function buildScenery(
       if (inStream(field.streams, x, z, 0.5)) continue;
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
+      // R47 — and nothing comes back into a shoulder that is under snow.
+      // What breaks the road's ruled line up there is the bank of snow
+      // standing at its lip (`snow-mantle.ts`), not grass.
+      if (underSnow(track.knobs, track.climate, y)) continue;
       // Scrappy: what survives on a graded shoulder is half the size of
       // what grows a metre further out.
       flora.push({
