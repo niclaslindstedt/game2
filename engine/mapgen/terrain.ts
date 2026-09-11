@@ -67,6 +67,13 @@ export type TerrainField = {
    * its outermost vertices exactly where the ground beside them is; the
    * analysis reads it to measure whatever is left at the seam. */
   latticeAt: (x: number, z: number) => number;
+  /** The BARE country under the snow, m — the drawn surface with the
+   * winter's blanket taken off it. The ground tiles are built from this and
+   * the snow is laid over them as a mantle of its own (`snow-mantle.ts`),
+   * because a coat with a four-metre bank at its edge cannot exist on a
+   * lattice with fourteen metres between corners. Identical to `latticeAt`
+   * on every green stage. */
+  bareLatticeAt: (x: number, z: number) => number;
   /** The landscape far from any road (mountains and sea included) — what
    * tooling can preview, and the country a road's earthworks are measured
    * against. */
@@ -348,6 +355,7 @@ export function createTerrain(track: Track): TerrainField {
     waterGround,
     cutAt,
     latticeAt,
+    bareLatticeAt,
     blanketAt,
     groundAt,
     iceAt,
@@ -388,6 +396,7 @@ export function createTerrain(track: Track): TerrainField {
     soilAt: (x, z) => land.geology.soilAt(x, z) * (1 - cutAt(x, z)),
     wetAt: land.geology.wetAt,
     guards,
+    blanketAt,
   });
 
   // R13 — the parapets, built once off the deck runs the track already
@@ -693,6 +702,7 @@ export function createTerrain(track: Track): TerrainField {
     heightAt,
     groundAt,
     latticeAt,
+    bareLatticeAt,
     farHeightAt: farField,
     waterGroundAt: waterGround,
     lidAt,

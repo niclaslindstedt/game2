@@ -272,6 +272,10 @@ export type PropContext = {
   soilAt: (x: number, z: number) => number;
   /** R14 — the corner guards, whose groves grow trunks of their own. */
   guards: GuardField;
+  /** R47 — THE SNOW STANDING OVER A POINT, m (`blanketAt`, climate.ts): what
+   * decides whether a solid here is still a solid. Zero on every green
+   * country, which is what makes the burial rule below cost one nothing. */
+  blanketAt: (x: number, z: number) => number;
 };
 
 export type PropField = {
@@ -376,7 +380,25 @@ export function createPropField(ctx: PropContext): PropField {
   const fell = (ob: WildObstacle): void => {
     felled.add(propKey(ob));
   };
-  const standing = (ob: WildObstacle): boolean => felled.size === 0 || !felled.has(propKey(ob));
+  /** R47 — ...AND WHAT THE SNOW HAS SWALLOWED. A winter's blanket is metres
+   * deep on a permanent snowfield (`permanentPack`, climate.ts), and a
+   * stone, a stump or a fallen limb shorter than the snow over it is simply
+   * not in the world any more: it is under the surface the car is driving
+   * on. So it is neither hit nor drawn — this is the one list both the
+   * contact model and the renderer's planting read, so burying it here
+   * buries it for both, and the two can never disagree about whether the
+   * thing a car just drove through was there.
+   *
+   * Measured against the solid's own foot rather than against the car,
+   * because it is a fact about the ground and not about who is looking: the
+   * snow at the foot has to bury the whole height for the thing to be gone.
+   * What still stands proud stays a solid at full strength — a fallen trunk
+   * with a metre of itself above the drift is a fallen trunk, and driving
+   * into one ends the way it should. */
+  const buried = (ob: WildObstacle): boolean => ob.height <= ctx.blanketAt(ob.x, ob.z);
+
+  const standing = (ob: WildObstacle): boolean =>
+    (felled.size === 0 || !felled.has(propKey(ob))) && !buried(ob);
 
   /** Half the width of the road at the sample a query landed nearest to, m.
    * The road's own width HERE, never the stage's nominal: a junction's mouth

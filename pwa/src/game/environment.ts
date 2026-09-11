@@ -58,6 +58,7 @@ import {
 
 import { createCarLamps } from "./car-lamps.ts";
 import { glassSky } from "./car/glass-reflect.ts";
+import { SNOW_SUN } from "./snow-mantle.ts";
 import { createClouds } from "./clouds.ts";
 import { dressSky, sunOcclusion, type SkyDressing } from "./cloud-field.ts";
 import { horizonCrossing, hoursToTurn, litAt, sunAt } from "./daylight.ts";
@@ -537,6 +538,10 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     hourNow = hour;
     preset = skyAt(env, biome, hour);
     sunV.copy(sunDir(preset.sunUp, preset.sunBearing));
+    // R47 — and the snow coat's own copy of it, for the glitter off the
+    // crystals (`snow-mantle.ts`), written here with the fog's for the same
+    // reason: this is the one place the sun is known to have moved.
+    SNOW_SUN.copy(sunV);
     keyV.copy(sunDir(preset.sunElevation, preset.sunAzimuth));
     applyFogTone();
     applyRange();

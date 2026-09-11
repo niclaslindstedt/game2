@@ -15,6 +15,8 @@ import {
   TUNING,
   blanketDepth,
   packedDepth,
+  permanentPack,
+  GROUND_CELL,
   createGame,
   defaultTemperature,
   fallsAsSnow,
@@ -176,6 +178,97 @@ describe("the climate", () => {
     expect(blanketDepth(-40)).toBe(CLIMATE.blanket.deep);
     expect(CLIMATE.blanket.shallow).toBeGreaterThanOrEqual(0.5);
     expect(CLIMATE.blanket.deep).toBeLessThanOrEqual(1);
+  });
+
+  it("lays a PERMANENT snowfield metres deep, whatever the air over it is", () => {
+    // The air above a summer snowfield is well over freezing, so the
+    // winter's own rule answers with its floor — and a permanent field is
+    // still metres deep, because what is on it never melted.
+    expect(blanketDepth(6)).toBe(CLIMATE.blanket.shallow);
+    expect(permanentPack(0)).toBe(0);
+    expect(permanentPack(CLIMATE.blanket.pileAt)).toBe(CLIMATE.blanket.pile);
+    expect(permanentPack(CLIMATE.blanket.pileAt * 5)).toBe(CLIMATE.blanket.pile);
+    expect(permanentPack(CLIMATE.blanket.pileAt / 2)).toBeCloseTo(CLIMATE.blanket.pile / 2, 6);
+    // ...and it is the DEEPER of the two that a country wears, so the pile
+    // is worth having at all.
+    expect(CLIMATE.blanket.pile).toBeGreaterThan(CLIMATE.blanket.deep);
+  });
+
+  /** The campaign's own alpine circuit (`campaign-locations.ts`, "First
+   * Light") — a country with a PERMANENT snowfield beside the road, which
+   * is the one thing the three cases below are about. */
+  const white = (): Track =>
+    stageTrack(
+      30,
+      "medium",
+      { biome: "alpine", elevation: 0.6, steepness: 0.6, asphalt: 0.5, altitude: 0.35 },
+      "circuit",
+      { season: "spring" },
+    );
+
+  it("gives the blanket an EDGE the ground lattice could never hold", () => {
+    // R47 — the bank at a ploughed road's lip stands up over `verge`
+    // metres, which is a fraction of a ground cell. Sampled on the ground's
+    // own lattice it falls between two corners and is erased, and a winter
+    // stage is flat white ground; on the snow's own grid it is a wall.
+    const track = white();
+    const terrain = stageTerrain(track);
+    expect(terrain.snowy).toBe(true);
+    const s = track.samples[40];
+    const rx = Math.cos(s.heading);
+    const rz = -Math.sin(s.heading);
+    const blanketOut = (d: number): number => terrain.blanketAt(s.x - rx * d, s.z - rz * d);
+    // Bare at the lip, and deep well inside ONE ground cell of it.
+    let lip = -1;
+    for (let d = 0; d < 40 && lip < 0; d += 0.5) if (blanketOut(d) > 0.05) lip = d;
+    expect(lip).toBeGreaterThan(0);
+    expect(blanketOut(lip + CLIMATE.blanket.verge * 1.5)).toBeGreaterThan(0.4);
+    // The whole rise happens inside a fraction of a ground cell — which is
+    // the property the blanket's own grid exists to buy.
+    expect(CLIMATE.blanket.verge * 1.5).toBeLessThan(GROUND_CELL);
+  });
+
+  it("stands the car INSIDE the snow the world draws, at any sampling rate", () => {
+    // The drawn coat and the surface the wheels are on compose the same two
+    // numbers (`terrain-ground.ts`), so a finer mesh can never float over
+    // the physics or sink under it.
+    const track = white();
+    const terrain = stageTerrain(track);
+    const s = track.samples[40];
+    const rx = Math.cos(s.heading);
+    const rz = -Math.sin(s.heading);
+    let checked = 0;
+    for (let d = 30; d <= 60; d += 3) {
+      const x = s.x - rx * d;
+      const z = s.z - rz * d;
+      const rest = terrain.blanketAt(x, z);
+      if (rest < 0.2) continue;
+      checked++;
+      const drawn = terrain.latticeAt(x, z);
+      const stood = terrain.groundAt(x, z);
+      // The coat's top is the bare ground plus the whole blanket...
+      expect(drawn).toBeCloseTo(terrain.bareLatticeAt(x, z) + rest, 6);
+      // ...and the wheels stand `ride` of the way up it, ploughing the rest.
+      expect(drawn - stood).toBeCloseTo(rest * (1 - CLIMATE.blanket.ride), 3);
+    }
+    expect(checked).toBeGreaterThan(3);
+  });
+
+  it("swallows a solid shorter than the snow standing over it", () => {
+    // R47 — a stone under the blanket is under the surface the car is
+    // driving on, so it is neither hit nor drawn. The one list the contact
+    // model and the renderer's planting both read is where it goes.
+    const track = white();
+    const terrain = stageTerrain(track);
+    let seen = 0;
+    for (const s of track.samples) {
+      terrain.sync(s.s);
+      for (const ob of terrain.obstaclesNear(s.x, s.z, 60)) {
+        seen++;
+        expect(ob.height).toBeGreaterThan(terrain.blanketAt(ob.x, ob.z));
+      }
+    }
+    expect(seen).toBeGreaterThan(10);
   });
 
   it("turns the rain to snow under freezing, and gives the desert a wet season", () => {

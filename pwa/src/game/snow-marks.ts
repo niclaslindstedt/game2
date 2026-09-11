@@ -66,8 +66,14 @@ const LIFT = 0.04;
  * shadowed and blue; the rim is its shoulder; the crown between the wheels
  * and the banks thrown outside them are broken snow, which is BRIGHTER than
  * the field it came out of — freshly turned snow catches the light on every
- * facet, and that is what makes a trail read from behind. */
-const FLOOR = new THREE.Color(0xa8b6c8);
+ * facet, and that is what makes a trail read from behind.
+ *
+ * `FLOOR`, `BANK` and `EDGE` are exported because a car's rut is not the only thing
+ * pressed into a snowfield: the crowd's walk out to a stand (`carpark.ts`)
+ * is the same two tones, and a path trodden by boots that read as a
+ * different white from one pressed by tyres would be two materials claiming
+ * to be one snow. */
+export const FLOOR = new THREE.Color(0xa8b6c8);
 /** ...and what the floor becomes once traffic has worked it all the way
  * down: a polished floor rather than a pressed one, darker and bluer
  * again. The mix is the pack itself, so the racing line on a white stage
@@ -75,10 +81,10 @@ const FLOOR = new THREE.Color(0xa8b6c8);
 const GLAZE = new THREE.Color(0x8e9db2);
 const RIM = new THREE.Color(0xcfd9e6);
 const CROWN = new THREE.Color(0xf6f9fc);
-const BANK = new THREE.Color(0xffffff);
+export const BANK = new THREE.Color(0xffffff);
 /** ...and where the strip meets the untouched field, in the field's own
  * white, so the trail has no drawn edge. */
-const EDGE = new THREE.Color(0xeceff2);
+export const EDGE = new THREE.Color(0xeceff2);
 
 /** Half the track width the section below is drawn around, m — where the
  * ruts are, and where the cut that sizes them is read. */

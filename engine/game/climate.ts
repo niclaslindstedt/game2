@@ -131,8 +131,21 @@ export const CLIMATE = {
    * which is what the sills ploughing through the surface are. It starts
    * at the road's own lip, where the blade or the traffic has cleared it,
    * and reaches full depth `verge` metres out, which is the bank a
-   * ploughed road stands between. */
-  blanket: { shallow: 0.5, deep: 1.0, deepAt: -15, ride: 0.6, verge: 4 },
+   * ploughed road stands between.
+   *
+   * ...and `pile` is the OTHER source of depth, which is not the air at
+   * all. Above a country's own permanent snowline the ground is white in
+   * July: what lies there is years of accumulation rather than this
+   * season's fall, and it is metres rather than centimetres. So the
+   * blanket is the deeper of the two (`blanketDepth` against
+   * `permanentPack`), and a snowfield reaches `pile` over `pileAt` metres
+   * of climb above the line — a short ramp on purpose, because the
+   * accumulation gradient really is steep near the line and because it is
+   * what makes a snowfield a WALL to drive into a few metres after it is
+   * merely white. That contrast is the whole point of one: the bladed road
+   * is the fast line, and the field either side of it is a place a car
+   * goes to be stopped. */
+  blanket: { shallow: 0.5, deep: 1.0, deepAt: -15, ride: 0.6, verge: 4, pile: 1.6, pileAt: 18 },
   /** HOW HARD THE SNOW HOLDS, by temperature, as a multiplier on the
    * surface's own grip (`TUNING.surfaces.grip.snow`, which is the cold
    * winter's — `at` degrees). Around freezing a packed road glazes: the
@@ -320,6 +333,22 @@ export function blanketDepth(temperature: number): number {
     B.shallow +
     (B.deep - B.shallow) * clamp01((CLIMATE.freeze - temperature) / (CLIMATE.freeze - B.deepAt))
   );
+}
+
+/** WHAT NEVER MELTED, m: the pack standing on ground that is `above`
+ * metres over the country's OWN permanent snowline (`BiomeLand.zones.snow`),
+ * and nothing at or under it.
+ *
+ * `blanketDepth` is a fact about the air — a cold winter lays a deep
+ * blanket and a mild one a thin one — and above the permanent line that is
+ * the wrong question to ask. A summer alpine snowfield sits under a +6 °C
+ * afternoon and is still metres deep, because what is on it is years of
+ * accumulation that the summer never got through. Read the two separately
+ * and take the deeper (`blanketOver`): a warm country's winter stage is
+ * untouched by this, and a snowfield stops being a white paint job. */
+export function permanentPack(above: number): number {
+  const B = CLIMATE.blanket;
+  return B.pile * clamp01(above / B.pileAt);
 }
 
 /** THE SNOW STILL STANDING where it has been worked to `pack`, m — the
