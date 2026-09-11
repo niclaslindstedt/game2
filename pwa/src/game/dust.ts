@@ -429,6 +429,14 @@ export const PLUME = {
   // behind, so any density that survives long enough to be seen there is
   // density painted across the thing the player is steering.
   rate: { min: 70, max: 340 },
+  /** R47 — THE BOW WAVE, for a ground the car PARTS rather than runs over
+   * (`PlumeGround.throw`). Where it is born and how far up it goes: at the
+   * nose rather than the axles, across the car's width rather than at two
+   * wheel lines, and thrown high enough that a car wading its own bonnet is
+   * looking through what it is ploughing. `spread` widens the puff on top of
+   * that, because snow coming over a windscreen is a sheet and not a
+   * rooster tail. */
+  bow: { at: 2.0, wide: 1.0, up: 1.5, spread: 1.6 },
   /** The longest frame the rate is paid for, s. A tab coming back from the
    * background hands the renderer one enormous dt, and a cloud that honours
    * it fires a second of plume into a single point. */

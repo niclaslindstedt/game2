@@ -11,7 +11,7 @@
 // a dozen pools to build, add, tint and throw away.
 
 import * as THREE from "three";
-import type { GameState } from "@engine";
+import { TUNING, snowUnder, snowWade, type GameState, type SnowUnder } from "@engine";
 
 import { createAmbientLife, type AmbientLife } from "./ambient-life.ts";
 import { createCelebration, type Celebration } from "./celebration.ts";
@@ -194,6 +194,25 @@ export function createCarFx(scene: THREE.Scene): CarFx {
       () => underSnow(state),
     );
 
+  /** Scratch for the reading below: one record, because it is asked every
+   * frame and a fresh object per frame is a frame's worth of litter. */
+  const NOSE: SnowUnder = { rest: 0, base: 0 };
+
+  /** R47 — HOW MUCH SNOW THE CAR IS SHOULDERING ASIDE, m: what stands above
+   * where its wheels are riding, read at the NOSE because the nose is where
+   * the untouched snow is met and the body has already flattened what is
+   * under the wheels (`engine/game/step.ts`). The one number the deep-snow
+   * cloud is sized and aimed by. */
+  const wadeAtNose = (state: GameState): number => {
+    if (!state.snow.white) return 0;
+    const car = state.car;
+    const reach = TUNING.collision.halfLength;
+    const x = car.x + Math.sin(car.heading) * reach;
+    const z = car.z + Math.cos(car.heading) * reach;
+    snowUnder(state.track, state.terrain, state.nearIndex, x, z, NOSE);
+    return NOSE.rest > 0 ? snowWade(NOSE.rest, state.snow.workAt(x, z, NOSE.base)) : 0;
+  };
+
   const plumeDust = (state: GameState, wet: boolean): PlumeGround =>
     plumeGround(
       state.track.knobs.biome,
@@ -201,6 +220,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
       wet,
       () => bareRock(state),
       () => underSnow(state),
+      () => wadeAtNose(state),
     );
 
   const atWheels = (
