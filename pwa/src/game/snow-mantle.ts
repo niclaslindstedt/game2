@@ -52,6 +52,12 @@ const N = Math.round((REACH * 2) / STEP) + 1;
  * the road's lip instead of a fade into the tile. */
 const NOTHING = 0.03;
 
+/** How far around the car a cut-only redraw reaches, m. The wheels can only
+ * have carved snow they actually drove over, so this needs to cover the
+ * ground crossed between two redraws with room for the body's width — a
+ * couple of car lengths, not the whole sheet. */
+const FRESH_REACH = 18;
+
 /** How many freshly worked cells of snow it takes to redraw the sheet. A
  * pass over one cell is `CLIMATE.pack.cell` of trail, so this is a couple
  * of car lengths of new rut — under a frame's worth at racing speed, and
@@ -217,17 +223,48 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
   let workedAt = -1;
   const tint = new THREE.Color();
 
-  const lay = (originX: number, originZ: number, snow: Snowpack | null): void => {
-    for (let j = 0; j < N; j++) {
+  /** The pack's cut averaged over one cell of the sheet — four taps at the
+   * quarter points, which is the coarsest average that cannot fall entirely
+   * between two wheel ruts. */
+  const cutAround = (snow: Snowpack, x: number, z: number): number => {
+    const q = STEP / 4;
+    return (
+      (snow.cutAt(x - q, z - q) +
+        snow.cutAt(x + q, z - q) +
+        snow.cutAt(x - q, z + q) +
+        snow.cutAt(x + q, z + q)) /
+      4
+    );
+  };
+
+  /** Re-sample part of the sheet: the rows and columns `[i0, i1] x [j0, j1]`,
+   * which is the whole of it when the anchor has moved and a patch around
+   * the car when only the snow under it has changed. */
+  const lay = (
+    originX: number,
+    originZ: number,
+    snow: Snowpack | null,
+    i0: number,
+    i1: number,
+    j0: number,
+    j1: number,
+  ): void => {
+    for (let j = j0; j <= j1; j++) {
       const z = originZ + j * STEP;
-      for (let i = 0; i < N; i++) {
+      for (let i = i0; i <= i1; i++) {
         const x = originX + i * STEP;
         const k = j * N + i;
         const rest = field.blanketAt(x, z);
-        // What the wheels have taken out of it. The pack only ever removes
-        // snow, so the coat sags into a trough exactly where a car went
-        // through and stands untouched a metre either side of it.
-        const cut = rest > 0 && snow ? snow.cutAt(x, z) : 0;
+        // What the wheels have taken out of it — averaged ACROSS THE CELL
+        // rather than read at the vertex. A wheel rut is about 0.75 m wide
+        // and the pair of them 1.5 m apart, which is finer than this sheet
+        // can hold: point-sampled, a vertex either lands in a rut or misses
+        // it, and the coat dimples at random instead of sagging. Averaged,
+        // the sheet carries the BROAD depression a driven-over patch of
+        // snow has, and `snow-marks.ts` draws the two ruts themselves at
+        // the resolution they actually need. Each surface then says the
+        // thing it can say, and neither contradicts the other.
+        const cut = rest > 0 && snow ? cutAround(snow, x, z) : 0;
         const depth = Math.max(0, rest - cut);
         const y = field.bareLatticeAt(x, z) + depth + LIFT;
         H[k] = y;
@@ -245,9 +282,14 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
       }
     }
     // Normals off the sheet's own slope, central differences where there is
-    // a neighbour either side and one-sided at the rim.
-    for (let j = 0; j < N; j++) {
-      for (let i = 0; i < N; i++) {
+    // a neighbour either side and one-sided at the rim. One ring wider than
+    // the window: a vertex just outside it reads a height that just changed.
+    const n0 = Math.max(0, j0 - 1);
+    const n1 = Math.min(N - 1, j1 + 1);
+    const m0 = Math.max(0, i0 - 1);
+    const m1 = Math.min(N - 1, i1 + 1);
+    for (let j = n0; j <= n1; j++) {
+      for (let i = m0; i <= m1; i++) {
         const k = j * N + i;
         const l = i > 0 ? H[k - 1] : H[k];
         const r = i < N - 1 ? H[k + 1] : H[k];
@@ -284,11 +326,31 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
       // re-sampling six thousand vertices that often is a frame's whole
       // budget spent redrawing a rut that moved by centimetres.
       const moved = originX !== anchorX || originZ !== anchorZ;
-      if (!moved && worked - workedAt < WORK_REDRAW) return;
+      const carved = worked - workedAt >= WORK_REDRAW;
+      if (!moved && !carved) return;
       anchorX = originX;
       anchorZ = originZ;
       workedAt = worked;
-      lay(originX, originZ, snow);
+      if (!moved) {
+        // Only the snow changed, and only where the car has just been. Re-lay
+        // the patch around it rather than the whole sheet: a rut appears
+        // under the wheels and nowhere else, and re-sampling six thousand
+        // vertices to move a few hundred of them is a frame's whole budget.
+        const ci = Math.round((x - originX) / STEP);
+        const cj = Math.round((z - originZ) / STEP);
+        const r = Math.ceil(FRESH_REACH / STEP);
+        lay(
+          originX,
+          originZ,
+          snow,
+          Math.max(0, ci - r),
+          Math.min(N - 1, ci + r),
+          Math.max(0, cj - r),
+          Math.min(N - 1, cj + r),
+        );
+        return;
+      }
+      lay(originX, originZ, snow, 0, N - 1, 0, N - 1);
     },
     dispose: () => {
       geo.dispose();
