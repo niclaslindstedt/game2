@@ -32,6 +32,7 @@ import type { Biome, RegionGround } from "./biome.ts";
 // so the dust and the tests read the same rule the tiles are painted with.
 import { ROCK_SLOPE, SNOW, rockAt, snowAt, snowLie, zonesUnder } from "./ground-rules.ts";
 import { sandRipple } from "./sand-ripple.ts";
+import { coatRoom } from "./snow-mantle.ts";
 // R16 — the ground beside a road takes the ROAD's own edge tone and the
 // SPILL's own noise field, so the ribbon's dissolve, the scattered stones
 // and this wash all hand over along one boundary.
@@ -172,7 +173,25 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // tile CORNERS are where the mesh and the field agree by construction, so
   // sampling it here is what DEFINES the drawn lattice. Anything asking
   // where the ground is between two corners wants `standOn`.
-  const heightAt = field.heightAt;
+  //
+  // R47 — ...LESS THE ROOM THE COAT NEEDS UNDER IT. On a white stage the
+  // snow's own surface is the mantle's (`snow-mantle.ts`), and the mantle
+  // has to be able to SINK: a car presses the snow it drives through down
+  // by up to a belly's worth, and a tile laid at the top the snow used to
+  // stand at stands OVER that trough and hides it — which is a car leaving
+  // no mark on snow it has demonstrably ploughed. So on a white stage the
+  // tiles are laid at the floor the coat can be pressed to, and the coat is
+  // drawn over them. `coatRoom` is zero wherever there is no blanket, so
+  // the road's corridor, the water and every green stage are the ground
+  // they always were, to the millimetre.
+  const heightAt = (x: number, z: number): number =>
+    field.heightAt(x, z) - coatRoom(field.blanketAt(x, z));
+  /** ...and the same ground where the ARENA cuts its tiles four times finer,
+   * which samples the ridden lattice rather than the analytic field (below).
+   * It leaves the coat exactly the same room, or the training ground would
+   * be the one patch of snow in the game a car could not mark. */
+  const latticeUnderCoat = (x: number, z: number): number =>
+    field.latticeAt(x, z) - coatRoom(field.blanketAt(x, z));
   const samples = track.samples;
   /** Where the road's corridor ends, m from its centerline — the lip the
    * ribbon hands over at, and so where the ground's own paint starts being
@@ -581,7 +600,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     const fine = tileIsFine(originX, originZ);
     const cells = fine ? CELLS * 4 : CELLS;
     const cell = fine ? CELL / 4 : CELL;
-    const sample = fine ? field.latticeAt : heightAt;
+    const sample = fine ? latticeUnderCoat : heightAt;
     // Heights on a (cells+3)² lattice — one ring beyond the tile — so the
     // normals at tile edges are finite differences of the SAME function on
     // both sides of the seam, and the lighting never shows the grid.
