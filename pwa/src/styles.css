@@ -742,8 +742,24 @@ body {
      untouched. */
   --replay-height: 3.9rem;
   --replay-band: 0rem;
-  --split-top: calc(var(--hud-top) + var(--replay-band));
+  /* THE THIRD THING THAT CAN CLAIM THE HEAD: the way home and the turn
+     around (`.hud-pace-alert`). They are not corner calls — nothing is being
+     called, the run has gone wrong — and a driver hunting for the road wants
+     the instruction at the top of the frame rather than a band or two down
+     it, where the road they are hunting for is. So they take the head and the
+     split's flash steps down for the few seconds one is up; unlike the bands
+     above, this one is NOT reserved when empty, because an alert is the rare
+     state and the split is the everyday one. The plate is the sign plus its
+     own padding — the two stacked lines beside it are shorter than the sign
+     at every size — and a little air under it. */
+  --alert-height: calc(var(--pace-sign) + 1.1rem);
+  --alert-band: 0rem;
+  --split-top: calc(var(--hud-top) + var(--replay-band) + var(--alert-band));
   --pace-top: calc(var(--split-top) + var(--split-band));
+}
+
+.hud[data-alert] {
+  --alert-band: var(--alert-height);
 }
 
 /* With a mirror up — showing the road or blanked, since the dead glass takes
@@ -1056,9 +1072,42 @@ body {
   --pace-stroke: 11;
 }
 
+/* THE HEAD OF THE FRAME, not the co-driver's slot. `.hud-pace` is worn for
+   everything but the offset — full width, centred, columnar, deaf to the
+   pointer — exactly as the spectator's banner wears it further down. The slot
+   itself hangs a band or two down the frame, which is where the road is, and
+   these two calls are the ones a driver is looking PAST the HUD to obey: find
+   the road again, or turn round. The split steps down to make the room
+   (`--alert-band`); nothing else stands here, because the corner strip is not
+   drawn while either of these is up. */
+.hud-pace-alert {
+  top: var(--hud-top);
+}
+
 .hud-pace-text {
   font-size: clamp(1.1rem, 4.5vmin, 2.1rem);
   letter-spacing: 0.04em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* A call with small print under it: the instruction on its own line, and what
+   it costs on the next. Ranged left against the sign rather than centred —
+   two centred lines of different lengths read as a title card, and this is a
+   co-driver's instruction with a footnote on it. */
+.hud-pace-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  /* Set SOLID, near enough. The page's default leading is set for paragraphs
+     of body copy; two short lines of display type carrying it read as two
+     separate readings that happen to share a plate, and the plate grows by
+     half a line of nothing for the privilege. */
+  line-height: 1.15;
+  gap: 0.1rem;
+}
+
+.hud-pace-sub {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
