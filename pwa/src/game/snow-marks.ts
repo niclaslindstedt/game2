@@ -108,7 +108,17 @@ const SECTION: { lat: number; rise: number; tone: THREE.Color }[] = [
   { lat: -0.86, rise: 0, tone: FLOOR },
   { lat: -0.62, rise: 0, tone: FLOOR },
   { lat: -0.56, rise: 0.65, tone: RIM },
-  { lat: 0, rise: 1.4, tone: CROWN },
+  // R47 — THE CROWN IS PRESSED, not untouched. The car straddles this strip
+  // so no wheel has been over it, but the CHASSIS has: the body parts the
+  // snow along the line its nose sweeps before the wheels ever reach it
+  // (`TUNING.snow.chassis`), and what it leaves is a broad floor with the
+  // two ruts cut into it. Measured on the campaign's alpine circuit over
+  // three different lines through the deepest field, the crown stands at
+  // 0.85, 0.87 and 0.86 of the rut's own depth above the rut floor — so it
+  // is a crown, clearly, and nothing like the wall of thrown snow beside it.
+  // Drawn level with the untouched field, as it was, it read as a ridge the
+  // car had somehow driven around.
+  { lat: 0, rise: 0.86, tone: CROWN },
   { lat: 0.56, rise: 0.65, tone: RIM },
   { lat: 0.62, rise: 0, tone: FLOOR },
   { lat: 0.86, rise: 0, tone: FLOOR },
