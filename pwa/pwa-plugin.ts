@@ -59,7 +59,13 @@ export function buildManifest(base: string): string {
     start_url: base,
     scope: base,
     display: "fullscreen",
-    orientation: "any",
+    // LANDSCAPE ONLY. Portrait is turned off in the app itself
+    // (`src/game/orientation.ts`); this is the half of it an INSTALLED copy
+    // honours, so the game never rotates under the player's hands in the
+    // first place and the cover the page would otherwise throw up is never
+    // needed. Change one and change the other — and `native/app.config.js`,
+    // which says the same thing to the store build.
+    orientation: "landscape",
     background_color: PALETTE.sky,
     theme_color: PALETTE.sky,
     icons: [

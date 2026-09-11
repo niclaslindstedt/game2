@@ -7442,6 +7442,118 @@ a.menu-version:focus-visible {
   }
 }
 
+/* PORTRAIT IS TURNED OFF — the cover that goes over a screen held upright.
+   `orientation.ts` owns the switch and the reasoning, and every
+   `@media (orientation: portrait)` rule in this file is still here and still
+   correct; this is simply what the player sees instead of reaching them.
+
+   Above the splash card (2000) because an upright screen is not a state any
+   surface of this game is offered in, the attract card included. No
+   `pointer-events: none` and no way out: turning the device back is the way
+   out, and a press that reached the road under here would be steering a car
+   nobody can see. */
+.rotate-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  padding-inline: max(1.5rem, env(safe-area-inset-left), env(safe-area-inset-right));
+  background: linear-gradient(#1f7fe0 0%, #3fa9f5 55%, #bfe3ff 100%);
+  color: #ffffff;
+  font-weight: 800;
+  font-style: italic;
+  text-align: center;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.rotate-gate-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.7rem, 3vmin, 1.4rem);
+  max-width: 26rem;
+}
+
+/* The before-and-after, sized off the SHORT edge of the viewport: upright
+   that is the width, and a mark sized off the height would be a phone drawn
+   nearly as tall as the phone holding it. */
+.rotate-gate-mark {
+  width: clamp(9rem, 62vmin, 15rem);
+  aspect-ratio: 128 / 56;
+  overflow: visible;
+  filter: drop-shadow(3px 4px 0 rgb(18 48 105 / 40%));
+}
+
+/* The shape the screen is in now: present, but plainly not the one being
+   asked for — so it is drawn in the body colour and held back. */
+.rotate-gate-was {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 4;
+  opacity: 0.5;
+}
+
+/* The shape the game wants, in the colour every other GO in this game is
+   drawn in. */
+.rotate-gate-want {
+  fill: none;
+  stroke: var(--hud-good);
+  stroke-width: 4;
+}
+
+/* The arrow leans toward the destination and comes back — a nudge, not a
+   slide: the mark is an instruction and the eye should land on the lit frame
+   at the end of it rather than follow something moving. */
+.rotate-gate-arrow {
+  fill: none;
+  stroke: var(--hud-good);
+  stroke-width: 4;
+  animation: rotate-gate-nudge 1.9s ease-in-out infinite;
+}
+
+.rotate-gate-arrow-head {
+  fill: var(--hud-good);
+  stroke: none;
+}
+
+.rotate-gate-head {
+  margin: 0;
+  font-size: clamp(1.3rem, 7vmin, 2.2rem);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  color: var(--hud-good);
+  text-shadow:
+    3px 3px 0 var(--hud-shadow),
+    -1px -1px 0 var(--hud-shadow);
+}
+
+.rotate-gate-line {
+  margin: 0;
+  font-size: clamp(0.8rem, 3.4vmin, 1.05rem);
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  text-wrap: balance;
+  text-shadow: 2px 2px 0 var(--hud-shadow);
+}
+
+@keyframes rotate-gate-nudge {
+  0%,
+  60%,
+  100% {
+    transform: translateX(0);
+  }
+
+  30% {
+    transform: translateX(3px);
+  }
+}
+
 /* Reduced motion: the card still shows and still fades away (an instant cut
    to the menu is the harsher of the two), but it stops sliding in and the
    flags stop flapping — that part is pure flourish, and `finish-flag.ts`
@@ -7465,6 +7577,17 @@ a.menu-version:focus-visible {
      still going. */
   .mark-tracks-ghost {
     opacity: 0;
+  }
+
+  /* The cover's mark stops moving and stands in the position it is asking
+     for — sideways, edges apart. Parked at the start of either keyframe it
+     would be drawing the problem instead of the answer. */
+  /* The cover's arrow stops nudging. It loses nothing: the mark says what it
+     says by the two frames it draws, and the motion was only ever pointing
+     at the one already lit. */
+  .rotate-gate-arrow {
+    animation: none;
+    transform: none;
   }
 
   .hud-tach-hot,
