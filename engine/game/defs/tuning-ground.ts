@@ -285,6 +285,34 @@ export const GROUND_TUNING = {
      * (`snow-marks.ts`) is drawn on the same track width. */
     wheelAt: 0.74,
     axleAt: 1.35,
+    /** R47 — WHAT THE CHASSIS DOES, which is not what the wheels do.
+     *
+     * A car does not arrive on deep snow and then sink into it: it PARTS
+     * it, and the thing that parts it is the front of the body. The snow
+     * under the nose has to come down for the car to be where it is, and by
+     * the time a wheel reaches that ground the body has already been over
+     * it. So the pressing LEADS the wheels rather than following them, and
+     * the line it is done along is the nose (`collision.halfLength` ahead of
+     * the middle, which is the same box the contact model uses).
+     *
+     * It is carved as a LINE ACROSS THE NOSE rather than as the whole
+     * footprint, and that is not an economy — it is the same thing said
+     * once. The car advances a fifth of a metre a step, so a nose line
+     * swept forward IS the footprint, and carving the whole of it every
+     * step would press the same snow twenty times over and call it twenty
+     * passes.
+     *
+     * `bite` is how hard it presses, against a tyre's full pass. Less,
+     * because a body spreads the same weight over four square metres where
+     * a tyre puts it through four patches the size of a hand — so the
+     * chassis leaves a broad shallow trough and the wheels cut their own
+     * ruts into the floor of it, which is exactly what a car's track
+     * through deep snow looks like from behind.
+     *
+     * `across` is how many points the line is carved at, spanning the
+     * body's width. Enough that the splat of one overlaps its neighbour at
+     * `CLIMATE.pack.cell`, or the path comes out as stripes. */
+    chassis: { bite: 0.55, across: 5 },
   },
 
   hills: {

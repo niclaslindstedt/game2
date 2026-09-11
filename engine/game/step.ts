@@ -219,14 +219,25 @@ function readSnow(
   const rightRide = standRide;
   const rightRest = standRest;
   let pack = standPack;
-  let wade = standRest > 0 ? snowWade(standRest, standPack) : 0;
   snowStand(state, index, car.x - rx, car.z - rz);
   const leftRide = standRide;
   pack = (pack + standPack) / 2;
-  wade = (wade + (standRest > 0 ? snowWade(standRest, standPack) : 0)) / 2;
   if (rightRest <= 1e-3 && standRest <= 1e-3) return;
   ctx.snowPack = pack;
-  ctx.snowWade = wade;
+  // WHAT THE CAR IS PLOUGHING is read at the NOSE, not under the wheels,
+  // because the nose is where the untouched snow is met. The body presses
+  // the snow down before a wheel ever reaches it (`carveSnow`), so a wheel
+  // stands on ground the car has already been over — and a resistance read
+  // there is a car being charged for snow it has just finished moving.
+  // Read that way the car softens its own path and deep snow gets easier
+  // the faster you go into it, which is backwards.
+  snowStand(
+    state,
+    index,
+    car.x + sinH * T.collision.halfLength,
+    car.z + cosH * T.collision.halfLength,
+  );
+  ctx.snowWade = standRest > 0 ? snowWade(standRest, standPack) : 0;
   // Whatever snow is standing under the wheels is rise the face check
   // gives away rather than charges for — the deeper of the two lines,
   // because the car only has to be clear of one of them.
@@ -256,16 +267,30 @@ function carveSnow(state: GameState, index: number, moved: number): void {
   if (share <= 1e-4) return;
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
-  const across = T.snow.wheelAt;
-  const along = T.snow.axleAt;
-  for (const lz of [along, -along]) {
-    for (const lx of [across, -across]) {
-      // Forward is (sin h, cos h) and right is (cos h, -sin h).
-      const x = car.x + sinH * lz + cosH * lx;
-      const z = car.z + cosH * lz - sinH * lx;
-      snowUnder(state.track, state.terrain, index, x, z, UNDER);
-      state.snow.carve(x, z, UNDER, share);
-    }
+  // Forward is (sin h, cos h) and right is (cos h, -sin h).
+  const press = (lz: number, lx: number, bite: number): void => {
+    const x = car.x + sinH * lz + cosH * lx;
+    const z = car.z + cosH * lz - sinH * lx;
+    snowUnder(state.track, state.terrain, index, x, z, UNDER);
+    state.snow.carve(x, z, UNDER, bite);
+  };
+
+  // THE NOSE FIRST. The snow under the body has to come down for the car to
+  // be where it is, and it is the front of the body that brings it down —
+  // so the pressing LEADS the wheels instead of following them, along the
+  // line the nose is sweeping. Swept forward a fifth of a metre a step, this
+  // line IS the footprint (`TUNING.snow.chassis`).
+  const C = T.snow.chassis;
+  const nose = T.collision.halfLength;
+  const half = T.collision.halfWidth;
+  const step = (2 * half) / (C.across - 1);
+  for (let i = 0; i < C.across; i++) press(nose, -half + i * step, share * C.bite);
+
+  // ...and THE WHEELS press their own ruts into the floor the body left,
+  // which is why a track through deep snow is a broad trough with two
+  // furrows in it rather than four holes.
+  for (const lz of [T.snow.axleAt, -T.snow.axleAt]) {
+    for (const lx of [T.snow.wheelAt, -T.snow.wheelAt]) press(lz, lx, share);
   }
 }
 
