@@ -239,7 +239,13 @@ export type SnowMarks = {
  * so the higher of the two is the surface a mark has to lie on. */
 export function drawnGround(state: GameState): (x: number, z: number) => number {
   const t = state.terrain;
-  return (x, z) => Math.max(t.groundAt(x, z), t.latticeAt(x, z));
+  const snow = state.snow;
+  // ...LESS WHATEVER THE CAR HAS ALREADY TAKEN OUT OF IT. The coat is drawn
+  // sagging into the trough a car ploughed (`snow-mantle.ts`), so a mark
+  // laid at the untouched top would hang in the air over the very trench it
+  // is supposed to be lying in.
+  return (x, z) =>
+    Math.max(t.groundAt(x, z), t.latticeAt(x, z) - (snow.white ? snow.sunkAt(x, z) : 0));
 }
 
 export function createSnowMarks(): SnowMarks {

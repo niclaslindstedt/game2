@@ -44,7 +44,7 @@ import { clamp } from "../lib/math.ts";
 import { handoverAt, ROAD_CROSS, snowWear } from "../mapgen/road.ts";
 import { flatTrack, type Track } from "../mapgen/index.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
-import { CLIMATE, packedBy, snowRide } from "./climate.ts";
+import { CLIMATE, packedBy, packedDepth, snowRide } from "./climate.ts";
 
 /** WHAT SNOW LIES UNDER A POINT, before this run touched it: how deep it
  * stood, and how worked the traffic that came before had already left it.
@@ -63,6 +63,19 @@ export type Snowpack = {
    * A pure lookup: the step reads it a score of times a tick off every
    * corner of the car, so it may not go asking the road where it is. */
   cutAt: (x: number, z: number) => number;
+  /** ...and HOW FAR THE SNOW'S OWN SURFACE HAS COME DOWN there, m — which
+   * is a different number from `cutAt` and the one anything DRAWING the
+   * snow wants.
+   *
+   * `cutAt` is how far the WHEELS were let down: the car rides on the
+   * column it packed, and packing a column both shortens it and firms it,
+   * so the wheels sink by only the part of the loss that was loose. The
+   * SURFACE loses the whole of it. A car's chassis working a patch of deep
+   * snow to a quarter packed drops the top of it by 0.28 m and the wheels
+   * by 0.036 — so a renderer reading the wheels' number draws a trough
+   * eight times too shallow, which is a car leaving no visible mark on
+   * snow it has demonstrably flattened. */
+  sunkAt: (x: number, z: number) => number;
   /** ...and how worked the snow there is now, 0..1, against `floor` as the
    * pack it had before anybody drove on it. Read once a tick, for the grip
    * and for the trail, so it may be the more careful of the two. */
@@ -96,8 +109,11 @@ function keyOf(i: number, j: number): number {
  * Nothing is ever removed. */
 type Cells = {
   at: Map<number, number>;
-  /** How far this corner has been let down, m. */
+  /** How far the WHEELS have been let down at this corner, m. */
   cut: Float32Array;
+  /** ...and how far the SNOW'S SURFACE has, m — the whole of what the
+   * packing took out of the column, which is what the world is drawn at. */
+  sunk: Float32Array;
   /** ...and how worked its snow is now, 0..1. */
   work: Float32Array;
 };
@@ -136,6 +152,8 @@ export function createSnowpack(white: boolean): Snowpack {
 
   const cutAt = (x: number, z: number): number => (cells ? across(x, z, cells.cut, 0) : 0);
 
+  const sunkAt = (x: number, z: number): number => (cells ? across(x, z, cells.sunk, 0) : 0);
+
   const workAt = (x: number, z: number, floor: number): number => {
     const base = clamp(floor, 0, 1);
     if (!cells || base >= 1) return base;
@@ -155,6 +173,7 @@ export function createSnowpack(white: boolean): Snowpack {
     const table = (cells ??= {
       at: new Map<number, number>(),
       cut: new Float32Array(CELLS),
+      sunk: new Float32Array(CELLS),
       work: new Float32Array(CELLS),
     });
     const key = keyOf(i, j);
@@ -175,6 +194,13 @@ export function createSnowpack(white: boolean): Snowpack {
     const room = Math.max(0, under.rest * (CLIMATE.blanket.ride - CLIMATE.pack.floor));
     const fell = snowRide(under.rest, before) - snowRide(under.rest, after);
     table.cut[e] = Math.min(room, table.cut[e] + Math.max(0, fell));
+    // ...and the SURFACE's own fall, which is the whole of what came out of
+    // the column rather than the share of it the wheels stand lower for.
+    // Capped against what the column has to give: everything above the
+    // floor a fully worked one stands at.
+    const depth = Math.max(0, under.rest * (1 - CLIMATE.pack.floor));
+    const dropped = packedDepth(under.rest, before) - packedDepth(under.rest, after);
+    table.sunk[e] = Math.min(depth, table.sunk[e] + Math.max(0, dropped));
   };
 
   const carve = (x: number, z: number, under: SnowUnder, share: number): void => {
@@ -200,6 +226,7 @@ export function createSnowpack(white: boolean): Snowpack {
   return {
     white,
     cutAt,
+    sunkAt,
     workAt,
     carve,
     get worked(): number {
