@@ -63,11 +63,13 @@ module.exports = () => ({
     name: APP_NAME,
     slug: "scandinavian-flick",
     version,
-    // Follow the device: the web game is fully responsive and ships a
-    // dedicated portrait HUD (styles.css `@media (orientation: portrait)`), so
-    // the shell must let the WebView rotate. "default" tracks the OS rotation
-    // lock / sensor, so portrait and landscape both work.
-    orientation: "default",
+    // LANDSCAPE ONLY. The web game still ships its whole portrait HUD
+    // (styles.css `@media (orientation: portrait)`), but the game no longer
+    // offers it — pwa/src/game/orientation.ts is the switch, and the web app
+    // manifest in pwa/pwa-plugin.ts says the same thing to an installed copy.
+    // Locking the shell is what stops the WebView rotating at all, so the
+    // packaged app never reaches the cover the page would otherwise show.
+    orientation: "landscape",
     icon: "./assets/icon.png",
     scheme: "scandinavianflick",
     userInterfaceStyle: "light",

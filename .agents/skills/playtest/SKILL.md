@@ -42,8 +42,11 @@ The default script captures the moments that matter: the **start grid**
 (landscape + portrait), **full speed** down the opening straight, a **drift**
 (a committed turn at speed, power held through the slide), the **first jump**
 the stage offers (skipped when the run never reaches one), **portrait at
-speed** (the touch HUD's world), and the **hood cam**. `--scene <name>`
-runs one.
+speed**, and the **hood cam**. `--scene <name>` runs one.
+
+The portrait scenes now photograph the COVER, not the game: upright is
+switched off (`pwa/src/game/orientation.ts`). The touch HUD's world is a
+phone held SIDEWAYS — shoot it at 844×390.
 
 **A new player-visible feature earns a scene in the same change.** The scenes
 are scripted keyboard input against the countdown clock (hold throttle N ms,

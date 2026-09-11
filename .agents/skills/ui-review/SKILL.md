@@ -1,6 +1,6 @@
 ---
 name: ui-review
-description: "Use for a fit-and-finish pass over the game's UI — the HUD, the touch controls, the finish/results overlay, the update toast. Drives the screenshot-audit loop: capture every surface at the reference viewports (desktop landscape, phone portrait), evaluate against the quality bar, fix what clips, overflows, or drifts off the shared look, and verify with re-captures."
+description: "Use for a fit-and-finish pass over the game's UI — the HUD, the touch controls, the finish/results overlay, the update toast. Drives the screenshot-audit loop: capture every surface at the reference viewports (desktop landscape, phone landscape), evaluate against the quality bar, fix what clips, overflows, or drifts off the shared look, and verify with re-captures."
 ---
 
 # UI Review — audit the HUD and every overlay
@@ -25,7 +25,7 @@ touches. Load **`skill-reflection`** at both ends of the session.
 
 | Piece | Role |
 | --- | --- |
-| `scripts/screenshot.mjs` | The capture harness — scenes at 1280×720 (desktop landscape) and 390×844 (phone portrait) |
+| `scripts/screenshot.mjs` | The capture harness — scenes at 1280×720 (desktop landscape) and 390×844. That second viewport is a phone held UPRIGHT, which the game no longer offers (`pwa/src/game/orientation.ts`), so those frames now photograph the cover rather than a layout. The phone case to audit is a phone held SIDEWAYS — 844×390 |
 | `make screenshots` | Runs it against the BUILT app (`make build` first); `CHROMIUM_PATH=/opt/pw-browsers/chromium` in web sessions |
 | Read tool on the PNGs | The evaluation itself — every judgement is made on a screenshot, not on source |
 | `npm run dev` | Headed spot-checks (hover states, the update toast's timing, touch behavior in devtools emulation) |
@@ -78,8 +78,12 @@ settles (that is the `skill-reflection` promotion path).
 5. **One look.** The HUD wears the arcade identity — the palette from
    `pwa/src/identity.ts`, never a re-hardcoded color. A new overlay that
    invents its own greys is drift; re-skin it.
-6. **Portrait is designed, not squeezed.** The portrait layout is its own
-   arrangement, not the landscape HUD scaled down.
+6. **Portrait is not a case any more.** The upright layout is still in
+   `styles.css` and still correct, but it is switched off
+   (`pwa/src/game/orientation.ts`) and a player never reaches it. Audit the
+   phone SIDEWAYS — `(orientation: landscape) and (max-height: 34rem)` is the
+   branch a phone actually wears — and judge an upright frame only on the
+   cover it now shows.
 7. **Safe areas + reduced motion.** Anything pinned to a screen edge respects
    `env(safe-area-inset-*)`; decorative animation has a
    `prefers-reduced-motion` fallback that keeps the information.
@@ -128,7 +132,8 @@ settles (that is the `skill-reflection` promotion path).
    drift exists because a surface predates a shared pattern. New CSS goes
    next to the component's existing block in `styles.css`.
 3. **Re-capture and re-look.** Same harness, same scenes. Diff by eye against
-   the baseline; a fix that helps landscape can break portrait.
+   the baseline; a fix that helps a desktop window can break a phone held
+   sideways, which is the tightest surface in the app.
 4. **Gates + ship.** `make build && make test && make lint && make fmt-check`,
    a changeset fragment when anything user-visible changed, then the `commit`
    skill. Presentation-only passes rarely need new tests; engine untouched

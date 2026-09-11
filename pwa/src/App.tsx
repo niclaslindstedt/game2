@@ -19,7 +19,7 @@
 // camera's pose (?gx= ?gy= ?gz= ?gyaw= ?gpitch=) — the repro line the debug
 // overlay prints is exactly that set, so a screenshot reproduces as a URL.
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { carById, status } from "@engine";
 
 import { onShellCommand } from "./shell-host.ts";
@@ -41,6 +41,8 @@ import { replayStageName } from "./game/menu-replays.tsx";
 import { recordScore, rememberInitials } from "./game/scores.ts";
 import { PauseMenu, gridSize } from "./game/menu.tsx";
 import { MainMenu } from "./game/main-menu.tsx";
+import { OrientationGate } from "./game/orientation-gate.tsx";
+import { mustPause } from "./game/orientation.ts";
 import { BenchmarkCard } from "./game/menu-bench.tsx";
 import {
   PODIUM,
@@ -297,6 +299,14 @@ export function App() {
       relaySharedTaps(window, (x, y) => document.elementFromPoint(x, y)?.closest("button") ?? null),
     [],
   );
+
+  // A SCREEN TURNED UPRIGHT MID-RUN. Portrait is barred (orientation.ts) and
+  // the cover that goes up is opaque, so the same rule the lost GPU context
+  // obeys applies: a run nobody can see goes on the pause card and waits
+  // there. A menu needs none of it — what is driving under a menu is a bot.
+  const onPortraitBarred = useCallback(() => {
+    if (mustPause(true, menuRef.current !== null)) setPaused(true);
+  }, [menuRef, setPaused]);
 
   // THE APP GOING AWAY IS AN OUTAGE THE BEDS HAVE TO BE TOLD ABOUT, the same
   // one a lost GPU context is. The frame loop is what feeds them and it stops
@@ -787,6 +797,10 @@ export function App() {
         incomingVersion={pwa.incomingVersion ?? (forcedUpdate ? __APP_VERSION__ : null)}
         onReload={pwa.reload}
       />
+      {/* PORTRAIT IS TURNED OFF (orientation.ts). Last in the tree and above
+          even the splash card: an upright screen is not a state any surface
+          of this game is offered in, so the cover goes over all of them. */}
+      <OrientationGate onBarred={onPortraitBarred} />
     </div>
   );
 }
