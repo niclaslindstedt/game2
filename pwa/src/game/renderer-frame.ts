@@ -13,7 +13,14 @@ import * as THREE from "three";
 import { FRONT_LAMPS, REAR_LAMPS, TUNING, lampShare, type GameState } from "@engine";
 
 import { clamp } from "../lib/util.ts";
-import { LAMP_BEAMS, DUST_RAISED, EXHAUST_SEEN, GLASS_RAIN, TV_BOKEH } from "./settings.ts";
+import {
+  LAMP_BEAMS,
+  DUST_RAISED,
+  TRAIL_LEFT,
+  EXHAUST_SEEN,
+  GLASS_RAIN,
+  TV_BOKEH,
+} from "./settings.ts";
 import { createTvLens } from "./camera-tv-lens.ts";
 import type { FrameCost, SceneShare } from "./benchmark-report.ts";
 import { SHADOW_REACH } from "./car-shadow.ts";
@@ -85,7 +92,13 @@ export function createFrame(parts: RenderScene, fx: ReturnType<typeof createEven
     // The trail is a decal and takes no light of its own, so it is handed
     // the same ambient the dust is (snow-marks.ts, `light`).
     marks.light(environment.dustTint());
-    if (DUST_RAISED[live.quality.dust].player) marks.lay(state, drawnGround(state));
+    // ...and it is laid on the DUST row's say, off `TRAIL_LEFT` rather than
+    // the budget above it: what the wheels LEAVE is a mesh built once, not a
+    // cloud spawned per frame, and the driven car's is drawn at every stop
+    // of the row. `lay` is safe to call on any surface — off snow it only
+    // breaks the run so the next mark does not span the gap — so there is
+    // no gate here and nothing to take down until the stage changes.
+    if (TRAIL_LEFT[live.quality.dust].player) marks.lay(state, drawnGround(state));
     else marks.forget(state);
     // The engine tracks the driven surface — road fords AND the wild's
     // lakes and streams throw the blue spray, and the stage's sealed
@@ -447,6 +460,13 @@ export function createFrame(parts: RenderScene, fx: ReturnType<typeof createEven
       EXHAUST_SEEN[live.quality.exhaust].vapour,
       DUST_RAISED[live.quality.dust].field ? fx : 0,
     );
+    // ...and whether they MARK the snow, which is the same row and not the
+    // same budget (`TRAIL_LEFT`): a rival's ruts are a mesh it builds once,
+    // not sprites it spawns, so they survive an EFFECTS budget spent all the
+    // way down — a stage where the field is visibly driving through snow and
+    // leaving none of it behind was the effects row answering a question it
+    // was never asked.
+    field.setTrails(TRAIL_LEFT[live.quality.dust].field);
     field.update(state, chase.camera, dt, view !== "map");
     // THE DIP SWITCH. Main beam is for a road with nobody on it: the moment
     // a crew is close enough ahead for the driving lamps to land on them the

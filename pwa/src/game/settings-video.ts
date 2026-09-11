@@ -649,6 +649,42 @@ export const DUST_RAISED: Record<VideoSettings["dust"], { player: boolean; field
   all: { player: true, field: true },
 };
 
+/** WHOSE TRAIL IS LEFT IN THE SNOW (snow-marks.ts) — the two ruts a car
+ * ploughs through a white stage, the crown it straddles between them and
+ * the banks thrown out either side.
+ *
+ * It reads the DUST row, because it is the same question asked about the
+ * same wheels. It does NOT read `DUST_RAISED`, because a mark is not a
+ * cloud, and that row's own note is where the line is drawn: what it thins
+ * is ground HANGING OVER the stage — spawned per frame, per car, for as
+ * long as anyone is driving. A trail is the opposite shape of bill. It is
+ * one mesh, built the first time a car touches snow and never again, a
+ * fixed ring of stamps rewritten in place; and on a stage with no snow on
+ * it nothing is ever allocated at all, so turning it off bought nothing on
+ * most of the campaign.
+ *
+ * So THE CAR BEING DRIVEN ALWAYS MARKS THE SNOW, at every stop of the row,
+ * `off` included. Two reasons, and only the second is about frames.
+ *
+ * The trail is the one drawn thing that reports a physical system the
+ * engine runs whatever this says (`snowpack.ts`): the snow really is being
+ * compressed under the wheels, the car really is being held back by
+ * ploughing it, and a stage where all of that happens invisibly reads as a
+ * car catching on nothing. And the trail is NAVIGATION as much as
+ * decoration — a rut's floor is drawn in the pack's own colour, so the
+ * line already driven is visibly the fast one and the slippery one, which
+ * is the last thing to take away from a player who asked for fewer frames'
+ * worth of scenery.
+ *
+ * The FIELD's trails are a different bill and go with the field's cloud:
+ * one mesh per rival in range rather than one for the stage, which is
+ * where this stops being nearly free. */
+export const TRAIL_LEFT: Record<VideoSettings["dust"], { player: boolean; field: boolean }> = {
+  off: { player: true, field: false },
+  player: { player: true, field: false },
+  all: { player: true, field: true },
+};
+
 /** WHOSE CAR MAY SHED A WHEEL, per the row above. The same split as the
  * dust, the exhaust and the fold, for the same reason: the cost is per car
  * and the road can carry fifteen, while a lost wheel means most on the one

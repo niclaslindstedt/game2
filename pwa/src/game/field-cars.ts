@@ -203,6 +203,16 @@ export type FieldCars = {
    * fires at, and this is the size and the life of a winter puff, which is
    * where a grid of eight of them actually costs anything. */
   setClouds: (wet: boolean, smoked: number, vapour: number, towed: number) => void;
+  /** Whether the field MARKS the snow it drives over (snow-marks.ts).
+   *
+   * Its own setter rather than a fifth number on `setClouds`, because a
+   * trail is not a cloud and does not answer to a cloud's budget: it is one
+   * mesh per rival, built once when that car first touches snow, where
+   * everything `setClouds` thins is sprites spawned per frame forever. The
+   * two came apart the moment the effects budget could put a rival's ruts
+   * away on a stage where the rival was still visibly driving through
+   * snow. See `TRAIL_LEFT` (settings.ts) for the row it rides. */
+  setTrails: (on: boolean) => void;
   /** Hang the nearest crews' lamps on the register the clouds are lit from
    * (dust-light.ts) — a rival ahead of you in the dark is a red glow inside
    * its own dust before it is a car. `power` is how much of a beam the
@@ -337,6 +347,11 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let wetGround = false;
   /** The budget the towed cloud may spend — see `setClouds`. */
   let towedFx = 1;
+  /** ...and whether the field leaves ruts behind it, which is a separate
+   * row's answer for a separate reason — see `setTrails`. Turned off, the
+   * ribbon of any rival still being drawn comes down on its next frame,
+   * through the `forget` beside the call that used to lay it. */
+  let trailed = true;
   /** …and the one the pipes may spend, which is a separate row's answer —
    * with that row's other half beside it, the share of the cold plume the
    * field is allowed to condense (see `setClouds`). */
@@ -345,7 +360,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   /** One cloud for the whole entry list — see the module note. Off until
    * somebody is entered (`showCloud`). */
   // The marks the field leaves in snow (snow-marks.ts) — on the DUST row's
-  // say, with the plume: a car that raises no ground leaves none either.
+  // say, like the plume, but off its own answer rather than the plume's
+  // budget (`setTrails`): the row decides WHOSE ruts are drawn, and a rival
+  // driving through snow leaves them whether or not there is budget left to
+  // hang a cloud over it.
   const marks = createSnowMarks();
   scene.add(marks.group);
   const plume = createPlume(FIELD_PLUME);
@@ -516,7 +534,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         if (!seen) continue;
         drawn += 1;
         existing.visual.update(run.state, dt, camera.position);
-        if (towedFx > 0) marks.lay(run.state, drawnGround(run.state));
+        if (trailed) marks.lay(run.state, drawnGround(run.state));
         else marks.forget(run.state);
         if (named && run !== watched) existing.tag.place(car.x, car.y, car.z, camera);
         else existing.tag.hide();
@@ -613,6 +631,9 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       fieldVapour = vapour;
       towedFx = towed;
       showCloud();
+    },
+    setTrails: (on) => {
+      trailed = on;
     },
     lightDust: (power) => {
       if (lamps === "off") return;
