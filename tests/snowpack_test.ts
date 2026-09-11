@@ -229,6 +229,34 @@ describe("a car on a snowfield", () => {
     expect(state.snow.workAt(away.x, away.z, 0)).toBe(0);
   });
 
+  it("drops the SNOW'S TOP by the whole of what the packing took, not the wheels' share", () => {
+    // The two numbers a pass leaves behind are different, and confusing them
+    // is a car that flattens a third of a metre of snow and draws a trough a
+    // few centimetres deep. Packing a column both shortens it and firms it:
+    // the wheels sink by the loose share of the loss, the SURFACE loses the
+    // whole of it — so `sunkAt` is always the larger, and it is the one
+    // anything drawing the snow reads (`snow-mantle.ts`).
+    const track = winter();
+    const { state, x, z } = inField(track, 16);
+    const heading = state.car.heading;
+    const rx = Math.cos(heading);
+    const rz = -Math.sin(heading);
+    for (let i = 0; i < 90; i++) step(state, NEUTRAL_INPUT);
+    const rut = { x: x + rx * TUNING.snow.wheelAt, z: z + rz * TUNING.snow.wheelAt };
+    const sunk = state.snow.sunkAt(rut.x, rut.z);
+    const cut = state.snow.cutAt(rut.x, rut.z);
+    expect(cut).toBeGreaterThan(0);
+    expect(sunk).toBeGreaterThan(cut);
+    // Neither may take more than the column has: the surface can lose down
+    // to the floor a fully worked one stands at, and no further.
+    const under: SnowUnder = { rest: 0, base: 0 };
+    snowUnder(track, state.terrain, state.nearIndex, rut.x, rut.z, under);
+    expect(sunk).toBeLessThanOrEqual(under.rest * (1 - CLIMATE.pack.floor) + 1e-9);
+    // ...and untouched ground has lost nothing either way.
+    const away = { x: x + rx * 8, z: z + rz * 8 };
+    expect(state.snow.sunkAt(away.x, away.z)).toBe(0);
+  });
+
   it("finds its own trail easier the second time down it", () => {
     const track = winter();
     const { state, x, z } = inField(track, 26);

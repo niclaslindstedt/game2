@@ -219,16 +219,23 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
   let workedAt = -1;
   const tint = new THREE.Color();
 
-  /** The pack's cut averaged over one cell of the sheet — four taps at the
-   * quarter points, which is the coarsest average that cannot fall entirely
-   * between two wheel ruts. */
+  /** How far the snow's SURFACE has come down, averaged over one cell of the
+   * sheet — four taps at the quarter points, which is the coarsest average
+   * that cannot fall entirely between two wheel ruts.
+   *
+   * `sunkAt` and not `cutAt`: the wheels sink by only the loose share of
+   * what the packing took out of the column, while the top of the snow
+   * loses the whole of it. This sheet IS the top of the snow. Drawn off the
+   * wheels' number it sank by a few centimetres where the car had flattened
+   * a third of a metre, which is a car leaving no mark on snow it had
+   * demonstrably ploughed. */
   const cutAround = (snow: Snowpack, x: number, z: number): number => {
     const q = STEP / 4;
     return (
-      (snow.cutAt(x - q, z - q) +
-        snow.cutAt(x + q, z - q) +
-        snow.cutAt(x - q, z + q) +
-        snow.cutAt(x + q, z + q)) /
+      (snow.sunkAt(x - q, z - q) +
+        snow.sunkAt(x + q, z - q) +
+        snow.sunkAt(x - q, z + q) +
+        snow.sunkAt(x + q, z + q)) /
       4
     );
   };
