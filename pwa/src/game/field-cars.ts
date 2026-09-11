@@ -251,9 +251,13 @@ export type FieldCars = {
    * ground under the car, read every frame like the player's own.) */
   events: (run: RivalRun, events: GameEvent[]) => void;
   /** The conditions: the tint every baked-colour surface takes, which stop of
-   * the light switch the stage has the cars on, and how hard it is raining on
-   * the glass. Pushed by the renderer, which owns all three. */
-  paint: (tint: THREE.Color, lamps: LampStage, rain: number) => void;
+   * the light switch the stage has the cars on, how hard it is coming down
+   * on the glass, and how much of that is FLAKES rather than drops
+   * (`fallsAsSnow` at the camera's own air — environment.ts). Pushed by the
+   * renderer, which owns all four. The last one is not a detail: a rival
+   * drawn streaming wet beside a player's car under a coat of snow is the
+   * whole field disagreeing with the sky over it. */
+  paint: (tint: THREE.Color, lamps: LampStage, rain: number, snowing: number) => void;
   /** Whether the rivals READ the shadow map as well as drawing into it —
    * the LIGHTING row's top stop (`RICH_SHADOWS`, car-shadow.ts). A field
    * that casts but never receives is a field of cars sitting on the light
@@ -342,6 +346,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let tint = new THREE.Color(1, 1, 1);
   let lamps: LampStage = "off";
   let rain = 0;
+  let snowing = 0;
   let named = true;
   let watched: RivalRun | null = null;
   let wetGround = false;
@@ -524,7 +529,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           visual.setCrumple(folds);
           visual.setBrakeLights(braked);
           visual.setShadowDetail(richShadows);
-          tintCar(visual, tint, lamps, rain);
+          tintCar(visual, tint, lamps, rain, snowing);
           visual.update(run.state, 0, camera.position);
           show(fresh, false);
           continue;
@@ -695,11 +700,12 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       }
       car.visual.onEvents(run.state, events);
     },
-    paint: (next, stage, wet) => {
+    paint: (next, stage, wet, flakes) => {
       tint = next;
       lamps = stage;
       rain = wet;
-      for (const { visual } of built.values()) tintCar(visual, tint, lamps, rain);
+      snowing = flakes;
+      for (const { visual } of built.values()) tintCar(visual, tint, lamps, rain, snowing);
       // The exhaust carries its own colours and is fullbright, so the time of
       // day reaches it the way it reaches every baked-colour surface: through
       // the material tint (car-fx.ts does the same to the player's). Without

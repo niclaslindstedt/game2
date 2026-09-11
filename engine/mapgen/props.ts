@@ -22,13 +22,60 @@
 // each community grows, and what its ground cover looks like, is the
 // renderer's business (the biome in the app maps these ids to flora).
 
+import { CLIMATE } from "../game/climate.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2, valueNoise } from "../lib/noise.ts";
 import { GROVE_SCALE, REGION_SCALE, type BiomeRules } from "./biomes.ts";
 import type { CornerGuard, GuardField } from "./guards.ts";
 import { LAKE_Y } from "./land.ts";
 import { ROAD_CROSS } from "./road.ts";
-import { STAGE_RULES } from "./rules.ts";
+import {
+  BLOWDOWN_GAP_MAX,
+  BLOWDOWN_GAP_MIN,
+  BLOWDOWN_MAX,
+  BOULDER_DENSITY,
+  BOULDER_FROM,
+  BOULDER_SCALE,
+  BOULDER_SIZE,
+  FALL_SLOPE,
+  FALL_SPAN,
+  OB_CELL,
+  OB_DENSITY,
+  OB_ROAD_CLEAR,
+  OUTCROP_CELL,
+  OUTCROP_CHANCE,
+  OUTCROP_MAX,
+  OUTCROP_MIN,
+  OUTCROP_SINK,
+  OUTCROP_SIZE_MAX,
+  OUTCROP_SIZE_MIN,
+  OUTCROP_SLOPE,
+  OUTCROP_SPREAD,
+  ROCK_CELL,
+  ROCK_DENSITY,
+  ROCK_SIZE_MAX,
+  ROCK_SIZE_MIN,
+  ROOTED_LOG_SHARE,
+  ROOT_DEPTH,
+  ROOT_FULL,
+  ROOT_THIN,
+  SHED_BURIES,
+  SHED_MIN,
+  SLAB_BAND,
+  SLAB_CELL,
+  SLAB_CHANCE,
+  SLAB_WALL_RISE,
+  SLAB_WALL_SPAN,
+  STUMP_GROVE_DENSITY,
+  STUMP_SHARE,
+  STUMP_SIZE_MAX,
+  STUMP_SIZE_MIN,
+  TIMBER_CELL,
+  TIMBER_CHANCE,
+  WINDTHROW_DENSITY,
+  WINDTHROW_FROM,
+  WINDTHROW_SCALE,
+} from "./props-rules.ts";
 import {
   SOLID_PROP_HEIGHT,
   solidShape,
@@ -100,136 +147,6 @@ const CLUMP_MAX = 4;
 const CLUMP_NEAR = 1.9;
 const CLUMP_FAR = 4.6;
 
-// ── The deep wild's boulders and fallen trunks ────────────────────────────
-
-/** R32 — what the SOIL decides about a wood, stated in the rules data so
- * that the map view's FOLIAGE layer paints the same rule the forest is
- * planted from (pwa/src/game/map-layers.ts) rather than a copy of it. */
-const { depth: ROOT_DEPTH, thin: ROOT_THIN, full: ROOT_FULL } = STAGE_RULES.forest.rooting;
-/** ...and what it BURIES. Loose stone lies on the surface where the cover is
- * thin and is buried where it is deep: `SHED_BURIES` is the soil depth that
- * hides all of it, and `SHED_MIN` the share that shows anyway, because a
- * field always turns up a few. */
-const SHED_BURIES = 2.6;
-const SHED_MIN = 0.18;
-
-/** One obstacle candidate per grid cell of this edge, m. */
-const OB_CELL = 56;
-/** Fraction of cells that actually hold one. */
-const OB_DENSITY = 0.45;
-/** Obstacles keep this far from the road centerline beyond the half-width. */
-const OB_ROAD_CLEAR = 10;
-/** Share of the deep wild's fallen trunks that came down in a gale and
- * still hold their root plate up on end at the butt. They are a KIND of
- * their own (`rootlog`) rather than a flag on a log: the plate stands a
- * metre and a half over a thing you could otherwise drive across, so the
- * collision shape has to know about it too. */
-const ROOTED_LOG_SHARE = 0.45;
-
-/** Blowdowns: metres of period for the noise that says where a gale went
- * through this forest, the level it has to reach for one, and what the deep
- * wild's fallen timber is multiplied by inside it. A trunk down on its own is
- * a prop somebody dropped; five of them lying parallel down the same slope is
- * weather, and weather is what a boreal forest is mostly made of. */
-const WINDTHROW_SCALE = 190;
-const WINDTHROW_FROM = 0.56;
-const WINDTHROW_DENSITY = 2.6;
-/** The most trunks one candidate lays down in the middle of a blowdown, and
- * how far apart they lie ACROSS the fall line, m — far enough apart that a
- * car meets one at a time. */
-const BLOWDOWN_MAX = 3;
-const BLOWDOWN_GAP_MIN = 5.5;
-const BLOWDOWN_GAP_MAX = 10;
-/** How far apart the ground is sampled to read which way is downhill, m, and
- * the gradient below which a slope has no opinion and the gale decides. */
-const FALL_SPAN = 5;
-const FALL_SLOPE = 0.06;
-
-/** One loose-rock candidate per grid cell of this edge, m, and the share
- * of cells that hold one — the open ground's rock litter, a field of its
- * own because it runs much closer to the road than the deep-wild props
- * above and because most of the landscape carries some. */
-const ROCK_CELL = 30;
-const ROCK_DENSITY = 0.38;
-/** How big a loose rock gets, as the radius of the lump before it is
- * squashed: the small end is pebble litter the field drops (see
- * SOLID_PROP_HEIGHT), the big end is a boulder that ends a run. */
-const ROCK_SIZE_MIN = 0.3;
-const ROCK_SIZE_MAX = 2.1;
-/** Boulder fields: metres of period for the noise that says where the
- * ground sheds stone, the level it has to reach for one, and what the
- * litter there gets multiplied by. An isolated rock in a meadow reads as a
- * prop somebody placed; a slope carrying forty of them reads as geology,
- * which is the whole reason to have them. */
-const BOULDER_SCALE = 130;
-const BOULDER_FROM = 0.62;
-const BOULDER_DENSITY = 1.5;
-const BOULDER_SIZE = 1.5;
-/** Share of the litter under a WOODED grove that is a cut stump rather
- * than a rock, and the size band one comes in. A stump is a round solid a
- * collision circle describes exactly, which is why the litter field grows
- * these and leaves the long fallen trunks to the deep wild. */
-const STUMP_SHARE = 0.3;
-const STUMP_SIZE_MIN = 0.75;
-const STUMP_SIZE_MAX = 1.35;
-/** Grove density at or above which the ground counts as wooded — a meadow
- * has nothing to have been felled. (The communities that are ALL stumps
- * whatever their density says are the biome's `felled` list.) */
-const STUMP_GROVE_DENSITY = 0.5;
-
-/** ROCKY OUTCROPS: one candidate per grid cell of this edge, m, and the
- * share of those that carry one. A lone boulder in a field reads as a prop
- * somebody placed however well it is drawn; a knot of stone shouldering out
- * of a hillside reads as the hill itself, which is the only reason to have
- * rocks in a landscape at all. So the deep wild grows CLUSTERS: half a dozen
- * to a dozen stones bedded into one slope, biggest first, strung out along
- * the contour the way a bed of rock actually breaks surface. */
-const OUTCROP_CELL = 120;
-const OUTCROP_CHANCE = 0.75;
-/** How many stones one outcrop is made of. */
-const OUTCROP_MIN = 5;
-const OUTCROP_MAX = 10;
-/** How far its stones spread from its middle, m — along the contour, and
- * this much again halved up and down the slope. */
-const OUTCROP_SPREAD = 8;
-/** How big its stones get, smallest at the ends of the band and biggest in
- * the middle. The small end is set by what the field is ALLOWED to place: a
- * stone has to stand SOLID_PROP_HEIGHT over the ground once it is bedded in,
- * and one too small to do that is litter the renderer scatters for itself. */
-const OUTCROP_SIZE_MIN = 0.8;
-const OUTCROP_SIZE_MAX = 1.7;
-/** The gradient the ground under one has to have. Bedrock shows where the
- * hill is steep, which is the same rule the terrain's own paint follows —
- * so an outcrop stands in ground that is already painted as rock. */
-const OUTCROP_SLOPE = 0.22;
-/** How deep into the hill a stone is bedded, as a share of its own height.
- * This is the whole difference between geology and litter: a rock sitting ON
- * a slope was dropped there, one sunk half its depth INTO it grew there. */
-const OUTCROP_SINK = 0.45;
-
-/** One CUT-WALL SLAB candidate per grid cell of this edge, m — a fine grid,
- * because a slab only ever stands in the narrow band beside the road where
- * the ground is climbing out of a cut. (The outcrops above are the same rock
- * out in the country; these are the face the road was cut through.) */
-const SLAB_CELL = 16;
-/** ...and the share of those that stand up where the ground allows one. */
-const SLAB_CHANCE = 0.7;
-/** How far out from the road the wall is measured, and how far it has to
- * have climbed over the road there, m: the cut an outcrop belongs to. */
-const SLAB_WALL_SPAN = 16;
-const SLAB_WALL_RISE = 6;
-/** How far past the road edge an outcrop's foot may sit, m. */
-const SLAB_BAND = 10;
-
-/** One timber-stack candidate per grid cell of this edge, m, and the share
- * of those that stand. Cut timber is stacked where it was cut and left for
- * the lorry, so a stack only appears on ground a logging grove owns — one
- * every few hundred metres of a logging block, which is what makes the
- * block read as one. How big one STANDS is solids.ts's (`solidShape`), like
- * every other solid. */
-const TIMBER_CELL = 110;
-const TIMBER_CHANCE = 0.55;
-
 /** What the prop fields need to know about the world they stand in. Every
  * one of these is a pure seeded function of the track, so the engine and
  * the renderer each build their own field and always agree. */
@@ -276,6 +193,11 @@ export type PropContext = {
    * decides whether a solid here is still a solid. Zero on every green
    * country, which is what makes the burial rule below cost one nothing. */
   blanketAt: (x: number, z: number) => number;
+  /** R47 — THE SURFACE THE EYE SEES, m: the ground tiles with the winter's
+   * blanket lying on them. The burial rule measures against this and not
+   * against the bare country, because what a driver has to pick a thing
+   * out of is the snow, not the hillside under it. */
+  latticeAt: (x: number, z: number) => number;
 };
 
 export type PropField = {
@@ -382,23 +304,46 @@ export function createPropField(ctx: PropContext): PropField {
   };
   /** R47 — ...AND WHAT THE SNOW HAS SWALLOWED. A winter's blanket is metres
    * deep on a permanent snowfield (`permanentPack`, climate.ts), and a
-   * stone, a stump or a fallen limb shorter than the snow over it is simply
-   * not in the world any more: it is under the surface the car is driving
-   * on. So it is neither hit nor drawn — this is the one list both the
-   * contact model and the renderer's planting read, so burying it here
-   * buries it for both, and the two can never disagree about whether the
-   * thing a car just drove through was there.
+   * stone, a stump or a fallen limb the snow has taken is simply not in the
+   * world any more: it is under the surface the car is driving on. So it is
+   * neither hit nor drawn — this is the one list both the contact model and
+   * the renderer's planting read, so burying it here buries it for both,
+   * and the two can never disagree about whether the thing a car just drove
+   * through was there.
    *
-   * Measured against the solid's own foot rather than against the car,
-   * because it is a fact about the ground and not about who is looking: the
-   * snow at the foot has to bury the whole height for the thing to be gone.
-   * What still stands proud stays a solid at full strength — a fallen trunk
+   * What counts is what STANDS OVER THE SNOW (`CLIMATE.blanket.bury`), not
+   * what the snow happens to have covered: the solid's own top against the
+   * drawn surface, which is the one thing a driver is looking at. A stone
+   * whose last hand's breadth pokes out of a drift is white on white, and a
+   * white country that stops a car on something it never showed is the
+   * whole complaint — so the bar is a real one and everything under it goes.
+   * What still stands proud stays a solid at full strength: a fallen trunk
    * with a metre of itself above the drift is a fallen trunk, and driving
-   * into one ends the way it should. */
-  const buried = (ob: WildObstacle): boolean => ob.height <= ctx.blanketAt(ob.x, ob.z);
+   * into one ends the way it should.
+   *
+   * Asked ONCE, as a cell is built (`unburied`), and never again: where a
+   * solid stands and how deep the snow over it lies are both facts about
+   * the seed, so a buried one is dropped before it ever reaches a cache.
+   * Asking it in `standing` instead would read two heightfields per
+   * candidate of every gather — thousands of times a step, for an answer
+   * that cannot change — and measured a microsecond a query on a winter
+   * stage, on the one call the physics makes every step. */
+  const buried = (ob: WildObstacle): boolean => {
+    if (ctx.blanketAt(ob.x, ob.z) <= 0) return false;
+    return ob.y + ob.height - ctx.latticeAt(ob.x, ob.z) < CLIMATE.blanket.bury;
+  };
 
-  const standing = (ob: WildObstacle): boolean =>
-    (felled.size === 0 || !felled.has(propKey(ob))) && !buried(ob);
+  /** A freshly built cell's solids, less whatever the snow has taken. The
+   * array itself where nothing went, so a green country allocates nothing
+   * on top of what it always did. */
+  const unburied = (found: WildObstacle[]): WildObstacle[] => {
+    for (let i = 0; i < found.length; i++) {
+      if (buried(found[i])) return found.filter((ob) => !buried(ob));
+    }
+    return found;
+  };
+
+  const standing = (ob: WildObstacle): boolean => felled.size === 0 || !felled.has(propKey(ob));
 
   /** Half the width of the road at the sample a query landed nearest to, m.
    * The road's own width HERE, never the stage's nominal: a junction's mouth
@@ -530,8 +475,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    obCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    obCache.set(key, kept);
+    return kept;
   };
 
   // ── Litter, boulder fields and bedrock outcrops ───────────────────────
@@ -602,8 +548,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    rockCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    rockCache.set(key, kept);
+    return kept;
   };
 
   // ── Rocky outcrops: the bedrock breaking surface, in company ─────────
@@ -665,8 +612,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    outcropCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    outcropCache.set(key, kept);
+    return kept;
   };
 
   const slabSeed = (ctx.seed ^ 0x2545f491) >>> 0;
@@ -717,8 +665,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    slabCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    slabCache.set(key, kept);
+    return kept;
   };
 
   // ── Human traces: the cut timber a logging block leaves behind ────────
@@ -755,8 +704,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    timberCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    timberCache.set(key, kept);
+    return kept;
   };
 
   /** Collect one cell field's props within `r` of a point. A cell may hold
@@ -844,8 +794,9 @@ export function createPropField(ctx: PropContext): PropField {
     // ridges and the mountain flanks instead of scattering it at random.
     const soil = ctx.soilAt(x, z);
     if (soil < ROOT_DEPTH) {
-      treeCache.set(key, found);
-      return found;
+      const bare = unburied(found);
+      treeCache.set(key, bare);
+      return bare;
     }
     const rooting = Math.min(1, ROOT_THIN + (soil - ROOT_DEPTH) / ROOT_FULL);
     // How many stems this candidate grows, and — because the clump has to
@@ -887,8 +838,9 @@ export function createPropField(ctx: PropContext): PropField {
         );
       }
     }
-    treeCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    treeCache.set(key, kept);
+    return kept;
   };
 
   // The guard groves' trunks (R14): the same solid trees the forest field

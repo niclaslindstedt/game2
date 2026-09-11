@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 import { TUNING, type RaceEnv } from "@engine";
 
 import { rainTone, skyFor, type Preset } from "../pwa/src/game/sky.ts";
-import { coverOf, precipReach, squallOf } from "../pwa/src/game/weather.ts";
+import { coverOf, precipReach, squallOf, wetnessOf } from "../pwa/src/game/weather.ts";
 
 /** A stage's conditions, with the wind — which is what everything wet is
  * scaled by — set by hand. */
@@ -74,6 +74,34 @@ describe("how heavy a stage's weather is", () => {
     expect(p.deck).toBeNull();
     expect(p.rain).toBe(0);
     expect(p.thunder).toBe(0);
+  });
+});
+
+describe("how wet a stage is", () => {
+  it("reads the weather against the country it is over", () => {
+    expect(wetnessOf(conditions({ weather: "clear" }), "taiga")).toBe(0);
+    expect(wetnessOf(conditions({ weather: "rain" }), "taiga")).toBeGreaterThan(0);
+    expect(wetnessOf(conditions({ weather: "storm" }), "taiga")).toBeGreaterThan(
+      wetnessOf(conditions({ weather: "rain" }), "taiga"),
+    );
+    // R40 — the desert's storm is wind and sand, and soaks nothing, except
+    // in the one season its own row calls wet.
+    expect(wetnessOf(conditions({ weather: "storm" }), "desert")).toBe(0);
+    expect(
+      wetnessOf(conditions({ weather: "storm", season: "winter", temperature: 12 }), "desert"),
+    ).toBeGreaterThan(0);
+  });
+
+  it("soaks nothing at or under freezing — what falls there is snow", () => {
+    // The sky already draws flakes rather than drops under 0 °C
+    // (`fallsAsSnow`). A wetness that kept saying rain there is the road
+    // bed's sheet, the wheels' clods and the film on the glass all
+    // disagreeing with what the player can see coming down.
+    const wet = { weather: "storm" as const, season: "winter" as const };
+    expect(wetnessOf(conditions({ ...wet, temperature: 4 }), "taiga")).toBeGreaterThan(0);
+    expect(wetnessOf(conditions({ ...wet, temperature: 0 }), "taiga")).toBe(0);
+    expect(wetnessOf(conditions({ ...wet, temperature: -9 }), "taiga")).toBe(0);
+    expect(wetnessOf(conditions({ ...wet, weather: "rain", temperature: -1 }), "taiga")).toBe(0);
   });
 });
 

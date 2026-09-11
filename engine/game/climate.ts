@@ -144,8 +144,32 @@ export const CLIMATE = {
    * what makes a snowfield a WALL to drive into a few metres after it is
    * merely white. That contrast is the whole point of one: the bladed road
    * is the fast line, and the field either side of it is a place a car
-   * goes to be stopped. */
-  blanket: { shallow: 0.5, deep: 1.0, deepAt: -15, ride: 0.6, verge: 4, pile: 1.6, pileAt: 18 },
+   * goes to be stopped.
+   *
+   * ...and `bury` is WHAT THE SNOW TAKES OUT OF THE WORLD: the metres a
+   * solid has to stand clear of the drawn snow surface to still be a solid
+   * at all (`props.ts`). Anything under it is neither hit nor drawn — the
+   * field reads as clean snow and drives as clean snow.
+   *
+   * A rally stage is arcade country, and the one contact a driver can
+   * never read is a low one: a solid whose top sits under the car's centre
+   * of mass catches the floor and rolls the car
+   * (`TUNING.collision.solids.tripTop`, 0.55 m) rather than stopping it.
+   * On bare ground that is a fair fight — the stone is a dark lump on a
+   * green hillside and the line round it is there to be taken. Under snow
+   * it is white on white at a hundred and forty, so this bar sits just
+   * over the trip height: what the snow has all but swallowed is gone,
+   * and what is left standing is something the player can SEE coming. */
+  blanket: {
+    shallow: 0.5,
+    deep: 1.0,
+    deepAt: -15,
+    ride: 0.6,
+    verge: 4,
+    pile: 1.6,
+    pileAt: 18,
+    bury: 0.6,
+  },
   /** HOW HARD THE SNOW HOLDS, by temperature, as a multiplier on the
    * surface's own grip (`TUNING.surfaces.grip.snow`, which is the cold
    * winter's — `at` degrees). Around freezing a packed road glazes: the

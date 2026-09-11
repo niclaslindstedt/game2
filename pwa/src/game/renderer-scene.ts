@@ -296,7 +296,7 @@ export function createScene(canvas: HTMLCanvasElement, video: VideoSettings) {
     const snowing = environment.snowing();
     if (car) tintCar(car, tint, lamps, rain, snowing);
     if (ghostCar) tintCar(ghostCar, tint, lamps, rain, snowing);
-    field.paint(tint, lamps, rain);
+    field.paint(tint, lamps, rain, snowing);
     carFx.setTint(tint, environment.dustTint(), environment.ceiling(), environment.highTint());
   };
 

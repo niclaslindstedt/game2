@@ -13,7 +13,7 @@
 // DOM-free and three-free on purpose: `sky.ts` is a renderer module and
 // `drive-bed.ts` is an audio one, and they need the same two numbers.
 
-import { TUNING, rainsIn, type BiomeId, type RaceEnv, type Weather } from "@engine";
+import { TUNING, fallsAsSnow, rainsIn, type BiomeId, type RaceEnv, type Weather } from "@engine";
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
@@ -28,14 +28,34 @@ const WETNESS: Record<Weather, number> = { clear: 0, rain: 0.6, storm: 1 };
 
 /**
  * HOW WET THE STAGE IS, 0..1 — the weather read against the COUNTRY it is
- * over (R40). A storm in the taiga is a downpour; the same storm in the
- * desert is wind and sand and puts nothing on the road at all. Everything
- * that swaps a dry thing for a wet one (the road's voice, the plume for the
- * clods, the film on the glass) asks this rather than the weather, so no
- * desert stage is ever a wet one however the sky is set — except in its WET
- * SEASON (`rainsIn`, climate.ts), when the same storm is a downpour there too.
+ * over (R40) and the AIR it falls through. A storm in the taiga is a
+ * downpour; the same storm in the desert is wind and sand and puts nothing
+ * on the road at all. Everything that swaps a dry thing for a wet one (the
+ * road's voice, the plume for the clods, the film on the glass) asks this
+ * rather than the weather, so no desert stage is ever a wet one however the
+ * sky is set — except in its WET SEASON (`rainsIn`, climate.ts), when the
+ * same storm is a downpour there too.
+ *
+ * ...and NOTHING IS WET UNDER FREEZING, because what is falling there is
+ * not water (`fallsAsSnow`, climate.ts): a stage at or under 0 °C is a
+ * snowfall, and a snowfall does not soak a road, throw clods off the wheels
+ * or put a sheet of rain in the ear. The sky already draws flakes rather
+ * than drops at that temperature, so a wetness that kept saying rain was
+ * the one half of the weather that disagreed with the other.
+ *
+ * The datum's air is the stage's own answer (`RaceEnv.temperature`) because
+ * being wet is a state the whole stage is in, decided once — the same
+ * grain the desert's storm is decided at. A stage whose valley is above
+ * freezing is a wet stage, and the drive up into the flakes reads as the
+ * changeover it is: the sheet turns white at the height the air does
+ * (environment.ts cross-fades the two on the camera's own air), over
+ * ground the weather really did soak on the way in.
  */
-export function wetnessOf(env: Pick<RaceEnv, "weather" | "season">, biome: BiomeId): number {
+export function wetnessOf(
+  env: Pick<RaceEnv, "weather" | "season" | "temperature">,
+  biome: BiomeId,
+): number {
+  if (fallsAsSnow(env.temperature)) return 0;
   return rainsIn(biome, env.season) ? WETNESS[env.weather] : 0;
 }
 
