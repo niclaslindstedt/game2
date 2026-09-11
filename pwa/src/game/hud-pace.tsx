@@ -217,14 +217,17 @@ function pacenoteClass(note: HudPacenote): string {
   return note.kind === "jump" ? `hud-pace-jump-${note.size}` : `hud-pace-${note.severity}`;
 }
 
-/** The way home, in the co-driver's own slot. Off the road there is no next
+/** The way home, at the head of the frame. Off the road there is no next
  * corner to call — the road itself is the thing that has to be found again —
  * so the strip stops reading the stage and starts reading the way back. The
  * metres are the distance to the exact point the arrow over the car points
- * at, and that the reset key hands you directly. */
+ * at, and that the reset key hands you directly.
+ *
+ * `hud-pace-alert` is the offset: this is not a corner call and must not sit
+ * in the slot one would (see the class's own note in styles.css). */
 export function WayHomeCall({ distance }: { distance: number }) {
   return (
-    <div className="hud-pace">
+    <div className="hud-pace hud-pace-alert">
       <div className="hud-pace-call hud-pace-home">
         {/* A warning triangle, drawn in the co-driver strip's own hand —
             chunky rounded strokes, one color — so it reads as the same
@@ -234,27 +237,38 @@ export function WayHomeCall({ distance }: { distance: number }) {
           <path d="M 50 41 L 50 60" />
           <circle cx="50" cy="72" r="6" />
         </svg>
-        <span className="hud-pace-text">
-          RETURN TO TRACK
-          <span className="hud-pace-dist">{Math.round(distance)}m</span>
-          {/* What the RESET key does, which is not the same as what the
-              arrow points at: driving back keeps the road, and the key hands
-              it back to the last split board (R28). A driver deciding between
-              the two has to be told the price. */}
-          <span className="hud-pace-cost">↺ LAST SPLIT</span>
+        {/* TWO LINES, NOT ONE. The instruction is the call; the metres and
+            the price of the button are its small print, and set beside the
+            words they stretch the plate most of the way across the screen —
+            over the road the instruction is telling you to go and find. Under
+            them the plate is as wide as its widest LINE, which is the
+            instruction, and the small print is read second because it is
+            printed second. */}
+        <span className="hud-pace-text hud-pace-stacked">
+          <span>RETURN TO TRACK</span>
+          <span className="hud-pace-sub">
+            <span className="hud-pace-dist">{Math.round(distance)}m</span>
+            {/* What the RESET key does, which is not the same as what the
+                arrow points at: driving back keeps the road, and the key hands
+                it back to the last split board (R28). A driver deciding between
+                the two has to be told the price. */}
+            <span className="hud-pace-cost">↺ LAST SPLIT</span>
+          </span>
         </span>
       </div>
     </div>
   );
 }
 
-/** Turned round and driving back up the stage, in the co-driver's slot. The
- * road is still under the wheels, so there is nothing to find and no
+/** Turned round and driving back up the stage, at the head of the frame
+ * beside the way home — the two are the same kind of call and a driver who
+ * met them at different heights would read the height as meaning something.
+ * The road is still under the wheels, so there is nothing to find and no
  * distance to quote — the whole call is one instruction and the mark that
  * says it without being read. */
 export function TurnAroundCall() {
   return (
-    <div className="hud-pace">
+    <div className="hud-pace hud-pace-alert">
       <div className="hud-pace-call hud-pace-turn">
         {/* The U-turn off a road sign: up the near side, over the top, and
             back down the far one under a solid head. Drawn in the strip's

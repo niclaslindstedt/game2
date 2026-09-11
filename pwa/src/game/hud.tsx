@@ -586,6 +586,12 @@ export function Hud({
       onSpectate={onSpectate}
     />
   );
+  /** The run has gone wrong and the strip is saying so rather than calling a
+   * corner — lost off the road, or turned round on it. It is ONE reading,
+   * used twice: the plate takes the head of the frame (`.hud-pace-alert`) and
+   * the split's flash steps down out of its way (`--alert-band`), and the two
+   * cannot disagree about which state that is. */
+  const alert = !spectate && snap.phase === "racing" && (snap.lost || snap.wrongWay);
   // THE RESULTS CARD OWNS THE SCREEN while the run-out is only its backdrop.
   // Nothing is being watched closely, the player's own car is parked past the
   // line, and a driving layout full of readings off a stationary car nobody
@@ -612,7 +618,9 @@ export function Hud({
   // two readings placed off one number can never drift apart. `data-replay`
   // is the second thing that can claim the head of that stack: the replay
   // bar stands across the top of the frame, and where the glass has already
-  // pushed the stack down the bar goes in front of it.
+  // pushed the stack down the bar goes in front of it. `data-alert` is the
+  // third — the way home and the turn around take the head while they are up,
+  // and the split steps down for them.
   return (
     <div
       className="hud pointer-events-none absolute inset-0 select-none"
@@ -623,6 +631,7 @@ export function Hud({
       data-glass={glass === "off" ? undefined : "1"}
       data-seated={seated ? "1" : undefined}
       data-replay={replaying ? "1" : undefined}
+      data-alert={alert ? "1" : undefined}
     >
       {/* THE MIRROR IS ITS OWN SWITCH: press the glass to put the rear view
           out, press the grey it leaves behind to bring it back. Only where
@@ -772,17 +781,17 @@ export function Hud({
           precisely what a replay of it is worth watching for. */}
       {spectate ? (
         <SpectateBanner {...spectate} />
+      ) : alert ? (
+        snap.lost ? (
+          <WayHomeCall distance={snap.homeDistance} />
+        ) : (
+          <TurnAroundCall />
+        )
       ) : (
         snap.phase === "racing" &&
-        (snap.lost ? (
-          <WayHomeCall distance={snap.homeDistance} />
-        ) : snap.wrongWay ? (
-          <TurnAroundCall />
-        ) : (
-          !replaying &&
-          show.pacenotes &&
-          snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
-        ))
+        !replaying &&
+        show.pacenotes &&
+        snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
       )}
 
       {/* Center: the countdown and the finish card. Both belong to the

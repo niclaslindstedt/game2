@@ -987,18 +987,23 @@ has driven out does not drown in the lake, it drowns in the beach.
   be lost first — but the ALERT waits for the car to actually be lost (`trackLost`, `TUNING.offTrack.guide`): more than 20 m
   out AND pointed more than 110° away from the way home. Two wheels on the
   verge is not lost, and neither is a clearing crossed perpendicular with the
-  stage running alongside. Once it is, the co-driver's strip reads RETURN TO
-  TRACK with the distance to the road, a footnote saying what the button
-  costs (the last checkpoint), and a small arrow hangs in the frame just
-  UNDER that sign, pointing at the road itself — measured off the sign
-  rather than parked at a fixed height, so the two stay stacked in either
+  stage running alongside. Once it is, a plate reads RETURN TO TRACK with the
+  distance to the road under it and, beside that, a footnote saying what the
+  button costs (the last checkpoint) — two lines rather than one, so the plate
+  is as wide as the instruction instead of as wide as the sentence. It stands
+  at the HEAD of the frame rather than in the co-driver's own slot a band or
+  two down it: the slot is over the road, which is the thing this call is
+  telling you to go and find, and nothing is being called anyway. The split's
+  flash steps down for the few seconds it is up. A small arrow hangs in the
+  frame just UNDER that sign, pointing at the road itself — measured off the
+  sign rather than parked at a fixed height, so the two stay stacked in either
   orientation and with or without a mirror hanging over them.
   Going OFF has no threshold of its own: the alert is an
   instruction, so the only thing that clears it is the track being back
   under the wheels. Nearing the road or aiming at it leaves it up, which is
   also what stops a wandering car blinking it on and off.
 
-- **The wrong way** — the other thing the co-driver's slot takes over for,
+- **The wrong way** — the other call that takes the head of the frame,
   and the opposite problem: the road is still under the wheels and it is
   being driven back up. `stageDirection` reads the car against the
   centerline sample under it and answers two questions, because on its own
@@ -1012,7 +1017,7 @@ has driven out does not drown in the lake, it drowns in the beach.
   (110°, the same angle the way home calls pointed away) and running back
   faster than `wrongWay.speed` (3 m/s) — for `wrongWay.after` (1.2 s), which
   is long enough that a three-point turn on a narrow road finishes inside it.
-  Then the strip reads TURN AROUND under a U-turn mark, in the HUD's red
+  Then the plate reads TURN AROUND under a U-turn mark, in the HUD's red
   rather than the way home's amber: this is the one call in the strip that is
   a mistake already being made rather than a corner coming up. Coming off is
   its own, narrower threshold: the nose back inside `wrongWay.back` (60°).
