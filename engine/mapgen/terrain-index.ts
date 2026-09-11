@@ -13,11 +13,11 @@
 import { blockOffsets, cellKey } from "../lib/math.ts";
 import type { Track, TrackSample } from "./compile.ts";
 import { knobScale, STAGE_RULES as R } from "./rules.ts";
-import { APRON, clamp01 } from "./terrain-streams.ts";
+import { clamp01 } from "./terrain-streams.ts";
 import { GROUND_CELL } from "./lattice.ts";
 import type { BiomeRules } from "./biomes.ts";
 import type { LandField } from "./land.ts";
-import type { RoadShape } from "./road.ts";
+import { apronReach, type RoadShape } from "./road.ts";
 
 /** A road sample as the shaping reads it: the cross-section at that point,
  * the centerline height it hangs off, and whether the road is bored
@@ -390,8 +390,8 @@ export function createSampleIndex(track: Track, deps: SampleIndexDeps) {
   /** The stage's END APRONS (R24): the dirt extrapolated straight past each
    * end sample, which is road the terrain shelves like road. A point past
    * an end is as far from the road as it is from the apron's SPINE — the
-   * end sample's line, out to `APRON` — and the sample it belongs to is
-   * that end sample. Asked on EVERY query, not only when the end sample
+   * end sample's line, out to its `apronReach` — and the sample it belongs
+   * to is that end sample. Asked on EVERY query, not only when the end sample
    * happens to be the nearest: past a curved end an earlier sample of the
    * route can be nearer than the end one, and a distance that switched
    * from the spine's to that sample's — sixty metres, across one lattice
@@ -399,12 +399,18 @@ export function createSampleIndex(track: Track, deps: SampleIndexDeps) {
    * the apron at either end of the stage. Writes the nearer end into
    * `apron` and says whether there was one. Both searches end here. */
   const apron = { index: -1, d: 0, lateral: 0 };
-  // The two ends are not the same length: the run-up is as long as the grid
-  // standing on it (`Track.startApron`), the run-off is the rule book's.
-  const reach = [track.startApron, APRON];
+  // How far each end's apron reaches is the ROAD's answer (`apronReach`),
+  // not this module's — the shelf has to end where the dirt standing on it
+  // does. A zero is an end with no apron at all (both of a circuit's, and
+  // an endless stage's open finish), and there the search skips it whole:
+  // shelving a circuit's opening straight against the start LINE holds the
+  // ground level while the lap falls away under it, which is a step up to a
+  // car's height standing in mid-road with nothing drawn on it.
+  const reach = [apronReach(track, "start"), apronReach(track, "finish")];
   const nearerApron = (x: number, z: number, d: number): boolean => {
     apron.index = -1;
     for (let end = 0; end < 2; end++) {
+      if (reach[end] <= 0) continue;
       const i = end === 0 ? firstIndexed : samples.length - 1;
       const s = samples[i];
       const sinH = Math.sin(s.heading);

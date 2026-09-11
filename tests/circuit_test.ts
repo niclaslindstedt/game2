@@ -14,6 +14,8 @@ import {
   circuitLapBand,
   compileStage,
   createGame,
+  createTerrain,
+  endApron,
   generateStage,
   simulateStage,
   step,
@@ -94,6 +96,38 @@ describe("R22 — the circuit's geometry", () => {
       expect(last.kind).toBe("straight");
       expect(last.feature).toBe("none");
       expect(last.length).toBeGreaterThanOrEqual(R.closingStraight);
+    }
+  });
+
+  it("R24 — has no end aprons, at either end, in the road OR in the ground", () => {
+    // A sprint's two ends carry road the sample array never held: dirt
+    // extrapolated level from the end sample for the grid to stand on and
+    // to run off onto. A circuit's ends are each other, so both aprons are
+    // road it already has — and laying one anyway holds the ground LEVEL
+    // over an opening straight that is falling away under it. The road is
+    // drawn from the samples and the apron is drawn from nothing, so what
+    // that leaves is an invisible step in mid-road: seed 30's Alps circuit
+    // put 1.4 m of it eight metres off the centreline, forty metres off the
+    // line, which took the wheels off a car that merely drifted wide.
+    for (const seed of SEEDS) {
+      const track = circuit(seed);
+      expect(endApron(track, "start")).toEqual([]);
+      expect(endApron(track, "finish")).toEqual([]);
+      const terrain = createTerrain(track);
+      // The two ends, out to as far as an apron would have reached.
+      const window = Math.max(track.startApron, R.startZone.apron);
+      for (const sample of track.samples) {
+        if (sample.s > window && sample.s < track.length - window) continue;
+        const rx = Math.cos(sample.heading);
+        const rz = -Math.sin(sample.heading);
+        // The crown is the highest line ACROSS the road (track-shape.ts), so
+        // nothing standing on the mat may be over it — which is exactly what
+        // a level slab laid over a descending lap is.
+        for (let lateral = -sample.width / 2; lateral <= sample.width / 2; lateral += 0.5) {
+          const ground = terrain.groundAt(sample.x + rx * lateral, sample.z + rz * lateral);
+          expect(ground - sample.elevation).toBeLessThan(0.1);
+        }
+      }
     }
   });
 

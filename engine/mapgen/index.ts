@@ -48,6 +48,7 @@ export {
 export { createGeology, type GeologyField, type GroundSample } from "./geology.ts";
 export {
   ROAD_CROSS,
+  apronReach,
   corridorOffset,
   crossOffset,
   endApron,

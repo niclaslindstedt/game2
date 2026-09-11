@@ -10,7 +10,7 @@
 
 import { STAGE_RULES, finishIndex, type Track, type Underfoot } from "../mapgen/index.ts";
 import { BLOCK, flatTrack, GROUP, GROUP_SHIFT, type FlatTrack } from "../mapgen/flat.ts";
-import { corridorOffset, crossOffset, ROAD_CROSS, snowSinkAt } from "../mapgen/road.ts";
+import { apronReach, corridorOffset, crossOffset, ROAD_CROSS, snowSinkAt } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
 
@@ -630,7 +630,7 @@ function nearerEnd(track: Track, flat: FlatTrack, x: number, z: number, best: nu
     // Past the apron's own end the point is off the spine by however far
     // past it is, which keeps this monotone and lets `pastApron` — asked
     // below, once the end sample has won — say the car has left the stage.
-    const reach = apronOf(track, end === 0);
+    const reach = apronReach(track, end === 0 ? "start" : "finish");
     const over = out > reach ? out - reach : 0;
     const d2 = lateral * lateral + over * over;
     if (d2 < bestD2) {
@@ -639,13 +639,6 @@ function nearerEnd(track: Track, flat: FlatTrack, x: number, z: number, best: nu
     }
   }
   return winner;
-}
-
-/** How far the apron off one end of the stage reaches, m. The run-up carries
- * whatever grid is standing on it; the run-off past a finish is the rule
- * book's, always — nothing lines up out there. */
-function apronOf(track: Track, start: boolean): number {
-  return start ? track.startApron : STAGE_RULES.startZone.apron;
 }
 
 /** True when the car has run off one of the stage's ENDS — past the apron
@@ -673,7 +666,7 @@ function pastApron(
   const past = first ? -along : along;
   // The run-up is as long as the stage was built for — a deep grid stands
   // on more apron than the rule book lays, and its back row is ON the stage.
-  return past > apronOf(track, first);
+  return past > apronReach(track, first ? "start" : "finish");
 }
 
 function clampIndex(samples: { length: number }, index: number): number {

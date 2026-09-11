@@ -144,7 +144,9 @@
 //       plain clearance a dozen metres above it leaves the ground between
 //       nothing to be but a face. A circuit closes onto its own start line
 //       by construction (R22), so what it must not do is come at it ACROSS
-//       the apron; its closure lies along it.
+//       the apron; its closure lies along it — and it has no apron at
+//       either END, neither drawn road nor terrain shelf (`apronReach`),
+//       because both ends are the lap's own road on grades of their own.
 //   R25 A SPRINT's finish line is not the end of its road. It carries on
 //       past the gate for a RUN-OUT — road the car coasts down after the
 //       clock stops, so the finish is a line drawn across a road rather

@@ -161,30 +161,41 @@ export function roadClearance(width: number): number {
   return Math.max(R.minSelfDistance, 2 * corridor + R.roadClear.margin);
 }
 
-/** R24 / R25 — the road at a stage's two ENDS that is in no sample array:
- * `Track.startApron` metres of plain dirt extrapolated straight back from
- * the start gate for the grid to stand on, and `startZone.apron` forward
- * past a sprint's flying finish for the car to run off onto. Each is the end
- * sample carried on along its own heading, level, as gravel — as
- * samples, in stage order, so the renderer welds them onto the ribbon and
- * a test can read exactly what gets drawn.
+/** R24 / R25 — HOW FAR THE APRON REACHES past one of a stage's ends, m, and
+ * 0 where that end has none. Stated once, here, because two things hang off
+ * it and they have to agree: the apron SAMPLES (`endApron`, what the
+ * renderer welds onto the ribbon) and the terrain's shelf UNDER them
+ * (`terrain-index.ts`). Ground shelved as apron where no apron is laid is a
+ * level slab standing over the real road, with nothing drawn on it to say
+ * so — a wall in mid-road that the player cannot see.
  *
- * A CIRCUIT has neither. Its last sample IS its first (R22), so the road
- * behind the start line is the closing straight and the road past the
- * finish is the opening one — both already in the array, both on grades
- * of their own. An apron laid past either end there is a level dirt slab
- * running over real road that is climbing or falling under it: on a lap
- * dropping off the line it stands a car's height over the mat within
- * forty metres, and a car driving the true road underneath is drawn
- * buried to its windows. An endless stage has a start and no finish. */
-export function endApron(track: Track, end: "start" | "finish"): TrackSample[] {
-  if (track.circuit) return [];
-  if (end === "finish" && track.endless) return [];
+ * A CIRCUIT has neither end. Its last sample IS its first (R22), so the
+ * road behind the start line is the closing straight and the road past the
+ * finish is the opening one — both already in the array, both on grades of
+ * their own. An apron laid past either end there is a level slab running
+ * over real road that is climbing or falling under it: on a lap dropping
+ * off the line it stands a car's height over the mat within forty metres.
+ * An endless stage has a start and no finish. */
+export function apronReach(track: Track, end: "start" | "finish"): number {
+  if (track.circuit) return 0;
   // The run-up is as long as the stage was BUILT for (`Track.startApron`) —
   // a mass start too deep for the rule book's own apron is stood on more of
   // it. The run-off past a finish is the rule book's, always: nothing lines
   // up out there.
-  const n = Math.round((end === "start" ? track.startApron : R.startZone.apron) / track.step);
+  if (end === "start") return track.startApron;
+  return track.endless ? 0 : R.startZone.apron;
+}
+
+/** R24 / R25 — the road at a stage's two ENDS that is in no sample array:
+ * `apronReach` metres of plain dirt extrapolated straight back from the
+ * start gate for the grid to stand on, and forward past a sprint's flying
+ * finish for the car to run off onto. Each is the end sample carried on
+ * along its own heading, level, as gravel — as samples, in stage order, so
+ * the renderer welds them onto the ribbon and a test can read exactly what
+ * gets drawn. */
+export function endApron(track: Track, end: "start" | "finish"): TrackSample[] {
+  const n = Math.round(apronReach(track, end) / track.step);
+  if (n <= 0) return [];
   const at = end === "start" ? track.samples[0] : track.samples[track.samples.length - 1];
   const sign = end === "start" ? -1 : 1;
   const out: TrackSample[] = [];
