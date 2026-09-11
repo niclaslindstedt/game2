@@ -22,6 +22,7 @@
 // each community grows, and what its ground cover looks like, is the
 // renderer's business (the biome in the app maps these ids to flora).
 
+import { CLIMATE } from "../game/climate.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2, valueNoise } from "../lib/noise.ts";
 import { GROVE_SCALE, REGION_SCALE, type BiomeRules } from "./biomes.ts";
@@ -276,6 +277,11 @@ export type PropContext = {
    * decides whether a solid here is still a solid. Zero on every green
    * country, which is what makes the burial rule below cost one nothing. */
   blanketAt: (x: number, z: number) => number;
+  /** R47 — THE SURFACE THE EYE SEES, m: the ground tiles with the winter's
+   * blanket lying on them. The burial rule measures against this and not
+   * against the bare country, because what a driver has to pick a thing
+   * out of is the snow, not the hillside under it. */
+  latticeAt: (x: number, z: number) => number;
 };
 
 export type PropField = {
@@ -382,23 +388,46 @@ export function createPropField(ctx: PropContext): PropField {
   };
   /** R47 — ...AND WHAT THE SNOW HAS SWALLOWED. A winter's blanket is metres
    * deep on a permanent snowfield (`permanentPack`, climate.ts), and a
-   * stone, a stump or a fallen limb shorter than the snow over it is simply
-   * not in the world any more: it is under the surface the car is driving
-   * on. So it is neither hit nor drawn — this is the one list both the
-   * contact model and the renderer's planting read, so burying it here
-   * buries it for both, and the two can never disagree about whether the
-   * thing a car just drove through was there.
+   * stone, a stump or a fallen limb the snow has taken is simply not in the
+   * world any more: it is under the surface the car is driving on. So it is
+   * neither hit nor drawn — this is the one list both the contact model and
+   * the renderer's planting read, so burying it here buries it for both,
+   * and the two can never disagree about whether the thing a car just drove
+   * through was there.
    *
-   * Measured against the solid's own foot rather than against the car,
-   * because it is a fact about the ground and not about who is looking: the
-   * snow at the foot has to bury the whole height for the thing to be gone.
-   * What still stands proud stays a solid at full strength — a fallen trunk
+   * What counts is what STANDS OVER THE SNOW (`CLIMATE.blanket.bury`), not
+   * what the snow happens to have covered: the solid's own top against the
+   * drawn surface, which is the one thing a driver is looking at. A stone
+   * whose last hand's breadth pokes out of a drift is white on white, and a
+   * white country that stops a car on something it never showed is the
+   * whole complaint — so the bar is a real one and everything under it goes.
+   * What still stands proud stays a solid at full strength: a fallen trunk
    * with a metre of itself above the drift is a fallen trunk, and driving
-   * into one ends the way it should. */
-  const buried = (ob: WildObstacle): boolean => ob.height <= ctx.blanketAt(ob.x, ob.z);
+   * into one ends the way it should.
+   *
+   * Asked ONCE, as a cell is built (`unburied`), and never again: where a
+   * solid stands and how deep the snow over it lies are both facts about
+   * the seed, so a buried one is dropped before it ever reaches a cache.
+   * Asking it in `standing` instead would read two heightfields per
+   * candidate of every gather — thousands of times a step, for an answer
+   * that cannot change — and measured a microsecond a query on a winter
+   * stage, on the one call the physics makes every step. */
+  const buried = (ob: WildObstacle): boolean => {
+    if (ctx.blanketAt(ob.x, ob.z) <= 0) return false;
+    return ob.y + ob.height - ctx.latticeAt(ob.x, ob.z) < CLIMATE.blanket.bury;
+  };
 
-  const standing = (ob: WildObstacle): boolean =>
-    (felled.size === 0 || !felled.has(propKey(ob))) && !buried(ob);
+  /** A freshly built cell's solids, less whatever the snow has taken. The
+   * array itself where nothing went, so a green country allocates nothing
+   * on top of what it always did. */
+  const unburied = (found: WildObstacle[]): WildObstacle[] => {
+    for (let i = 0; i < found.length; i++) {
+      if (buried(found[i])) return found.filter((ob) => !buried(ob));
+    }
+    return found;
+  };
+
+  const standing = (ob: WildObstacle): boolean => felled.size === 0 || !felled.has(propKey(ob));
 
   /** Half the width of the road at the sample a query landed nearest to, m.
    * The road's own width HERE, never the stage's nominal: a junction's mouth
@@ -530,8 +559,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    obCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    obCache.set(key, kept);
+    return kept;
   };
 
   // ── Litter, boulder fields and bedrock outcrops ───────────────────────
@@ -602,8 +632,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    rockCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    rockCache.set(key, kept);
+    return kept;
   };
 
   // ── Rocky outcrops: the bedrock breaking surface, in company ─────────
@@ -665,8 +696,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    outcropCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    outcropCache.set(key, kept);
+    return kept;
   };
 
   const slabSeed = (ctx.seed ^ 0x2545f491) >>> 0;
@@ -717,8 +749,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    slabCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    slabCache.set(key, kept);
+    return kept;
   };
 
   // ── Human traces: the cut timber a logging block leaves behind ────────
@@ -755,8 +788,9 @@ export function createPropField(ctx: PropContext): PropField {
         }
       }
     }
-    timberCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    timberCache.set(key, kept);
+    return kept;
   };
 
   /** Collect one cell field's props within `r` of a point. A cell may hold
@@ -844,8 +878,9 @@ export function createPropField(ctx: PropContext): PropField {
     // ridges and the mountain flanks instead of scattering it at random.
     const soil = ctx.soilAt(x, z);
     if (soil < ROOT_DEPTH) {
-      treeCache.set(key, found);
-      return found;
+      const bare = unburied(found);
+      treeCache.set(key, bare);
+      return bare;
     }
     const rooting = Math.min(1, ROOT_THIN + (soil - ROOT_DEPTH) / ROOT_FULL);
     // How many stems this candidate grows, and — because the clump has to
@@ -887,8 +922,9 @@ export function createPropField(ctx: PropContext): PropField {
         );
       }
     }
-    treeCache.set(key, found);
-    return found;
+    const kept = unburied(found);
+    treeCache.set(key, kept);
+    return kept;
   };
 
   // The guard groves' trunks (R14): the same solid trees the forest field

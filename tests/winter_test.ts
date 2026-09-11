@@ -254,21 +254,41 @@ describe("the climate", () => {
     expect(checked).toBeGreaterThan(3);
   });
 
-  it("swallows a solid shorter than the snow standing over it", () => {
-    // R47 — a stone under the blanket is under the surface the car is
-    // driving on, so it is neither hit nor drawn. The one list the contact
-    // model and the renderer's planting both read is where it goes.
+  it("swallows a solid the snow has all but taken, not only one it has covered", () => {
+    // R47 — a stone the blanket has swallowed is under the surface the car
+    // is driving on, so it is neither hit nor drawn. The bar is what STANDS
+    // OVER the drawn snow (`CLIMATE.blanket.bury`) rather than what the snow
+    // happens to have covered: a stone with its last hand's breadth out of a
+    // drift is white on white at rally pace, and a country that stops a car
+    // on something it never showed is not a country anybody wants to drive.
+    // The one list the contact model and the renderer's planting both read
+    // is where it goes.
     const track = white();
     const terrain = stageTerrain(track);
     let seen = 0;
+    let inSnow = 0;
     for (const s of track.samples) {
       terrain.sync(s.s);
       for (const ob of terrain.obstaclesNear(s.x, s.z, 60)) {
         seen++;
-        expect(ob.height).toBeGreaterThan(terrain.blanketAt(ob.x, ob.z));
+        if (terrain.blanketAt(ob.x, ob.z) <= 0) continue;
+        inSnow++;
+        expect(ob.y + ob.height - terrain.latticeAt(ob.x, ob.z)).toBeGreaterThanOrEqual(
+          CLIMATE.blanket.bury,
+        );
       }
     }
     expect(seen).toBeGreaterThan(10);
+    expect(inSnow).toBeGreaterThan(10);
+  });
+
+  it("leaves nothing in the snow low enough to TRIP the car", () => {
+    // The whole point of the bar: a solid whose top sits under the car's own
+    // centre of mass catches the floor and rolls the car rather than
+    // stopping it (`TUNING.collision.solids.tripTop`). On a green hillside
+    // that is a dark lump with a line round it; under snow it is invisible,
+    // so the survivors have to clear the trip height by construction.
+    expect(CLIMATE.blanket.bury).toBeGreaterThan(TUNING.collision.solids.tripTop);
   });
 
   it("turns the rain to snow under freezing, and gives the desert a wet season", () => {

@@ -397,6 +397,7 @@ export function createTerrain(track: Track): TerrainField {
     wetAt: land.geology.wetAt,
     guards,
     blanketAt,
+    latticeAt,
   });
 
   // R13 — the parapets, built once off the deck runs the track already
