@@ -13,8 +13,8 @@ import { describe, expect, it } from "vitest";
 
 import { CARS, SOLID_PROP_HEIGHT, TUNING } from "@engine";
 
-import { bodyHalfLength, bodyHalfWidth } from "../pwa/src/game/car/shell.ts";
-import { CAR_BODIES, bodySpecFor } from "../pwa/src/game/car-styles.ts";
+import { bodyHalfLength, bodyHalfWidth, bodyNoseZ } from "../pwa/src/game/car/shell.ts";
+import { CAR_BODIES, bodySpecFor, carEyes } from "../pwa/src/game/car-styles.ts";
 
 const bodies = Object.entries(CAR_BODIES);
 
@@ -37,6 +37,37 @@ describe("the drawn cars against the collision box", () => {
     const widest = Math.max(...bodies.map(([, spec]) => bodyHalfWidth(spec, axlesOf(spec))));
     expect(TUNING.collision.halfLength - longest).toBeLessThan(0.5);
     expect(TUNING.collision.halfWidth - widest).toBeLessThan(0.2);
+  });
+});
+
+describe("the bumper camera against the nose it sits ahead of", () => {
+  // The lens is stood a hand's breadth in front of the car so that no panel
+  // of it is in frame — the whole reason to drive from down there. What it
+  // has to be in front of is the BODYWORK, and the profile's nose station is
+  // not that: the bar is bolted on past it. Measured from the station, the
+  // standoff put the compact's lens two and a half centimetres BEHIND its
+  // own bumper face, which the near plane cut into a wedge across the bottom
+  // of the frame.
+  it.each(CARS.map((car) => [car.id, car] as const))("%s sees none of itself", (_id, car) => {
+    const spec = bodySpecFor(car);
+    const lens = carEyes(car).bumper.z;
+    // Clear of the bodywork by more than the neck can ever pull the lens
+    // back into it (`EYE_RIGS.bumper`: a 0.18 m neck at 0.09 rad, and 18 mm
+    // of squash under it)…
+    expect(lens - bodyNoseZ(spec)).toBeGreaterThan(0.035);
+    // …and never outside the box the car is collided as, which would put
+    // the lens inside whatever the car has just stopped against.
+    expect(lens).toBeLessThanOrEqual(TUNING.collision.halfLength);
+  });
+
+  it("the nose is measured past every catalog bumper, not to the cap", () => {
+    // Every car in the roster wears a bar, so on every one of them the cap
+    // is behind the front of the car — a `bodyNoseZ` that merely echoed the
+    // profile would pass the test above and still photograph the bumper.
+    for (const car of CARS) {
+      const spec = bodySpecFor(car);
+      expect(bodyNoseZ(spec), car.name).toBeGreaterThan(spec.profile[0].z);
+    }
   });
 });
 

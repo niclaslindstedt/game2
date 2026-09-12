@@ -23,9 +23,9 @@
 // or, on a car with a shallow rear bar, the tip of its tailpipe
 // (`bodyHalfLength`, held by tests/car_geometry_test.ts).
 
-import type { CarSpec } from "@engine";
+import { TUNING, type CarSpec } from "@engine";
 import type { CarEyes } from "./camera-eye.ts";
-import { cockpitEyeFor, type CarBodySpec } from "./car-body.ts";
+import { bodyNoseZ, cockpitEyeFor, type CarBodySpec } from "./car-body.ts";
 import { applyLivery, type Livery } from "./car-livery.ts";
 
 /** The front-driver: a short, upright, hard-edged two-box hatch in the
@@ -864,11 +864,25 @@ const EYE_AHEAD = 0.06;
  * still has to read as centred. */
 const EYE_SIDE = 0.16;
 
-/** The BUMPER eye: ahead of the nose cap, so no panel of the car is in
+/** The BUMPER eye: ahead of the FRONT OF THE CAR, so no panel of it is in
  * frame at all, and level with the top of the bumper bar it is named for.
- * Ahead rather than on it, because a lens flush with the cap catches the
- * paint at the edges of a wide frame — which is the one thing this view is
- * for not having. */
+ * Ahead rather than on it, because a lens flush with the bodywork catches
+ * the paint at the edges of a wide frame — which is the one thing this view
+ * is for not having.
+ *
+ * Ahead of `bodyNoseZ` and not of the profile's nose station, which is a
+ * different place: the bumper bar stands up to 18 cm proud of that cap, so
+ * measured from the cap this standoff stood the compact's lens two and a
+ * half centimetres BEHIND its own bumper face — inside the bar, with the
+ * near plane cutting it, and one shunt away from a bent one being wrapped
+ * round the lens. Whatever a spec bolts to its nose, the lens clears it.
+ *
+ * And never further out than the box the engine COLLIDES, which is the
+ * other end of the same measurement: a lens standing outside that box is a
+ * lens inside the tree the car has just stopped against. Every body in the
+ * catalog is held inside it (tests/car_geometry_test.ts), so the nose of
+ * the box is the one place that is ahead of every panel of every car and
+ * still part of it. */
 const NOSE_AHEAD = 0.14;
 const NOSE_RISE = 0.06;
 
@@ -896,12 +910,15 @@ function deckAt(body: CarBodySpec, z: number): number {
 export function carEyes(car: CarSpec): CarEyes {
   const body = bodySpecFor(car);
   const cowl = body.cabin.cowlZ;
-  const nose = body.profile[0].z;
   const bumper = body.front?.bumper;
   const bumperTop = bumper ? bumper.y + bumper.height : body.beltY * 0.8;
   return {
     cockpit: cockpitEyeFor(body),
     hood: { x: EYE_SIDE, y: deckAt(body, cowl) + EYE_RISE, z: cowl + EYE_AHEAD },
-    bumper: { x: 0, y: bumperTop + NOSE_RISE, z: nose + NOSE_AHEAD },
+    bumper: {
+      x: 0,
+      y: bumperTop + NOSE_RISE,
+      z: Math.min(bodyNoseZ(body) + NOSE_AHEAD, TUNING.collision.halfLength),
+    },
   };
 }

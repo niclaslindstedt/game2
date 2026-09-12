@@ -54,7 +54,7 @@ export type {
   TailLights,
   WheelStyle,
 } from "./car/spec.ts";
-export { bodyHalfLength, bodyHalfWidth } from "./car/shell.ts";
+export { bodyHalfLength, bodyHalfWidth, bodyNoseZ } from "./car/shell.ts";
 export {
   LENS_MATERIAL,
   frontLampAnchors,
