@@ -25,6 +25,7 @@ import {
   packedDepth,
   roadSnow,
   rutAt,
+  snowBelly,
   snowGrip,
   snowRide,
   snowSinkAt,
@@ -419,8 +420,75 @@ describe("what the snow a car pressed is DRAWN as", () => {
       expect(sink).toBeLessThanOrEqual(coatRoom(state.terrain.blanketAt(x, z)) + 0.02);
       expect(sink).toBeGreaterThan(-0.05);
     }
-    // ...and it DID sink: a car went through here, and the drawn snow says so.
-    expect(sank).toBeGreaterThan(0.05);
+    // ...and it DID sink: a car went through here, and the drawn snow says
+    // so. Held low on purpose. What presses this field is FOUR TYRES and
+    // nothing else (`snowBelly`): a taiga blanket at -6 °C stands a couple
+    // of hand-widths deep, the car rides most of the way down into it, and
+    // its floor is still a clear fifth of a metre over the top of it — so
+    // the body is not in this snow and the broad trough a ploughing car
+    // leaves does not belong here. It belongs in a drift or a permanent
+    // snowfield, where the same gate opens on its own.
+    expect(sank).toBeGreaterThan(0.03);
+  });
+
+  it("keeps the body off a snow ROAD, and puts it into a drift", () => {
+    // R47 — THE ONE RULE AN ALPINE ROAD IS JUDGED BY. A snow road's cover
+    // is a few centimetres of already-bladed, already-worn snow and a rally
+    // car's floor is a third of a metre over the wheels: nothing about the
+    // body touches it, so what is left behind is four tyre tracks with
+    // UNBROKEN SNOW between them. Pressed unconditionally, every road in
+    // the game grew a bladed crown down the middle — the mark of a vehicle
+    // ploughing rather than the one being driven.
+    const track = winter();
+    const terrain = stageTerrain(track);
+    const under: SnowUnder = { rest: 0, base: 0 };
+    const road = track.samples.findIndex((s) => s.snow > 0);
+    expect(road).toBeGreaterThan(-1);
+    const s = track.samples[road];
+    snowUnder(track, terrain, road, s.x, s.z, under);
+    expect(snowBelly(under.rest, under.base)).toBe(0);
+    // ...and the same car in a drift deep enough to reach its sills is in
+    // the snow up to the floor, so the trough comes back on its own.
+    expect(snowBelly(CLIMATE.blanket.pile, 0)).toBe(1);
+    // The gate is a RAMP off the nose and not a switch at the floor: a car
+    // whose valance is in the snow while its sills are still clear is
+    // already disturbing it.
+    const nose = (TUNING.snow.clearance - TUNING.snow.dam / 2) / (1 - CLIMATE.blanket.ride);
+    expect(snowBelly(nose, 0)).toBeGreaterThan(0);
+    expect(snowBelly(nose, 0)).toBeLessThan(1);
+  });
+
+  it("lays a band under every one of the four wheels", () => {
+    // A car going where it is pointing runs its rear wheels in the tracks
+    // its own fronts cut and leaves TWO. Yawed, the four sweep four paths
+    // and leave FOUR — which is what a drift across a snowfield actually
+    // writes, and what one swept cross-section could never draw however it
+    // was shaped.
+    const track = winter();
+    const { state } = inField(track, 16);
+    const marks = createSnowMarks();
+    for (let i = 0; i < 240; i++) {
+      step(state, NEUTRAL_INPUT);
+      marks.lay(state, drawnGround(state));
+    }
+    const geo = (marks.group.children[0] as THREE.Mesh).geometry as THREE.BufferGeometry;
+    const p = geo.getAttribute("position").array as ArrayLike<number>;
+    // Every laid vertex, measured ACROSS the car: four clusters, one per
+    // wheel, and the two on each side straddle `TUNING.snow.wheelAt`.
+    const rx = Math.cos(state.car.heading);
+    const rz = -Math.sin(state.car.heading);
+    let left = 0;
+    let right = 0;
+    for (let v = 0; v * 3 < p.length; v++) {
+      if (p[v * 3 + 1] < -999) continue;
+      const lat = (p[v * 3] - state.car.x) * rx + (p[v * 3 + 2] - state.car.z) * rz;
+      if (Math.abs(Math.abs(lat) - TUNING.snow.wheelAt) > 0.3) continue;
+      if (lat < 0) left++;
+      else right++;
+    }
+    expect(left).toBeGreaterThan(0);
+    expect(right).toBeGreaterThan(0);
+    marks.dispose();
   });
 
   it("draws the trail's every triangle FACING UP", () => {

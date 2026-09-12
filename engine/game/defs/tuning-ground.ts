@@ -313,6 +313,25 @@ export const GROUND_TUNING = {
      * body's width. Enough that the splat of one overlaps its neighbour at
      * `CLIMATE.pack.cell`, or the path comes out as stripes. */
     chassis: { bite: 0.55, across: 5 },
+    /** ...and HOW FAR BELOW THE FLOOR THE NOSE HANGS, m — the front valance
+     * and the sump guard, which is the part of a car that reaches snow
+     * first and the reason the body's mark starts before the sills are
+     * buried.
+     *
+     * It is what turns `clearance` from a switch into a RAMP (`snowBelly`),
+     * and the ramp is what separates the two winter grounds this game has.
+     * On a snow ROAD the cover is a few centimetres of already-bladed,
+     * already-worn snow and nothing on the car comes near it: what is left
+     * behind is four tyre tracks with unbroken snow between them, which is
+     * what a photograph of a winter road always shows. In a FIELD the snow
+     * is most of a metre, the valance is in it long before the floor is,
+     * and the mark is the broad trough with a crown down the middle that a
+     * car ploughing leaves. A switch at the floor alone put the road's
+     * crown on every stage in the game; a switch at nothing put the
+     * field's trough nowhere, because a rally car rides high enough that
+     * its FLOOR clears even deep powder. The truth is in between and it is
+     * the nose. */
+    dam: 0.12,
   },
 
   hills: {

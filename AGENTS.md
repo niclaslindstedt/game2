@@ -36,6 +36,7 @@ This project is tuned by measuring and LOOKING, not guessing. Each lab below is 
 | A roll, a trip, a contact    | `crash`, `roll`                         | `crash`                       |
 | The ground under the car     | `verge`                                 | `crash`                       |
 | Damage: how it reads / draws | `health`, `wrecks`, `wheel`             | `collision`                   |
+| The track a car leaves in snow | `tracks`                              | `visual-effects`              |
 | The stage generator          | `analyze`, `track`, `level`, `previews` | `mapgen-improvement`          |
 | Whether a stage is any GOOD  | `rate`                                  | `level-rating`                |
 | The campaign's ladder        | `rate CAMPAIGN=1`, `sim`, `previews`    | `level-rating`                |
