@@ -36,7 +36,7 @@ import { coatRoom } from "./snow-mantle.ts";
 // R16 — the ground beside a road takes the ROAD's own edge tone and the
 // SPILL's own noise field, so the ribbon's dissolve, the scattered stones
 // and this wash all hand over along one boundary.
-import { ROAD_PAINT } from "./road-mesh.ts";
+import { ROAD_PAINT } from "./road-paint.ts";
 import { DISSOLVE } from "./road-spill.ts";
 import { detailTexture } from "./textures.ts";
 import { driftWater, iceMaterial, waterMaterial } from "./water-look.ts";
