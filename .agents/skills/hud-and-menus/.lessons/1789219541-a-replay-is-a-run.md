@@ -21,9 +21,11 @@ driver is the worst of the three because it also lies about what it does.
 `EXIT` / `WATCH AGAIN` — while the handlers stay exactly as they were.
 
 The layout half of the same trap: `.hud-replay` stands across the head of the
-frame and the comment over it claims "the card's title and sheet clear it".
-They do on the results card, which leads with a head ROW; they do not on
-`.hud-finish-retired`, which is the headline itself at `top: 7%`. Do not try
-to nudge that card down by `--replay-height` — that token is a reserve, not a
-measurement (3.9rem against a bar measuring 79px at 1280x720). Centring the
-notice in the frame over a replay is what actually clears it at every size.
+frame and the comment over it claimed "the card's title and sheet clear it".
+NEITHER does — at `top: 7%` the strip crosses the results card's title and the
+whole of the retirement notice, which is its own headline. Do not nudge by
+`--replay-height`; that token is a reserve, not a measurement (3.9rem against
+a bar standing 79px tall at 1280x720). Centring `.hud-finish` in the frame
+under `[data-replay]` clears it at every size, and is safe only BECAUSE a
+replay carries no level id and so no sheet or board — a card at its full
+`max-height: 86%` would centre straight back under the strip.

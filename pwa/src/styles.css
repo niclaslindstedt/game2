@@ -1575,6 +1575,22 @@ body {
   color: var(--hud-bad);
 }
 
+/* A REPLAY'S STRIP STANDS ACROSS THE HEAD OF THE FRAME (`.hud-replay`), and
+   at 7% no card clears it: the strip crosses the results card's title and
+   lands squarely on the retirement notice, which IS its own headline.
+   Nudging down by the strip's height settles nothing — `--replay-height` is a
+   RESERVE rather than a measurement, under what the bar actually stands at on
+   a desktop — so over a recording the card takes the MIDDLE of the frame,
+   which the head of the HUD cannot reach at any size. Safe for every card a
+   recording can raise BECAUSE none of them carries a sheet or a board: a
+   replay is entered with no level id, so there is no table, no points and no
+   times, and what is left is short enough to centre. A card at its full
+   `max-height` would be back under the strip. */
+.hud[data-replay] .hud-finish {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 /* A retirement: the same card in the same red as a run that missed the
    podium, laid out the same way — a headline, and where a result would put
    its total time, the part that gave out. */
@@ -1597,20 +1613,6 @@ body {
   justify-content: center;
   gap: 0.7rem;
   margin: clamp(1rem, 3.5vmin, 1.6rem) 0 0;
-}
-
-/* A REPLAY'S STRIP STANDS ACROSS THE HEAD OF THE FRAME (`.hud-replay`), and
-   this is the one card that cannot live under it. Every other results card
-   leads with a head row, so the strip crosses empty card; a retirement is the
-   headline itself at 7% of the frame, and the strip lands straight on the
-   news. Nudging the card down by the strip's own height would not settle it
-   either — `--replay-height` is a RESERVE rather than a measurement, under
-   what the bar actually stands at on a desktop. So over a recording the
-   notice takes the MIDDLE of the frame instead, which the head of the HUD
-   cannot reach at any size. */
-.hud[data-replay] .hud-finish-retired {
-  top: 50%;
-  transform: translateY(-50%);
 }
 
 /* The sentence under the headline, in the sentence case a consequence is spoken
@@ -2086,11 +2088,11 @@ body {
    keeps the top edge and nothing moves.
 
    It stands over the results card at the end of the recording, which is the
-   moment the disk is most likely to be wanted — so its stack order has to
-   beat the card's, and its own box is small enough that the card's title and
-   sheet clear it. The RETIREMENT notice is the one that does not, having no
-   head row to be crossed: it drops to the middle of the frame instead
-   (`.hud[data-replay] .hud-finish-retired`). */
+   moment the disk is most likely to be wanted — so its stack order beats the
+   card's. What it does NOT do is leave room for it: at the card's own 7% the
+   strip crosses the results card's title and the whole of the retirement
+   notice, so a card raised over a recording drops to the middle of the frame
+   to clear it (`.hud[data-replay] .hud-finish`). */
 .hud-replay {
   position: absolute;
   top: max(0.6rem, env(safe-area-inset-top));
