@@ -80,33 +80,56 @@ export const SPHAGNUM_RUST = new THREE.Color(0xa8894a); // ...and the rust it tu
 // Grey-green, olive and silver, over bark that is more often green or
 // bleached than brown; the saturated colours are the SPRING's and live in
 // the season table below.
-export const SAGUARO = new THREE.Color(0x5f8a4a);
-export const SAGUARO_DARK = new THREE.Color(0x4a7038); // the shaded side of a rib
+//
+// A cactus is NOT leaf green. Its skin is a dull, slightly blue grey-green
+// under a waxy bloom, and the difference between that and a tree's foliage
+// is most of what tells a viewer at speed that they are looking at a desert
+// and not a savanna. Every green below is pulled toward grey on purpose.
+export const SAGUARO = new THREE.Color(0x5e8055);
+export const SAGUARO_DARK = new THREE.Color(0x46603e); // the shaded flank of a rib
 /** The crown of a saguaro: green all year, and where the blossom and then
  * the fruit sit — so this is the colour the season table moves. */
-export const SAGUARO_TIP = new THREE.Color(0x6f9a55);
+export const SAGUARO_TIP = new THREE.Color(0x6b8e5e);
 export const SAGUARO_RIB = new THREE.Color(0xc9b99a); // the woody ribs a dead one leaves standing
-export const BARREL = new THREE.Color(0x5d8548);
+export const ORGAN_PIPE = new THREE.Color(0x53744a); // darker and bluer than a saguaro
+export const ORGAN_PIPE_DARK = new THREE.Color(0x3d5836);
+export const BARREL = new THREE.Color(0x66884a); // yellower than the columns
 export const BARREL_SPINE = new THREE.Color(0xd8b06a); // the yellow spines that catch the light
-export const PRICKLY_PEAR = new THREE.Color(0x6f9a5c);
+export const BARREL_HOOK = new THREE.Color(0xb2663a); // the red hooked central spines
+export const PRICKLY_PEAR = new THREE.Color(0x6d9270); // bluer still — a pad is glaucous
 export const PEAR_FRUIT = new THREE.Color(0x7d9c60); // green in summer; the season turns it purple
-export const CHOLLA = new THREE.Color(0xa3a882); // silvery — a cholla is mostly spines
+export const HEDGEHOG = new THREE.Color(0x4f6f42); // a clump of short dark columns
+export const HEDGEHOG_BLOOM = new THREE.Color(0x6d7a52); // ...and the magenta it wears in April
+export const CHOLLA = new THREE.Color(0xb4ad88); // silvery — a cholla is mostly spines
 export const CHOLLA_DARK = new THREE.Color(0x6f6b50);
+export const CHOLLA_FRUIT = new THREE.Color(0x8aa06a); // the green chains a chain-fruit hangs
 export const OCOTILLO = new THREE.Color(0x6d5a48);
 /** An ocotillo's cane tips: bare most of the year, a red flame in spring. */
 export const OCOTILLO_TIP = new THREE.Color(0x8a6a4e);
-export const JOSHUA_LEAF = new THREE.Color(0x5d7a4a);
+export const JOSHUA_LEAF = new THREE.Color(0x55704a); // stiff dark daggers, not foliage
 export const JOSHUA_BARK = new THREE.Color(0x8a7a66); // shaggy, grey, fibrous
-export const MESQUITE_LEAF = new THREE.Color(0x6d8a45);
+export const JOSHUA_DEAD = new THREE.Color(0x9c8459); // the skirt of dead leaves under every head
+export const MESQUITE_LEAF = new THREE.Color(0x687f43);
 export const MESQUITE_BARK = new THREE.Color(0x5a4636);
-export const PALO_VERDE = new THREE.Color(0x8fb86a); // green BARK — the whole tree is this colour
+/** Green BARK — a palo verde photosynthesises through its trunk, which is
+ * the whole reason it has almost no leaves to speak of. */
+export const PALO_VERDE = new THREE.Color(0x89ad64);
+/** ...and the little it does carry: paler, yellower, and thin enough to
+ * see the sky through. Kept apart from the bark so that spring can put the
+ * tree's yellow bloom on the CROWN and leave the trunk green. */
+export const PALO_VERDE_LEAF = new THREE.Color(0xa6c47c);
+export const IRONWOOD_BARK = new THREE.Color(0x8d8478); // grey and shredding
+export const IRONWOOD_LEAF = new THREE.Color(0x76876a); // the greyest crown in the wash
 export const PINYON = new THREE.Color(0x4f6f45);
 export const CREOSOTE = new THREE.Color(0x6b7a3e); // small, resinous, olive
 export const CREOSOTE_STEM = new THREE.Color(0x5a4d3a);
+export const BURSAGE = new THREE.Color(0x9aa27e); // the grey dome under every saguaro
 export const BRITTLEBUSH = new THREE.Color(0x8c9a6e); // grey-green; the season turns the whole bush yellow
 export const SAGEBRUSH = new THREE.Color(0x8e957a);
 export const AGAVE = new THREE.Color(0x7f9a86); // blue-green blades
 export const AGAVE_TIP = new THREE.Color(0x4a4034); // the black spine on each
+export const AGAVE_STALK = new THREE.Color(0xa89060); // the mast a century plant dies putting up
+export const AGAVE_BLOOM = new THREE.Color(0xcfc06a); // ...and the panicles along its arms
 export const YUCCA = new THREE.Color(0x6f8f62);
 export const YUCCA_STALK = new THREE.Color(0xa8916a);
 export const DEAD_BRUSH = new THREE.Color(0x9a8c74);
@@ -239,13 +262,21 @@ const SEASONAL: SeasonalColor[] = [
   // crowns and red ocotillo tips on a country that is grey-green the rest
   // of the time — and autumn is a small drying and reddening. Every cactus
   // body, every bark and the dead wood hold still, as the conifers do.
-  { summer: SAGUARO_TIP, spring: 0xf4efdc, autumn: 0xc23a2e, winter: 0x6f9a55 },
+  { summer: SAGUARO_TIP, spring: 0xf4efdc, autumn: 0xc23a2e, winter: 0x6b8e5e },
   { summer: PEAR_FRUIT, spring: 0xd9c85a, autumn: 0x8e2f52, winter: 0x7d9c60 },
   { summer: OCOTILLO_TIP, spring: 0xd23c2c, autumn: 0x8a6a4e, winter: 0x5f8a4a },
   { summer: BRITTLEBUSH, spring: 0xe6c93a, autumn: 0x9a9268, winter: 0x86a468 },
   { summer: CREOSOTE, spring: 0x7d8f43, autumn: 0x6b7038, winter: 0x5f7f3e },
-  { summer: PALO_VERDE, spring: 0xd9c848, autumn: 0x8fb06a, winter: 0x86b862 },
+  // A blooming palo verde is a yellow cloud on a GREEN trunk — the bark
+  // does not flower, so only the crown's colour is on this table.
+  { summer: PALO_VERDE_LEAF, spring: 0xdcc94c, autumn: 0xa8bc78, winter: 0xa2c47a },
   { summer: MESQUITE_LEAF, spring: 0x86a04e, autumn: 0x9a9048, winter: 0x6f8f48 },
+  { summer: IRONWOOD_LEAF, spring: 0x9a8ab0, autumn: 0x80876e, winter: 0x76876a },
+  // Bursage greens up with the winter rain and is grey straw by June — the
+  // whole Sonoran ground layer doing it at once is what makes the spring.
+  { summer: BURSAGE, spring: 0x8fa858, autumn: 0xa39a7c, winter: 0x84a05c },
+  { summer: HEDGEHOG_BLOOM, spring: 0xc4407a, autumn: 0x6d7a52, winter: 0x6d7a52 },
+  { summer: AGAVE_BLOOM, spring: 0xe4d266, autumn: 0xb8a25c, winter: 0xbfae60 },
   { summer: SAGEBRUSH, spring: 0x98a27e, autumn: 0x8a8a6c, winter: 0x8aa088 },
   { summer: YUCCA_STALK, spring: 0xf3eedd, autumn: 0xa8916a, winter: 0xa8916a },
   { summer: BUNCH_BASE, spring: 0x9aa858, autumn: 0xc0a24e, winter: 0x8ea852 },
@@ -343,6 +374,70 @@ export function limb(
   const hinge = typeof at === "number" ? { x: 0, y: at, z: 0 } : at;
   const geo = new THREE.CylinderGeometry(rTop, rBot, len, seg);
   geo.translate(0, len / 2, 0);
+  geo.rotateZ(-tilt);
+  geo.rotateY(angle);
+  geo.translate(hinge.x, hinge.y, hinge.z);
+  b.add(geo, color);
+  const end = swung(Math.sin(tilt) * len, Math.cos(tilt) * len, angle);
+  return { x: hinge.x + end.x, y: hinge.y + end.y, z: hinge.z + end.z };
+}
+
+/** A FLUTED cylinder: a column whose cross-section alternates rib and
+ * groove, every other facet pulled in to `depth` of the radius. It is the
+ * one primitive that separates a CACTUS from a green pipe — a saguaro, an
+ * organ pipe and a barrel are all the same accordion of ribs, and a smooth
+ * cylinder of the same colour and size reads as plumbing. Cheap: the ribs
+ * cost only the extra facets, and the smooth normals a cylinder already
+ * carries turn the alternation into a run of soft vertical shading bands
+ * rather than a row of hard edges.
+ *
+ * Standing on its own base, like everything else here, so it drops
+ * straight into `cyl`'s and `limb`'s place. */
+export function flutedGeo(
+  rTop: number,
+  rBot: number,
+  h: number,
+  ribs = 8,
+  depth = 0.84,
+  open = false,
+): THREE.BufferGeometry {
+  const seg = ribs * 2;
+  const geo = new THREE.CylinderGeometry(rTop, rBot, h, seg, 1, open);
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  const step = (Math.PI * 2) / seg;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    if (x * x + z * z < 1e-12) continue;
+    // three.js lays a cylinder's rim out at theta = k·step measured from
+    // +z toward +x, so this recovers the facet's own index — and it is the
+    // PARITY of that index, not the angle, that says rib or groove.
+    const k = Math.round(Math.atan2(x, z) / step);
+    if (((k % 2) + 2) % 2 === 0) continue;
+    pos.setXYZ(i, x * depth, pos.getY(i), z * depth);
+  }
+  geo.computeVertexNormals();
+  geo.translate(0, h / 2, 0);
+  return geo;
+}
+
+/** `limb`, but fluted: the arm of a saguaro rather than the bough of a
+ * tree. Same hinge, same returned far end — the arms of a candelabra are
+ * a chain of these, each hinged on the last one's end. */
+export function ribLimb(
+  b: GeoBuilder,
+  color: PartColor,
+  rTop: number,
+  rBot: number,
+  len: number,
+  at: number | Point,
+  tilt: number,
+  angle: number,
+  ribs = 5,
+  open = true,
+): Point {
+  const hinge = typeof at === "number" ? { x: 0, y: at, z: 0 } : at;
+  const geo = flutedGeo(rTop, rBot, len, ribs, 0.84, open);
   geo.rotateZ(-tilt);
   geo.rotateY(angle);
   geo.translate(hinge.x, hinge.y, hinge.z);
@@ -454,6 +549,20 @@ export class GeoBuilder {
     const geo = new THREE.CylinderGeometry(rTop, rBot, h, seg);
     geo.translate(0, h / 2, 0);
     this.add(geo, color, { ...o, y: baseY });
+  }
+
+  /** `cyl`, but fluted (`flutedGeo`): the ribbed column a cactus is. */
+  ribbed(
+    color: PartColor,
+    rTop: number,
+    rBot: number,
+    h: number,
+    baseY: number,
+    o: PartOpts = {},
+    ribs = 8,
+    open = false,
+  ): void {
+    this.add(flutedGeo(rTop, rBot, h, ribs, 0.84, open), color, { ...o, y: baseY });
   }
 
   /** A faceted foliage blob centered at (x, y, z). Squash is baked into

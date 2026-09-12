@@ -102,14 +102,27 @@ export const DESERT: Biome = {
         saguaroOld: 4,
         saguaroYoung: 6,
         deadSaguaro: 2,
+        organPipe: 2,
         paloVerde: 4,
+        ironwood: 2,
         barrelCactus: 4,
         cholla: 4,
+        chollaChain: 2,
         pricklyPear: 3,
         creosote: 3,
         brittlebush: 3,
       },
-      undergrowth: { bunchGrass: 8, brittlebush: 4, creosote: 3, deadBrush: 2, barrelCactus: 2 },
+      // Bursage first, because it IS first: the commonest plant on the
+      // Arizona upland, and the nurse most of the saguaros over it started
+      // their first fifty years under.
+      undergrowth: {
+        bursage: 10,
+        bunchGrass: 6,
+        brittlebush: 4,
+        creosote: 3,
+        deadBrush: 2,
+        barrelCactus: 2,
+      },
     },
     {
       // Higher and colder: the Joshua trees, with yucca and creosote and
@@ -124,9 +137,17 @@ export const DESERT: Biome = {
         creosote: 4,
         sagebrush: 3,
         cholla: 2,
+        agaveBloom: 1,
         deadBrush: 1,
       },
-      undergrowth: { bunchGrass: 8, sagebrush: 4, desertGrass: 3, deadBrush: 2, yucca: 1 },
+      undergrowth: {
+        bunchGrass: 8,
+        sagebrush: 4,
+        bursage: 4,
+        desertGrass: 3,
+        deadBrush: 2,
+        yucca: 1,
+      },
     },
     {
       // A dry wash: the one place the desert's trees close up, because the
@@ -134,8 +155,8 @@ export const DESERT: Biome = {
       id: "mesquiteBosque",
       weight: 1,
       density: 0.65,
-      trees: { mesquite: 10, paloVerde: 5, deadBrush: 3, creosote: 2, tumbleweed: 1 },
-      undergrowth: { bunchGrass: 6, desertGrass: 6, deadBrush: 3, tumbleweed: 1 },
+      trees: { mesquite: 10, paloVerde: 5, ironwood: 4, deadBrush: 3, creosote: 2, tumbleweed: 1 },
+      undergrowth: { bunchGrass: 6, desertGrass: 6, bursage: 5, deadBrush: 3, tumbleweed: 1 },
       groundCover: 1.2,
     },
     {
@@ -145,7 +166,14 @@ export const DESERT: Biome = {
       weight: 3,
       density: 0.08,
       trees: { paloVerde: 2, creosote: 6, brittlebush: 3, cholla: 1 },
-      undergrowth: { creosote: 10, bunchGrass: 6, brittlebush: 3, desertGrass: 3, deadBrush: 2 },
+      undergrowth: {
+        creosote: 10,
+        bursage: 8,
+        bunchGrass: 6,
+        brittlebush: 3,
+        desertGrass: 3,
+        deadBrush: 2,
+      },
       groundCover: 1.5,
     },
     {
@@ -158,12 +186,22 @@ export const DESERT: Biome = {
         paloVerde: 3,
         saguaroYoung: 1,
         ocotillo: 5,
-        cholla: 5,
+        cholla: 4,
+        chollaChain: 2,
         pricklyPear: 4,
         agave: 3,
+        agaveBloom: 1,
         creosote: 3,
       },
-      undergrowth: { bunchGrass: 7, creosote: 4, pricklyPear: 2, agave: 2, deadBrush: 2 },
+      undergrowth: {
+        bunchGrass: 7,
+        bursage: 6,
+        creosote: 4,
+        pricklyPear: 2,
+        hedgehogCactus: 2,
+        agave: 2,
+        deadBrush: 2,
+      },
       groundCover: 1.2,
     },
     {
@@ -172,8 +210,23 @@ export const DESERT: Biome = {
       id: "rockyUpland",
       weight: 1.2,
       density: 0.25,
-      trees: { pinyon: 5, joshuaYoung: 2, yucca: 4, agave: 5, ocotillo: 3, cholla: 2 },
-      undergrowth: { bunchGrass: 5, agave: 3, desertGrass: 3, deadBrush: 2 },
+      trees: {
+        pinyon: 5,
+        joshuaYoung: 2,
+        yucca: 4,
+        agave: 5,
+        agaveBloom: 2,
+        ocotillo: 3,
+        cholla: 2,
+      },
+      undergrowth: {
+        bunchGrass: 5,
+        agave: 3,
+        hedgehogCactus: 3,
+        desertGrass: 3,
+        bursage: 2,
+        deadBrush: 2,
+      },
       groundCover: 0.8,
     },
     {
@@ -200,20 +253,23 @@ export const DESERT: Biome = {
   // never asked for (planting.ts checks the engine's rules before the
   // height). They are the wash's own plants, so that a dial that ever did
   // put water here would grow the right thing beside it.
-  lakeshoreTrees: { mesquite: 8, paloVerde: 4, deadBrush: 2, bunchGrass: 3 },
+  lakeshoreTrees: { mesquite: 8, paloVerde: 4, ironwood: 3, deadBrush: 2, bunchGrass: 3 },
   shoreCover: { saltCrust: 6, bunchGrass: 4, desertGrass: 3 },
-  riparianTrees: { mesquite: 10, paloVerde: 4, creosote: 2, deadBrush: 2 },
+  riparianTrees: { mesquite: 10, paloVerde: 4, ironwood: 3, creosote: 2, deadBrush: 2 },
   highlandTrees: {
     pinyon: 5,
     joshuaYoung: 3,
     yucca: 5,
     agave: 6,
+    agaveBloom: 1,
     ocotillo: 3,
     cholla: 3,
+    hedgehogCactus: 2,
     deadBrush: 2,
   },
   undergrowth: {
     bunchGrass: 10,
+    bursage: 7,
     desertGrass: 5,
     creosote: 3,
     deadBrush: 3,
@@ -223,7 +279,7 @@ export const DESERT: Biome = {
   // Sparser than the taiga's: a desert is mostly ground, and a verge as
   // busy as a boreal one is a desert that has been watered.
   undergrowthDensity: 0.75,
-  vergeCover: { bunchGrass: 3, deadBrush: 1 },
+  vergeCover: { bunchGrass: 3, bursage: 2, deadBrush: 1 },
   // Nothing grows on a stone here. It varnishes instead, which is a colour
   // the bedrock already carries.
   mossyStone: 0,
