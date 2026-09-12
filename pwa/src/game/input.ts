@@ -57,7 +57,7 @@ import { clamp } from "../lib/util.ts";
 
 /** The presses the app reacts to rather than the car: they leave, reload or
  * reframe the run instead of driving it. */
-export type InputAction = "restart" | "menu" | "camera" | "pause" | "screenshot";
+export type InputAction = "restart" | "menu" | "camera" | "pause" | "hud" | "screenshot";
 
 /** The presses that walk a MENU rather than the game behind it. Only a
  * controller produces these: a keyboard has the mouse and the touchscreen
@@ -111,8 +111,8 @@ export type InputManager = {
   /** Queue a reset-to-track (the bound key / HUD button) — edge-triggered
    * into the engine, which respawns the car at its last on-road progress. */
   requestReset: () => void;
-  /** Fired on the keys bound to restart / main menu / camera / pause so the
-   * app can react. */
+  /** Fired on the keys bound to restart / main menu / camera / pause / the
+   * HUD switch / the shutter, so the app can react. */
   onAction: (handler: (action: InputAction) => void) => void;
   /** Hand the controls to god mode's camera, or take them back. While it is
    * on the CAR is given nothing at all — `sample` returns neutral — so a
@@ -380,6 +380,7 @@ export function createInput(target: Window = window): InputManager {
         action === "restart" ||
         action === "camera" ||
         action === "pause" ||
+        action === "hud" ||
         action === "screenshot"
       ) {
         actionHandler?.(action);
