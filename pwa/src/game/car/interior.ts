@@ -36,9 +36,18 @@ import * as THREE from "three";
 
 import { playerCrewLook, type CrewLook } from "../car-crew.ts";
 import { NO_DIRT } from "../car-dirt.ts";
-import { MeshBuilder, patchQuad, plate, slab, solid, tube, type V3 } from "./builder.ts";
+import {
+  MeshBuilder,
+  patchQuad,
+  patchReveal,
+  plate,
+  slab,
+  solid,
+  tube,
+  type V3,
+} from "./builder.ts";
 import { buildCrewMember, type CrewSeat } from "./crew.ts";
-import { cabinFrame, cabinPanels, glassRect, panelMinus } from "./greenhouse.ts";
+import { GLASS_LIFT, cabinFrame, cabinPanels, glassRect, panelMinus } from "./greenhouse.ts";
 import type { CarBodySpec } from "./spec.ts";
 
 export type InteriorDetail = "off" | "low" | "high";
@@ -238,6 +247,13 @@ export function buildLining(b: MeshBuilder, cabin: Cabin, floor = true): void {
     const panes = panel.holes.map((hole) => glassRect(hole, seal, panel.span));
     for (const strip of panelMinus(panes)) {
       patchQuad(b, panel.patch, strip, TRIM.lining, LINING_LIFT, !panel.mirrored);
+    }
+    // …and the WALL between that lining and the glass it stops at. The two
+    // are cut to the same rectangle a couple of centimetres apart, and from
+    // a seat looking almost along a flank that step is a strip of sky down
+    // the front of the door window (`patchReveal`).
+    for (const pane of panes) {
+      patchReveal(b, panel.patch, pane, TRIM.lining, -LINING_LIFT, GLASS_LIFT, panel.mirrored);
     }
   }
   if (floor) plate(b, cabin.inner, cabin.panY, cabin.cowlZ, cabin.rearZ, TRIM.floor, true);

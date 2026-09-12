@@ -629,6 +629,24 @@ export function bodyHalfWidth(spec: CarBodySpec, axles: number[]): number {
   return widest;
 }
 
+/** THE FRONT OF THE CAR, m of car-local z — and it is NOT the profile's
+ * nose station. That station is where the loft ends; the bumper bar is
+ * bolted on past it, and a car carrying driving lamps on a pod bar stands
+ * proud of the bumper in turn. Anything that has to be clear of the WHOLE
+ * car measures from here: the collision half-length below, and the bumper
+ * camera's lens, which is otherwise stood a hand ahead of a cap that is
+ * itself a hand behind the bodywork — and photographs the bar it is named
+ * after. */
+export function bodyNoseZ(spec: CarBodySpec): number {
+  const cap = spec.profile[0].z;
+  // buildBumper centers the bar at zEnd + (depth/2 − 0.02), so its outer
+  // face lands depth − 0.02 past the cap; buildLampPods opens each bowl
+  // `radius × 0.8` forward of the pod's own z (car/lamps.ts).
+  const bumper = spec.front?.bumper ? cap + spec.front.bumper.depth - 0.02 : cap;
+  const pods = [spec.front?.lampPods ?? []].flat();
+  return Math.max(cap, bumper, ...pods.map((pod) => pod.z + pod.radius * 0.8));
+}
+
 /** Half-length of a spec, m, measured to the furthest point it actually
  * DRAWS rather than to the profile's end stations: the bumpers stand proud
  * of both caps, and they are what a tree meets first. The TAILPIPE is in
@@ -637,14 +655,10 @@ export function bodyHalfWidth(spec: CarBodySpec, axles: number[]): number {
  * measurement that says otherwise stops being the number the collision box
  * is checked against. */
 export function bodyHalfLength(spec: CarBodySpec): number {
-  const nose = spec.profile[0].z;
   const tail = spec.profile[spec.profile.length - 1].z;
-  // buildBumper centers the bar at zEnd ± (depth/2 − 0.02), so its outer
-  // face lands depth − 0.02 past the cap.
-  const front = spec.front?.bumper ? spec.front.bumper.depth - 0.02 : 0;
   const bumper = spec.rear?.bumper ? spec.rear.bumper.depth - 0.02 : 0;
   const pipe = spec.rear?.exhaust ? (spec.rear.exhaust.out ?? EXHAUST_OUT) : 0;
-  return Math.max(nose + front, -tail + Math.max(bumper, pipe));
+  return Math.max(bodyNoseZ(spec), -tail + Math.max(bumper, pipe));
 }
 
 /** How far forward of its tip the exhaust runs, m — the length of pipe and

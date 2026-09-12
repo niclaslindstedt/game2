@@ -526,6 +526,66 @@ export function patchQuad(
   else b.quad(c[0], c[1], c[2], c[3], color, alpha);
 }
 
+/** THE WALL OF A WINDOW WELL: a ribbon standing in the rect's own edge, from
+ * `inner` out to `outer` along the patch's true outward normal, all the way
+ * round, with every face pointing INTO the opening.
+ *
+ * It exists because two surfaces cut to the same rectangle at different
+ * depths do not meet — they are a step, and a step seen from the shallow
+ * side is a HOLE. The cabin's lining sits a centimetre inside the panel it
+ * lines and is cut to the glass; from the driver's seat the flank is nearly
+ * edge-on, so a ray grazing the lining's edge crosses the panel a good four
+ * centimetres further along it, and everything between is back-facing metal
+ * — which is to say the landscape, in a strip down the front of the door
+ * window. The gap grows with the depth times how far off square the surface
+ * is looked at, so no amount of overlap closes it at every angle and only
+ * the wall between the two does.
+ *
+ * The facing is DERIVED, not wound by hand: each edge's quad is turned to
+ * face the middle of the rect, which is the one description that is true of
+ * all four edges of a warped, leaning, possibly mirrored patch at once. */
+export function patchReveal(
+  b: MeshBuilder,
+  q: Patch,
+  rect: UVRect,
+  color: number,
+  inner: number,
+  outer: number,
+  mirrored = false,
+): void {
+  if (rect.u1 - rect.u0 < 1e-3 || rect.v1 - rect.v0 < 1e-3) return;
+  const n = patchNormal(q);
+  const flip = mirrored ? -1 : 1;
+  const p = (uv: [number, number], lift: number): V3 => {
+    const q0 = patchAt(q, uv[0], uv[1]);
+    const out = lift * flip;
+    return [q0[0] + n[0] * out, q0[1] + n[1] * out, q0[2] + n[2] * out];
+  };
+  const corners = rectCorners(rect);
+  const mid = p([(rect.u0 + rect.u1) / 2, (rect.v0 + rect.v1) / 2], (inner + outer) / 2);
+  for (let i = 0; i < 4; i++) {
+    const a = corners[i];
+    const c = corners[(i + 1) % 4];
+    const ai = p(a, inner);
+    const ci = p(c, inner);
+    const co = p(c, outer);
+    const ao = p(a, outer);
+    // Which way round these four go is the sign of the face against the way
+    // the middle of the opening lies from it.
+    const e1: V3 = [ci[0] - ai[0], ci[1] - ai[1], ci[2] - ai[2]];
+    const e2: V3 = [co[0] - ai[0], co[1] - ai[1], co[2] - ai[2]];
+    const face: V3 = [
+      e1[1] * e2[2] - e1[2] * e2[1],
+      e1[2] * e2[0] - e1[0] * e2[2],
+      e1[0] * e2[1] - e1[1] * e2[0],
+    ];
+    const toMid: V3 = [mid[0] - ai[0], mid[1] - ai[1], mid[2] - ai[2]];
+    const inward = face[0] * toMid[0] + face[1] * toMid[1] + face[2] * toMid[2] > 0;
+    if (inward) b.quad(ai, ci, co, ao, color);
+    else b.quad(ao, co, ci, ai, color);
+  }
+}
+
 /** The same rectangle, fading from what its v0 edge carries to what its v1
  * edge carries. Mirroring reverses the corner order, so the pair of colours
  * has to travel with it or every window on the left flank fades the wrong

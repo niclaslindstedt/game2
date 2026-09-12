@@ -34,7 +34,7 @@ import {
 
 import { buildCockpit, cockpitEyeFor, cockpitMirrorFor } from "../pwa/src/game/car/cockpit.ts";
 import { DIALS, dialAngle } from "../pwa/src/game/car/cockpit-dials.ts";
-import { cabinOf } from "../pwa/src/game/car/interior.ts";
+import { buildLining, cabinOf } from "../pwa/src/game/car/interior.ts";
 import {
   FIGURES,
   POINT,
@@ -43,8 +43,15 @@ import {
   figureBits,
   textBars,
 } from "../pwa/src/game/car/segment-display.ts";
-import { screenPanes } from "../pwa/src/game/car/greenhouse.ts";
-import { patchAt, rectAt, type Patch, type UVRect } from "../pwa/src/game/car/builder.ts";
+import { cabinPanels, glassRect, screenPanes } from "../pwa/src/game/car/greenhouse.ts";
+import {
+  MeshBuilder,
+  patchAt,
+  rectAt,
+  rectCorners,
+  type Patch,
+  type UVRect,
+} from "../pwa/src/game/car/builder.ts";
 import { instrumentReadings, tachometer } from "../pwa/src/game/car-instruments.ts";
 import { CAR_BODIES } from "../pwa/src/game/car-styles.ts";
 import { MIRROR_ASPECT, fallbackMount } from "../pwa/src/game/mirror.ts";
@@ -355,6 +362,92 @@ describe("the mirror's lens", () => {
       expect(centre.y, id).toBeCloseTo(cockpit.mirror.at.y, 3);
       expect(centre.z, id).toBeCloseTo(cockpit.mirror.at.z, 2);
       cockpit.dispose();
+    }
+  });
+});
+
+describe("the cabin's lining against the glass it stops at", () => {
+  // THE HOLE THIS EXISTS TO STOP. The lining and the glass are cut to the
+  // same rectangle a couple of centimetres apart — the lining inside the
+  // panel, the pane proud of it — and from the seat a flank is looked at
+  // almost edge-on. So a ray that grazes the lining's edge crosses the panel
+  // a good four centimetres further along it, and the metal in between is
+  // back-facing, which is to say the landscape: a strip of bright sky down
+  // the front of the driver's own door window, with no rain on it, because
+  // there is no glass there to bead. Nothing a screenshot pass can catch —
+  // it is two centimetres of geometry seen from one seat.
+  //
+  // The claim is therefore the honest one and not a count of triangles: from
+  // where the driver's eye actually is, every point on the metal just
+  // outside a window is BEHIND something facing them.
+
+  /** How far past a pane's edge to sample, m of panel: inside the narrowest
+   * strip any body leaves round a window (a 45 mm header plus its seal), and
+   * wider than the gap the parallax opens.
+   *
+   * It starts at a centimetre rather than at the edge itself because the
+   * last few millimetres of a LEANING edge are a different question. A lean
+   * is a straight line in (u, v) and every rect along it is drawn as a chord
+   * over its OWN v range, so the pane and the pillar beside it bow apart by
+   * a few millimetres in the middle of a flank warped enough — a hairline at
+   * the B pillar, behind the driver's shoulder and out of every frame this
+   * camera takes, and not the centimetres this test is here for. */
+  const PAST = [0.012, 0.03];
+
+  /** Every front-facing triangle of the trim, as the ray test wants them. */
+  function liningFaces(spec: (typeof CAR_BODIES)[string]): THREE.Vector3[][] {
+    const b = new MeshBuilder();
+    buildLining(b, cabinOf(spec), false);
+    const pos = b.geometry().getAttribute("position");
+    const faces: THREE.Vector3[][] = [];
+    for (let i = 0; i < pos.count; i += 3) {
+      faces.push([0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(pos, i + k)));
+    }
+    return faces;
+  }
+
+  function blocked(faces: THREE.Vector3[][], eye: THREE.Vector3, at: THREE.Vector3): boolean {
+    const ray = new THREE.Ray(eye, at.clone().sub(eye).normalize());
+    const reach = eye.distanceTo(at) - 1e-4;
+    const hit = new THREE.Vector3();
+    for (const [a, b, c] of faces) {
+      // Culled, because a face turned away from the eye is not a surface —
+      // it is the hole this test is about.
+      if (ray.intersectTriangle(a, b, c, true, hit) && eye.distanceTo(hit) < reach) return true;
+    }
+    return false;
+  }
+
+  it.each(bodies)("%s shows no daylight round its windows", (id, spec) => {
+    const seat = cockpitEyeFor(spec);
+    const eye = new THREE.Vector3(seat.x, seat.y, seat.z);
+    const faces = liningFaces(spec);
+    const seal = spec.cabin.seal ?? 0;
+    for (const panel of cabinPanels(spec)) {
+      for (const hole of panel.holes) {
+        // The pane AS DRAWN: four corners with straight edges between them,
+        // which is what `patchQuad` lays and therefore where the metal round
+        // it really begins — a leaning edge sampled back through the patch
+        // lands a couple of centimetres off it on a flank this warped.
+        const corners = rectCorners(glassRect(hole, seal, panel.span)).map(([u, v]) => {
+          const q = patchAt(panel.patch, u, v);
+          return new THREE.Vector3(q[0], q[1], q[2]);
+        });
+        const middle = corners
+          .reduce((sum, c) => sum.add(c), new THREE.Vector3())
+          .multiplyScalar(0.25);
+        for (let i = 0; i < 4; i++) {
+          const edge = corners[i]
+            .clone()
+            .add(corners[(i + 1) % 4])
+            .multiplyScalar(0.5);
+          const out = edge.clone().sub(middle).normalize();
+          for (const past of PAST) {
+            const at = edge.clone().addScaledVector(out, past);
+            expect(blocked(faces, eye, at), `${id} ${past} past edge ${i}`).toBe(true);
+          }
+        }
+      }
     }
   });
 });
