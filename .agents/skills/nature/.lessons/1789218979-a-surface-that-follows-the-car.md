@@ -18,9 +18,11 @@ Three things had to match, and matching only one or two leaves the line:
 
 - **the albedo**, as a FIELD and not a constant (`snowAlbedo`, off the stage's
   paint seed) — two flat whites of equal value still show their boundary;
-- **the detail map**, on the same world uv (metres / 16) — it is the finest
-  grain either surface has, so a coat without it is the smooth patch in the
-  middle of a grainy country however well the whites match;
+- **the grain**, on the same world uv (metres / 16) — a coat without it is
+  the smooth patch in the middle of a grainy country however well the whites
+  match. Take the ground's detail map NEUTRALISED and weakened, never whole:
+  it is a GRIT texture and its warm flecks are hand-sized two metres from
+  the lens, which reads as gravel rather than snow;
 - **the surface terms** (wrap, glitter), weighted on the tiles by the cover the
   paint laid, so a hillside's meadow and bedrock are untouched.
 
