@@ -118,18 +118,29 @@ that was the single most visible flaw in the old roster. Recipes may take
 `b.random()` rolls for their shape, so a variant's cached builds are
 different trees.
 
-## The desert roster (~22 variants, `flora-desert.ts`)
+## The desert roster (~30 variants, `flora-desert.ts`)
 
-Columnar cacti `saguaro/saguaroOld/saguaroYoung/deadSaguaro`, the Joshua
-trees `joshuaTree/joshuaYoung`, the wash trees `mesquite/paloVerde`, a
-`pinyon` on the high ground; the spiky middle storey `barrelCactus`,
-`pricklyPear`, `cholla`, `ocotillo`, `agave`, `yucca`; the scrub `creosote`,
+Columnar cacti `saguaro/saguaroOld/saguaroYoung/deadSaguaro` and the
+many-stemmed `organPipe`, the Joshua trees `joshuaTree/joshuaYoung`, the
+wash trees `mesquite/paloVerde/ironwood`, a `pinyon` on the high ground; the
+spiky middle storey `barrelCactus`, `hedgehogCactus`, `pricklyPear`,
+`cholla` and the tree-sized `chollaChain`, `ocotillo`, `agave` and the
+century plant's `agaveBloom`, `yucca`; the scrub `bursage`, `creosote`,
 `brittlebush`, `sagebrush`, `deadBrush`, `tumbleweed`; and the ground
-`bunchGrass/desertGrass` (the swayed set), `saltCrust`, `cowSkull`. Only
-the cacti, the Joshua trees and the wash trees are trunks; everything else
-is brush the car goes over. The spring is the loud season here — the
-season table turns the saguaro crowns white, the brittlebush yellow and the
-ocotillo tips red.
+`bunchGrass/desertGrass` (the swayed set), `saltCrust`, `cowSkull`. Only the
+cacti with trunks, the Joshua trees and the wash trees are solid; everything
+else is brush the car goes over. The spring is the loud season here — the
+season table turns the saguaro crowns white, the brittlebush and the palo
+verde's crown yellow, the ocotillo tips red, the hedgehog magenta and the
+ironwood lavender.
+
+**Every cactus body is `flutedGeo`/`GeoBuilder.ribbed`, never `cyl`** — a
+column of alternating rib and groove, which under a low sun is a run of
+vertical shading bands. A smooth green cylinder is a length of pipe, and
+that is a shading problem no colour fixes. **And the wash trees are OPEN
+scatters on several thin stems**: one bole under a dense flat-topped crown
+is an umbrella-thorn acacia, which is the wrong continent. `bursage` is the
+ground under all of it, so it is the one to count triangles on.
 
 ## The seasons
 
