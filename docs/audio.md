@@ -375,23 +375,37 @@ shape first (a circuit and an endless stage each have their own), then the
 country (the desert and the alpine each keep one score whatever the sky
 does), then the taiga's sky:
 
-| Id        | Title           | Where                            | Loop            |
-| --------- | --------------- | -------------------------------- | --------------- |
-| `menu`    | SERVICE PARK    | Behind every menu page           | 128 bpm, ~105 s |
-| `taiga`   | TAIGA, FLAT OUT | The taiga on a clear day         | 150 bpm, ~90 s  |
-| `spruce`  | BLACK SPRUCE    | The taiga in rain or a storm     | 140 bpm, ~96 s  |
-| `polar`   | MIDNIGHT SUN    | The taiga at dawn, dusk or night | 118 bpm, ~114 s |
-| `desert`  | SALT PAN        | The desert, whatever the sky     | 126 bpm, ~107 s |
-| `alpine`  | SNOWLINE        | The alpine, whatever the sky     | 120 bpm, ~96 s  |
-| `circuit` | SHORT CIRCUIT   | Any circuit stage                | 160 bpm, ~84 s  |
-| `endless` | LONG HAUL       | Any endless stage                | 132 bpm, ~131 s |
+| Id        | Title           | Key        | Where                            | Loop            |
+| --------- | --------------- | ---------- | -------------------------------- | --------------- |
+| `menu`    | SERVICE PARK    | D minor    | Behind every menu page           | 112 bpm, ~120 s |
+| `taiga`   | TAIGA, FLAT OUT | E Phrygian | The taiga on a clear day         | 150 bpm, ~90 s  |
+| `spruce`  | BLACK SPRUCE    | D minor    | The taiga in rain or a storm     | 132 bpm, ~102 s |
+| `polar`   | MIDNIGHT SUN    | A minor    | The taiga at dawn, dusk or night | 118 bpm, ~114 s |
+| `desert`  | SALT PAN        | E Phrygian | The desert, whatever the sky     | 118 bpm, ~114 s |
+| `alpine`  | SNOWLINE        | E aeolian  | The alpine, whatever the sky     | 120 bpm, ~96 s  |
+| `circuit` | SHORT CIRCUIT   | G minor    | Any circuit stage                | 150 bpm, ~90 s  |
+| `endless` | LONG HAUL       | C minor    | Any endless stage                | 126 bpm, ~137 s |
 
-SNOWLINE is the cold one: E dorian, three sawtooth pads voiced an octave over
+**No score in the game is in a major key, and none of them lifts to one.** A
+rally is a thing that goes wrong, and the soundtrack says so before the player
+has touched anything: where an arcade racer would climb to the relative major,
+every one of these falls instead, and the ♭II — a chord a half-step over the
+tonic, which belongs to no key the stage is in — is what four of the eight
+lean on when they want to sound watched rather than merely sad. The two labelled Phrygian
+are that interval made structural: TAIGA, FLAT OUT answers its i–VI–III–VII
+gallop with an F major and a B major, and SALT PAN walks its chorus A–G–F–E
+down the Phrygian tetrachord, with the blues box putting a G♯ over the ♭II so
+the scale arrives at phrygian dominant out of the blues rather than borrowed.
+SHORT CIRCUIT holds two bars of a diminished triad in its build; LONG HAUL's
+chorus ends on the dominant and never comes home.
+
+SNOWLINE is the cold one: E aeolian, three sawtooth pads voiced an octave over
 every other score's in fifths and ninths with no third in the low pair, a
 glass bell dripping in three over four under them, a plucked bass that is
 absent for half the loop (the low end is the engine's), and a pulse that
 climbs from a heartbeat kick on the grid to four to the floor in the chorus
-and falls back to nothing in the break.
+and falls back to nothing in the break. Its IV is minor, so there is no major
+sixth in it anywhere.
 
 A score is instruments (named patches), patterns (sections of note tokens on a
 sixteenth-note grid) and an order (the arrangement, which loops), built over

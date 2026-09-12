@@ -20,5 +20,8 @@ table:
   over the whole track and read the overlaps.
 
 It does NOT judge whether anything sounds good, so it is a screen before the
-audition page, never a replacement for it. Note that `noteFrequency` throws on
-a noise voice's `x` token — wrap it in a try/catch when walking every voice.
+audition page, never a replacement for it. Two mechanics: `noteFrequency`
+throws on a noise voice's `x` token, so wrap it in a try/catch when walking
+every voice; and vitest's default reporter SWALLOWS `console.log`, so the probe
+has to `appendFileSync` its table somewhere and be `cat`ed afterwards, or it
+prints nothing and reads as a passing test with no output.

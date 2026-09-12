@@ -10,8 +10,9 @@ score's own header comment:
 
 - `scripts/audition.mjs` — the `scores:` map hard-codes each `title:`, so a
   stale one means the review page announces a track that no longer exists.
-- `docs/audio.md` — the score table carries the title AND the `bpm, ~seconds`
-  cell, which goes wrong the moment the tempo or the bar count moves.
+- `docs/audio.md` — the score table carries the title, the KEY, and the
+  `bpm, ~seconds` cell, any of which goes wrong the moment the tempo, the bar
+  count or the mode moves.
 - `.changes/unreleased/*.md` — an UNRELEASED fragment may already name the
   track in the release notes.
 

@@ -1,18 +1,24 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // SALT PAN — the stage theme for the desert.
 //
-// E at 126 bpm — E mixolydian with a blues in it: 56 bars, a hundred and
-// seven seconds. Sand roads, saguaros, a sky with nothing in it and a road
-// you can see for three kilometres: the desert wants a groove, not a
+// E at 118 bpm — E Phrygian with a blues in it: 56 bars, a hundred and
+// fourteen seconds. Sand roads, saguaros, a sky with nothing in it and a
+// road you can see for three kilometres: the desert wants a groove, not a
 // gallop, and it wants a guitar that bends.
 //
 // THREE DECISIONS:
 //
-//   1. THE RIFF IS A BLUES SHAPE, and it TRANSPOSES. Root, flat third,
-//      fourth, flat fifth, fifth — the box every rock guitarist learns
-//      first — walked by the bass and doubled by the low guitar, and moved
-//      with the chord rather than left on the tonic, so the I–♭VII–IV
-//      verse is three riffs and not one riff over three chords.
+//   1. THE RIFF IS A BLUES SHAPE, and it TRANSPOSES ONTO THE ♭II. Root, flat
+//      third, fourth, flat fifth, fifth — the box every rock guitarist
+//      learns first — walked by the bass and doubled by the low guitar, and
+//      moved with the chord rather than left on the tonic, so a plan is
+//      three riffs and not one riff over three chords. WHICH chords is the
+//      whole mood, and these are the dark ones: the verse is i–♭II–iv where
+//      a rock score would put I–♭VII–IV, and the chorus falls A–G–F–E down
+//      the Phrygian tetrachord. The box's flat third of that F is a
+//      G♯, which over an E tonic is a major third — so the scale arrives at
+//      phrygian dominant, the sound every desert has been scored in, out of
+//      the blues rather than borrowed from it.
 //   2. THE KIT IS TOMS AND A SHAKER. No hi-hat. A rally through a desert is
 //      a big open sound, and a sixteenth hat is a small closed one; the
 //      time is kept by a shaker (a pink hat) and a floor tom under it.
@@ -45,15 +51,15 @@ import {
 /** The blues box, per chord: root, flat third, fourth, flat fifth, fifth. */
 const BOX: Record<string, [string, string, string, string, string]> = {
   E: ["E2", "G2", "A2", "A#2", "B2"],
-  D: ["D2", "F2", "G2", "G#2", "A2"],
+  F: ["F2", "G#2", "A#2", "B2", "C3"],
   A: ["A2", "C3", "D3", "D#3", "E3"],
   G: ["G2", "A#2", "C3", "C#3", "D3"],
   B: ["B2", "D3", "E3", "F3", "F#3"],
 };
-const GTR_LO: Record<string, string> = { E: "E3", D: "D3", A: "A3", G: "G3", B: "B3" };
-const GTR_HI: Record<string, string> = { E: "B3", D: "A3", A: "E4", G: "D4", B: "F#4" };
-const PAD_LOW: Record<string, string> = { E: "B3", D: "A3", A: "A3", G: "B3", B: "B3" };
-const PAD_TOP: Record<string, string> = { E: "E4", D: "D4", A: "E4", G: "D4", B: "D#4" };
+const GTR_LO: Record<string, string> = { E: "E3", F: "F3", A: "A3", G: "G3", B: "B3" };
+const GTR_HI: Record<string, string> = { E: "B3", F: "C4", A: "E4", G: "D4", B: "F#4" };
+const PAD_LOW: Record<string, string> = { E: "B3", F: "C4", A: "A3", G: "B3", B: "B3" };
+const PAD_TOP: Record<string, string> = { E: "E4", F: "F4", A: "E4", G: "D4", B: "D#4" };
 
 type Box = [string, string, string, string, string];
 
@@ -76,10 +82,11 @@ const riffUp = (chord: string): string => {
   return riff(box(chord).map(up) as Box);
 };
 
-const VERSE = ["E", "E", "D", "D", "A", "A", "E", "E"];
-const CHORUS = ["A", "A", "G", "G", "D", "D", "E", "E"];
+const VERSE = ["E", "E", "F", "F", "A", "A", "E", "E"];
+// The chorus walks the Phrygian tetrachord home: iv, ♭III, ♭II, i.
+const CHORUS = ["A", "A", "G", "G", "F", "F", "E", "E"];
 const BREAK = ["E", "E", "G", "G", "A", "A", "B", "B"];
-const BUILD = ["E", "E", "E", "E", "D", "D", "B", "B"];
+const BUILD = ["E", "E", "E", "E", "F", "F", "B", "B"];
 
 /** The riff section: the bass walks the box, the low guitar doubles it, the
  * high guitar hits the chord on the one. */
@@ -106,14 +113,14 @@ function wall(plan: string[]): Record<string, string[]> {
 const SHAKER = "x  .  x  x  .  x  x  .  x  .  x  x  .  x  x  .";
 
 export const DESERT_TRACK: Track = {
-  bpm: 126,
+  bpm: 118,
   stepsPerBeat: 4,
   instruments: {
     bass: bass(0.052, 460, { hold: 0.3, gate: 0.55 }),
-    gtrLo: guitar(0.022, -0.3, 1400),
-    gtrHi: guitar(0.018, 0.3, 1700),
-    padLow: pad(0.01, 800, -0.3, { open: 1.4, attackMs: 300 }),
-    padTop: pad(0.009, 1000, 0.3, { open: 1.4, attackMs: 300 }),
+    gtrLo: guitar(0.022, -0.3, 1200),
+    gtrHi: guitar(0.018, 0.3, 1450),
+    padLow: pad(0.01, 650, -0.3, { open: 1.4, attackMs: 300 }),
+    padTop: pad(0.009, 820, 0.3, { open: 1.4, attackMs: 300 }),
     // The slide guitar is two voices: the note itself, and an APPROACH a
     // semitone under it that glides up into it over its short life — the
     // sequencer can only glide a note away from its own pitch, so the bend
@@ -127,7 +134,7 @@ export const DESERT_TRACK: Track = {
       detuneCents: 7,
       echo: 0.35,
       vibrato: { rateHz: 5, depthCents: 30, delayMs: 260 },
-      filter: { type: "lowpass", frequency: 2200, to: 3000, q: 1.2 },
+      filter: { type: "lowpass", frequency: 1800, to: 2400, q: 1.2 },
     },
     slide: {
       wave: "sawtooth",
@@ -138,7 +145,7 @@ export const DESERT_TRACK: Track = {
       detuneCents: 7,
       echo: 0.35,
       slide: 1.06,
-      filter: { type: "lowpass", frequency: 2000, to: 2600, q: 1.2 },
+      filter: { type: "lowpass", frequency: 1650, to: 2100, q: 1.2 },
     },
     kick: kick(0.058, 220),
     clap: clap(0.026),
@@ -173,27 +180,29 @@ export const DESERT_TRACK: Track = {
       ),
     },
 
-    // The chorus: the wall, the clap on the backbeat, the slide lead.
+    // The chorus: the wall walking down the tetrachord, the clap on the
+    // backbeat, and the slide lead falling with it — the ♭II onto the tonic
+    // in the seventh bar is the piece's whole argument in two notes.
     b: {
       ...wall(CHORUS),
       lead: bars(
-        "E5 =  =  =  G5 =  =  =  E5 =  =  =  D5 =  =  =",
-        "B4 =  =  =  =  =  =  =  D5 =  =  =  E5 =  =  =",
-        "G5 =  =  =  =  =  =  =  E5 =  =  =  D5 =  =  =",
-        "B4 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
-        "A5 =  =  =  G5 =  =  =  E5 =  =  =  =  =  =  =",
-        "D5 =  =  =  E5 =  =  =  G5 =  =  =  =  =  =  =",
-        "E5 =  =  =  =  =  =  =  D5 =  =  =  B4 =  =  =",
+        "C6 =  =  =  A5 =  =  =  G5 =  =  =  E5 =  =  =",
+        "A5 =  =  =  =  =  =  =  E5 =  =  =  C5 =  =  =",
+        "D5 =  =  =  G5 =  =  =  F5 =  =  =  =  =  =  =",
+        "D5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
+        "F5 =  =  =  E5 =  =  =  C5 =  =  =  =  =  =  =",
+        "A5 =  =  =  F5 =  =  =  E5 =  =  =  =  =  =  =",
+        "F5 =  =  =  E5 =  =  =  B4 =  =  =  =  =  =  =",
         "E5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
       ),
       slide: bars(
-        "D#5 .  .  .  F#5 .  .  .  D#5 .  .  .  C#5 .  .  .",
-        "A#4 .  .  .  .  .  .  .  C#5 .  .  .  D#5 .  .  .",
-        "F#5 .  .  .  .  .  .  .  D#5 .  .  .  C#5 .  .  .",
-        "A#4 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .",
-        "G#5 .  .  .  F#5 .  .  .  D#5 .  .  .  .  .  .  .",
-        "C#5 .  .  .  D#5 .  .  .  F#5 .  .  .  .  .  .  .",
-        "D#5 .  .  .  .  .  .  .  C#5 .  .  .  A#4 .  .  .",
+        "B5 .  .  .  G#5 .  .  .  F#5 .  .  .  D#5 .  .  .",
+        "G#5 .  .  .  .  .  .  .  D#5 .  .  .  B4 .  .  .",
+        "C#5 .  .  .  F#5 .  .  .  E5 .  .  .  .  .  .  .",
+        "C#5 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .",
+        "E5 .  .  .  D#5 .  .  .  B4 .  .  .  .  .  .  .",
+        "G#5 .  .  .  E5 .  .  .  D#5 .  .  .  .  .  .  .",
+        "E5 .  .  .  D#5 .  .  .  A#4 .  .  .  .  .  .  .",
         "D#5 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .",
       ),
       kick: bars(KICK_PUSH),
@@ -222,7 +231,7 @@ export const DESERT_TRACK: Track = {
     },
 
     // The build: the riff on the tonic for four bars, the toms rolling, the
-    // clap filling, and the ♭VII and the V to turn it round.
+    // clap filling, and the ♭II and the V to turn it round.
     d: {
       ...groove(BUILD),
       kick: bars(KICK_PUSH),
@@ -242,17 +251,17 @@ export const DESERT_TRACK: Track = {
         ".  .  .  .  .  .  .  .  .  .  E2 .  .  .  E2 .",
         ".  .  .  .  .  .  .  .  .  .  E2 .  .  .  .  .",
         ".  .  .  .  .  .  .  .  E2 .  E2 .  E2 .  E2 .",
-        ".  .  .  .  .  .  .  .  .  .  D2 .  .  .  .  .",
-        ".  .  .  .  .  .  .  .  D2 .  D2 .  D2 .  D2 .",
+        ".  .  .  .  .  .  .  .  .  .  F2 .  .  .  .  .",
+        ".  .  .  .  .  .  .  .  F2 .  F2 .  F2 .  F2 .",
         "B2 .  .  .  B2 .  .  .  B2 .  B2 .  B2 .  B2 .",
         "B2 .  B2 .  B2 .  B2 .  B2 B2 B2 B2 B2 B2 B2 B2",
       ),
     },
 
-    // The turnaround, with the clap still on the halves so the loop lands
-    // back on its own riff without the kit having stopped.
+    // The turnaround — ♭III, ♭II, home — with the clap still on the halves
+    // so the loop lands back on its own riff without the kit having stopped.
     outro: {
-      ...groove(["D", "A", "E", "E"]),
+      ...groove(["G", "F", "E", "E"]),
       kick: bars(KICK_HALF),
       clap: bars(SNARE_HALF),
       shaker: bars(SHAKER),
