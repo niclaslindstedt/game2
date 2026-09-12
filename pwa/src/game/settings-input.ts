@@ -19,6 +19,7 @@ export type KeyAction =
   | "restart"
   | "menu"
   | "pause"
+  | "hud"
   | "screenshot";
 
 /** Bound `KeyboardEvent.code` values per action — a list, because the
@@ -39,6 +40,7 @@ export const KEY_ACTIONS: { id: KeyAction; label: string }[] = [
   { id: "restart", label: "RESTART STAGE" },
   { id: "menu", label: "MAIN MENU" },
   { id: "pause", label: "PAUSE" },
+  { id: "hud", label: "TOGGLE HUD" },
   { id: "screenshot", label: "SCREENSHOT" },
 ];
 
@@ -60,6 +62,14 @@ export const DEFAULT_KEYS: KeyBindings = {
   restart: ["KeyB"],
   menu: ["KeyM"],
   pause: ["Escape"],
+  // H for HUD, and it is the only letter the word offers that the road has
+  // not already spent: the pedals are the arrows and WASD, the gears and the
+  // camera are the letters around them, and the two presses that throw road
+  // away are R and B. It flips the SAME switch the pause card and OPTIONS ▸
+  // HUD carry rather than a latch of its own, so the HUD a player turned off
+  // mid-stage is still off on the next one — and the row they can turn it
+  // back on from says so.
+  hud: ["KeyH"],
   // ENTER, because it is the one key on a driving keyboard that nothing
   // else on the road wants: the pedals are the arrows and WASD, the gears
   // and the camera are letters around them, and ESCAPE is the pause card.

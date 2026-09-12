@@ -77,6 +77,7 @@ export function createRunEvents(store: RunStore, actions: RunActions, renderer: 
     input,
     menuNav,
     menuRef,
+    optionsRef,
     paceRef,
     pickPlayCamera,
     playCameraRef,
@@ -111,6 +112,7 @@ export function createRunEvents(store: RunStore, actions: RunActions, renderer: 
     watchPaceRef,
   } = store;
   const {
+    applyOptions,
     flash,
     takeShotRef,
     showSplit,
@@ -308,7 +310,17 @@ export function createRunEvents(store: RunStore, actions: RunActions, renderer: 
     if (action === "restart") restart();
     else if (action === "menu") goMainMenu();
     else if (action === "screenshot") takeShotRef.current();
-    else if (action === "pause") {
+    else if (action === "hud") {
+      // The SAME switch OPTIONS ▸ HUD and the pause card carry, rather than a
+      // latch of this key's own: a HUD that came back the next time the game
+      // was started would be a setting the player has to find twice, and both
+      // rows read the answer straight off the settings they are drawn from —
+      // so the card a player opens after pressing this already says OFF.
+      // Distinct from the chrome ALT and god mode's Z take off, which is a
+      // frame being photographed rather than a player's standing choice.
+      const hud = optionsRef.current.hud;
+      applyOptions({ ...optionsRef.current, hud: { ...hud, on: !hud.on } });
+    } else if (action === "pause") {
       if (menuRef.current) return;
       setPaused((was) => !was);
     } else camera();

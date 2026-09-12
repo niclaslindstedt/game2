@@ -33,6 +33,18 @@ describe("the keys a driver reaches for", () => {
     expect(boundTo("KeyB")).toEqual(["restart"]);
     expect(boundTo("Enter")).toEqual(["screenshot"]);
   });
+
+  it("puts the HUD on H, and gives H to nothing else", () => {
+    // H for HUD, and the press flips the SAME switch OPTIONS ▸ HUD and the
+    // pause card carry — so a HUD turned off mid-stage is still off on the
+    // next one, and there is a row on screen saying so. That is what
+    // separates it from the chrome ALT and god mode's Z take off, which is a
+    // frame being photographed and comes back on its own.
+    expect(boundTo("KeyH")).toEqual(["hud"]);
+    // …and a letter that shares a hand with a pedal or a gear would take the
+    // HUD down every time it was reached for.
+    expect(DEFAULT_KEYS.hud).toEqual(["KeyH"]);
+  });
 });
 
 describe("a key the game has acted on", () => {
@@ -43,7 +55,7 @@ describe("a key the game has acted on", () => {
     // reached for mid-stage.
     expect(browserKeepsKey(["screenshot"], false, false)).toBe(false);
     // ...and so is every other press the car answers to.
-    for (const action of ["reset", "restart", "camera", "pause", "menu"] as const) {
+    for (const action of ["reset", "restart", "camera", "pause", "menu", "hud"] as const) {
       expect(browserKeepsKey([action], false, false)).toBe(false);
     }
   });
