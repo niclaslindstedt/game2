@@ -123,7 +123,14 @@ const PATCH = { width: 0.24, length: 0.34 };
  * the only place it is ever judged.
  *
  * `bump` is how far the pattern leans the surface and `shade` how much it
- * darkens it, and both are deliberately UNDER what looks right in a still.
+ * darkens it. `bump` does nearly all of the work on purpose: a tread is
+ * SHAPE, so what should make it visible is the light finding the edges of
+ * the blocks, not the blocks being painted a different colour. `shade` is
+ * the little that is honestly albedo-ish — a block pressed into snow sits
+ * at the bottom of its own small groove, so it keeps a touch less of the
+ * sky, which is the sky term one scale down.
+ *
+ * Both are deliberately UNDER what looks right in a still.
  * The first pass ran them at 0.34 and 0.16 and the track came back as a
  * ladder — rungs, with the regularity of a zip rather than the texture of
  * a tyre. A tread is something the eye catches at the edge of a frame at
@@ -135,7 +142,7 @@ const PATCH = { width: 0.24, length: 0.34 };
  * sit correctly on a band that is narrow when the tyre rolls true and half
  * again as wide when it is dragged (`bandHalf`). A tread stretches with the
  * smear; it does not tile more of itself into it. */
-const TREAD = { pitch: 0.115, ribs: 3, bump: 0.2, shade: 0.1 };
+const TREAD = { pitch: 0.115, ribs: 3, bump: 0.2, shade: 0.06 };
 
 /** HOW WIDE A BAND A RECTANGLE SMEARS, half-width in m, given how far off
  * its own pointing direction it is travelling.
@@ -165,32 +172,54 @@ const BODY = {
   length: 2 * TUNING.collision.halfLength,
 };
 
-/** The colours across a track. The floor is the pressed snow in the rut,
- * shadowed and blue; the rim is its shoulder; the lip thrown outside it is
- * broken snow, which is BRIGHTER than the field it came out of — freshly
- * turned snow catches the light on every facet, and that is what makes a
- * track read from behind.
+/** The colours across a track — AND THEY ARE ALL SNOW-WHITE, which is the
+ * whole of what this palette has to say.
+ *
+ * A tyre track in a photograph looks dark. The snow in it is NOT dark: it
+ * is the same snow, pressed, and pressing snow barely moves its albedo —
+ * it is still a heap of ice crystals returning most of what falls on it.
+ * What is actually dark in the photograph is LIGHT: the walls of the rut
+ * have turned away from the sun, the floor of it sees a strip of sky
+ * instead of a hemisphere, and the crystals that were catching the sun
+ * edge-on have been crushed flat. All three are lighting, and all three
+ * are modelled — the section's own normals (`lean`), the sky term
+ * (`SKY_SHUT`) and the reduced glitter.
+ *
+ * Painted dark INSTEAD, which is what this palette used to do, a track is
+ * wrong in a way that shows the moment the light changes: it stays a grey
+ * stripe in flat overcast where the real thing all but disappears, it
+ * cannot go darker when a ridge shadow crosses it, and at dusk it reads as
+ * dirt on the snow rather than as snow. So nothing here is darker than the
+ * field by more than a few percent, and the pressed ones lean BLUE rather
+ * than grey — packed snow scatters a little less and lets a little more of
+ * the sky's own colour back, which is the one honest albedo difference
+ * there is.
  *
  * `FLOOR`, `BANK` and `EDGE` are exported because a car's rut is not the
  * only thing pressed into a snowfield: the crowd's walk out to a stand
  * (`carpark.ts`) is the same two tones, and a path trodden by boots that
  * read as a different white from one pressed by tyres would be two
  * materials claiming to be one snow. */
-export const FLOOR = new THREE.Color(0xa8b6c8);
+export const FLOOR = new THREE.Color(0xe6edf7);
 /** ...and what the floor becomes once traffic has worked it all the way
- * down: a polished floor rather than a pressed one, darker and bluer
- * again. The mix is the pack itself, so the racing line on a white stage
- * darkens as it is driven. */
-const GLAZE = new THREE.Color(0x8e9db2);
-const RIM = new THREE.Color(0xcfd9e6);
-/** The broad floor the BODY pressed, where it pressed one at all — lighter
- * than a rut because nothing rolled on it, darker than the field because
- * something stood on it. */
-const PAN = new THREE.Color(0xdde6f0);
+ * down. A glazed racing line IS a shade darker and bluer than snow, and for
+ * a reason that is not compaction: it is on its way to being ICE, and ice
+ * is part transparent, so some of what reaches it does not come back. Kept
+ * small but deliberately not zero — this is the one place the game tells
+ * the driver that the fast line is also the slippery one (`snowpack.ts`),
+ * and it is told in the place they are already looking. */
+const GLAZE = new THREE.Color(0xccd8ec);
+const RIM = new THREE.Color(0xeff3fb);
+/** The broad floor the BODY pressed, where it pressed one at all. */
+const PAN = new THREE.Color(0xf0f5fc);
+/** The snow thrown out past the tyre — the BRIGHTEST thing on a track, and
+ * the one tone here that is not a near-copy of the field. Freshly broken
+ * snow is a heap of new faces, every one of them catching the light. */
 export const BANK = new THREE.Color(0xffffff);
-/** ...and where a band meets the untouched field, in the field's own white,
- * so the track has no drawn edge. */
-export const EDGE = new THREE.Color(0xeceff2);
+/** ...and where a band meets the untouched field, in the field's own white
+ * exactly (`snow-mantle.ts`'s `FRESH`), so a track has no drawn edge at
+ * all — only the shading of its own shape. */
+export const EDGE = new THREE.Color(0xf4f8ff);
 
 /** ONE STATION ACROSS A BAND: how far out it stands, how far it rises (in
  * ridge heights — `ridgeOf`), what colour it is, and how solid. Both ends
@@ -263,6 +292,29 @@ const LANE_AT = LANES.map((_, l) => LANES.slice(0, l).reduce((n, s) => n + s.len
 /** Quads per stamp — one between each pair of stations in each lane. */
 const QUADS = LANES.reduce((n, lane) => n + lane.length - 1, 0);
 
+/** HOW MUCH SKY EACH STATION CAN SEE, 0 at the bottom of the rut and 1 at
+ * the top of its lip — the section's own rise, normalised.
+ *
+ * This is the term that replaced a dark floor colour, and it is the honest
+ * version of the same look. A point at the bottom of a groove has the walls
+ * of that groove across half of its hemisphere, so less of the sky reaches
+ * it and it is darker than the snow beside it WITHOUT being made of
+ * anything darker. Which is why it behaves: it goes with the depth of the
+ * rut, so a road's shallow one hardly darkens at all and a deep field rut
+ * does; and it is a multiplier on the light, so a ridge shadow crossing the
+ * track takes the whole of it down together instead of leaving a grey
+ * stripe lit from nowhere. */
+const OPEN = LANES.map((lane) => {
+  const top = Math.max(...lane.map((st) => st.rise));
+  return lane.map((st) => (top > 0 ? st.rise / top : 1));
+});
+
+/** ...and how far a fully deep rut shuts the sky out. Gentle: a groove a
+ * few centimetres deep and a hand wide still sees most of the sky, and
+ * anything heavier here is the dark-stripe mistake arriving by another
+ * road. */
+const SKY_SHUT = 0.34;
+
 /** HOW STEEPLY THE SECTION RISES at each station, per unit of `u` — the
  * central difference of the section's own shape, so the lips of a rut carry
  * a normal that leans and catch the light as raised snow rather than reading
@@ -323,12 +375,13 @@ type Row = {
   /** ...and how steeply the band leans across itself at each one, m per m. */
   lean: Float64Array;
   /** Per lane: the across axis (x, z), how far that lane has travelled (m,
-   * for the tread's pitch), how sideways it was going (0..1), and how
-   * solid the lane is at all — which is what switches the belly pan off on
-   * a road. */
+   * for the tread's pitch), how sideways it was going (0..1), how solid the
+   * lane is at all — which is what switches the belly pan off on a road —
+   * and how DEEP its rut came out as a share of the deepest one drawable,
+   * which is what scales the sky term. */
   lane: Float64Array;
 };
-const LANE_STRIDE = 5;
+const LANE_STRIDE = 6;
 
 /** The attributes a stamp rewrites, so the upload list and the geometry
  * cannot drift apart. */
@@ -372,7 +425,8 @@ type Ribbon = {
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
-  /** Per vertex: across (-1..1 of the band), along (m), smear (0..1). */
+  /** Per vertex: across (-1..1 of the band), along (m), smear (0..1), and
+   * how much of the sky this point can see (0..1). */
   marks: Float32Array;
   /** Per vertex: the band's across axis in world space, for the tread's
    * bump frame. */
@@ -468,13 +522,17 @@ function markMaterial(): THREE.MeshLambertMaterial {
       // loose ones standing proud of the surface, and a tyre has crushed
       // them flat.
       glitter: 0.45,
+      // ...and the sky the bottom of a rut has lost to its own walls, which
+      // is what makes a track read dark WITHOUT any part of it being made
+      // of anything darker than snow.
+      sky: "vMark.w",
       vertex: [
         [
           "#include <common>",
-          `attribute vec3 mark;
+          `attribute vec4 mark;
            attribute vec3 bandAxis;
            attribute float alpha;
-           varying vec3 vMark;
+           varying vec4 vMark;
            varying vec3 vBandAxis;
            varying float vAlpha;`,
         ],
@@ -488,7 +546,7 @@ function markMaterial(): THREE.MeshLambertMaterial {
       fragment: [
         [
           "#include <common>",
-          `varying vec3 vMark;
+          `varying vec4 vMark;
            varying vec3 vBandAxis;
            varying float vAlpha;
            // Flat-topped blocks rather than a sine: a tread is rubber and
@@ -523,6 +581,9 @@ function markMaterial(): THREE.MeshLambertMaterial {
            vec3 tAcross = normalize(vBandAxis);
            vec3 tAlong = normalize(cross(normal, tAcross));
            normal = normalize(normal - tAlong * cos(along) * bump - tAcross * cos(across) * bump * 0.4);
+           // ...and the TREAD's own small shading, which is the same thing
+           // one scale down: a block pressed into the snow sits at the
+           // bottom of its own little groove.
            diffuseColor.rgb *= 1.0 - print * TREAD_SHADE * (1.0 - lugs * 0.5 - ribs * 0.5);
            diffuseColor.a *= vAlpha;`,
         ],
@@ -542,7 +603,7 @@ export function createSnowMarks(): SnowMarks {
     const positions = new Float32Array(verts * 3);
     const normals = new Float32Array(verts * 3);
     const colors = new Float32Array(verts * 3);
-    const marks = new Float32Array(verts * 3);
+    const marks = new Float32Array(verts * 4);
     const bandAxes = new Float32Array(verts * 3);
     const alphas = new Float32Array(verts);
     const index = new Uint32Array(STAMPS * QUADS * 6);
@@ -571,7 +632,7 @@ export function createSnowMarks(): SnowMarks {
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    geo.setAttribute("mark", new THREE.BufferAttribute(marks, 3));
+    geo.setAttribute("mark", new THREE.BufferAttribute(marks, 4));
     geo.setAttribute("bandAxis", new THREE.BufferAttribute(bandAxes, 3));
     geo.setAttribute("alpha", new THREE.BufferAttribute(alphas, 1));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
@@ -691,6 +752,7 @@ export function createSnowMarks(): SnowMarks {
       // the whole of it and shows none.
       row.lane[at + 3] = tyre ? Math.min(1, Math.max(Math.abs(sinB), worked * GLAZED)) : 1;
       row.lane[at + 4] = tyre ? 1 : belly;
+      row.lane[at + 5] = ridge / RIDGE.max;
       for (let i = 0; i < lane.length; i++) {
         const st = lane[i];
         const out = acrossAt(st.u, half);
@@ -797,9 +859,12 @@ export function createSnowMarks(): SnowMarks {
           r.normals[vi * 3] = (-ax * lean) / len;
           r.normals[vi * 3 + 1] = 1 / len;
           r.normals[vi * 3 + 2] = (-az * lean) / len;
-          r.marks[vi * 3] = st.u;
-          r.marks[vi * 3 + 1] = row.lane[laneAt + 2];
-          r.marks[vi * 3 + 2] = row.lane[laneAt + 3];
+          r.marks[vi * 4] = st.u;
+          r.marks[vi * 4 + 1] = row.lane[laneAt + 2];
+          r.marks[vi * 4 + 2] = row.lane[laneAt + 3];
+          // The sky this station is open to, shut down in proportion to how
+          // deep its own rut actually came out.
+          r.marks[vi * 4 + 3] = 1 - SKY_SHUT * row.lane[laneAt + 5] * (1 - OPEN[l][i]);
           r.alphas[vi] = st.alpha * row.lane[laneAt + 4];
           const tone = st.tone === FLOOR ? FLOOR_NOW : st.tone;
           r.colors[vi * 3] = tone.r;

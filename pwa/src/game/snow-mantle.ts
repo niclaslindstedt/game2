@@ -203,9 +203,21 @@ export function coatHeightAt(
  * Fresh snow is very slightly blue rather than pure white: a white that
  * clips to the same value across a whole hillside has no form in it, and
  * the blue is what the shaded side of a drift actually is — sky light,
- * scattered out of the pack. */
+ * scattered out of the pack.
+ *
+ * `PACKED` is only a LITTLE darker than `FRESH`, and that is the correction
+ * rather than the compromise. Pressing snow hardly moves its albedo — it is
+ * the same crystals, closer together, still returning most of what falls on
+ * them. A driven patch looks darker because it is SHAPED: it has sunk, so
+ * its slopes have turned away from the sun and its floor sees less sky, and
+ * this sheet's own normals are computed off its own bent surface for
+ * exactly that reason. Given a grey tint on top of that the snow went
+ * twice-darkened — a grey stripe that stayed grey in flat overcast, where
+ * the real thing all but disappears. The small blue that is left is the one
+ * honest difference: worked snow is on its way to ice, and ice gives a
+ * little less back. */
 const FRESH = new THREE.Color(0xf4f8ff);
-const PACKED = new THREE.Color(0xb9c6d6);
+const PACKED = new THREE.Color(0xd5dfee);
 
 /** THE COAT'S OWN MATERIAL: the shared snow surface (`snow-shader.ts` —
  * wrap lighting and the glitter, which the trail laid on top of this sheet

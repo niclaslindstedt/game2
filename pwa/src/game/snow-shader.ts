@@ -73,15 +73,25 @@ export const SNOW_VERTEX = `
  * `glitter` is a multiplier on how hard the crystals flare: the open field
  * carries all of it, and snow a wheel has pressed to a floor carries less,
  * because the thing that sparkled was the loose crystal standing proud of
- * the surface and the tyre has crushed it flat. */
-export function snowSurface(glitter = 1): string {
+ * the surface and the tyre has crushed it flat.
+ *
+ * `sky` is a GLSL expression for how much of the SKY reaches this point,
+ * 0..1, and it multiplies the AMBIENT half alone — never the sun's. That
+ * split is the whole point of it. A rut floor in direct sunlight is fully
+ * lit; what it has lost is the blue coming down off the rest of the
+ * hemisphere, because the walls of its own groove are in the way. Applied
+ * to the whole of the light instead it would be a dark stripe again, just
+ * computed more expensively — and the flat surfaces around it would be
+ * wrong in the other direction. A surface with no grooves in it (the coat)
+ * leaves it at 1 and pays nothing. */
+export function snowSurface(glitter = 1, sky = "1.0"): string {
   return `
     {
       vec3 snowN = normalize(normal);
       vec3 snowV = normalize(cameraPosition - vWorldPos);
       // Wrap lighting: the light that went INTO the snow and came back.
       float wrapped = max(0.0, (dot(snowN, uSun) + 0.6) / 1.6);
-      gl_FragColor.rgb *= 0.72 + 0.45 * wrapped;
+      gl_FragColor.rgb *= 0.72 * (${sky}) + 0.45 * wrapped;
       // ...and the crystals that happened to line up.
       vec3 snowH = normalize(uSun + snowV);
       vec3 facet = normalize(snowN + snowHash(floor(vWorldPos * 7.0)) * 0.55);
@@ -105,6 +115,7 @@ export function snowLambert(
     vertex?: [string, string][];
     fragment?: [string, string][];
     glitter?: number;
+    sky?: string;
   },
 ): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({ fog: true, ...options });
@@ -128,7 +139,10 @@ export function snowLambert(
     shader.fragmentShader = after(shader.fragmentShader, [
       ["#include <common>", SNOW_COMMON],
       ...(own.fragment ?? []),
-    ]).replace("#include <fog_fragment>", `${snowSurface(own.glitter)}\n#include <fog_fragment>`);
+    ]).replace(
+      "#include <fog_fragment>",
+      `${snowSurface(own.glitter, own.sky)}\n#include <fog_fragment>`,
+    );
   };
   return material;
 }
