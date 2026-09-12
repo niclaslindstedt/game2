@@ -11,7 +11,7 @@ import { TUNING } from "./defs/tuning.ts";
 import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { clipKerbs, clipSolids, collideCar } from "./collision.ts";
 import { CLIMATE, snowBite, snowGrip, snowRide, snowWade, temperatureAt } from "./climate.ts";
-import { snowUnder, type SnowUnder } from "./snowpack.ts";
+import { snowBelly, snowUnder, type SnowUnder } from "./snowpack.ts";
 import { stepCooling } from "./cooling.ts";
 import { sandAt } from "./sandstorm.ts";
 import { beyondDriving } from "./damage.ts";
@@ -275,20 +275,36 @@ function carveSnow(state: GameState, index: number, moved: number): void {
     state.snow.carve(x, z, UNDER, bite);
   };
 
-  // THE NOSE FIRST. The snow under the body has to come down for the car to
-  // be where it is, and it is the front of the body that brings it down —
-  // so the pressing LEADS the wheels instead of following them, along the
-  // line the nose is sweeping. Swept forward a fifth of a metre a step, this
-  // line IS the footprint (`TUNING.snow.chassis`).
+  // THE NOSE FIRST — WHERE THE NOSE IS IN THE SNOW AT ALL. The snow under
+  // the body has to come down for the car to be where it is, and it is the
+  // front of the body that brings it down, so the pressing LEADS the wheels
+  // instead of following them, along the line the nose is sweeping. Swept
+  // forward a fifth of a metre a step, this line IS the footprint
+  // (`TUNING.snow.chassis`).
+  //
+  // ...but only in snow the body is actually IN (`snowBelly`). A car on a
+  // snow road is riding over a few centimetres of cover with its floor a
+  // clear third of a metre above it: nothing about the body touches that
+  // snow, and what an alpine road keeps is four tyre tracks with unbroken
+  // snow between them. Pressed unconditionally, every road in the game got
+  // a bladed crown down the middle of it instead — the mark of a vehicle
+  // ploughing, which is not the one being driven.
   const C = T.snow.chassis;
   const nose = T.collision.halfLength;
   const half = T.collision.halfWidth;
-  const step = (2 * half) / (C.across - 1);
-  for (let i = 0; i < C.across; i++) press(nose, -half + i * step, share * C.bite);
+  const noseX = car.x + sinH * nose;
+  const noseZ = car.z + cosH * nose;
+  snowUnder(state.track, state.terrain, index, noseX, noseZ, UNDER);
+  const belly = snowBelly(UNDER.rest, state.snow.workAt(noseX, noseZ, UNDER.base));
+  if (belly > 0) {
+    const step = (2 * half) / (C.across - 1);
+    for (let i = 0; i < C.across; i++) press(nose, -half + i * step, share * C.bite * belly);
+  }
 
-  // ...and THE WHEELS press their own ruts into the floor the body left,
-  // which is why a track through deep snow is a broad trough with two
-  // furrows in it rather than four holes.
+  // ...and THE WHEELS press their own ruts, into the floor the body left
+  // where it left one and into the untouched cover where it did not. Which
+  // is why a track through DEEP snow is a broad trough with furrows cut in
+  // it, and a track along a snow ROAD is the furrows alone.
   for (const lz of [T.snow.axleAt, -T.snow.axleAt]) {
     for (const lx of [T.snow.wheelAt, -T.snow.wheelAt]) press(lz, lx, share);
   }

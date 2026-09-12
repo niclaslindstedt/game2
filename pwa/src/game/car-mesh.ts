@@ -188,8 +188,14 @@ const GLASS_INSIDE = 0.25;
  * only thing there is to see. */
 const CABIN_LIGHT = { day: 0.78, dusk: 0.44, night: 0.16 };
 
-/** Front-wheel visual steer: radians of wheel angle at full lock... */
-const WHEEL_STEER_LOCK = 0.55;
+/** Front-wheel visual steer: radians of wheel angle at full lock...
+ *
+ * Exported because the drawn wheels are not the only thing that has to know
+ * where the fronts are pointed: the track they leave in snow
+ * (`snow-marks.ts`) is drawn as wide as the angle between where a tyre
+ * points and where it is going, and a second copy of this number would be
+ * a car whose ruts disagree with its own front wheels. */
+export const WHEEL_STEER_LOCK = 0.55;
 /** ...hard-clamped here, rad — past this the wheels read as broken. */
 const WHEEL_STEER_MAX = 0.7;
 /** How fast the drawn wheels chase the input, 1/s — quick enough to read

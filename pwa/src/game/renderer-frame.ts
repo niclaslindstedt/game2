@@ -89,11 +89,8 @@ export function createFrame(parts: RenderScene, fx: ReturnType<typeof createEven
     // that keeps `fx` is made of the car — the tyre smoke, the shards, the
     // spray, the grit a crash ploughs up.
     const groundFx = dustFx();
-    // The trail is a decal and takes no light of its own, so it is handed
-    // the same ambient the dust is (snow-marks.ts, `light`).
-    marks.light(environment.dustTint());
-    // ...and it is laid on the DUST row's say, off `TRAIL_LEFT` rather than
-    // the budget above it: what the wheels LEAVE is a mesh built once, not a
+    // The track a car leaves in snow is laid on the DUST row's say, off
+    // `TRAIL_LEFT` rather than the budget above it: what the wheels LEAVE is a mesh built once, not a
     // cloud spawned per frame, and the driven car's is drawn at every stop
     // of the row. `lay` is safe to call on any surface — off snow it only
     // breaks the run so the next mark does not span the gap — so there is

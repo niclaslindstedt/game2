@@ -44,6 +44,7 @@
     "rollcam": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/roll-cam.mjs",
     "aircam": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/air-cam.mjs",
     "wheel": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/wheel-lab.mjs",
+    "tracks": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/snow-tracks-lab.mjs",
     "views": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/views-preview.mjs",
     "audition": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/audition.mjs",
     "profile": "node scripts/profile-render.mjs",

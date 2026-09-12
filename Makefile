@@ -391,6 +391,20 @@ aircam:
 wheel:
 	npm run wheel
 
+# THE SNOW-TRACK LAB — what a car writes into snow, photographed FROM
+# DIRECTLY ABOVE (previews/tracks.png): a straight, a curve, a drift, a
+# handbrake turn and a run out in the deep blanket, each in plan at a fixed
+# metres-per-pixel with the chase camera's view of the same instant beside
+# it. The plan view is the point — four paths crossing each other is a shape
+# the chase camera cannot show, so "are all four wheels there", "does a band
+# widen when the tyre goes sideways" and "is the snow between the ruts still
+# untouched" were all being judged off the one angle that could not answer
+# them. REQUIRED before/after any change to the snow track, the tyre band,
+# R47's belly gate or the tread shader. Same Chromium requirements as
+# `screenshots`. `OUT=` names the sheet.
+tracks:
+	npm run tracks
+
 # Photograph the CAMERA KEY being pressed, at every step of the ladder
 # (previews/views.png) — six consecutive frames per step, with the lens's own
 # reading under each, so a frame that does not belong beside the last shows

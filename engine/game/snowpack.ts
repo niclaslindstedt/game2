@@ -44,7 +44,8 @@ import { clamp } from "../lib/math.ts";
 import { handoverAt, ROAD_CROSS, snowWear } from "../mapgen/road.ts";
 import { flatTrack, type Track } from "../mapgen/index.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
-import { CLIMATE, packedBy, packedDepth, snowRide } from "./climate.ts";
+import { CLIMATE, packedBy, packedDepth, snowRide, snowWade } from "./climate.ts";
+import { TUNING } from "./defs/tuning.ts";
 
 /** WHAT SNOW LIES UNDER A POINT, before this run touched it: how deep it
  * stood, and how worked the traffic that came before had already left it.
@@ -88,6 +89,44 @@ export type Snowpack = {
    * the cap is counted against. */
   readonly worked: number;
 };
+
+/** R47 — HOW HARD THE BODY IS PRESSING the snow at a point, 0..1: nothing
+ * at all while the car is riding OVER the snow on its wheels, and all of it
+ * once the snow is well over the sills.
+ *
+ * The thing that makes a car's mark in deep snow is its own FRONT: the snow
+ * under the body has to come down for the car to be where it is, so a
+ * trail through a field is a broad trough with two furrows cut in the floor
+ * of it. But that is a fact about DEEP snow and about nothing else. A car
+ * on a snow ROAD is riding on a cover a few centimetres thick, its floor a
+ * clear `TUNING.snow.clearance` above it, and the body never touches it —
+ * what is left in an alpine road is four tyre tracks and unbroken snow
+ * between them, which is the one thing a picture of a real winter road
+ * always shows and the crown-on-everything model always got wrong.
+ *
+ * So the belly is asked the same question the resistance asks
+ * (`car.ts`'s bulldozing term): how much snow stands ABOVE where the wheels
+ * are riding (`snowWade`), against how far the body reaches down into it.
+ *
+ * AND IT IS A RAMP BETWEEN TWO HEIGHTS, not a switch at one. The part of a
+ * car that meets snow first is not its floor but its NOSE — the valance and
+ * the sump guard, hanging `TUNING.snow.dam` below it — so the body starts
+ * disturbing the snow while the sills are still clear and is pressing the
+ * whole width of itself by the time they are not. Which matters, because a
+ * rally car rides high: measured against the floor alone, even the deep
+ * taiga blanket a stage at -6 °C lays leaves the sills clear by a couple of
+ * centimetres, and a switch there is a car that never presses snow
+ * anywhere. Measured against the nose, the road is clear and the field is
+ * not, which is the distinction this exists to draw.
+ *
+ * Read by the carve (`step.ts`, how hard the nose line presses) and by the
+ * renderer (`snow-marks.ts`, whether a belly pan is drawn at all), which is
+ * why it is stated here rather than in either: the drawn trough and the
+ * pressed one have to be the same trough. */
+export function snowBelly(rest: number, pack: number): number {
+  const S = TUNING.snow;
+  return clamp((snowWade(rest, pack) - (S.clearance - S.dam)) / S.dam, 0, 1);
+}
 
 /** Cells the pack remembers — about ten thousand square metres of worked
  * ground at `CLIMATE.pack.cell`, which is a trail down the whole of a long

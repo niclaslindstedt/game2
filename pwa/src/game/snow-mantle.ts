@@ -44,7 +44,7 @@
 import * as THREE from "three";
 import { CLIMATE, TUNING, type Snowpack, type TerrainField } from "@engine";
 
-import { SUN_DIR } from "./sun-dir.ts";
+import { snowLambert } from "./snow-shader.ts";
 
 /** The grid the coat is drawn on, m. Two metres is the blanket's own
  * sampling grid (`SNOW_CELL`), so the sheet resolves every edge the engine
@@ -207,87 +207,23 @@ export function coatHeightAt(
 const FRESH = new THREE.Color(0xf4f8ff);
 const PACKED = new THREE.Color(0xb9c6d6);
 
-/** THE SNOW SHADER, grafted onto a Lambert material rather than written
- * from nothing — the lights, the shadows and the game's own height fog are
- * all in the built-in one already (`height-fog.ts` grafts itself into
- * three's shader chunks), and a material assembled by hand would have to
- * reproduce every one of them to sit in the same world.
- *
- * Two things are added, and they are the two things that separate snow from
- * white paint:
- *
- *   * WRAP LIGHTING — the cheap standing approximation of subsurface
- *     scattering. Light does not stop at the surface of snow, it goes in,
- *     bounces about the grains and comes back out somewhere else, so the
- *     terminator is soft and the shaded side glows instead of going black.
- *     `N·L` is remapped through `(N·L + w) / (1 + w)`, which is that in one
- *     line.
- *
- *   * THE GLITTER — snow sparkles because it is not a surface at all, it is
- *     a heap of crystals, each an almost perfect mirror at a random angle.
- *     A handful of them line up with the sun and the eye at once and flare.
- *     Modelled the way real-time work does it: hash the WORLD position into
- *     a random normal per cell, and give it an extremely tight specular
- *     lobe. World-space, so the glints sit still on the ground and twinkle
- *     as the CAMERA moves, which is what the real thing does — a glitter
- *     that swims with the view reads as noise on the lens. */
+/** THE COAT'S OWN MATERIAL: the shared snow surface (`snow-shader.ts` —
+ * wrap lighting and the glitter, which the trail laid on top of this sheet
+ * carries too), plus the one thing that belongs to the sheet alone. Where
+ * the blanket has run out there is nothing to draw: the fragment is thrown
+ * away rather than faded, which is what gives the coat a clean edge at the
+ * road's lip instead of a seam across the tile under it. */
 function snowMaterial(): THREE.MeshLambertMaterial {
-  const material = new THREE.MeshLambertMaterial({ vertexColors: true, fog: true });
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uSun = { value: SUN_DIR };
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        "#include <common>",
-        `#include <common>
-         attribute float depth;
-         varying float vDepth;
-         varying vec3 vWorldPos;`,
-      )
-      .replace(
-        "#include <begin_vertex>",
-        `#include <begin_vertex>
-         vDepth = depth;
-         vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
-      );
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        "#include <common>",
-        `#include <common>
-         uniform vec3 uSun;
-         varying float vDepth;
-         varying vec3 vWorldPos;
-         // One random unit vector per cell of world space.
-         vec3 snowHash(vec3 p) {
-           p = fract(p * vec3(0.1031, 0.1030, 0.0973));
-           p += dot(p, p.yxz + 33.33);
-           return normalize(fract((p.xxy + p.yxx) * p.zyx) * 2.0 - 1.0);
-         }`,
-      )
-      // Nothing at all where the blanket has run out — a clean edge, and
-      // the tile underneath showing through rather than a seam.
-      .replace(
-        "#include <clipping_planes_fragment>",
-        `#include <clipping_planes_fragment>
-         if (vDepth < ${NOTHING.toFixed(3)}) discard;`,
-      )
-      .replace(
-        "#include <fog_fragment>",
-        `{
-           vec3 nrm = normalize(vNormal);
-           vec3 view = normalize(cameraPosition - vWorldPos);
-           // Wrap lighting: the light that went INTO the snow and came back.
-           float wrapped = max(0.0, (dot(nrm, uSun) + 0.6) / 1.6);
-           gl_FragColor.rgb *= 0.72 + 0.45 * wrapped;
-           // ...and the crystals that happened to line up.
-           vec3 half3 = normalize(uSun + view);
-           vec3 facet = normalize(nrm + snowHash(floor(vWorldPos * 7.0)) * 0.55);
-           float glint = pow(max(0.0, dot(facet, half3)), 220.0);
-           gl_FragColor.rgb += glint * 1.6 * max(0.0, uSun.y);
-         }
-         #include <fog_fragment>`,
-      );
-  };
-  return material;
+  return snowLambert({ vertexColors: true }, () => ({
+    vertex: [
+      ["#include <common>", "attribute float depth;\n varying float vDepth;"],
+      ["#include <begin_vertex>", "vDepth = depth;"],
+    ],
+    fragment: [
+      ["#include <common>", "varying float vDepth;"],
+      ["#include <clipping_planes_fragment>", `if (vDepth < ${NOTHING.toFixed(3)}) discard;`],
+    ],
+  }));
 }
 
 export type SnowMantle = {
