@@ -27,6 +27,7 @@ import {
 } from "@engine";
 
 import { valueNoise } from "../lib/noise.ts";
+import { ROAD_PAINT } from "./road-paint.ts";
 // The dissolve field is the SPILL's — one field, so the paint's boundary and
 // the scattered stones agree instead of reading as two effects.
 import { DISSOLVE } from "./road-spill.ts";
@@ -42,39 +43,6 @@ import { detailTexture, looseTexture, textureMean } from "./textures.ts";
 
 /** World up — the axis every scattered chipping spins about. */
 export const UP = new THREE.Vector3(0, 1, 0);
-
-/** The road's palette. Gravel is graded dirt, worn to hardpack down the two
- * tracks every car before you drove in, loose and pale at the edges;
- * asphalt is bitumen, polished lighter where the tires have burnished it
- * and grey-black between. */
-export const ROAD_PAINT = {
-  gravel: { loose: "#d2b489", worn: "#8a7046" },
-  // R40 — the desert's road: bleached, near-white sand rather than graded
-  // stone, and the wheel tracks are packed sand rather than worn-through
-  // subgrade, so the split between loose and worn is shallow and stays
-  // pale. Read under the same speckle map as the gravel, which darkens
-  // everything it covers — so both are authored a shade lighter than the
-  // sand they are meant to come out as.
-  sand: { loose: "#f2e2b4", worn: "#d6bf8a" },
-  // R47 — packed snow over the road above the snowline: white, the wheel
-  // tracks worn to grey-blue ice. Authored as it should come OUT, because
-  // a snow vertex is lifted clear of the grit map's darkening (see
-  // `buildRoad`) — unlike the rows above, which are read under it.
-  snow: { loose: "#f1f3f6", worn: "#c4ccd6" },
-  // R48 — the road across a frozen lake: swept ice rather than packed
-  // snow, so it is darker and bluer than the row above it, and the wheel
-  // tracks are polished rather than worn — the tread burnishes the sheet
-  // instead of cutting into it. Lifted clear of the grit map for the same
-  // reason the snow is: there is no stone in a lake.
-  ice: { loose: "#dbe7f1", worn: "#adc2d4" },
-  asphalt: { loose: "#3a3b40", worn: "#54555c" },
-  water: { loose: "#8fa6c6", worn: "#8fa6c6" },
-  deck: { loose: "#b7b3a8", worn: "#a4a096" },
-  shoulder: "#8a734f",
-  /** Past the bare shoulder the verge greens over and meets the terrain's
-   * own grass — there is no ditch to color (R16). */
-  verge: "#6f8f3e",
-};
 
 /** How many bands the loose outer margin — everything past the wheel
  * tracks — is cut into on the way to the road's edge. */

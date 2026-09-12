@@ -84,6 +84,7 @@ import { TUNING, snowBelly, snowUnder, type GameState, type SnowUnder } from "@e
 
 import { WHEEL_STEER_LOCK } from "./wheel-steer.ts";
 import { coatHeightAt, coatSagAt } from "./snow-mantle.ts";
+import { ROAD_PAINT } from "./road-paint.ts";
 import { snowLambert } from "./snow-shader.ts";
 
 /** Metres of travel between stamps, measured on the busiest wheel. */
@@ -216,6 +217,22 @@ const PAN = new THREE.Color(0xf0f5fc);
  * the one tone here that is not a near-copy of the field. Freshly broken
  * snow is a heap of new faces, every one of them catching the light. */
 export const BANK = new THREE.Color(0xffffff);
+/** ...and WHAT A TRACK ON A ROAD IS ACTUALLY MADE OF, which is not clean
+ * snow at all.
+ *
+ * A tyre in a field presses powder, and what it leaves is white. A tyre on
+ * a ROAD presses the road's snow — and the road's snow has had grit thrown
+ * into it by everything that drove there before, which is exactly what
+ * `road-mesh.ts` paints as the worn lines down a winter road. Drawn in the
+ * field's own white regardless, a track came out CLEANER than the road it
+ * was cut into: a strip of fresh powder laid down the middle of a dirty
+ * road, which is the one thing a tyre certainly does not do.
+ *
+ * So it is the ROAD's own worn tone, read from the road's palette rather
+ * than copied into a second table — a track that disagreed with the mat
+ * beside it about what colour that road's packed snow is would be two
+ * surfaces claiming to be one. */
+const GRIT = new THREE.Color(ROAD_PAINT.snow.worn);
 /** ...and where a band meets the untouched field, in the field's own white
  * exactly (`snow-mantle.ts`'s `FRESH`), so a track has no drawn edge at
  * all — only the shading of its own shape. */
@@ -403,7 +420,7 @@ const LANE_STRIDE = 6;
 
 /** The attributes a stamp rewrites, so the upload list and the geometry
  * cannot drift apart. */
-const TOUCHED = ["position", "normal", "color", "mark", "bandAxis", "alpha"] as const;
+const TOUCHED = ["position", "normal", "color", "mark", "bandAxis", "blend"] as const;
 
 /** Where a lane's tread distance wraps, m — far enough that no track is
  * ever long enough to see the seam, near enough that the float keeps the
@@ -449,7 +466,8 @@ type Ribbon = {
   /** Per vertex: the band's across axis in world space, for the tread's
    * bump frame. */
   bandAxes: Float32Array;
-  alphas: Float32Array;
+  /** Per vertex: how solid it is, and how much road grit it carries. */
+  blends: Float32Array;
   head: number;
   /** How far each lane's tread has run, m — carried across stamps so the
    * pattern runs continuously down a track instead of restarting at every
@@ -549,16 +567,16 @@ function markMaterial(): THREE.MeshLambertMaterial {
           "#include <common>",
           `attribute vec4 mark;
            attribute vec3 bandAxis;
-           attribute float alpha;
+           attribute vec2 blend;
            varying vec4 vMark;
            varying vec3 vBandAxis;
-           varying float vAlpha;`,
+           varying vec2 vBlend;`,
         ],
         [
           "#include <begin_vertex>",
           `vMark = mark;
            vBandAxis = bandAxis;
-           vAlpha = alpha;`,
+           vBlend = blend;`,
         ],
       ],
       fragment: [
@@ -566,7 +584,7 @@ function markMaterial(): THREE.MeshLambertMaterial {
           "#include <common>",
           `varying vec4 vMark;
            varying vec3 vBandAxis;
-           varying float vAlpha;
+           varying vec2 vBlend;
            // Flat-topped blocks rather than a sine: a tread is rubber and
            // voids with edges between them, and a smooth ripple reads as
            // corduroy.
@@ -603,7 +621,17 @@ function markMaterial(): THREE.MeshLambertMaterial {
            // one scale down: a block pressed into the snow sits at the
            // bottom of its own little groove.
            diffuseColor.rgb *= 1.0 - print * TREAD_SHADE * (1.0 - lugs * 0.5 - ribs * 0.5);
-           diffuseColor.a *= vAlpha;`,
+           // THE GRIT, where this is a road's snow rather than a field's.
+           // A tone alone makes a track merely greyer, and grey snow is the
+           // mistake this whole surface has been backing out of; what makes
+           // it read as DIRTY is that the dirt is in PIECES. So the road's
+           // share is spent on scattered stones hashed off world space —
+           // which sit still on the ground as the camera moves, the way the
+           // glitter does, because grit that swims is noise on the lens.
+           vec3 stones = snowHash(floor(vWorldPos * 42.0));
+           float stone = smoothstep(0.35, 0.75, stones.x * 0.5 + 0.5);
+           diffuseColor.rgb *= 1.0 - vBlend.y * stone * 0.3;
+           diffuseColor.a *= vBlend.x;`,
         ],
       ],
     }),
@@ -623,7 +651,7 @@ export function createSnowMarks(): SnowMarks {
     const colors = new Float32Array(verts * 3);
     const marks = new Float32Array(verts * 4);
     const bandAxes = new Float32Array(verts * 3);
-    const alphas = new Float32Array(verts);
+    const blends = new Float32Array(verts * 2);
     const index = new Uint32Array(STAMPS * QUADS * 6);
     for (let q = 0; q < STAMPS * QUADS; q++) {
       const b = q * 4;
@@ -652,7 +680,7 @@ export function createSnowMarks(): SnowMarks {
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     geo.setAttribute("mark", new THREE.BufferAttribute(marks, 4));
     geo.setAttribute("bandAxis", new THREE.BufferAttribute(bandAxes, 3));
-    geo.setAttribute("alpha", new THREE.BufferAttribute(alphas, 1));
+    geo.setAttribute("blend", new THREE.BufferAttribute(blends, 2));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     const mesh = new THREE.Mesh(geo, material);
     mesh.frustumCulled = false;
@@ -666,7 +694,7 @@ export function createSnowMarks(): SnowMarks {
       colors,
       marks,
       bandAxes,
-      alphas,
+      blends,
       head: 0,
       along: new Float64Array(LANES.length),
       was: new Float64Array(WHEELS.length * 2),
@@ -830,8 +858,13 @@ export function createSnowMarks(): SnowMarks {
     const now = r.next;
     cut(r, now, state, belly, worked, sag, ground);
     if (r.joined) {
-      FLOOR_NOW.copy(FLOOR).lerp(GLAZE, worked);
-      write(r, now);
+      // The floor's tone: how far traffic has worked this snow toward a
+      // glaze, and then how much of the ROAD's own grit it is made of —
+      // which is `UNDER.base`, R16's wear, and is zero the moment the car
+      // is off the mat. So a field track is white and a road track is the
+      // road's dirty packed snow, out of one expression.
+      FLOOR_NOW.copy(FLOOR).lerp(GLAZE, worked).lerp(GRIT, UNDER.base);
+      write(r, now, UNDER.base);
       r.head = (r.head + 1) % STAMPS;
       for (const name of TOUCHED) {
         (r.mesh.geometry.attributes[name] as THREE.BufferAttribute).needsUpdate = true;
@@ -848,7 +881,7 @@ export function createSnowMarks(): SnowMarks {
 
   /** Write one stamp's quads: every lane, every span, from the last row to
    * this one. */
-  const write = (r: Ribbon, now: Row): void => {
+  const write = (r: Ribbon, now: Row, grit: number): void => {
     const last = r.last;
     let q = r.head * QUADS;
     for (let l = 0; l < LANES.length; l++) {
@@ -883,7 +916,8 @@ export function createSnowMarks(): SnowMarks {
           // The sky this station is open to: the floor of the rut has lost
           // the whole of what its walls take, and the lip has lost none.
           r.marks[vi * 4 + 3] = 1 - row.lane[laneAt + 5] * (1 - OPEN[l][i]);
-          r.alphas[vi] = st.alpha * row.lane[laneAt + 4];
+          r.blends[vi * 2] = st.alpha * row.lane[laneAt + 4];
+          r.blends[vi * 2 + 1] = grit;
           const tone = st.tone === FLOOR ? FLOOR_NOW : st.tone;
           r.colors[vi * 3] = tone.r;
           r.colors[vi * 3 + 1] = tone.g;
