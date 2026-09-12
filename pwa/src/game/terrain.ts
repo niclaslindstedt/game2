@@ -33,6 +33,7 @@ import type { Biome, RegionGround } from "./biome.ts";
 import { ROCK_SLOPE, SNOW, rockAt, snowAt, snowLie, zonesUnder } from "./ground-rules.ts";
 import { sandRipple } from "./sand-ripple.ts";
 import { coatRoom } from "./snow-mantle.ts";
+import { snowAlbedo, snowLambert } from "./snow-shader.ts";
 // R16 — the ground beside a road takes the ROAD's own edge tone and the
 // SPILL's own noise field, so the ribbon's dissolve, the scattered stones
 // and this wash all hand over along one boundary.
@@ -141,6 +142,13 @@ export type Terrain = {
    * this height, so the two meshes meet instead of one stopping in the air
    * over the other. */
   latticeAt: (x: number, z: number) => number;
+  /** The seed every paint-only noise field is drawn from, for a surface that
+   * has to agree with this paint but is not drawn by it: the coat of snow
+   * over the tiles (`snow-mantle.ts`) takes its white from the same field
+   * rather than from a second one that merely looks similar. The two meet
+   * along a rim a hundred metres from the car, and a tone of its own on
+   * either side of that rim is a line across the hillside. */
+  paintSeed: number;
   /** The ground's own COLOUR at a point, into `out` — the same paint the
    * tiles carry. The road's outer band fades into it, so the corridor ends
    * in the country rather than at a line ruled against it. */
@@ -216,7 +224,27 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // given one of its own, so the tiles stay a single draw and the paint,
   // the detail grain and the height fog are all still the ones every other
   // country uses. Nothing at all on ground the wind never sorted.
-  const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: groundTex });
+  //
+  // R47 — ...and on a WHITE country it is a surface made of snow, shaded by
+  // the same rules as the coat over it (`snow-shader.ts`). The coat is a fine
+  // sheet that follows the car and stops a hundred metres out; these tiles
+  // carry the same country to 640 m, and on plain Lambert with a white of
+  // their own they are a different snow, which puts the coat's square rim
+  // across every hillside as a line. Grafted only where there is snow to
+  // shade: a green stage pays not one instruction for it.
+  const snowy = field.snowy;
+  const groundMat = snowy
+    ? snowLambert({ vertexColors: true, map: groundTex }, () => ({
+        vertex: [
+          ["#include <common>", "attribute float snow;\nvarying float vSnow;"],
+          ["#include <begin_vertex>", "vSnow = snow;"],
+        ],
+        fragment: [["#include <common>", "varying float vSnow;"]],
+        // A tile is meadow, bedrock AND snow at once, so the terms are
+        // weighted by what the paint actually laid white.
+        cover: "vSnow",
+      }))
+    : new THREE.MeshLambertMaterial({ vertexColors: true, map: groundTex });
   if (biomeRules(track.knobs.biome).loose === "sand") sandRipple(groundMat);
   // The app's one water look, shared with the fords and the streams — never
   // disposed here, because it is not this module's to free.
@@ -241,36 +269,11 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   const shore = new THREE.Color(palette.shore);
   const bed = new THREE.Color(palette.bed);
   // The snow is not the palette's: it is the one ground every country
-  // paints the same, a cool off-white with a shaded blue-grey through it,
-  // and it goes over whatever the country was doing under it.
-  const snow = new THREE.Color(0xf8fbff);
-  const snowShade = new THREE.Color(0xc9daf2);
+  // paints the same, and it goes over whatever the country was doing under
+  // it. Its tone is `snowAlbedo`'s (`snow-shader.ts`) rather than a copy
+  // here — the coat that lies over these tiles a hundred metres out is
+  // painted from the same field, which is what lets its rim disappear.
   const snowTone = new THREE.Color();
-  /** R47 — HOW MUCH BRIGHTER THAN ITS OWN PAINT SNOW RENDERS. Every other
-   * ground in the game is a dark material under a bright sky and comes out
-   * near the colour it was authored at. Snow is the opposite: it returns
-   * something like nine tenths of everything that lands on it, which is
-   * more than a material multiplied by a light can say. Painted at plain
-   * white it still arrives GREY — the ground detail map takes a few per
-   * cent off it and tints it warm, the key light is a warm sun, and a
-   * winter sun is low, so the diffuse term on flat ground is well under
-   * one. Measured on a taiga winter, white paint rendered #c4c4bb: a warm
-   * three-quarter grey, on the one surface a player would describe as
-   * white before anything else about it.
-   *
-   * So the tone is pushed PAST white and allowed to clip, which is what
-   * snow does to an eye and to a camera both. The shaded side still reads,
-   * because `snowShade` is a real blue-grey and the noise between them is
-   * what gives a snowfield its form; what clips is the lit side, which is
-   * the half that is supposed to be blinding.
-   *
-   * ...and the tone is COOL, for the same reason it is bright: the light
-   * it is standing under is a warm sun (`sunLight`, environment.ts) over a
-   * warm-flecked grit map, and a neutral white painted under both renders
-   * beige. Snow reads as snow when it is a touch bluer than the light
-   * falling on it, which is also what it really is — most of what fills a
-   * snowfield's shadows is sky. */
-  const SNOW_GLARE = 1.28;
   // R40 — the country's own rules: which regions quilt it, what its
   // unsealed road is made of, and the heights its zones stand at.
   const rules = biomeRules(track.knobs.biome);
@@ -389,7 +392,8 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     carved: boolean,
     out: THREE.Color,
     dusted = true,
-  ): void => {
+  ): number => {
+    let cover = 0;
     const speck = 0.88 + hash2(Math.round(x * 2), Math.round(z * 2), noiseSeed + 29) * 0.24;
     // THE TRAINING GROUND is not country. Its pad was graded and then
     // either sealed or bladed, so it takes the ROAD's own palette — the
@@ -413,7 +417,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
       // SHAPES from the far side of the ground.
       out.lerp(worn, clamp01((1 - normalY) * 2.4));
       out.multiplyScalar(speck);
-      return;
+      return 0;
     }
     // R35 — bed and beach are painted against the level of the water
     // STANDING HERE, not against the sea. A tarn on a shoulder has a
@@ -484,8 +488,10 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     // faces stay rock), and just above the line it is broken by windows of
     // bare stone cut by a noise band, closing as the ground climbs, so the
     // snowline is a ragged margin rather than a contour drawn round the
-    // mountain. A slow second noise leans the white toward its shade, which
-    // is what keeps a snowfield from reading as a blank.
+    // mountain. A slow second noise leans the white toward its shade
+    // (`snowAlbedo`), which is what keeps a snowfield from reading as a
+    // blank — and how much of it went down is handed back, because the
+    // material shades the snow by exactly the amount the paint laid.
     if (zones.snow !== null && y >= level + 0.6) {
       const lie = snowLie(y, normalY, zones);
       if (lie > 0) {
@@ -495,17 +501,12 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
         // near it.
         const closed = Math.min(1.4, (y - zones.snow + SNOW.lead) / SNOW.patchFade);
         const window = valueNoise(x, z, SNOW.patch, noiseSeed + 67);
-        const cover = lie * clamp01((window - 0.55 + 0.55 * closed) / 0.22);
-        if (cover > 0) {
-          snowTone
-            .copy(snow)
-            .lerp(snowShade, valueNoise(x, z, 46, noiseSeed + 71) * 0.55)
-            .multiplyScalar(SNOW_GLARE);
-          out.lerp(snowTone, cover);
-        }
+        cover = lie * clamp01((window - 0.55 + 0.55 * closed) / 0.22);
+        if (cover > 0) out.lerp(snowAlbedo(snowTone, x, z, noiseSeed), cover);
       }
     }
     out.multiplyScalar(speck);
+    return cover;
   };
 
   /** Rewrite ONE of the two sheets from every tile standing: a single
@@ -622,6 +623,12 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     const normals = new Float32Array(verts * verts * 3);
     const uvs = new Float32Array(verts * verts * 2);
     const colors = new Float32Array(verts * verts * 3);
+    // R47 — HOW MUCH OF EACH VERTEX IS SNOW, for the material to weight the
+    // snow surface by (`snow-shader.ts`). The paint already knows: it is the
+    // same number it laid the white on with, so the shading and the colour
+    // can never disagree about where the snowfield is. Built only on a white
+    // country — nothing else has a material that reads it.
+    const snowCover = snowy ? new Float32Array(verts * verts) : null;
     const indices: number[] = [];
     for (let j = 0; j < verts; j++) {
       for (let i = 0; i < verts; i++) {
@@ -645,7 +652,8 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
         normals[v * 3 + 2] = dz * inv;
         // Color by altitude band with a per-vertex speckle — the same
         // chunky grain the road textures carry, on top of the detail map.
-        paintGround(x, z, y, normals[v * 3 + 1], carved[hi] === 1, c);
+        const cover = paintGround(x, z, y, normals[v * 3 + 1], carved[hi] === 1, c);
+        if (snowCover) snowCover[v] = cover;
         colors[v * 3] = c.r;
         colors[v * 3 + 1] = c.g;
         colors[v * 3 + 2] = c.b;
@@ -659,6 +667,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
     geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    if (snowCover) geo.setAttribute("snow", new THREE.BufferAttribute(snowCover, 1));
     geo.setIndex(indices);
     const ground = new THREE.Mesh(geo, groundMat);
     // The ground reads the cars' shadow map (car-shadow.ts); nothing that
@@ -924,14 +933,16 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     paintGround(x, z, y, 1 / Math.hypot(dx, 1, dz), inStream(field.streams, x, z, 0), out);
   };
 
-  const paintLand = (x: number, z: number, y: number, normalY: number, out: THREE.Color): void =>
+  const paintLand = (x: number, z: number, y: number, normalY: number, out: THREE.Color): void => {
     paintGround(x, z, y, normalY, false, out, false);
+  };
 
   return {
     group,
     field,
     standOn: field.groundAt,
     latticeAt: field.latticeAt,
+    paintSeed: noiseSeed,
     paintAt,
     paintLand,
     sync,
