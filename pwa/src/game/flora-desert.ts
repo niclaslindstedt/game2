@@ -95,31 +95,41 @@ const PHI = 2.39996;
 
 // ── Shared silhouettes ─────────────────────────────────────────────────────
 
-/** The scatter a desert tree's foliage is: blobs thrown over a low dome
- * around `at`, thinning and flattening toward its edge. Airiness is a
- * matter of COUNT against SPREAD — the same twelve blobs are a solid
- * umbrella over two metres and a lace of leaves over five — so every
- * caller below tunes those two against each other and nothing else. */
+/** The scatter a desert tree's foliage is: blobs thrown ALONG one branch,
+ * from its fork to its tip, and out to either side of it.
+ *
+ * Along, and not on the end. Foliage piled on the tips of the boughs puts
+ * every leaf a tree owns into one thin horizontal band — and a band of
+ * foliage on bare stems is a flat-topped umbrella, which is an acacia and
+ * the wrong continent however open the scatter inside it is. Walking the
+ * branch spends the same blobs over the whole height between the fork and
+ * the tip, so the silhouette is a mound with trunks showing through it.
+ *
+ * How open that mound reads is `n` against `spread`, and nothing else: the
+ * same eight blobs are a solid crown over two metres and a lace of leaves
+ * over five. */
 function crown(
   b: GeoBuilder,
   color: THREE.Color,
-  at: Point,
+  from: Point,
+  to: Point,
   spread: number,
-  rise: number,
   n: number,
   r: number,
-  flat = 0.55,
+  flat = 0.6,
 ): void {
   for (let i = 0; i < n; i++) {
     const a = i * PHI;
-    const t = (i + 0.55) / n;
-    const d = spread * Math.sqrt(t);
+    // Down the branch, biased toward the outer half where the leaves
+    // actually are, but never leaving the inner half bare.
+    const f = 0.26 + ((i + 0.5) / n) * 0.86;
+    const d = spread * (0.3 + 0.7 * ((i % 3) / 2));
     b.blob(
       color,
-      r * (1.15 - t * 0.4) * (0.8 + b.random() * 0.4),
-      at.x + Math.cos(a) * d,
-      at.y + rise * (1 - t * t) * (0.7 + b.random() * 0.6),
-      at.z + Math.sin(a) * d,
+      r * (1.12 - (i % 3) * 0.16) * (0.82 + b.random() * 0.36),
+      from.x + (to.x - from.x) * f + Math.cos(a) * d,
+      from.y + (to.y - from.y) * f + (b.random() - 0.5) * spread,
+      from.z + (to.z - from.z) * f + Math.sin(a) * d,
       { sy: flat },
     );
   }
@@ -264,53 +274,60 @@ function pad(b: GeoBuilder, r: number, at: Point, yaw: number, tilt: number): Po
 
 /** The wash trees, which is what the desert calls a tree: several thin
  * stems out of one root, forking low, carrying an OPEN scatter of small
- * leaves. How open is `leaves` against `spread` — a palo verde you can read
- * a newspaper through, an ironwood you cannot — and nothing else. */
+ * leaves down the length of every branch.
+ *
+ * `fork` is the height the stems split at as a fraction of the tree, and it
+ * is what separates the three: a mesquite breaks up near the ground and is
+ * a mound of foliage with dark trunks inside it, an ironwood carries a
+ * rounded crown higher, and a palo verde holds the most bare green stem of
+ * the three. Fork them all high and they are the same tree wearing three
+ * colours. */
 function washTree(
   b: GeoBuilder,
   bark: THREE.Color,
   leaf: THREE.Color,
   h: number,
   spread: number,
-  opts: { stems: number; leaves: number; leaf: number; flat?: number; droop?: number },
+  opts: {
+    stems: number;
+    leaves: number;
+    leaf: number;
+    fork: number;
+    flat?: number;
+    droop?: number;
+  },
 ): void {
-  const ends: Point[] = [];
+  const droop = opts.droop ?? 0;
   for (let i = 0; i < opts.stems; i++) {
     const a = i * PHI;
     const lean = 0.14 + (i % 3) * 0.09;
-    const stem = limb(b, bark, h * 0.026, h * 0.042, h * 0.46, 0, lean, a, 5);
+    const stem = limb(b, bark, h * 0.026, h * 0.042, h * opts.fork, 0, lean, a, 5);
     for (let k = 0; k < 2; k++) {
-      // Each fork its own length, so the ends finish at half a dozen
-      // different heights: a crown whose every blob sits on the same plane
-      // is the flat-topped umbrella of a savanna acacia.
-      const reach = h * (0.3 + ((i + k * 2) % 4) * 0.075);
-      ends.push(
-        limb(
-          b,
-          bark,
-          h * 0.012,
-          h * 0.024,
-          reach,
-          stem,
-          lean + 0.2 + k * 0.3,
-          a + (k ? 0.8 : -0.7),
-          4,
-        ),
+      // Each fork its own length, so the tips finish at half a dozen
+      // different heights rather than on one plane.
+      const reach = h * (0.3 + ((i + k * 2) % 4) * 0.08);
+      const end = limb(
+        b,
+        bark,
+        h * 0.012,
+        h * 0.024,
+        reach,
+        stem,
+        lean + 0.2 + k * 0.3,
+        a + (k ? 0.8 : -0.7),
+        4,
+      );
+      crown(
+        b,
+        leaf,
+        { x: stem.x, y: stem.y - droop, z: stem.z },
+        { x: end.x, y: end.y - droop, z: end.z },
+        spread * 0.26,
+        opts.leaves,
+        opts.leaf,
+        opts.flat ?? 0.6,
       );
     }
-  }
-  const droop = opts.droop ?? 0;
-  for (const e of ends) {
-    crown(
-      b,
-      leaf,
-      { x: e.x, y: e.y - droop, z: e.z },
-      spread * 0.38,
-      spread * 0.14,
-      opts.leaves,
-      opts.leaf,
-      opts.flat ?? 0.55,
-    );
   }
 }
 
@@ -581,12 +598,16 @@ export const DESERT_VARIANTS: Record<string, VariantDef> = {
    * foliage hanging almost to the ground. The densest of the three. */
   mesquite: {
     build: (b) =>
-      washTree(b, MESQUITE_BARK, MESQUITE_LEAF, 4.6, 5.2, {
+      washTree(b, MESQUITE_BARK, MESQUITE_LEAF, 5.9, 5.6, {
         stems: 4,
         leaves: 6,
         leaf: 0.44,
-        flat: 0.68,
-        droop: 0.4,
+        // Breaking up at a quarter of its height, which is what makes a
+        // mesquite a thicket you cannot see over rather than a shade tree
+        // you can walk under.
+        fork: 0.26,
+        flat: 0.72,
+        droop: 0.5,
       }),
   },
   /** Palo verde — the green stick. Bark green from the ground to the
@@ -598,8 +619,9 @@ export const DESERT_VARIANTS: Record<string, VariantDef> = {
       washTree(b, PALO_VERDE, PALO_VERDE_LEAF, 6, 5, {
         stems: 3,
         leaves: 6,
-        leaf: 0.46,
-        flat: 0.72,
+        leaf: 0.4,
+        fork: 0.44,
+        flat: 0.78,
       }),
   },
   /** Ironwood: the biggest and the oldest thing that grows in a wash, on a
@@ -607,12 +629,13 @@ export const DESERT_VARIANTS: Record<string, VariantDef> = {
    * fortnight in May, a lavender one. */
   ironwood: {
     build: (b) =>
-      washTree(b, IRONWOOD_BARK, IRONWOOD_LEAF, 7, 5.6, {
+      washTree(b, IRONWOOD_BARK, IRONWOOD_LEAF, 8.2, 6, {
         stems: 3,
         leaves: 8,
-        leaf: 0.5,
-        flat: 0.66,
-        droop: 0.25,
+        leaf: 0.48,
+        fork: 0.36,
+        flat: 0.7,
+        droop: 0.3,
       }),
   },
   /** A pinyon pine: the one conifer up here, squat and round-headed. */
