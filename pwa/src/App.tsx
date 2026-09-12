@@ -498,8 +498,18 @@ export function App() {
   // race is the whole thing, and the only way on from one is another.
   // …and a RETIREMENT wants it in every mode: the stage was not cleared,
   // and running it again is the only way it ever will be.
+  // …and a REPLAY wants the same press for a different reason, which is why
+  // the card renames it: `restart` over a recording rewinds it to its first
+  // step rather than putting the player on a grid (run-events.ts), so what
+  // the button offers is the run again from the top. Offered on a recording
+  // that reached the line as well as one that ended against a tree — either
+  // way it is over, and either way watching it again is the only way on.
   const onRetry =
-    run.mode === "timetrial" || run.mode === "headsup" || missedPodium || snap?.phase === "retired"
+    run.mode === "timetrial" ||
+    run.mode === "headsup" ||
+    run.mode === "replay" ||
+    missedPodium ||
+    snap?.phase === "retired"
       ? (): void => actionsRef.current.restart()
       : null;
 
