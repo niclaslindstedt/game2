@@ -201,7 +201,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   // winter's blanket (`snow-mantle.ts` says why), so on a white country the
   // snow is laid over it as a surface of its own, following the car. Null
   // on every green stage, and nothing anywhere pays for it there.
-  const mantle = createSnowMantle(terrain.field);
+  const mantle = createSnowMantle(terrain.field, terrain.paintSeed, detailTexture());
   if (mantle) {
     mantle.object.name = "snow";
     group.add(mantle.object);

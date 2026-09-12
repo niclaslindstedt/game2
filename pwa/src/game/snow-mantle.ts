@@ -44,7 +44,7 @@
 import * as THREE from "three";
 import { CLIMATE, TUNING, type Snowpack, type TerrainField } from "@engine";
 
-import { snowLambert } from "./snow-shader.ts";
+import { SNOW_PACK, snowAlbedo, snowLambert } from "./snow-shader.ts";
 
 /** The grid the coat is drawn on, m. Two metres is the blanket's own
  * sampling grid (`SNOW_CELL`), so the sheet resolves every edge the engine
@@ -199,34 +199,23 @@ export function coatHeightAt(
   return (a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz;
 }
 
-/** The snow's own white, and what it becomes where a wheel has worked it.
- * Fresh snow is very slightly blue rather than pure white: a white that
- * clips to the same value across a whole hillside has no form in it, and
- * the blue is what the shaded side of a drift actually is — sky light,
- * scattered out of the pack.
- *
- * `PACKED` is only a LITTLE darker than `FRESH`, and that is the correction
- * rather than the compromise. Pressing snow hardly moves its albedo — it is
- * the same crystals, closer together, still returning most of what falls on
- * them. A driven patch looks darker because it is SHAPED: it has sunk, so
- * its slopes have turned away from the sun and its floor sees less sky, and
- * this sheet's own normals are computed off its own bent surface for
- * exactly that reason. Given a grey tint on top of that the snow went
- * twice-darkened — a grey stripe that stayed grey in flat overcast, where
- * the real thing all but disappears. The small blue that is left is the one
- * honest difference: worked snow is on its way to ice, and ice gives a
- * little less back. */
-const FRESH = new THREE.Color(0xf4f8ff);
-const PACKED = new THREE.Color(0xd5dfee);
-
 /** THE COAT'S OWN MATERIAL: the shared snow surface (`snow-shader.ts` —
  * wrap lighting and the glitter, which the trail laid on top of this sheet
  * carries too), plus the one thing that belongs to the sheet alone. Where
  * the blanket has run out there is nothing to draw: the fragment is thrown
  * away rather than faded, which is what gives the coat a clean edge at the
  * road's lip instead of a seam across the tile under it. */
-function snowMaterial(): THREE.MeshLambertMaterial {
-  return snowLambert({ vertexColors: true }, () => ({
+function snowMaterial(grain: THREE.Texture): THREE.MeshLambertMaterial {
+  // ...and the SAME detail grain the ground tiles carry, on the same world
+  // uv (metres / 16). It is the finest thing either surface has, so a coat
+  // without it reads as the smooth patch in the middle of a grainy country
+  // however well the two whites are matched — and the grain runs straight
+  // across the rim because both are sampling one texture in world space.
+  //
+  // Handed IN rather than fetched: the texture is painted on a canvas, and
+  // this module is read by the engine's own tests (`snowpack_test.ts`) for
+  // the coat's heights, so it must not learn that a `document` exists.
+  return snowLambert("coat", { vertexColors: true, map: grain }, () => ({
     vertex: [
       ["#include <common>", "attribute float depth;\n varying float vDepth;"],
       ["#include <begin_vertex>", "vDepth = depth;"],
@@ -249,12 +238,19 @@ export type SnowMantle = {
 
 /** Lay a coat of snow over the country, or nothing at all where the climate
  * leaves it green — a green stage builds no mesh and pays nothing. */
-export function createSnowMantle(field: TerrainField): SnowMantle | null {
+export function createSnowMantle(
+  field: TerrainField,
+  paintSeed: number,
+  grain: THREE.Texture,
+): SnowMantle | null {
   if (!field.snowy) return null;
 
   const positions = new Float32Array(N * N * 3);
   const normals = new Float32Array(N * N * 3);
   const colors = new Float32Array(N * N * 3);
+  // World metres / 16, exactly as the ground tiles lay theirs, so the shared
+  // detail grain is continuous across the rim rather than restarting on it.
+  const uvs = new Float32Array(N * N * 2);
   const depths = new Float32Array(N * N);
   // The heights, kept so the normals can be finite differences of the
   // sheet itself rather than of the ground under it — a rut has to shade.
@@ -278,9 +274,10 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
   geo.setAttribute("depth", new THREE.BufferAttribute(depths, 1));
   geo.setIndex(new THREE.BufferAttribute(indices, 1));
-  const material = snowMaterial();
+  const material = snowMaterial(grain);
   const mesh = new THREE.Mesh(geo, material);
   mesh.name = "snow-mantle";
   // The coat is laid in world coordinates, so it must never be culled
@@ -332,17 +329,22 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
         positions[k * 3] = x;
         positions[k * 3 + 1] = y;
         positions[k * 3 + 2] = z;
+        uvs[k * 2] = x / 16;
+        uvs[k * 2 + 1] = z / 16;
         depths[k] = depth;
-        // Worked snow is the darker, bluer of the two: what the wheels
-        // pressed down is a floor, and the field beside it is crystals.
-        // Off the RAW fall rather than the drawn one — how worked a patch of
-        // snow is is a fact about the snow, and it goes on darkening after
-        // the coat has run out of room to sink any further.
+        // The country's own white at this point (`snowAlbedo`), which is
+        // the SAME field the ground tiles past the rim are painted from —
+        // the slow lean toward blue-grey runs through both, so the sheet's
+        // edge has no tone of its own to give itself away with.
+        snowAlbedo(tint, x, z, paintSeed);
+        // ...darkened a little where the wheels have worked it. Off the RAW
+        // fall rather than the drawn one — how worked a patch of snow is is
+        // a fact about the snow, and it goes on darkening after the coat has
+        // run out of room to sink any further.
         const worked = rest > 1e-3 ? Math.min(1, raw / (rest * CLIMATE.blanket.ride)) : 0;
-        tint.copy(FRESH).lerp(PACKED, worked);
-        colors[k * 3] = tint.r;
-        colors[k * 3 + 1] = tint.g;
-        colors[k * 3 + 2] = tint.b;
+        colors[k * 3] = tint.r * (1 - worked + worked * SNOW_PACK.r);
+        colors[k * 3 + 1] = tint.g * (1 - worked + worked * SNOW_PACK.g);
+        colors[k * 3 + 2] = tint.b * (1 - worked + worked * SNOW_PACK.b);
       }
     }
     // Normals off the sheet's own slope, central differences where there is
@@ -372,6 +374,7 @@ export function createSnowMantle(field: TerrainField): SnowMantle | null {
     geo.getAttribute("position").needsUpdate = true;
     geo.getAttribute("normal").needsUpdate = true;
     geo.getAttribute("color").needsUpdate = true;
+    geo.getAttribute("uv").needsUpdate = true;
     geo.getAttribute("depth").needsUpdate = true;
   };
 

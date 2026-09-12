@@ -2,7 +2,7 @@
 title: A ground decal that must sit IN the world is a Lambert with a grafted term, never a Basic with a tint — and the graft point for a bump is `normal_fragment_begin`
 date: 2026-09-12
 scope: pwa/src/game/snow-shader.ts, pwa/src/game/snow-marks.ts, pwa/src/game/snow-mantle.ts
-concepts: [shaders, lighting, decals, onBeforeCompile, three.js, normals]
+concepts: [shaders, lighting, decals, on-before-compile, three-js, normals]
 ---
 
 `MeshBasicMaterial` + `material.color = environment.someTint()` is the right

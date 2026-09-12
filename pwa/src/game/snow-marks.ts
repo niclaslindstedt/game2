@@ -545,6 +545,7 @@ export function drawnGround(state: GameState): (x: number, z: number) => number 
  * passes has lost the print of any one of them. */
 function markMaterial(): THREE.MeshLambertMaterial {
   return snowLambert(
+    "trail",
     {
       vertexColors: true,
       transparent: true,
