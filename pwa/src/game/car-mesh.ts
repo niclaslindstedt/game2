@@ -41,6 +41,7 @@ import {
   type MirrorMount,
 } from "./car-body.ts";
 import { instrumentReadings } from "./car-instruments.ts";
+import { WHEEL_STEER_LOCK, wheelSteerChase } from "./wheel-steer.ts";
 import type { CrewLook } from "./car-crew.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, glassSpray, groundTravel, wheelSpray } from "./car-dirt.ts";
@@ -187,20 +188,6 @@ const GLASS_INSIDE = 0.25;
  * the same way a lamp is), so the darker the stage the more they are the
  * only thing there is to see. */
 const CABIN_LIGHT = { day: 0.78, dusk: 0.44, night: 0.16 };
-
-/** Front-wheel visual steer: radians of wheel angle at full lock...
- *
- * Exported because the drawn wheels are not the only thing that has to know
- * where the fronts are pointed: the track they leave in snow
- * (`snow-marks.ts`) is drawn as wide as the angle between where a tyre
- * points and where it is going, and a second copy of this number would be
- * a car whose ruts disagree with its own front wheels. */
-export const WHEEL_STEER_LOCK = 0.55;
-/** ...hard-clamped here, rad — past this the wheels read as broken. */
-const WHEEL_STEER_MAX = 0.7;
-/** How fast the drawn wheels chase the input, 1/s — quick enough to read
- * as the driver's hands, slow enough not to strobe on per-step input. */
-const WHEEL_STEER_RATE = 14;
 
 export type CarVisual = {
   group: THREE.Group;
@@ -797,8 +784,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // counter-steer in a drift shows because the input does — and each wheel
     // turns at the speed of its own contact patch, plus, on the driven axles
     // only, whatever the engine is spinning it beyond that (car-wheels.ts).
-    const wantSteer = clamp(car.steer * WHEEL_STEER_LOCK, -WHEEL_STEER_MAX, WHEEL_STEER_MAX);
-    steerVisual += (wantSteer - steerVisual) * clamp(WHEEL_STEER_RATE * dt, 0, 1);
+    steerVisual = wheelSteerChase(steerVisual, car.steer, dt);
     for (let i = 0; i < body.wheelSpin.length; i++) {
       const front = i < 2;
       const speed = wheelSurfaceSpeed(

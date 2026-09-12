@@ -82,7 +82,7 @@
 import * as THREE from "three";
 import { TUNING, snowBelly, snowUnder, type GameState, type SnowUnder } from "@engine";
 
-import { WHEEL_STEER_LOCK } from "./car-mesh.ts";
+import { WHEEL_STEER_LOCK } from "./wheel-steer.ts";
 import { coatHeightAt, coatSagAt } from "./snow-mantle.ts";
 import { snowLambert } from "./snow-shader.ts";
 
