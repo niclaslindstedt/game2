@@ -215,7 +215,7 @@ function snowMaterial(grain: THREE.Texture): THREE.MeshLambertMaterial {
   // Handed IN rather than fetched: the texture is painted on a canvas, and
   // this module is read by the engine's own tests (`snowpack_test.ts`) for
   // the coat's heights, so it must not learn that a `document` exists.
-  return snowLambert({ vertexColors: true, map: grain }, () => ({
+  return snowLambert("coat", { vertexColors: true, map: grain }, () => ({
     vertex: [
       ["#include <common>", "attribute float depth;\n varying float vDepth;"],
       ["#include <begin_vertex>", "vDepth = depth;"],

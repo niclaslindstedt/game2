@@ -115,6 +115,50 @@ export function snowAlbedo(out: THREE.Color, x: number, z: number, seed: number)
  * its way to ice, and ice gives a little less back. */
 export const SNOW_PACK = { r: 0.873, g: 0.899, b: 0.933 };
 
+/** HOW MUCH OF THE GROUND'S GRIT MAP SNOW WEARS, 0..1 — and it is not much.
+ *
+ * `detailTexture()` is a GRIT map: a white ground flecked with warm greys,
+ * authored so grass and gravel have a grain between the tile lattice's
+ * fourteen-metre vertices. On the country's tiles that is invisible and
+ * useful — at a hundred metres a fleck is well under a pixel and all it does
+ * is stop a big colour field reading as plastic. Two metres from the lens on
+ * the coat it is neither: the flecks are the size of a hand, and warm specks
+ * scattered over white do not read as snow at all, they read as GRIT. The
+ * first pass to give the coat the tiles' map made the ground under the car
+ * look like wet gravel.
+ *
+ * So snow takes the map's grain at a third depth and with its HUE thrown
+ * away — the luminance only, which is a neutral sparkle in the surface
+ * rather than dirt lying on it. Snow does have a fine texture; what it does
+ * not have is somebody else's warm flecks.
+ *
+ * Weighted by the same `cover` as everything else here, so a hillside's
+ * bare rock keeps the full grit map and the snow over it does not, and the
+ * coat and the tiles past it are cleaned by exactly the same amount — which
+ * is what keeps the rim invisible while both get cleaner. */
+const GRAIN = 0.34;
+
+/** Reshape the ground's grit map where the surface is snow. Grafted after
+ * `#include <map_fragment>`, which leaves `sampledDiffuseColor` in scope and
+ * has already multiplied it in — so this divides that back out and puts the
+ * neutral, weakened grain in its place. No second texture fetch. */
+function snowGrain(cover: string): string {
+  return `
+    {
+      float snowC = ${cover};
+      if (snowC > 0.0) {
+        float grit = dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+        vec3 clean = diffuseColor.rgb / max(sampledDiffuseColor.rgb, vec3(0.02));
+        diffuseColor.rgb = mix(
+          diffuseColor.rgb,
+          clean * mix(1.0, grit, ${GRAIN.toFixed(2)}),
+          snowC
+        );
+      }
+    }
+  `;
+}
+
 /** HOW FAR THE GLITTER CARRIES, m — the band it fades out over.
  *
  * The crystals are hashed per 1/7 m of world space and given a lobe tight
@@ -209,12 +253,27 @@ export function snowSurface(glitter = 1, sky = "1.0", cover = "1.0"): string {
 /** A Lambert material with the snow terms already in it, and a hook for
  * whatever else the caller's own surface needs to add.
  *
+ * `name` IS LOAD-BEARING — it is `graftShader`'s rule (car-surface.ts),
+ * which owns the reasoning, applied to a factory instead of a chain. Every
+ * material this function makes carries the same `onBeforeCompile` SOURCE,
+ * which is three's default program cache key, so two snow surfaces that
+ * also agree on every other program parameter (Lambert, vertex colours, a
+ * map, fog, lights) are handed whichever program compiled first.
+ *
+ * The coat and the country's tiles are exactly that pair. Unnamed, the coat
+ * drew with the TILES' shader, read a `snow` attribute its geometry does
+ * not have, took `cover` 0 from it — and silently lost its wrap lighting,
+ * its glitter and its blanket-depth discard while still looking like snow.
+ * Nothing errors and nothing is missing; the surface is just quietly a
+ * different one. So every caller names its surface.
+ *
  * `extra` is spliced in the same way `onBeforeCompile` would do it by hand:
  * each entry names a three.js shader chunk and the source to put after it,
  * which is how the coat adds its blanket-depth discard and the trail adds
  * its tread. Handed the shader object too, so a caller can declare its own
  * uniforms and attributes beside them. */
 export function snowLambert(
+  name: string,
   options: THREE.MeshLambertMaterialParameters,
   graft?: (shader: THREE.WebGLProgramParametersWithUniforms) => {
     vertex?: [string, string][];
@@ -225,6 +284,7 @@ export function snowLambert(
   },
 ): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({ fog: true, ...options });
+  material.customProgramCacheKey = (): string => `snow:${name}`;
   material.onBeforeCompile = (shader) => {
     const own = graft?.(shader) ?? {};
     // The sun by REFERENCE — `SUN_DIR` is mutated in place by the
@@ -244,6 +304,12 @@ export function snowLambert(
     ]);
     shader.fragmentShader = after(shader.fragmentShader, [
       ["#include <common>", SNOW_COMMON],
+      // Only where there IS a map to reshape: the trail carries none, and
+      // `sampledDiffuseColor` does not exist in a shader three compiled
+      // without `USE_MAP`.
+      ...(options.map
+        ? [["#include <map_fragment>", snowGrain(own.cover ?? "1.0")] as [string, string]]
+        : []),
       ...(own.fragment ?? []),
     ]).replace(
       "#include <fog_fragment>",

@@ -234,7 +234,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // shade: a green stage pays not one instruction for it.
   const snowy = field.snowy;
   const groundMat = snowy
-    ? snowLambert({ vertexColors: true, map: groundTex }, () => ({
+    ? snowLambert("ground", { vertexColors: true, map: groundTex }, () => ({
         vertex: [
           ["#include <common>", "attribute float snow;\nvarying float vSnow;"],
           ["#include <begin_vertex>", "vSnow = snow;"],
