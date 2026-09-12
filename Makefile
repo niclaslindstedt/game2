@@ -401,7 +401,9 @@ wheel:
 # untouched" were all being judged off the one angle that could not answer
 # them. REQUIRED before/after any change to the snow track, the tyre band,
 # R47's belly gate or the tread shader. Same Chromium requirements as
-# `screenshots`. `OUT=` names the sheet.
+# `screenshots`. `OUT=` names the sheet. `MOVES=` shoots only the named
+# manoeuvres and `HOLD=` shortens each one, for a quick look at one of them
+# rather than the half-hour sweep: `MOVES=drift HOLD=1.6 make tracks OUT=peek`.
 tracks:
 	npm run tracks
 

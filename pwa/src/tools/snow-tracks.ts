@@ -133,6 +133,22 @@ const MOVES: Move[] = [
   },
 ];
 
+/** WHICH MANOEUVRES TO SHOOT, off `?moves=` — a comma-separated list of
+ * names, or everything when it is not given. A whole sheet is five stages
+ * of real driving under a software rasterizer and takes the better part of
+ * half an hour; a question about ONE of them ("is the drift still four
+ * tracks after that retune?") does not need the other four. Same idea as
+ * the bare words `scripts/screenshot.mjs` takes, and for the same reason. */
+const ONLY = (new URLSearchParams(location.search).get("moves") ?? "")
+  .split(",")
+  .map((name) => name.trim())
+  .filter((name) => name.length > 0);
+
+/** ...and how long a manoeuvre is held, which `?hold=` shortens for a quick
+ * look. The default is what the sheet is JUDGED at — long enough to write a
+ * track worth reading — so anything less is a glance and should say so. */
+const HELD = Number(new URLSearchParams(location.search).get("hold") ?? HOLD);
+
 /** The sheet: one cell's pixels, and how many across. */
 const TILE = { width: 520, height: 420, cols: 2 };
 
@@ -189,7 +205,7 @@ async function main(): Promise<void> {
   const shots: Shot[] = [];
   const ticks = Math.round(FRAME / TUNING.dt);
 
-  for (const move of MOVES) {
+  for (const move of MOVES.filter((m) => ONLY.length === 0 || ONLY.includes(m.name))) {
     const game: GameState = createGame({
       seed: STAGE.seed,
       carId: STAGE.carId,
@@ -227,14 +243,14 @@ async function main(): Promise<void> {
     for (let f = 0; f < Math.round(RUN_IN / FRAME); f++) run({ throttle: 1 });
     toField(move.out ?? 0, game, run);
 
-    const held = Math.round(HOLD / FRAME);
+    const held = Math.round(HELD / FRAME);
     for (let f = 0; f < held; f++) tick(move.drive(f * FRAME));
 
     // THE PLAN. Straight down over the middle of what was just written —
     // not over the car, which is at the END of its own track and would put
     // three quarters of the mark off the bottom of the frame.
     const car = game.car;
-    const back = 0.5 * HOLD * Math.hypot(car.u, car.w);
+    const back = 0.5 * HELD * Math.hypot(car.u, car.w);
     const overX = car.x - Math.sin(car.heading) * back;
     const overZ = car.z - Math.cos(car.heading) * back;
     renderer.setCamera("free");

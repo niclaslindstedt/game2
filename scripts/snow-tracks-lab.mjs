@@ -85,7 +85,15 @@ page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
 page.on("console", (msg) => {
   if (msg.type() === "error") console.error(`[console] ${msg.text()}`);
 });
-await page.goto(`http://127.0.0.1:${port}/snow-tracks.html`);
+// MOVES= shoots only the named manoeuvres and HOLD= shortens each one: a
+// whole sheet is five stages of real driving and takes the better part of
+// half an hour on a machine with no GPU, where a question about one of them
+// is a couple of minutes. `MOVES=drift HOLD=1.6 make tracks OUT=peek`.
+const query = new URLSearchParams();
+if (process.env.MOVES) query.set("moves", process.env.MOVES);
+if (process.env.HOLD) query.set("hold", process.env.HOLD);
+const search = query.size > 0 ? `?${query}` : "";
+await page.goto(`http://127.0.0.1:${port}/snow-tracks.html${search}`);
 // HOW LONG THE SHEET IS GIVEN TO DRAW ITSELF, ms — sized for the machine
 // with no GPU, where Chromium software-rasterizes every frame of three
 // runs. A deadline rather than a budget: the wait ends when `__done` is set.
