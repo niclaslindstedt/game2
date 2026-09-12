@@ -577,6 +577,7 @@ export function Hud({
       nextStage={nextStage}
       onRetry={onRetry}
       onRetire={onRetire}
+      replaying={replaying}
       scores={scores}
       campaign={campaign}
       race={race}

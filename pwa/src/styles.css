@@ -1599,6 +1599,20 @@ body {
   margin: clamp(1rem, 3.5vmin, 1.6rem) 0 0;
 }
 
+/* A REPLAY'S STRIP STANDS ACROSS THE HEAD OF THE FRAME (`.hud-replay`), and
+   this is the one card that cannot live under it. Every other results card
+   leads with a head row, so the strip crosses empty card; a retirement is the
+   headline itself at 7% of the frame, and the strip lands straight on the
+   news. Nudging the card down by the strip's own height would not settle it
+   either — `--replay-height` is a RESERVE rather than a measurement, under
+   what the bar actually stands at on a desktop. So over a recording the
+   notice takes the MIDDLE of the frame instead, which the head of the HUD
+   cannot reach at any size. */
+.hud[data-replay] .hud-finish-retired {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 /* The sentence under the headline, in the sentence case a consequence is spoken
    in rather than the caps a readout is labelled in. */
 .hud-finish-retired .fin-note {
@@ -2074,7 +2088,9 @@ body {
    It stands over the results card at the end of the recording, which is the
    moment the disk is most likely to be wanted — so its stack order has to
    beat the card's, and its own box is small enough that the card's title and
-   sheet clear it. */
+   sheet clear it. The RETIREMENT notice is the one that does not, having no
+   head row to be crossed: it drops to the middle of the frame instead
+   (`.hud[data-replay] .hud-finish-retired`). */
 .hud-replay {
   position: absolute;
   top: max(0.6rem, env(safe-area-inset-top));

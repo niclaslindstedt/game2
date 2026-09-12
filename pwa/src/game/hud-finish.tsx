@@ -142,6 +142,13 @@ export type FinishCardProps = {
    * you have just missed by two tenths is read and answered in one press. */
   onRetry: (() => void) | null;
   onRetire: () => void;
+  /** NOBODY IS DRIVING THIS ONE: the card has come up over a REPLAY, and the
+   * run it is about was driven and lost some time ago. The card still says
+   * what happened — that is the news the recording stops on — but every
+   * press on it belongs to a watcher rather than a driver, so the two words
+   * change and the handlers do not: leaving is leaving the recording, and
+   * the way on is the recording again from its first step. */
+  replaying: boolean;
   scores: FinishScores | null;
   /** The field's verdict — null on every run with nobody else entered. */
   standing: FinishStanding | null;
@@ -219,12 +226,15 @@ function Head({
   title,
   sub,
   onRetire,
+  leave,
   acts,
   primary,
 }: {
   title: string;
   sub: string | null;
   onRetire: () => void;
+  /** What the way out is CALLED — the driver's word, or the watcher's. */
+  leave: string;
   /** What this run offers besides leaving — spectating, saving the tape. */
   acts: ComponentChildren;
   /** The way ON: the next stage, or the same one again. Last, and loud. */
@@ -248,7 +258,7 @@ function Head({
             onRetire();
           }}
         >
-          RETIRE
+          {leave}
         </button>
         {primary}
       </div>
@@ -265,6 +275,7 @@ export function FinishCard({
   nextStage,
   onRetry,
   onRetire,
+  replaying,
   scores,
   standing,
   campaign,
@@ -292,6 +303,14 @@ export function FinishCard({
   // dress it as one: the confetti is off, the way on is gone, and the
   // headline says the only thing that happened.
   const slow = standing !== null && !standing.podium;
+  // THE WATCHER'S TWO WORDS. Over a replay the card's two presses do the
+  // same two things and mean something else by both: there is no run to
+  // RETIRE from, and nothing restarts the STAGE — `restart` rewinds the
+  // recording to its first step (run-events.ts). Naming them for a driver
+  // was the card claiming the player was still in the race it is a picture
+  // of, which is exactly how it reads.
+  const leave = replaying ? "EXIT" : "RETIRE";
+  const again = replaying ? "WATCH AGAIN" : null;
   // ...and a RETIREMENT is not a result at all. The car is stopped on the
   // stage with nothing to show for the run, so the card is the headline,
   // the reason, and the two ways off it: nothing below is worth printing
@@ -324,7 +343,7 @@ export function FinishCard({
               onRetire();
             }}
           >
-            RETIRE
+            {leave}
           </button>
           {onRetry && (
             <button
@@ -335,7 +354,7 @@ export function FinishCard({
                 onRetry();
               }}
             >
-              RESTART STAGE
+              {again ?? "RESTART STAGE"}
             </button>
           )}
         </div>
@@ -400,6 +419,7 @@ export function FinishCard({
         title={title}
         sub={sub}
         onRetire={ending(onRetire)}
+        leave={leave}
         acts={
           <>
             {/* …and the way to spend the wait the sheet is otherwise
@@ -454,7 +474,7 @@ export function FinishCard({
                   onRetry();
                 })}
               >
-                RETRY
+                {again ?? "RETRY"}
               </button>
             )}
           </>
@@ -493,7 +513,12 @@ export function FinishCard({
                 <span className="fin-place-of">OFF THE BOARD</span>
               </div>
             ))}
-          {slow && <div className="fin-note">TOP {PODIUM} TO GO ON — RUN IT AGAIN</div>}
+          {/* …and the nudge under it is spoken to a DRIVER. Over a replay
+              the run is already lost and nobody is being asked to do
+              anything about it. */}
+          {slow && !replaying && (
+            <div className="fin-note">TOP {PODIUM} TO GO ON — RUN IT AGAIN</div>
+          )}
           <div className="fin-label">TOTAL TIME</div>
           <div className="fin-time">{formatTime(time)}</div>
           {record && <div className="fin-record">NEW RECORD</div>}
