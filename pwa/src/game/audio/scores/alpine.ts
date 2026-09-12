@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // SNOWLINE — the stage theme for the alpine.
 //
-// E dorian at 120 bpm: 48 bars, ninety-six seconds. A stage that starts
+// E aeolian at 120 bpm: 48 bars, ninety-six seconds. A stage that starts
 // on packed snow above the treeline and comes down through the larches to
 // a farmed valley with a lake in it wants a score with air in it — cold,
 // wide, and mostly still — and the two things every other stage theme is
@@ -21,12 +21,14 @@
 //      figure comes round every three bars and lands somewhere new on each
 //      bar it crosses. Meltwater off an eave: it is the one thing that moves
 //      through the opening, and in the chorus it doubles to every three.
-//   3. THE PULSE PICKS UP. A heartbeat kick on the one, then the halves,
-//      then four to the floor — the piece climbs from a standstill on the
-//      grid to the flat-out of the chorus and falls back to the break's
-//      stillness. The dorian IV (an A major under an E minor stage) is the
-//      only warmth in it, and a B major at the end of the build is the
-//      harmonic-minor lurch back into the chorus.
+//   3. THE PULSE PICKS UP, AND NOTHING ELSE WARMS UP. A heartbeat kick on
+//      the one, then the halves, then four to the floor — the piece climbs
+//      from a standstill on the grid to the flat-out of the chorus and falls
+//      back to the break's stillness. The HARMONY never climbs with it: the
+//      IV is minor, so there is no major sixth anywhere in the piece, and
+//      the single accidental is the B major at the end of the build, which
+//      is the harmonic-minor lurch back into the chorus. Snow above the
+//      treeline with no sun on it.
 //
 // The melodies are original.
 
@@ -54,11 +56,11 @@ import {
   type Triad,
 } from "./kit.ts";
 
-// The pads: root and fifth low, the ninth (or the dorian third) on top.
+// The pads: root and fifth low, the ninth (or the minor third) on top.
 const PAD_LOW: Record<string, string> = {
   Em: "E4",
   D: "D4",
-  A: "E4",
+  Am: "E4",
   Bm: "D4",
   C: "E4",
   G: "D4",
@@ -67,7 +69,7 @@ const PAD_LOW: Record<string, string> = {
 const PAD_MID: Record<string, string> = {
   Em: "B4",
   D: "A4",
-  A: "A4",
+  Am: "A4",
   Bm: "B4",
   C: "G4",
   G: "G4",
@@ -76,7 +78,7 @@ const PAD_MID: Record<string, string> = {
 const PAD_TOP: Record<string, string> = {
   Em: "F#5",
   D: "E5",
-  A: "C#5",
+  Am: "C5",
   Bm: "F#5",
   C: "D5",
   G: "D5",
@@ -85,7 +87,7 @@ const PAD_TOP: Record<string, string> = {
 const ROOT: Record<string, string> = {
   Em: "E2",
   D: "D2",
-  A: "A2",
+  Am: "A2",
   Bm: "B2",
   C: "C2",
   G: "G2",
@@ -96,7 +98,7 @@ const ROOT: Record<string, string> = {
 const DRIP: Record<string, Triad> = {
   Em: ["B5", "E6", "G6"],
   D: ["A5", "D6", "F#6"],
-  A: ["A5", "C#6", "E6"],
+  Am: ["A5", "C6", "E6"],
   Bm: ["B5", "D6", "F#6"],
   C: ["C6", "E6", "G6"],
   G: ["B5", "D6", "G6"],
@@ -104,11 +106,11 @@ const DRIP: Record<string, Triad> = {
 };
 
 const OPENING = ["Em", "Em", "Em", "C"];
-const VERSE = ["Em", "Em", "D", "D", "A", "A", "Em", "Em"];
-const CHORUS = ["C", "D", "Em", "Em", "C", "D", "A", "Bm"];
+const VERSE = ["Em", "Em", "D", "D", "Am", "Am", "Em", "Em"];
+const CHORUS = ["C", "D", "Em", "Em", "C", "D", "Am", "Bm"];
 const BREAK = ["Em", "Em", "C", "C", "G", "G", "D", "D"];
 const BUILD = ["Em", "Em", "C", "C", "D", "D", "B", "B"];
-const CADENCE = ["A", "A", "Em", "Em"];
+const CADENCE = ["Am", "Am", "Em", "Em"];
 
 /** The drip, written across the whole plan rather than a bar at a time so
  * the three-over-four phase carries over every bar line: one glass note
@@ -154,14 +156,14 @@ export const ALPINE_TRACK: Track = {
   bpm: 120,
   stepsPerBeat: 4,
   instruments: {
-    padLow: pad(0.011, 900, -0.45, { open: 1.6, attackMs: 520, echo: 0.32 }),
-    padMid: pad(0.01, 1100, 0.45, { open: 1.6, attackMs: 520, echo: 0.32 }),
-    padTop: pad(0.009, 1500, 0, { open: 1.6, attackMs: 560, echo: 0.36 }),
+    padLow: pad(0.011, 800, -0.45, { open: 1.6, attackMs: 520, echo: 0.32 }),
+    padMid: pad(0.01, 1000, 0.45, { open: 1.6, attackMs: 520, echo: 0.32 }),
+    padTop: pad(0.009, 1300, 0, { open: 1.6, attackMs: 560, echo: 0.36 }),
     // The glass: a sine bell struck and left in a long echo.
     drip: { ...bell(0.012, 0.3), echo: 0.6 },
     // The lead is glass too — a triangle with almost no vibrato, through a
     // lowpass that opens, deep in the same echo. No edge on it anywhere.
-    glass: lead(0.026, "triangle", 2600, { echo: 0.5, detune: 5, vibrato: 10 }),
+    glass: lead(0.026, "triangle", 2200, { echo: 0.5, detune: 5, vibrato: 10 }),
     bass: bass(0.045, 380, { hold: 0.2, gate: 0.4 }),
     // A breath: pink noise swelling over half a second and holding — the
     // wind crossing the col, once every other bar in the sections with no
@@ -210,7 +212,7 @@ export const ALPINE_TRACK: Track = {
         "=  =  =  =  =  =  =  =  .  .  .  .  .  .  .  .",
         "G5 =  =  =  =  =  =  =  A5 =  =  =  =  =  =  =",
         "B5 =  =  =  =  =  =  =  =  =  =  =  A5 =  =  =",
-        "E5 =  =  =  =  =  =  =  C#5 =  =  =  =  =  =  =",
+        "E5 =  =  =  =  =  =  =  C5 =  =  =  =  =  =  =",
         "D5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
       ),
       kick: bars(KICK_FOUR),
@@ -264,7 +266,7 @@ export const ALPINE_TRACK: Track = {
       hat: bars(HAT_OFF, HAT_OFF, HAT_OFF, HAT_OFF, HAT_8, HAT_8, HAT_8, HAT_8),
     },
 
-    // The cadence: the dorian IV home to the tonic, the bass still pulsing
+    // The cadence: the iv home to the tonic, the bass still pulsing
     // and the hat on the offbeats, so the loop lands back on the heartbeat
     // from something that was still moving.
     outro: {

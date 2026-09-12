@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // BLACK SPRUCE — the stage theme for the taiga in the rain.
 //
-// D minor at 140 bpm: 56 bars, ninety-six seconds. The same forest as the
-// clear-day theme with the light gone out of it: a wet stage is driven
+// D minor at 132 bpm: 56 bars, a hundred and two seconds. The same forest as
+// the clear-day theme with the light gone out of it: a wet stage is driven
 // slower, seen less far, and heard through a windscreen the wipers are
 // working on, and the score has to sound like that stage rather than like
 // the sunny one played sad.
@@ -16,9 +16,12 @@
 //      forward, under held chords: the drive is in the low end and the mid
 //      is a wall, which is the opposite of the dry theme's arrangement and
 //      the reason the two read as two weathers.
-//   3. THE LIFT IS TO THE RELATIVE MAJOR. The verse is a lament — i–VI–iv–V
-//      — and the chorus goes up to B♭ and F and lets some light through the
-//      cloud for eight bars before the dominant drags it back.
+//   3. THERE IS NO LIFT. The verse is a lament — i–VI–iv–V — and the chorus,
+//      where a wet score would reach for the relative major and let some
+//      light through the cloud, falls onto the ♭II instead: iv, then an E♭
+//      a half-step over the tonic. The loudest eight bars of the piece are
+//      therefore also its darkest, and the dominant at the end of them has
+//      nothing to drag back.
 //
 // The melodies are original.
 
@@ -50,24 +53,24 @@ import {
   type Triad,
 } from "./kit.ts";
 
-const ROOT: Record<string, string> = { Dm: "D2", Bb: "A#2", Gm: "G2", A: "A2", F: "F2", C: "C2" };
-const GTR_LO: Record<string, string> = { Dm: "D3", Bb: "A#2", Gm: "G3", A: "A3", F: "F3", C: "C3" };
-const GTR_HI: Record<string, string> = { Dm: "A3", Bb: "F3", Gm: "D4", A: "E4", F: "C4", C: "G3" };
+// Flats have no token, so B♭ is written `A#` and the chorus's E♭ — the ♭II,
+// a half-step over the tonic — is `D#`.
+const ROOT: Record<string, string> = { Dm: "D2", Bb: "A#2", Gm: "G2", A: "A2", Eb: "D#2" };
+const GTR_LO: Record<string, string> = { Dm: "D3", Bb: "A#2", Gm: "G3", A: "A3", Eb: "D#3" };
+const GTR_HI: Record<string, string> = { Dm: "A3", Bb: "F3", Gm: "D4", A: "E4", Eb: "A#3" };
 const PAD_LOW: Record<string, string> = {
   Dm: "A3",
   Bb: "A#3",
   Gm: "A#3",
   A: "A3",
-  F: "A3",
-  C: "G3",
+  Eb: "A#3",
 };
 const PAD_TOP: Record<string, string> = {
   Dm: "F4",
   Bb: "F4",
   Gm: "G4",
   A: "C#4",
-  F: "F4",
-  C: "E4",
+  Eb: "G4",
 };
 // The rain: voiced high and inside one octave, so it patters at one height.
 const RAIN: Record<string, Triad> = {
@@ -75,12 +78,11 @@ const RAIN: Record<string, Triad> = {
   Bb: ["D5", "F5", "A#5"],
   Gm: ["D5", "G5", "A#5"],
   A: ["C#5", "E5", "A5"],
-  F: ["C5", "F5", "A5"],
-  C: ["C5", "E5", "G5"],
+  Eb: ["D#5", "G5", "A#5"],
 };
 
 const VERSE = ["Dm", "Dm", "Bb", "Bb", "Gm", "Gm", "A", "A"];
-const CHORUS = ["Bb", "F", "Gm", "Dm", "Bb", "F", "A", "A"];
+const CHORUS = ["Gm", "Eb", "Dm", "Dm", "Gm", "Eb", "A", "A"];
 const BREAK = ["Dm", "Dm", "Gm", "Gm", "Bb", "Bb", "A", "A"];
 const BUILD = ["Dm", "Dm", "Dm", "Dm", "Bb", "Bb", "A", "A"];
 
@@ -98,7 +100,7 @@ function wall(plan: string[], rain: boolean): Record<string, string[]> {
 }
 
 export const SPRUCE_TRACK: Track = {
-  bpm: 140,
+  bpm: 132,
   stepsPerBeat: 4,
   instruments: {
     // Darker than the dry theme's guitars by half an octave of cutoff.
@@ -137,16 +139,16 @@ export const SPRUCE_TRACK: Track = {
       hat: bars(HAT_OFF),
     },
 
-    // The chorus: up to the relative major, the kit to full time, the lead.
+    // The chorus: down onto the ♭II, the kit to full time, the lead.
     b: {
       ...wall(CHORUS, true),
       lead: bars(
-        "D5 =  =  =  =  =  =  =  F5 =  =  =  D5 =  =  =",
-        "C5 =  =  =  =  =  =  =  A4 =  =  =  C5 =  =  =",
-        "A#4 =  =  =  D5 =  =  =  G5 =  =  =  =  =  =  =",
-        "F5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
-        "D5 =  =  =  F5 =  =  =  A#5 =  =  =  A5 =  =  =",
-        "F5 =  =  =  =  =  =  =  C5 =  =  =  A4 =  =  =",
+        "D5 =  =  =  =  =  =  =  A#4 =  =  =  D5 =  =  =",
+        "D#5 =  =  =  =  =  =  =  A#4 =  =  =  G4 =  =  =",
+        "F5 =  =  =  D5 =  =  =  A4 =  =  =  =  =  =  =",
+        "D5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
+        "A#4 =  =  =  D5 =  =  =  G5 =  =  =  F5 =  =  =",
+        "A#5 =  =  =  =  =  =  =  G5 =  =  =  D#5 =  =  =",
         "C#5 =  =  =  E5 =  =  =  A5 =  =  =  =  =  =  =",
         "G5 =  =  =  =  =  =  =  E5 =  =  =  C#5 =  =  =",
       ),

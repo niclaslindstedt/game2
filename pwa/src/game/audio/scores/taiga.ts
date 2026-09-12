@@ -17,13 +17,19 @@
 //      speed-metal record runs on, because what the player is doing while
 //      this plays needs all of their attention: the verse hands them a pulse
 //      to drive to and saves the melody for the chorus.
-//   3. THE BREAK IS COLD. Eight bars where the kit stops, the guitars stop,
-//      and a pad and a bell hold a B major over an E minor stage — the
-//      harmonic-minor dominant, which is the one moment in the loop that
-//      sounds like the forest rather than like the car.
+//   3. EVERYTHING THAT ANSWERS THE RIFF IS PHRYGIAN. The verse is the plain
+//      i–VI–III–VII gallop; nothing that replies to it is in E minor at all.
+//      Where a clear-day theme would lift its chorus to the major III, this
+//      one falls onto an F major — the ♭II, a half-step over the tonic, the
+//      interval that makes a forest sound like it is watching — and both the
+//      chorus and the cold eight end on the B major. Eight bars where the
+//      kit stops, the guitars stop, and a pad and a bell hold that
+//      harmonic-minor dominant over an E minor stage is still the one moment
+//      in the loop that sounds like the forest rather than like the car.
 //
-// The harmony is the i–VI–III–VII that has driven game scores since they had
-// three channels; the melodies are original.
+// The verse's harmony is the i–VI–III–VII that has driven game scores since
+// they had three channels; everything over it is E Phrygian, and the
+// melodies are original.
 
 import { bars, type Track } from "../../../lib/tracker.ts";
 
@@ -52,9 +58,35 @@ import {
 
 // Roots and fifths. A power chord is two voices, so the guitars are a pair:
 // one on the root and one a fifth above, panned apart.
-const ROOT: Record<string, string> = { Em: "E2", C: "C2", G: "G2", D: "D2", Am: "A2", B: "B2" };
-const GTR_LO: Record<string, string> = { Em: "E3", C: "C3", G: "G3", D: "D3", Am: "A3", B: "B3" };
-const GTR_HI: Record<string, string> = { Em: "B3", C: "G3", G: "D4", D: "A3", Am: "E4", B: "F#4" };
+// `F` is the Phrygian ♭II — an F major a half-step over the tonic, and the
+// one chord here that belongs to no key this stage is in.
+const ROOT: Record<string, string> = {
+  Em: "E2",
+  C: "C2",
+  G: "G2",
+  D: "D2",
+  Am: "A2",
+  B: "B2",
+  F: "F2",
+};
+const GTR_LO: Record<string, string> = {
+  Em: "E3",
+  C: "C3",
+  G: "G3",
+  D: "D3",
+  Am: "A3",
+  B: "B3",
+  F: "F3",
+};
+const GTR_HI: Record<string, string> = {
+  Em: "B3",
+  C: "G3",
+  G: "D4",
+  D: "A3",
+  Am: "E4",
+  B: "F#4",
+  F: "C4",
+};
 // The pad's top note is the third, which is the only voice that says whether
 // a chord is major or minor — the guitars deliberately do not.
 const PAD_TOP: Record<string, string> = {
@@ -64,12 +96,13 @@ const PAD_TOP: Record<string, string> = {
   D: "F#4",
   Am: "C4",
   B: "D#4",
+  F: "A4",
 };
 
 const DRIVE = ["Em", "Em", "C", "C", "G", "G", "D", "D"];
-const CHORUS = ["C", "G", "D", "Em", "C", "G", "D", "D"];
+const CHORUS = ["C", "F", "Em", "Em", "C", "F", "B", "B"];
 const COLD = ["Em", "Em", "Am", "Am", "C", "C", "B", "B"];
-const BUILD = ["Em", "Em", "Em", "Em", "C", "C", "D", "D"];
+const BUILD = ["Em", "Em", "Em", "Em", "C", "C", "B", "B"];
 
 /** The rhythm section of a section, from its chord plan — written once so
  * the two guitars and the bass can never disagree about the harmony. */
@@ -102,7 +135,7 @@ export const TAIGA_TRACK: Track = {
   patterns: {
     // Four bars of the gallop with nothing over it: the loop's own count-in.
     intro: {
-      ...riff(["Em", "Em", "C", "D"], gallop),
+      ...riff(["Em", "Em", "C", "F"], gallop),
       kick: bars(KICK_HALF),
       hat: bars(HAT_8),
     },
@@ -117,20 +150,20 @@ export const TAIGA_TRACK: Track = {
     },
 
     // The chorus: the guitars stop galloping and OPEN OUT into held chords,
-    // the kick goes to four on the floor, and the hook finally arrives.
-    // Nothing gets louder — the change is entirely one of rhythm.
+    // the kick goes to four on the floor, and the hook finally arrives over
+    // the ♭II. Nothing gets louder — the change is entirely one of rhythm.
     b: {
       ...riff(CHORUS, hold),
       pad: bars(...CHORUS.map((c) => hold(voice(PAD_TOP, c)))),
       lead: bars(
         "E5 =  =  =  G5 =  =  =  E5 =  =  =  D5 =  =  =",
-        "B4 =  =  =  =  =  =  =  D5 =  =  =  G5 =  =  =",
-        "A5 =  =  =  F#5 =  =  =  A5 =  =  =  D5 =  =  =",
-        "E5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
+        "C5 =  =  =  =  =  =  =  A4 =  =  =  F5 =  =  =",
+        "E5 =  =  =  G5 =  =  =  B4 =  =  =  E5 =  =  =",
+        "G5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
         "G5 =  =  =  E5 =  =  =  C5 =  =  =  E5 =  =  =",
-        "D5 =  =  =  B4 =  =  =  D5 =  =  =  G5 =  =  =",
-        "F#5 =  =  =  A5 =  =  =  D5 =  =  =  =  =  =  =",
-        "B5 =  =  =  =  =  =  =  A5 =  =  =  F#5 =  =  =",
+        "F5 =  =  =  C5 =  =  =  A5 =  =  =  F5 =  =  =",
+        "F5 =  =  =  D#5 =  =  =  B4 =  =  =  =  =  =  =",
+        "F#5 =  =  =  =  =  =  =  D#5 =  =  =  B4 =  =  =",
       ),
       kick: bars(KICK_FOUR),
       snare: bars(SNARE_24),
@@ -179,13 +212,14 @@ export const TAIGA_TRACK: Track = {
         ".  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .",
         ".  .  .  .  .  .  .  .  .  .  .  .  C2 .  C2 .",
         ".  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .",
-        "D2 .  .  .  D2 .  .  .  E2 .  E2 .  E2 .  E2 .",
+        "B2 .  .  .  B2 .  .  .  E2 .  E2 .  E2 .  E2 .",
       ),
     },
 
-    // Four bars to hand the loop back to its own intro.
+    // Four bars to hand the loop back to its own intro: ♭II, V, home — the
+    // Phrygian cadence, and the last thing heard before the gallop returns.
     outro: {
-      ...riff(["C", "D", "Em", "Em"], gallop),
+      ...riff(["F", "B", "Em", "Em"], gallop),
       kick: bars(KICK_HALF),
       snare: bars(SNARE_24),
       hat: bars(HAT_8),

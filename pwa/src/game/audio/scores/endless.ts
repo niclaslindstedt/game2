@@ -1,25 +1,27 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // LONG HAUL — the score for an endless stage.
 //
-// C minor at 132 bpm: 72 bars, a hundred and thirty seconds — the longest
+// C minor at 126 bpm: 72 bars, a hundred and thirty-seven seconds — the longest
 // loop in the game, because an endless stage has no finish to build toward
 // and a player on one is settling in. The piece is a cruise with a drop in
-// it: a groove that takes its time to arrive, a chorus that lifts to the
-// relative major, and a long empty middle.
+// it: a groove that takes its time to arrive, a chorus that refuses to
+// land, and a long empty middle.
 //
 // THREE DECISIONS:
 //
 //   1. THE INTRO IS EIGHT BARS AND MOSTLY EMPTY. A pad, a bass on the root,
 //      a kick every other bar. The groove is earned, not given, and on a
 //      loop this long the first bars can afford to be the horizon.
-//   2. THE CHORUS IS IN E♭. The verse and the lead are in C minor; the
-//      chorus goes to the relative major and gets the brightest pad and
-//      the highest lead of the piece, then comes home. It is the one
-//      section that plays once per loop, which is what makes it a chorus.
+//   2. THE CHORUS NEVER RESOLVES. It goes to the iv — F minor, the darkest
+//      chord in the plan — and it ENDS ON THE DOMINANT rather than coming
+//      home, so the one section that plays once per loop is also the one
+//      that leaves the piece hanging. On a stage with no finish, a chorus
+//      that will not land is the right kind of wrong, and it is the reason
+//      this loop can afford to be the longest in the game.
 //   3. THE DROP IS THE PAD, THE BELL AND NOTHING ELSE for eight bars, over
-//      the iv — the darkest chord in the plan — and then the dominant. It
-//      is where the loop breathes, and it is longer than a stage theme
-//      would allow because there is no finish this has to hurry toward.
+//      that same iv and then the dominant. It is where the loop breathes,
+//      and it is longer than a stage theme would allow because there is no
+//      finish this has to hurry toward.
 //
 // The melodies are original.
 
@@ -113,10 +115,10 @@ const ARP: Record<string, Triad> = {
 
 const OPENING = ["Cm", "Cm", "Cm", "Cm", "Ab", "Ab", "Bb", "Bb"];
 const VERSE = ["Cm", "Cm", "Ab", "Ab", "Eb", "Eb", "Bb", "Bb"];
-const LEAD = ["Ab", "Bb", "Cm", "Cm", "Ab", "Bb", "Eb", "Eb"];
+const LEAD = ["Ab", "Bb", "Cm", "Cm", "Ab", "Bb", "Fm", "Fm"];
 const DROP = ["Fm", "Fm", "Cm", "Cm", "Ab", "Ab", "G", "G"];
 const CLIMB = ["Ab", "Ab", "Bb", "Bb", "Cm", "Cm", "G", "G"];
-const CHORUS = ["Eb", "Bb", "Cm", "Ab", "Eb", "Bb", "Cm", "Cm"];
+const CHORUS = ["Fm", "G", "Cm", "Cm", "Fm", "G", "Ab", "G"];
 const CADENCE = ["Ab", "Ab", "Bb", "Bb", "Cm", "Cm", "Cm", "Cm"];
 
 type Parts = {
@@ -147,16 +149,16 @@ function bed(plan: string[], parts: Parts): Record<string, string[]> {
 const held = (lo: string): string => hold(lo);
 
 export const ENDLESS_TRACK: Track = {
-  bpm: 132,
+  bpm: 126,
   stepsPerBeat: 4,
   instruments: {
     padLow: pad(0.011, 700, -0.35, { open: 1.6, attackMs: 340, echo: 0.28 }),
     padMid: pad(0.01, 900, 0.35, { open: 1.6, attackMs: 340, echo: 0.28 }),
-    padTop: pad(0.009, 1200, 0, { open: 1.7, attackMs: 380, echo: 0.32 }),
+    padTop: pad(0.009, 1000, 0, { open: 1.7, attackMs: 380, echo: 0.32 }),
     bass: bass(0.05, 440, { hold: 0.35, gate: 0.55 }),
-    brass: brass(0.017, -0.2, 1800),
-    lead: lead(0.028, "sawtooth", 2400, { echo: 0.36, detune: 9, vibrato: 16 }),
-    arp: arp(0.011, 0.4, 1900),
+    brass: brass(0.017, -0.2, 1500),
+    lead: lead(0.028, "sawtooth", 2000, { echo: 0.36, detune: 9, vibrato: 16 }),
+    arp: arp(0.011, 0.4, 1600),
     bell: bell(0.015, -0.35),
     kick: kick(0.056, 220),
     clap: clap(0.024),
@@ -198,8 +200,8 @@ export const ENDLESS_TRACK: Track = {
         "G4 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
         "C5 =  =  =  D#5 =  =  =  G#5 =  =  =  G5 =  =  =",
         "F5 =  =  =  D5 =  =  =  A#4 =  =  =  D5 =  =  =",
-        "D#5 =  =  =  G5 =  =  =  A#5 =  =  =  =  =  =  =",
-        "G5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
+        "C5 =  =  =  F5 =  =  =  G#5 =  =  =  =  =  =  =",
+        "F5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
       ),
       kick: bars(KICK_ROCK),
       clap: bars(SNARE_24),
@@ -251,18 +253,19 @@ export const ENDLESS_TRACK: Track = {
       hat: bars(HAT_8, HAT_8, HAT_8, HAT_8, HAT_16, HAT_16, HAT_16, HAT_16),
     },
 
-    // The chorus: the relative major, the brass wall, the high lead.
+    // The chorus: the iv, the brass wall, and a lead that walks down to the
+    // dominant and stops there.
     e: {
       ...bed(CHORUS, { bass: push, arp: roll16, brass: swell }),
       lead: bars(
-        "A#5 =  =  =  G5 =  =  =  D#5 =  =  =  G5 =  =  =",
-        "F5 =  =  =  D5 =  =  =  A#4 =  =  =  D5 =  =  =",
-        "D#5 =  =  =  G5 =  =  =  C6 =  =  =  =  =  =  =",
-        "G#5 =  =  =  =  =  =  =  G5 =  =  =  D#5 =  =  =",
-        "A#5 =  =  =  G5 =  =  =  D#5 =  =  =  A#4 =  =  =",
-        "D5 =  =  =  F5 =  =  =  A#5 =  =  =  =  =  =  =",
-        "G5 =  =  =  =  =  =  =  D#5 =  =  =  C5 =  =  =",
-        "G4 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
+        "G#5 =  =  =  F5 =  =  =  C5 =  =  =  F5 =  =  =",
+        "G5 =  =  =  D5 =  =  =  B4 =  =  =  D5 =  =  =",
+        "C5 =  =  =  D#5 =  =  =  G5 =  =  =  =  =  =  =",
+        "D#5 =  =  =  C5 =  =  =  G4 =  =  =  =  =  =  =",
+        "G#5 =  =  =  G5 =  =  =  F5 =  =  =  C5 =  =  =",
+        "D5 =  =  =  B4 =  =  =  G4 =  =  =  =  =  =  =",
+        "G#4 =  =  =  C5 =  =  =  D#5 =  =  =  =  =  =  =",
+        "D5 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
       ),
       kick: bars(KICK_FOUR),
       clap: bars(SNARE_24),

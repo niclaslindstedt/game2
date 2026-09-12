@@ -56,7 +56,10 @@ const PLUCK: Record<string, string> = { Am: "E5", F: "F5", C: "E5", G: "D5", Dm:
 
 const OPENING = ["Am", "Am", "F", "G"];
 const VERSE = ["Am", "Am", "F", "F", "C", "C", "G", "G"];
-const CHORUS = ["F", "G", "Am", "Am", "F", "G", "C", "E"];
+// The chorus turns to the iv rather than to the major III. This is the
+// darkest score in the game and the only major chord it allows itself is the
+// E at the end of the phrase, which is the dominant and pulls home.
+const CHORUS = ["F", "G", "Am", "Am", "F", "G", "Dm", "E"];
 const BREAK = ["Dm", "Dm", "Am", "Am", "F", "F", "E", "E"];
 const CLIMB = ["F", "F", "G", "G", "Am", "Am", "E", "E"];
 const CADENCE = ["F", "G", "Am", "Am"];
@@ -132,7 +135,7 @@ export const POLAR_TRACK: Track = {
         ".  .  .  .  .  .  .  .  E5 =  =  =  =  =  =  =",
         "F5 =  =  =  =  =  =  =  E5 =  =  =  =  =  =  =",
         "D5 =  =  =  =  =  =  =  G5 =  =  =  =  =  =  =",
-        "E5 =  =  =  =  =  =  =  =  =  =  =  C5 =  =  =",
+        "E5 =  =  =  =  =  =  =  =  =  =  =  D5 =  =  =",
         "B4 =  =  =  =  =  =  =  =  =  =  =  .  .  .  .",
       ),
       kick: bars(KICK_FOUR),
