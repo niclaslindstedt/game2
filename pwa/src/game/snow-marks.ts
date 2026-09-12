@@ -122,12 +122,20 @@ const PATCH = { width: 0.24, length: 0.34 };
  * this reads as separate rows from the chase camera at rally pace, which is
  * the only place it is ever judged.
  *
+ * `bump` is how far the pattern leans the surface and `shade` how much it
+ * darkens it, and both are deliberately UNDER what looks right in a still.
+ * The first pass ran them at 0.34 and 0.16 and the track came back as a
+ * ladder — rungs, with the regularity of a zip rather than the texture of
+ * a tyre. A tread is something the eye catches at the edge of a frame at
+ * a hundred km/h; anything strong enough to count the blocks in is too
+ * strong.
+ *
  * `ribs` is a COUNT and not a width, because the band is drawn in its own
  * across coordinate rather than in metres — which is what lets one pattern
  * sit correctly on a band that is narrow when the tyre rolls true and half
  * again as wide when it is dragged (`bandHalf`). A tread stretches with the
  * smear; it does not tile more of itself into it. */
-const TREAD = { pitch: 0.115, ribs: 3 };
+const TREAD = { pitch: 0.115, ribs: 3, bump: 0.2, shade: 0.1 };
 
 /** HOW WIDE A BAND A RECTANGLE SMEARS, half-width in m, given how far off
  * its own pointing direction it is travelling.
@@ -184,12 +192,34 @@ export const BANK = new THREE.Color(0xffffff);
  * so the track has no drawn edge. */
 export const EDGE = new THREE.Color(0xeceff2);
 
-/** ONE STATION ACROSS A BAND: how far out it stands as a fraction of the
- * band's half width, how far it rises (in ridge heights — `ridgeOf`), what
- * colour it is, and how solid. Both ends come back down to the ground at
- * zero alpha, so a band meets the snow around it rather than floating a lip
- * along its edge. */
+/** ONE STATION ACROSS A BAND: how far out it stands, how far it rises (in
+ * ridge heights — `ridgeOf`), what colour it is, and how solid. Both ends
+ * come back down to the ground at zero alpha, so a band meets the snow
+ * around it rather than floating a lip along its edge.
+ *
+ * `u` IS NOT ONE SCALE THE WHOLE WAY OUT, and that is the correction that
+ * made a track visible. Inside |u| = 1 it is a fraction of the band's own
+ * half width, which is what it must be: the floor IS the contact patch, and
+ * it has to widen with the smear. OUTSIDE it, every extra unit is
+ * `SHOULDER` metres — an absolute distance, because the snow a tyre throws
+ * out past itself spreads about as far whatever the tyre was doing. Scaled
+ * with the band like everything else, the thrown lip came out two
+ * centimetres wide: sub-pixel at any honest camera distance, which is a
+ * track drawn with no shoulder at all and the reason the first sheet came
+ * back showing two pencil lines where there should have been tyre tracks. */
 type Station = { u: number; rise: number; tone: THREE.Color; alpha: number };
+
+/** How far out the thrown snow reaches past the band's edge, m per unit of
+ * `u` beyond 1 — so the sections below, which run to 1.45, put their outer
+ * edge about a hand's breadth outside the pressed floor. */
+const SHOULDER = 0.34;
+
+/** Where a station actually stands, m to the side of the band's middle. */
+function acrossAt(u: number, half: number): number {
+  const out = Math.abs(u);
+  const side = out > 1 ? half + (out - 1) * SHOULDER : out * half;
+  return u < 0 ? -side : side;
+}
 
 /** A TYRE'S OWN CROSS-SECTION. Read from the middle out: the floor the
  * tread pressed flat, the shoulder where it lets go, and the little the
@@ -261,7 +291,7 @@ const SLOPE = LANES.map((lane) =>
  * car in snow leaves a TRACK — four tyres and, in powder, its floor — and
  * never the walls of thrown snow a snowplough leaves behind it. `min` keeps
  * a hairline, so a road worked to a floor still draws its track. */
-const RIDGE = { min: 0.012, max: 0.08 };
+const RIDGE = { min: 0.022, max: 0.08 };
 
 function ridgeOf(sunk: number, sag: number): number {
   return Math.min(RIDGE.max, Math.max(RIDGE.min, sunk - sag));
@@ -466,7 +496,9 @@ function markMaterial(): THREE.MeshLambertMaterial {
            // corduroy.
            float tread(float t) { return smoothstep(-0.35, 0.35, sin(t)); }
            #define ALONG ${((Math.PI * 2) / TREAD.pitch).toFixed(4)}
-           #define ACROSS ${(Math.PI * TREAD.ribs).toFixed(4)}`,
+           #define ACROSS ${(Math.PI * TREAD.ribs).toFixed(4)}
+           #define BUMP ${TREAD.bump.toFixed(3)}
+           #define TREAD_SHADE ${TREAD.shade.toFixed(3)}`,
         ],
         [
           // AFTER three's own normal, and before its lighting — which is
@@ -483,7 +515,7 @@ function markMaterial(): THREE.MeshLambertMaterial {
            // dragged patch polishes what it crosses instead of printing
            // into it, and thrown snow has no pattern in it at all.
            float print = (1.0 - vMark.z) * (1.0 - smoothstep(0.7, 1.0, abs(vMark.x)));
-           float bump = print * 0.34;
+           float bump = print * BUMP;
            // The height field's own gradient, turned into a lean of the
            // surface: the blocks press and the snow rises into the voids
            // between them, so what the light meets is a relief and not a
@@ -491,7 +523,7 @@ function markMaterial(): THREE.MeshLambertMaterial {
            vec3 tAcross = normalize(vBandAxis);
            vec3 tAlong = normalize(cross(normal, tAcross));
            normal = normalize(normal - tAlong * cos(along) * bump - tAcross * cos(across) * bump * 0.4);
-           diffuseColor.rgb *= 1.0 - print * 0.16 * (1.0 - lugs * 0.5 - ribs * 0.5);
+           diffuseColor.rgb *= 1.0 - print * TREAD_SHADE * (1.0 - lugs * 0.5 - ribs * 0.5);
            diffuseColor.a *= vAlpha;`,
         ],
       ],
@@ -661,8 +693,9 @@ export function createSnowMarks(): SnowMarks {
       row.lane[at + 4] = tyre ? 1 : belly;
       for (let i = 0; i < lane.length; i++) {
         const st = lane[i];
-        const x = cx + ax * st.u * half;
-        const z = cz + az * st.u * half;
+        const out = acrossAt(st.u, half);
+        const x = cx + ax * out;
+        const z = cz + az * out;
         // The thrown snow is lumpy; the floor of a rut is not — a wheel
         // presses it flat, which is the whole reason a rut reads as a rut.
         const rough = st.rise > 0 ? 1 - ROUGH + jitter(x, z) * 2 * ROUGH : 1;
@@ -673,7 +706,7 @@ export function createSnowMarks(): SnowMarks {
         // The band's own lean across itself, in metres of rise per metre
         // out: the lips of a rut then carry a tilted normal and catch the
         // light, which is what stands them up out of a flat floor.
-        row.lean[LANE_AT[l] + i] = (SLOPE[l][i] * ridge) / Math.max(half, 1e-3);
+        row.lean[LANE_AT[l] + i] = (SLOPE[l][i] * ridge) / Math.max(SHOULDER, half);
       }
     }
   };

@@ -46,10 +46,13 @@ import {
   NEUTRAL_INPUT,
   TUNING,
   createGame,
+  snowBelly,
+  snowUnder,
   step,
   type CarInput,
   type GameEvent,
   type GameState,
+  type SnowUnder,
 } from "@engine";
 
 import { createRenderer } from "../game/renderer.ts";
@@ -131,20 +134,47 @@ const MOVES: Move[] = [
 ];
 
 /** The sheet: one cell's pixels, and how many across. */
-const TILE = { width: 420, height: 420, cols: 2 };
+const TILE = { width: 520, height: 420, cols: 2 };
 
 type Shot = { image: ImageBitmap; label: string; head: boolean };
 
+/** Scratch for the label's reading of the snow under the car. */
+const UNDER: SnowUnder = { rest: 0, base: 0 };
+
+/** HOW FAR OFF THE ROAD'S MIDDLE THE CAR IS, m to the driver's right — the
+ * offset projected onto the nearest sample's right axis, which is the same
+ * signed lateral the engine measures. */
+function lateralOf(game: GameState): number {
+  const s = game.track.samples[game.nearIndex];
+  if (!s) return 0;
+  return (game.car.x - s.x) * Math.cos(s.heading) + (game.car.z - s.z) * -Math.sin(s.heading);
+}
+
 /** Drive the car out to `out` metres beside the road before the manoeuvre —
- * the field cases need to be OFF the mat, and the only honest way there is
+ * the field case needs to be OFF the mat, and the only honest way there is
  * to drive, because a car teleported into a snowfield has not pressed the
- * snow it is standing in. `out` is read as a yes-or-no rather than as a
- * distance: the steer and the seconds below are what actually decide where
- * the car ends up, and they were found by driving it. */
-function toField(out: number, run: (input: Partial<CarInput>) => void): void {
+ * snow it is standing in.
+ *
+ * STEERED AT THE OFFSET rather than run open-loop, and that is not
+ * fussiness. The first version of this was a fixed turn out and a fixed
+ * turn back, tuned by eye: it over-rotated, came back onto the mat, and
+ * photographed a car on the ROAD under a cell labelled `field` — so the
+ * one case in the sheet that exists to test the belly gate was the one
+ * case that never reached deep snow, and the picture did not say so.
+ * A proportional aim at the offset, with the offset it actually reached
+ * printed under the cell, cannot fail that way quietly. */
+function toField(out: number, game: GameState, run: (input: Partial<CarInput>) => void): void {
   if (out === 0) return;
-  for (let f = 0; f < Math.round(2.2 / FRAME); f++) run({ throttle: 0.75, steer: 0.45 });
-  for (let f = 0; f < Math.round(1.1 / FRAME); f++) run({ throttle: 0.75, steer: -0.45 });
+  for (let f = 0; f < Math.round(6 / FRAME); f++) {
+    const miss = out - lateralOf(game);
+    if (Math.abs(miss) < 1) break;
+    run({ throttle: 0.6, steer: Math.max(-0.5, Math.min(0.5, miss * 0.1)) });
+  }
+  // ...and then straighten up, so the manoeuvre starts from a car pointing
+  // down the stage rather than out of it.
+  for (let f = 0; f < Math.round(1.2 / FRAME); f++) {
+    run({ throttle: 0.6, steer: Math.max(-0.5, Math.min(0.5, -lateralOf(game) * 0.02)) });
+  }
 }
 
 async function main(): Promise<void> {
@@ -195,7 +225,7 @@ async function main(): Promise<void> {
     // the same line on every run of this sheet, which is what lets two
     // sheets be compared at all.
     for (let f = 0; f < Math.round(RUN_IN / FRAME); f++) run({ throttle: 1 });
-    toField(move.out ?? 0, run);
+    toField(move.out ?? 0, game, run);
 
     const held = Math.round(HOLD / FRAME);
     for (let f = 0; f < held; f++) tick(move.drive(f * FRAME));
@@ -221,9 +251,19 @@ async function main(): Promise<void> {
     tick({});
     const kmh = Math.round(Math.hypot(car.u, car.w) * 3.6);
     const slip = Math.round((car.slip * 180) / Math.PI);
+    // WHAT GROUND IT IS ACTUALLY ON, in the label — the surface the physics
+    // says, how far off the road's middle it ended up, and how hard the
+    // body is pressing the snow there (R47). A cell cannot then claim to be
+    // in a field while sitting on the mat, which is exactly what the first
+    // sheet did.
+    snowUnder(game.track, game.terrain, game.nearIndex, car.x, car.z, UNDER);
+    const belly = snowBelly(UNDER.rest, game.snow.workAt(car.x, car.z, UNDER.base));
     shots.push({
       image: await createImageBitmap(canvas),
-      label: `${move.name}  plan  ${PLAN.up} m up  ${kmh} km/h  slip ${slip}°`,
+      label:
+        `${move.name}  plan  ${kmh} km/h  slip ${slip}°  ` +
+        `${game.surface} ${lateralOf(game).toFixed(1)} m out  ` +
+        `snow ${UNDER.rest.toFixed(2)} m  belly ${belly.toFixed(2)}`,
       head: true,
     });
 
