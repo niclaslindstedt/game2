@@ -142,7 +142,7 @@ const PATCH = { width: 0.24, length: 0.34 };
  * sit correctly on a band that is narrow when the tyre rolls true and half
  * again as wide when it is dragged (`bandHalf`). A tread stretches with the
  * smear; it does not tile more of itself into it. */
-const TREAD = { pitch: 0.115, ribs: 3, bump: 0.2, shade: 0.06 };
+const TREAD = { pitch: 0.115, ribs: 3, bump: 0.14, shade: 0.05 };
 
 /** HOW WIDE A BAND A RECTANGLE SMEARS, half-width in m, given how far off
  * its own pointing direction it is travelling.
@@ -297,23 +297,41 @@ const QUADS = LANES.reduce((n, lane) => n + lane.length - 1, 0);
  *
  * This is the term that replaced a dark floor colour, and it is the honest
  * version of the same look. A point at the bottom of a groove has the walls
- * of that groove across half of its hemisphere, so less of the sky reaches
+ * of that groove across part of its hemisphere, so less of the sky reaches
  * it and it is darker than the snow beside it WITHOUT being made of
- * anything darker. Which is why it behaves: it goes with the depth of the
- * rut, so a road's shallow one hardly darkens at all and a deep field rut
- * does; and it is a multiplier on the light, so a ridge shadow crossing the
- * track takes the whole of it down together instead of leaving a grey
- * stripe lit from nowhere. */
+ * anything darker. Which is why it behaves: it goes with the shape of the
+ * rut (`skyShut`), so a road's shallow one hardly darkens at all and a deep
+ * field rut does; and it is a multiplier on the light, so a ridge shadow
+ * crossing the track takes the whole of it down together instead of
+ * leaving a grey stripe lit from nowhere. */
 const OPEN = LANES.map((lane) => {
   const top = Math.max(...lane.map((st) => st.rise));
   return lane.map((st) => (top > 0 ? st.rise / top : 1));
 });
 
-/** ...and how far a fully deep rut shuts the sky out. Gentle: a groove a
- * few centimetres deep and a hand wide still sees most of the sky, and
- * anything heavier here is the dark-stripe mistake arriving by another
- * road. */
-const SKY_SHUT = 0.34;
+/** HOW MUCH SKY THE FLOOR OF A RUT HAS LOST TO ITS OWN WALLS, 0..1 —
+ * computed from the rut rather than dialled.
+ *
+ * A rut is a trench `half` wide and `deep` deep, so its floor sees the sky
+ * between ±atan(half / deep) either side of vertical, and the
+ * cosine-weighted fraction of the hemisphere that leaves is the sine of
+ * that angle. Two lines of trigonometry, no knob, and it answers the right
+ * thing at both ends without being asked: a road's rut is two centimetres
+ * deep and a hand wide, so it loses under one percent and is invisible as
+ * shading — correctly, because a tyre track on a packed road IS nearly
+ * invisible except for its tread; a deep field rut loses about nine.
+ *
+ * Nine percent is the number worth remembering, because the first version
+ * of this was a flat 0.34 picked by eye and it was FOUR TIMES the truth.
+ * Measured off the sheet, the bands were coming back a third darker than
+ * the snow around them in plan and nearly half in the chase — which is the
+ * same dark-stripe mistake the dark paint made, arriving by another road.
+ * A groove a few centimetres deep in snow is barely shaded at all; what
+ * makes a track visible is its WALLS turning to the sun, not its floor
+ * going dim. */
+function skyShut(half: number, deep: number): number {
+  return 1 - Math.sin(Math.atan2(half, Math.max(deep, 1e-4)));
+}
 
 /** HOW STEEPLY THE SECTION RISES at each station, per unit of `u` — the
  * central difference of the section's own shape, so the lips of a rut carry
@@ -377,8 +395,8 @@ type Row = {
   /** Per lane: the across axis (x, z), how far that lane has travelled (m,
    * for the tread's pitch), how sideways it was going (0..1), how solid the
    * lane is at all — which is what switches the belly pan off on a road —
-   * and how DEEP its rut came out as a share of the deepest one drawable,
-   * which is what scales the sky term. */
+   * and how much sky the FLOOR of its rut has lost to its own walls
+   * (`skyShut`), which every station above the floor gets less of. */
   lane: Float64Array;
 };
 const LANE_STRIDE = 6;
@@ -752,7 +770,7 @@ export function createSnowMarks(): SnowMarks {
       // the whole of it and shows none.
       row.lane[at + 3] = tyre ? Math.min(1, Math.max(Math.abs(sinB), worked * GLAZED)) : 1;
       row.lane[at + 4] = tyre ? 1 : belly;
-      row.lane[at + 5] = ridge / RIDGE.max;
+      row.lane[at + 5] = skyShut(half, ridge);
       for (let i = 0; i < lane.length; i++) {
         const st = lane[i];
         const out = acrossAt(st.u, half);
@@ -862,9 +880,9 @@ export function createSnowMarks(): SnowMarks {
           r.marks[vi * 4] = st.u;
           r.marks[vi * 4 + 1] = row.lane[laneAt + 2];
           r.marks[vi * 4 + 2] = row.lane[laneAt + 3];
-          // The sky this station is open to, shut down in proportion to how
-          // deep its own rut actually came out.
-          r.marks[vi * 4 + 3] = 1 - SKY_SHUT * row.lane[laneAt + 5] * (1 - OPEN[l][i]);
+          // The sky this station is open to: the floor of the rut has lost
+          // the whole of what its walls take, and the lip has lost none.
+          r.marks[vi * 4 + 3] = 1 - row.lane[laneAt + 5] * (1 - OPEN[l][i]);
           r.alphas[vi] = st.alpha * row.lane[laneAt + 4];
           const tone = st.tone === FLOOR ? FLOOR_NOW : st.tone;
           r.colors[vi * 3] = tone.r;
