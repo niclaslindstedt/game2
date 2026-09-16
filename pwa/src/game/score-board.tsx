@@ -33,8 +33,8 @@ import { formatDay, formatTime } from "../lib/util.ts";
 import { carById } from "@engine";
 
 /** The fewest rows a page of the board is ever cut to — HALF THE BOARD, and
- * higher than the result sheet's own floor on purpose. A sheet of fifteen
- * crews is a table you page through; ten places is a table you are supposed
+ * higher than the result sheet's own floor on purpose. A sheet of a whole
+ * field is a table you page through; ten places is a table you are supposed
  * to read at once, and three of them tells a player nothing about what they
  * are chasing. The card is sized to hold these (`styles.css`); a screen too
  * short even for five gives up its bottom edge rather than its board. */

@@ -8,15 +8,16 @@
 // The player is always the LAST car out (R29).
 //
 // THE STAGGER IS REAL, not a story told over a simultaneous start. Car 1
-// leaves thirteen intervals before the player, car 14 leaves exactly one —
-// on the first frame of the establishing shot, which is why the player
-// WATCHES the crew in front go. Everybody is therefore genuinely up the
-// road, and that is what makes a split readable: any rival whose split time
-// beats yours went through that board before you got to it, so the place is
-// a straight count of the better times and never a provisional one.
+// leaves a whole entry list of intervals before the player and the car in
+// front of them leaves exactly one — on the first frame of the establishing
+// shot, which is why the player WATCHES the crew in front go. Everybody is
+// therefore genuinely up the road, and that is what makes a split readable:
+// any rival whose split time beats yours went through that board before you
+// got to it, so the place is a straight count of the better times and never
+// a provisional one.
 //
 // THE RIVALS ARE REAL. There is no table of authored times here and no
-// curve fitted to a par: the field is fourteen more `GameState`s on the same
+// curve fitted to a par: the field is a `GameState` per rival on the same
 // compiled track, each driven by the real bot with its own skill profile
 // (rivals.ts) in its own car. They brake for the corners the player brakes
 // for, they get it wrong on the corners their profile is bad at, and the
@@ -159,8 +160,8 @@ export type FieldPlan = {
   contact: boolean;
 };
 
-/** The campaign's own plan — the whole roster, one at a time (R29), and
- * nobody solid. */
+/** The campaign's own plan — a full field (`FIELD_SIZE`, an even spread of
+ * the roster), one at a time (R29), and nobody solid. */
 export const RALLY_FIELD: FieldPlan = {
   difficulty: "medium",
   cars: FIELD_SIZE,

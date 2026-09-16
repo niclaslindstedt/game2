@@ -83,7 +83,10 @@ describe("picking a livery for a slot on the start list", () => {
 });
 
 describe("the campaign field's own paint", () => {
-  const entries = rivalField("medium");
+  // The whole ROSTER entered, not the field the campaign actually stands up
+  // (`FIELD_MAX` caps that at twelve cars): a scheme has to be nobody else's
+  // whether or not today's spread happens to enter the crew wearing it.
+  const entries = rivalField("medium", RIVALS.length + 1);
 
   it("paints every crew on the roster, and nobody who is not on it", () => {
     // A crew with no scheme still gets a livery (`liveryForCrew` is total),
@@ -135,7 +138,9 @@ describe("the campaign field's own paint", () => {
     // and it does not: the seeding order is the standing, which is fixed.
     const paint = new Map(entries.map((e) => [e.crew.id, liveryForCrew(e.crew.id, e.number)]));
     for (const difficulty of ["easy", "medium", "hard"] as const) {
-      for (const entry of rivalField(difficulty)) {
+      // The same entry list as `entries`, since a crew's door number is what
+      // the field's SIZE moves — this is about the difficulty and nothing else.
+      for (const entry of rivalField(difficulty, RIVALS.length + 1)) {
         expect(liveryForCrew(entry.crew.id, entry.number)).toEqual(paint.get(entry.crew.id));
       }
     }

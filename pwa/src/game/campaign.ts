@@ -38,8 +38,8 @@
 import {
   DEFAULT_KNOBS,
   NUMERIC_KNOBS,
-  RIVALS,
   STAGE_RULES,
+  entryList,
   resolveKnobs,
   type BiomeId,
   type Difficulty,
@@ -563,7 +563,11 @@ export type StandingsRow = {
 /** THE TABLE — every crew entered in the location, the player included,
  * best first. Ties go to stage wins, and then to the player: a location that
  * ends level and hands the country to the machine is a lock with no visible
- * way in. Below that, the field's own reputation order breaks it. */
+ * way in. Below that, the field's own reputation order breaks it.
+ *
+ * The crews are the ENTRY LIST rather than the roster: a field is a spread of
+ * the roster (`FIELD_MAX`), so a table built from `RIVALS` would carry rows
+ * for crews the campaign never enters, on nought points for ever. */
 export function locationStandings(
   location: CampaignLocation,
   progress: CampaignProgress,
@@ -580,7 +584,7 @@ export function locationStandings(
   };
   const rows = [
     { id: PLAYER_ID, alias: "YOU", driver: "You", you: true, seed: -1, ...tally(PLAYER_ID) },
-    ...RIVALS.map((crew) => ({
+    ...entryList().map((crew) => ({
       id: crew.id,
       alias: crew.alias,
       driver: crew.driver,

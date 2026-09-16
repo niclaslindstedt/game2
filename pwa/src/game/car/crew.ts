@@ -26,7 +26,7 @@
 //
 // It all goes into the cabin's own builder, so a crew is triangles in a mesh
 // that already exists and never a draw call of its own — the field draws
-// fifteen cabins.
+// one cabin per car on it.
 
 import * as THREE from "three";
 

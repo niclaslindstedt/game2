@@ -20,6 +20,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FIELD_SIZE,
   GRID_STAGGER,
   RALLY_FIELD,
   RIVALS,
@@ -129,7 +130,8 @@ describe("the campaign's field of ghosts", () => {
     // Three crews from the head, the middle and the tail of the field,
     // driven alone from the same slot by the same brain: the same metre of
     // road and the same clock, or the trace is not the run.
-    for (const number of [1, 7, 14]) {
+    const last = FIELD_SIZE - 1;
+    for (const number of [1, Math.round(last / 2), last]) {
       const run = field.runs.find((r) => r.entry.number === number)!;
       const solo = soloOf(run, track);
       let time: number | null = null;

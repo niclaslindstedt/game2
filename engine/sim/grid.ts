@@ -24,6 +24,12 @@
 // untouched — the same seed is the same stage whoever is on it — so what
 // grows is the dirt behind the line and the shelf under it.
 //
+// Nothing but Roam ever asks: every other field is held to `GRID_MAX`, which
+// is twelve, so the rule book's apron carries room to spare. It KEEPS that
+// room — the apron is also the start zone the search keeps the route out of,
+// so trimming it to the field would redraw every seed's road the day the
+// field moves again.
+//
 // It ZIG-ZAGS: one car per row, alternating sides of the centre line, the way
 // a kart or club grid is laid out. The cars overlap nose to tail and are kept
 // apart across the road instead, which is what a stagger IS — and from the
@@ -80,12 +86,13 @@ export const APRON_HOLDS =
   Math.floor((STAGE_RULES.startZone.apron - TUNING.collision.halfLength) / M.rowGap) + 1;
 
 /** …and the largest grid a stage BUILT TO THE RULE BOOK will stand up: never
- * more than that apron holds, and never more than the AUTHORED roster can
- * dress. It is the heads-up race's ceiling and the one the stage analysis
- * measures against, because those are the two that take the stage as the
- * generator built it — and the roster half of it is a choice rather than a
- * limit: a heads-up race is the fourteen crews, not fourteen crews and a
- * club entry to round the number up (`clubCrew`). */
+ * more than that apron holds, and never more than a field is allowed to be
+ * (`FIELD_SIZE`, which `FIELD_MAX` decides long before the roster runs out).
+ * It is the heads-up race's ceiling and the one the stage analysis measures
+ * against, because those are the two that take the stage as the generator
+ * built it — and the field half of it is a choice rather than a limit: a
+ * race is as many cars as a timing screen can be read at, not as many as the
+ * apron has room for. */
 export const GRID_MAX = Math.min(FIELD_SIZE, APRON_HOLDS);
 
 /** …and the largest grid ANYWHERE, once the stage is built for it.
@@ -120,10 +127,10 @@ export function apronForGrid(cars: number): number {
 }
 
 /** The default grid, and also the deepest one on offer. Both numbers above
- * it are DERIVED, so this is whatever the apron and the roster currently
- * allow rather than a figure to quote: today the roster is the binding half
- * and a default heads-up race is the whole entry list on one grid. A shorter
- * one is a menu choice (`GRID_OPTIONS`), and it is the one setting that
+ * it are DERIVED, so this is whatever the apron and the field cap currently
+ * allow rather than a figure to quote: today the cap is the binding half, so
+ * a default heads-up race is a full twelve-car grid. A shorter one is a menu
+ * choice (`GRID_OPTIONS`), and it is the one setting that
  * decides what a heads-up frame costs — every car on it is a body, a plate
  * and a `GameState` stepped beside the player's. */
 export const GRID_DEFAULT = GRID_MAX;

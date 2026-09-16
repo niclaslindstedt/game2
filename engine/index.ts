@@ -535,6 +535,7 @@ export {
   type GridSlot,
 } from "./sim/grid.ts";
 export {
+  FIELD_MAX,
   FIELD_SIZE,
   GRID_STAGGER,
   PLAYER_NUMBER,

@@ -29,7 +29,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_KNOBS, RIVALS, biomeRules, compileStage } from "@engine";
+import { DEFAULT_KNOBS, FIELD_SIZE, RIVALS, biomeRules, compileStage, entryList } from "@engine";
 
 import {
   LOCATIONS,
@@ -146,8 +146,10 @@ describe("the location's table", () => {
     // Third on both, once as named and once off the back of the sheet.
     expect(points.get("blink")).toBe(2);
     expect(playerStanding(TAIGA, loadProgress()).place).toBe(1);
-    // Everybody entered is on the table, scored or not.
-    expect(table).toHaveLength(RIVALS.length + 1);
+    // Everybody ENTERED is on the table, scored or not — which is a field
+    // (`FIELD_MAX`) rather than the whole roster behind it.
+    expect(table).toHaveLength(FIELD_SIZE);
+    expect(table.filter((row) => !row.you)).toHaveLength(entryList().length);
     expect(table.map((row) => row.place)).toEqual(table.map((_row, i) => i + 1));
   });
 
@@ -380,12 +382,12 @@ describe("the line and the classification", () => {
     recordResult(TAIGA.levels[0].id, sheet([PLAYER_ID, "frostbite"]));
     // A lap for fun, gone badly — at the line and again when it settles.
     recordFinish(TAIGA.levels[0].id, 80, { place: PODIUM + 1, difficulty: "hard" });
-    recordResult(TAIGA.levels[0].id, sheet(["blink", "scrapper", "frostbite", PLAYER_ID]));
+    recordResult(TAIGA.levels[0].id, sheet(["blink", "skarv", "frostbite", PLAYER_ID]));
     const table = locationStandings(TAIGA, loadProgress());
     expect(table.find((row) => row.you)?.points).toBe(3);
     expect(table.find((row) => row.id === "frostbite")?.points).toBe(2);
     // Second on the afternoon that was thrown away is worth nothing at all.
-    expect(table.find((row) => row.id === "scrapper")?.points).toBe(0);
+    expect(table.find((row) => row.id === "skarv")?.points).toBe(0);
     // …and the best time still belongs to the run that set it.
     expect(loadProgress().best[TAIGA.levels[0].id]).toBe(80);
   });

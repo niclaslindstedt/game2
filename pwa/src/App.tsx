@@ -417,7 +417,7 @@ export function App() {
   // card has a table on it from the moment it comes up and the rows fill in
   // as the stragglers come home. Read off the field ref rather than carried
   // in state: the HUD already redraws a dozen times a second off `snap`, and
-  // fifteen rows are nothing beside what that costs.
+  // a field of rows is nothing beside what that costs.
   const sheetRows = ((): { rows: SheetRow[]; settled: boolean } | null => {
     if (!run.levelId || (run.mode !== "campaign" && run.mode !== "headsup")) return null;
     const settled = result?.levelId === run.levelId;
