@@ -20,6 +20,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 
+import { fitHintRing } from "./hint-fit.ts";
 import type { InputManager } from "./input.ts";
 import { createPedalGesture } from "./pedal-gesture.ts";
 import type { PedalDir, TouchSettings } from "./settings.ts";
@@ -241,6 +242,37 @@ export function SteerZone({
 
 type PedalMode = "gas" | "brake" | "handbrake";
 
+/** Open the hint ring around the thumb, then pull it back onto the glass if
+ * the thumb anchored near enough to an edge to hang a label off it.
+ *
+ * The ring is positioned twice on purpose. Where each label ENDS up is a
+ * question about the text inside it — the word, the face, the player's font
+ * scale — so it is asked of the layout rather than predicted from the
+ * anchor; `hint-fit.ts` then says how far the ring has to come back. One
+ * forced reflow per press, which is the cheapest place in this component to
+ * spend one: the 12 Hz re-render and the rAF loop never touch this. */
+function placeHint(hint: HTMLDivElement | null, x: number, y: number, zone: HTMLElement): void {
+  if (!hint) return;
+  const box = zone.getBoundingClientRect();
+  const left = x - box.left;
+  const top = y - box.top;
+  hint.style.left = `${left}px`;
+  hint.style.top = `${top}px`;
+  hint.style.display = "block";
+
+  const parts = [...hint.querySelectorAll(".hud-hint, .hud-flick")].map((el) =>
+    el.getBoundingClientRect(),
+  );
+  const { dx, dy } = fitHintRing(parts, {
+    left: 0,
+    top: 0,
+    right: window.innerWidth,
+    bottom: window.innerHeight,
+  });
+  if (dx !== 0) hint.style.left = `${left + dx}px`;
+  if (dy !== 0) hint.style.top = `${top + dy}px`;
+}
+
 /** The pedal thumb: touching anywhere is GAS; dragging off the anchor does
  * whatever the player has bound to that direction (gas stays on through
  * the handbrake — that is what makes it a drift tool). Sliding back inside
@@ -326,13 +358,7 @@ export function PedalZone({
         capturePointer(e);
         if (!guard.claim(e.pointerId, stillDown(e.currentTarget))) return;
         originRef.current = { x: e.clientX, y: e.clientY };
-        const hint = hintRef.current;
-        if (hint) {
-          const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          hint.style.left = `${e.clientX - box.left}px`;
-          hint.style.top = `${e.clientY - box.top}px`;
-          hint.style.display = "block";
-        }
+        placeHint(hintRef.current, e.clientX, e.clientY, e.currentTarget as HTMLElement);
         gesture.press();
         setMode("gas");
       }}

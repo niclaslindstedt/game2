@@ -23,6 +23,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { fitHintRing, HINT_EDGE_MARGIN } from "../pwa/src/game/hint-fit.ts";
 import { createPedalGesture, PEDAL_DEAD_PX } from "../pwa/src/game/pedal-gesture.ts";
 import {
   browserKeepsTouch,
@@ -460,5 +461,61 @@ describe("the second finger", () => {
     expect(watch.size()).toBe(0);
     // A pointer nobody ever saw go down is not a shared press.
     expect(watch.lift(9)).toBe(false);
+  });
+});
+
+// THE HINT RING STAYS ON THE GLASS. The ring is drawn around wherever the
+// thumb landed and its labels run outward from that anchor, so a thumb
+// against the bezel hangs the word that names the gesture off the screen —
+// the gesture a first-time player is trying to learn, unreadable in exactly
+// the corner a one-handed grip puts the thumb in.
+describe("the pedal hint ring's fit", () => {
+  const FRAME = { left: 0, top: 0, right: 844, bottom: 390 };
+  /** A label at the given horizontal span, on a line well clear of the
+   * frame's own top and bottom. */
+  const label = (left: number, right: number) => ({ left, right, top: 180, bottom: 200 });
+
+  it("leaves a ring that already fits exactly where the thumb put it", () => {
+    expect(fitHintRing([label(400, 490)], FRAME)).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it("pulls a label that runs off the outboard edge back onto the screen", () => {
+    const { dx, dy } = fitHintRing([label(800, 890)], FRAME);
+    // Far enough that the label's right edge clears the frame by the margin,
+    // and no further — the ring stays as near the thumb as it can.
+    expect(800 + dx).toBe(844 - HINT_EDGE_MARGIN - 90);
+    expect(890 + dx).toBe(844 - HINT_EDGE_MARGIN);
+    expect(dy).toBe(0);
+  });
+
+  it("pushes a label off the left edge back the other way", () => {
+    const { dx } = fitHintRing([label(-30, 60)], FRAME);
+    expect(-30 + dx).toBe(HINT_EDGE_MARGIN);
+  });
+
+  it("brings a label that fell below the fold back up", () => {
+    const { dx, dy } = fitHintRing([{ left: 400, right: 440, top: 370, bottom: 410 }], FRAME);
+    expect(410 + dy).toBe(390 - HINT_EDGE_MARGIN);
+    expect(dx).toBe(0);
+  });
+
+  it("fits the whole ring, not whichever piece was measured first", () => {
+    // The brake's label sits comfortably; the handbrake's runs off the edge.
+    // Nudging for the union is what keeps the two in the same ring.
+    const { dx } = fitHintRing([label(700, 740), label(790, 900)], FRAME);
+    expect(900 + dx).toBe(844 - HINT_EDGE_MARGIN);
+    // And the piece that already fitted came along rather than staying put.
+    expect(700 + dx).toBeLessThan(700);
+  });
+
+  it("gives up the far end of a ring too wide for the frame, never the near one", () => {
+    // Nothing can fit this; the arrows and the start of each word are worth
+    // more than a tail, so the near edge wins.
+    const { dx } = fitHintRing([label(40, 1200)], FRAME);
+    expect(40 + dx).toBe(HINT_EDGE_MARGIN);
+  });
+
+  it("has nothing to say about a ring with no labels bound to it", () => {
+    expect(fitHintRing([], FRAME)).toEqual({ dx: 0, dy: 0 });
   });
 });
