@@ -303,6 +303,21 @@ On top of that rides the road's own ROLL: `compileStage` sums octaves of seeded 
 
 `generateStage(seed, length)` → `compileStage(seed, length)` is deterministic end to end: the same seed always builds the same stage, on every device — endless streams included. The app seeds from the day number, so everyone drives the same stage today; each finish advances to the next seed. Seeds are also the bug-report currency (the HUD shows the stage seed).
 
+## Generator versions, and what the campaign stands on
+
+The rules ARE the stage: move a turn radius, a placement rule or a step of the compiler, and every seed in the game builds a different road. That is what a generator is for, and it is exactly wrong for the eighteen roads in the campaign, which were CURATED — rated, timed, previewed, blurbed — as the roads they are.
+
+So each campaign level names the version of the generator it was built by (`version` on `CampaignLevel`), and that version keeps building it. `engine/mapgen/versions.ts` is the registry; `CURRENT_GENERATOR_VERSION` is the rules as they stand in this tree, and it is what every other way into the generator gets — Roam, the daily seed, the labs, the sweeps, the suite. The version rides on `StageKnobs` (`knobs.version`) because the dials are the one object handed to every module in `mapgen/`, but it is not a dial: it is outside `NUMERIC_KNOBS`, no menu offers it, and the only URL that carries it is a repro line (`?genversion=`).
+
+**Changing the generator, once a change moves what a seed builds:**
+
+1. Add a row to `GENERATOR_VERSIONS` with a note saying what moved. `CURRENT_GENERATOR_VERSION` follows the last row.
+2. Keep the old behaviour on the old row, as an optional TRAIT on `GeneratorTraits`, read through `generatorTraits(knobs.version)` at the one place the behaviour differs — absent on the current row, so "build it the way the rules say" is the branch a reader meets first.
+3. Move a campaign level onto the new version when somebody decides to, level by level. The road changes, so it is a curation and not an edit: re-rate, re-time, `make previews`, re-blurb. The `level-rating` skill's Loop B is that job.
+4. **Delete a version no campaign level names any more** — the row, and every trait branch that only existed for it. Backward compatibility is owed to the committed roads and to nothing else.
+
+Two cases hold the scheme up, and they are the reason it is more than a label. `tests/generator_version_test.ts` refuses a level pointing at a version that is gone and refuses a version nobody points at. `tests/stage_preview_test.ts` recompiles campaign roads and compares the committed route bytes, so the rules moving under a level is a red suite rather than a silent re-roll — and when it goes red, the question is which of the two it was: a level deliberately moved (regenerate), or the rules moving out from under one (add a version, or curate the levels onto it).
+
 ## Looking at the output
 
 ```sh

@@ -56,7 +56,7 @@ function routesModule(rows) {
       ({ id, route, spec }) =>
         `  "${id}": {\n    d: "${route.d}",\n    aspect: ${route.aspect},\n` +
         `    spec: { seed: ${spec.seed}, length: "${spec.length}", shape: "${spec.shape}",` +
-        ` season: "${spec.season}" },\n  },`,
+        ` season: "${spec.season}", version: ${spec.version} },\n  },`,
     )
     .join("\n");
   return `// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
@@ -68,8 +68,10 @@ function routesModule(rows) {
 // the whole campaign fits in a few kilobytes — cheaper to bundle than to
 // ask the network for while a menu is already on screen.
 //
-// Regenerate whenever the generator's rules move: a stale route is a
-// picture of a road nobody drives any more.
+// Regenerate whenever the generator's rules move UNDER A LEVEL — which, now
+// that a level names the generator that built it (\`mapgen/versions.ts\`),
+// should only ever be a level being deliberately moved to a newer version.
+// A stale route is a picture of a road nobody drives any more.
 
 export type StageRoute = {
   /** The polyline, base64 of (x, y) byte pairs. 0 is the west and north
@@ -84,7 +86,17 @@ export type StageRoute = {
    * \`make previews\` leaves a picture of the road that USED to be there,
    * under the name of the one that is — and that is invisible unless the
    * data says which road it drew. */
-  spec: { seed: number; length: string; shape: string; season: string };
+  spec: {
+    seed: number;
+    length: string;
+    shape: string;
+    season: string;
+    /** WHICH GENERATOR drew it (\`mapgen/versions.ts\`). The receipt's most
+     * important field: the route bytes go stale the moment the rules move,
+     * and this is what says whether that was a level being moved on purpose
+     * or the rules moving out from under one. */
+    version: number;
+  };
 };
 
 export const STAGE_ROUTES: Record<string, StageRoute> = {
@@ -109,10 +121,17 @@ for (const location of LOCATIONS) {
     routes.push({
       id: level.id,
       route,
-      spec: { seed: level.seed, length: level.length, shape, season: level.season },
+      spec: {
+        seed: level.seed,
+        length: level.length,
+        shape,
+        season: level.season,
+        version: level.version,
+      },
     });
     console.log(
-      `  ${level.id.padEnd(10)} ${(track.length / 1000).toFixed(1).padStart(5)} km  ` +
+      `  ${level.id.padEnd(10)} gen v${level.version}  ` +
+        `${(track.length / 1000).toFixed(1).padStart(5)} km  ` +
         `${String(route.points).padStart(4)} points  ` +
         `${String(route.d.length).padStart(4)} B  (${Date.now() - started} ms)`,
     );

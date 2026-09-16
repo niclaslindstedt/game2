@@ -70,12 +70,13 @@ first jump on level 1" is a claim about `J1` there. Engine only: no build, no
 browser, a couple of seconds. Both halves live under `scripts/level-map.mjs`: the ids are
 `scripts/lib/stage-features.mjs`, the picture `scripts/lib/level-map-render.mjs`.
 
-**The campaign's committed previews are generator OUTPUT, and every rule change
-re-rolls them.** `make previews` regenerates both halves — `make routes` (`scripts/stage-routes.mjs`) writes
+**The campaign's committed previews are generator OUTPUT.** `make previews`
+regenerates both halves — `make routes` (`scripts/stage-routes.mjs`) writes
 every campaign stage's road into `pwa/src/game/stage-routes.ts` (pure Node,
 ~13 s), `make biomes` re-renders each country over its FIRST stage's start
-line (needs a build + Chromium). Skipping it leaves the menu drawing stages
-that no longer exist.
+line (needs a build + Chromium). But read the version call above BEFORE
+running it: a rule change re-rolling a campaign road is a version to add,
+not a preview to regenerate.
 
 **Step 5 is the one that is easy to skip and the one that makes the rest worth
 doing.** An analyzer is only as honest as its checks, and the fastest route to
@@ -141,6 +142,40 @@ rally stage" — is what `make track` and the sim are for. Say so out loud when
 that is the answer, rather than inventing a number that stands in for it
 badly; a check measuring a proxy nobody believes is worse than no check,
 because it will be optimised against.
+
+---
+
+## THE VERSION CALL — the first question a rules change owes
+
+**Does this change move what a seed BUILDS?** If it does, it re-rolls the
+campaign's eighteen CURATED roads along with everything else — and that is not
+a thing to discover from a red suite and fix with `make previews`. A campaign
+level names the generator version it was curated on; `engine/mapgen/versions.ts`
+is the registry and `docs/track-generator.md` the contract.
+
+```
+   no   →  nothing owed. Run the loop.
+   yes  →  1. add a row to GENERATOR_VERSIONS, noting what moved
+           2. keep the OLD behaviour on the OLD row, as a trait
+           3. leave the campaign's levels alone — moving one is a CURATION
+                                                 (`level-rating`, Loop B)
+           4. delete any version no campaign level names any more
+```
+
+The trait is absent on the current row and set on the old one, so the branch a
+reader meets first is the rules as written — never a trait the CURRENT row sets:
+
+```ts
+const traits = generatorTraits(knobs.version);
+const radius = traits.wideHairpins ? LEGACY_HAIRPIN : R.turn.hard.radius;
+```
+
+**What tells you a campaign road moved:** `tests/stage_preview_test.ts`
+recompiles them and compares committed route bytes; `make routes` then
+`git diff pwa/src/game/stage-routes.ts` asks the same on demand, in ~13 s,
+without a worktree. Red there is the QUESTION — a level deliberately moved
+(regenerate) or the rules moving under one that was not (version it).
+Regenerating to turn it green is the implicit re-roll this scheme prevents.
 
 ---
 
@@ -484,6 +519,10 @@ undoes it without knowing it was ever a rule.
   seed more than once.
 - Zoom in on what the whole-stage frame cannot resolve — a junction, a bridge,
   a guarded hairpin.
+- **The version call made** (above), and `make routes` re-run only if a level
+  was deliberately moved. A `stage-routes.ts` diff on a PR that did NOT move a
+  level is the change re-rolling the campaign, and it needs a version rather
+  than a regeneration.
 - `docs/track-generator.md` updated if any rule moved (the verbatim list, and
   the scoring table if a metric changed).
 - A `.changes/unreleased/` fragment: generator changes are player-visible by

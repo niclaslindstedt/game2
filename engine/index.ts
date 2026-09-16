@@ -222,6 +222,15 @@ export {
 
 // The stage generator.
 export {
+  CURRENT_GENERATOR_VERSION,
+  GENERATOR_VERSIONS,
+  GENERATOR_VERSION_IDS,
+  generatorTraits,
+  isGeneratorVersion,
+  type GeneratorTraits,
+  type GeneratorVersion,
+} from "./mapgen/versions.ts";
+export {
   STAGE_RULES,
   DEFAULT_KNOBS,
   NUMERIC_KNOBS,

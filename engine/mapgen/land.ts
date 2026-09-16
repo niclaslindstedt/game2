@@ -139,7 +139,7 @@ export function createLandField(
   // read costs a cache miss nobody will notice; a dial it reads and the
   // key does not is a stage built from another stage's country.
   const dials = NUMERIC_KNOBS.map((dial) => knobs[dial]).join("|");
-  const key = `${seed}|${knobs.biome}|${dials}|${cold}`;
+  const key = `${seed}|${knobs.biome}|${knobs.version}|${dials}|${cold}`;
   const had = memo.find((entry) => entry.key === key);
   if (had) return had.land;
   const land = buildLandField(seed, knobs, climate);

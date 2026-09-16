@@ -133,7 +133,10 @@ score well for the same reasons and are the same road six times.
    4. search for a replacement             make rate COUNT=200 BIOME=<country> LENGTH=<band>
    5. shortlist on CHARACTER               ARGS="--pick 6", or by hand from the axes
    6. CONFIRM the candidate in the game     see below — this step is not optional
-   7. edit pwa/src/game/campaign.ts        seed, length, shape, hour, weather, season, blurb
+   7. edit pwa/src/game/campaign-locations.ts
+                                           seed, length, shape, hour, weather,
+                                           season, blurb — and `version`, if this
+                                           is a move onto a newer generator
    8. re-audit, re-shoot the previews
 ```
 
@@ -189,6 +192,31 @@ shortlist to a brief instead, and read the score as a pass mark:
 one that is not; a pass chosen on the rating alone put a road carrying
 EIGHTY-ONE R-rule violations into a ladder at a rating of 84. Sweep
 `analyzeSeed`'s `errors` over the same candidates and carry it into the pick.
+
+**MOVING A LEVEL TO A NEWER GENERATOR IS THIS LOOP, not an edit.** Every
+campaign level names the generator version its road was built by
+(`engine/mapgen/versions.ts`), and that version keeps building it while the
+rules move on underneath. That pin is the only reason a curated ladder
+survives a generator change — so when a change to the rules wants the
+campaign to follow it, what the campaign owes is not a bumped number. It is
+Loop B, on every level being moved:
+
+- The road is a DIFFERENT ROAD. Re-rate it (`make rate SEEDS=<seed>
+  ARGS=--traits`), re-analyze it, re-time it (`npm run sim`), re-read the
+  ladder as a set (`make rate CAMPAIGN=1`) — the rung may not climb any more,
+  and its neighbours may now be the same road twice.
+- Its blurb is a claim about the road ("one ford", "forty-three calls"), and
+  its location's header comment quotes its distance, time and pace. Both are
+  now claims about a road that no longer exists.
+- `make previews` — the box and, for a country's first level, the banner.
+- Everything that PINS A LEVEL ID, below.
+
+**Move levels one at a time, for a reason.** Bumping all eighteen in one
+commit because the suite went red is the implicit re-roll the version scheme
+exists to prevent; the honest alternative is a trait on the old version
+(`mapgen-improvement` owns that half). And once nothing names a version any
+more, DELETE it — `tests/generator_version_test.ts` refuses a row nobody
+stands on.
 
 **What a level change owes** (`CLAUDE.md`'s sync points):
 
@@ -249,7 +277,8 @@ else is noise you introduced.
 | The fingerprint, difficulty, and which car          | `engine/rating/character.ts`            |
 | Judging a LADDER and the whole campaign             | `engine/rating/campaign.ts`             |
 | The CLI                                             | `scripts/rate-stage.mjs`                |
-| The committed ladder itself                         | `pwa/src/game/campaign.ts`              |
+| The committed ladder itself                         | `pwa/src/game/campaign-locations.ts`    |
+| WHICH generator each rung was curated on            | `version` per level; `engine/mapgen/versions.ts` |
 | Tests                                               | `tests/rating_test.ts`                  |
 
 **Adding a trait.** It belongs here only if it can be WRONG IN BOTH

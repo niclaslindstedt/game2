@@ -41,7 +41,14 @@ export type SplitStage = {
  * same fields the generator was handed. */
 export function splitStageId(stage: SplitStage): string {
   const dials = NUMERIC_KNOBS.map((key) => stage.knobs[key].toFixed(3)).join(",");
-  return `${stage.seed}/${stage.length}/${stage.shape}/${stage.laps}/${stage.knobs.biome}/${dials}`;
+  // The generator's version is in the key for the same reason everything
+  // else is: a board stands at a place on a road, and a road rebuilt by
+  // newer rules puts it somewhere else. Times set on the old one are not
+  // times on this one.
+  return (
+    `${stage.seed}/${stage.length}/${stage.shape}/${stage.laps}/${stage.knobs.biome}` +
+    `/v${stage.knobs.version}/${dials}`
+  );
 }
 
 /** The best seconds for each board on the lap, in board order. A hole is a

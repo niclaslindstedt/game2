@@ -185,6 +185,15 @@ export function initialRace(): RaceSettings {
   // from a build with no countries in it resolves to the taiga.
   const biome = params.get("biome");
   if (isBiomeId(biome)) race.knobs.biome = biome;
+  // ...and WHICH GENERATOR to build it with (`mapgen/versions.ts`), which is
+  // not a dial at all: it is what lets a repro link off a campaign stage
+  // rebuild the road the report was about rather than whatever this tree
+  // generates today. A version this build no longer carries falls back to
+  // the current one inside `resolveKnobs`.
+  const genversion = params.get("genversion");
+  if (genversion !== null && Number.isInteger(Number(genversion))) {
+    race.knobs.version = Number(genversion);
+  }
   race.knobs = resolveKnobs(race.knobs);
   // A weather the country does not have (a desert save left on RAIN by a
   // build that offered it) is cleared rather than drawn as something else.

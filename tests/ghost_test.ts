@@ -40,6 +40,7 @@ const STAGE: GhostStage = {
   length: "short",
   knobs: {
     biome: "taiga",
+    version: DEFAULT_KNOBS.version,
     peaks: 0.5,
     altitude: DEFAULT_KNOBS.altitude,
     dunes: DEFAULT_KNOBS.dunes,

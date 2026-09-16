@@ -7,8 +7,10 @@
 // the whole campaign fits in a few kilobytes — cheaper to bundle than to
 // ask the network for while a menu is already on screen.
 //
-// Regenerate whenever the generator's rules move: a stale route is a
-// picture of a road nobody drives any more.
+// Regenerate whenever the generator's rules move UNDER A LEVEL — which, now
+// that a level names the generator that built it (`mapgen/versions.ts`),
+// should only ever be a level being deliberately moved to a newer version.
+// A stale route is a picture of a road nobody drives any more.
 
 export type StageRoute = {
   /** The polyline, base64 of (x, y) byte pairs. 0 is the west and north
@@ -23,98 +25,108 @@ export type StageRoute = {
    * `make previews` leaves a picture of the road that USED to be there,
    * under the name of the one that is — and that is invisible unless the
    * data says which road it drew. */
-  spec: { seed: number; length: string; shape: string; season: string };
+  spec: {
+    seed: number;
+    length: string;
+    shape: string;
+    season: string;
+    /** WHICH GENERATOR drew it (`mapgen/versions.ts`). The receipt's most
+     * important field: the route bytes go stale the moment the rules move,
+     * and this is what says whether that was a level being moved on purpose
+     * or the rules moving out from under one. */
+    version: number;
+  };
 };
 
 export const STAGE_ROUTES: Record<string, StageRoute> = {
   "taiga-1": {
     d: "AP4AzALEBb4LuSOsJ6wrri+wMbQxuy3ELMku0DPWSd1P3ljbX9RgzV3AXrtis2KuS4hKhEt/UndVcVZIWUJfP2U+mUKlSK1RsVW4V75W4EniRuJD3D3aONo03DDkKvAo9ib7I/4e/xj9EvgN8QpyAA==",
     aspect: 0.7853,
-    spec: { seed: 30, length: "short", shape: "sprint", season: "summer" },
+    spec: { seed: 30, length: "short", shape: "sprint", season: "summer", version: 1 },
   },
   "taiga-2": {
     d: "zpDOVs9R00rZRuFC8D/5OPwx/xf+FfkR7xDmEtYYxhi5FK4KpweJAH0BdQRvCUo/SURKSk1NVVNYWFhdVmNQaUpuQXE0dS16Kn4ogyiILJIrlimaIKEQpQipArAAuALACMgQzCDSKNgt4S3vMPM19z35RflM91jwYu9r8Yn+kf+Z+8TLycTMvc62zpE=",
     aspect: 0.7071,
-    spec: { seed: 11, length: "medium", shape: "circuit", season: "spring" },
+    spec: { seed: 11, length: "medium", shape: "circuit", season: "spring", version: 1 },
   },
   "taiga-3": {
     d: "aFBoJWsfbxp4F4UYnQyhDKYOqg6vC7MDuAC+Ac0Jzw7PEswVxhnDH8pFyE7CWMFew2LHZMpk0WHXY9pm6oDugvSA+IH8g/6H/4z9kPqT8Zbume2d7qP1qPet97H0t/S89sD8x/7S/dn53vLj6OTh6tvs1enT4tHfydzA1bzVodiZ1ZXVkdaP2o7qi/CH9X/5ZP9g/lz6W+9ezFqjV6E8lTqROoY3fh9mHGcZahhtGHIadiB9JIkrjy6UL5otpi2pMao5pkCmTq5QslC3Q8lDzkbVRdtC3yvyKPMl8wC5",
     aspect: 1.0251,
-    spec: { seed: 48, length: "medium", shape: "sprint", season: "spring" },
+    spec: { seed: 48, length: "medium", shape: "sprint", season: "spring", version: 1 },
   },
   "taiga-4": {
     d: "27vaidaEzYHIfsV5xHTGb99G30HdP9k+zkDFQL4+uDu0N7Iysi61JrYhtBuwFqgQlwuJAoEAfAJ4BGsUaBtoIGombip0MHc1d0hzUmxaY15aXVBWSVRBVTlaNl80azFxK3UfeRp/GIgboBumGKwOtA24Db8MwwnHAswA0wLZCd0P3hrbH9sj3ibhKeUo8Cr2MPw4/0L+SvtO9lPtV+mDyobJisqQ0ZjWn9it2bfdv+PR9db33vTo7fPr+Oj84f/S/s/7y/jK9MrwzePb4Nzd29vY27s=",
     aspect: 0.8683,
-    spec: { seed: 46, length: "long", shape: "circuit", season: "summer" },
+    spec: { seed: 46, length: "long", shape: "circuit", season: "summer", version: 1 },
   },
   "taiga-5": {
     d: "HVMcPBc3DTMLMA0tFCoYJCYhKh4qHCgZJBcXFxEVDRINDxMMKQwrCjABMwA7AUUEVANaBV4Ochx0IHEkaCVkKGMqZS9lMmA1VThTO1U+WT9kQHBJg02SXLJcs16xYbJkvGrdZeZn8mT6Zf5n/2n9evp+9IHlgNeD0IPLgsl/yX3LeMp0xXK+cblyon+cgJd9lHmZa5ZpkWiLa4hxf3aAen59coJxhHKIcIptjGiNYYxbh1CCTn5QeE12RXRCdT93Ooc7jD+QTJZcp2GpZqlzpnmnibCIsoC1friAu4a/h8OExnbMdM92037Wi9WS1pfZrOmy673rw+zR+dD8zP3F/Lz5tPis+pv/lf+R/JD6kPeU9JTwhuGC33fdb9pp2V/bVeFM4UbfQ9k/2CjYJ9Yq0ynQH8wZxxPGBsgDxwDDAsASuxa3FbUPsg6vFYk=",
     aspect: 0.5174,
-    spec: { seed: 45, length: "long", shape: "sprint", season: "autumn" },
+    spec: { seed: 45, length: "long", shape: "sprint", season: "autumn", version: 1 },
   },
   "taiga-6": {
     d: "Gf8Z5xzjJN0szi7OP9ZP4WLrZups5YDlg+SF4ovTitCFyoHIe8p40XPTbtJpzmXNYc5b0UjRRM9EzUbLUcdUxFO6V7VUsFStW51gm2SYaZd7oIKVipONj4yKh4lxjmmNZ4pphWiBXnpac1dxTW5Gb0JxNX41gTiDPIJBfkZ+S4VUiVWNU49QkEWPQJA+k0CbP508njWcMZ4voS6nKKsjsh60GbINpAKlAKQClwaTCpMOlQ+YD54UoRmgHp0kmyaZJpQdhx2EIn4teDhnOGEwWC5TMFA2Sjc4OzZAMUQxSDJMNVZEXkhhT2RRalFvVHRVf0+BS4FHdDd1NH4ugy6SNpQ2mDKbMqRApkGrPq41sTK1Mb0yyC3KKsklzSHSIdsn5SjtK/wl/yH+HfcT9BPyFu8X3BbcFN8P3QvUBs4CyQDEAMECvgq2ELMYrRynG5kQlxGUFZEWhRJ+F3kYTBk=",
     aspect: 0.7999,
-    spec: { seed: 1, length: "xlong", shape: "sprint", season: "autumn" },
+    spec: { seed: 1, length: "xlong", shape: "sprint", season: "autumn", version: 1 },
   },
   "desert-1": {
     d: "Qf5Bwz+8PLU0rCmmH6QOpQijAp8AmAGTA44Tfhh8RG5Ja0xmTWJNXUhTP0svQys/KTkrMj4QRgdSAV4AZgRsEXUWgRiOE5QSnBShGaMeoyOgKJ0rZz9jQmRHZ0x0VntggGWHZ/90",
     aspect: 0.8476,
-    spec: { seed: 33, length: "short", shape: "sprint", season: "summer" },
+    spec: { seed: 33, length: "short", shape: "sprint", season: "summer", version: 1 },
   },
   "desert-2": {
     d: "W7ZaaFdbUlFKSwspBSQAGwEQBQcNARYAJwc4B0AKRg1KElQiWSZfJ2UmayN0GXoVgROKFpAVlxKfCqUGrQS2Br4MwhXDHsEpwDDCN8U+zkbjTPBV9lz7Zf5t/3X+fPyE9I66sLC5q8CnyKTRo92h44/3hv19/3P+Y/Vd8FvmW7c=",
     aspect: 1.1046,
-    spec: { seed: 43, length: "medium", shape: "circuit", season: "autumn" },
+    spec: { seed: 43, length: "medium", shape: "circuit", season: "autumn", version: 1 },
   },
   "desert-3": {
     d: "LP8s3SvYJNMYzhHKAbsAuAG1BrEWrDSoUqN2nnibdpJ7inyGeYFue2x4bHVucYFdglqAV3xWc1hdblpwTG9BcjpwN202aT9dQFg+Uy47KDgbNQghBRkIEgsPEA0fDSgLOgFCAEcCSgVJCksOVhdXGlUgVyVlKGoqgT+EP4k6jziVOJo7mz6aUpdVj1mNXpBjl2qXbZVylnWaeaB6uHe+dMFtxWrpZPBi9F/2W/RV9VL3T/5K/0b+Q/tB7z/qO+o28TLzLfEp7SXgI9cf0h7MHsMivSO3IqcaohqfHJ0gsVU=",
     aspect: 0.6854,
-    spec: { seed: 16, length: "medium", shape: "sprint", season: "spring" },
+    spec: { seed: 16, length: "medium", shape: "sprint", season: "spring", version: 1 },
   },
   "desert-4": {
     d: "Iqwhex13EncIdQNxAGoBYgdZCFQIIAkcCxcQExURGxIhFCYXLyMzJjooQShGJUkgShtJE0sOWAJbAF8BYwRnFmsecSR5KH8ohCaHI4wZkxOcEqMVpxm8RMBJxEvKTNZJ30nmS+tP7VP/f/2F+Yf1iO6E6YTjhd6I3JDgod+l3afYp9GiyqHEo76ou666tbu6wMXAzrH0q/yj/5v+kviO94n3gfp7+nT1cOtr52XmWedM4kbiQOU37jLxLPEm7xPeEtwT2B/QIs0irQ==",
     aspect: 1.0199,
-    spec: { seed: 4, length: "long", shape: "circuit", season: "winter" },
+    spec: { seed: 4, length: "long", shape: "circuit", season: "winter", version: 1 },
   },
   "desert-5": {
     d: "n/+f46DfpNmw0rHQsM6fw57Bnr6nuLmwxKrcmd2V147XiduF34Xmh+uE7H/reOt0/V7/WP5S+k71TehS51TnV+xb7l/tY+xm6Gnkaddk0mTNZctoymvMcsx1x3m/e7J3rHiqfauEqoiijp6WmpiDlH+Seo14g3J/a39hhVyEWYJUe1R4VnZucXRxe3WAdYVxiGiQZJJhlF2TWo1ViU2DS3tNdkxySG0/bT1vO3U6eTd8L34sgyuJLYwwkDaWOpc/lEiWUKBcpF2oXaxZskS0QbhCu0W7SLhQuVO9U8NSyVLOUNNB3DngNOYv8RvyFO4O6AvfDc4JyQrAEbMQsRCxErIWux2+JsApxinKJM4j0STUJ9MsyTzFPcI8vDS2Ma8woDScM5kxliyXJ5okoyClHaUaoxabE5YLkQmMCogOhxKIGoUfgCJ4InQkciZwLWwxZzJbLlYqUiVNC0sGRAFAADwBKBEmFCgvLjcwPTBBLUkqSyJLHk0AfA==",
     aspect: 0.9712,
-    spec: { seed: 11, length: "long", shape: "sprint", season: "autumn" },
+    spec: { seed: 11, length: "long", shape: "sprint", season: "autumn", version: 1 },
   },
   "desert-6": {
     d: "b/9v6mvjauBs3HHYcdJsy17FWsJXvVWsS6lJqkavQbA9rjioNKguqielJagksCGyH7IcsBajFqAZnh6eJZopmy+fNKA8m0OcRptKkk+PVY5dkWiLbY1wlXWZeJ56n36fg5uGkIyNl4CZgJ6CooCjfKNzoXCcb4t3iXuLgIqEg4Z9i3qKd4h2gHN8bnxqgGGEXYJbfFZ5VHlOgkiFQ4pCij2IOYk0kzCWLZYpkiWRH5QYlBKZDJoJmAGLAIcChQWFCooNixWHHokiiSSEInwjeCV2LHQwbDhlPGY8ajJ3Mnk0ezl7Pn9Efkl0SHBFbURqSWBHXjdWN1M5UENQTUxRTVRQVVRSYFNiVmNaYFtaXldhVmlXb1NwTm1JbUV1PXc9eT54TnpRfVGES4pKjkySUpZTnU6jS6VJpkajQKI6oDeZNZcxmR+aHqAfox2lGaUSqA6sDrASsxS5FMoJzgLQANYB3ADiB+YJ7wj1A/oD/gf/EfwU+BfzF+0V6BbmGOUe4iHUIdEi0CbSLNot2y7cN+E84UHfQ9xE1kDSQMhGxES/QbxAtUWzSbBv",
     aspect: 0.9939,
-    spec: { seed: 23, length: "xlong", shape: "sprint", season: "summer" },
+    spec: { seed: 23, length: "xlong", shape: "sprint", season: "summer", version: 1 },
   },
   "alpine-1": {
     d: "AGcAFwQMCwQSARgBHQIkBysIMAc5AUEARgNtHW8hbiZlLmE3YD9iR2ZNcFR0WXZed218d6aTq5mupKm6qsOsysT7yf/Q/tT82Pf4xfu7+q3+of+a/ZLBHw==",
     aspect: 1.1538,
-    spec: { seed: 17, length: "short", shape: "sprint", season: "summer" },
+    spec: { seed: 17, length: "short", shape: "sprint", season: "summer", version: 1 },
   },
   "alpine-2": {
     d: "/8P/evxz9m/ubulx43nffNl+0n7Le7pttWexYK9WsE3GE8UMwwi/BLoBsQCoA3cqbytkJlwkUyVLKA5TCVkEYQFnAG4BdQR8CYISiReSGJsUqBOwE7cVvhvIJc4xzz/KSchaymnQn/Sp+rj97//0/vn7/Pj+8//E",
     aspect: 0.982,
-    spec: { seed: 30, length: "medium", shape: "circuit", season: "spring" },
+    spec: { seed: 30, length: "medium", shape: "circuit", season: "spring", version: 1 },
   },
   "alpine-3": {
     d: "ykbKK8YixhzIGM8S0QnQA8sAtgKzBLEIsQ67JLU8sj2sOpo4lzqWPqZPqF2uZ75uwHDBd8R6yHrPdtJ21XjWfNWD1ofmmuif56fpq+2s9Kn8qv6s/rH5ufvF+sn3zPPM7cnmyeDG28bYyNTNwdG52q/cqOGj3p/XndSa05bTk9aN6IDue/t1/Gz/VvdT9FDwUOxR6F7ZXtZd1FnRWM1YyVzDW75Yuk+4TbdMtE2rSqVFpTSuMK4urC2pL6AunCyZKJgAsw==",
     aspect: 1.1111,
-    spec: { seed: 27, length: "medium", shape: "sprint", season: "spring" },
+    spec: { seed: 27, length: "medium", shape: "sprint", season: "spring", version: 1 },
   },
   "alpine-4": {
     d: "AL8AjASCC3wUeB12Nnc6dT1xPWs7ZjhiMV4sWSlUKE02ETkNPApRAFUAWQNbBmU2ZzprPHI9fjeINpA5nEGkQ61BuTnGOMw17QnwBvYF+gf+DP8S/RvwJuww7jr4SPlN+FP0Wuth5mjffdmC0oXMhbyBtYKuhKWJip+GpYSthLSIwojJhs9+2XDga+Ro62X1YPtZ/lL/S/1E+UD0J8MkwSDBHsMJ5QbnAuYA4gDA",
     aspect: 0.9947,
-    spec: { seed: 41, length: "long", shape: "circuit", season: "autumn" },
+    spec: { seed: 41, length: "long", shape: "circuit", season: "autumn", version: 1 },
   },
   "alpine-5": {
     d: "34XfauFl5GLwXPNd9WD0ZvRq9m39cP90/ILtiuyM7Y/xlfKc9aL1qfCv5rLjueXG683t0e3X6uHw7fDz7fjg/97/3P3b9Nnx1PDO88vyye3J2sjWxdO80rrQus2+u7y0urK3srG3rLegpp2kmKWWqZm2mLqVvpTClsabyZzNmeGW5JTjkuGQ1ovUhteD4XrmeeVx1XLRdsx2yHTFb8Rswmm2ZbVfu1q8V7hXsVStTKdHqkKqM5oxmi2eJ5wknSKgIqwhrx6wGKwUrBCxDLkKugi6BbcEsQGsAKgCowifDJcQlhiYH5QqlCyRK4gwgDN+N346gT2GQYdEhUZ+S3pMd0x0SnFDb0BtP2k/YjpbN1IxTi5JLUQvQDE+Ojw7OTo1NTIzLCUdIxgjBy4AMQAzAkY0",
     aspect: 1.2373,
-    spec: { seed: 3, length: "long", shape: "sprint", season: "autumn" },
+    spec: { seed: 3, length: "long", shape: "sprint", season: "autumn", version: 1 },
   },
   "alpine-6": {
     d: "+4f7cf9o/mD8X/dh8WHtY+Fx3XPXctRrz2nIbsBvvnK+d7t6t3qzdq11qnegf56DoIiki6uNtJu4ncCexaXWptuo4bDit9vG2cjYx9XDzcLEvMS5zrHOrsytyq3Gr7+wubq3vLS8sLmsuqPJoMqbypnNmtOg2aHdoOGa5Jfom/ua/pj/lP6P+o30ivKH8oH1fPR58XTmdeF5337iguKJ3YnaiNmD1nzIdsN2wHi5d7Rso1meVZ9PokOhQKQ/q0CtRrFHtEa3Qro1ujO3NbE0rS6pK6MooiSjIaYfqh+xHLUXtRCxAbIAsAGuBqoHpwagB50KmhCdFJwgkiSMJooqizCPM441ijeHOoc/ikOJXFZfV2phbGBuW3dVe1aHX4tfkVqZXJxanlWhU6dSrFCzULhOvE7BTMhMy0rPRNRJ10ngPOE34DTbMdku1CPWH9Uc0xnOF8wVywrICMMHwAK8ALYEsgOvBa4HrQ6lGKEZmxaXGJAfjyeNKoorgyphNg==",
     aspect: 1.0454,
-    spec: { seed: 38, length: "xlong", shape: "sprint", season: "winter" },
+    spec: { seed: 38, length: "xlong", shape: "sprint", season: "winter", version: 1 },
   },
 };
