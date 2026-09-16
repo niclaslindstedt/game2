@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE FIELD — the fourteen crews the campaign is raced against.
+// THE FIELD — the fourteen crews a race is drawn from, and the eleven of
+// them the campaign is raced against (`FIELD_MAX`).
 //
 // A rally stage is driven alone against the clock: the cars leave the start
 // control one at a time, `START_INTERVAL` seconds apart, and the result is
@@ -276,8 +277,29 @@ export const RIVALS: RivalCrew[] = [
   },
 ];
 
-/** Everybody on the start list, the player included. */
-export const FIELD_SIZE = RIVALS.length + 1;
+/** THE MOST CARS ANY RACE BUT ROAM PUTS ON THE ROAD, the player included.
+ *
+ * A ceiling rather than a count of anything: the roster is deeper than this
+ * (fourteen crews and a player is fifteen cars), and a field that wants
+ * fewer than the whole of it takes a SPREAD of it rather than the top of it
+ * (`entryList`), so the head and the tail of the entry list are both on
+ * every field however short it is.
+ *
+ * Twelve is what a stage can be READ at. Every car on a field is a
+ * `GameState` stepped beside the player's and a body drawn beside theirs, so
+ * the number is a frame budget on a phone as much as anything — but the
+ * reason it is here and not in a renderer is the timing screen: a place out
+ * of twelve is a position a player can hold in their head at 140 km/h, and
+ * the deep end of the entry list was never anything but names going past.
+ *
+ * ROAM IS NOT HELD TO IT. Its slider is the player spending their own frame
+ * rate on traffic, up to a full `GRID_CEILING` grid, and it dresses the
+ * field out past the roster with club entries (`clubCrew`). */
+export const FIELD_MAX = 12;
+
+/** Everybody on the start list, the player included — the whole roster, or
+ * as much of it as `FIELD_MAX` allows. */
+export const FIELD_SIZE = Math.min(FIELD_MAX, RIVALS.length + 1);
 
 /** One crew, entered for a stage at a difficulty: their start number and the
  * driver the bot actually becomes. */
@@ -299,13 +321,14 @@ export const PLAYER_NUMBER = FIELD_SIZE;
 /** THE ENTRY LIST for a field of `cars` (the player included), in
  * REPUTATION ORDER, best first.
  *
- * The campaign enters the whole roster and this is simply that list sorted.
- * A short field — a heads-up race picks its own size — takes `cars - 1` crews
- * SPREAD evenly across the order rather than skimmed off the top of it: the
- * best seven crews are one tier of driving repeated seven times, where a
- * spread keeps Sprat at the tail, Frostbite at the head, and the characters
- * in between as far apart as the entry list allows. How hard the whole field
- * is stays the difficulty's job, not the entry list's.
+ * A field shorter than the roster — which is every field the game enters,
+ * since `FIELD_MAX` is below it, and shorter again whenever a heads-up race
+ * picks its own size — takes `cars - 1` crews SPREAD evenly across the order
+ * rather than skimmed off the top of it: the best seven crews are one tier
+ * of driving repeated seven times, where a spread keeps Sprat at the tail,
+ * Frostbite at the head, and the characters in between as far apart as the
+ * entry list allows. How hard the whole field is stays the difficulty's job,
+ * not the entry list's.
  *
  * A field DEEPER than the roster — which only Roam's opponents slider asks
  * for — is the whole roster and then club entries behind it (`clubCrew`),

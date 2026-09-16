@@ -4792,7 +4792,7 @@ body {
 
 /* ── R29: DIFFICULTY, as three cards ────────────────────────────────────
    The biggest control on a stage grid, because it is the biggest decision
-   on one: it sets how good the fourteen crews are AND how much of every
+   on one: it sets how good the field you are racing is AND how much of every
    impact lands on the player's own car, and every result the boxes above it
    are showing was scored at one of these three.
 
@@ -7269,7 +7269,8 @@ a.menu-version:focus-visible {
 
 /* MEASURED: the work counted itself, so the fill is put exactly there. The
    ease covers the step between two readings without ever running ahead of
-   one — the crews arrive in fourteenths, and the bar should not tick. */
+   one — the crews arrive a field's-worth at a time, and the bar should not
+   tick. */
 .loading-bar-measured .loading-bar-fill {
   transition: transform 180ms linear;
 }
@@ -9019,7 +9020,7 @@ a.menu-version:focus-visible {
 }
 
 /* ── …and the same board as a LOCATION'S TABLE (results-table.tsx) ──────
-   The campaign's fifteen crews after the stages driven so far, behind the
+   The campaign's whole field after the stages driven so far, behind the
    STANDINGS press on a location page. Same rows, same pictures, same pager:
    what changes is that a stage's TIME becomes the WINS that break a tie, and
    TOTAL is the figure the whole board is about.

@@ -30,6 +30,7 @@ import {
   CARS,
   DIFFICULTIES,
   DIFFICULTY_IDS,
+  FIELD_MAX,
   FIELD_SIZE,
   GRID_CEILING,
   PLAYER_NUMBER,
@@ -221,7 +222,11 @@ describe("the club entries", () => {
 
 describe("the roster", () => {
   it("fills the start list, with the player last out", () => {
-    expect(RIVALS).toHaveLength(FIELD_SIZE - 1);
+    // The roster is DEEPER than a field: `FIELD_MAX` is the ceiling on the
+    // cars, and what a field enters is a spread of the roster up to it.
+    expect(FIELD_SIZE).toBe(FIELD_MAX);
+    expect(RIVALS.length).toBeGreaterThanOrEqual(FIELD_SIZE - 1);
+    expect(entryList()).toHaveLength(FIELD_SIZE - 1);
     expect(PLAYER_NUMBER).toBe(FIELD_SIZE);
     expect(START_INTERVAL).toBeGreaterThan(0);
   });
@@ -276,8 +281,10 @@ describe("the roster", () => {
   });
 
   it("gives every crew a driving profile that differs from its neighbours", () => {
+    // Every crew ON THE ROSTER, which is deeper than a field (`FIELD_MAX`) —
+    // a character nobody has entered today is still a character.
     const seen = new Set(
-      rivalField("hard").map((entry) => JSON.stringify(profileFor(entry.skill))),
+      rivalField("hard", RIVALS.length + 1).map((entry) => JSON.stringify(profileFor(entry.skill))),
     );
     expect(seen.size).toBe(RIVALS.length);
   });
@@ -294,12 +301,12 @@ describe("the roster", () => {
     // any of them is allowed to do about it.
     const ranked = [...RIVALS].sort((a, b) => b.temper - a.temper).map((c) => c.id);
     for (const id of DIFFICULTY_IDS) {
-      const byTemper = rivalField(id)
+      const byTemper = rivalField(id, RIVALS.length + 1)
         .sort((a, b) => b.profile.aggression - a.profile.aggression)
         .map((e) => e.crew.id);
       expect(byTemper).toEqual(ranked);
       // …and the overtake knob is the crew's alone, at every setting.
-      for (const entry of rivalField(id)) {
+      for (const entry of rivalField(id, RIVALS.length + 1)) {
         expect(entry.profile.overtake).toBe(entry.crew.overtake);
         expect(entry.profile.aggression).toBeCloseTo(temperFor(id, entry.crew.temper), 9);
       }

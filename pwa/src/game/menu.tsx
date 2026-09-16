@@ -146,11 +146,11 @@ export const DEFAULT_HEADS_UP: HeadsUpSettings = {
  * decision nobody can make.
  *
  * The top rung is the ceiling rather than the ladder's own last step: the
- * roster and the apron decide how deep a grid can be (`GRID_MAX`), so a
- * fifteenth rival added to `rivals.ts` moves this without it being edited,
- * and a rung past the ceiling is dropped instead of quietly clamping onto
- * the one below it. */
-const GRID_LADDER = [2, 4, 8, 12, 16];
+ * field cap and the apron decide how deep a grid can be (`GRID_MAX`), so
+ * raising `FIELD_MAX` in `rivals.ts` moves this without it being edited, and
+ * a rung past the ceiling is dropped instead of quietly clamping onto the
+ * one below it. */
+const GRID_LADDER = [2, 4, 8, 12];
 
 export const GRID_OPTIONS: { id: string; label: string; cars: number }[] = (() => {
   const sizes = new Set(GRID_LADDER.filter((cars) => cars >= GRID_MIN && cars < GRID_MAX));

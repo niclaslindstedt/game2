@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE FIELD ON THE ROAD — the rivals as things you can see and hit.
 //
-// The classification has always stepped fourteen real games beside the
+// The classification has always stepped a real game per rival beside the
 // player's (standings.ts). This is what puts them in the world: each crew in
 // its own car, in its own paint (car-livery.ts), driven by the same
 // `GameState` the results are read off. Nothing here simulates anything —
@@ -13,8 +13,8 @@
 //   BUILT LAZILY. A rival's body is generated the first time that crew comes
 //   within `BUILD_RANGE`, and kept from then on. Most runs build one car —
 //   the crew in front, who is stood on the line as the establishing shot
-//   opens — and several build none at all. Building all fourteen up front
-//   would cost every run the geometry of a field it will never meet.
+//   opens — and several build none at all. Building the whole field up
+//   front would cost every run the geometry of cars it will never meet.
 //
 //   DRAWN BY RANGE. Past `DRAW_RANGE` a car is a couple of pixels that still
 //   costs its draw calls, so it is switched off rather than shrunk. The map
@@ -33,8 +33,8 @@
 //   where only the player's car raises anything is a rally with one car in
 //   it — a rival is very often a plume over the trees a corner before it is
 //   a car — so every crew on the road feeds the field's plume (plume.ts),
-//   and because a cloud is one pool and one draw call, fourteen of them
-//   cost what one does. Their lamps light it, and everybody else's, through
+//   and because a cloud is one pool and one draw call, a whole field of
+//   them costs what one does. Their lamps light it, and everybody else's, through
 //   the register in dust-light.ts.
 //
 //   AND SMOKING, out of a second shared cloud on the same terms. Every crew

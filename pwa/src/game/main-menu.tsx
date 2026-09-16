@@ -490,7 +490,7 @@ function LocationPage({
   const [table, setTable] = useState(false);
   // Its pictures, ordered while the player is still reading the stage boxes
   // (`warmStandings`) — a portrait is a real body on a stand, and a board
-  // that asks for fifteen the moment it opens spends its first seconds as an
+  // that asks for a full field the moment it opens spends its first seconds as an
   // empty column. The table is rebuilt inside the effect rather than read off
   // the render's own copy: a fresh array every render would make it a
   // dependency that always changed.
@@ -517,7 +517,7 @@ function LocationPage({
           next={resume}
           onPlay={pick}
         />
-        {/* R29 — how good the fourteen crews you are running against are, and
+        {/* R29 — how good the crews you are running against are, and
             what a crash costs your own car while you race them
             (`damageScaleFor`). It stays on the GRID rather than moving to the
             pre-race card with the car, because it is what the boxes'

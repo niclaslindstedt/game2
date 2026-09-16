@@ -626,8 +626,14 @@ export const ROAD_BUDGETS = {
     /** How many cars a heads-up field is, and therefore how many the start
      * apron has to stand. The grid is one car per row (`sim/grid.ts`), so
      * this and `TUNING.massStart.rowGap` together are what
-     * `STAGE_RULES.startZone.apron` has to be long enough for. */
-    grid: 16,
+     * `STAGE_RULES.startZone.apron` has to be long enough for.
+     *
+     * It is `sim/rivals.ts`'s `FIELD_MAX`, restated as a number because a
+     * budget is data: the analyzer says what a stage OWES, and a stage that
+     * owes whatever the sim happens to be compiled with is a check that can
+     * never fail. The apron the rule book lays is longer than this and stays
+     * that way (`sim/grid.ts`) — the headroom is the point, not a defect. */
+    grid: 12,
     /** Clearance every grid slot needs around it, m. */
     slotClear: 2.4,
     /** How far out of level the apron under the grid may be, end to end,
@@ -635,7 +641,7 @@ export const ROAD_BUDGETS = {
      * terrain failing to lay a shelf under it rather than a slope. */
     apronStep: 0.6,
     /** How far up the road from the GATE the field is stringing out, m,
-     * and the tightest corner allowed inside it. A grid sixteen deep
+     * and the tightest corner allowed inside it. A full grid
      * arrives at the first corner still stacked if it comes too soon —
      * this is the straight R1 exists to provide, measured. */
     launch: 150,

@@ -8,7 +8,7 @@
 // dragged along behind the car until the air lets it go.
 //
 // A cloud, and ANY NUMBER OF CARS FEEDING IT. The player's is one instance;
-// the field on the road is another, shared by all fourteen crews, because a
+// the field on the road is another, shared by every crew on it, because a
 // rally where only one car raises dust is a rally with one car in it. What
 // makes a cloud one cloud is the pool, not the car: every puff in an
 // instance recycles through the same buffer and costs the same single draw,

@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_KNOBS,
+  FIELD_SIZE,
   NEUTRAL_INPUT,
   TAPE_FORMAT,
   createTapeRecorder,
@@ -162,12 +163,12 @@ describe("the run tape", () => {
   });
 
   it("replays a run that had a field beside it, contact and all", () => {
-    const recorded = recordBotRun({ difficulty: "medium", cars: 15 });
+    const recorded = recordBotRun({ difficulty: "medium", cars: FIELD_SIZE });
     const tape = parseTape(recorded.tape as string);
     expect(tape.header.field?.difficulty).toBe("medium");
     // The classification the run produced travels with it — that is what
     // makes a tape a calibration artifact and not only a replay.
-    expect(tape.rivals.length).toBe(14);
+    expect(tape.rivals.length).toBe(FIELD_SIZE - 1);
     expect(tape.result?.place).toBe(recorded.place);
     const replayed = race({
       stage: STAGE,
@@ -195,7 +196,12 @@ describe("the run tape", () => {
     // on others, with no relation to how near the player's time is to the
     // crew either side. Pinning the two equal on a solid field is pinning
     // one seed's coincidence, and any change to how a crew drives moves it.
-    const field = { difficulty: "hard" as const, cars: 15, massStart: false, contact: false };
+    const field = {
+      difficulty: "hard" as const,
+      cars: FIELD_SIZE,
+      massStart: false,
+      contact: false,
+    };
     const recorded = recordGhostRun(field);
     const placed = placeAmongField({ stage: STAGE, field, time: recorded.time, carId: CAR.id });
     // The precondition, asserted rather than assumed: not one crew's time
@@ -235,14 +241,14 @@ describe("the run tape", () => {
       const recorded = race({
         stage,
         car: CAR,
-        field: { difficulty: "medium" as const, cars: 15, massStart: false, contact: true },
+        field: { difficulty: "medium" as const, cars: FIELD_SIZE, massStart: false, contact: true },
         start: START,
         driver: { kind: "bot" as const },
       });
       (["easy", "medium", "hard"] as const).forEach((difficulty, i) => {
         const { rows } = placeAmongField({
           stage,
-          field: { difficulty, cars: 15, massStart: false, contact: true },
+          field: { difficulty, cars: FIELD_SIZE, massStart: false, contact: true },
           time: recorded.time,
           carId: CAR.id,
         });
