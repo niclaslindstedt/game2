@@ -192,6 +192,12 @@ export type Environment = {
   onThunder: (play: (clap: Clap) => void) => void;
   /** How filthy the car is, 0..1 — every beam fades under a caked lens. */
   setGrime: (level: number) => void;
+  /** Stand the car's beams at every light COUNT the run can reach other than
+   * the one they are at, calling `draw` on each, then put them back. The
+   * renderer's warm-up uses it: three.js keys its program cache on how many
+   * lights are visible, so the sky throwing the light switch mid-race would
+   * otherwise relink every lit material in the scene (car-lamps.ts). */
+  warmLamps: (draw: () => void) => void;
   /** How much of each end's lighting is still on the car, 0..1 — a share,
    * not a switch, because the lamps break one at a time (`FRONT_LAMPS` /
    * `REAR_LAMPS`, engine-side). One headlamp gone is half the light down
