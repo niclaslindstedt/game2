@@ -74,12 +74,13 @@ const WHEEL_TURN_GAIN = 12;
 const WHEEL_LOCK_DEG = 120;
 
 /** The directions a hint arrow can be drawn in, and what each bound action
- * is called on it — "DRIFT" rather than "HANDBRAKE", because that is what
- * the player is reaching for it to do. */
+ * is called on it — the control's own name, matching what the settings page
+ * calls it (`settings-input.ts`), so a player rebinding the gesture there
+ * and then reaching for it here is looking for the same word twice. */
 const PEDAL_HINT_DIRS: PedalDir[] = ["up", "down", "left", "right"];
 const PEDAL_HINT_WORD: Record<Exclude<PedalMode, "gas">, string> = {
   brake: "BRAKE",
-  handbrake: "DRIFT",
+  handbrake: "HANDBRAKE",
 };
 /** The gear flicks, drawn as a pair of chevrons beside the thumb rather than
  * as words on the hint ring.
