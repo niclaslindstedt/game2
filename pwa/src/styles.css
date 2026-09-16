@@ -3253,19 +3253,25 @@ body {
   transition: opacity 90ms steps(2);
 }
 
+/* The arrow always sits BETWEEN the thumb and the word it names, whichever
+   direction the gesture runs in: out from the anchor it is arrow, then
+   label. That is what makes the four readable as one ring rather than four
+   arrangements — the arrows form the ring, at one radius, and the words sit
+   outside them. Each direction's `flex-direction` is whatever puts the
+   arrow on the anchor's side of the stack. */
 .hud-hint-up {
   left: 0;
   /* Measured from the anchor's BOTTOM so the label grows upward, away from
      the thumb, however many lines it runs to. */
   bottom: 2.6rem;
   transform: translateX(-50%);
+  flex-direction: column-reverse;
 }
 
 .hud-hint-down {
   left: 0;
   top: 2.6rem;
   transform: translateX(-50%);
-  flex-direction: column-reverse;
 }
 
 .hud-hint-right {
