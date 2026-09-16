@@ -24,7 +24,7 @@ alone the sweep flew six metres and more over open ice — a causeway, the
 one thing R35 exists to prevent. There is no fixing that downstream: the
 rule has to be a floor in `keepsDry`, refused where another line can still
 be drawn. Expect it to bite hard — an over-tight floor (1.5 m) cut twelve
-stages' worth of crossings to 300 m of road, because the country almost
+stages' worth of crossings to 300 m of road, because the biome almost
 never offers a flat run at a shore. Sweep it, and separate "how much bank
 may a crossing be approached over" (the search's floor) from "where does
 the bank stop and the feature start" (the compiler's classification band).

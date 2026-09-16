@@ -27,7 +27,7 @@ with "no" a million times on a summer stage.
 
 The fix is the shape to reach for whenever a feature adds a reader to the
 search's hot path: decide ONCE, when the field is built, whether the
-feature can fire at all (`icyCountry` off the country's ceiling), and hand
+feature can fire at all (`icyBiome` off the land's ceiling), and hand
 out the plain readers when it cannot — predicate and all, not a predicate
 that returns true quickly. That put the mean and the total build time back
 on top of `origin/main`.

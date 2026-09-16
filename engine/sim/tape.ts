@@ -79,7 +79,7 @@ export type TapeStage = {
   /** The temperature at the datum, °C, or null (or absent, on a tape
    * written before there was one) for the season's own (climate.ts). */
   temperature?: number | null;
-  /** How often the sandstorms come, 0..1, or absent for the country's own
+  /** How often the sandstorms come, 0..1, or absent for the biome's own
    * default. Not part of the ROAD — the fronts cross a stage compiled
    * without knowing about them — but they are part of what the run drove
    * through, so a replay owes them. */

@@ -8,7 +8,7 @@ concepts: [caching, test-conventions, seeds, harness]
 A renderer-side module that caches something derived from a `Track` wants a
 cheap cache key, and `track.seed` looks like one. It is not: `compileTrack`
 takes a seed AND a segment list, so a synthetic rig and a generated stage
-can carry the same seed and be different countries — and a cache keyed that
+can carry the same seed and be different biomes — and a cache keyed that
 way hands the second one the first one's roads. Hold the `Track` object
 itself and compare by identity (`cache.track !== track`), with
 `samples.length` beside it for the endless stage that grows under a track

@@ -34,7 +34,7 @@ only the instrument they are played on.
 | `pwa/src/lib/tracker.ts` | The sequencer: flattens patterns through the order and books each note on the synth with a lookahead. Also `bars()`, `noteFrequency()`, `trackSeconds()`. |
 | `pwa/src/lib/voice.ts` / `synth.ts` | The instrument every note is played on, shared with the sound effects. |
 | `pwa/src/game/audio/scores/kit.ts` | **THE KIT.** The figures (a chord held, a gallop, brass on the offbeats, an arpeggio) and the patches (a kick, a snare, a hat under 7 kHz, a pad that holds) every score is built from. A score file is its DECISIONS and its tunes; the plumbing lives here. |
-| `pwa/src/game/audio/music-pick.ts` | **WHICH score a stage gets** — from its country, its sky and the shape of its road. DOM-free; the tests read it. |
+| `pwa/src/game/audio/music-pick.ts` | **WHICH score a stage gets** — from its biome, its sky and the shape of its road. DOM-free; the tests read it.   |
 | `pwa/src/game/audio/music.ts` | The single player — play/stop/pause, which track is current, the per-track dynamic import, and `armMenuMusic`. |
 | `scripts/audition.mjs` | **THE REVIEW SURFACE** (`make audition`): every score under the real sequencer, with a per-voice mute. Its `SCORE_FILES` table carries each score's title. |
 
@@ -134,7 +134,7 @@ music against — both shipped scores do.
 | The finish | `stopMusic()` — the sting lands in quiet, and the menu re-arms its own theme |
 
 `trackFor` decides in this order: the SHAPE of the road (a circuit, an
-endless stage), then the COUNTRY (the desert has one score whatever the sky
+endless stage), then the BIOME (the desert has one score whatever the sky
 does), then the taiga's sky (rain or storm, then dusk/night/dawn, then the
 clear-day anthem). A new score is a new file, a new `TrackId`, a loader, a
 rung in `trackFor`, a row in the audition page's `SCORE_FILES`, and a row in

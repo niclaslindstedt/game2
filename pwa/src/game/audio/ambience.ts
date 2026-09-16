@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE WORLD — what the country sounds like with the car taken out of it.
+// THE WORLD — what the biome sounds like with the car taken out of it.
 //
 // Four layers that never stop and a roster of calls raised on a loose
 // clock, all read off the state rather than reported by the engine, because
@@ -18,7 +18,7 @@
 // alpine road, an owl at dusk, crickets and a coyote after dark, a cow or a
 // sheep behind a fence the road runs past, the diesel's horn as it comes to
 // the crossing and the bell on the crossing itself — and, over the northern
-// countries, GEESE AND SWANS going over, which is the one call on the
+// biomes, GEESE AND SWANS going over, which is the one call on the
 // roster that comes from the sky and the one the SEASON decides: a skein on
 // passage in spring and autumn is a different sound from the pair that
 // nests down the valley all summer. `skein.ts` draws them.
@@ -45,7 +45,7 @@ import { playSound } from "./play.ts";
 import { createRack, type Rack } from "./rack.ts";
 import type { PlayShape } from "./types.ts";
 
-/** What the country is doing around the car this instant. */
+/** What the biome is doing around the car this instant. */
 export type WorldVoice = {
   biome: BiomeId;
   /** What kind of light it is this moment (daylight.ts) — the sun moves
@@ -102,7 +102,7 @@ export const WORLD_GLIDE: Record<WorldLayer, number> = {
   train: 0.3,
 };
 
-/** The hush a country has with no wind at all. The taiga's is the trees;
+/** The hush a biome has with no wind at all. The taiga's is the trees;
  * the desert's is nearly nothing, because there is nearly nothing there to
  * move; the alpine's is a thinner forest than the taiga's — spruce and
  * larch on a slope, with pasture between — and it gives out with the trees
@@ -116,7 +116,7 @@ const PASS = { still: 0.007, gale: 0.014 };
 
 /**
  * How far above the treeline a height stands, 0..1 — nothing at the
- * treeline and below, 1 at the snowline. A country with no snowline has no
+ * treeline and below, 1 at the snowline. A biome with no snowline has no
  * pass, whatever its hills do: the taiga's crests are inside its forest.
  */
 export function exposureOf(y: number, zones: BiomeRules["land"]["zones"]): number {
@@ -162,7 +162,7 @@ export type WorldCall = {
 
 /**
  * THE BIRDS ON PASSAGE — geese and swans going over, in the two northern
- * countries only. What the season buys is the whole point of them:
+ * biomes only. What the season buys is the whole point of them:
  *
  *   SPRING / AUTUMN  skeins on the move, so they are OFTEN — a stage should
  *                    have one over it — and they go over at night too,

@@ -30,7 +30,7 @@ describe("the world a stage is drawn in", () => {
     }
   });
 
-  // Two minutes because R17 lays the country's tarmac before the route and
+  // Two minutes because R17 lays the biome's tarmac before the route and
   // the search then has to plan around it, and R23's height clause refuses
   // every fold-back the terrain could not build — a hilly seed's search
   // backtracks several times as often for it — and this walks thirty-two

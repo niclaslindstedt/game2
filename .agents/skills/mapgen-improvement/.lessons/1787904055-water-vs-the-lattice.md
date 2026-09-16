@@ -12,7 +12,7 @@ construction and tells you nothing. State them against `groundAt`.
 
 Doing that naively reports ~60% of a stage's river as "water with ground over
 it" and sends you off widening the carve. Split the count by
-`roadDistanceAt` first: out in the country only ~6% was wrong, and the whole
+`roadDistanceAt` first: out in the land only ~6% was wrong, and the whole
 rest was river running INSIDE a road corridor — under bridge decks (correct,
 R13) and down the corridor between two crossings (the actual bug). One
 `roadDistanceAt < width/2 + reach` filter turned a "the terrain cannot hold

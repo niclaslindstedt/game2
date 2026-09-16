@@ -56,9 +56,9 @@ function overTheSphere(n: number): THREE.Vector3[] {
 }
 
 describe("the turn of the sphere", () => {
-  it("stands the pole at the country's latitude, due north", () => {
+  it("stands the pole at the biome's latitude, due north", () => {
     const turn = skyTurnAt(1, "winter", "taiga");
-    // The taiga is a northern country, so the pole is high and behind the
+    // The taiga is a northern biome, so the pole is high and behind the
     // sun's noon bearing rather than in front of it.
     expect(turn.pole / DEG).toBeGreaterThan(50);
     expect(turn.pole / DEG).toBeLessThan(75);

@@ -101,7 +101,7 @@ export type GameCamera = {
    * a different road. This drops all of it and stands the rig around `state`
    * in one call, with no time in it.
    *
-   * `fly` makes the change a flight back up the road over the country
+   * `fly` makes the change a flight back up the road over the land
    * between the two rather than a cut (camera-sweep.ts) — which is what a
    * spectator
    * CHANGING crew wants, and what standing the feed down does not: the

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // WHEN THE RUN GOES WRONG, and what it costs to put it right. A car can
-// leave the stage in five different ways — off into the country, into the
+// leave the stage in five different ways — off into the land, into the
 // water, onto its roof, wedged against something solid, or pointed back up
 // the road it came down — and each has its own grace period, its own
 // warning, and its own way back. The rules for all of them are here; the
@@ -44,7 +44,7 @@ export function offRoadSurface(state: GameState, x: number, z: number): Underfoo
   if (state.terrain.iceAt(x, z) !== null) return "ice";
   const spur = state.terrain.spurSurfaceAt(x, z);
   if (spur !== null) return spur;
-  // The open country under a winter's blanket is deep snow, not turf
+  // The open land under a winter's blanket is deep snow, not turf
   // (climate.ts) — from where the blanket is more than a dusting.
   return state.terrain.blanketAt(x, z) > 0.1 ? "snowfield" : "nature";
 }

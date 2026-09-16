@@ -44,7 +44,7 @@ const TINT = {
 const SHOP_STOREY = 3.6;
 const SHED_STOREY = 4.2;
 
-/** What each kind's sign says — plain Swedish, because the country is. */
+/** What each kind's sign says — plain Swedish, because the biome is. */
 const SIGN_TEXT: Partial<Record<HousePlan["kind"], string[]>> = {
   grocery: ["LIVS", "LANTHANDEL", "HANDEL"],
   post: ["POST", "POSTEN"],

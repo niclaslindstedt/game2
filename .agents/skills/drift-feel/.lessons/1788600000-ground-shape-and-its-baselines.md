@@ -15,7 +15,7 @@ keep the rest. One helper for both, with the takeoff reading the pull itself
 so a grip-side gain can never move where a shape throws the car.
 
 **Baselines.** `crestSpan` is 12 m so a brow is judged by the hill and not
-the road's texture; laid ACROSS an 8 m road it reaches into the country both
+the road's texture; laid ACROSS an 8 m road it reaches into the land both
 sides. But a fixed 2.5 m transverse baseline straddles a wheel-track trough
 and reads it as a COMPRESSION — grip went _up_ in the ruts, on every road. It
 has to be a SHARE of the half-width (the crown IS a half-width parabola;

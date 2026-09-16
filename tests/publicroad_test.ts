@@ -3,10 +3,10 @@
 //
 // `highway_test.ts` holds the LINES: laid rim to rim before the rally, out
 // of the water, going somewhere. Those are a plan. This is about the ones
-// that get BUILT — the stretch of a line the country carries, at the
-// country's own height, as an ordinary road off the stage — because before
+// that get BUILT — the stretch of a line the biome carries, at the
+// biome's own height, as an ordinary road off the stage — because before
 // this the tarmac on eight seeds in twelve was a plan nobody laid and the
-// country came out with no sealed road on it anywhere.
+// biome came out with no sealed road on it anywhere.
 //
 // What has to be true of one is what has to be true of any road off the
 // stage, plus the one thing that makes it a PUBLIC road: it leaves the map
@@ -38,7 +38,7 @@ function routeDistance(track: (typeof stages)[number]["track"], x: number, z: nu
 }
 
 describe("the public roads the route never met (R17)", () => {
-  it("puts a sealed road on the country of nearly every stage, as an arm or as a built line", () => {
+  it("puts a sealed road on the land of nearly every stage, as an arm or as a built line", () => {
     // A SHARE and not every seed. Which seeds have tarmac on them is a
     // property of where the route happened to be drawn against where the
     // line happened to be laid, so a per-seed assertion here is a fixture
@@ -55,7 +55,7 @@ describe("the public roads the route never met (R17)", () => {
     );
   });
 
-  it("is tarmac, standing proud of the country the way a laid road does", () => {
+  it("is tarmac, standing proud of the biome the way a laid road does", () => {
     for (const { track } of stages) {
       for (const road of track.publicRoads) {
         expect(road.samples.every((s) => s.surface === "asphalt")).toBe(true);
@@ -68,7 +68,7 @@ describe("the public roads the route never met (R17)", () => {
     }
   });
 
-  it("leaves the country the stage occupies at BOTH ends", () => {
+  it("leaves the land the stage occupies at BOTH ends", () => {
     const out = (track: (typeof stages)[number]["track"], p: { x: number; z: number }): boolean => {
       const b = track.bounds;
       return (
@@ -126,7 +126,7 @@ describe("the public roads the route never met (R17)", () => {
   it("is not a second copy of a road the rally already drives", () => {
     // A line the route borrows or crosses is already built — as the run the
     // rally drives and the two arms the tape shuts — so it is not built
-    // again here, and the two never stand on the same country (R23).
+    // again here, and the two never stand on the same biome (R23).
     for (const { track } of stages) {
       for (const road of track.publicRoads) {
         for (const spur of track.spurs) {

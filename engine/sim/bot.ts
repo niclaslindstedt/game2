@@ -83,7 +83,7 @@ export type BotProfile = {
    *
    * The rest of this plan reads the road and nothing beside it, which is
    * fine while the answer to running wide is always "a bit of grass". It
-   * stops being fine the moment the stage is laid along the country (R34):
+   * stops being fine the moment the stage is laid along the land (R34):
    * a road down a valley floor runs past open water, and a road forced over
    * a shoulder runs between rock. A driver looks at that and lifts. One who
    * does not drives into the same lake until the clock runs out — which is
@@ -258,9 +258,9 @@ const GRIP_BY_CAR = new WeakMap<CarSpec, readonly number[]>();
  * KEYED ON THE TRACK where the terrain is one the mapgen actually built,
  * and on the terrain itself where it is not.
  *
- * The exposure is a fact about the country, so the key has to be whatever
- * decides the country — and `createTerrain` takes the track and nothing
- * else, so two genuine fields off one track ARE one country and answer
+ * The exposure is a fact about the biome, so the key has to be whatever
+ * decides the biome — and `createTerrain` takes the track and nothing
+ * else, so two genuine fields off one track ARE one biome and answer
  * identically. That matters because a field is fifteen games on one shared
  * track, each with its own terrain (they need their own: the field caches
  * the block its last query landed in, and fifteen cars in fifteen places
@@ -270,7 +270,7 @@ const GRIP_BY_CAR = new WeakMap<CarSpec, readonly number[]>();
  *
  * The terrain stays the key for anything the mapgen did not build, which is
  * what keeps the other half of the old rule: a test that spreads its own
- * `waterAt` over a field gets its own table rather than the real country's
+ * `waterAt` over a field gets its own table rather than the real biome's
  * answers. `builtTerrain` is a `WeakSet` membership test for exactly that
  * reason — a spread produces a new object, so it cannot inherit the mark. */
 const EXPOSURE = new WeakMap<TerrainField | Track, Float32Array>();

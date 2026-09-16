@@ -17,7 +17,7 @@ stamps run along it, and in this world's handedness those two axes cross
 downward, so a front-face material threw the whole mesh away every frame.
 A trail laid, shaped and coloured, and never once on screen.
 
-And the coat of snow the country wears — a mesh that is supposed to BEND
+And the coat of snow the biome wears — a mesh that is supposed to BEND
 where a car has been — was sinking behind the ground tiles under it, which
 were still drawn at the height the snow stood at before anybody touched it.
 The tiles are now laid a car's belly-clearance under the untouched top, which

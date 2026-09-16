@@ -17,7 +17,7 @@ Two things made the number honest:
 - **Sort the folds by cause before scoring.** A corner where `heightAt`
   differs from `farHeightAt` was shaped by a road — cut, fill, cone, shelf,
   pad — and a cutting has an edge. `geology.sharpAt` says where the rock is
-  deliberately sharp. Only the rest is the country, and only the country is
+  deliberately sharp. Only the rest is the biome, and only the biome is
   held to a curve (20° across an edge; a healthy seed folds 0.0-0.2% of its
   edges past it).
 - **The mark has to reach a cell beyond the feature.** It is the foot and the
@@ -31,5 +31,5 @@ What the probe found, in order of size: `smooth(1 - |2n - 1|)` as the
 runs steep (a parabola `4n(1-n)` over the raw noise has a third of the
 curvature and no crease anywhere); a smoothstep rim narrower than three cells
 (the old tarn at 24 m, the pond at 23 m) folds ~27° at its top on every lake
-in the country; and a kettle hole's 7 m rim cannot be a curve at all, so it
+in the biome; and a kettle hole's 7 m rim cannot be a curve at all, so it
 is marked sharp instead of widened.

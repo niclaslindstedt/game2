@@ -7,14 +7,14 @@
 // questions and answers to a different rule: a path may hug the route's
 // verge where a road may not, it crosses no ground a road needs, and where
 // a lane is refused for a step in it a path is refused for having to double
-// back. It is threaded along the same country map the pad was found on —
+// back. It is threaded along the same ground map the pad was found on —
 // the cells say roughly where, and every step then reads the real ground
 // and steers round what it finds.
 //
 // The renderer lays a strip of trodden earth on it and stands the boards
 // beside it; the forest and the scatter keep off it (`trailClearance`).
 
-import { CELL, walkFrom, type CountryMap } from "./carpark-map.ts";
+import { CELL, walkFrom, type GroundMap } from "./carpark-map.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 import type { Stand } from "./stands.ts";
 
@@ -72,12 +72,12 @@ function wrap(a: number): number {
 }
 
 /** Walk a trail from the pad's rim to a stand's back, threaded along the
- * cells the country map found a way through. The cells say roughly
+ * cells the ground map found a way through. The cells say roughly
  * where; every step still reads the real ground, and steers round what
  * it finds. Null where the walk cannot get there inside `walk` metres. */
 export function walkTrail(
   probe: TrailProbe,
-  map: CountryMap,
+  map: GroundMap,
   pad: { x: number; z: number; radius: number },
   stand: Stand,
 ): Trail | null {

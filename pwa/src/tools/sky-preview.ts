@@ -45,7 +45,7 @@ type Row = {
   gust?: number;
   /** Hold the frame until a strike is at its brightest. */
   catchStrike?: boolean;
-  /** How cold the country is at the road, °C — the sheet stands in a mild
+  /** How cold the biome is at the road, °C — the sheet stands in a mild
    * autumn unless a row says otherwise. Under freezing what falls is SNOW
    * rather than rain (`fallsAsSnow`, climate.ts), which is the one weather
    * on this sheet that is not chosen by the sky at all. */
@@ -99,7 +99,7 @@ const ROWS: Row[] = [
   // air at the CAMERA (environment.ts) — so without a row pinning the
   // climate cold, the snow and its white-out are drawn by nobody and
   // reviewed by nobody. Two of them, because a snowfall is read as a
-  // ladder: a light one has to leave the country visible behind it, and a
+  // ladder: a light one has to leave the land visible behind it, and a
   // heavy one has to take it away.
   {
     name: "snow — a light fall",
@@ -176,7 +176,7 @@ const PACE = 32;
  * the longest and everything it can see has to reach that far. */
 const RUN_M = 1700;
 
-/** The country the harness stands in: a gentle valley under the road, so
+/** The biome the harness stands in: a gentle valley under the road, so
  * the mist has somewhere to lie and the sun something to hide behind. */
 function heightAt(x: number, z: number): number {
   return -6 + 4 * Math.sin(z / 300) + 26 * Math.max(0, Math.abs(x) - 80) * 0.02;
@@ -278,7 +278,7 @@ async function main(): Promise<void> {
   /** The slice of `GameState` the atmosphere actually reads. The SAND has
    * to be in it even though this sheet is a taiga one and never blows: the
    * environment reads `state.sand` on every update to decide how far the
-   * view runs, so leaving it out is not a country with no sandstorms in it,
+   * view runs, so leaving it out is not a biome with no sandstorms in it,
    * it is a crash on the first cell. */
   const state = {
     t: 0,

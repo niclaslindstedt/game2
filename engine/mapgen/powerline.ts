@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R45 — THE GRID. The country that makes power (R43) has to send it
+// R45 — THE GRID. The biome that makes power (R43) has to send it
 // somewhere, and what that looks like from a rally stage is a 400 kV
 // transmission line: two lattice legs under one crossarm, three bundled
 // conductors on insulator strings and two earth wires on the peaks,
@@ -10,7 +10,7 @@
 // slot along the arc rolls, a probe goes out sideways, something stands
 // there. A power line decided that way would follow the road, which is the
 // one thing a real one never does. So this module works like `highway.ts`:
-// it crosses the whole map, rim to rim, from the seed and the bare country
+// it crosses the whole map, rim to rim, from the seed and the bare land
 // alone, and the rally passes under it wherever it happens to. The moment
 // worth having is the crossing, and a crossing you can plan for is not one.
 //
@@ -43,7 +43,7 @@
 //   `span.stretch` and carries over, which is the ridge-to-ridge crossing
 //   span and the one that looks like something. A window that refuses even
 //   stretched refuses the LINE, and another entry on the rim is tried: a
-//   grid with a hole in it is worse than a country with no grid.
+//   grid with a hole in it is worse than a biome with no grid.
 //
 // The renderer draws the machines and hangs the catenaries off the points
 // this module hands it; the terrain makes the legs solid and cuts the
@@ -69,7 +69,7 @@ const note = (why: string): void => powerlineTally.note?.(why);
  * and into the tower, so the wire is anchored rather than merely resting. */
 export type PylonKind = "suspension" | "angle" | "tension";
 
-/** One tower. `y` is the bare country at its foot — the renderer re-foots
+/** One tower. `y` is the bare land at its foot — the renderer re-foots
  * every leg on the ground the terrain actually made, so this is what the
  * surveyor judged rather than where the steel ends up. `heading` is the
  * line's bearing through it, bisected at a turn, and the crossarm lies
@@ -122,7 +122,7 @@ export type PowerlineContext = {
    * the highest thing under it, and the air it owes over that.
    *
    * `ground` is not `land.heightAt`, and the difference is a real defect
-   * rather than a refinement. A road is laid ALONG the country but not ON
+   * rather than a refinement. A road is laid ALONG the land but not ON
    * it — it rides embankments and shelves metres above the ground the
    * survey read — so a span planned against the bare land came out with
    * seven metres of clearance where it had promised twelve, and another was
@@ -174,7 +174,7 @@ export function spanSag(length: number, t: number): number {
 
 // ── The ground a tower stands on ──────────────────────────────────────────
 
-/** Will the country hold a tower here: dry, level enough across the base,
+/** Will the biome hold a tower here: dry, level enough across the base,
  * ground R31 is not about to reshape, and clear of everything already on
  * the map.
  *
@@ -203,7 +203,7 @@ function towerClear(ctx: PowerlineContext, x: number, z: number, bearing: number
       if (h < lo) lo = h;
       if (h > hi) hi = h;
       // R31 — and ground the road's own cone is about to move. A tower
-      // spotted on the bare country beside a cutting is a tower the terrain
+      // spotted on the bare land beside a cutting is a tower the terrain
       // then blasts the ground out from under: the cone is the compiler
       // saying in advance where that will happen, and it is the same
       // question a turbine's crane pad asks.
@@ -267,12 +267,12 @@ function spanClears(
 
 // ── The walk ──────────────────────────────────────────────────────────────
 
-/** Where a tower could stand, and what the country there is. */
+/** Where a tower could stand, and what the biome there is. */
 type Spot = { x: number; z: number; y: number };
 
 /** Where the next tower goes along `bearing`: a span between `lo` and `hi`
  * that lands on ground which will take a tower and keeps the wire off the
- * country under it.
+ * biome under it.
  *
  * Which END of the band it starts from is the economics, and the two bands
  * pull opposite ways. Inside the ORDINARY band the longest span wins —
@@ -337,7 +337,7 @@ function walkLine(seed: number, ctx: PowerlineContext, height: number): Pylon[] 
   // on the far side, which is how a real route is defined — the line is
   // fixed as a handful of points and the towers are spotted between them
   // afterwards. Aiming at the exit alone comes out dead straight across
-  // every seed, because nothing in a bare country is a reason to turn: what
+  // every seed, because nothing in a bare land is a reason to turn: what
   // turns a real line is land nobody would sell and places somebody wanted
   // it to pass, and neither of those is on this map. The dice stand in for
   // the surveyor, and the deviation limit still decides what the structure
@@ -361,7 +361,7 @@ function walkLine(seed: number, ctx: PowerlineContext, height: number): Pylon[] 
   survey.push(to);
   let aimAt = 0;
   const target = (): { x: number; z: number } => survey[aimAt];
-  // The first tower: walked in from the rim until the country takes one.
+  // The first tower: walked in from the rim until the land takes one.
   // Its own bearing is the aim, because there is no line behind it yet.
   const x0 = from.x;
   const z0 = from.z;
@@ -417,7 +417,7 @@ function walkLine(seed: number, ctx: PowerlineContext, height: number): Pylon[] 
     const wanted = Math.max(-most, Math.min(most, angleDiff(heading, bearing)));
     // AND WHERE THE LINE CAN GO is the tower's answer, not the survey's.
     // The wanted bearing first, then further and further off it: a span
-    // the country will not close is got round by TURNING, which is what a
+    // the biome will not close is got round by TURNING, which is what a
     // surveyor does with it and the reason a line has angle points at all.
     // Only then does the span stretch — a bend is cheaper than six hundred
     // metres of conductor, and both are cheaper than no line.
@@ -488,8 +488,8 @@ function walkLine(seed: number, ctx: PowerlineContext, height: number): Pylon[] 
 
 // ── The line, laid ────────────────────────────────────────────────────────
 
-/** R45 — lay the transmission line this seed's country carries, if it
- * carries one. Deterministic in the seed, the country and what is already
+/** R45 — lay the transmission line this seed's biome carries, if it
+ * carries one. Deterministic in the seed, the biome and what is already
  * on the map; at most one line, and none at all on a little under half the
  * seeds. Called once per stage, after everything a tower keeps off has
  * been built. */
@@ -590,9 +590,9 @@ export function powerLineSolids(
 }
 
 /** The ground each tower keeps everything else off: a rectangle round its
- * base, square to the crossarm. Not a pad — the country under a tower is
- * the country, and a real one stands on the hillside its legs were cut to
- * fit; flattening a disc under every tower would put a step in the country
+ * base, square to the crossarm. Not a pad — the land under a tower is
+ * the biome, and a real one stands on the hillside its legs were cut to
+ * fit; flattening a disc under every tower would put a step in the biome
  * every three hundred metres. */
 export function powerLineFootprints(
   line: PowerLine,

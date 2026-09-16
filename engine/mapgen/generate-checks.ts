@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // WHAT MAKES A CANDIDATE SEGMENT LEGAL. The sprint search draws a segment,
-// walks it, and asks these: does the line fit the country it is crossing
+// walks it, and asks these: does the line fit the biome it is crossing
 // (R47), does it stay out of the water (R35), does it stand on ground a
 // road can be built on (R23/R34), is it clear of the tarmac it has not
 // turned onto (R17), does a jump on it land on road that is still there
@@ -38,7 +38,7 @@ export function createRouteChecks(deps: {
   network: HighwayNetwork;
   routeClear: number;
   fillScale: number;
-  country: ReturnType<typeof landOf>;
+  biome: ReturnType<typeof landOf>;
   /** R6 — where the last committed jump's lip ended, m along the route.
    * A `let` on the search's side, so it is read through rather than
    * copied: a ford's apron has to clear whatever the walk has committed
@@ -46,10 +46,10 @@ export function createRouteChecks(deps: {
   lastLipEnd: () => number;
 }) {
   const { knobs, land, rolling, groundAt, profile, grade, clear, shelfEnd } = deps;
-  const { network, routeClear, fillScale, country, lastLipEnd } = deps;
-  /** R47 — how much deeper the road may be CUT in this country than the
+  const { network, routeClear, fillScale, biome, lastLipEnd } = deps;
+  /** R47 — how much deeper the road may be CUT in this biome than the
    * hillsides R34 measured its cap on: the flank's own grade against the
-   * tuned country's (`altitudeScale`). A shelf on a face is blasted, and
+   * tuned biome's (`altitudeScale`). A shelf on a face is blasted, and
    * held to a forest road's twenty-four metres the search draws a line
    * across a mountain, is refused it, and walks the pocket until its
    * iterations run out — every candidate on a steep flank asks for a cut
@@ -86,7 +86,7 @@ export function createRouteChecks(deps: {
     p.y === undefined || p.rollS === undefined
       ? 0
       : p.y - rolling(p.rollS) - landUnder(land, p.x, p.z);
-  /** R47 — how badly a candidate FITS the country: the furthest its base
+  /** R47 — how badly a candidate FITS the biome: the furthest its base
    * stands off the land anywhere along it, plus a charge for climbing,
    * because a mountain stage is a road coming down off a mountain and a
    * corner that turns uphill is a corner that turns away from where the
@@ -102,7 +102,7 @@ export function createRouteChecks(deps: {
   /** R12 — A FORD LIES IN ITS VALLEY, and the road dips to it. The water
    * is laid at the bare land's level at the crossing (`fordDip` in
    * compile.ts lays it the same way), and the road comes down to it from
-   * wherever its line was running — on a stage rolling over the country,
+   * wherever its line was running — on a stage rolling over the land,
    * metres up — over an apron as long as that drop needs to stay a ramp.
    * Asked here because the apron has to fit inside the straight, and only
    * the search can draw another straight when it does not.
@@ -280,7 +280,7 @@ export function createRouteChecks(deps: {
   const keepsDry = (p: Cursor): boolean => {
     if (land.nearOpenWater(p.x, p.z, routeClear)) return false;
     // ...and its SURFACE stays over the water beside it. The road's height
-    // follows the country through a lag, and the freeboard it keeps over a
+    // follows the land through a lag, and the freeboard it keeps over a
     // lake is only asked for where the lake is already in view: a road
     // running down into a cutting beside one arrived under the lake's
     // level before the lag had lifted it, and the pour flooded the trench.
@@ -295,7 +295,7 @@ export function createRouteChecks(deps: {
     const level = land.openShoreLevelAt(p.x, p.z);
     if (level !== null && p.y < level + R.water.underLake) return false;
     // ...and where it crosses ice it crosses it LOW. The follower brings
-    // the road down to the country through a lag longer than most lakes are
+    // the road down to the biome through a lag longer than most lakes are
     // wide, so a line that reaches a shore metres up is still up there at
     // the far side — a causeway over a frozen lake, which is the one thing
     // R35 exists to prevent. Refused here, where another line can still be
@@ -311,7 +311,7 @@ export function createRouteChecks(deps: {
     return !points.some((p) => land.nearIce(p.x, p.z, R.ice.cornerClear));
   };
   /** R34 — and it keeps within reach of the ground. A line the road can
-   * only take by standing twenty-odd metres off the country is refused
+   * only take by standing twenty-odd metres off the land is refused
    * here, where another line can still be drawn, rather than left to the
    * terrain — which has no good answer to it. */
   /** R34/R47 — ...and BEFORE that, whether there is ground here a road
@@ -333,10 +333,10 @@ export function createRouteChecks(deps: {
     // surface, the roll's swing tightened them by up to six metres and the
     // search refused thirty times the candidates for it.
     const off = offLand(p);
-    const scale = fillScale * country.earthworks;
+    const scale = fillScale * biome.earthworks;
     return off <= R.elevation.maxFill * scale && -off <= R.elevation.maxCut * scale * cutScale;
   };
-  /** R47 — ...except INSIDE A BORE, where the country standing over the
+  /** R47 — ...except INSIDE A BORE, where the biome standing over the
    * road is the whole point. Everything outside the bore on the same
    * straight — the approach, the portals, the run out of the far one — is
    * held to the cap like any other road. */
@@ -352,7 +352,7 @@ export function createRouteChecks(deps: {
     return sitsOnTheLand(p);
   };
   /** R17 + R23 — AND IT NEVER WANDERS ACROSS THE TARMAC. The sealed roads
-   * were laid across this country before the rally was routed over it, and a
+   * were laid across this biome before the rally was routed over it, and a
    * rally stage does not drive along a public road by accident: it meets one
    * at a junction and runs it, or it goes square over it and away (R36). So
    * the same clearance that keeps two roads apart keeps the gravel off the

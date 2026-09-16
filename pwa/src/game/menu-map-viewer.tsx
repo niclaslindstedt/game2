@@ -6,7 +6,7 @@
 // or shot into the gallery with the boxes painted in. Nothing here helps
 // anybody choose a stage to drive, which is exactly why none of it is on
 // Roam any more: Roam is a stage you are choosing in order to drive it, and
-// a row of layer buttons across the country is a row the country does not
+// a row of layer buttons across the land is a row the land does not
 // get.
 //
 // The two pages share the WINDOW (map-pane.tsx) and the stage list
@@ -27,7 +27,7 @@ import type { RaceSettings } from "./menu.tsx";
 /** THE DEVELOPER'S MAP: the stage's own layers painted over the landscape,
  * and the box that says what the picture is of. Everything here is behind
  * the developer switch — a player choosing a seed to drive is choosing it by
- * LOOKING at the country, and none of this helps them do that. */
+ * LOOKING at the biome, and none of this helps them do that. */
 export type MapDebug = {
   layer: MapLayerId | null;
   onLayer: (layer: MapLayerId | null) => void;
@@ -261,7 +261,7 @@ export function MapViewerPage({
           {/* Everything this page has to say about itself rides the map's
               own header — the way out, the copy mark, which road is under
               the layers, and the seed. A bar above the pane would be a bar
-              taken off the country. */}
+              taken off the map. */}
           <div className="roam-pane-head">
             {/* `data-nav-back` is what a controller's B button presses (see
                 menu-nav.ts). This page does not use MenuHead, so it carries

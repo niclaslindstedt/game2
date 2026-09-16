@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE SHADOW THE COUNTRY THROWS — the march off a heightfield toward the
+// THE SHADOW THE BIOME THROWS — the march off a heightfield toward the
 // sun (mountain-shadow.ts) that says, for every cell round the camera,
 // below what height the ground is in a mountain's shadow. The GPU reads
 // the bytes; this reads the same bytes here — TWO a cell, the shadow at
@@ -23,7 +23,7 @@ function sunFromEast(elevation: number): { x: number; y: number; z: number } {
   return { x: Math.cos(el), y: Math.sin(el), z: 0 };
 }
 
-describe("the country's shadow", () => {
+describe("the biome's shadow", () => {
   it("falls on the far side of a ridge from a low sun, and nowhere from a high one", () => {
     const march = createShadowMarch(ridge, 64, 2400);
     expect(march.focus(0, 0)).toBe(true);

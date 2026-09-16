@@ -35,7 +35,7 @@ import {
 } from "@engine";
 import { stageTerrain, stageTrack } from "./support/stages.ts";
 
-/** A spread wide enough to exercise every facet — three countries, two
+/** A spread wide enough to exercise every facet — three biomes, two
  * shapes, three length bands — and small enough to stay well inside the
  * per-file minute. Taken from the shared corpus, so a stage another suite
  * has already built costs nothing here. */

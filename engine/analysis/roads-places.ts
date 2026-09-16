@@ -4,7 +4,7 @@
 // changes hands (R17), whether the tarmac leads to a town and whether that
 // town's lots stand on the ground it was graded to (R39), whether the
 // crowd could actually drive to the stands it is watching from (R42), and
-// whether the country's wind and solar farms stand where a country would
+// whether the biome's wind and solar farms stand where a biome would
 // put them (R43).
 //
 // Split out of `roads.ts` because it is a different question asked of the
@@ -143,7 +143,7 @@ export function analyzePlaces(track: Track, terrain: TerrainField) {
       // analytic field agrees with a lot's own pad by construction, and a
       // pad narrower than the ground lattice never reaches the drawn
       // ground at all (`lattice.ts`) — which is how a street of houses
-      // came to be hanging over the country while every number about it
+      // came to be hanging over the land while every number about it
       // read clean.
       const off = footingOff(b, terrain);
       if (off > footing) footing = off;
@@ -195,7 +195,7 @@ export function analyzePlaces(track: Track, terrain: TerrainField) {
     }
     // R42 — the finish's own banks are the one crowd that does not have to
     // have found its own way in: the organisers' road and the service area
-    // are there by construction, so a finish the country will not grade a
+    // are there by construction, so a finish the biome will not grade a
     // pad behind keeps its crowd rather than losing it.
     if (stand.finish) continue;
     unserved++;
@@ -316,7 +316,7 @@ export function analyzePlaces(track: Track, terrain: TerrainField) {
     return sample.elevation;
   };
 
-  // ── R43 — DOES THE COUNTRY MAKE POWER WHERE IT SHOULD? ─────────────────
+  // ── R43 — DOES THE BIOME MAKE POWER WHERE IT SHOULD? ─────────────────
   //
   // Every wind farm stands OVER the road it is seen from, every tower off
   // the route by more than a rotor and off every other road; every solar
@@ -378,7 +378,7 @@ export function analyzePlaces(track: Track, terrain: TerrainField) {
     }
     if (farm.rows < 1 || farm.perRow < 1) wrong.push("no tables");
     // A farm laid at the top of a road's cutting shows more fall on the
-    // SHAPED ground than the placer read off the bare country: the tables
+    // SHAPED ground than the placer read off the bare land: the tables
     // follow the ground table by table, so it is a blemish — a farm on a
     // hillside — and not a defect, which is why it is a warning on its own.
     const diagonal = Math.hypot(rect.width, rect.depth);

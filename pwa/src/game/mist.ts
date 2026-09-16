@@ -7,7 +7,7 @@
 // out as a sheet a few metres to a few tens of metres deep that pools in
 // the low ground because cold air runs downhill. It is thickest at dawn,
 // the sun burns it off over the first hour or two of the morning, and in a
-// mountain country it is a whole CLOUD SEA: a pass at six hundred metres
+// mountain biome it is a whole CLOUD SEA: a pass at six hundred metres
 // looks down onto a white floor filling the valley at three, with the
 // peaks standing out of it like islands. An autumn morning has the most of
 // it (long cold nights, damp ground), a summer one the least, and a desert
@@ -44,11 +44,11 @@ const SEASON_MIST: Record<Season, number> = {
   winter: 0.45,
 };
 
-/** How each country's valleys hold it: how deep a sheet lies (as a
+/** How each biome's valleys hold it: how deep a sheet lies (as a
  * fraction of the stage's own relief, between a floor and a ceiling in
  * metres), how soft its top is, and how much of the season's mist the
- * country gets at all. */
-const COUNTRY_MIST: Record<
+ * biome gets at all. */
+const BIOME_MIST: Record<
   BiomeId,
   { share: number; fill: number; least: number; most: number; depth: number }
 > = {
@@ -98,11 +98,11 @@ export function mistFor(conditions: {
   floor: number;
   peak: number;
 }): Mist {
-  const country = COUNTRY_MIST[conditions.biome];
+  const biome = BIOME_MIST[conditions.biome];
   const relief = Math.max(0, conditions.peak - conditions.floor);
   const top =
     conditions.floor +
-    Math.max(country.least, Math.min(country.most, relief * country.fill + country.least));
+    Math.max(biome.least, Math.min(biome.most, relief * biome.fill + biome.least));
   let strength: number;
   if (conditions.weather === "clear") {
     strength = conditions.rising ? morningOf(conditions.sunUp) : eveningOf(conditions.sunUp);
@@ -116,6 +116,6 @@ export function mistFor(conditions: {
   }
   // A desert outside its wet season has no water to make a mist of.
   const dry = conditions.biome === "desert" && !conditions.wet;
-  const density = dry ? 0 : Math.min(1, strength * country.share);
-  return { density, top, depth: country.depth };
+  const density = dry ? 0 : Math.min(1, strength * biome.share);
+  return { density, top, depth: biome.depth };
 }

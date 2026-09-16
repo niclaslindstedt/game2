@@ -4,13 +4,13 @@
 // into `STAGE_RULES` by `rules-book.ts`.
 
 export const GEOLOGY_RULES = {
-  /** R32 — THE GROUND, IN LAYERS. What the country beside the road is made
+  /** R32 — THE GROUND, IN LAYERS. What the land beside the road is made
    * of, laid in the order it was made: rock, then the water in it, then the
    * soil on top. `geology.ts` builds the field; these are its numbers, and
    * every one of them is in meters unless it says otherwise.
    *
    * The single most important number here is `smoothness`. It is drawn per
-   * seed rather than read off a dial, because it says which COUNTRY a stage
+   * seed rather than read off a dial, because it says which BIOME a stage
    * is in — how long the ice sat on it — and that is not a slider anybody
    * was asked about. At the low end the rock stands its mountains high and
    * keeps its fine grain; at the high end it is planed into filled valleys
@@ -19,27 +19,27 @@ export const GEOLOGY_RULES = {
    * is turned past `steep.crease`, which is the one thing that opens a
    * knife-edge or a cliff. */
   geology: {
-    /** How glacially planed a country may be, 0 (alpine) to 1 (shield).
+    /** How glacially planed a biome may be, 0 (alpine) to 1 (shield).
      * Neither end is reached: a stage with no texture at all reads as a
      * heightmap, and one with nothing worn is a set of teeth.
      *
      * The band is what `steepness` moves (see `steep` below); the position
      * INSIDE it is still drawn from the seed, because a stage is set
-     * somewhere and the dial only says which countries the seed may land
+     * somewhere and the dial only says which biomes the seed may land
      * in. This pair is the worn end, held for `steepness` 0. */
     smoothness: { min: 0.5, max: 0.95 },
 
     /** R34 — where the `steepness` dial reaches into the rock.
      *
      * `sharp` is the smoothness band at the top of the dial: the ice barely
-     * touched this country, so it keeps its crests, its fine grain and its
+     * touched this biome, so it keeps its crests, its fine grain and its
      * fault steps as cliffs. Reading between the two bands rather than
      * replacing one number with a dial is what keeps `smoothness` a
      * per-seed property — every dial position still builds a range of
-     * countries, it just builds a different range.
+     * biomes, it just builds a different range.
      *
      * `rise` is the same dial on the SIZE of the relief, because sharp
-     * country does not only hold its slopes steeper, it stands them
+     * biome does not only hold its slopes steeper, it stands them
      * higher: the same escarpment the ice would have worn into a hillside
      * is a hundred-foot step where it did not. */
     steep: {
@@ -51,7 +51,7 @@ export const GEOLOGY_RULES = {
        * crest, the fold of the ridge noise cubed, which is a knife-edge on
        * the 14 m ground lattice; and the escarpment drawn at the narrow
        * end of its span, which is a cliff. They are the sharp things the
-       * country has, and they are opened by this dial and nothing else:
+       * biome has, and they are opened by this dial and nothing else:
        * below `crease` no seed draws either, and above it both grow with
        * the dial AND with how far down the sharp band the seed's
        * smoothness fell, so the top of the dial draws a knife-edge along
@@ -59,7 +59,7 @@ export const GEOLOGY_RULES = {
        * out sharpest. Keyed to the dial rather than to the smoothness
        * alone because the midpoint of the dial reads into the sharp band,
        * and a sharp edge is a thing somebody has to have asked for. The
-       * analysis's `ground.crease` holds the rest of the country to a
+       * analysis's `ground.crease` holds the rest of the biome to a
        * curve, and exempts only what this opened. */
       crease: 0.5,
       /** ...and how much steeper the ground BESIDE THE ROAD is allowed to
@@ -77,20 +77,20 @@ export const GEOLOGY_RULES = {
     grain: { planed: 0.72 },
 
     /** The mountain's height band across the smoothness range: sharp
-     * country stands its crests higher than the shield does, and the two
+     * land stands its crests higher than the shield does, and the two
      * crest SHAPES (the fold cubed, against a parabola over the raw noise)
      * do the rest once `steep.crease` lets the first one in. */
     mountain: { tall: 1.3, planed: 0.5 },
 
     bedrock: {
-      /** The broad swell of the country — the wave a stage crosses two or
+      /** The broad swell of the biome — the wave a stage crosses two or
        * three of. `amp` is peak to trough. */
       swell: { scale: 430, amp: 54 },
       /** Hills riding on it. This is the layer a DRIVER reads: the swell is
        * slower than a stage is long, and the grain is finer than a corner,
        * so a hill you crest and a hollow you drop into is this one and
        * nothing else. It is deliberately short and tall enough to hold a
-       * real grade — a country whose only shape is its swell is the country
+       * real grade — a biome whose only shape is its swell is the biome
        * you can see clean across, which is a rare view even on a plain. */
       hills: {
         scale: 130,
@@ -165,7 +165,7 @@ export const GEOLOGY_RULES = {
      *           at the bottom of a field.
      *
      * `from` is the share of the noise below which no pit forms (so it sets
-     * how much of the country is pitted), `span` how sharp the rim is, and
+     * how much of the biome is pitted), `span` how sharp the rim is, and
      * `depth` how far under the table a fully-formed floor sits.
      *
      * A pit only forms where the water table is ALREADY near the surface:
@@ -178,7 +178,7 @@ export const GEOLOGY_RULES = {
       /** A tarn's rim is a SHORE, not a bank: forty metres across, which
        * is three ground cells and a curve the lattice can draw. At half
        * that span the shore turned over inside two cells and folded 27° at
-       * its top on every tarn in the country. The span is widened INWARD —
+       * its top on every tarn in the biome. The span is widened INWARD —
        * `from` holds, so the footprint of water on the map is unchanged —
        * which puts the floor past where the noise reaches; `depth` is
        * raised to keep the middle of a tarn a lake. */
@@ -186,7 +186,7 @@ export const GEOLOGY_RULES = {
       pool: { scale: 110, from: 0.86, span: 0.09, depth: 4.5 },
       flat: 0.3,
       /** How far above the lake table the ground may stand before pits stop
-       * forming, m. It is a SMALL number on purpose: the country's own datum
+       * forming, m. It is a SMALL number on purpose: the biome's own datum
        * sits only a few metres over the table, so a generous reach makes
        * almost every flat hectare on the map eligible and a wet dial then
        * drowns the lot. Pits belong in the genuinely low ground. */
@@ -209,18 +209,18 @@ export const GEOLOGY_RULES = {
       sharpRim: 20,
     },
 
-    /** R35 — SITING. Where in the country the stage's own origin lands.
+    /** R35 — SITING. Where in the biome the stage's own origin lands.
      *
      * A stage starts at (0, 0) and no search chooses that point: the route
-     * is drawn outward from it. So where the seed's country happens to put
+     * is drawn outward from it. So where the seed's biome happens to put
      * a sea basin there, the start line is in a lake and every metre of
      * road leaving it is an embankment — which is what a stage looked like
-     * on nearly half of all seeds before the country was allowed to move
+     * on nearly half of all seeds before the biome was allowed to move
      * under the stage instead.
      *
-     * It is a SEARCH over the country, not a nudge: the origin walks out
+     * It is a SEARCH over the land, not a nudge: the origin walks out
      * along a spiral until it finds ground standing clear of the water
-     * across the whole footprint a start needs, and the country is read
+     * across the whole footprint a start needs, and the biome is read
      * from there. Deterministic and rng-free, so a seed's landscape is the
      * same landscape it always was — sampled from a spot a stage can start
      * on. */
@@ -234,7 +234,7 @@ export const GEOLOGY_RULES = {
       freeboard: 6,
       /** How far the origin may walk to find such a place, m, and in what
        * steps. A basin is a kilometre or two across, so the walk has to be
-       * able to leave one; past `far` the country has no dry ground worth
+       * able to leave one; past `far` the biome has no dry ground worth
        * the search and the driest spot found is taken. */
       step: 120,
       far: 2600,
@@ -253,7 +253,7 @@ export const GEOLOGY_RULES = {
     soil: {
       /** Deepest the cover ever gets, m. */
       max: 3.2,
-      /** How far below the country's broad shape counts as a full hollow,
+      /** How far below the biome's broad shape counts as a full hollow,
        * m — the depth over which the till gets from thin to deep. */
       hollow: 14,
       /** The patchiness of the cover: its noise scale, and the least of it
@@ -261,14 +261,14 @@ export const GEOLOGY_RULES = {
        * alone. */
       patch: { scale: 210, min: 0.3 },
       /** The band over which the ground thins to bare rock above the
-       * country's treeline (`BiomeLand.zones.treeline`, the height the ice
+       * biome's treeline (`BiomeLand.zones.treeline`, the height the ice
        * or the cold scoured it bare at), m. */
       alpine: { over: 40 },
-      /** How much a glaciated country moves off its highs and into its
+      /** How much a glaciated biome moves off its highs and into its
        * hollows, over and above what slope alone does. */
       glacial: 0.5,
       /** Subtracted from the surface so that adding a soil layer does not
-       * raise the whole country by its own mean depth — the water table
+       * raise the whole biome by its own mean depth — the water table
        * and every number tuned against the old ground stay where they
        * were. Half of `max`, which is roughly what the cover averages. */
       datum: 1.6,

@@ -15,7 +15,7 @@
 //
 // So this is a REFLECTION rather than a picture of one, and everything in
 // it is the stage's own: the sky's two colours this hour, the cloud tone
-// and how much of it there is, the country's ground under the horizon, and
+// and how much of it there is, the biome's ground under the horizon, and
 // the real sun with the real beam behind it (environment.ts writes them,
 // the way it writes the height fog's).
 //
@@ -73,7 +73,7 @@ export const GLASS_SKY = {
   horizon: { x: 0.75, y: 0.85, z: 0.95 } as V3,
   /** The lit face of the cloud in it. */
   cloud: { x: 1, y: 1, z: 1 } as V3,
-  /** The country under that horizon: the open ground, and the band of trees
+  /** The land under that horizon: the open ground, and the band of trees
    * standing on it. Both already washed toward the fog by the distance a
    * reflected horizon is always at. */
   ground: { x: 0.34, y: 0.36, z: 0.31 } as V3,
@@ -85,7 +85,7 @@ export const GLASS_SKY = {
   look: { x: 0.35, y: 0.055, z: 0, w: 0 } as V4,
 };
 
-/** How tall the skyline stands in the glass, per country — the one thing
+/** How tall the skyline stands in the glass, per biome — the one thing
  * about the land the reflection can say cheaply, and the difference between
  * a window in a forest and a window in a desert. A share of the reflected
  * ray's rise, so it is an angle: the taiga is a wall of spruce a few degrees
@@ -234,7 +234,7 @@ vec3 glassWorld( vec3 dir ) {
   // it and a clear one puts a highlight down the whole greenhouse.
   float toward = max( dot( dir, gwSun.xyz ), 0.0 );
   sky += gwSunTone * gwSun.w * ( pow( toward, 60.0 ) + 0.16 * pow( toward, 6.0 ) );
-  // ...AND THE COUNTRY under the horizon: open ground, with a ragged band of
+  // ...AND THE LAND under the horizon: open ground, with a ragged band of
   // trees standing on it. The band's height is read off a lattice walked
   // round the compass, so it is a skyline at a fixed BEARING — it stays put
   // as the car turns, which is the whole point of reflecting anything.

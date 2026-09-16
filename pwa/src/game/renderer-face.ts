@@ -149,8 +149,8 @@ export type GameRenderer = {
    * scripted still needs to come off the same lens every time. */
   pinTvStand: () => void;
   /** OPEN THE AIR to `far` metres — what `?air=` asks for. Moves the three
-   * numbers that decide how much country is on screen together, because
-   * moving one alone does nothing: the fog (or the country fades out), the
+   * numbers that decide how much land is on screen together, because
+   * moving one alone does nothing: the fog (or the biome fades out), the
    * camera's far plane (or it is not drawn at all), and with them the road
    * chunks, which `cull` keeps exactly as far as the fog reaches. 0 puts the
    * driving values back.

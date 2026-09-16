@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE INK a stage preview is drawn in: the ground and road palettes each
-// country is painted from, the tree and house colours, the route's own
+// biome is painted from, the tree and house colours, the route's own
 // magenta, and the two helpers every one of them is mixed and shaded
 // through. `stage-render.mjs` draws with them.
 
 /** The taiga palette, as the picture paints it when nobody hands it a
- * country (`paletteFor` below builds one from the game's own biome table,
+ * biome (`paletteFor` below builds one from the game's own biome table,
  * which is what the preview tools do — the preview is useless if it is not
  * the colours the game paints with). */
 export const TAIGA_GROUND = {
@@ -18,8 +18,8 @@ export const TAIGA_GROUND = {
   shore: [0xc2, 0xa8, 0x78],
   water: [0x2f, 0x86, 0xe0],
   deepWater: [0x1c, 0x5a, 0xa0],
-  /** The snow over a country's snowline — the game's own off-white
-   * (terrain.ts), the one ground every country paints alike. */
+  /** The snow over a biome's snowline — the game's own off-white
+   * (terrain.ts), the one ground every biome paints alike. */
   snow: [0xee, 0xf2, 0xf7],
 };
 
@@ -79,7 +79,7 @@ export const DESERT_TREE = {
   shadow: [0x8a, 0x70, 0x4a],
 };
 
-/** The picture's palette for a country, from the game's own ground table
+/** The picture's palette for a biome, from the game's own ground table
  * (`Biome.ground` in pwa/src/game/biome.ts) — so a preview of a desert
  * stage is sand, and a change to the game's paint reaches the preview
  * without a copy of it here going stale. */

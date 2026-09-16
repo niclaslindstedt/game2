@@ -25,6 +25,6 @@ the trial arm against every trial arm already taken (`bench + drop /
 verge.climb + slack` centreline to centreline, stricter than the
 analysis's `stepFloor`) inside `armCanLeave`, and a corner whose arm would
 stack is not given a junction — the search flips no surface and draws on.
-Over 72 stages across three countries it re-rolled exactly one (the repro),
+Over 72 stages across three biomes it re-rolled exactly one (the repro),
 because the route's line is planned before the compiler decides junctions;
 only that stage's sealed share and heights moved.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE BACKDROP'S DEPTH, which is a seam nothing else can check.
 //
-// The sky is drawn LAST and depth-tested, so the country rejects its pixels
+// The sky is drawn LAST and depth-tested, so the biome rejects its pixels
 // before the dearest fragment shader in the frame runs on them
 // (pwa/src/game/sky-depth.ts). That only holds while three things are true
 // of every piece of it, and all three are silent when broken: the picture
@@ -71,7 +71,7 @@ describe("a backdrop material", () => {
 
   it("sorts after everything the world and the car draw", () => {
     // The opaque pass is walked in renderOrder; the sky has to be the end
-    // of it or the country never gets the chance to reject its pixels.
+    // of it or the biome never gets the chance to reject its pixels.
     // The highest the rest of the app sets is the way-home arrow at 3, and
     // the map view's own layers and route at 9 to 11.
     expect(SKY_ORDER - 3).toBeGreaterThan(11);

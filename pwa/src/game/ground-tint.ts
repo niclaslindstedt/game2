@@ -20,7 +20,7 @@ import { biomeFor } from "./biome.ts";
 import { type DustTint } from "./dust.ts";
 
 /** R40 — DRY GRIT: the loose stuff lying on top of a graded road, which is
- * the country's own (`Biome.grit`): the shield's brown gravel, the sand a
+ * the biome's own (`Biome.grit`): the shield's brown gravel, the sand a
  * desert road is bladed out of — paler, and it hangs in the air as a haze
  * rather than a spray of stones — a mountain's grey chippings. */
 export function grit(biome: BiomeId | string): number {
@@ -60,7 +60,7 @@ export const MUD_CLODS: DustTint = { base: 0x4a3a29, fleck: 0x6d5a43, fleckMix: 
  * of it through the cloud. Lighter than the rock face it comes off, because
  * shattered grit catches the sky where a flat face does not.
  *
- * Both are the COUNTRY's (R40): a desert verge is sand with sand through
+ * Both are the BIOME's (R40): a desert verge is sand with sand through
  * it, and its rock is red. Resolved once per biome and kept, because the
  * renderer asks several times a second and the answer never changes. */
 export type GroundTints = { wild: DustTint; stone: DustTint };
@@ -74,7 +74,7 @@ export function groundTints(biome: BiomeId): GroundTints {
   const ground = look.ground;
   const built: GroundTints = {
     wild: {
-      // A boreal verge is earth with turf through it; a country that
+      // A boreal verge is earth with turf through it; a biome that
       // blades its roads out of SAND has no earth under its verges at all,
       // so there the base is the sand — the same grit the road throws.
       base: biomeRules(biome).loose === "sand" ? look.grit : 0x4a3520,

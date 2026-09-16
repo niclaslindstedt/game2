@@ -1,5 +1,5 @@
 ---
-title: The snow paint's rock windows never fully close above the line — cap the closure PAST 1, or a whole-white country is a mottled one
+title: The snow paint's rock windows never fully close above the line — cap the closure PAST 1, or a whole-white biome is a mottled one
 date: 2026-09-06
 scope: pwa/src/game/terrain.ts, pwa/src/game/ground-rules.ts
 concepts: [snow, paint, seasons, screenshot]
@@ -11,7 +11,7 @@ the height over the snowline in `SNOW.patchFade`, clamped to 1. At 1 the
 expression is `window / 0.22`, so every cell whose noise rolls under 0.22
 stays bare FOREVER — a fifth of the ground, which reads as a ragged margin
 right at the alpine's line and as a dirty, patched snowfield anywhere the
-climate has put the line hundreds of metres under the country. The first
+climate has put the line hundreds of metres under the land. The first
 winter screenshot was exactly that: a white taiga with grey holes in it.
 
 Let `closed` run to 1.4: the windows shut a hundred metres over the line

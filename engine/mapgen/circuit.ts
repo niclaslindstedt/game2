@@ -218,11 +218,11 @@ export function generateCircuit(
   seed: number,
   length: FiniteStageLength,
   knobs: StageKnobs,
-  /** R48 — the cold, which decides which of the country's bodies the ring
+  /** R48 — the cold, which decides which of the biome's bodies the ring
    * may be drawn ACROSS rather than around. */
   climate?: Climate,
 ): SegmentPlan[] {
-  // R35 — the country and its water, poured before the ring is drawn. One
+  // R35 — the biome and its water, poured before the ring is drawn. One
   // field for every attempt: a retry is redrawing the road, not the
   // landscape.
   const land = createLandField(seed, knobs, climate);

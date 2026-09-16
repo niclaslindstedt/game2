@@ -6,12 +6,12 @@ concepts: elevation, junctions, terrain, measurement, road-network
 ---
 
 Two traps, both of which produced numbers nowhere near the ones the rules
-named, when R36 lifted a crossing's platform above the country.
+named, when R36 lifted a crossing's platform above the biome.
 
 **A LEVEL plane makes the step a lottery.** The obvious reading of "the tarmac
 stands `stand` proud" is a horizontal plane at `routeY + stand`. But the route
 arrives on a grade, so the two edges of the platform sit at two different
-heights above the road's own line — and where the country falls faster than
+heights above the road's own line — and where the land falls faster than
 `stand`, the far edge is BELOW it: a hole with a road in it, not a jump.
 Measured over seeds 1-24 a nominal 1 m step came out 2.0-2.9 m with 27-33%
 ramps. Give the plane the route's own slope (base slope PLUS the rate its

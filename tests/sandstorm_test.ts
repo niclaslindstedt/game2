@@ -10,7 +10,7 @@
 //   - the dial says how OFTEN, and the bottom of it says never;
 //   - a front has a haboob's SHAPE — seen coming, then sudden, then a long
 //     settling — because that asymmetry is the whole character of it;
-//   - and it exists only in a country the wind can lift, so no taiga or
+//   - and it exists only in a biome the wind can lift, so no taiga or
 //     alpine run is touched by any of it.
 import { describe, expect, it } from "vitest";
 
@@ -158,7 +158,7 @@ describe("the sandstorm", () => {
   });
 
   it("blows only where the wind can lift the ground", () => {
-    // The flag is the country's, not the country's NAME — a fourth biome
+    // The flag is the biome's, not the biome's NAME — a fourth biome
     // made of sand would blow without anybody coming back here.
     expect(biomeRules("desert").blown).toBe(true);
     for (const biome of ["taiga", "alpine"] as BiomeId[]) {

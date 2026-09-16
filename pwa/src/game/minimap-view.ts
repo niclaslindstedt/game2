@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // WHAT STANDS ON THE MINIMAP — everything that moves, over the schematic
-// the country is drawn as (minimap-scene.ts).
+// the biome is drawn as (minimap-scene.ts).
 //
 // The window travels with the car, so every mark here is a mark that may be
 // off the edge of it, and each one answers that differently:
@@ -85,7 +85,7 @@ export type MinimapNext = { x: number; y: number; edge: boolean; angle: number }
 export type MinimapEnd = { x: number; y: number; kind: "start" | "finish" };
 
 export type HudMinimap = {
-  /** The country around the car, as paths (minimap-scene.ts). */
+  /** The land around the car, as paths (minimap-scene.ts). */
   scene: MinimapScene;
   /** The rivals on the road, in PAINT ORDER: last in the list is drawn last
    * and is therefore the one nothing can cover. The list runs backmarker

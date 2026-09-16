@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE DRIVING SET: the grid, the launch, the speed, the country off the
+// THE DRIVING SET: the grid, the launch, the speed, the biome off the
 // road, the air, the crashes, and every camera the player can drive from.
 // Each scene is one page driven to a moment and photographed there; the
 // harness that opens the page and waits for the moment is

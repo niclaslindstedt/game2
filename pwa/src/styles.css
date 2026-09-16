@@ -161,7 +161,7 @@ body {
      and the row of presses under it takes the same width, so the whole
      right-hand column is this one number. The map is the instrument that is
      read while the road is moving, and at seven rem a schematic of three
-     hundred metres of country was a squiggle: it is sized to be legible at a
+     hundred metres of land was a squiggle: it is sized to be legible at a
      glance rather than to be unobtrusive. */
   --hud-map: clamp(6.24rem, 20.8vmin, 9.75rem);
   /* The glyph buttons' edge: half the map, so the two of them side by side
@@ -2520,7 +2520,7 @@ body {
 }
 
 /* ── The minimap ────────────────────────────────────────────────────────
-   A square of country seen from above in the top-right corner, travelling
+   A square of land seen from above in the top-right corner, travelling
    with the car, and the run's progress read off the FRAME: the border is
    the gauge, filling clockwise from twelve o'clock. The whole plate is the
    button that opens the in-race menu.
@@ -2528,7 +2528,7 @@ body {
    Everything inside is a schematic — the paths are cut in minimap-scene.ts
    and none of it is to scale but the ground. The palette is the one thing
    that makes it readable: warm and pale for the road the run is on, dim
-   white for every other road, cool for water, and the country itself only
+   white for every other road, cool for water, and the land itself only
    ever a tint, so nothing the driver is not driving on competes with the
    ribbon they are.
 
@@ -2571,7 +2571,7 @@ body {
   display: block;
 }
 
-/* The country: scaled for the speedo's zoom and slid to wherever the car
+/* The biome: scaled for the speedo's zoom and slid to wherever the car
    has got since the paths were cut (minimap.tsx's `worldPose`). The origin
    is written into the transform list itself, so this only has to make sure
    nothing else is imposed on it. Tweened at the snapshot's own rate, so the
@@ -2583,7 +2583,7 @@ body {
 }
 
 /* Every stroked road is held OFF the zoom: the window opening up at speed
-   has to mean more country in the frame, not a thinner road in it. The
+   has to mean more biome in the frame, not a thinner road in it. The
    fills scale with the world, because a lake really is a piece of ground
    and a road at this framing really is not — it is three pixels of truth
    drawn five wide so it can be read at all. */
@@ -2598,7 +2598,7 @@ body {
 }
 
 /* The OPENINGS — clearings, bogs, felled blocks, meadows. The plate's own
-   dark ground stands for the closed country around them, which is nearly
+   dark ground stands for the closed land around them, which is nearly
    all of a boreal stage; this is where a car could get through it. A pale
    tint and nothing more: it is the least urgent thing on the map and must
    never compete with a road. */
@@ -2712,7 +2712,7 @@ body {
 }
 
 /* R28 — the split board the run still owes: a ring in the HUD's signal
-   yellow with a halo breathing out of it. Yellow because the country under
+   yellow with a halo breathing out of it. Yellow because the biome under
    it is warm road, dim lanes and cool water and the car on it is red, and
    the mark has to be none of them; a ring because every other glyph that
    moves is solid.
@@ -4287,7 +4287,7 @@ body {
 }
 
 /* The one fact about the table worth reading without opening it: this
-   country has been WON, and the next one is open because of it. */
+   biome has been WON, and the next one is open because of it. */
 .menu-head-act-lit {
   color: var(--hud-good);
   border-color: var(--hud-good);
@@ -4375,11 +4375,11 @@ body {
 
 /* ── Locations and stage boxes ───────────────────────────────────────── */
 
-/* EVERY COUNTRY THE SAME HEIGHT, and the grid is what buys it: `1fr` auto
+/* EVERY BIOME THE SAME HEIGHT, and the grid is what buys it: `1fr` auto
    rows size every row to the tallest one, with no number here to keep in
    step with the rows' contents. It is not tidiness — the banner behind a row
    is cropped to it by `object-fit: cover` off an 8:1 picture, so it is the
-   ROW'S HEIGHT that sets how much of the country a row shows. Rows of
+   ROW'S HEIGHT that sets how much of the biome a row shows. Rows of
    different heights are two banners at two different zooms, panning the same
    pixels over different amounts of ground. */
 .menu-locations {
@@ -4407,15 +4407,15 @@ body {
   /* The rows are all the tallest row's height (see `.menu-locations`), so
      what a shorter row has is space above and below rather than under. */
   justify-content: center;
-  /* The row's own words now sit on a photograph of the country rather than
+  /* The row's own words now sit on a photograph of the biome rather than
      on a flat panel, so they get the shadow back that the rest of the menu
      does without: over a sunlit lake, white text with no edge disappears. */
   text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
 }
 
-/* THE COUNTRY behind a location row. It fills the row and the text sits on
+/* THE BIOME behind a location row. It fills the row and the text sits on
    it, because the campaign page has no height to give a picture a column of
-   its own — and a banner across the top would push the second country off a
+   its own — and a banner across the top would push the second biome off a
    phone held sideways.
 
    Darkened, and that is the whole trick: what the row has to do first is
@@ -4445,7 +4445,7 @@ body {
   max-width: none;
   height: 100%;
   object-fit: cover;
-  /* Cropped off the TOP: the sky is the same blue in both countries and the
+  /* Cropped off the TOP: the sky is the same blue in both biomes and the
      ground is what tells them apart. */
   object-position: 50% 64%;
   filter: brightness(0.72) saturate(1.05);
@@ -4459,7 +4459,7 @@ body {
      makes that load-bearing: `ease-in-out` is near-still at the ends of a
      sweep and quickest through the middle, so two rows offset in the cycle
      are visibly moving at different speeds at every instant, and the page
-     reads as one country panning past a second one that is holding still. */
+     reads as one biome panning past a second one that is holding still. */
   animation: biome-pan 54s ease-in-out infinite alternate;
 }
 
@@ -4476,7 +4476,7 @@ body {
   }
 }
 
-/* Motion is decoration here: the banner says which country this is whether
+/* Motion is decoration here: the banner says which biome this is whether
    or not it moves, so a reader who has asked for less of it loses nothing. */
 @media (prefers-reduced-motion: reduce) {
   .menu-location-shot {
@@ -4490,7 +4490,7 @@ body {
 /* THE SCRIM. The row's words all sit down its left-hand side, and that is
    the half a landscape cannot be trusted in: a sunlit dune and a white name
    are the same colour. So the picture is darkened where the text is and
-   left alone where it is not — which buys the country a brightness a flat
+   left alone where it is not — which buys the biome a brightness a flat
    wash over the whole row could never be given. */
 .menu-location::before {
   content: "";
@@ -4513,7 +4513,7 @@ body {
   z-index: 1;
 }
 
-/* A locked country is still shown, further down: enough to want it, not
+/* A locked biome is still shown, further down: enough to want it, not
    enough to look available. */
 .menu-location-locked .menu-location-shot {
   filter: brightness(0.42) saturate(0.5);
@@ -5694,7 +5694,7 @@ a.menu-version:focus-visible {
    a scroll or a page zoom before the pane sees it.
 
    Stacked on a phone it takes a third of the height and no less: below that
-   the country stops being something you can judge, and the settings under
+   the biome stops being something you can judge, and the settings under
    it scroll on their own rather than eating it. */
 .roam-map {
   position: relative;
@@ -6022,7 +6022,7 @@ a.menu-version:focus-visible {
   /* THE SETTINGS TAKE THE WIDTH HERE, and the map gives it up: a phone held
      sideways has 390 px of height, and one column of rows in it shows four
      of fourteen. Two narrow columns show nine, and a 340 px map is still a
-     country you can judge — where a column you have to scroll four times is
+     biome you can judge — where a column you have to scroll four times is
      not a page anybody reads to the end of. */
   .roam-side {
     width: clamp(17rem, 60vw, 30rem);
@@ -8061,7 +8061,7 @@ a.menu-version:focus-visible {
   color: var(--hud-good);
 }
 
-/* THE LOCKS, one country per row: what the country's board says on the left,
+/* THE LOCKS, one biome per row: what the biome's board says on the left,
    and the two presses that set it on the right. The buttons keep `.menu-item`
    so they are the same target size as every other row on the page — the row
    only takes the width back off the label, which is the one part that can
@@ -9183,7 +9183,7 @@ a.menu-version:focus-visible {
    the gate. The press that tears the points up stands beside the way out
    (`.hud-modal-ways`). */
 
-/* The one gate a padlock cannot teach: a country whose stages are all
+/* The one gate a padlock cannot teach: a biome whose stages are all
    driven still needs its table topped. Only there when it applies, and on
    its own line between the rows and the ways out — it is something to READ,
    where the line under it is something to press. */
@@ -9195,7 +9195,7 @@ a.menu-version:focus-visible {
   opacity: 0.85;
 }
 
-/* A country still behind the table before it: the tile is a wall with the
+/* A biome still behind the table before it: the tile is a wall with the
    reason written on it, not a button. The padlock leads, because it is what
    the eye needs first — the sentence answers the question it raises. */
 .menu-location-locked {

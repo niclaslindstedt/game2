@@ -148,7 +148,7 @@ describe("stage routes", () => {
 });
 
 describe("biome banners", () => {
-  it("ships one for every country the campaign visits", () => {
+  it("ships one for every biome the campaign visits", () => {
     for (const location of LOCATIONS) {
       const file = join(root, `pwa/public/previews/biome-${location.biome}.jpg`);
       expect(existsSync(file), `no banner for ${location.biome} — run \`make biomes\``).toBe(true);
@@ -160,9 +160,9 @@ describe("biome banners", () => {
     }
   });
 
-  it("is a picture of the stage that country STILL opens on", () => {
+  it("is a picture of the stage that biome STILL opens on", () => {
     // The one check that catches a level edit reaching the banners. A banner
-    // is a render of the country's FIRST stage from over its start line, so
+    // is a render of the biome's FIRST stage from over its start line, so
     // re-seeding that stage — or re-banding it, or moving it to another hour
     // or season — makes the picture wrong: a road nobody drives, lit for
     // weather the stage is no longer set in. There is no recomputing a JPEG
@@ -183,7 +183,7 @@ describe("biome banners", () => {
     }
   });
 
-  it("carries no shot for a country the campaign no longer visits", () => {
+  it("carries no shot for a biome the campaign no longer visits", () => {
     const visited = new Set<string>(LOCATIONS.map((l) => l.biome));
     const orphans = Object.keys(BIOME_SHOTS).filter((biome) => !visited.has(biome));
     expect(orphans, `stale banner for ${orphans.join(", ")} — ${REBANNER}`).toEqual([]);

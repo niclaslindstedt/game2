@@ -36,7 +36,7 @@ export function trainingSpec(carId: string): StageSpec {
     length: TRAINING_LEVEL.length,
     shape: "sprint",
     laps: 1,
-    // The dials the arena's own country was built with, so the debug
+    // The dials the arena's own biome was built with, so the debug
     // overlay states the ground that is actually there.
     knobs: { ...DEFAULT_KNOBS, ...ARENA_KNOBS, biome: TRAINING_LOCATION.biome },
     carId,

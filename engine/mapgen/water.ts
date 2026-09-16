@@ -6,7 +6,7 @@
 // world that happened to dip under it was wet. That is a sea, and it is
 // the only body of water such a rule can make. It cannot put a tarn on a
 // shoulder four hundred metres up, because a tarn's surface is nowhere
-// near the sea's; and it has no opinion at all about the country between
+// near the sea's; and it has no opinion at all about the land between
 // them, so a road could be — and routinely was — laid straight across the
 // middle of a lake on an embankment sixty metres tall, because nothing in
 // the pipeline had ever been asked where the water was.
@@ -16,7 +16,7 @@
 //
 //   THE SPILL. A hollow cannot hold water above the lowest point on its
 //   own rim. Found with the standard priority-flood (Barnes, Lehman &
-//   Mulla 2014): walk the country inward from its edge, always from the
+//   Mulla 2014): walk the biome inward from its edge, always from the
 //   lowest ground reached so far, and each cell's sill is the highest one
 //   the walk had to climb to arrive. One pass, no iteration, and exact —
 //   which matters, because a fill that is nearly right leaves a lake with
@@ -33,7 +33,7 @@
 // So a body's surface is the LOWER of the two: filled to its rim if the
 // groundwater would push it higher, and standing at the groundwater if the
 // rim is higher still. Take the spill alone and every enclosed dip in the
-// noise brims to its rim — a country forty per cent under water, with
+// noise brims to its rim — a biome forty per cent under water, with
 // ninety-metre lakes perched on hillsides. Take the table alone and water
 // runs over sills it should have poured through. It needs both.
 //
@@ -132,7 +132,7 @@ export type WaterField = {
  * tightest hollow the geology cuts (`pits.pool`) is a hundred metres
  * across. */
 const CELL = 32;
-/** How much country one cached flood covers, m — world-aligned, so which
+/** How much land one cached flood covers, m — world-aligned, so which
  * block a point falls in never depends on where the stage started. */
 const BLOCK = 1536;
 /** ...and how far past its own edges that flood reaches. The domain's rim
@@ -143,7 +143,7 @@ const BLOCK = 1536;
  * from its middle, not a wave. */
 const MARGIN = 768;
 /** Water shallower than this is not a body of water, it is wet ground, m.
- * A pour on noisy country puddles in every dimple; this is the line under
+ * A pour on noisy biome puddles in every dimple; this is the line under
  * which a dimple drains, soaks away, or simply never reads as water. */
 const MIN_DEPTH = 0.35;
 /** ...and how much ground a body has to cover to be one, m². Below this it
@@ -233,7 +233,7 @@ type Block = {
   bodies: WaterBody[];
 };
 
-/** Pour water over one block's country and let it settle.
+/** Pour water over one block's biome and let it settle.
  *
  * Four passes, and each is doing one clean thing:
  *
@@ -256,7 +256,7 @@ type Block = {
  *   is what decides where it sits.
  *
  *   SIFT. Throw away what is left that is not water — too shallow to see,
- *   too small to matter. Country this fine-grained puddles everywhere, and
+ *   too small to matter. Biome this fine-grained puddles everywhere, and
  *   every one of those puddles would otherwise cost a shoreline. */
 function floodBlock(bx: number, bz: number, sampleAt: GroundSampler): Block {
   const originX = bx * BLOCK - MARGIN;
@@ -404,15 +404,15 @@ function floodBlock(bx: number, bz: number, sampleAt: GroundSampler): Block {
   return { originX, originZ, n, level, body, bodies: kept };
 }
 
-/** The standing water on a country.
+/** The standing water on a biome.
  *
  * It takes the ground and nothing else, which is the whole of its contract:
  * the seed and the dials reach it only through the landscape they shaped,
- * so the same country always holds the same water however it was arrived
+ * so the same biome always holds the same water however it was arrived
  * at. `surfaceAt` is the BARE ground — the landscape before anybody laid a
  * road across it. That is deliberate and it is the whole point of the
  * module's position in the pipeline: the water is worked out from the
- * country alone, so it is already there, at its own levels, by the time
+ * biome alone, so it is already there, at its own levels, by the time
  * anything asks where to put a road. A water table computed from a
  * landscape that has already been shaped around a road is a table that
  * agrees with the road by construction, which is how a stage ends up with

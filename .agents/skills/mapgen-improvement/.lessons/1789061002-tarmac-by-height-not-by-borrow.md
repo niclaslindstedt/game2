@@ -1,5 +1,5 @@
 ---
-title: In a country where the route cannot reach a public road, the asphalt dial has to seal the route ITSELF — the compiler's painted path already does it, by height
+title: In a biome where the route cannot reach a public road, the asphalt dial has to seal the route ITSELF — the compiler's painted path already does it, by height
 date: 2026-09-05
 scope: engine/mapgen/compile.ts, engine/mapgen/generate.ts, engine/mapgen/rules.ts
 concepts: [asphalt, r15, r17, r20, junctions, massif, alpine, paving]
@@ -21,7 +21,7 @@ edge), and the surface flips there. Hand it a height instead of an arc —
 off the dial between the rock line and above the snowline — and a mountain
 stage is tarmac from the valley up to a line and gravel above it, its
 hairpins kept (R20's unseal is the borrowed road's rule). Three things go
-with it: `borrowed` must be false for that country's sprints (it is
+with it: `borrowed` must be false for that biome's sprints (it is
 `!circuit` otherwise, and the painted branch is skipped), the search must
 stop trying to borrow there (`tryBorrow` returns early — every solve was
 being refused anyway), and the band the dial reads onto has to sit where a

@@ -84,7 +84,7 @@ describe("placing a run", () => {
     // on down the road it was stood on, not one respawning off it. The bot
     // and not neutral input, because the claim is that the placed car is
     // DRIVEABLE — not that metre 600 of this seed's stage happens to be
-    // followed by a straight, which is a fact about the country that every
+    // followed by a straight, which is a fact about the biome that every
     // generator change re-rolls.
     const events: GameEvent[] = [];
     for (let i = 0; i < TUNING.physicsHz; i++) events.push(...step(state, botInput(state)));

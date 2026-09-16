@@ -4,7 +4,7 @@
 //
 // The ground goes white by being PAINTED white (terrain.ts reads
 // `snowLie`); everything standing on it cannot, because a tree is one
-// geometry shared by every instance of that tree in the country and a
+// geometry shared by every instance of that tree in the biome and a
 // second, snowed build of it would be a second mesh, a second draw call and
 // a second megabyte per variant — a forest drawn twice to put a white edge
 // on it.
@@ -14,7 +14,7 @@
 // dozen instructions. A face is snowed by how far it looks UP (its world
 // normal's Y) and by how high it stands (its world Y, against the same
 // snowline the ground paint uses) — so the load appears on exactly the
-// faces that would hold it, fades in over the same metres the country
+// faces that would hold it, fades in over the same metres the biome
 // whitens through, and is simply not there in a summer. Nothing new is
 // drawn: the same instanced spruces that stood there in June stand there in
 // January, wearing it.
@@ -22,7 +22,7 @@
 // WHAT IT IS FOR is the other half. A stage whose ground has gone white and
 // whose forest has not is the picture that gives a winter away — black
 // trees on a white field read as a summer forest on a bleached photograph.
-// The load is what makes the country cold.
+// The load is what makes the biome cold.
 //
 // Two things it is deliberately NOT on: anything that MOVES (the cars, the
 // traffic, the crowd, the livestock, the train — they shed it, and a car
@@ -81,9 +81,9 @@ const uSnowCap = { value: new THREE.Vector3(0, SNOW.fade, 0) };
 const uSnowCapColor = { value: SNOW_WHITE };
 
 /** Set the cold every capped material reads: the same snowline the ground
- * paint whitens from (`zonesUnder`, which brings a country's own line down
+ * paint whitens from (`zonesUnder`, which brings a biome's own line down
  * to wherever the climate freezes it), so a tree's foot goes white exactly
- * where the ground it stands on does. A country the climate leaves green
+ * where the ground it stands on does. A biome the climate leaves green
  * has no line and takes no load. */
 export function setSnowCap(knobs: StageKnobs | undefined, climate: Climate): void {
   const zones = zonesUnder(climate, zonesOf(knobs));
@@ -95,7 +95,7 @@ export function setSnowCap(knobs: StageKnobs | undefined, climate: Climate): voi
 }
 
 /** Take the load off — a menu backdrop, a turntable, a preview that stands
- * one item up in no country at all. */
+ * one item up in no biome at all. */
 export function clearSnowCap(): void {
   uSnowCap.value.set(0, SNOW.fade, 0);
 }

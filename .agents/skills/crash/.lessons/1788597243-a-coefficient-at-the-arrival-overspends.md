@@ -8,7 +8,7 @@ concepts: [roll, contacts, friction, coulomb, physics, surfaces]
 The ground's plough (`TUNING.surfaces.plough`, a furrow's friction over the
 shell's own coefficient) was first handed to BOTH rubs — the grounded step's
 `g × dt` budget and the arrival's `grip × descent`. The bench ledger then
-showed +1.6 and +6.2 J/kg on landing steps in sand and open country, and
+showed +1.6 and +6.2 J/kg on landing steps in sand and open land, and
 nothing at all on tarmac. The give was innocent; zeroing the plough alone
 cleared it.
 

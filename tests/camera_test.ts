@@ -10,7 +10,7 @@
 // fall is the whole scenario and needs no physics.
 //
 // ...and, at the bottom, the TRANSIT between two cars (camera-sweep.ts): a
-// spectator changing crew is a jump of hundreds of metres over country that
+// spectator changing crew is a jump of hundreds of metres over biome that
 // is mostly hill, and the one thing a picture can never prove is that the
 // lens did not go THROUGH any of it.
 import * as THREE from "three";

@@ -146,11 +146,11 @@ function board(
 }
 
 /** The path from the pad to a stand: trodden earth on green ground, and a
- * trough pressed into the snow where the country is white (`TRAIL`).
+ * trough pressed into the snow where the land is white (`TRAIL`).
  *
  * `frozen` answers whether the ground at a height is under snow — the same
  * question the planting asks before it puts anything on it
- * (`ground-rules.ts`), so the path turns white exactly where the country
+ * (`ground-rules.ts`), so the path turns white exactly where the biome
  * does and nothing has to be told twice. */
 function buildTrail(
   samples: readonly { x: number; z: number }[],

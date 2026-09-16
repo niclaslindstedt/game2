@@ -126,7 +126,7 @@ describe("stage generator", () => {
         // corners in a row the RALLY may turn the same way; the pieces of a
         // public road the route is running along are a line being tracked,
         // and a gentle bend cut into seventy-metre chunks comes out as
-        // several same-direction turns that in the country are one sweep.
+        // several same-direction turns that in the biome are one sweep.
         if (plan.kind !== "turn" || plan.paved) {
           dir = 0;
           run = 0;
@@ -334,8 +334,8 @@ describe("endless stages", () => {
   it("marks the terrains it built, and never a stub spread over one", () => {
     // What lets a reader cache an answer against the TRACK instead of the
     // field that was asked (`exposureAt` in the bot): two genuine terrains
-    // off one track are one country, so they may share the work — while a
-    // test's own `waterAt` must never be handed the real country's answers.
+    // off one track are one biome, so they may share the work — while a
+    // test's own `waterAt` must never be handed the real biome's answers.
     // A spread is exactly the thing that would defeat a flag or a property,
     // so this asserts a spread does NOT inherit the mark.
     const track = compileStage(11, "short");

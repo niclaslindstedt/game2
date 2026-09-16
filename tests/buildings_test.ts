@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE BUILDINGS' STYLE (R40) — which kind of house a country builds. The
+// THE BUILDINGS' STYLE (R40) — which kind of house a biome builds. The
 // plan is the engine's and the look is the renderer's, and the one field
 // joining them is `style`: a taiga yard gets the Nordic timber house, an
-// alpine yard the chalet, and a country that draws a plan without saying
+// alpine yard the chalet, and a biome that draws a plan without saying
 // which gets the Nordic one.
 import { describe, expect, it } from "vitest";
 
@@ -41,7 +41,7 @@ function plansOn(track: Track): HousePlan[] {
   return out;
 }
 
-/** The first stage in a country with anything built on it — searched for,
+/** The first stage in a biome with anything built on it — searched for,
  * never named, so a re-rolled generator still finds one. */
 function settledStage(biome: "taiga" | "alpine"): Track {
   for (let seed = 1; seed <= 40; seed++) {
@@ -51,8 +51,8 @@ function settledStage(biome: "taiga" | "alpine"): Track {
   throw new Error(`no ${biome} stage in forty seeds has a building on it`);
 }
 
-describe("the house style a country builds (R40)", () => {
-  it("every country names one, and the alpine's is the chalet", () => {
+describe("the house style a biome builds (R40)", () => {
+  it("every biome names one, and the alpine's is the chalet", () => {
     for (const rules of Object.values(BIOMES)) {
       expect(["nordic", "chalet"]).toContain(rules.houses);
     }

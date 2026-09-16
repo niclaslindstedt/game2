@@ -15,7 +15,7 @@
 // walk is clever; from a car at speed a herd reads as a herd if it is
 // spread out, pointing different ways, and not all doing the same thing.
 //
-// The breeds are the country's: the red-and-white Swedish cattle (SRB) and
+// The breeds are the biome's: the red-and-white Swedish cattle (SRB) and
 // the black-and-white Holstein, and a lowland sheep with a dark face.
 
 import * as THREE from "three";

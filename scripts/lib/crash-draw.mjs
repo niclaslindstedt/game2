@@ -216,7 +216,7 @@ export function drawProfile(canvas, run, box, shown) {
   const view = fit(box, { x: a.span, y: u.span }, { x: a.mid, y: u.mid }, 13);
 
   // The ground, traced by the body's own contacts — never a flat line
-  // assumed under a crash that covered eighty metres of country.
+  // assumed under a crash that covered eighty metres of land.
   const floor = run.frames.filter((f) => !f.airborne);
   for (let i = 1; i < floor.length; i++) {
     const p = view.at(floor[i - 1].along, floor[i - 1].ground);

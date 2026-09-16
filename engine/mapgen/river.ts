@@ -58,7 +58,7 @@ import {
   MEANDER,
   MOUTH_REACH,
   MOUTH_RUN,
-  OPEN_COUNTRY,
+  OPEN_LAND,
   POOL_DEPTH,
   POOL_REACH,
   POOL_SLACK,
@@ -257,7 +257,7 @@ function traceCourse(
         z: head.z + across.z * STEP,
         // Above the crossing by a real margin, never above the ground it
         // comes out of — and NEVER BELOW the crossing it feeds. Where the
-        // country around a ford is lower than the water the road was built
+        // land around a ford is lower than the water the road was built
         // for, there is no uphill to put a spring on, and forcing one there
         // inverts the course: the downhill pass that closes the trace then
         // drags every crossing down to the false source, and the water ends
@@ -529,7 +529,7 @@ function traceCourse(
         endsAt = "water";
         break;
       }
-      // ...or it has left the country the stage occupies, which is the
+      // ...or it has left the land the stage occupies, which is the
       // other honest way to end: where it goes after that is nobody's
       // business, exactly as it is for a road that runs off the map (R17).
       if (d > MOUTH_RUN.min && bounds && offMap(bounds, x, z)) {
@@ -586,7 +586,7 @@ export function traceRivers(
   anchors: RiverAnchor[],
   field: Field,
   standingAt: StandingWater,
-  roadClear: RoadClear = OPEN_COUNTRY,
+  roadClear: RoadClear = OPEN_LAND,
   bounds?: WorldBounds,
 ): River[] {
   if (anchors.length === 0) return [];

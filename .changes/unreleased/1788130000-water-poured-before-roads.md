@@ -16,7 +16,7 @@ eleventh of the route ran over ground under the water table, on a causeway
 sixty-three metres tall, with the start line itself in the middle of a lake.
 Seventeen seeds in forty started in water.
 
-The water is now worked out from the bare country first, by physics. Rain
+The water is now worked out from the bare land first, by physics. Rain
 runs downhill and collects: a priority flood finds the sill each hollow
 would spill over, the groundwater says how much of it is really wet, and a
 body's surface is the lower of the two. Every lake and tarn gets its own

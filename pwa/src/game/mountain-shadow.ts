@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE SHADOW THE COUNTRY THROWS — where a low sun does not reach because
+// THE SHADOW THE BIOME THROWS — where a low sun does not reach because
 // a mountain is in the way.
 //
 // The stage is lit by one directional light, and a slope facing away from
@@ -67,7 +67,7 @@ export type ShadowMarch = {
   /** The ceiling at a world point, m — the nearest cell's, on the NEAR
    * half, which is where the shadow stood when the pair was last laid. */
   ceilingAt: (x: number, z: number) => number;
-  /** Whether `(x, y, z)` is in the shadow of the country. */
+  /** Whether `(x, y, z)` is in the shadow of the biome. */
   shadowed: (x: number, y: number, z: number) => boolean;
 };
 

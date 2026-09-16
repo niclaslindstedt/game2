@@ -87,7 +87,7 @@ describe("the mirror's pace ladder", () => {
     const bottom = MIRROR_TIERS[MIRROR_TIERS.length - 1];
     expect(pace.tier()).toBe(bottom);
     // The bottom rung is the one that hands frames back to the FORWARD pass
-    // (a shorter mirror frustum is less country the world cull has to keep),
+    // (a shorter mirror frustum is less biome the world cull has to keep),
     // so it has to actually be shorter.
     expect(bottom.range).toBeLessThan(MIRROR_TIERS[0].range);
   });

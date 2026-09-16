@@ -21,7 +21,7 @@ them near a lip).
 Blend the whole profile by the same `f` the crown uses — `profileOf(s) +
 (profileOf(next) − profileOf(s)) · f` — and do the same in
 `terrain.corridorGround`, whose `ribbonY` off the nearest sample had the same
-sawtooth: the road and the country have to agree at the verge line to a
+sawtooth: the road and the biome have to agree at the verge line to a
 centimetre (`tests/ground_test.ts` holds them there on a graded stage), or
 crossing that line is a step the car drops down.
 

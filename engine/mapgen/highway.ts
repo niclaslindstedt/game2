@@ -10,7 +10,7 @@
 // junction, wanders, and stops in a field, because it was never a road.
 //
 // So this module runs FIRST, on nothing but the seed, the dials and the
-// bare country. It lays whole roads across the map, edge to edge, steering
+// bare land. It lays whole roads across the map, edge to edge, steering
 // round the lakes — and because they are built from edge to edge, a tarmac
 // road leading somewhere is a property of the construction rather than
 // something a later check has to hope for.
@@ -85,7 +85,7 @@ export const HIGHWAY: LineRules = {
    * the player can drive is cut from this line. */
   overrun: 320,
   /** Radius the line never turns tighter than, m. A public road through
-   * open country bends; it does not corner. */
+   * open land bends; it does not corner. */
   minRadius: 220,
   /** ...and how often it redraws that bend, m. Short enough that a
    * kilometre of road is several bends and not one, which is what R38 asks
@@ -104,7 +104,7 @@ export const HIGHWAY: LineRules = {
    * did, and what that produces is not a gently wandering road but a ruled
    * line with an occasional kink in it. The floor puts the loosest bend at
    * a 550 m radius and the tightest at the road's own minimum — which is
-   * the country lane this is meant to be, and, since both are inside R38's
+   * the biome lane this is meant to be, and, since both are inside R38's
    * `straightRun.bend`, a road with corners on it for a rally to borrow. */
   wander: { min: 0.4, max: 1 },
   /** How hard it may steer back onto its bearing once it has gone round
@@ -114,13 +114,13 @@ export const HIGHWAY: LineRules = {
    * at parity can it always straighten the road out again, and a road that
    * cannot straighten out never reaches the far rim. */
   correction: 1,
-  /** How many entry points a road may try before the country is judged not
+  /** How many entry points a road may try before the biome is judged not
    * to carry one there. */
   tries: 40,
 };
 
 /** R41 — how a RAILWAY is laid. The same walk, with a railway's numbers: a
- * single track through forest country holds a curve a rally road would
+ * single track through forest land holds a curve a rally road would
  * call a straight, so it bends at radii of half a kilometre and up, redraws
  * its bend rarely, and where a lake is in the way it goes round on a sweep
  * rather than a dodge — and where it cannot, there is no railway on this
@@ -134,7 +134,7 @@ export const RAILWAY: LineRules = {
   // It sees the water further off than a road does and goes round it on
   // a curve a branch line would actually have — held to a main line's
   // radius it was refused by the water on five attempts in six, and a
-  // country whose lakes refuse every railway is a country with none.
+  // biome whose lakes refuse every railway is a biome with none.
   shoreLook: 300,
   shoreFreeboard: 2,
   avoidRadius: 95,
@@ -219,12 +219,12 @@ export type HighwayNetwork = {
   ) => HighwayHit | null;
 };
 
-/** How many sealed roads a stage's country carries.
+/** How many sealed roads a stage's biome carries.
  *
  * The `asphalt` dial is the share of the ROUTE that comes out paved (R15),
  * and the only way the route can buy a metre of it is to be driving on one
- * of these — so the dial has to move the COUNTRY, not just the surface. A
- * rally that meets a public road twice in a stage is in country with
+ * of these — so the dial has to move the BIOME, not just the surface. A
+ * rally that meets a public road twice in a stage is in biome with
  * several of them; one that never meets one is out in the back of beyond.
  * Measured over seeds 1-24 at medium with a fixed single road, the dial did
  * nothing at all past its floor: 11% of the road came out sealed at 0.15
@@ -232,26 +232,26 @@ export type HighwayNetwork = {
  *
  * But the count is NOT where the dial spends, and it was measured twice
  * before that was believed. The route may not CROSS a public road (R17), so
- * every road laid partitions the country the search has left — and a medium
+ * every road laid partitions the biome the search has left — and a medium
  * stage is four kilometres of road inside a three-kilometre map. Two roads
  * across one and seed 15 could not be generated at any sub-seed or any dial
  * position; the sealed share it bought on the seeds that did generate went
  * DOWN, from 8.9% to 5.8%, because the search spends its retries getting
  * round the roads instead of onto them.
  *
- * So the count grows with the COUNTRY alone: one road crosses a sprint's
+ * So the count grows with the BIOME alone: one road crosses a sprint's
  * map, a long stage's has room for two. The land still has the final say —
  * `layHighways` refuses a road it will not carry, and R23 keeps two of them
  * apart — so a seed can come out with fewer, or with none, and roughly half
  * of them do.
  *
- * What that leaves is a dial with a CEILING the country sets, and it is
+ * What that leaves is a dial with a CEILING the biome sets, and it is
  * worth stating plainly because it is a real change: measured over eight
  * long stages, `asphalt` buys nothing at 0, about 6% of the road at 0.1 and
  * about 10% at 0.25, and past that the map runs out — there is only so far
  * a rally can drive down one public road inside a bounded world before R9
- * puts it outside. The dial asks; the country answers. */
-/** R47 — the grade past which a line in a mountain country turns away
+ * puts it outside. The dial asks; the biome answers. */
+/** R47 — the grade past which a line in a mountain biome turns away
  * from the flank ahead, m per m, and how far ahead it reads it. A shade
  * over a road's own follow grade at the alpine's multiplier. */
 const CONTOUR_GRADE = 0.1;
@@ -259,7 +259,7 @@ const CONTOUR_LOOK = 110;
 
 export function highwayCount(knobs: StageKnobs, worldBound: number): number {
   if (knobs.asphalt < R.paving.floor) return 0;
-  // R47 — a mountain country's public road IS the pass the stage runs
+  // R47 — a mountain biome's public road IS the pass the stage runs
   // down, sealed by height in the compiler; a second road contouring the
   // flank was an obstacle along the one line the route needed (a third of
   // a slow seed's refusals) and was joined once in a hundred tries.
@@ -268,7 +268,7 @@ export function highwayCount(knobs: StageKnobs, worldBound: number): number {
 }
 
 /** Lay the tarmac for a seed. Deterministic in the seed, the dials and the
- * country — and in nothing else, so every consumer that rebuilds the
+ * biome — and in nothing else, so every consumer that rebuilds the
  * network gets the same roads. */
 export function layHighways(
   seed: number,
@@ -281,11 +281,11 @@ export function layHighways(
 ): Highway[] {
   const roads: Highway[] = [];
   const count = highwayCount(knobs, worldBound);
-  // R47 — a road in a mountain country contours.
+  // R47 — a road in a mountain biome contours.
   const contour = biomeRules(knobs.biome).land.massif !== null;
   for (let i = 0; i < count; i++) {
     // Several entries tried per road, because where a road can be laid is
-    // the country's decision: a rim point out in a sea basin, or a line
+    // the biome's decision: a rim point out in a sea basin, or a line
     // that runs into a lake it cannot get round, is not a road worth
     // building, and the answer is to try somewhere else rather than to
     // build it anyway.
@@ -310,7 +310,7 @@ export function layHighways(
   return roads;
 }
 
-/** R41 — lay the RAILWAY for a seed, in a country that carries one: at
+/** R41 — lay the RAILWAY for a seed, in a biome that carries one: at
  * most a single line, on `rail.chance` of the seeds, walked the way a road
  * is and held off every road already laid. Nothing to do with the
  * `asphalt` dial — a railway is not tarmac and the rally never drives it —
@@ -318,7 +318,7 @@ export function layHighways(
  *
  * `width` is the ROUTE's, as it is for a road: the R24 start clearance is
  * measured in it, and the formation's own width is the railway's
- * (`rail.line.width`). Deterministic in the seed, the dials and the country,
+ * (`rail.line.width`). Deterministic in the seed, the dials and the biome,
  * for `layHighways`'s reason. */
 export function layRailways(
   seed: number,
@@ -337,7 +337,7 @@ export function layRailways(
   // they run the same way, and a railway is not allowed to cross the road
   // (`layOne`'s R23 keep): entered anywhere on the rim it was refused on
   // three seeds in four. So where there is a road, the railway sets out
-  // from the same side of the country as the road did — the way a line
+  // from the same side of the biome as the road did — the way a line
   // and a road share a valley — and the dice spread it either side of that.
   // The spread is wide enough that the two are never simply parallel.
   const road = standing[0];
@@ -354,7 +354,7 @@ export function layRailways(
       RAILWAY,
       "rail",
       aim,
-      // R47 — a railway in a mountain country runs up the valley.
+      // R47 — a railway in a mountain biome runs up the valley.
       biomeRules(knobs.biome).land.massif !== null,
     );
     if (line) {
@@ -366,7 +366,7 @@ export function layRailways(
 }
 
 /** One road, walked from an entry on the map's rim to wherever it leaves.
- * Returns null where the country would not carry one — a rim point in a
+ * Returns null where the biome would not carry one — a rim point in a
  * lake, or a walk that never got clear — rather than laying a road that
  * stops. */
 function layOne(
@@ -380,7 +380,7 @@ function layOne(
   /** Where on the rim to enter, radians, and how far either side of it the
    * dice may put the entry. Unset, anywhere on the rim. */
   aim?: { entry: number; spread: number },
-  /** R47 — whether the line CONTOURS: in a mountain country a railway
+  /** R47 — whether the line CONTOURS: in a mountain biome a railway
    * turns away from a flank it cannot climb as it turns away from water,
    * and runs up the valley instead of over the crest. */
   contour = false,
@@ -388,7 +388,7 @@ function layOne(
   const rng = createRng(seed);
   const reach = worldBound + HIGHWAY.overrun;
   // Enter on one side of the rim and aim across the map, so the road is a
-  // road THROUGH the country rather than a line clipping a corner of it.
+  // road THROUGH the biome rather than a line clipping a corner of it.
   // The aim wanders as it goes; what this fixes is only which way it set
   // out.
   const entry = aim ? aim.entry + rng.range(-aim.spread, aim.spread) : rng.range(0, Math.PI * 2);
@@ -397,7 +397,7 @@ function layOne(
   // A road goes somewhere, so it is steered at a PLACE — the point on the
   // far rim it is headed for — rather than along a bearing. The difference
   // shows the first time it has to go round a lake: a bearing takes it out
-  // of the country and leaves it there, because the correction that brings
+  // of the biome and leaves it there, because the correction that brings
   // it back is aiming it the way it was already pointing. Offset off the
   // exact diameter so it does not run through the middle of every seed's
   // map, but not so far that it clips a corner instead of crossing.
@@ -417,7 +417,7 @@ function layOne(
   const points: HighwayPoint[] = [];
   const limit = Math.ceil((4 * reach) / HIGHWAY.step);
 
-  /** The lowest the bare country gets above the water table along a bearing
+  /** The lowest the bare land gets above the water table along a bearing
    * inside the look-ahead, m. Negative is a lake in the way. */
   const clearance = (bearing: number): number => {
     const sin = Math.sin(bearing);
@@ -430,7 +430,7 @@ function layOne(
     return worst;
   };
 
-  /** R47 — how steeply the country climbs or falls along a bearing over
+  /** R47 — how steeply the land climbs or falls along a bearing over
    * the next `CONTOUR_LOOK` metres, m per m. */
   const climbAhead = (bearing: number): number => {
     const here = land.heightAt(x, z);
@@ -445,13 +445,13 @@ function layOne(
   for (let i = 0; i < limit; i++) {
     points.push({ x, z, heading, s: i * HIGHWAY.step });
     if (Math.hypot(x, z) <= worldBound) entered = true;
-    // Out the far side: the road has crossed the country and left it. Only
+    // Out the far side: the road has crossed the biome and left it. Only
     // once it has been IN it — the walk starts out on the rim, so a first
     // step that bends outward would otherwise finish the road before it
     // reached the map at all.
     if (entered && Math.hypot(x, z) > reach) break;
     // The shore. A public road goes ROUND a lake — and it bends harder
-    // doing it than it ever does in open country, which is why the dodge
+    // doing it than it ever does in open land, which is why the dodge
     // has a radius of its own: at the sweeping radius a road holds across a
     // field it cannot turn away from water it can already see, and the
     // whole line gets thrown away for a lake it should have skirted.
@@ -474,9 +474,9 @@ function layOne(
       z += Math.cos(heading) * HIGHWAY.step;
       continue;
     }
-    // R47 — THE FLANK. In a mountain country the line goes round a
+    // R47 — THE FLANK. In a mountain biome the line goes round a
     // hillside it could not be built up, the way it goes round a lake:
-    // where the country ahead climbs or falls faster than a line can
+    // where the biome ahead climbs or falls faster than a line can
     // follow it, swing toward the bearing that climbs least. A railway in
     // the Alps runs up the valley floor; one that ran at its aim over the
     // crest was a wall forty metres tall through the mountain.
@@ -517,7 +517,7 @@ function layOne(
     z += Math.cos(heading) * HIGHWAY.step;
   }
 
-  // A road that never got out of the country is not a road: better no
+  // A road that never got out of the land is not a road: better no
   // tarmac on a seed than tarmac that stops in a field.
   const last = points[points.length - 1];
   if (!last || !entered || Math.hypot(last.x, last.z) <= worldBound) return null;
@@ -535,8 +535,8 @@ function layOne(
   // kilometres. It threw away roads that were nowhere near the water:
   // measured over seeds 1-24 at medium it vetoed 24 to 40 of every road's
   // 40 entry attempts on the wet ones, and four seeds — 2, 4, 8 and 19 —
-  // ended up with no public road anywhere in the country, which is a
-  // country with no civilization in it and, since R15's dial can only spend
+  // ended up with no public road anywhere in the biome, which is a
+  // biome with no civilization in it and, since R15's dial can only spend
   // on a road that exists, a stage that is gravel however far the dial is
   // turned up.
   //
@@ -583,7 +583,7 @@ function layOne(
     if (Math.hypot(p.x, p.z - along) < startClear) return null;
   }
   // R23 — and two public roads do not run into each other out in the
-  // country either. A crossroads is a place somebody built; two lines that
+  // land either. A crossroads is a place somebody built; two lines that
   // happen to touch is not. Nor does a railway cross a road: a level
   // crossing on the public road is a place too, and not one that is built.
   const keep = 4 * width;
@@ -624,7 +624,7 @@ export function createHighwayNetwork(roads: Highway[]): HighwayNetwork {
    *
    * The search asks `nearest` of every probe point of every candidate it
    * draws — over a million queries on a medium stage — and nearly all of
-   * them are out in country with no road in reach, where the ring walk has
+   * them are out in biome with no road in reach, where the ring walk has
    * no first hit to bound itself with and sweeps its whole radius for an
    * answer of "nothing". This turns that case into one set lookup. */
   const inReach = new Set<number>();

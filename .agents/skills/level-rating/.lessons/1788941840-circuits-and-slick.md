@@ -18,8 +18,8 @@ three laps is 282 m of climbing.
 **`slick` is the ROAD's surface grip, not the weather** (`slickness()` in
 character.ts reads `TUNING.surfaces.grip` times each sample's `bite`). Rain
 does not raise it. The `slide` demand row leans on `slick` at 0.9, so in a
-country whose only slick surface is snow or ice, taking WINTER away caps the
+biome whose only slick surface is snow or ice, taking WINTER away caps the
 sideways car's demand structurally — a snow-free taiga tops out near 46%
 slide however narrow, unsealed and enclosed the road is made. Do not chase a
-slide target in such a country; either accept the ceiling or note that the
-country is not that car's.
+slide target in such a biome; either accept the ceiling or note that the
+biome is not that car's.

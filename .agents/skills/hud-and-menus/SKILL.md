@@ -59,8 +59,8 @@ a drift's drama) load `game-feel`; for the developer surfaces, `debug-tools`.
 | The ROW every settings surface is built from | `menu-knobs.tsx` — mark, name, value, two arrows, pips; the pause card, options and Roam all share it |
 | A player option | `settings.ts`, then its reader; offered on `menu-options.tsx` only if a PLAYER needs it — the rest stay code knobs |
 | Campaign stages, locations, points, unlocks | `campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location |
-| The stage boxes and the country step | `menu-levels.tsx` (shared by all three grids) + `LocationList`; the HEADS UP page is `menu-headsup.tsx` |
-| The campaign's stage/country previews | `stage-preview.ts` (road as an SVG path, country as a file name), both BUILT AHEAD by `make previews` (`scripts/stage-routes.mjs` → `stage-routes.ts`, `scripts/biome-preview.mjs` → `pwa/public/previews/biome-<id>.jpg`) |
+| The stage boxes and the biome step   | `menu-levels.tsx` (shared by all three grids) + `LocationList`; the HEADS UP page is `menu-headsup.tsx` |
+| The campaign's stage/biome previews   | `stage-preview.ts` (road as an SVG path, biome as a file name), both BUILT AHEAD by `make previews` (`scripts/stage-routes.mjs` → `stage-routes.ts`, `scripts/biome-preview.mjs` → `pwa/public/previews/biome-<id>.jpg`)   |
 | The location's table, drawn | `results-table.tsx` — behind the location head's STANDINGS press |
 | How hard the game is, as a control | `DifficultyPicker` in `menu.tsx` (three cards, green-amber-red) over the meter glyphs |
 | The campaign's stages offered elsewhere | `StagePicker` in `menu-levels.tsx` over `App.tsx`'s `loadRoamLevel`; `levelForRoad` says which is loaded |
@@ -93,7 +93,7 @@ Everything above is under `pwa/src/game/` unless a path says otherwise.
   `botInput` under the drone camera while a menu page is up, and holds it
   under the map camera on Roam. A menu that stops driving is a bug, not a
   saving.
-- **A campaign level or country edited in `campaign.ts` owes a
+- **A campaign level or biome edited in `campaign.ts` owes a
   `make previews`** — the boxes and banners are generator OUTPUT.
 
 ## The loop

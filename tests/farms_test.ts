@@ -2,7 +2,7 @@
 // R37 — THE FARMS: the homesteads that are a barn, a paddock, a field and
 // the machinery as well as a house. The house's own rules are held by
 // `homesteads_test.ts`; these hold what a farm adds — that some homesteads
-// are one in a farmed country and none are anywhere else, that the barn is
+// are one in a farmed biome and none are anywhere else, that the barn is
 // bigger than the house and stands across the yard from it, that the
 // paddock and the field keep off every road and out of the water, that the
 // fence goes right round with a gate in it, that everything a car can hit
@@ -56,7 +56,7 @@ function routeDistance(track: Track, x: number, z: number): number {
 }
 
 describe("farms (R37)", () => {
-  it("makes some homesteads farms in a farmed country, and none in one that is not", () => {
+  it("makes some homesteads farms in a farmed biome, and none in one that is not", () => {
     const all = farms();
     let homes = 0;
     for (const seed of SEEDS) homes += stage(seed).homesteads.length;

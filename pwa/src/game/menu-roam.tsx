@@ -38,7 +38,7 @@
 // and it owns everything that is about reading a stage rather than choosing
 // one: the generator's layers, the debug copy, the shutter. None of that is
 // offered here, and that is the point — a player picking a seed to drive is
-// not served by a row of layer buttons across the country.
+// not served by a row of layer buttons across the land.
 
 import { levelForRoad, type CampaignLevel, type CampaignProgress } from "./campaign.ts";
 import { HOURS, daylightAt, hourOfStop, hourStop } from "./daylight.ts";
@@ -102,7 +102,7 @@ type RoamProps = {
 
 /** WHICH MARK EACH GENERATOR DIAL LEADS WITH, keyed by the knob it moves.
  * The dial's three stops name themselves (FLAT, ROLLING, ALPINE); the mark
- * is what says which part of the country they are naming, at a glance
+ * is what says which part of the biome they are naming, at a glance
  * across five of them. */
 const DIAL_GLYPHS: Record<string, GlyphName> = {
   elevation: "mountain",
@@ -207,7 +207,7 @@ export function RoamPage({
               track and wants travel under it. It stands over the two
               columns rather than in one of them because it reaches into
               BOTH: it moves the corner vocabulary and the jumps of the
-              left-hand column and the country's relief of the right — and
+              left-hand column and the biome's relief of the right — and
               the road's width, which is why there is no ROAD row under
               LAND any more. Two controls over one number is a fight nobody
               wins.
@@ -319,14 +319,14 @@ export function RoamPage({
               </KnobGroup>
 
               {/* The sky over it: the hour, what is coming down, and what
-                  the country is dressed in. Only the weathers the COUNTRY
+                  the biome is dressed in. Only the weathers the BIOME
                   actually gets are offered (R40), which is why moving that
                   dial can take this one with it. */}
               <KnobGroup title="SKY" glyph="sun">
                 {/* THE HOUR the stage starts at, on a clock — and the sun
                     moves from there at an hour a minute, so a stage set at
                     sunset is driven into the dark. What 16:00 LOOKS like is
-                    the season's and the country's to say (daylight.ts): a
+                    the season's and the biome's to say (daylight.ts): a
                     taiga winter afternoon is night by then, and the mark on
                     the row says which before the map does. */}
                 <StepRow
@@ -349,7 +349,7 @@ export function RoamPage({
                 />
                 {/* The season reaches the ground (a winter is snow on the
                     road and a blanket beside it), and the season decides
-                    what weathers the country has — the desert rains in its
+                    what weathers the biome has — the desert rains in its
                     winter — so moving it can take the row above with it.
                     It also hands the TEMPERATURE fader back to the season's
                     own air, which is the only way back to AUTO once the
@@ -374,8 +374,8 @@ export function RoamPage({
                 />
                 {/* THE COLD, at the valley floor — the air gets colder with
                     height from here (climate.ts). It stands at the season's
-                    own in this country until it is moved: under freezing the
-                    loose road is snow, the country lies under it, and the
+                    own in this biome until it is moved: under freezing the
+                    loose road is snow, the land lies under it, and the
                     rain above turns to flakes. Around zero the road glazes;
                     at -5 the lakes go over and the route may cross them;
                     deep cold bites. Settled, because every degree either
@@ -394,7 +394,7 @@ export function RoamPage({
                   settle
                   onChange={(air) => onRace({ ...race, temperature: air })}
                 />
-                {/* R40 — HOW OFTEN THE SAND COMES. Only over a country whose
+                {/* R40 — HOW OFTEN THE SAND COMES. Only over a biome whose
                     wind picks the ground up and carries it, which today is
                     the desert and nowhere else — a gale through a rooted
                     forest is a gale and nothing more.
@@ -423,15 +423,15 @@ export function RoamPage({
             </div>
 
             <div className="roam-knob-col">
-              {/* THE COUNTRY, and the generator's dials over it: what the
+              {/* THE BIOME, and the generator's dials over it: what the
                   seed BUILDS, with the map redrawing the moment one moves.
                   R40 leads, because every dial under it is read against it
                   — ALPINE is one thing in the taiga and another in the
-                  desert — and because a country has its own weathers, so
+                  desert — and because a biome has its own weathers, so
                   moving it can take the sky's second row with it. */}
               <KnobGroup title="LAND" glyph="mountain">
                 <StepRow
-                  label="COUNTRY"
+                  label="BIOME"
                   glyph="globe"
                   stops={BIOME_OPTIONS}
                   value={race.knobs.biome}
@@ -451,7 +451,7 @@ export function RoamPage({
                     MEASUREMENT — a number of metres, running from a worn
                     shoulder to six thousand — and three named stops on a
                     span like that would each be a different game. It only
-                    appears over a country that HAS a mountain (R47),
+                    appears over a biome that HAS a mountain (R47),
                     which today is the alpine and nowhere else.
 
                     It reads in METRES rather than as a position, because
@@ -459,7 +459,7 @@ export function RoamPage({
                     that high over a valley floor that stays where it is,
                     so the number is also how far there is to fall off the
                     side of it. And it SETTLES, like the two sliders over
-                    the map: every position is a different country, and a
+                    the map: every position is a different biome, and a
                     drag across the track would build twenty of them. */}
                 {hasAltitude(race.knobs.biome) && (
                   <FadeRow
@@ -476,16 +476,16 @@ export function RoamPage({
                   />
                 )}
                 {/* R40 — HOW HIGH THE SAND STANDS, and the LAND column's
-                    other measurement row. Only over a country the wind has
+                    other measurement row. Only over a biome the wind has
                     piled any (`BiomeLand.dunes`).
 
                     Metres, and a MAXIMUM: what a full-grown dune stands
                     over the trough beside it where the erg is deepest, with
-                    most of the country lower and the pans between the ergs
+                    most of the biome lower and the pans between the ergs
                     carrying none. The bottom of the travel is a desert
                     stripped to its rock; the top is the Empty Quarter. It
                     SETTLES, because every position of it is a different
-                    country and a drag across the track would build fifty. */}
+                    biome and a drag across the track would build fifty. */}
                 {hasDunes(race.knobs.biome) && (
                   <FadeRow
                     label="DUNES"

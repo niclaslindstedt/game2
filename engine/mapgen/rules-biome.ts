@@ -2,7 +2,7 @@
 // THE DIALS READ. Every rule in the book is a fixed number or a band; these
 // are the functions that turn a dial position into the number a rule is
 // actually applied at — the difficulty multiplier and its skew (R46), the
-// altitude scale a mountain country is built at (R47), the country row the
+// altitude scale a mountain biome is built at (R47), the biome row the
 // dials leave behind (`landOf`), and the road's own width, relief, grade and
 // lag. Everything downstream asks HERE rather than reading a band and
 // scaling it itself, so a dial means the same thing everywhere.
@@ -31,14 +31,14 @@ export function challengeMul(challenge: number, band: { easy: number; hard: numb
     : 1 + ((mid - challenge) / mid) * (band.easy - 1);
 }
 
-/** R47 — the ALTITUDE dial as a MULTIPLIER on a mountain country's crest
+/** R47 — the ALTITUDE dial as a MULTIPLIER on a mountain biome's crest
  * height (`STAGE_RULES.massif.altitude`). `challengeMul`'s shape, read
  * GEOMETRICALLY rather than linearly: the dial's default hands back
- * exactly 1 — so the country the alpine's row was written for is the
- * country an un-dialled seed still gets — and each end is approached by a
+ * exactly 1 — so the biome the alpine's row was written for is the
+ * biome an un-dialled seed still gets — and each end is approached by a
  * constant RATIO per notch of travel rather than a constant number of
  * metres. That is what a dial spanning forty-six times its own bottom
- * needs: read linearly, the whole of the low country would live in the
+ * needs: read linearly, the whole of the low biome would live in the
  * first two per cent of the thumb's travel and every position after it
  * would be a mountain.
  *
@@ -86,9 +86,9 @@ export function roadWidthOf(knobs: StageKnobs): number {
   return Math.min(R.roadWidth.max, Math.max(R.roadWidth.min, width));
 }
 
-/** R34/R46 — how high the country stands its relief, as the DIALS decide
+/** R34/R46 — how high the land stands its relief, as the DIALS decide
  * it: the `elevation` knob over its band, and what the difficulty dial
- * makes of that. The country's own share (`BiomeLand.relief`) is the
+ * makes of that. The biome's own share (`BiomeLand.relief`) is the
  * caller's to multiply in — a desert is a worn place whatever either dial
  * says. */
 export function reliefOf(knobs: StageKnobs): number {
@@ -98,14 +98,14 @@ export function reliefOf(knobs: StageKnobs): number {
   );
 }
 
-/** R47 — THE COUNTRY AT THIS ALTITUDE: the biome's own land row with
+/** R47 — THE BIOME AT THIS ALTITUDE: the biome's own land row with
  * everything the ALTITUDE dial reaches already read onto it, so that
  * every side of the world — the geology that builds the rock, the search
  * that lays the road on it, the compiler, the terrain, the paint, the
- * planting and the audio — asks one function how high this country stands
+ * planting and the audio — asks one function how high this land stands
  * and gets one answer. A caller reading `biomeRules(knobs.biome).land`
- * directly is reading the country the row was WRITTEN for rather than the
- * one the dial built, which is the same country only at the dial's
+ * directly is reading the biome the row was WRITTEN for rather than the
+ * one the dial built, which is the same biome only at the dial's
  * default.
  *
  * Four things move together, and they have to: the crest's HEIGHT, the
@@ -114,7 +114,7 @@ export function reliefOf(knobs: StageKnobs): number {
  * read (more slowly still, so a taller mountain has more of itself above
  * the treeline rather than being a taller picture of the same one), and
  * the EARTHWORKS a road may be built on, which track the flank's grade
- * because that is what a cut is paying for. A country with no massif has
+ * because that is what a cut is paying for. A biome with no massif has
  * no altitude to dial and is handed back untouched.
  *
  * Memoized on the two dials it reads, because the paint asks it per
@@ -127,7 +127,7 @@ const LAND_CACHE = new Map<string, BiomeLand>();
  * a caller that re-derives `Math.pow(mul, …)` for itself is a caller that
  * will still be raising the old exponent after somebody moves it.
  *
- * A country with no massif has no altitude to dial, and every factor is 1.
+ * A biome with no massif has no altitude to dial, and every factor is 1.
  */
 export type AltitudeScale = {
   /** The crest's HEIGHT over its valley floor. The dial itself. */
@@ -146,16 +146,16 @@ export type AltitudeScale = {
   /** HOW FAR THE SUMMIT HAS BEEN CUT INTO A SHELF, 0 (the flank the row
    * describes, running to a point) to 1 (a ledge across the top with the
    * mountain falling away either side of it). 0 at and below the dial's
-   * default, so the tuned country is untouched. */
+   * default, so the tuned biome is untouched. */
   shelf: number;
-  /** R47 — HOW HIGH THE COUNTRY ITSELF STANDS, m above the sea. The half
+  /** R47 — HOW HIGH THE LAND ITSELF STANDS, m above the sea. The half
    * of the dial's travel that is NOT relief inside the stage's box: the
    * bands, the air and what the slider prints all read it, and no geometry
    * does. See `massif.altitude.reliefCap` for why the travel splits. */
   base: number;
   /** What is left of the massif's flank after the valley floor has taken
    * its share (`BiomeLand.massif.valley`), as a fraction of the tuned
-   * country's: under 1, so the same ridge holds a wider floor and a
+   * biome's: under 1, so the same ridge holds a wider floor and a
    * narrower — and therefore steeper again — flank. */
   flank: number;
 };
@@ -169,7 +169,7 @@ export function altitudeScale(knobs: StageKnobs): AltitudeScale {
   // R47 — THE DIAL'S TRAVEL SPLITS. Everything the slider prints is still
   // `altitudeMul`; what changes is where it goes. Up to `reliefCap` it is
   // RELIEF — the massif's own amplitude inside the stage's box — and past
-  // that it lifts the whole country instead, as metres above the sea that
+  // that it lifts the whole biome instead, as metres above the sea that
   // no geometry ever reads.
   const full = altitudeMul(knobs.altitude);
   const height = Math.min(full, A.reliefCap);
@@ -194,22 +194,22 @@ export function altitudeScale(knobs: StageKnobs): AltitudeScale {
   };
 }
 
-/** R40/R47 — THE COUNTRY THE DIALS BUILT: the biome's own land row with
+/** R40/R47 — THE BIOME THE DIALS BUILT: the biome's own land row with
  * everything the ALTITUDE and DUNE dials reach already read onto it, so
  * that every side of the world — the geology that builds the rock, the
  * search that lays the road on it, the compiler, the terrain, the paint,
- * the planting and the audio — asks one function what this country is and
+ * the planting and the audio — asks one function what this biome is and
  * gets one answer. A caller reading `biomeRules(knobs.biome).land`
- * directly is reading the country the row was WRITTEN for rather than the
- * one the dials built, which is the same country only at their defaults.
+ * directly is reading the biome the row was WRITTEN for rather than the
+ * one the dials built, which is the same biome only at their defaults.
  *
  * Five things move together under the ALTITUDE dial, and they have to: the
  * crest's HEIGHT, the GROUND it stands on, how hard the flank is BENT
- * about that crest, how much of the country between the ridges is VALLEY
+ * about that crest, how much of the land between the ridges is VALLEY
  * FLOOR, and the elevation BANDS the paint and the planting read.
  * `massif.altitude` says what each of them is worth and why. The DUNE dial
  * moves the sand the same way and for the same reason (`dunesAt`). A
- * country with neither a massif nor sand is handed back untouched, and so
+ * biome with neither a massif nor sand is handed back untouched, and so
  * is one whose dials are both at rest.
  *
  * `earthworks` is deliberately NOT among them. A shelf road on a face is
@@ -231,22 +231,22 @@ export function landOf(knobs: StageKnobs): BiomeLand {
   const dunes = dunesAt(land.dunes, knobs.dunes);
   // Any dial at rest hands the ROW ITSELF back, not a copy of it built out
   // of multiplications by one: `1 - (1 - 0.3) * 1` is 0.30000000000000004,
-  // and a country that differs from its own row in the last bit of a float
-  // is a country whose seeds differ from the ones the game shipped.
+  // and a biome that differs from its own row in the last bit of a float
+  // is a biome whose seeds differ from the ones the game shipped.
   if (A.height === 1 && A.base === 0 && dunes === land.dunes) return land;
   const key = `${knobs.biome}|${knobs.altitude}|${knobs.dunes}`;
   const had = LAND_CACHE.get(key);
   if (had) return had;
   const Z = land.zones;
-  // A country is RAISED when the altitude dial moved either half of its
+  // A biome is RAISED when the altitude dial moved either half of its
   // travel — the crest's own height, or the datum under it. A dune dial
   // alone moves neither, so a desert never rebuilds a massif it has not got.
   const raised = M !== null && (A.height !== 1 || A.base !== 0);
-  // R47 — the bands are ABSOLUTE lines the country is then raised THROUGH.
+  // R47 — the bands are ABSOLUTE lines the biome is then raised THROUGH.
   // `bands` stretches the row's treeline, rock line and snowline up to
   // where the real Alps put them, and the base is subtracted off, so what
   // the rest of the engine reads is each line as a height in the stage's
-  // own coordinates. A country standing above its own snowline gets a
+  // own coordinates. A biome standing above its own snowline gets a
   // NEGATIVE line, which is the correct answer and reads as "all of it is
   // above the snow" everywhere the lines are compared against ground.
   const line = (v: number): number => v * A.bands - A.base;
@@ -276,7 +276,7 @@ export function landOf(knobs: StageKnobs): BiomeLand {
 
 /** R40 — THE DUNE FIELD AT THIS POSITION OF THE DUNE DIAL. The row itself
  * at the dial's rest, so a desert seed nobody has dialled is the desert the
- * row describes; null at the bottom, because a country with no sand in it
+ * row describes; null at the bottom, because a biome with no sand in it
  * has no dune field rather than a flat one; and otherwise the same field
  * built at a new size — the height the dial asks for, with the period
  * across the wind and the erg it lies in grown under `dunes.spread` so the
@@ -288,7 +288,7 @@ export function landOf(knobs: StageKnobs): BiomeLand {
 function dunesAt(row: BiomeLand["dunes"], dial: number): BiomeLand["dunes"] {
   if (row === null) return null;
   // The rest position hands the ROW back on the DIAL, not on the metres it
-  // reads onto: `100 * 0.22` is 22.000000000000004, so a country compared
+  // reads onto: `100 * 0.22` is 22.000000000000004, so a biome compared
   // on its height would rebuild itself out of a ratio of one and differ
   // from its own row in the last bit of a float.
   if (dial === DEFAULT_KNOBS.dunes) return row;
@@ -306,8 +306,8 @@ function dunesAt(row: BiomeLand["dunes"], dial: number): BiomeLand["dunes"] {
 
 /** R40 — ...and HOW HIGH THE SAND STANDS, m: what the DUNE row prints, and
  * the one number the dial is really about. A full-grown dune over the
- * trough beside it, where the erg is deepest — most of the country is
- * lower. 0 in a country the wind has never had sand to pile in, which is
+ * trough beside it, where the erg is deepest — most of the biome is
+ * lower. 0 in a biome the wind has never had sand to pile in, which is
  * what "there are no dunes here" reads as on a row that is not offered
  * there anyway. */
 export function duneHeightOf(knobs: StageKnobs): number {
@@ -319,33 +319,33 @@ export function duneHeightOf(knobs: StageKnobs): number {
  * What the ALTITUDE row prints, and the one number the dial is really
  * about. The massif's own amplitude read through `massif.altitude.summit`,
  * which is the measured distance between that figure and the ground the
- * country actually stands at once its relief, its rise and the swell and
- * hills on top of it are in. 0 in a country with no massif, which is what
+ * biome actually stands at once its relief, its rise and the swell and
+ * hills on top of it are in. 0 in a biome with no massif, which is what
  * "there is no mountain here" reads as on a row that is not offered there
  * anyway. */
 export function altitudeOf(knobs: StageKnobs): number {
   const M = landOf(knobs).massif;
   if (M === null) return 0;
-  // R47 — the country's own height above the sea, plus the mountain
+  // R47 — the land's own height above the sea, plus the mountain
   // standing on it. Below the relief cap the base is 0 and this is exactly
   // the crest over the valley floor, as it always was.
   return altitudeScale(knobs).base + M.height * STAGE_RULES.massif.altitude.summit;
 }
 
-/** R47 — how fast the air cools with height in this country, °C per metre.
+/** R47 — how fast the air cools with height in this biome, °C per metre.
  * The climate's own rate at the dial's default, divided by the same factor
  * the elevation bands were multiplied by: the freezing line is a height
- * like the treeline and the snowline are, and a country whose bands have
+ * like the treeline and the snowline are, and a biome whose bands have
  * been stretched up a mountain with its frost line left where it was is a
- * country whose road is snow a long way under its own snowline. Scaling
+ * biome whose road is snow a long way under its own snowline. Scaling
  * them together is what keeps a cold dial meaning the same thing at every
  * position of this one. */
 export function lapseOf(knobs: StageKnobs, base: number): number {
   return base / altitudeScale(knobs).bands;
 }
 
-/** R34/R47 — the grade the road may follow the country at in this
- * country: the rule book's, times the biome's own multiplier. Stated once
+/** R34/R47 — the grade the road may follow the land at in this
+ * biome: the rule book's, times the biome's own multiplier. Stated once
  * because two walks read it — the compiler's, which builds the road, and
  * the search's, which judges the line — and a road judged at one grade
  * and built at another is a road that stands off the land it was passed
@@ -354,16 +354,16 @@ export function followGradeOf(knobs: StageKnobs): number {
   return STAGE_RULES.elevation.follow.grade * biomeRules(knobs.biome).land.grade;
 }
 
-/** R34/R40 — ...and HOW FAR BEHIND THE COUNTRY the road is allowed to run
+/** R34/R40 — ...and HOW FAR BEHIND THE BIOME the road is allowed to run
  * in it, m (`BiomeLand.lag`). Stated beside the grade and read by the same
  * two walks for the same reason: the road the search judges and the road
  * the compiler builds have to be one road, and a trial that smooths the
- * country over a different window from the build is a trial that accepts
+ * biome over a different window from the build is a trial that accepts
  * lines the build cannot lay.
  *
  * It is the lag rather than the grade that decides whether a road RIDES a
  * landscape — the filter levels away anything shorter than its window, so
- * a country whose shape is finer than the lag arrives at the road as a
+ * a biome whose shape is finer than the lag arrives at the road as a
  * flat. The two are tuned together (`BiomeLand.lag`). */
 export function followLagOf(knobs: StageKnobs): number {
   return STAGE_RULES.elevation.follow.lag * biomeRules(knobs.biome).land.lag;
@@ -375,14 +375,14 @@ export function followLagOf(knobs: StageKnobs): number {
  * climbs; and the magnitude is how much height it is willing to trade for
  * level ground to put a grid on.
  *
- * The country's own appetite (`BiomeLand.startHigh` — a mountain stage
+ * The biome's own appetite (`BiomeLand.startHigh` — a mountain stage
  * comes down a mountain, R47) plus the TILT dial's, clamped to the travel.
- * At the middle of the dial a country that does not start high gets
+ * At the middle of the dial a biome that does not start high gets
  * exactly zero, which is R35's plain spiral and the site every seed has
  * always had. */
 export function siteBiasOf(knobs: StageKnobs): number {
-  const country = biomeRules(knobs.biome).land.startHigh ? 1 : 0;
-  const bias = country + (knobs.tilt - 0.5) * 2;
+  const high = biomeRules(knobs.biome).land.startHigh ? 1 : 0;
+  const bias = high + (knobs.tilt - 0.5) * 2;
   return bias < -1 ? -1 : bias > 1 ? 1 : bias;
 }
 

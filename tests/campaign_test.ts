@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // R29/R30 — THE CAMPAIGN, PLAYED FOR POINTS: three for a stage win, two for
-// second, one for third, the next STAGE behind a podium and the next COUNTRY
+// second, one for third, the next STAGE behind a podium and the next BIOME
 // behind the table those points build.
 //
 // Six things are worth a guard here, and every one of them is a lock that
-// fails SILENTLY — either it hands a player a country they did not earn, or
+// fails SILENTLY — either it hands a player a biome they did not earn, or
 // it takes one they did:
 //
 //   * AN EMPTY TABLE THE PLAYER LEADS. Nobody has scored, everybody is on
@@ -17,7 +17,7 @@
 //     so the order has to be the times — with the crews who never made the
 //     line behind everybody who did.
 //   * A LADDER THAT LEAKS. The stage after this one is a podium away; the
-//     COUNTRY after this one is the whole table away, and the results card
+//     BIOME after this one is the whole table away, and the results card
 //     must not offer what the campaign menu locks.
 //   * A SETTLE THAT NEVER SETTLES. The stragglers are run home off the
 //     results card's frames, so a bot that is never coming home has to be
@@ -288,23 +288,23 @@ describe("the developer's locks", () => {
   const cleared = (location: (typeof LOCATIONS)[number], progress = loadProgress()): number =>
     location.levels.filter((level) => levelCleared(progress, level.id)).length;
 
-  it("opens the ladder as far as the country pressed, and no further", () => {
+  it("opens the ladder as far as the biome pressed, and no further", () => {
     const progress = unlockLocation(LOCATIONS[1].id);
-    // The ladder is a prefix: a country is only reachable once the one
+    // The ladder is a prefix: a biome is only reachable once the one
     // before it has been won, so opening the second opens the first with it.
     expect(cleared(LOCATIONS[0], progress)).toBe(LOCATIONS[0].levels.length);
     expect(cleared(LOCATIONS[1], progress)).toBe(LOCATIONS[1].levels.length);
     expect(locationWon(LOCATIONS[1], progress)).toBe(true);
     expect(locationUnlocked(LOCATIONS[1], progress)).toBe(true);
-    // ...and stops there. The country in front is untouched: its door is
-    // open, because winning a country is what opens the next one, but not a
+    // ...and stops there. The biome in front is untouched: its door is
+    // open, because winning a biome is what opens the next one, but not a
     // stage of it has been driven and it is nobody's win yet.
     expect(cleared(LOCATIONS[2], progress)).toBe(0);
     expect(locationWon(LOCATIONS[2], progress)).toBe(false);
     expect(levelUnlocked(LOCATIONS[2], 1, progress)).toBe(false);
   });
 
-  it("shuts the country pressed and everything in front of it", () => {
+  it("shuts the biome pressed and everything in front of it", () => {
     unlockEverything();
     const progress = lockLocation(LOCATIONS[1].id);
     expect(cleared(LOCATIONS[0], progress)).toBe(LOCATIONS[0].levels.length);
@@ -314,7 +314,7 @@ describe("the developer's locks", () => {
     expect(locationUnlocked(LOCATIONS[2], progress)).toBe(false);
   });
 
-  it("takes the finish line with it, so a country the ladder no longer reaches shuts to the clock too", () => {
+  it("takes the finish line with it, so a biome the ladder no longer reaches shuts to the clock too", () => {
     // A stage merely un-scored stays open to the clock forever (`resetPoints`
     // keeps it that way on purpose, because a finish line cannot be un-seen).
     // A LOCKED one must not: the whole point is a save that reads as never
@@ -324,7 +324,7 @@ describe("the developer's locks", () => {
     const progress = lockLocation(LOCATIONS[1].id);
     expect(levelCompleted(LOCATIONS[2].levels[0], progress)).toBe(false);
     expect(timeTrialOpen(LOCATIONS[2], progress)).toBe(false);
-    // The country pressed is still REACHED — the ladder stops at it rather
+    // The biome pressed is still REACHED — the ladder stops at it rather
     // than short of it — so the campaign and the clock both still offer it.
     expect(timeTrialOpen(LOCATIONS[1], progress)).toBe(true);
   });
@@ -346,7 +346,7 @@ describe("the developer's locks", () => {
       expect(locationWon(location, progress)).toBe(false);
       expect(locationUnlocked(location, progress)).toBe(location === LOCATIONS[0]);
     }
-    // The first stage of the first country is always open — the ladder has
+    // The first stage of the first biome is always open — the ladder has
     // to have a way in.
     expect(levelUnlocked(LOCATIONS[0], 0, progress)).toBe(true);
     expect(levelUnlocked(LOCATIONS[0], 1, progress)).toBe(false);
@@ -430,7 +430,7 @@ describe("a save from before the campaign kept the points", () => {
   });
 });
 
-describe("the ladder out of a country", () => {
+describe("the ladder out of a biome", () => {
   beforeEach(() => {
     stubStorage();
   });
@@ -450,7 +450,7 @@ describe("the ladder out of a country", () => {
     expect(first.kind === "next" && first.level.id).toBe(TAIGA.levels[1].id);
 
     // The last stage of the last location: there is nothing after it, won or
-    // not. A location with a country behind it answers "locked" instead —
+    // not. A location with a biome behind it answers "locked" instead —
     // see the crossing test below.
     const last = TAIGA.levels[TAIGA.levels.length - 1];
     const after = ladderAfter(last.id, progress);
@@ -532,7 +532,7 @@ describe("the stage's classification", () => {
 describe("the alps (R47)", () => {
   const ALPINE = LOCATIONS[2];
 
-  it("is the third country, with the same six rungs as the first", () => {
+  it("is the third biome, with the same six rungs as the first", () => {
     expect(ALPINE.biome).toBe("alpine");
     expect(ALPINE.levels).toHaveLength(TAIGA.levels.length);
     expect(ALPINE.levels.map((l) => l.length)).toEqual(TAIGA.levels.map((l) => l.length));
@@ -541,7 +541,7 @@ describe("the alps (R47)", () => {
     );
   });
 
-  it("is built high, in its own country and its own sky, and its sprints come down", () => {
+  it("is built high, in its own biome and its own sky, and its sprints come down", () => {
     const offered = biomeRules("alpine").weathers;
     const snow = biomeRules("alpine").land.zones.snow as number;
     for (const level of ALPINE.levels) {
@@ -562,7 +562,7 @@ describe("the alps (R47)", () => {
         expect(track.samples[0].elevation - last).toBeGreaterThan(40);
       }
       // Snow on the road somewhere on every stage but the one that comes
-      // right down: the country's own surface.
+      // right down: the biome's own surface.
       expect(track.samples.some((s) => s.surface === "snow")).toBe(true);
     }
   });
@@ -571,7 +571,7 @@ describe("the alps (R47)", () => {
 describe("the desert (R40)", () => {
   const DESERT = LOCATIONS[1];
 
-  it("is the second country, with the same six rungs as the first", () => {
+  it("is the second biome, with the same six rungs as the first", () => {
     expect(DESERT.biome).toBe("desert");
     expect(DESERT.levels).toHaveLength(TAIGA.levels.length);
     expect(DESERT.levels.map((l) => l.length)).toEqual(TAIGA.levels.map((l) => l.length));
@@ -580,15 +580,15 @@ describe("the desert (R40)", () => {
     );
   });
 
-  it("is built on the rule book's defaults in its own country, and only its own sky", () => {
+  it("is built on the rule book's defaults in its own biome, and only its own sky", () => {
     const offered = biomeRules("desert").weathers;
     for (const level of DESERT.levels) {
       const knobs = campaignKnobs(level);
       expect(knobs.biome).toBe("desert");
       expect({ ...knobs, biome: "taiga" }).toEqual(DEFAULT_KNOBS);
       expect(offered).toContain(level.weather);
-      // No water on any of them — the country guarantees it, and a level
-      // is the country's stage and nothing else.
+      // No water on any of them — the biome guarantees it, and a level
+      // is the biome's stage and nothing else.
       const track = compileStage(level.seed, level.length, knobs, level.shape ?? "sprint", {
         season: level.season,
       });
@@ -621,14 +621,14 @@ describe("the desert (R40)", () => {
   });
 });
 
-describe("the time trial's country gate", () => {
+describe("the time trial's biome gate", () => {
   const DESERT = LOCATIONS[1];
 
   beforeEach(() => {
     stubStorage();
   });
 
-  it("opens the whole first country before a metre has been driven", () => {
+  it("opens the whole first biome before a metre has been driven", () => {
     // The point of the rule: a fresh save can put a clock on any of the six
     // taiga roads without podiuming down the ladder to reach them.
     const progress = loadProgress();
@@ -636,10 +636,10 @@ describe("the time trial's country gate", () => {
     for (const level of TAIGA.levels) expect(levelCompleted(level, progress)).toBe(false);
   });
 
-  it("holds the next country behind the table, exactly as the campaign does", () => {
+  it("holds the next biome behind the table, exactly as the campaign does", () => {
     expect(timeTrialOpen(DESERT, loadProgress())).toBe(false);
     // Driving all six is not enough while somebody else is top of the table:
-    // the trial skips the LADDER inside a country and never the countries.
+    // the trial skips the LADDER inside a biome and never the biomes.
     driveLocation(2);
     expect(locationComplete(TAIGA, loadProgress())).toBe(true);
     expect(timeTrialOpen(DESERT, loadProgress())).toBe(false);
@@ -648,18 +648,18 @@ describe("the time trial's country gate", () => {
     expect(timeTrialOpen(DESERT, loadProgress())).toBe(true);
   });
 
-  it("keeps a country whose finish line has been seen, whatever the board does", () => {
+  it("keeps a biome whose finish line has been seen, whatever the board does", () => {
     driveLocation(1);
     recordFinish(DESERT.levels[0].id, 100, { place: 9, difficulty: "medium" });
     // Tearing the taiga's points up shuts the desert in the CAMPAIGN — and a
     // road already driven to the line cannot be un-driven, so the clock keeps
-    // the country it was already being offered.
+    // the biome it was already being offered.
     resetPoints(TAIGA.id);
     expect(locationUnlocked(DESERT, loadProgress())).toBe(false);
     expect(timeTrialOpen(DESERT, loadProgress())).toBe(true);
   });
 
-  it("counts a country by the times on it, since every stage is open", () => {
+  it("counts a biome by the times on it, since every stage is open", () => {
     expect(stagesTimed(TAIGA, loadProgress())).toBe(0);
     recordFinish(TAIGA.levels[3].id, 100, null);
     expect(stagesTimed(TAIGA, loadProgress())).toBe(1);

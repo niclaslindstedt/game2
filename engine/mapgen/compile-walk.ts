@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE CURSOR AND WHAT IT CARRIES. One compile is a walk down the segment
 // plan, and this is the state that walk owns: where it stands, the bare
-// country under it (R34's follow, at the road's own grade and lag), the
+// biome under it (R34's follow, at the road's own grade and lag), the
 // public network it may meet, the road's pristine heights and widths
 // before any junction warped them, and the ledgers of what it has met so
 // far. Everything else about compiling a stage is a question asked of
@@ -22,11 +22,11 @@ export type Walk = ReturnType<typeof createWalk>;
 
 export function createWalk(track: Track, rolling: (s: number) => number, followsLand: boolean) {
   const cursor: Cursor = { x: 0, z: 0, heading: 0, s: 0, rollS: 0, baseY: 0, baseSlope: 0 };
-  /** The bare country the stage is laid across — the branches steer by it
+  /** The bare land the stage is laid across — the branches steer by it
    * so none of them drives out into a lake (R17), and (R34) the road's own
    * height follows it. */
   const land = createLandField(track.seed, track.knobs, track.climate);
-  // R40 — what an unsealed sample of this country is made of, and whether
+  // R40 — what an unsealed sample of this biome is made of, and whether
   // anybody lives in it.
   const biome = biomeRules(track.knobs.biome);
   const loose = biome.loose;
@@ -39,24 +39,24 @@ export function createWalk(track: Track, rolling: (s: number) => number, follows
   /** R34 — one step of the road builder's eye: move the road's base toward
    * the ground under it, but no faster than the eye smooths and no steeper
    * than anything will drive. What comes out is a road that runs along the
-   * country and cuts or fills where the country will not have it.
+   * biome and cuts or fills where the biome will not have it.
    *
    * Exponential rather than linear so the response length means the same
    * thing whatever the step is, and clamped after rather than before, so
    * the clamp is a property of the ROAD and the lag a property of the eye
    * — two rules, not one number doing both jobs badly.
    *
-   * R40 — and BOTH are the country's (`followLagOf`, `followGradeOf`),
-   * because the eye is a different man in a different country: a surveyor
+   * R40 — and BOTH are the biome's (`followLagOf`, `followGradeOf`),
+   * because the eye is a different man in a different biome: a surveyor
    * running a graded line across the taiga, a bulldozer following the sand
    * across the desert. They move together, and `BiomeLand.lag` says why. */
   const F = R.elevation.follow;
-  /** R40/R47 — the steepest the road runs in this country, and how far
-   * behind the country it may run: the pair that decides whether it rides
+  /** R40/R47 — the steepest the road runs in this biome, and how far
+   * behind the biome it may run: the pair that decides whether it rides
    * the landscape or is planed through it. */
   const grade = followGradeOf(track.knobs);
   const lag = followLagOf(track.knobs);
-  /** R47 — the country's zones, for the snowline the road goes under —
+  /** R47 — the biome's zones, for the snowline the road goes under —
    * and the line itself, which the climate may bring down (climate.ts). */
   const zones = landOf(track.knobs).zones;
   const snowline = snowlineOf(track.climate, zones);
@@ -108,8 +108,8 @@ export function createWalk(track: Track, rolling: (s: number) => number, follows
   const bareBank: number[] = [];
 
   /** Junctions found in this pass, waiting for their branches. The branch
-   * has to run until it is clear of the stage's country (R17), and how big
-   * that country is is only known once the road it belongs to is
+   * has to run until it is clear of the stage's biome (R17), and how big
+   * that biome is is only known once the road it belongs to is
    * compiled — so the junction is noted here and the road built below. */
   type Junction = {
     /** Where the two roads MEET: a point on the route's own centerline,
@@ -138,7 +138,7 @@ export function createWalk(track: Track, rolling: (s: number) => number, follows
    * the way the junctions wait for their branches. */
   const railMeets: { crossing: RailCrossing; road: Highway; slope: number }[] = [];
 
-  /** R17 — can the arm this junction would abandon get OUT of the country
+  /** R17 — can the arm this junction would abandon get OUT of the land
    * the stage occupies? A branch runs until it is clear of the map and then
    * stops out of sight; one that cannot get clear stops in a field instead,
    * and a tarmac road ending in a field is the loudest mistake the
@@ -147,7 +147,7 @@ export function createWalk(track: Track, rolling: (s: number) => number, follows
    *
    * The only honest test of whether a branch can leave is to DRIVE it, so
    * that is the test: the same `buildSpur` the junction would really get,
-   * run against the country the plan already describes, and the corner is
+   * run against the biome the plan already describes, and the corner is
    * taken only if the branch it would earn actually reaches the edge. A ray
    * out of the box cannot answer it — what stops a branch is the lake it
    * has to steer round and the stage it may not cross (R23), and neither is

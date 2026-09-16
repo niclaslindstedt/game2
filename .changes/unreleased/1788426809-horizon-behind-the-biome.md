@@ -1,6 +1,6 @@
 ---
 type: Fixed
-title: The horizon stays behind the country
+title: The horizon stays behind the biome
 ---
 
 The distant mountains no longer cut across the landscape in front of them,

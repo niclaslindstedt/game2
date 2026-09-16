@@ -181,7 +181,7 @@ export type VideoSettings = {
    * player sets per stage, and this never touches it. */
   flora: "sparse" | "normal" | "lush";
   /** How much LOOSE STONE the ground is scattered with — the chippings
-   * spilled across the road's edge that make it run out into the country
+   * spilled across the road's edge that make it run out into the land
    * instead of ending at a line (R16, road-spill.ts), and the cobbles out in
    * the field beyond them. Its own row rather than a share of UNDERGROWTH
    * because it is the one detail lever that is not decoration: what it
@@ -276,7 +276,7 @@ export type VideoSettings = {
    * their real altitudes — cumulus a kilometre up, cirrus ten — foreshortened
    * into the haze, lit and shaded by where the sun is, the sun dimming when
    * one crosses it; with the valley mist lying in the low ground at dawn
-   * and burning off, the sun glowing through it, and the country's own
+   * and burning off, the sun glowing through it, and the biome's own
    * shadow marched off the heightfield so a low sun stops at the ridge.
    * `full` reads the same sky at more octaves, lights every cloud's edges
    * by a second sample toward the sun, and throws the cumulus's shadows

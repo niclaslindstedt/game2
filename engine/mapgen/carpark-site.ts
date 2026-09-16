@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // FINDING A CAR PARK SOMEWHERE TO STAND. Every question here is asked of
-// the country rather than of the car park: where the public roads within
+// the biome rather than of the car park: where the public roads within
 // reach are and which of them may be left from, which points on the ground
 // a pad could sit on, whether one of them actually fits (level enough, off
 // the route, off everything already built), and how a lane's profile eases
@@ -11,7 +11,7 @@ import { smooth } from "../lib/noise.ts";
 import { type Rng } from "../lib/prng.ts";
 import { type ParkedCar } from "./buildings.ts";
 import type { Track } from "./compile.ts";
-import { CELL, createCountryMap, type CountryMap } from "./carpark-map.ts";
+import { CELL, createGroundMap, type GroundMap } from "./carpark-map.ts";
 import { standBack, type TrailProbe } from "./carpark-trail.ts";
 import { corridorOffset, ROAD_CROSS } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";
@@ -44,11 +44,11 @@ export type SitingDeps = {
 
 export function createSiting(deps: SitingDeps) {
   const { track, corridor, nearRoute, carParks } = deps;
-  /** The country map round a place. A finite stage's box is the stage's
+  /** The ground map round a place. A finite stage's box is the stage's
    * own; an endless one has no box, so the map is the neighbourhood and a
    * road that leaves it has left. Rebuilt for every car park, because the
    * built things it keeps a road off change as each one is committed. */
-  const countryMap = (ctx: CarParkContext, near: { x: number; z: number }): CountryMap => {
+  const groundMap = (ctx: CarParkContext, near: { x: number; z: number }): GroundMap => {
     const bounds = track.endless
       ? {
           minX: near.x - STREAMED_BOX,
@@ -80,7 +80,7 @@ export function createSiting(deps: SitingDeps) {
       }
     }
     const reach = nearest <= LANE_REACH ? nearest : 0;
-    return createCountryMap(
+    return createGroundMap(
       bounds,
       {
         routeDistance: ctx.routeDistance,
@@ -222,7 +222,7 @@ export function createSiting(deps: SitingDeps) {
       }
       if (!onRoad && ctx.builtClearance(p.x, p.z) < 6) return refuse("built");
       // The ground as the terrain has already SHAPED it, not the bare
-      // country: beside the road R31 has cut the hillside back to its cone,
+      // biome: beside the road R31 has cut the hillside back to its cone,
       // and a pad fitted to the hill that was there before the cut is a pad
       // standing over the cone at its near rim, on every stage with any
       // relief in it.
@@ -231,7 +231,7 @@ export function createSiting(deps: SitingDeps) {
     // The plane the pad is graded to: the least-squares fit through the
     // probes, which on two symmetric rings round the centre is the mean
     // height and the moment of the heights about each axis. Held to a
-    // grade a car park can be parked on; steeper country than that is a
+    // grade a car park can be parked on; steeper biome than that is a
     // hillside, and the residual says so.
     let sum = 0;
     let mx = 0;
@@ -256,7 +256,7 @@ export function createSiting(deps: SitingDeps) {
     // beside the road the cone exists to take down. The terrain's cone and
     // not a restatement of it at the verge's climb — the cut is made at
     // the grade R34 gives the road, and a gentler copy refused half the
-    // country beside every road with relief in it.
+    // land beside every road with relief in it.
     let wall = false;
     probes.forEach((p, i) => {
       const level = padHeight(pad, p.x, p.z);
@@ -292,7 +292,7 @@ export function createSiting(deps: SitingDeps) {
   /** Is the lane, as it stands, a road end to end — no step in it steeper
    * than a lane or a pad is built to? The last word on a lane, asked
    * after the pad's blend: everything above lays the profile to arrive on
-   * the plane, and where the country gave it too short a run to, the blend
+   * the plane, and where the biome gave it too short a run to, the blend
    * turns what is left into a ramp. A lane that fails this is not built,
    * and the search tries another way in (R42: reject, never repair). */
   const gradesHold = (samples: SpurSample[]): boolean => {
@@ -308,9 +308,9 @@ export function createSiting(deps: SitingDeps) {
   /** Ease a lane's FIRST stretch off the road it leaves, so a car turning
    * in rides that road's cross-section instead of dropping off it.
    *
-   * A lane that is searched out over the country (`layRoadOut`) arrives at
+   * A lane that is searched out over the land (`layRoadOut`) arrives at
    * the road it joins on that road's CROWN — which on tarmac stands
-   * `asphaltLift` proud of the country and cambers away either side — and
+   * `asphaltLift` proud of the biome and cambers away either side — and
    * then carries on at its own height. The terrain lays the joined road's
    * mat out to `ROAD_CROSS.reach` past its edge, so the lane's first few
    * metres run across ground that is the road's, not theirs: a quarter of a
@@ -405,7 +405,7 @@ export function createSiting(deps: SitingDeps) {
   };
 
   return {
-    countryMap,
+    groundMap,
     accessPoints,
     nearestJoin,
     joinPoints,

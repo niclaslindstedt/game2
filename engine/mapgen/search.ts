@@ -32,7 +32,7 @@ export type Cursor = {
    * resolution. Absent where the caller has no landscape to follow (a
    * synthetic track), and the height half of R23 is then simply not asked.
    *
-   * The road's SURFACE — the base the builder's eye followed the country
+   * The road's SURFACE — the base the builder's eye followed the land
    * to, plus the stage's own roll on top of it (`rolling.ts`), read at the
    * same arc the compiler will read it at. The roll swings several metres
    * either way, and a rule that has to fit two arms of a stage between
@@ -49,11 +49,11 @@ export type Cursor = {
  * The same lag and the same two clamps the compiler walks with, so the
  * search's idea of how high the road will be tracks the road that actually
  * gets built rather than the bare hillside under it. That difference is the
- * whole point: a road is metres above the country it crosses on an
+ * whole point: a road is metres above the biome it crosses on an
  * embankment and metres below it in a cutting, and it is the ROAD's height
  * that decides whether two arms of a stage can pass each other. */
 export type Profile = {
-  /** The road's BASE, m — the country's height as the eye has followed it. */
+  /** The road's BASE, m — the biome's height as the eye has followed it. */
   y: number;
   slope: number;
   /** Arc along the roll, m (`rolling.ts`). Corners advance it slowly, so it
@@ -63,7 +63,7 @@ export type Profile = {
 
 /** The road's base after one probe step of `step` m toward `ground`, with
  * the roll's arc advanced for a segment of `curvature`. `grade` is the
- * steepest the road may run here (`followGradeOf` for the country's own;
+ * steepest the road may run here (`followGradeOf` for the biome's own;
  * `tunnel.level` inside a bore). */
 export function stepProfile(
   profile: Profile,
@@ -87,14 +87,14 @@ export function stepProfile(
 }
 
 /** R47 — A BORE, as the height walk sees it: from `from` metres of arc the
- * road stops following the country and holds its line near level, and it
+ * road stops following the land and holds its line near level, and it
  * comes out again where the bare land has dropped back to within
  * `tunnel.depth` of the road — or at `tunnel.maxLength`, whatever the land
  * is doing, after which the straight is a deep cut again and the rules
  * refuse it. `to` is FOUND by the walk when it is null and recorded on it,
  * so the search can write the exit into the plan the compiler builds from;
  * given, it is held to, which is how the compiler walks the same bore the
- * search found. The land is the BARE country (`land.heightAt`), because a
+ * search found. The land is the BARE land (`land.heightAt`), because a
  * bore is measured against the rock over it and not against the water's
  * freeboard. */
 export type Bore = {
@@ -140,7 +140,7 @@ export function boreFor(
 /** What the search walks the road's height WITH: the ground the road may
  * be built on at a point given the roll there (the compiler's `buildable`,
  * water's freeboard included), the roll itself, the steepest grade the
- * country's roads run at (`followGradeOf`), and the bore the walk is in,
+ * biome's roads run at (`followGradeOf`), and the bore the walk is in,
  * if any (R47). */
 export type HeightWalk = {
   profile: Profile;
@@ -279,7 +279,7 @@ const HEIGHT_SPAN = 60;
  * Stated ONCE and read by the search and the analysis (`roads.step`), so
  * the two cannot drift. It is R31's own geometry read between two roads:
  * the upper arm owns its corridor out to `shelfEnd` at its own height, the
- * lower arm's bench keeps the country flat out to `verge.bench` at ITS
+ * lower arm's bench keeps the land flat out to `verge.bench` at ITS
  * height, and between the two the ground may climb no faster than
  * `verge.climb`. Any closer than that and no ground satisfies both — the
  * terrain gives each lattice corner to the nearer road and the difference
@@ -288,7 +288,7 @@ const HEIGHT_SPAN = 60;
  *
  * Read against R34's steepest cut face instead of the verge's climb, as it
  * was, it let a stage fold back 45 m from itself with 33 m between the arms
- * — a rock face the country never earns (a cut opens only where the road
+ * — a rock face the biome never earns (a cut opens only where the road
  * runs UNDER the land, and a road benched along a hillside runs at it) and
  * the single commonest error the analyzer found on the taiga, on every seed
  * of a dozen. */
@@ -453,7 +453,7 @@ export type StartGround = { y: number; shelfEnd: number };
  *
  * Asked in height as well as on the map where the search knows both
  * (`start`): the apron is road like any other arm, and a stretch passing it
- * at R23's plain clearance but a dozen metres above it leaves the country
+ * at R23's plain clearance but a dozen metres above it leaves the land
  * between the two nothing to be but a face (`armSeparation`). The point
  * field cannot see this one — the apron is behind the first committed point
  * and outside every bucket — so the same clause is asked here. */
@@ -545,7 +545,7 @@ export function recomputeSameDirRun(plans: SegmentPlan[], run: SameDirRun): void
  * not spiral — and the pieces of a public road the route is running along
  * (R17) are not the rally's corners. They are a line being tracked: a
  * gentle bend cut into seventy-metre chunks (`borrow.ts`) comes out as
- * several same-direction turns that in the country are one sweep, and
+ * several same-direction turns that in the biome are one sweep, and
  * counting them caps the rally's own vocabulary for something the rally
  * did not draw. What the reset says is that the route came off a public
  * road, so the next corner is a fresh corner. */
@@ -710,7 +710,7 @@ export function assignFeature(
       lipHeight: Math.min(R.jump.lipHeight.max, Math.max(R.jump.lipHeight.min, ratio * ramp)),
     };
   }
-  // R40 — a dry country has no water for a straight to cross, so the roll
+  // R40 — a dry biome has no water for a straight to cross, so the roll
   // is never made there: the desert's straights go on to the crests.
   if (
     biomeRules(knobs.biome).water &&

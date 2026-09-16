@@ -34,7 +34,7 @@ import { detailTexture } from "./textures.ts";
 export type PitchedRoof = Exclude<RoofKind, "flat" | "gambrel">;
 
 /** The paint box. Falu red is the iron-oxide red every second house in the
- * country is painted; the ochre is the manor's yellow; the white is a warm
+ * biome is painted; the ochre is the manor's yellow; the white is a warm
  * white, never a printer's. The grey render, the yellow brick and the green
  * are the village's — what a block of flats, a post office and a workshop
  * are done in. The trims are a shade off pure so the jitter has somewhere
@@ -80,7 +80,7 @@ export const HOUSE = {
   eave: 0.45,
   gable: 0.3,
   /** Roof pitch, radians — steep enough to shed snow, which every roof in
-   * this country is. */
+   * this biome is. */
   pitch: 0.62,
   roofThick: 0.14,
   cornerBoard: 0.16,

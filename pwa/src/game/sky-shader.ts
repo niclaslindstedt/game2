@@ -224,7 +224,7 @@ void main() {
       c += uSunColor * forward * ( 1.0 - dens ) * 0.45 * B.w;
     } else {
       // The top, from above: sunlit where it faces the sun, and in the
-      // country's shadow where the map says the mountain is in the way.
+      // biome's shadow where the map says the mountain is in the way.
       float topLit = 0.72 + 0.28 * ( 1.0 - dens * B.z );
       ${
         build.sunlit
@@ -417,8 +417,8 @@ export function createSkyShell(): SkyShell {
       .sort((a, b) => a.altitude - b.altitude);
     rebuild({ octaves: look.octaves, sunlit: look.sunlit, layers: drawn.length });
     drawn.forEach((layer, i) => {
-      // How much of the fair-weather ring a dry country flies thins the
-      // sheets' opacity here too, and the deck is a lid in any country.
+      // How much of the fair-weather ring a dry biome flies thins the
+      // sheets' opacity here too, and the deck is a lid in any biome.
       const opacity = layer.deck ? 1 : p.cloudOpacity;
       Object.assign(layerA[i], {
         x: layer.altitude,

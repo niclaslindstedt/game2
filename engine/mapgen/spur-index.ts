@@ -42,10 +42,10 @@ export type SpurIndex = {
     edgeOf: (spur: SpurLine) => number,
   ) => SpurHit | null;
   /** The branch whose CONE stands lowest here: over every branch in reach,
-   * the one whose road, with a bench `bench` wide and the country rising
-   * off it at `climb`, holds the country lowest at this point — R31's
+   * the one whose road, with a bench `bench` wide and the land rising
+   * off it at `climb`, holds the land lowest at this point — R31's
    * ceiling is a min over every road, and the nearest branch alone is not
-   * that. Where a branch cut thirty metres under the country hands over
+   * that. Where a branch cut thirty metres under the land hands over
    * to a higher one, the nearest changes hands and the lower one's cone
    * simply stops: a twenty metre step ruled along the midline (seed 22).
    * Its own scratch record, like `highest`. */
@@ -324,7 +324,7 @@ export function createSpurIndex(): SpurIndex {
     let best = Infinity;
     for (let c = 0; c < cells.length; c++) {
       const cell = cells[c];
-      // What the cell's lowest road could hold the country to from its
+      // What the cell's lowest road could hold the biome to from its
       // box's edge bounds everything in it.
       if (cell.minY + Math.max(0, Math.sqrt(boxD2(cell, x, z)) - bench) * climb >= best) continue;
       const entries = cell.entries;

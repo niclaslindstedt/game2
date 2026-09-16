@@ -22,7 +22,7 @@ export const ROAD_BUDGETS = {
      * share to a percent. */
     groundGrid: 96,
     /** How far outside the road's own bounding box the ground sweep looks,
-     * m — the country the stage is set in, not just the strip it runs
+     * m — the biome the stage is set in, not just the strip it runs
      * through. */
     groundMargin: 260,
   },
@@ -269,7 +269,7 @@ export const ROAD_BUDGETS = {
     selfRun: 300,
     /** How much of the stage's own bounding box should be within reach of
      * SOME road, as a share — the distribution check. Too little and the
-     * stage is a thread across an empty map; too much and the country is
+     * stage is a thread across an empty map; too much and the biome is
      * more road than land. */
     coverage: { min: 0.12, max: 0.62 },
     /** ...measured at this distance from a centerline, m. Roughly how far
@@ -278,7 +278,7 @@ export const ROAD_BUDGETS = {
     coverageReach: 130,
     /** How square the route's own footprint should be — the shorter side
      * of its bounding box over the longer. A stage that runs down a
-     * corridor uses none of the country it was given. */
+     * corridor uses none of the biome it was given. */
     boxFill: { min: 0.3, max: 1 },
 
     /** R20 — how much of the SEALED road may bend tighter than
@@ -328,7 +328,7 @@ export const ROAD_BUDGETS = {
      * with its street, but a pad ten metres across is narrower than the
      * ground lattice (`lattice.ts`): graded one lot at a time the
      * flattening fell BETWEEN the lattice corners, never reached the drawn
-     * ground at all, and four houses in five stood on the country's own
+     * ground at all, and four houses in five stood on the land's own
      * slope — hanging a couple of metres over it downhill, buried in it
      * uphill. Read over the whole footprint, wings included, because the
      * corner that hung in the air was usually a villa's wing.
@@ -356,7 +356,7 @@ export const ROAD_BUDGETS = {
 
     /** R43 — how much more fall a solar farm's ground may show, as a
      * multiple of the placer's own `energy.solar.slope`, before it is a
-     * hillside. The placer reads the BARE country at a lattice of probes;
+     * hillside. The placer reads the BARE land at a lattice of probes;
      * the check reads the SHAPED ground at the corners and the middle, and
      * a road's shelf or a guard's mound at the near corner moves it. */
     energySlopeSlack: 1.5,
@@ -406,7 +406,7 @@ export const ROAD_BUDGETS = {
      * once per junction. */
     cell: 1,
     /** How far past the mouth the sweep still looks, m. Room for the open
-     * country beside a junction to be recognized as open country: a box
+     * biome beside a junction to be recognized as open land: a box
      * that stopped at the paving would measure the field as one more
      * sliver of grass and report it. Comfortably over `mouth.seam`. */
     margin: 26,
@@ -414,7 +414,7 @@ export const ROAD_BUDGETS = {
      * reporting, m². Under this it is the raster's own edge — a mat is
      * swept as a disc per sample and its boundary lands between cells. */
     splinterArea: 6,
-    /** ...and how thin a patch of country between two roads has to be
+    /** ...and how thin a patch of land between two roads has to be
      * before it is a SPLINTER rather than a field, m. A junction whose
      * grass runs to a knife point is the tell that nobody planned it: below
      * a car and a half across, the ground between two carriageways is a
@@ -503,7 +503,7 @@ export const ROAD_BUDGETS = {
     /** R34 — HOW UNEVEN THE ROAD IS: metres of climb plus descent per
      * kilometre of it, jumps excluded. The simplest statement there is of
      * "the road is not a plane", and the one number that moves when the
-     * road is laid closer along the country it crosses.
+     * road is laid closer along the land it crosses.
      *
      * A band at both ends. Under the floor the stage is a table with a
      * ribbon on it — the tell that the road was drawn rather than laid.

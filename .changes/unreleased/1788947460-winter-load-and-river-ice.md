@@ -12,11 +12,11 @@ because it is a term in the materials the world already draws rather than a
 second set of snowed models. Two of the same tree standing side by side wear
 different snow.
 
-The country's hillsides are covered too. The face rule that keeps snow off a
+The biome's hillsides are covered too. The face rule that keeps snow off a
 slope is the summer alpine's — the wind-scoured edge of the permanent snow —
 and it was leaving a winter as white flats between brown hills; deep in the
 cold it now relaxes until only near-vertical rock is bare. And the whole
-country is brighter, because snow bounces most of the light that falls on it
+biome is brighter, because snow bounces most of the light that falls on it
 back up: a snowfield now lifts and cools the light it is lit by, which is
 what makes one bright under a sun too low to light anything else.
 

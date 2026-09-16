@@ -238,7 +238,7 @@ describe("the ridges on the horizon", () => {
    * foot, snowline, summit, so only every third vertex can carry snow. */
   function ridges(p: Preset): { lum: number; warmth: number; up: number; summit: boolean }[] {
     const horizon = createHorizon();
-    horizon.setCountry("taiga");
+    horizon.setBiome("taiga");
     horizon.paint(p);
     const pos = horizon.mesh.geometry.getAttribute("position");
     const col = horizon.mesh.geometry.getAttribute("color");

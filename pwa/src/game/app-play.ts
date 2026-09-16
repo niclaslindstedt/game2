@@ -159,7 +159,7 @@ export function usePlayActions(store: RunStore, arming: RunArming) {
    * where to read these again rather than guess at them:
    *
    *   road      219 ms   whole, the generator compiling the route
-   *   world     333 ms   whole, the game state and the country and its forest
+   *   world     333 ms   whole, the game state and the biome and its forest
    *   crews     508 ms   fourteen games, cut a crew to a slice
    *   enter       1 ms
    *   drive    2391 ms   fourteen whole stages DRIVEN, cut by the frame
@@ -188,7 +188,7 @@ export function usePlayActions(store: RunStore, arming: RunArming) {
       // The car, the world, the light and the score. `applyStage` finds the
       // road above already compiled and cached, so what is left here is the
       // game state and the renderer's world.
-      { id: "world", label: "Building the country", run: () => (applyStage(spec, true), false) },
+      { id: "world", label: "Building the biome", run: () => (applyStage(spec, true), false) },
       {
         id: "crews",
         label: "Entering the field",
@@ -360,9 +360,9 @@ export function usePlayActions(store: RunStore, arming: RunArming) {
         length: level.length,
         shape: level.shape ?? "sprint",
         laps: lapsOverride() ?? levelLaps(level),
-        // A campaign stage is the same country for everybody: the dials are
+        // A campaign stage is the same biome for everybody: the dials are
         // Roam's to play with, not the campaign's to inherit — the location
-        // says which country, and the rule book's defaults say the rest.
+        // says which biome, and the rule book's defaults say the rest.
         knobs: campaignKnobs(level),
         carId: race.carId,
         hour: level.hour,

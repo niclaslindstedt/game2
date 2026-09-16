@@ -6,8 +6,8 @@
 // is a property of the geometry rather than a hope. So these are the
 // assertions that hold that geometry up: the two dirt arms are one straight
 // line, the passage is square, the sealed road runs through it unbroken and
-// SHUT ON BOTH SIDES, and the tarmac stands proud of the country by the
-// height the rule says and not by whatever the country was doing.
+// SHUT ON BOTH SIDES, and the tarmac stands proud of the biome by the
+// height the rule says and not by whatever the land was doing.
 //
 // The last of those is the feature. A crossing is a jump nobody built, and
 // the whole reason it can be tuned at all is that the step comes out the
@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 import { STAGE_RULES, compileStage, junctionMainEdge, type Track } from "@engine";
 
-/** Seeds and lengths whose country carries a road the route goes over. Found
+/** Seeds and lengths whose biome carries a road the route goes over. Found
  * by sweeping, and pinned here rather than searched at test time: a suite
  * that hunts for its own subject reports "nothing to test" as a pass. Every
  * generator change re-rolls the routes, so the sweep is re-run when one
@@ -154,13 +154,13 @@ describe("the level crossing (R36)", () => {
     }
   });
 
-  it("stands the tarmac PROUD of the country by `stand`, whatever the country does", () => {
+  it("stands the tarmac PROUD of the biome by `stand`, whatever the biome does", () => {
     for (const { seed, length } of CROSSINGS) {
       const track = stage(seed, length);
       for (const crossing of track.junctions.filter((j) => j.crossing)) {
         // The step, measured against the road's own line either side: the
         // platform is tilted at the route's grade, so the rally climbs the
-        // SAME height onto it whichever way the country was falling. It is
+        // SAME height onto it whichever way the biome was falling. It is
         // the property the whole feature is tuned on — read against a level
         // plane instead, the step was 2 to 2.9 m on a nominal 1.
         const ramp = 0.72 * crossing.spread + STAGE_RULES.crossing.ramp;

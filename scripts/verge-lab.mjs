@@ -4,7 +4,7 @@
 //
 // The verge is the one seam in the world the car crosses at speed: on the
 // mat the ground is the road's own ribbon (`track.ts`, `locate`), out in
-// the country it is the terrain lattice (`terrain.groundAt`), and the
+// the biome it is the terrain lattice (`terrain.groundAt`), and the
 // physics swaps readers the moment the middle of the car passes the verge
 // line. Everything about a car going off — how far it drops, whether the
 // wheels reach after the ground or the body leaves it, what the springs
@@ -18,7 +18,7 @@
 // MOMENT, sampled across the car's own width from both readers at once:
 //
 //   the ribbon      what `locate` says the road is, in road ink
-//   the terrain     what `terrain.groundAt` says the country is, in green
+//   the terrain     what `terrain.groundAt` says the biome is, in green
 //
 // Where the two lie on top of each other the seam is honest and the car
 // drives over it. Where they part — and they part by a body's height at
@@ -306,7 +306,7 @@ function drawRun(canvas, run, y0) {
   }
 
   // THE GROUND UNDER EVERY FRAME, both readers, drawn first and behind the
-  // bodies: the terrain the country is made of, and the ribbon the road
+  // bodies: the terrain the biome is made of, and the ribbon the road
   // says is there. Where the two lie on each other the seam is honest.
   for (const f of bodies) {
     for (let i = 1; i < f.under.length; i++) {
@@ -370,7 +370,7 @@ function drawRun(canvas, run, y0) {
   // read apart: the SEAT (the car's own corners, straddling a break it is
   // too long to follow), the LOFT (the body up off its wheels), and the
   // FOOT's speed, which is what opens the loft. Their sum is the body's
-  // height over the country, and which of them is carrying it is the whole
+  // height over the land, and which of them is carrying it is the whole
   // diagnosis — a seat is a car standing on its tail, a loft is a car in
   // the air, and a foot moving at a speed no hillside could is a seam.
   const traces = [

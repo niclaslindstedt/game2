@@ -48,7 +48,7 @@ const T = TUNING;
 /** The drift group, used on nearly every line below. */
 const D = TUNING.drift;
 
-/** HOW MUCH OF THE THROTTLE THE OPEN COUNTRY PUTS DOWN at a ground speed,
+/** HOW MUCH OF THE THROTTLE THE OPEN BIOME PUTS DOWN at a ground speed,
  * 0..1 — everywhere else, all of it. A driven wheel on unconsolidated
  * ground DIGS instead of driving, so the wild takes `surfaces.natureDig`
  * out of the pull at a standstill — and deep snow `CLIMATE.dig`, more,
@@ -56,7 +56,7 @@ const D = TUNING.drift;
  * `natureDigSpeed`, where the car is skimming the ground rather than
  * trenching it. The shape is the point: what the wild costs is TIME, never
  * a ceiling — past the dig speed nothing holds the car back but the
- * gearbox it brought, so a long run through open country ends wherever
+ * gearbox it brought, so a long run through open land ends wherever
  * the top gear ends.
  *
  * R47 — and what SNOW takes is charged on the DEPTH of it rather than on
@@ -663,7 +663,7 @@ export function stepGrounded(
   // angle are large enough to put a car off its line.
   //
   // It is the SANDSTORM'S term rather than the wind's in general
-  // (`ctx.sand` is 0 outside a front, in every country but the desert),
+  // (`ctx.sand` is 0 outside a front, in every biome but the desert),
   // because the ambient wind's hold on the car is already modelled — the
   // push down a straight and the carry off a jump — and every stage the
   // game has ever built was tuned and digested with those two and no

@@ -4,7 +4,7 @@
 //
 // The line is a `Highway` of kind `rail` so every clearance the search keeps
 // from a road holds against it for free; what these assertions hold up is
-// the rest — that a country carries one where its biome says so and not
+// the rest — that a biome carries one where its biome says so and not
 // where it does not, that the rally never borrows or joins it, that the
 // crossing is square with a lip standing the rule's height short of the
 // rails and the road at grade beyond, that the two arms are cut and joined
@@ -55,7 +55,7 @@ function fold(a: number, b: number): number {
 }
 
 describe("the railway (R41)", () => {
-  it("is laid in a country that carries one, and nowhere the biome says not", () => {
+  it("is laid in a biome that carries one, and nowhere the biome says not", () => {
     let lines = 0;
     for (const seed of SEEDS) {
       const track = stage(seed);
@@ -107,7 +107,7 @@ describe("the railway (R41)", () => {
         expect(crossing.s - lip.s).toBeGreaterThan(rail.gap - 3);
         expect(crossing.s - lip.s).toBeLessThan(rail.gap + 3);
         // ...standing the ramp's height over the road at grade beyond it —
-        // give or take the country's own fall over the ten metres between.
+        // give or take the biome's own fall over the ten metres between.
         const past = track.samples.find((s) => s.s > crossing.s + 4) ?? at;
         expect(lip.elevation - past.elevation).toBeGreaterThan(rail.lip.height - 1.2);
         expect(lip.elevation - past.elevation).toBeLessThan(rail.lip.height + 1.2);

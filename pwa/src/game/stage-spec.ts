@@ -30,7 +30,7 @@ export type StageSpec = {
   shape: StageShape;
   /** Laps a circuit is raced over; 1 on anything that does not come back. */
   laps: number;
-  /** The generator's dials — what KIND of country the seed is built in. */
+  /** The generator's dials — what KIND of biome the seed is built in. */
   knobs: StageKnobs;
   carId: string;
   /** The box, when the stage insists on one. Normally absent: which gearbox
@@ -46,12 +46,12 @@ export type StageSpec = {
   weather: Weather;
   season: Season;
   /** The air at the datum, °C, or null (or absent — the campaign's levels
-   * never name one) for the season's own in the country (climate.ts).
+   * never name one) for the season's own in the biome (climate.ts).
    * Part of the ROAD, with the season: the two decide what the compiled
    * track is made of, so the cached track is keyed on both. */
   temperature?: number | null;
   /** How often the SANDSTORMS come, 0..1, or absent for the default
-   * (`DEFAULT_SANDSTORMS`) — read only in a country whose wind lifts the
+   * (`DEFAULT_SANDSTORMS`) — read only in a biome whose wind lifts the
    * ground (`BiomeRules.blown`, `game/sandstorm.ts`). Unlike the season
    * and the temperature it is NOT part of the road: the fronts cross a
    * stage that was compiled without knowing about them, so the cached

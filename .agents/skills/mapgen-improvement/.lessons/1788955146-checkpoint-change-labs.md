@@ -12,7 +12,7 @@ identical except the `perf.build` timing column, which is machine noise.
 `make sim` is identical too whenever the sweep records no respawns, since the
 bot drives the same road and only the split LINES moved. And `make previews`
 is not owed: `routes` regenerates `stage-routes.ts` from road geometry alone
-(it came back byte-identical) and `biomes` photographs the country from over
+(it came back byte-identical) and `biomes` photographs the biome from over
 the start line. Run `npm run routes` and check `git status` rather than
 assuming a rules.ts edit re-rolls the boxes.
 

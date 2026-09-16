@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE RAILWAY, drawn (R41). The engine cut the line's two arms from the
-// railway it laid across the country (`track.spurs`, flagged `rail`) and
+// railway it laid across the land (`track.spurs`, flagged `rail`) and
 // recorded where the rally goes over it (`track.rails`); this module builds
 // what stands on that: the ballast bed on the shelf the terrain flattened
 // under the arm, the sleepers in it, the two rails on them, and — at the

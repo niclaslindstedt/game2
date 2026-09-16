@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// WHAT A COUNTRY'S WEATHER LOOKS LIKE — the tables sky.ts reads to put a
-// lid on a clear sky, and the cast each country puts on the clear sky
+// WHAT A BIOME'S WEATHER LOOKS LIKE — the tables sky.ts reads to put a
+// lid on a clear sky, and the cast each biome puts on the clear sky
 // before any weather is added. Pure data: every number here is a colour or
 // a fraction, and the arithmetic that applies them is sky.ts's.
 
@@ -26,9 +26,9 @@ export type WeatherLook = {
   dim: [number, number];
   hemi: [number, number];
   /** How thick the deck has to be before the car turns its lights on — the
-   * country's own say. sky.ts holds a floor under it in DAYLIGHT (`LAMPS_DIM`)
+   * biome's own say. sky.ts holds a floor under it in DAYLIGHT (`LAMPS_DIM`)
    * as well, so a lid darker than this figure allows for still lights the
-   * lamps; what this number buys is a country turning them on EARLY. */
+   * lamps; what this number buys is a biome turning them on EARLY. */
   lampsAt: number;
   /** Fog distances, as fractions of the clear preset's own, thin cover →
    * thick. Heavier weather is not only darker, it is SHORTER: the water in
@@ -123,7 +123,7 @@ export const TAIGA_LOOKS: Looks = {
  * rides the heaviest of them. Nothing here rains: the `rain` pair is zero
  * on both rows, which is what keeps the wipers parked and the road dry.
  *
- * Its `rain` is not offered by the country (`biomeRules().weathers`), but
+ * Its `rain` is not offered by the biome (`biomeRules().weathers`), but
  * a dial can still be left on it, so it has a look: a HAZE, the same sand
  * in the air at a fraction of the density — the desert on a windy day. */
 export const DESERT_LOOKS: Looks = {
@@ -201,7 +201,7 @@ export const LOOKS: Record<BiomeId, Looks> = {
   alpine: ALPINE_LOOKS,
 };
 
-/** R40 — what a COUNTRY does to the clear sky over it, before any weather
+/** R40 — what a BIOME does to the clear sky over it, before any weather
  * is put on top. The ladder of skies was authored for the taiga; the
  * desert's air is drier and clearer, its horizon hazed warm by the dust
  * that is always in it, its sun a shade warmer and harder, and — the one
@@ -218,7 +218,7 @@ export type Cast = {
   hemiGround: [number, number];
   cloudCover: number;
   /** …and how many of them there are at all. See `Preset.cloudShare`: over
-   * a dry country the sky is EMPTIER, not hazier. */
+   * a dry biome the sky is EMPTIER, not hazier. */
   cloudShare: number;
 };
 

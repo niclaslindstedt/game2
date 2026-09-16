@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE BIRD OF PREY: one large bird, alone, turning a thermal higher than
-// anything else that flies over a stage. Both countries have them — a
+// anything else that flies over a stage. Both biomes have them — a
 // buzzard over the taiga, a vulture over the desert — and they are the same
 // bird in different light, because what makes one is the way it FLIES.
 //
@@ -39,7 +39,7 @@ const SOAR = { dihedral: 0.17, beatRate: 3.1, beatUp: 0.34, beatDown: 0.72 };
 const BURST = { min: 0.9, vary: 1.6, restMin: 7, restVary: 11 };
 
 /** Where a fresh thermal is pitched, relative to the camera: metres out,
- * metres up over whatever the country's own flocks wheel at, the circle it
+ * metres up over whatever the biome's own flocks wheel at, the circle it
  * holds, and the ±rad of the view direction it may sit within. */
 const PITCH = {
   outMin: 410,
@@ -174,9 +174,9 @@ type Bird = {
 
 export type Raptors = {
   group: THREE.Group;
-  /** How many this country flies, and how far over the camera to hold them
+  /** How many this biome flies, and how far over the camera to hold them
    * — enough to clear whatever else is wheeling below. Idempotent. */
-  setCountry: (count: number, over: number) => void;
+  setFlock: (count: number, over: number) => void;
   /** The sky's light: near-black by day, invisible-dark at night, never
    * grey. */
   setTint: (tint: THREE.Color) => void;
@@ -186,9 +186,9 @@ export type Raptors = {
   dispose: () => void;
 };
 
-/** `most` is how many the busiest country flies: they are all built once
- * and hidden down to the count a given country wants, so a change of
- * country is a re-light rather than a rebuild. */
+/** `most` is how many the busiest biome flies: they are all built once
+ * and hidden down to the count a given biome wants, so a change of
+ * biome is a re-light rather than a rebuild. */
 export function createRaptors(most: number): Raptors {
   const group = new THREE.Group();
   const mat = material();
@@ -217,7 +217,7 @@ export function createRaptors(most: number): Raptors {
     });
   }
 
-  /** Pitch a fresh thermal for one bird: out in the country AHEAD of where
+  /** Pitch a fresh thermal for one bird: out in the land AHEAD of where
    * the camera is looking, and well above it. Called once at the start and
    * again every time the car leaves one behind — which is what keeps a
    * stage that runs for kilometres in birds without ever putting one on the
@@ -245,14 +245,14 @@ export function createRaptors(most: number): Raptors {
     b.placed = true;
   };
 
-  const setCountry = (next: number, nextOver: number): void => {
+  const setFlock = (next: number, nextOver: number): void => {
     if (next === count && nextOver === over) return;
     count = next;
     over = nextOver;
     birds.forEach((b, i) => {
       b.root.visible = i < count;
       // Re-pitched rather than left where it was: the altitude it was given
-      // belongs to the country it was given in.
+      // belongs to the biome it was given in.
       b.placed = false;
     });
   };
@@ -340,5 +340,5 @@ export function createRaptors(most: number): Raptors {
     mat.dispose();
   };
 
-  return { group, setCountry, setTint, update, dispose };
+  return { group, setFlock, setTint, update, dispose };
 }

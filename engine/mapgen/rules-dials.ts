@@ -2,7 +2,7 @@
 // One chapter of the stage generator's rule book (`rules.ts`): WHAT THE
 // DIFFICULTY DIAL MULTIPLIES (R46) — one `{ easy, hard }` pair per rule the
 // dial reaches, read through `challengeMul` / `challengeSkew` in
-// `rules-country.ts`. Spread into `STAGE_RULES` by `rules-book.ts`.
+// `rules-biome.ts`. Spread into `STAGE_RULES` by `rules-book.ts`.
 
 export const DIAL_RULES = {
   /** R46 — THE DIFFICULTY DIAL, and every rule above that it leans on.
@@ -66,7 +66,7 @@ export const DIAL_RULES = {
      * `roadWidth` afterwards (`roadWidthOf`), so nothing downstream ever
      * meets a road outside the band it was built for. */
     width: { easy: 1.12, hard: 0.82 },
-    /** R34 — how high the country beside the road stands its relief, road
+    /** R34 — how high the land beside the road stands its relief, road
      * roll and all. This is the half of the dial you meet by LEAVING the
      * road: a hillside to fall down rather than a field to spin on. */
     relief: { easy: 0.85, hard: 1.3 },

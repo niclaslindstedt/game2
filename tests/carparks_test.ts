@@ -83,7 +83,7 @@ describe("car parks (R42)", () => {
       );
       for (const stand of terrain.stands) {
         // ...except the finish's own banks, which keep their crowd whatever
-        // the country behind them offers: the organisers' road and the
+        // the land behind them offers: the organisers' road and the
         // service area are there by construction.
         if (stand.finish) continue;
         expect(trailed.has(`${stand.s.toFixed(2)}/${stand.facing.toFixed(4)}`)).toBe(true);
@@ -316,7 +316,7 @@ describe("car parks (R42)", () => {
     expect(tb.carParks.length).toBeGreaterThan(0);
     // The chunked stream serves the stands the single call serves, and
     // every car park it places obeys the rules — but not with the same pad:
-    // a pad and a lane are searched over the country as far as the road
+    // a pad and a lane are searched over the land as far as the road
     // has been laid, and road laid later closes ways out the chunked stream
     // took and opens ones the single call never saw. That is what `hold`
     // bounds and cannot end, on a stage that never ends.

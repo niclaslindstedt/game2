@@ -2,23 +2,23 @@
 // THE CLIMATE — what season a stage is driven in and how cold it is, and
 // everything the two decide together: where the ground is frozen, what
 // falls out of a wet sky, what the snow on the road is like and how deep
-// it lies off it, and which weathers a country has in a given season.
+// it lies off it, and which weathers a biome has in a given season.
 //
 // Stated once here, DOM-free, because it is read on both sides of the
 // world. The compiler asks it which samples are snow (compile.ts), the
 // terrain asks it how deep the blanket beside the road is (terrain.ts), the
 // physics asks it how hard the snow holds (car.ts through the sample's
 // `bite`), and the renderer asks the same questions again to paint the
-// ground, plant the country, grey the sky and choose between rain and
+// ground, plant the biome, grey the sky and choose between rain and
 // flakes — so a stage that is white to the eye is white to the wheels.
 //
 // TEMPERATURE IS A FIELD, NOT A NUMBER. A stage names one temperature, at
 // the datum (y = 0, the valley floor), and the air gets colder with height
-// at the country's lapse rate — so a mountain stage that starts beside the
+// at the biome's lapse rate — so a mountain stage that starts beside the
 // snow is warmer at the bottom of its descent than at the top, the snow
 // on the pass is a different snow from the slush in the valley, and the
 // same dial that makes a taiga stage a snowfield leaves a desert stage a
-// wet one. The height is read off the country's bedrock, which is why the
+// wet one. The height is read off the land's bedrock, which is why the
 // answer exists before anything is laid on it: the roads and the nature
 // are drawn onto a ground whose temperature is already known.
 
@@ -30,8 +30,8 @@ export type Climate = {
   season: Season;
   /** Air temperature at the datum (y = 0), °C. */
   temperature: number;
-  /** R47 — how fast this country's air cools with height, °C per metre.
-   * `CLIMATE.lapse` unless the ALTITUDE dial has built a taller country
+  /** R47 — how fast this biome's air cools with height, °C per metre.
+   * `CLIMATE.lapse` unless the ALTITUDE dial has built a taller biome
    * than the biome's row describes, in which case the rate comes down
    * with the same factor its elevation bands went up (`lapseOf`) — the
    * freezing line is a height like the treeline and the snowline, and the
@@ -39,12 +39,12 @@ export type Climate = {
    *
    * Optional, and the constant when it is missing: a climate stated by
    * hand — a test, a preview tool, a stage from a build that had no dial
-   * — is the tuned country's, which is the country it was written for. */
+   * — is the tuned biome's, which is the one it was written for. */
   lapse?: number;
 };
 
 /** What a caller may leave unsaid: the season defaults to summer, and the
- * temperature to the season's own in that country (`null` says so
+ * temperature to the season's own in that biome (`null` says so
  * explicitly, which is what a menu row set to AUTO stores). */
 export type ClimateChoice = { season?: Season; temperature?: number | null };
 
@@ -56,7 +56,7 @@ export const SEASONS: readonly Season[] = ["spring", "summer", "autumn", "winter
 
 export const CLIMATE = {
   /** How fast the air cools with height, °C per metre. Real air loses about
-   * 6.5° a kilometre; this country is drawn at a fraction of its real
+   * 6.5° a kilometre; this biome is drawn at a fraction of its real
    * height (the alpine's permanent snow stands at 340 m for a range whose
    * real line is nearer 2,800), so the lapse is scaled the same way — a
    * pass 340 m over its valley floor is seven degrees colder, which is
@@ -74,7 +74,7 @@ export const CLIMATE = {
    * sheet a run of hard nights builds, and -5 at the surface is the
    * shorthand for "it has been properly cold here" — the same shorthand
    * the Nordic ice roads use before they open one. Between 0 and -5 the
-   * water is still water: the road glazes, the country whitens, and the
+   * water is still water: the road glazes, the biome whitens, and the
    * lakes are exactly the hazard they were in summer.
    *
    * It is asked of the air at the BODY'S level, not at the datum, because
@@ -105,13 +105,13 @@ export const CLIMATE = {
    *   to bank down the flats, and black water smoking at every drop.
    *
    * `open` is that 0.006 carried into DRAWN metres, which is where the
-   * number stops looking like river science. This country is built at a
+   * number stops looking like river science. This biome is built at a
    * fraction of its real height — the same compression `lapse` above is
    * scaled by, the alpine's permanent snow standing at 340 m for a range
    * whose real line is nearer 2,800 — so every gradient in it is
    * exaggerated by about eight, and a brook drawn falling five per cent is
    * a real one falling well under one. Measured against the generator's own
-   * population (`make analyze` seeds, both countries), a drawn 0.05 puts
+   * population (`make analyze` seeds, both biomes), a drawn 0.05 puts
    * the median reach just the wrong side of freezing and takes in the
    * flats, the pools and the mouths — which is the picture wanted.
    *
@@ -134,7 +134,7 @@ export const CLIMATE = {
    * ploughed road stands between.
    *
    * ...and `pile` is the OTHER source of depth, which is not the air at
-   * all. Above a country's own permanent snowline the ground is white in
+   * all. Above a biome's own permanent snowline the ground is white in
    * July: what lies there is years of accumulation rather than this
    * season's fall, and it is metres rather than centimetres. So the
    * blanket is the deeper of the two (`blanketDepth` against
@@ -151,7 +151,7 @@ export const CLIMATE = {
    * at all (`props.ts`). Anything under it is neither hit nor drawn — the
    * field reads as clean snow and drives as clean snow.
    *
-   * A rally stage is arcade country, and the one contact a driver can
+   * A rally stage is arcade biome, and the one contact a driver can
    * never read is a low one: a solid whose top sits under the car's centre
    * of mass catches the floor and rolls the car
    * (`TUNING.collision.solids.tripTop`, 0.55 m) rather than stopping it.
@@ -251,11 +251,11 @@ export const CLIMATE = {
    *   a stage's whole trail is tens of thousands of cells rather than
    *   millions. */
   pack: { floor: 0.3, bite: 0.45, road: 0.3, polish: 0.22, worn: 0.52, cell: 0.4 },
-  /** The season's own temperature at the datum, per country, °C. The
+  /** The season's own temperature at the datum, per biome, °C. The
    * taiga's is a boreal year at 62°N; the desert's a hot one at 33°N, its
    * winter the wet season the annuals grow on; the alpine's is the VALLEY
    * FLOOR's, seven degrees warmer than its pass. Every non-winter figure
-   * keeps the freezing height above the country's own ground — so the
+   * keeps the freezing height above the biome's own ground — so the
    * campaign's stages, which never name a temperature, are exactly the
    * stages they were before there was one. */
   seasons: {
@@ -263,29 +263,29 @@ export const CLIMATE = {
     desert: { spring: 24, summer: 36, autumn: 26, winter: 12 },
     alpine: { spring: 14, summer: 22, autumn: 10, winter: -4 },
   } satisfies Record<BiomeId, Record<Season, number>>,
-  /** Which countries RAIN in which seasons, over and above the weathers on
+  /** Which biomes RAIN in which seasons, over and above the weathers on
    * their row: the desert's winter is its wet season. */
   wetSeasons: { desert: ["winter"] } satisfies Partial<Record<BiomeId, readonly Season[]>>,
 } as const;
 
-/** The season's own temperature in a country, °C at the datum. */
+/** The season's own temperature in a biome, °C at the datum. */
 export function defaultTemperature(biome: BiomeId | string | undefined, season: Season): number {
   return CLIMATE.seasons[biomeRules(biome).id][season];
 }
 
 /** A whole climate from what was chosen: the season named or summer, the
- * temperature named or the season's own in this country, and the country's
+ * temperature named or the season's own in this biome, and the biome's
  * own lapse rate at the altitude its dials build it at. */
 export function resolveClimate(choice: ClimateChoice | undefined, knobs: StageKnobs): Climate {
   const season = choice?.season ?? "summer";
   const named = choice?.temperature;
   const lapse = lapseOf(knobs, CLIMATE.lapse);
-  // R47 — the datum is y = 0, and on a country the ALTITUDE dial has
+  // R47 — the datum is y = 0, and on a biome the ALTITUDE dial has
   // raised, y = 0 stands `base` metres above the sea. So the air there is
   // the season's own temperature carried up that far and cooled by the
-  // country's own lapse rate — which is what puts the freezing line at the
+  // biome's own lapse rate — which is what puts the freezing line at the
   // same absolute height as the snowline the bands were stretched to, and
-  // what makes a stage on a six-thousand-metre country cold on its valley
+  // what makes a stage on a six-thousand-metre biome cold on its valley
   // floor rather than only on its summit. A temperature named by hand is
   // the air at the datum and is taken as given.
   const raised = defaultTemperature(knobs.biome, season) - lapse * altitudeScale(knobs).base;
@@ -295,7 +295,7 @@ export function resolveClimate(choice: ClimateChoice | undefined, knobs: StageKn
 }
 
 /** How fast the air cools with height under this climate, °C per metre —
- * the country's own where it carries one, and the tuned rate otherwise.
+ * the biome's own where it carries one, and the tuned rate otherwise.
  * Stated once because all three readings below take it. */
 function lapse(climate: Climate): number {
   return climate.lapse ?? CLIMATE.lapse;
@@ -307,15 +307,15 @@ export function temperatureAt(climate: Climate, y: number): number {
 }
 
 /** The height the air freezes at, m — every height above it is at or
- * under `CLIMATE.freeze`. Below the whole country when the datum itself
+ * under `CLIMATE.freeze`. Below the whole biome when the datum itself
  * is frozen. */
 export function frostLine(climate: Climate): number {
   return (climate.temperature - CLIMATE.freeze) / lapse(climate);
 }
 
-/** WHERE THE SNOW LIES: the country's own permanent line, or the frost
+/** WHERE THE SNOW LIES: the biome's own permanent line, or the frost
  * line where the cold brings the snow down under it — the lower of the two.
- * `null` on a country with no permanent snow is Infinity here, so a warm
+ * `null` on a biome with no permanent snow is Infinity here, so a warm
  * taiga answers "nowhere" the way it always has. */
 export function snowlineOf(climate: Climate, zones: BiomeLand["zones"]): number {
   return Math.min(zones.snow ?? Infinity, frostLine(climate));
@@ -327,9 +327,9 @@ export function snowCoverAt(climate: Climate, zones: BiomeLand["zones"], y: numb
   return clamp01((y - snowlineOf(climate, zones)) / CLIMATE.fade);
 }
 
-/** Whether a country under this climate is white ANYWHERE its ground
+/** Whether a biome under this climate is white ANYWHERE its ground
  * stands — what decides whether the blanket is laid at all. */
-export function snowyCountry(climate: Climate, zones: BiomeLand["zones"]): boolean {
+export function snowyBiome(climate: Climate, zones: BiomeLand["zones"]): boolean {
   return zones.snow !== null || frostLine(climate) < zones.rock.to;
 }
 
@@ -360,7 +360,7 @@ export function blanketDepth(temperature: number): number {
 }
 
 /** WHAT NEVER MELTED, m: the pack standing on ground that is `above`
- * metres over the country's OWN permanent snowline (`BiomeLand.zones.snow`),
+ * metres over the land's OWN permanent snowline (`BiomeLand.zones.snow`),
  * and nothing at or under it.
  *
  * `blanketDepth` is a fact about the air — a cold winter lays a deep
@@ -368,7 +368,7 @@ export function blanketDepth(temperature: number): number {
  * the wrong question to ask. A summer alpine snowfield sits under a +6 °C
  * afternoon and is still metres deep, because what is on it is years of
  * accumulation that the summer never got through. Read the two separately
- * and take the deeper (`blanketOver`): a warm country's winter stage is
+ * and take the deeper (`blanketOver`): a warm biome's winter stage is
  * untouched by this, and a snowfield stops being a white paint job. */
 export function permanentPack(above: number): number {
   const B = CLIMATE.blanket;
@@ -478,7 +478,7 @@ export type SnowHabit = (typeof SNOW_HABITS)[number];
  * simple stars. Colder, between about -3 and -10, the growth flips to rods
  * — needles and hollow columns, the "small bits of white hair" a guide
  * calls them, and nothing a child would draw. Colder still, and it flips
- * back: -10 to -22 is plate country again, and right around -15 it makes
+ * back: -10 to -22 is plate biome again, and right around -15 it makes
  * the big six-armed dendrites and ferns everybody pictures. Past -22 the
  * air has too little water left in it for any of that and goes back to
  * small plates and columns.
@@ -569,19 +569,19 @@ export function streamFrozen(climate: Climate, level: number, fall: number): boo
   return temperatureAt(climate, level) <= needs;
 }
 
-/** R48 — whether a country under this climate can hold ANY frozen water:
+/** R48 — whether a biome under this climate can hold ANY frozen water:
  * its ground has to reach the height the air drops to `CLIMATE.ice` at.
  *
  * A cheap NO for every warm stage, and a loose YES, because it asks about
- * the country's ceiling rather than about where the lakes actually lie —
+ * the biome's ceiling rather than about where the lakes actually lie —
  * and lakes lie in the hollows, well under it. Callers use it to skip the
  * ice entirely, never to conclude that a particular body is frozen; that
  * is `waterFrozen`'s answer and it needs the body's own level. */
-export function icyCountry(climate: Climate, zones: BiomeLand["zones"]): boolean {
+export function icyBiome(climate: Climate, zones: BiomeLand["zones"]): boolean {
   return (climate.temperature - CLIMATE.ice) / lapse(climate) < zones.rock.to;
 }
 
-/** Whether this country's rain is WET in this season: its row's own word,
+/** Whether this biome's rain is WET in this season: its row's own word,
  * or a wet season the climate grants it. */
 export function rainsIn(biome: BiomeId | string | undefined, season: Season): boolean {
   const rules = biomeRules(biome);
@@ -589,7 +589,7 @@ export function rainsIn(biome: BiomeId | string | undefined, season: Season): bo
   return rules.rain || (wet?.includes(season) ?? false);
 }
 
-/** The weathers a country's sky can be in during a season: its row's, plus
+/** The weathers a biome's sky can be in during a season: its row's, plus
  * rain wherever the season is a wet one. In the order the row lists them,
  * with rain slotted before the storm so the ladder still climbs. */
 export function weathersIn(

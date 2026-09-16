@@ -21,7 +21,7 @@
 // to draw a line on is `stroke-dashoffset`, and it was the first way this
 // worked — but that property animates on the MAIN THREAD, and the main thread
 // is exactly what this card is covering for. Standing a long stage up blocks
-// it for seconds at a stretch (compiling the road, building the country and
+// it for seconds at a stretch (compiling the road, building the biome and
 // its forest are single indivisible calls), and a card that freezes for those
 // seconds is worse than no card at all: it reads as a hung game.
 //

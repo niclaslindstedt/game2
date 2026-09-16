@@ -7,7 +7,7 @@
 // that applies them.
 //
 // The lattice is COARSE on purpose: fourteen metres between corners buys a
-// country's worth of ground for a stage's worth of triangles. What it costs
+// biome's worth of ground for a stage's worth of triangles. What it costs
 // is detail — nothing much narrower than a cell can be graded into the
 // drawn ground at all, because the flattening falls between the corners and
 // never reaches the surface anyone stands on or drives over. A road gets
@@ -26,16 +26,16 @@ export const GROUND_CELL = 14;
  * than the ground's.
  *
  * The paragraph above is the reason. The ground may be coarse because the
- * country has no edges in it — a hillside is the same hillside either side
+ * biome has no edges in it — a hillside is the same hillside either side
  * of a fourteen-metre step. Snow is not like that: it is a LAYER with a
  * boundary, and the boundary is the thing the eye reads it by. The bank at
  * a ploughed road's lip stands up over `CLIMATE.blanket.verge` — four
  * metres — so on the ground's own lattice it falls between two corners and
  * is erased, which leaves a winter stage as flat white ground rather than
- * as a country with a coat on it.
+ * as a biome with a coat on it.
  *
  * Two metres holds that bank in two samples and a rut in one. It is only
- * ever asked about where a country is actually white, and it is cached the
+ * ever asked about where a biome is actually white, and it is cached the
  * way the ground's corners are, so a green stage pays nothing for it. */
 export const SNOW_CELL = 2;
 

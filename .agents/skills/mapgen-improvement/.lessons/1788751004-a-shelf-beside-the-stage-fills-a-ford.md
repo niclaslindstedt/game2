@@ -16,7 +16,7 @@ Anything that flattens ground beside the route — a drive, a pad, a stand, a
 mound — has to keep off the fords and bridges ALONG THE STAGE, not just off
 the water on the map: `keepOff.water` (90 m along `s`, either way) is the
 homestead's version. `land.flooded` says nothing about a ford, because a
-ford is the road's water, not the country's.
+ford is the road's water, not the biome's.
 
 Two habits that made this cheap: the sweep of suites the change touches is
 re-run after EVERY generator fix, not once at the end (this appeared only

@@ -34,7 +34,7 @@
 // stage nobody has driven costs nothing and reads exactly as it always
 // did. Only the cells a wheel has actually crossed are kept, in a hash
 // table of the carved share alone, grown as the run needs it and capped so
-// a car that spends a stage in the country cannot grow it without end.
+// a car that spends a stage in the biome cannot grow it without end.
 //
 // Deterministic, like everything else in the engine: the cells are written
 // in step order and read by interpolation, so two runs of one seed leave
@@ -278,7 +278,7 @@ export function createSnowpack(white: boolean): Snowpack {
  * model, and the only part of it that has to know what a road is.
  *
  * Two grounds meet here and they are stated in different places. Out in the
- * country the snow is the terrain's blanket (climate.ts, terrain.ts): as
+ * biome the snow is the terrain's blanket (climate.ts, terrain.ts): as
  * deep as the cold at this height makes it, untouched, cleared to nothing
  * along every corridor. On the road it is `TrackSample.snow` — a fraction
  * of that, because the road was bladed — already worn into the five lines

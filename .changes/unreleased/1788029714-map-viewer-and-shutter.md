@@ -12,7 +12,7 @@ whole stage: leaned in, that gentle turn walks the ground straight past the
 thing you leaned in to look at.
 
 For developers, the map grows two things. **MAP VIEWER**, on the developer
-menu, lists the campaign's own stages by country and opens any of them on the
+menu, lists the campaign's own stages by biome and opens any of them on the
 full-screen map — the roads a player actually drives, rather than whatever
 Roam's dials were last left on. And **SCREENSHOT**, on the map's own strip,
 saves the whole screen with the debug boxes, the layer legend and the REPRO

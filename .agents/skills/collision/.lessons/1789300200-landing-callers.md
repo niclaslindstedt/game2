@@ -16,7 +16,7 @@ shows, and the gap is the surface. The three callers:
 
 Two consequences worth having in mind before touching it. First, a fall onto
 loose ground is a genuinely gentler arrival than the same fall onto tarmac —
-`surfaces.give` is a quarter in open country — so anything sized off a
+`surfaces.give` is a quarter in open land — so anything sized off a
 terminal-velocity plunge has to be sized off the SOFT case or it will only
 fire on sealed roads. Second, `car.ts`'s call is why an attitude-dependent
 rule cannot simply read `car.pitch` inside `landingDamage`: on a 45° bank a

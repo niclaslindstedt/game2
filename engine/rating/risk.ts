@@ -48,7 +48,7 @@ export function rateRisk(walk: Walk, terrain: TerrainField): Facet {
     // cone of ground beside every road, so the metres immediately off the
     // shoulder are a bench by construction — read there alone, the whole
     // sweep reports zero exposure and the trait measures the rule rather
-    // than the country. What a driver sees is what happens PAST the bench.
+    // than the biome. What a driver sees is what happens PAST the bench.
     let drop = 0;
     for (const side of [-1, 1]) {
       for (const reach of [shoulder + 14, shoulder + 36, shoulder + 70]) {

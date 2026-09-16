@@ -10,7 +10,7 @@ the start line. It moved `track.samples` and `track.junctions`, and ran
 AFTER `append()` — so every road hung off the stage inside `append`
 (`buildForks`, `buildTowns`, `buildHomesteads`) had already been laid
 against the pre-ramp profile. Half a lap along, that is the ramp's full
-half-step of tarmac floating over the country: on seed 27 medium circuit
+half-step of tarmac floating over the land: on seed 27 medium circuit
 the junction arm started 1.27 m under the road it joined, and the terrain's
 two shelves met in a cliff a few metres out.
 
@@ -20,7 +20,7 @@ Two rules fall out of it, and both cost a second debugging round to find:
   that writes `sample.elevation` (`shapeJunctions`) and BEFORE `buildForks`.
   Only the samples and the junctions can be moved by arithmetic — an arm, a
   drive and a car park lane are anchored to the route at one end and to the
-  COUNTRY at the other, so no offset is right for both. What they have is
+  BIOME at the other, so no offset is right for both. What they have is
   their own grade-limited walk down to the land, and that walk only comes
   out right when it starts from the corrected profile. It is also the
   profile `shelfBand` (R31) is read off, live from `track.samples`.

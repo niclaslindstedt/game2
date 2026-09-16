@@ -149,7 +149,7 @@ describe("the rule book is self-consistent", () => {
     it("relaxes its setbacks from full standard down to none", () => {
       // Both ladders are read with the same rung index, so they have to be
       // the same length, start at the full standard, and end at nothing —
-      // a country that will not yield a stage still has to produce one.
+      // a biome that will not yield a stage still has to produce one.
       expect(R.water.routeClearLadder.length).toBe(R.elevation.fillLadder.length);
       expect(R.water.routeClearLadder[0]).toBe(1);
       expect(R.elevation.fillLadder[0]).toBe(1);
@@ -162,14 +162,14 @@ describe("the rule book is self-consistent", () => {
       }
     });
 
-    it("lets a wetter country run its roads closer to the water", () => {
+    it("lets a wetter biome run its roads closer to the water", () => {
       // The dial has to shrink the setback, or turning the water UP pushes
       // the route into the dry corridors and the stage comes out drier
       // than a dry seed's — the dial working backwards.
       expect(R.wet.routeSetback.max).toBeLessThan(R.wet.routeSetback.min);
     });
 
-    it("allows a road to stand further off the country than a verge is deep", () => {
+    it("allows a road to stand further off the land than a verge is deep", () => {
       // The fill cap is a plausibility bound, not a flattener: it has to
       // leave room for ordinary cut and fill, which is at least the depth
       // the corridor itself works to.

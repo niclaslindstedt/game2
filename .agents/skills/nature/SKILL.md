@@ -26,7 +26,7 @@ its generation, `mapgen-improvement`.
 | `pwa/src/game/flora-species.ts` | HOW each plant is shaped: the taiga's ~60 parametric variants, as recipes over the builder |
 | `pwa/src/game/flora.ts` | The shape cache, the two shared materials, the ground-cover sway shader, and the two ways a population is instanced |
 | `pwa/src/game/planting.ts` | Which species dresses a given patch of ground, which of them read as solid trunks and which as brush, how one engine prop is dressed, and the understory skirt around a mature trunk |
-| `pwa/src/game/wild.ts` | The open country beyond the road bands: pooled flora and the wild's stone, streamed in cells around the CAR |
+| `pwa/src/game/wild.ts` | The open land beyond the road bands: pooled flora and the wild's stone, streamed in cells around the CAR    |
 | `pwa/src/game/terrain.ts` | The heightfield AND its paint: altitude bands, moss/heath/forest-floor noise patches, slope-revealed bedrock, the tiling detail speckle, the road-apron shelf |
 | `pwa/src/game/world.ts` | WHERE the SOFT things stand (ground cover, stumps, shrubs), dressing engine trunks with species, road clearance, boulders' rock meshes, cut-wall outcrop slabs, the rally gates and hay bales |
 | `engine/mapgen/props.ts` | WHERE the SOLID things stand: the region/grove/stand quilt (`REGIONS`, `GROVES`, `regionAt`, `groveAt`) and every collidable trunk (`treesNear`) and prop (`obstaclesNear`) — the car crashes into these, so placement is the engine's (the `collision` skill owns the contact itself) |
@@ -52,7 +52,7 @@ drawing from the same helpers or their patches stop lining up.
   exist: the taiga and the desert.
 - **The landscape is quilted at THREE scales**, all placed in the engine
   because the trunks are solid: a SUB-REGION (~900 m) says what kind of
-  country this is and re-weights the groves under it; a GROVE (~150 m)
+  biome this is and re-weights the groves under it; a GROVE (~150 m)
   picks the community; a STAND noise (~42 m) clumps the trees INSIDE one
   grove into closed thickets and the clearings between them. The stand
   noise is what stops a forest reading as evenly sprinkled, and its mean is
@@ -214,7 +214,7 @@ whether a forest reads as a forest.
   weight, density and small species mix. Check it appears at the grove
   scale by driving seeds.
 - **A new biome**: an engine row in `engine/mapgen/biomes.ts` (the quilt
-  and the country's rules), an app row in `pwa/src/game/biome-<id>.ts`
+  and the biome's rules), an app row in `pwa/src/game/biome-<id>.ts`
   registered in `biome.ts`'s `BIOMES`, its plants in `flora-<id>.ts` merged
   into `VARIANTS`, its brush named in `planting.ts`'s `SOFT_FLORA`, a
   `weathers` list and a sky look (`LOOKS`/`CASTS` in `sky.ts`), and what

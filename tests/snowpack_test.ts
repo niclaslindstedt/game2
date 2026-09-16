@@ -383,7 +383,7 @@ describe("the pack itself", () => {
 });
 
 describe("what the snow a car pressed is DRAWN as", () => {
-  /** The GROUND TILES' own surface at a point, m — the country's 14 m
+  /** The GROUND TILES' own surface at a point, m — the biome's 14 m
    * lattice with the snow on it, laid `coatRoom` under the untouched top so
    * the coat above has somewhere to sink to (`terrain.ts` samples exactly
    * this; it is restated here because that module is a renderer and this
@@ -534,7 +534,7 @@ describe("what the snow a car pressed is DRAWN as", () => {
   });
 
   it("leaves the ground alone where there is no snow to press", () => {
-    // The room is taken out of the snow and never out of the country, so a
+    // The room is taken out of the snow and never out of the land, so a
     // green stage, a bladed road's corridor and the ice on a lake are drawn
     // exactly where they always were.
     expect(coatRoom(0)).toBe(0);

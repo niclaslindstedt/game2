@@ -14,7 +14,7 @@
 //     the ear, so it is the loudest it ever is.
 //   * BEHIND the car the exhaust is what you hear of the engine, the tyres
 //     are the surface being thrown at you, and the wind is the camera's own.
-//   * HIGH ABOVE it the car is a small thing in a big country: the engine
+//   * HIGH ABOVE it the car is a small thing in a big biome: the engine
 //     is thin, the wind is gone, and the world — the birds, the trees, the
 //     weather — is most of what there is.
 //
@@ -159,7 +159,7 @@ export const LISTENERS: Record<PlayCamera, Listener> = {
   // THE TRACKSIDE TRIPOD (camera-tv.ts) — the one seat in the game that is
   // not moving. No wind, because nothing is travelling through the air; the
   // exhaust and the scrub carry the shot, because what this camera is for is
-  // a car arriving sideways a few metres away; and the country is loud,
+  // a car arriving sideways a few metres away; and the biome is loud,
   // because the ear is standing in it rather than being flown over it.
   tv: {
     engine: 0.7,

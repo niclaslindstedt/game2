@@ -19,7 +19,7 @@
 //   npm run analyze -- --count 24         # a sweep
 //   npm run analyze -- --length long --shape circuit
 //   npm run analyze -- --water 1 --elevation 1   # the generator's dials
-//   npm run analyze -- --biome desert            # ...and the country (R40)
+//   npm run analyze -- --biome desert            # ...and the biome (R40)
 //   npm run analyze -- --steepness 1 --asphalt 1 # R34: rock, and roads cut through it
 //   npm run analyze -- --challenge 1            # R46: the difficulty dial
 //   npm run analyze -- --checks           # every check, not just the metrics

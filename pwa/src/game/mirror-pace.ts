@@ -19,7 +19,7 @@
 //   * HOW FAR it sees. This one pays TWICE. It is the mirror camera's own
 //     far plane, so it decides what that pass draws; and the same frustum is
 //     handed to the world's cull (`world.cull`'s `also`), so it also decides
-//     how much open country BEHIND the car the forward pass is forbidden to
+//     how much open land BEHIND the car the forward pass is forbidden to
 //     throw away. It is the only lever here that makes the frame the player
 //     is actually looking at cheaper.
 //

@@ -152,7 +152,7 @@ And the pieces that belong to no skill in particular:
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Run orchestration (phases, laps, respawn, events) | `engine/game/step.ts`                                                                                                                          |
 | Track geometry / compilation                      | `engine/mapgen/compile.ts`                                                                                                                     |
-| What a surface does to the car                    | `TUNING.surfaces`; a country's loose surface is `BiomeRules.loose`                                                                             |
+| What a surface does to the car                    | `TUNING.surfaces`; a biome's loose surface is `BiomeRules.loose`                                                                               |
 | Anything drawn, with no better home               | `pwa/src/game/` (`renderer.ts` and friends)                                                                                                    |
 | What the player FEELS — the device's vibration    | `pwa/src/game/rumble.ts` (the whole table, DOM-free) → `haptics.ts`, the only module that buzzes; a phone's own haptics are `platform-shells` |
 | What a RACE COSTS TO STAND UP, and its card       | `pwa/src/game/race-loader.ts` (the steps and the frame budget, DOM-free) + `loading-screen.tsx`; the steps are `App.tsx`'s `beginLoad` |
@@ -209,7 +209,7 @@ Each of these is the one place an answer is written down. Anything that needs it
 | An age rating, a category, a Steam tag | `native/store/listing.mts` — the rules half, committed; then `make store-metadata` |
 | A spec chapter, or a verdict under one | `docs/spec-conformance.md` — `sync-game-spec` re-dates it      |
 
-The campaign menu's routes and biome banners are generator OUTPUT, so every rule change re-rolls them: a re-seeded, re-banded or re-lit level otherwise leaves a picture of a stage that no longer exists. Editing the first level of a location, or adding a location, re-shoots that country's banner.
+The campaign menu's routes and biome banners are generator OUTPUT, so every rule change re-rolls them: a re-seeded, re-banded or re-lit level otherwise leaves a picture of a stage that no longer exists. Editing the first level of a location, or adding a location, re-shoots that biome's banner.
 
 ## Parity and cross-cutting rules
 

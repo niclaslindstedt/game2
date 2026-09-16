@@ -12,7 +12,7 @@ does not exist to the car either.
 
 Where something has to be finer (the training ground's ramp, its graded
 roads, its banked corner), give that region its own lattice and make it
-NEST: `GROUND_CELL / 4`, so every country corner is also a fine corner and
+NEST: `GROUND_CELL / 4`, so every biome corner is also a fine corner and
 the two meshes share their boundary vertices exactly. Two rules make the
 seam invisible and honest:
 
@@ -24,7 +24,7 @@ seam invisible and honest:
   tile beside a coarse one has no crack and no disagreement.
 - **The boundary of the fine region must sit where the fine field asserts
   nothing.** If the region's own blend weight is still non-zero at the
-  boundary, the coarse tile beside it draws the un-blended country and the
+  boundary, the coarse tile beside it draws the un-blended biome and the
   two disagree by exactly the blend.
 
 Cost is smaller than it looks: `make profile`'s `training` row is 366 draws

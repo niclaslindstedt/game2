@@ -92,7 +92,7 @@ float viewDepth(vec2 uv) {
 
 /** The circle of confusion at a point, in pixels. Relative rather than
  * absolute: what matters is how far out of focus a thing is compared with how
- * far away it is, which is why the far country saturates at one disc while
+ * far away it is, which is why the far biome saturates at one disc while
  * a leaf in front of the lens goes to the ceiling. */
 float coc(vec2 uv, float height) {
   float z = viewDepth(uv);
@@ -116,7 +116,7 @@ void main() {
       float a = float(i) * GOLDEN;
       vec2 at = vUv + vec2(cos(a), sin(a)) * r * radius * texel;
       // A tap only counts toward a disc it is itself blurry enough to belong
-      // in. Without this the sharp car bleeds outward into the soft country
+      // in. Without this the sharp car bleeds outward into the soft biome
       // behind it and wears a halo — the one artefact that makes a gather
       // look like a bug rather than like a lens.
       float w = step(r * radius - 1.0, coc(at, height));

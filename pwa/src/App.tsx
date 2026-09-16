@@ -383,7 +383,7 @@ export function App() {
 
   // WHERE THE RESULTS CARD GOES ON TO. Only the ladder has a next rung:
   // Roam is one stage and a time trial is one stage repeated, so both offer
-  // the way out and nothing else. R30 — and the rung into the NEXT country is
+  // the way out and nothing else. R30 — and the rung into the NEXT biome is
   // behind this location's table, so the ladder is asked rather than walked.
   const ladder =
     run.mode === "campaign" && run.levelId
@@ -399,7 +399,7 @@ export function App() {
     upNext && !missedPodium
       ? { name: upNext.name, go: (): void => playLevel(upNext, "campaign") }
       : null;
-  // …and when the way on is a country rather than a stage, what is holding
+  // …and when the way on is a biome rather than a stage, what is holding
   // it shut. Said only to a player who cleared the stage: one outside the
   // podium is being told to run this one again, and a second lock behind
   // that one is noise.

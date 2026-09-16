@@ -26,7 +26,7 @@ Three seams, and none of them is typed:
   dressed as barrel cacti and the scatter never plants them.
 
 And the absolute heights are the TAIGA's: `LAKE_Y + 4` is the shoreline,
-`HIGHLAND_Y` is 26 m, the rock line paints from 26 m. A dry country keeps its
+`HIGHLAND_Y` is 26 m, the rock line paints from 26 m. A dry biome keeps its
 pans well above the lake table (`BiomeLand.floor`) and `mixAt` asks the
-engine whether the country has water before it reads the height, or every
+engine whether the biome has water before it reads the height, or every
 pan grows willows.

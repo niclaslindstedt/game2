@@ -54,7 +54,7 @@ export async function toolShots(shot) {
     ...MAP_FRAME,
   });
 
-  // ...then one sheet per layer, in the order the country was made: the rock,
+  // ...then one sheet per layer, in the order the land was made: the rock,
   // the water in it, the soil on it, the forest rooted in that, and the road
   // cut through the lot.
   for (const layer of ["bedrock", "water", "soil", "flora", "roads"]) {
@@ -156,7 +156,7 @@ export async function toolShots(shot) {
   );
 
   // ...and the same boxes where a PLAYER meets them: Roam's own SELECT A
-  // LEVEL, which is the campaign's country rows and the campaign's stage grid
+  // LEVEL, which is the campaign's biome rows and the campaign's stage grid
   // with the padlocks off.
   await capture(
     "shot-roam-stages",
@@ -278,7 +278,7 @@ export async function toolShots(shot) {
   //   test is that the two substances do not look alike: rain is a scatter of
   //   bright streaks with dark air between them, snow a wall.
   //
-  //   MIDDLE — the far shell, hatching the country over rather than stopping
+  //   MIDDLE — the far shell, hatching the biome over rather than stopping
   //   at a bubble round the car. A frame where the rain ends at a clean radius
   //   is the defect this set exists to catch.
   //

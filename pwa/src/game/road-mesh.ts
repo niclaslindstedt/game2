@@ -155,7 +155,7 @@ function dustAt(track: Track, x: number, z: number): number {
  * disc per sample, at the width that sample actually is.
  *
  * What it answers is "is this point paved by somebody", which is the only
- * honest way to decide whether a border vertex may wear the country's
+ * honest way to decide whether a border vertex may wear the biome's
  * colour. A junction is two roads and a graded platform, and each of the
  * three knows about itself: the main road's own edge is `mainEdgeAt`, the
  * platform is `junctionAt`, and neither of them is the MOUTH — the minor
@@ -233,7 +233,7 @@ export type GroundBeside = {
 
 /** The road, across its whole width and a little past it: the mat with its
  * camber and its two worn wheel tracks, the chamfered edge, the shoulder,
- * and the band over which the whole thing runs out into the country (R16).
+ * and the band over which the whole thing runs out into the land (R16).
  * The SHAPE comes from the engine (road.ts) — the same profile the physics
  * rides and the terrain field hangs its shelf off — so what the car climbs
  * out of is exactly what the player sees it climb out of.
@@ -278,17 +278,17 @@ export function buildRoad(
   const gravelDust = new THREE.Color();
   const looseGravel = new THREE.Color(ROAD_PAINT.gravel.loose);
   const wornGravel = new THREE.Color(ROAD_PAINT.gravel.worn);
-  const country = new THREE.Color();
+  const biome = new THREE.Color();
   // What the ribbon's colour has to be multiplied by at the corridor's lip
   // so that, once this mesh's gravel map has had its say, it renders what
   // the ground beside it renders under the detail map. Read off the two
   // canvases rather than declared, so re-speckling a texture keeps the seam
   // shut. Built here, once per ribbon, rather than at module scope: both
   // textures are painted lazily and neither exists until something asks.
-  // R40 — the grain the ribbon is drawn under is the country's own grit:
+  // R40 — the grain the ribbon is drawn under is the biome's own grit:
   // brown stone over the shield's gravel, a pale hueless one over sand,
   // grey over a mountain's chippings. One map per ribbon, because a stage
-  // is in one country. The GRAVEL paint is derived from the same grit, so
+  // is in one biome. The GRAVEL paint is derived from the same grit, so
   // a grey road is grey and not the taiga's brown under a grey speckle;
   // the sand row stays authored, because bleached sand's split between
   // loose and worn is shallower than any rule for stone gives it.
@@ -352,7 +352,7 @@ export function buildRoad(
     // read under the grit map's darkening.
     const snowy = kind === "snow" || kind === "ice";
     shoulder.copy(snowy ? snowBank : earth);
-    // R47 — inside a BORE the country beside the road is the mountain,
+    // R47 — inside a BORE the land beside the road is the mountain,
     // twenty metres up. The ribbon must not hand its outer band over to it.
     // `tunnel` rides the engine's sample rather than the ribbon's shape.
     const bored = (s as Ribbon & { tunnel?: boolean }).tunnel === true;
@@ -459,7 +459,7 @@ export function buildRoad(
           // and a real crossing is scuffed evenly all over anyway.
           const flat = s.flat ?? 0;
           paint.copy(loose).lerp(worn, wearAt(l * wide, here) * (1 - flat) + 0.55 * flat);
-          // R16 — the road's outer line has to MEET the country, not stop at
+          // R16 — the road's outer line has to MEET the biome, not stop at
           // it. Over the last stretch of the mat the surfacing gives way to
           // the shoulder's dirt, along a line that wanders: a dead straight
           // boundary ruled parallel to the centerline is the one thing that
@@ -507,7 +507,7 @@ export function buildRoad(
           paint.copy(shoulder).lerp(loose, memory * (1 - out / ROAD_CROSS.verge.bareTo));
         } else {
           // R16 — THE DISSOLVE. Past the bare shoulder the road runs out into
-          // the country, and this is the half of that a player actually sees.
+          // the biome, and this is the half of that a player actually sees.
           //
           // What it must not be is a lerp between two colours across a band of
           // fixed width, because that is a line ruled parallel to the
@@ -523,13 +523,13 @@ export function buildRoad(
           // tile mesh is standing next to.
           const t = 1 - handoverAt(out);
           if (bored) {
-            // No country to run out into: the floor of the bore, to the wall.
+            // No biome to run out into: the floor of the bore, to the wall.
             paint.copy(shoulder);
           } else if (ground !== undefined) {
             const g = valueNoise(px, pz, DISSOLVE.patch, DISSOLVE.seed);
             const mix = clamp01(t * (1 + DISSOLVE.spread) - g * DISSOLVE.spread);
-            ground.paintAt(px, pz, country);
-            paint.copy(shoulder).lerp(country, mix);
+            ground.paintAt(px, pz, biome);
+            paint.copy(shoulder).lerp(biome, mix);
             // ...and then UNDO THIS MESH'S OWN MAP, by however much of the
             // ground's colour the vertex has taken.
             //
@@ -557,7 +557,7 @@ export function buildRoad(
         // R17 — and NO BORDER over the road it meets. A minor road's shoulder
         // and verge stop dead at the main road's edge, because past that line
         // the ground is the through road's: a vertex out there wearing the
-        // country's colour is a patch of grass lying on the carriageway, and
+        // biome's colour is a patch of grass lying on the carriageway, and
         // that is what the mouth's outer corner had. The sample's own centre
         // cannot answer this — it is metres away and often clear of the main
         // road while its verge is not — so it is asked per VERTEX, where the
@@ -571,11 +571,11 @@ export function buildRoad(
           // ...and NO GRASS ON THE PAVING either. A junction is graded and
           // surfaced out to its rim (R17), so a border vertex inside the
           // platform is standing on made ground however far it is from
-          // either mat — and one that has dissolved into the country is a
+          // either mat — and one that has dissolved into the land is a
           // green tongue lying across the crossing, tapering to a point at
           // the mouth's outer corner. Held at the bare shoulder instead,
           // which is what the ground round a junction actually is, and
-          // faded out on the platform's own edge so the country comes back
+          // faded out on the platform's own edge so the biome comes back
           // where the made ground stops.
           const graded = paved ? 1 : junctionAt(track, px, pz);
           if (graded > 0) paint.lerp(shoulder, graded);

@@ -66,7 +66,7 @@ const CAP = 40;
  * The cap above bounds how many plants of one species are in the pass; this
  * bounds how many meshes, which is what the draw-call count is made of — a
  * pool that takes every tall variant a biome plants measured at +36 draws a
- * frame, and varied with the country. Sorted tallest first, so what gets in
+ * frame, and varied with the biome. Sorted tallest first, so what gets in
  * is what throws the longest shadows.
  *
  * Together the two make the top stop cost a FIXED amount rather than one

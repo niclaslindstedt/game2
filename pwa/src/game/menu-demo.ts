@@ -26,7 +26,7 @@ export type DemoConditions = Pick<
 /** THE ROAD THE MENU'S DEMO DRIVES: the one already standing, wherever there
  * is one.
  *
- * Compiling a route and building the country around it is the better part of
+ * Compiling a route and building the land around it is the better part of
  * two seconds, and none of it can be cut into frames — which is the whole
  * reason a race is stood up behind a loading card (`race-loader.ts`). The menu
  * has no card. The press that walks out of a run, and the one that steps back

@@ -71,7 +71,7 @@ const TRIES = 8;
 const MAT_TRIES = 2;
 
 /** ...and tufts of grass, per sample per side. The other direction of the
- * same hand-over: the stones run out into the country and the country grows
+ * same hand-over: the stones run out into the land and the biome grows
  * back in, on the same noise field, so the two interlock instead of meeting.
  * Sparser than the stones: a tuft costs the same four triangles but stands
  * up, so it is a far bigger thing on screen and a great many fewer of them
@@ -137,7 +137,7 @@ export type RoadSpill = {
  * `groundAt` is the DRAWN surface (the terrain field's, not the analytic
  * height): in the hand-over band those two differ by the whole of R16's
  * blend, and a stone placed on the analytic one floats over the road it is
- * supposed to be lying on. `paintAt` is the country's own colour, so a tuft
+ * supposed to be lying on. `paintAt` is the biome's own colour, so a tuft
  * growing out of the verge is the green the ground beside it already is
  * rather than a green of its own. `blocked` rejects water, and the caller's
  * own road-clearance walk keeps the scatter off any other road. */

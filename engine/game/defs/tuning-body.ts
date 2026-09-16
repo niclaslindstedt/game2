@@ -214,7 +214,7 @@ export const BODY_TUNING = {
     crestSpan: 12,
     /** ...and the baseline its CROSS-SECTION is read over, as a share of the
      * road's own HALF-WIDTH. The two directions cannot share a baseline:
-     * `crestSpan` laid across an 8 m road reaches into the country on both
+     * `crestSpan` laid across an 8 m road reaches into the land on both
      * sides and reads the whole shelf, and the road's own width read along
      * the stage turns every ripple into a hop.
      *

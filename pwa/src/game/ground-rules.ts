@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// WHAT THE COUNTRY'S GROUND IS, as rules — stated once and DOM-free, so the
+// WHAT THE BIOME'S GROUND IS, as rules — stated once and DOM-free, so the
 // tile paint (terrain.ts), the dust a wheel throws (ground-tint.ts, through
 // car-fx.ts), the road's own colour (road-mesh.ts, textures.ts) and the
 // tests all read the same answer:
 //
-//   - THE ELEVATION ZONES (R40, `BiomeLand.zones`): where a country's meadow
+//   - THE ELEVATION ZONES (R40, `BiomeLand.zones`): where a biome's meadow
 //     goes to rock and where its rock goes under snow. The taiga's rock line
 //     runs 26..52 m and it has no snow; the alpine's stands a couple of
 //     hundred metres higher with a snowline over it.
 //   - THE SLOPE: a face shows rock whatever its height, and sheds snow.
-//   - THE GRIT (`Biome.grit`): what a bladed road in this country is made
+//   - THE GRIT (`Biome.grit`): what a bladed road in this biome is made
 //     of, and so what colour its mat, its wheel tracks and its speckle are.
 
 import * as THREE from "three";
@@ -31,12 +31,12 @@ function clamp01(t: number): number {
 
 export type Zones = BiomeLand["zones"];
 
-/** The zones of the country a stage's dials build (R47, `landOf`) — the
+/** The zones of the biome a stage's dials build (R47, `landOf`) — the
  * bands climb with the ALTITUDE dial, so a mountain drawn six thousand
  * metres high carries its treeline and its snowline where a mountain that
  * high carries them, rather than where a three-hundred-metre one does.
  * Unnamed dials are the taiga's row, exactly as the engine resolves a
- * country it does not know. */
+ * biome it does not know. */
 export function zonesOf(knobs: StageKnobs | undefined): Zones {
   return knobs ? landOf(knobs).zones : biomeRules(undefined).land.zones;
 }
@@ -51,7 +51,7 @@ const STEP = 14;
  * that band — a flank steeper than about 45° is rock all the way. */
 export const ROCK_SLOPE = { from: 0.88, band: 0.18 };
 /** THE SNOW. Over `fade` metres the ground goes white, starting `lead`
- * metres UNDER the country's snowline — the road turns to packed snow at
+ * metres UNDER the biome's snowline — the road turns to packed snow at
  * the line itself, and a white road through bare grit is a road drawn on
  * the wrong picture, so the verge is already patched white when the road
  * gets there. On gentle ground first: a face's own snowline stands `climb`
@@ -65,7 +65,7 @@ export const ROCK_SLOPE = { from: 0.88, band: 0.18 };
  * summer alpine's own rule: at the edge of the permanent snow the wind
  * scours every face and the cover survives on the flats, which is what a
  * summit reads as in July. A WINTER is not that. The cold brings the line
- * down hundreds of metres under the whole country (`zonesUnder`), and by
+ * down hundreds of metres under the whole biome (`zonesUnder`), and by
  * then the snow is on everything a slope can hold it on — a hillside at
  * forty degrees is white to its top, and only rock too steep for anything
  * to sit on is bare. So the face rule RELAXES with depth: `deep` is how
@@ -74,7 +74,7 @@ export const ROCK_SLOPE = { from: 0.88, band: 0.18 };
  * about sixty degrees holds it all, and past about seventy-five nothing
  * does, which is the angle snow actually stops sitting at. Without it a
  * winter stage is white flats between brown hillsides, which is the one
- * thing a snowed country never looks like — and it is the paint
+ * thing a snowed biome never looks like — and it is the paint
  * disagreeing with the physics, which lays its blanket by height alone. */
 export const SNOW = {
   fade: CLIMATE.fade,
@@ -87,12 +87,12 @@ export const SNOW = {
   sheer: 0.5,
 };
 
-/** THE ZONES UNDER A CLIMATE: the country's own, with its snowline brought
+/** THE ZONES UNDER A CLIMATE: the biome's own, with its snowline brought
  * down to wherever the cold freezes the ground (`snowlineOf`, climate.ts)
  * — the zones the PAINT and the powder read, so a winter taiga is white to
  * the eye exactly where it is snow to the wheels. Not the zones the trees
  * are planted by: a forest stands through its winter, and `plantZone`
- * keeps the country's own line for that. */
+ * keeps the land's own line for that. */
 export function zonesUnder(climate: Climate, zones: Zones): Zones {
   const snow = snowlineOf(climate, zones);
   return snow === zones.snow ? zones : { ...zones, snow: Number.isFinite(snow) ? snow : null };
@@ -100,7 +100,7 @@ export function zonesUnder(climate: Climate, zones: Zones): Zones {
 
 /** Whether the ground at a height is under a winter's snow — the blanket
  * the cold lays wherever it freezes, which in a hard one is the whole
- * country (`snowlineOf`, climate.ts). */
+ * biome (`snowlineOf`, climate.ts). */
 function frozenAt(knobs: StageKnobs | undefined, climate: Climate, y: number): boolean {
   return snowCoverAt(climate, zonesOf(knobs), y) > 0.5;
 }
@@ -116,7 +116,7 @@ export function bareRock(y: number, normalY: number, zones: Zones): number {
 }
 
 /** How much of the ground lies under snow, 0..1, before the rock windows
- * the paint cuts in it: none in a country with no snowline, a fade in over
+ * the paint cuts in it: none in a biome with no snowline, a fade in over
  * the first `SNOW.fade` metres above a line that climbs with the ground's
  * lean, and none at all on a face — until the ground stands far enough over
  * the line that the margin has become a winter, at which point the lean
@@ -143,7 +143,7 @@ function normalAt(groundAt: (x: number, z: number) => number, x: number, z: numb
 
 /** The paint rules above, asked at a world position off the ridden ground
  * lattice, so anything reading the ground the car is on agrees with what is
- * drawn under it. `biome` is the country's id; unnamed, the taiga's zones. */
+ * drawn under it. `biome` is the biome's id; unnamed, the taiga's zones. */
 export function rockAt(
   groundAt: (x: number, z: number) => number,
   x: number,
@@ -172,14 +172,14 @@ export function snowAt(
  * of those grows whatever the quilt says it grows. */
 export type PlantZone = "shore" | "snow" | "riparian" | "highland" | "community";
 
-/** Which context a height stands in, in a country — the rule `mixAt`
+/** Which context a height stands in, in a biome — the rule `mixAt`
  * (planting.ts) turns into a mix. Read off the same zones as the paint,
  * so the flora and the ground always tell the same story about how high
  * up this is: the highland takes over where the paint starts going to
  * rock, and over the snowline nothing is planted at all. */
 export function plantZone(knobs: StageKnobs, y: number, riparian: boolean): PlantZone {
   const rules = biomeRules(knobs.biome);
-  // R40 — a country with no water has no shoreline, however low its pans
+  // R40 — a biome with no water has no shoreline, however low its pans
   // lie: the height test is only a shoreline where there is water to
   // stand at.
   if (rules.water && y < LAKE_Y + 4) return "shore";
@@ -191,7 +191,7 @@ export function plantZone(knobs: StageKnobs, y: number, riparian: boolean): Plan
 }
 
 /** R47 — WHETHER THE GROUND AT A HEIGHT IS UNDER SNOW, and so grows nothing
- * soft: over the country's own permanent line, or under the blanket the
+ * soft: over the land's own permanent line, or under the blanket the
  * cold has brought down hundreds of metres below it. The one question every
  * app-side planting pass asks — the ground-cover bands, the verge's own
  * fringe, the brush between the trunks, the skirt round one, and the crowd's
@@ -200,7 +200,7 @@ export function plantZone(knobs: StageKnobs, y: number, riparian: boolean): Plan
  * down.
  *
  * It is a TEMPERATURE rule as much as a height one: the line it measures
- * from is the lower of the country's permanent snow and the height this
+ * from is the lower of the biome's permanent snow and the height this
  * stage's air freezes at (`snowlineOf`, climate.ts), so the same alp grows
  * grass to its shoulders in July and none at all in January.
  *
@@ -238,7 +238,7 @@ export function looseShades(grit: number): { ground: string; flecks: string[] } 
   return { ground: css(ground), flecks: [dark(0.89), pale(0.16), dark(0.76), pale(0.38)] };
 }
 
-/** R40 — the GRAVEL road's paint, for a country's own grit: the mat is the
+/** R40 — the GRAVEL road's paint, for a biome's own grit: the mat is the
  * grit a step lighter and a shade brighter (the loose dry stone on top),
  * the wheel tracks the grit a step darker (the packed subgrade showing
  * through). The offsets are the taiga's own — `ROAD_PAINT.gravel` IS this

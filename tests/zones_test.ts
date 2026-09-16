@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R40 — THE ELEVATION ZONES. Each country states where its meadow goes to
+// R40 — THE ELEVATION ZONES. Each biome states where its meadow goes to
 // rock and where its rock goes under snow (`BiomeLand.zones`), and three
 // sides of the app read the same row: the terrain's paint, what a wheel
 // throws off the ground it is standing on, and what is planted where. The
 // taiga's zones are the numbers those readers were written against, so the
-// taiga must answer exactly as it always did; the alpine is the country the
+// taiga must answer exactly as it always did; the alpine is the biome the
 // zones exist for, so above its snowline the ground has to read as snow and
 // grow nothing.
 //
@@ -34,11 +34,11 @@ import {
 } from "../pwa/src/game/ground-rules.ts";
 
 /** The dials the readers now take: R47's ALTITUDE moves the bands, so what
- * they are asked is a whole set of knobs rather than a country's name. Every
- * case here is at the dial's default, which is the country each biome row
+ * they are asked is a whole set of knobs rather than a biome's name. Every
+ * case here is at the dial's default, which is the land each biome row
  * describes — the alpine's own zones, untouched. */
 const dials = (biome?: string) =>
-  // `resolveKnobs` takes an unknown country at runtime — a stale URL, a save
+  // `resolveKnobs` takes an unknown biome at runtime — a stale URL, a save
   // from a build that had one this does not — and hands back the taiga; the
   // cast is what lets a test name one ("nowhere") and check that it does.
   resolveKnobs(biome === undefined ? {} : ({ biome } as Partial<StageKnobs>));
@@ -51,9 +51,9 @@ const face =
   (x: number): number =>
     y + x * grade;
 
-describe("the zones are the country's, read against the country's own ground", () => {
+describe("the zones are the biome's, read against the biome's own ground", () => {
   it("states the taiga's rock line at 55..100 m with no snow, and an alpine snowline above its rock", () => {
-    // A BAND IS A PERCENTILE OF ITS OWN COUNTRY. These were 46 and 26..52,
+    // A BAND IS A PERCENTILE OF ITS OWN BIOME. These were 46 and 26..52,
     // which are the desert's numbers and right for the desert — its ground
     // reaches 26 m at p88. The taiga's stands about twice as tall, so the
     // same band started at p65 and an eighth of everything a player drove
@@ -71,7 +71,7 @@ describe("the zones are the country's, read against the country's own ground", (
   });
 
   it("paints the taiga's rock over its band: nothing at 55 m, half way at 77.5 m, all rock from 100 m", () => {
-    // The unnamed country is the taiga, as it is everywhere else in the app.
+    // The unnamed biome is the taiga, as it is everywhere else in the app.
     expect(rockAt(flat(10), 0, 0)).toBe(0);
     expect(rockAt(flat(55), 0, 0)).toBe(0);
     expect(rockAt(flat(77.5), 0, 0)).toBeCloseTo(0.5, 6);
@@ -124,7 +124,7 @@ describe("the snow", () => {
   it("R47 — but covers the faces too once the ground is DEEP in the cover", () => {
     // The same 60° face, a winter's depth over the line rather than a
     // margin above it: the wind-scoured edge of the permanent snow is one
-    // picture and a country under a winter is another, and the second one
+    // picture and a biome under a winter is another, and the second one
     // has no brown hillsides in it.
     const deep = snowline + SNOW.deep;
     expect(snowAt(face(deep, 1.7), 0, 0, dials("alpine"))).toBe(1);
@@ -139,7 +139,7 @@ describe("the snow", () => {
     expect(snowAt(face(deep, 12), 0, 0, dials("alpine"))).toBe(0);
   });
 
-  it("never falls in a country with no snowline", () => {
+  it("never falls in a biome with no snowline", () => {
     for (const biome of ["taiga", "desert"] as const) {
       expect(biomeRules(biome).land.zones.snow).toBeNull();
       expect(snowAt(flat(500), 0, 0, dials(biome))).toBe(0);
@@ -172,9 +172,9 @@ describe("what is planted where", () => {
     expect(plantZone(dials("taiga"), 40, true)).toBe("riparian");
     expect(plantZone(dials("taiga"), 800, false)).toBe("highland");
     expect(plantZone(dials("taiga"), LAKE_Y + 1, false)).toBe("shore");
-    // The unnamed country is the taiga here too.
+    // The unnamed biome is the taiga here too.
     expect(plantZone(dials("nowhere"), 56, false)).toBe("highland");
-    // A dry country has no shore however low its pans lie.
+    // A dry biome has no shore however low its pans lie.
     expect(plantZone(dials("desert"), LAKE_Y + 1, false)).toBe("community");
   });
 });
@@ -194,7 +194,7 @@ describe("nothing soft grows out of snow", () => {
     const summer = climate("alpine", "summer");
     const snow = BIOMES.alpine.land.zones.snow as number;
     // The air up there is well above freezing — what buries the grass is
-    // the country's own permanent line, not the temperature.
+    // the biome's own permanent line, not the temperature.
     expect(summer.temperature).toBeGreaterThan(CLIMATE.freeze);
     expect(underSnow(knobs, summer, snow + 1)).toBe(true);
     expect(underSnow(knobs, summer, snow + 300)).toBe(true);
@@ -203,7 +203,7 @@ describe("nothing soft grows out of snow", () => {
     expect(underSnow(knobs, summer, 0)).toBe(false);
   });
 
-  it("takes it off the whole country once the air freezes, hundreds of metres lower", () => {
+  it("takes it off the whole biome once the air freezes, hundreds of metres lower", () => {
     const knobs = dials("alpine");
     const winter = climate("alpine", "winter");
     expect(winter.temperature).toBeLessThan(CLIMATE.freeze);
@@ -232,7 +232,7 @@ describe("nothing soft grows out of snow", () => {
   it("leaves the trees to stand through it", () => {
     // The rule is the ground cover's, not the forest's: a spruce wood stands
     // through its winter wearing the load (`snow-cap.ts`), which is why
-    // `plantZone` — what a TRUNK is dressed from — keeps the country's own
+    // `plantZone` — what a TRUNK is dressed from — keeps the biome's own
     // line and answers "community" on a valley floor the cold has whitened.
     const knobs = dials("alpine");
     const winter = climate("alpine", "winter");
@@ -241,8 +241,8 @@ describe("nothing soft grows out of snow", () => {
   });
 });
 
-describe("the loose road is built from the country's grit", () => {
-  it("gives each country its own grit, and the taiga's is the gravel it always was", () => {
+describe("the loose road is built from the land's grit", () => {
+  it("gives each biome its own grit, and the taiga's is the gravel it always was", () => {
     expect(LOOKS.taiga.grit).toBe(0xb29268);
     expect(LOOKS.desert.grit).not.toBe(LOOKS.taiga.grit);
     expect(LOOKS.alpine.grit).not.toBe(LOOKS.taiga.grit);

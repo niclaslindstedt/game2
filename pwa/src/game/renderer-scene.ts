@@ -409,7 +409,7 @@ export function createScene(canvas: HTMLCanvasElement, video: VideoSettings) {
     const biome = state.track.knobs.biome;
     environment.apply(state.env, biome);
     // The ground the sky stands over: where the road goes lowest (the mist
-    // pools there, the deck hangs over it) and highest, and the country's
+    // pools there, the deck hangs over it) and highest, and the biome's
     // own heightfield for the shadow a low sun leaves behind a ridge.
     let floor = Infinity;
     let peak = -Infinity;
@@ -420,13 +420,13 @@ export function createScene(canvas: HTMLCanvasElement, video: VideoSettings) {
     environment.setGround(
       Number.isFinite(floor) ? { floor, peak, heightAt: state.terrain.heightAt } : null,
     );
-    life.setCountry(biome, state.env.season);
+    life.setBiome(biome, state.env.season);
     // Rain settles the stage. There is no cloud to tow once the surface is
     // soaked — what the wheels lift is clods — so the two swap over here,
     // once, rather than being decided per frame per particle. How hard it
     // is actually coming down is the environment's per-frame business: the
     // squall breathes, and the sheet has to breathe with it. Read against
-    // the country (R40): a desert storm is wind and sand, and soaks nothing.
+    // the biome (R40): a desert storm is wind and sand, and soaks nothing.
     wetGround = wetnessOf(state.env, biome) > 0;
     applyClouds();
     mud.points.visible = wetGround;
@@ -618,7 +618,7 @@ export function createScene(canvas: HTMLCanvasElement, video: VideoSettings) {
     // and the establishing shot starts again from the top.
     chase.resetStartShot();
     // ...and a new stage is a new SUBJECT for the map. The zoom and the pan
-    // were walked onto the last one and describe country that is no longer
+    // were walked onto the last one and describe biome that is no longer
     // there, so stepping a seed on Roam or opening a level in the map viewer
     // frames the whole of the new stage and lets the turn go again.
     if (!first) chase.reframeMap();

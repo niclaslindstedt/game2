@@ -4,7 +4,7 @@ title: Distant snow is the same snow as the snow under the car
 ---
 
 The coat of snow that bends under the wheels only reaches a hundred metres
-from the car; past it the country was shaded by plain Lambert off a white of
+from the car; past it the biome was shaded by plain Lambert off a white of
 its own, so the coat's square rim drew a hard line across every hillside
 that walked outwards as you drove towards it. The ground now carries the
 same snow surface the coat does — the wrap lighting, the crystals and the

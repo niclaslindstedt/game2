@@ -72,10 +72,10 @@ export type MenuPage =
   | { page: "root" }
   | { page: "campaign" }
   | { page: "location"; locationId: string }
-  /** The time trial and heads up — and, with `locationId` set, the country's
+  /** The time trial and heads up — and, with `locationId` set, the biome's
    * own six stages. A step of the page rather than a page of its own, the
-   * way the campaign's location is: the country is chosen first on all
-   * three, because a page carrying every country's grid at once is a page
+   * way the campaign's location is: the biome is chosen first on all
+   * three, because a page carrying every biome's grid at once is a page
    * where the stage you want is below the fold. */
   | { page: "timetrial"; locationId?: string }
   | { page: "headsup"; locationId?: string }
@@ -126,9 +126,9 @@ export type MainMenuProps = {
   onSettings: (settings: Settings) => void;
   /** Let the developer menu out — the chassis secret found (see DEV_TAPS). */
   onDeveloper: () => void;
-  /** Open the campaign up to one country, or the whole ladder for null. */
+  /** Open the campaign up to one biome, or the whole ladder for null. */
   onUnlock: (locationId: string | null) => void;
-  /** Shut one country and everything in front of it; null shuts the lot. */
+  /** Shut one biome and everything in front of it; null shuts the lot. */
   onLock: (locationId: string | null) => void;
   /** Tear a location's table up and drive it again. */
   onResetPoints: (locationId: string) => void;
@@ -173,10 +173,10 @@ function VersionStamp() {
   );
 }
 
-/** Where the CAMPAIGN tile lands. A page listing ONE country is a press
+/** Where the CAMPAIGN tile lands. A page listing ONE biome is a press
  * that asks nothing — so while there is only one, the tile opens it and the
  * list is skipped. The rule is read off the catalog rather than hardcoded:
- * the day a second country ships, the list comes back on its own, and
+ * the day a second biome ships, the list comes back on its own, and
  * `parentOf` reads the same rule so BACK never lands on the skipped page. */
 function campaignEntry(): MenuPage {
   return LOCATIONS.length === 1
@@ -281,7 +281,7 @@ function CampaignPage({
   progress: CampaignProgress;
   onNavigate: (page: MenuPage) => void;
 }) {
-  // The FURTHEST country open, which is the one a player coming back is
+  // The FURTHEST biome open, which is the one a player coming back is
   // playing. It is where the cursor stands and what START takes.
   const resume = LOCATIONS.filter((location) => locationUnlocked(location, progress)).at(-1);
   return (
@@ -289,7 +289,7 @@ function CampaignPage({
       <MenuHead back={() => onNavigate({ page: "root" })} backLabel="MENU" title="CAMPAIGN" />
       <LocationList
         open={(location) => locationUnlocked(location, progress)}
-        // R30 — a country is opened by the PREVIOUS country's TABLE, not by
+        // R30 — a biome is opened by the PREVIOUS biome's TABLE, not by
         // its stages: a player who podiumed their way through Taiga has seen
         // all of it and still has a table to top. That rule is the one thing
         // here a padlock cannot say on its own, so it stays written.
@@ -320,9 +320,9 @@ function CampaignPage({
 
 /** WHERE THE LOCATION STANDS, in the one line that used to be a panel: the
  * player's place on its table, what they have scored, and how much of the
- * country has been driven. Read by the head's press (for its tooltip and
+ * biome has been driven. Read by the head's press (for its tooltip and
  * whether it is lit) and by the board itself, off one function so the two can
- * never disagree about a country that has been won. */
+ * never disagree about a biome that has been won. */
 function locationLine(
   location: CampaignLocation,
   progress: CampaignProgress,
@@ -348,7 +348,7 @@ function locationLine(
 /** R30 — THE STANDINGS, BEHIND ONE PRESS IN THE HEAD.
  *
  * The location's table is what the stage boxes are being driven FOR — the
- * same points open the next box and the next country — but knowing where it
+ * same points open the next box and the next biome — but knowing where it
  * stands is a question a player asks between runs, not on every visit to the
  * grid. It used to be a panel under the boxes: a line of figures and a row
  * of buttons, permanently occupying the height of a seventh stage box on a
@@ -356,7 +356,7 @@ function locationLine(
  *
  * So it is a button at the far end of the head instead, and everything it
  * used to print lives on the board it opens (results-table.tsx). The button
- * itself wears the menu's yellow once the country is WON, which is the
+ * itself wears the menu's yellow once the biome is WON, which is the
  * single fact worth reading without opening anything.
  *
  * The CONTINUE press went with the panel. The grid already marks the stage
@@ -389,7 +389,7 @@ function StandingsAct({
   );
 }
 
-/** THE BOARD ITSELF — the table, the gate the country is still behind, and
+/** THE BOARD ITSELF — the table, the gate the biome is still behind, and
  * the press that tears its points up.
  *
  * It is rendered OUTSIDE the menu card rather than beside the button that
@@ -432,7 +432,7 @@ function StandingsBoard({
       foot={
         !won &&
         locationComplete(location, progress) && (
-          <div className="menu-standings-hint">TOP THE TABLE TO OPEN THE NEXT COUNTRY</div>
+          <div className="menu-standings-hint">TOP THE TABLE TO OPEN THE NEXT BIOME</div>
         )
       }
       aside={
@@ -544,14 +544,14 @@ function LocationPage({
 }
 
 /** THE TIME TRIAL — the campaign's roads with the field taken off, driven
- * for the clock alone. Two steps, the campaign's own: which country, then
+ * for the clock alone. Two steps, the campaign's own: which biome, then
  * which of its six.
  *
- * The gate is a COUNTRY here (`timeTrialOpen`), which is the one place in
- * the game a mode runs ahead of the campaign's ladder: open a country in the
+ * The gate is a BIOME here (`timeTrialOpen`), which is the one place in
+ * the game a mode runs ahead of the campaign's ladder: open a biome in the
  * campaign and all six of its roads are open to the clock at once, in any
  * order, without podiuming down the rungs a second time to reach the last
- * one. It never runs ahead of the COUNTRIES — the desert is behind the
+ * one. It never runs ahead of the BIOMES — the desert is behind the
  * taiga's table here exactly as it is next door.
  *
  * There is no board on this page. The ten best times for a stage are the
@@ -563,14 +563,14 @@ function TimeTrialPage({
   progress,
   onNavigate,
 }: {
-  /** The country being looked at, or null on the step that chooses one. */
+  /** The biome being looked at, or null on the step that chooses one. */
   locationId: string | null;
   progress: CampaignProgress;
   onNavigate: (page: MenuPage) => void;
 }) {
   const open = (location: CampaignLocation): boolean => timeTrialOpen(location, progress);
   if (locationId === null) {
-    // The furthest country open, which is the one a player coming back is
+    // The furthest biome open, which is the one a player coming back is
     // driving. The first one always is, so this page is never empty.
     const resume = LOCATIONS.filter(open).at(-1);
     return (
@@ -579,7 +579,7 @@ function TimeTrialPage({
         <LocationList
           open={open}
           // The same reason the campaign gives, because it is the same lock:
-          // a country is opened by the previous country's TABLE.
+          // a biome is opened by the previous biome's TABLE.
           hint={(_location, index) => `Top the ${LOCATIONS[index - 1].name} table`}
           line={(location) => {
             const timed = stagesTimed(location, progress);
@@ -600,12 +600,12 @@ function TimeTrialPage({
   }
   const location = locationById(locationId);
   const before = LOCATIONS[LOCATIONS.indexOf(location) - 1];
-  // Every stage of an open country is open, so the grid asks the COUNTRY its
+  // Every stage of an open biome is open, so the grid asks the BIOME its
   // question once and hands the same answer to all six boxes.
   const here = open(location);
   // The cursor still stands on the furthest road actually driven rather than
-  // on the last box in the country: a player coming back lands where they
-  // are, and a country nobody has timed yet opens on its first stage.
+  // on the last box in the biome: a player coming back lands where they
+  // are, and a biome nobody has timed yet opens on its first stage.
   const driven = (level: CampaignLevel): boolean => levelCompleted(level, progress);
   return (
     <div className="menu-card menu-card-wide">
@@ -686,17 +686,17 @@ function parentOf(page: MenuPage): MenuPage | null {
   return { page: "root" };
 }
 
-/** Out of a country: the list of them, or straight to the front door while
+/** Out of a biome: the list of them, or straight to the front door while
  * there is only one to list (see `campaignEntry`). */
 function locationParent(): MenuPage {
   return LOCATIONS.length === 1 ? { page: "root" } : { page: "campaign" };
 }
 
-/** The grid the pre-race card was reached from — the stage's OWN country on
+/** The grid the pre-race card was reached from — the stage's OWN biome on
  * all three modes, since all three now choose one before they show a grid.
  * A level id with no location behind it cannot happen from the grids, but a
  * stale one out of a reload should land somewhere real rather than on a
- * blank card: without a country, each mode falls back to its list of them. */
+ * blank card: without a biome, each mode falls back to its list of them. */
 function carParent(levelId: string, mode: PlayMode): MenuPage {
   if (mode === "training") return { page: "root" };
   const found = findLevel(levelId);

@@ -11,12 +11,12 @@ turns continuously with the wheels instead of flicking over — there is always
 something moving down there. The dial itself is a fifth smaller, and the
 minimap a third larger, which is the swap that matters: the revs are read
 off a needle's angle and survive being drawn smaller, where a schematic of
-the country loses its road.
+the biome loses its road.
 
 The map's window is now tied to the speedo at both ends rather than merely
 stretched at the top. Picking a way through a farmyard it closes right in and
 becomes a plan of the ground under the wheels; wound up on a straight it
-pulls back to most of half a kilometre of road. The country visibly opening
+pulls back to most of half a kilometre of road. The biome visibly opening
 out as you accelerate is the map telling you how fast you are going without
 a number on it.
 

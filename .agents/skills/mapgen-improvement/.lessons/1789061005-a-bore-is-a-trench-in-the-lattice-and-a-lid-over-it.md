@@ -5,7 +5,7 @@ scope: engine/mapgen/terrain.ts, engine/mapgen/solids.ts, pwa/src/game/tunnel-li
 concepts: [r47, tunnel, lattice, ground-cell, trench, lid, portal]
 ---
 
-The first tunnel left the country over the bore untouched ("the road shapes
+The first tunnel left the land over the bore untouched ("the road shapes
 nothing off a tunnel sample"). Read at the corners of a 14 m lattice, that
 made the ONE cell straddling each mouth a tile with a corner on the cutting
 (road level) and a corner on the mountain (thirty metres up) — a steep tile

@@ -17,7 +17,7 @@ and none visible in a top-down preview:
   across one cell — a 12 m step in the corridor beside every stage end.
   `nearerApron` now asks the spine on every query.
 - **Two arms at two heights.** The higher arm's embankment, still a dozen
-  metres over the country at the line where the lower arm becomes nearer,
+  metres over the land at the line where the lower arm becomes nearer,
   was dropped for the lower arm's cross-section. `nearestSample` now finds
   the OTHER arm (more than `ARM_WINDOW` samples of arc away) and its fill
   is carried (`fillBeyond`, max with the base) until it has come down.

@@ -70,7 +70,7 @@ export type RunTapeStart = {
   season: Season;
   /** The air at the datum, °C, or null for the season's own (climate.ts). */
   temperature?: number | null;
-  /** How often the sandstorms come, 0..1, or absent for the country's own. */
+  /** How often the sandstorms come, 0..1, or absent for the biome's own. */
   sandstorms?: number;
   /** The training ground rather than a generated stage. */
   arena?: boolean;

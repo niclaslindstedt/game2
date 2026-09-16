@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// PUDDLES — the standing water a WET SEASON leaves on a country that has no
+// PUDDLES — the standing water a WET SEASON leaves on a biome that has no
 // water table to drain into (climate.ts, `rainsIn`: the desert's winter).
 // A lake is the engine's — poured, levelled, cut against the ground
-// (terrain.ts) — and a country with no water has none; what its rain
+// (terrain.ts) — and a biome with no water has none; what its rain
 // leaves is a few days of sheet water in every flat: the pans, the
 // pavement between the creosote, the hollow of a wash. Drawn as flat
 // discs of the app's one water look, laid on the ground where it is level

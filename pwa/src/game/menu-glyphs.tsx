@@ -243,7 +243,7 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
       <path d="M7.2 8.4v3M12 8.4v4.2M16.8 8.4v3" />
     </>
   ),
-  // The globe: which COUNTRY the stage is built in (R40).
+  // The globe: which BIOME the stage is built in (R40).
   globe: (
     <>
       <circle cx="12" cy="12" r="8.6" />
@@ -252,7 +252,7 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
     </>
   ),
   // A thermometer: the bulb, the stem, and the column part way up it —
-  // how COLD the stage is, which is what decides whether the country is
+  // how COLD the stage is, which is what decides whether the biome is
   // white and whether the rain is snow.
   thermometer: (
     <>
@@ -270,7 +270,7 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
   ),
   // A crescent with two stars: the same HOUR row, once the hour it is set
   // to is dark. The row's mark answers the question the row asks — whether
-  // 16:00 is daylight is the season's and the country's to say, and the
+  // 16:00 is daylight is the season's and the biome's to say, and the
   // sun or the moon on the row says it before the map does.
   moon: (
     <>
@@ -287,14 +287,14 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
       <path d="M9 18.4l-.7 2.2M12.6 18.4l-.7 2.2M16.2 18.4l-.7 2.2" />
     </>
   ),
-  // A leaf with its vein: which SEASON the country is dressed for.
+  // A leaf with its vein: which SEASON the biome is dressed for.
   leaf: (
     <>
       <path d="M20.4 3.6c-9.4 0-15.6 4.2-15.6 11a5.7 5.7 0 0 0 5.7 5.7c6.8 0 9.9-6.8 9.9-16.7Z" />
       <path d="M15.6 8.4 6.6 18" />
     </>
   ),
-  // A range of peaks: how HIGH the country stands (`elevation`).
+  // A range of peaks: how HIGH the land stands (`elevation`).
   mountain: <path d="M2.4 19.6h19.2L15.2 8.4l-3.5 5.9-2.5-3.7Z" />,
   // A peak with the height it stands to marked off beside it: HOW HIGH the
   // race is (R47's `altitude`). The mark is the ARROW and the datum under
@@ -328,7 +328,7 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
       <path d="M2.6 6.4h7M12.4 4.2h8M15.6 8.6h5.8M18.6 12.4h2.8" />
     </>
   ),
-  // One peak with its strata: how STEEP the same country stands
+  // One peak with its strata: how STEEP the same land stands
   // (`steepness`). A range says how much ground goes up; a face says how
   // hard it goes up, which is the dial this is.
   crag: (
@@ -338,8 +338,8 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
     </>
   ),
   // A road falling away from a brow, with the arrow on the way DOWN: which
-  // way the stage runs through the country (`tilt`, R49). The mountain and
-  // the crag say how much country there is and how steep it stands; this
+  // way the stage runs through the land (`tilt`, R49). The mountain and
+  // the crag say how much land there is and how steep it stands; this
   // one says which end of it the stage starts at.
   descent: (
     <>

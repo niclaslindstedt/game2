@@ -5,14 +5,14 @@ scope: pwa/src/styles.css, pwa/src/game/menu-levels.tsx
 concepts: [css, menus, responsive, ui, measurement]
 ---
 
-Two bugs in the campaign's country rows that both looked like "the desert one
+Two bugs in the campaign's biome rows that both looked like "the desert one
 is wrong" and were neither about the desert nor about the picture.
 
 **Scale.** `.menu-location-shot` is an 8:1 render sized `width: 170%;
 height: 100%; object-fit: cover`. Cover fills that box by HEIGHT from anything
 wider, so the DISPLAY SCALE of the banner is set by the ROW'S HEIGHT — and a
 locked row (padlock, centred) is taller than an open one (progress line), so
-the two countries were at two different zooms, showing different amounts of
+the two biomes were at two different zooms, showing different amounts of
 ground while panning the same pixels. The fix is equal rows, and the way to
 get them with no magic number is `display: grid; grid-auto-rows: 1fr` on the
 list: every row takes the tallest row's height, whatever the content and the

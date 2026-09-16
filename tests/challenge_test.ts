@@ -202,10 +202,10 @@ describe("R46 — the difficulty dial", () => {
     expect(grade(1)).toBeGreaterThan(grade(0) * 1.08);
   });
 
-  it("R34 — stands the country higher around the road", () => {
+  it("R34 — stands the land higher around the road", () => {
     // The half of the dial a player meets by LEAVING the road: a hillside
     // to fall down rather than a field to spin on. Measured as the road's
-    // own climb per kilometre, which is what the country under it decides.
+    // own climb per kilometre, which is what the land under it decides.
     const climb = (challenge: number): number => {
       let travel = 0;
       let km = 0;

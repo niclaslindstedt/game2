@@ -160,7 +160,7 @@ export function buildHomestead(
   // The lane trees, through the flora so they are instanced, seasoned and
   // swayed with the rest of the wood. Footed on the ground the terrain
   // field made beside the drive — the record's own height is the bare
-  // country's, which the drive's shelf has since moved.
+  // biome's, which the drive's shelf has since moved.
   const trees: FloraPlacement[] = homestead.trees.map((tree) => ({
     id: laneTree(tree.roll),
     x: tree.x,

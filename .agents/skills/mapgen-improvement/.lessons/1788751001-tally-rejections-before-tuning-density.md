@@ -7,7 +7,7 @@ concepts: [placement, density, seeds, measurement, homesteads]
 
 A feature placed "every so often along the stage" has two numbers that
 look like density — the dice (a slot's roll against a mean spacing) and the
-acceptance (how many rolled slots survive the country's checks) — and only
+acceptance (how many rolled slots survive the biome's checks) — and only
 the second is worth tuning first. Homesteads at a 620 m mean came out at
 0.25 per stage; raising the mean would have done nothing, because a tally
 showed 98 of ~200 candidates dying on "the slot's sample is on a corner"
@@ -21,7 +21,7 @@ The loop that worked, in order:
 2. Make the slot a WINDOW: pick the straightest qualifying sample within
    `slot` metres rather than testing the slot's own sample, which on a
    twisty stage is a corner more often than not.
-3. Make the pad's level the country's MEAN across it, not the height the
+3. Make the pad's level the biome's MEAN across it, not the height the
    drive happened to arrive at — a pad held at the lane's height is all cut
    or all fill and fails a level bound half the time.
 4. Retry the shortest drive on both sides before giving up.

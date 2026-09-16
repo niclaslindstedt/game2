@@ -25,7 +25,7 @@ re-check.
 
 The companion rule: a GUARANTEED feature must be exempt from the hand-back
 rather than trusted to survive it. R27's finish banks are placed because a
-finish always has a crowd, and the country behind a finish is as likely to
+finish always has a crowd, and the land behind a finish is as likely to
 refuse a pad as anywhere else — so `stand.finish` skips the refusal, in the
 placer and in the analysis check both. Without that, `runout_test`'s "banks
 its biggest crowd on both sides of the line" is a test the new rule quietly

@@ -46,7 +46,7 @@ function RecoverGlyph() {
  *
  * ...and the moment the car is OFF THE ROAD it says so, quietly. The mark is
  * up the whole run because the press has to be findable before it is needed,
- * but a car in the country is a car that is probably reaching for it, so
+ * but a car in the biome is a car that is probably reaching for it, so
  * `.hud-recover` BREATHES off the root's `data-off` (styles.css) rather than
  * appearing from nowhere at the worst moment. A button that arrives while
  * the driver is already looking for it is a button they have to find twice —

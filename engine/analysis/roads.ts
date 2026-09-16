@@ -7,7 +7,7 @@
 // the altitude at which the two classic mistakes are obvious.
 //
 //   A road that ends in a field. Roads go somewhere. A branch that stops
-//   in open country, with nothing at the end of it and nothing on the far
+//   in open land, with nothing at the end of it and nothing on the far
 //   side, is the single loudest tell that a landscape was generated: the
 //   real ones all continue past the edge of what you were given. A SEALED
 //   road that does it is worse again: somebody laid a tarmac road, and
@@ -20,7 +20,7 @@
 //   never spoke.
 //
 //   Two roads running side by side. Legal — they never touch — and still
-//   wrong, because a country does not lay two carriageways a hundred
+//   wrong, because a biome does not lay two carriageways a hundred
 //   metres apart across the same empty valley. It reads as one road drawn
 //   twice, which is what it is.
 //
@@ -63,7 +63,7 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
   // ── R17 — DOES THE GRAVEL CROSS THE TARMAC? ───────────────────────────
   //
   // The one thing the road network must never do, and the reason the whole
-  // model was turned round. The sealed roads are laid on the bare country
+  // model was turned round. The sealed roads are laid on the bare land
   // before the rally is routed over it (`highway.ts`): they are what was
   // there first, they go somewhere, and a rally stage does not drive across
   // a public road at speed. It meets one at a junction, borrows it, and
@@ -148,13 +148,13 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
     const out = Math.max(box.minX - end.x, end.x - box.maxX, box.minZ - end.z, end.z - box.maxZ);
     // A branch that stopped on a shore or short of the road it may not
     // cross has a REASON to have stopped, and the reason is visible from
-    // the car. One that simply ran out in dry open country does not.
+    // the car. One that simply ran out in dry open land does not.
     if (out < R.escape && spur.endsAt === "map") {
       stranded++;
       findings.push({
         code: "roads.stranded",
         severity: "error",
-        message: `branch ${i + 1} ends in open country ${Math.max(0, -out).toFixed(
+        message: `branch ${i + 1} ends in open land ${Math.max(0, -out).toFixed(
           0,
         )} m inside the stage's own bounds`,
         at: { x: end.x, z: end.z },
@@ -323,7 +323,7 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
           const d = Math.hypot(p.x - q.x, p.z - q.z);
           if (d > reach) continue;
           // R31 — and how far apart in HEIGHT, because that is what decides
-          // what the country between them has to be. Two roads that keep
+          // what the land between them has to be. Two roads that keep
           // R23's distance may still be tens of metres apart vertically, and
           // the ground joining them is then a face rather than a hillside:
           // the same defect as a road on stilts, and the one the picture
@@ -332,14 +332,14 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
           // TWO roads, never one against itself. R31's cone is a rule about
           // what a road's SHELF does to the road beside it, and the stage
           // against its own switchback is not that: the terrain gives the
-          // ground to whichever of the two arms is nearer and the country
+          // ground to whichever of the two arms is nearer and the biome
           // between them is one hillside, which is what a road climbing a
           // hill looks like. Measured over seeds 1-8, every finding this
           // raised with the self case in was a switchback on a slope well
           // under `verge.climb` — the check reporting the design.
           //
           // What is scored is the EXCESS over the cone — how much higher one
-          // road stands than the country between them may climb to — not
+          // road stands than the land between them may climb to — not
           // the height itself. A branch thirty metres up a hillside ninety
           // metres off is a hillside, and read as thirty metres it was an
           // error whatever the cone allowed; read as the tenth of a metre it
@@ -357,7 +357,7 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
                   0,
                 )} m apart with ${drop.toFixed(1)} m of height between them, ${excess.toFixed(
                   1,
-                )} m more than the country can climb — a face, not a hillside (R31)`,
+                )} m more than the biome can climb — a face, not a hillside (R31)`,
                 at: { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 },
                 value: excess,
               });
@@ -414,7 +414,7 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
   }
   findings.push(...parallels);
 
-  // ── How the roads are spread over the country they were given ─────────
+  // ── How the roads are spread over the land they were given ─────────
   const b = track.bounds;
   const width = Math.max(1, b.maxX - b.minX);
   const depth = Math.max(1, b.maxZ - b.minZ);
@@ -445,7 +445,7 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
       severity: "warn",
       message: `${(coverage * 100).toFixed(
         0,
-      )}% of the map is within sight of a road — the country is more road than land`,
+      )}% of the map is within sight of a road — the biome is more road than land`,
       value: coverage - R.coverage.max,
     });
   } else if (coverage < R.coverage.min) {
@@ -462,7 +462,7 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
       severity: "warn",
       message: `the route runs down a ${(boxFill * 100).toFixed(
         0,
-      )}%-square corridor instead of using the country`,
+      )}%-square corridor instead of using the biome`,
       value: R.boxFill.min - boxFill,
     });
   }
@@ -612,7 +612,7 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
     },
     {
       id: "coverage",
-      label: "the roads are spread over the country",
+      label: "the roads are spread over the land",
       score: within(coverage, R.coverage, ANALYSIS.ground.slack),
       weight: 1,
       value: coverage,

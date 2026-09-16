@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // WHAT THE CAMPAIGN MENU SHOWS OF A PLACE BEFORE YOU DRIVE IT — a stage's
-// road as a shape, and a country as a photograph.
+// road as a shape, and a biome as a photograph.
 //
 // The two are deliberately different kinds of thing, because a stage and a
-// country are different kinds of thing:
+// biome are different kinds of thing:
 //
 //   A STAGE is one road, and the useful picture of it is its SHAPE — how it
 //   winds, whether it doubles back, whether it comes back to its own start.
@@ -13,7 +13,7 @@
 //   in — lit on an open stage, grey on a locked one — and stay sharp at any
 //   size, on any screen.
 //
-//   A COUNTRY is many stages, so no one road is a picture of it. What it
+//   A BIOME is many stages, so no one road is a picture of it. What it
 //   gets instead is a real render taken by the game itself, from a camera
 //   over the first stage's start line (`make biomes`), and there is nothing
 //   to do here but name the file.
@@ -97,7 +97,7 @@ function decode(base64: string): Uint8Array {
   return out;
 }
 
-/** The banner for a country — a render of the place, written by
+/** The banner for a biome — a render of the place, written by
  * `make biomes` into the site's own assets.
  *
  * `base` is the bundler's base (`import.meta.env.BASE_URL`), and it is a

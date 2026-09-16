@@ -14,7 +14,7 @@ import { buildSpur, cutSpur } from "./spur-build.ts";
 import { placeBlock, PLATFORM_HOLD, type ShelfBand, type Spur } from "./spurs.ts";
 import { joinRailLine } from "./railway.ts";
 import { branchClearance, ROAD_DISTANCE_REACH, STREAMED_ESCAPE } from "./compile-road.ts";
-import { BUILT_PARTING, STAGE_DISTANCE_SLACK } from "./compile-country.ts";
+import { BUILT_PARTING, STAGE_DISTANCE_SLACK } from "./compile-land.ts";
 import type { Track, TrackSample } from "./track-shape.ts";
 
 import type { Walk } from "./compile-walk.ts";
@@ -191,7 +191,7 @@ export function createShelving(
    * hands it to the branch's own shelf, so a branch running low beside the
    * route drops the difference between them over the few metres between
    * two lips. Seed 38's arm ran 140 m at twelve metres from the route and
-   * ten below it, and the country between them came out as a sheer earth
+   * ten below it, and the land between them came out as a sheer earth
    * face a car falls off — which is the same defect as a branch on stilts
    * and was let through because the sign was never checked.
    *
@@ -226,7 +226,7 @@ export function createShelving(
    *
    * Unbounded where no part of the stage is close enough to have an
    * opinion, which is most of a branch — so past the corridor it follows
-   * the country exactly as it always did. Where the stage passes twice at
+   * the biome exactly as it always did. Where the stage passes twice at
    * two heights the band can come out EMPTY (`floor` over `ceiling`), and
    * that is an honest answer: no road can stand there, and the cut pass
    * below reads it off `shelfHolds` and ends the branch. */
@@ -317,7 +317,7 @@ export function createShelving(
      * the stage and (since it wanders) against its own line, but two
      * branches off two different junctions are two roads like any other
      * pair, and nothing was asking them to keep apart: they cross in open
-     * country a kilometre from anything, which is a junction nobody built.
+     * biome a kilometre from anything, which is a junction nobody built.
      *
      * Strided to match the stage's own coarsening, and the slack is taken
      * off the answer so this can only ever under-report the room a branch
@@ -338,7 +338,7 @@ export function createShelving(
       // arm in EACH direction: the road runs on out of the crossing both
       // ways, and both ways are shut. Cut, never driven — a crossing is only
       // ever made on a road that already exists, so `road` is always there
-      // and there is no country to steer a branch through.
+      // and there is no biome to steer a branch through.
       //
       // The two are labelled `entry` and `exit` because a `Spur` has to be
       // one or the other, and which arm is which does not matter: the label
@@ -369,7 +369,7 @@ export function createShelving(
       const end = junction.joining ? "entry" : "exit";
       // R17 — a BORROWED junction's arm is the rest of the road, so it is
       // cut off the line the tarmac was laid on rather than driven out of
-      // the country. `nearest` finds where on that line the meeting point
+      // the biome. `nearest` finds where on that line the meeting point
       // is: the route arrived there by solving onto the road's own tangent,
       // so it is a metre or so away, not a search.
       //
@@ -382,7 +382,7 @@ export function createShelving(
       // road, and crossed its own stage 600 m later at 0.8 m — R23's whole
       // subject, drawn by the code meant to honour it. A junction that is
       // not on a public road has no road to be the rest of, and gets a
-      // branch driven out of the country like any other.
+      // branch driven out of the land like any other.
       const hit = borrowed
         ? highways.nearest(junction.x, junction.z, undefined, track.width)
         : null;
@@ -571,7 +571,7 @@ export function createShelving(
    *   grade defines.
    * - If it is the MINOR road, its mat FLARES. The dirt road opens out into
    *   its mouth over the last stretch, until it meets the main road's edge
-   *   with no wedge of country left between them — which is the difference
+   *   with no wedge of land left between them — which is the difference
    *   between two roads that meet and two ribbons that collided. */
   const shapeJunctions = (from: number): void => {
     if (track.junctions.length === 0) return;

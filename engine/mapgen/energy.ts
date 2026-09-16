@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R43 — THE ENERGY. A stage in a modern country runs past the two things
+// R43 — THE ENERGY. A stage in a modern biome runs past the two things
 // a hillside has on it now. The WIND FARMS: a string of turbines along a
 // rise off the road, each two hundred metres to the blade tip, the biggest
 // things on any stage by an order of magnitude — seen from a kilometre
@@ -15,7 +15,7 @@
 // and the one thing it decides for itself is where the blades are this
 // frame, because that is the wind's business, not the stage's.
 //
-// A wind farm is placed against the BARE country: the first tower on the
+// A wind farm is placed against the BARE land: the first tower on the
 // highest dry ground a lateral probe from the stage can find, the rest
 // along a string that keeps the road's own bearing (so every tower stays in
 // the band the road sees it from) and walks each tower onto the highest
@@ -69,7 +69,7 @@ export type SolarFarm = {
   /** The fence: a rect whose `heading` is `facing + π/2`, so its width runs
    * ALONG the rows and its depth across them, toward and away from the sun. */
   rect: FarmRect;
-  /** The bare country's height at the fence's middle, m — the tables are
+  /** The bare land's height at the fence's middle, m — the tables are
    * footed on the ground as the terrain makes it; this is the fallback. */
   y: number;
   /** How many rows of tables stand across the rect, and how many tables
@@ -85,7 +85,7 @@ export type SolarFarm = {
   cabin: FarmRect | null;
 };
 
-/** Everything the placers have to ask about the country. Functions rather
+/** Everything the placers have to ask about the biome. Functions rather
  * than the compiler's own state so the module can be driven from a test
  * with a flat rig as easily as from a compiled stage. */
 export type EnergyContext = {
@@ -205,7 +205,7 @@ function nothing(why: string): null {
   return null;
 }
 
-/** The crane pad under a tower: the country's own mean level across it,
+/** The crane pad under a tower: the biome's own mean level across it,
  * with the bare ground everywhere on it near enough to that level, and the
  * level inside R31's cone. Null where the ground says no. */
 function padAt(ctx: EnergyContext, x: number, z: number): number | null {
@@ -247,7 +247,7 @@ function highestNear(
 }
 
 /** Probe out from the road on one side for the rise, and string the towers
- * along it. Null where the country has no high ground to offer. */
+ * along it. Null where the biome has no high ground to offer. */
 function tryWindFarm(
   ctx: EnergyContext,
   at: HomesteadSample,
@@ -310,7 +310,7 @@ function tryWindFarm(
   };
   if (!stand(anchor.x, anchor.z)) return null;
   // The rest, from the anchor out along the string — one way, and then the
-  // other from the anchor again when the country runs out that way. The
+  // other from the anchor again when the biome runs out that way. The
   // slots are measured from the anchor rather than from the tower before,
   // so a string that walks onto the ridge does not drift off its bearing.
   let k = 1;
@@ -380,7 +380,7 @@ export function placeSolarFarms(ctx: EnergyContext): SolarFarm[] {
     }
     const rng = createRng((ctx.seed ^ 0x19c4d2a7 ^ Math.imul(slot, 2654435761)) >>> 0);
     // The size class, off the slot's own dice: a big farm is rare, and a
-    // rolled size is what the country is asked to take, shrunk if it must.
+    // rolled size is what the land is asked to take, shrunk if it must.
     let roll = hash2(slot, 1, gate);
     let size: (typeof S.sizes)[number] = S.sizes[0];
     for (const candidate of S.sizes) {
@@ -453,7 +453,7 @@ function solarClear(
   return true;
 }
 
-/** Lay the fence out from the road on one side and see whether the country
+/** Lay the fence out from the road on one side and see whether the biome
  * takes it: clear and dry at a lattice of probes across it, and not so far
  * out of level that the rows would be a staircase. */
 function trySolarFarm(
@@ -675,7 +675,7 @@ export function solarFarmSolids(
 }
 
 /** The ground a solar farm keeps the forest off: its fence, and nothing
- * else — the country's own grass under the tables. */
+ * else — the biome's own grass under the tables. */
 export function solarFarmClearings(farm: SolarFarm): { rect: FarmRect; surface: null }[] {
   return [{ rect: farm.rect, surface: null }];
 }

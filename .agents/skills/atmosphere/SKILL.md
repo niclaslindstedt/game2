@@ -8,7 +8,7 @@ description: "Use when working on the SKY and the air under it — where the sun
 Everything above the ground and in the air between the camera and the hills.
 The stage's look is set here before a single tree is placed: the sun's
 elevation decides the palette, the weather decides the contrast, and the mist
-decides how far the country reads. A change here moves every screenshot in
+decides how far the land reads. A change here moves every screenshot in
 the game.
 
 **Read this skill's lessons first** — `node scripts/skill-lessons.mjs
@@ -24,14 +24,14 @@ The sun is decided first, everything else reads it.
 
 | File | Owns |
 | --- | --- |
-| `pwa/src/game/daylight.ts` | WHERE THE SUN IS: the hour, the season and the country's latitude turned into an elevation and a bearing. The clock itself is the engine's `sunHourAt` — an hour of sun per minute of racing |
+| `pwa/src/game/daylight.ts` | WHERE THE SUN IS: the hour, the season and the biome's latitude turned into an elevation and a bearing. The clock itself is the engine's `sunHourAt` — an hour of sun per minute of racing   |
 | `pwa/src/game/sky.ts` | What COLOUR the sky is: a ladder of rungs over the sun's elevation, plus the weather and season colour maths, over the tables in `sky-looks.ts`. Also `sunHardness` — how hard a shadow the light throws |
 | `pwa/src/game/cloud-field.ts` | What is IN the sky: the cloud chart's genera, their altitudes and coverage, decided per stage. `sky-shader.ts` draws them on the dome; `clouds.ts` is the LOW setting's ring of puffs and its mesh deck |
-| `pwa/src/game/starfield.ts` | THE NIGHT SKY: where the sphere of stars has turned this hour and season (the pole is the country's latitude), the Milky Way's frame, band and rift, and the star grids — as GLSL for the dome and as the same arithmetic in TypeScript for the LOW sky |
+| `pwa/src/game/starfield.ts` | THE NIGHT SKY: where the sphere of stars has turned this hour and season (the pole is the biome's latitude), the Milky Way's frame, band and rift, and the star grids — as GLSL for the dome and as the same arithmetic in TypeScript for the LOW sky   |
 | `pwa/src/game/night-sky.ts` | The LOW setting's answer to it: the field baked into points and the band into one additive strip |
 | `pwa/src/game/mist.ts` | The rule for mist in the valleys — when it lies there and how deep |
 | `pwa/src/game/height-fog.ts` | The fog chunk EVERY material carries: the mist, the sun in it, and the shadows in the air |
-| `pwa/src/game/mountain-shadow.ts` | The shadow the COUNTRY throws — a low sun stopped by a ridge, marched off the heightfield; read by `height-fog.ts` on the ground and `sky-shader.ts` on the cloud sea |
+| `pwa/src/game/mountain-shadow.ts` | The shadow the BIOME throws — a low sun stopped by a ridge, marched off the heightfield; read by `height-fog.ts` on the ground and `sky-shader.ts` on the cloud sea   |
 | `pwa/src/game/horizon.ts` | The ridge rings closing the view, and the sea gap in them; turned to the run's sunrise or sunset by `environment.ts` |
 | `pwa/src/game/weather.ts` | How heavy the weather is and how hard it is coming down — read off the wind, and DOM-free so the road bed can share it |
 | `pwa/src/game/storm.ts` | Lightning; the thunder behind it is `thunder_*` in `audio/bank.ts` |
@@ -42,7 +42,7 @@ The sun is decided first, everything else reads it.
 | `pwa/src/game/environment.ts` | Hangs it all in the scene: the sky, the light, the horizon's orientation. The CAR's own beams and its brake pool are `car-lamps.ts`, which this only drives |
 
 WHETHER a lake is frozen at all is the engine's call, not this skill's:
-`CLIMATE.ice` + `waterFrozen` / `icyCountry` in `engine/game/climate.ts`, and
+`CLIMATE.ice` + `waterFrozen` / `icyBiome` in `engine/game/climate.ts`, and
 the floor it becomes is `iceAt` on the `LandField`. This skill only decides
 what that ice LOOKS like.
 

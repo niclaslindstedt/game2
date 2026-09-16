@@ -80,11 +80,11 @@ function withMipmaps(tex: THREE.CanvasTexture): THREE.CanvasTexture {
   return tex;
 }
 
-/** R40 — THE GRAIN OF A LOOSE ROAD, derived from the country's own grit
+/** R40 — THE GRAIN OF A LOOSE ROAD, derived from the biome's own grit
  * (`Biome.grit`: the shield's brown gravel, a desert's sand, a mountain's
  * grey chippings). One texture per grit colour, painted once and shared —
- * a stage is in one country, so this is one map per session in practice,
- * but a Roam that changes country must not keep drawing the last one. */
+ * a stage is in one biome, so this is one map per session in practice,
+ * but a Roam that changes biome must not keep drawing the last one. */
 const looseTextures = new Map<number, THREE.CanvasTexture>();
 
 export function looseTexture(grit: number): THREE.CanvasTexture {
@@ -105,7 +105,7 @@ export function looseTexture(grit: number): THREE.CanvasTexture {
 }
 
 /** The taiga's gravel — the grit every yard, car park and turbine pad is
- * graded with whatever country it stands in, and the grain the car preview
+ * graded with whatever biome it stands in, and the grain the car preview
  * stands on. */
 export const gravelTexture = (): THREE.CanvasTexture => looseTexture(0xb29268);
 
@@ -175,7 +175,7 @@ export const waterTexture = once((): THREE.CanvasTexture => {
  * blue of the water beneath showing through it in patches, a scatter of
  * paler wind-swept snow over the top and a few dark lines where it has
  * cracked and refrozen. Cold and grey-blue rather than the snow's warm
- * white, so a lake reads as a different surface from the country around it
+ * white, so a lake reads as a different surface from the land around it
  * at a glance and at speed — which is the whole job, because on the map it
  * is the flattest, emptiest thing on the stage. */
 export const iceTexture = once((): THREE.CanvasTexture => {

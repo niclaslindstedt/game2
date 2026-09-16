@@ -29,7 +29,7 @@ import { CAR_BODIES } from "../pwa/src/game/car-styles.ts";
 /** A racing state parked on the first sample of the given surface.
  *
  * The seed is SEARCHED FOR rather than named, and that is not fussiness.
- * What surfaces a stage has is a property of its COUNTRY: tarmac exists only
+ * What surfaces a stage has is a property of its BIOME: tarmac exists only
  * where the land carried a public road the route could use (R17), and water
  * only where the pour left a body in the way (R35). A seed that has both
  * today can have neither tomorrow — any change to how the route meets the

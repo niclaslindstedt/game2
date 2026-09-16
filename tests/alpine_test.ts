@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R47 — THE MOUNTAINS. The alpine is the country where the geography comes
+// R47 — THE MOUNTAINS. The alpine is the biome where the geography comes
 // first and the road is made to fit it: a massif with a valley floor and a
 // snowline, a stage that starts beside the snow and comes down, corners
 // drawn by reading the land, tunnels where a shoulder is in the way, and
@@ -61,7 +61,7 @@ function digest(track: Track): number {
 }
 
 describe("R47 — the alpine row", () => {
-  it("is a mountain country with water, a massif, zones and the rest of the machinery on", () => {
+  it("is a mountain biome with water, a massif, zones and the rest of the machinery on", () => {
     const A = BIOMES.alpine;
     expect(A.land.massif).not.toBeNull();
     expect(A.land.mountains).toBe(0);
@@ -76,7 +76,7 @@ describe("R47 — the alpine row", () => {
     expect(Z.rock.from).toBeLessThan(Z.rock.to);
     expect(Z.snow).not.toBeNull();
     expect(Z.snow as number).toBeGreaterThan(Z.rock.from);
-    // ...and the other two countries carry none of the MOUNTAIN: no massif
+    // ...and the other two biomes carry none of the MOUNTAIN: no massif
     // to stand up, no contour to steer along, nothing to bore through, no
     // summit to start on and no snow line to climb to.
     for (const id of ["taiga", "desert"] as const) {
@@ -89,7 +89,7 @@ describe("R47 — the alpine row", () => {
     }
     // The ROAD-BUILDING pair is not part of that, and is asserted of the
     // taiga alone. `grade` and `lag` say how a road is laid on whatever
-    // country it is in, so a flat country can hold either of them off 1
+    // biome it is in, so a flat land can hold either of them off 1
     // for a reason of its own — the desert does, because a sand road rides
     // the dunes rather than cutting through them (R40) — and only the
     // taiga is the reference every rule was written against.
@@ -116,7 +116,7 @@ describe("R47 — the alpine row", () => {
     const range = compileStage(2, "short", { peaks: 1 }, "sprint");
     expect(digest(flat)).toBe(digest(compileStage(2, "short", {}, "sprint")));
     expect(digest(range)).toBe(digest(flat));
-    // ...and the alpine at 0 and 1 is two different countries.
+    // ...and the alpine at 0 and 1 is two different biomes.
     const one = compileStage(2, "short", { ...KNOBS, peaks: 0 }, "sprint");
     const many = compileStage(2, "short", { ...KNOBS, peaks: 1 }, "sprint");
     expect(digest(one)).not.toBe(digest(many));
@@ -125,7 +125,7 @@ describe("R47 — the alpine row", () => {
 
 // R47 — THE ALTITUDE DIAL. How high the mountain the race is on stands, in
 // metres, from a worn shoulder to six thousand — and the four things that
-// have to move with it for the result to be a country rather than a wall:
+// have to move with it for the result to be a biome rather than a wall:
 // the ground the crest stands on, how hard the flank is bent about it, how
 // much of what is between the ridges is valley floor, and the elevation
 // bands the paint and the planting read.
@@ -141,7 +141,7 @@ describe("R47 — how high the race is", () => {
     expect(Math.round(altitudeOf(at(0)))).toBe(176);
     expect(Math.round(altitudeOf(at(1)))).toBe(6000);
     // ...and the metres are the GROUND's, not the arithmetic's: what the
-    // row prints is what the country actually tops out at (`summit`).
+    // row prints is what the biome actually tops out at (`summit`).
     const geology = createGeology(3, at(1));
     let summit = -Infinity;
     for (let x = -4000; x <= 4000; x += 200) {
@@ -149,8 +149,8 @@ describe("R47 — how high the race is", () => {
         summit = Math.max(summit, geology.surfaceAt(x, z));
       }
     }
-    // R47 — the country's own datum plus the mountain standing on it. Past
-    // the relief cap the dial lifts the whole country rather than growing
+    // R47 — the biome's own datum plus the mountain standing on it. Past
+    // the relief cap the dial lifts the whole biome rather than growing
     // the crest, so what the slider prints is the SUM, and the ground the
     // stage is driven on carries only the crest.
     const base = altitudeScale(at(1)).base;
@@ -161,7 +161,7 @@ describe("R47 — how high the race is", () => {
     expect(summit).toBeGreaterThan(700);
     expect(summit).toBeLessThan(1600);
     expect(altitudeOf(at(0.5))).toBeGreaterThan(altitudeOf(at(0.35)));
-    // ...and the DEFAULT is exactly the country the alpine's row describes,
+    // ...and the DEFAULT is exactly the biome the alpine's row describes,
     // multiplier 1 and nothing touched, which is what makes every seed the
     // game ever built the seed it still builds.
     expect(altitudeMul(DEFAULT_KNOBS.altitude)).toBe(1);
@@ -172,7 +172,7 @@ describe("R47 — how high the race is", () => {
     );
   });
 
-  it("is a dial only a mountain country reads", () => {
+  it("is a dial only a mountain biome reads", () => {
     for (const biome of ["taiga", "desert"] as const) {
       expect(altitudeOf(resolveKnobs({ biome, altitude: 1 }))).toBe(0);
       expect(landOf(resolveKnobs({ biome, altitude: 1 }))).toEqual(BIOMES[biome].land);
@@ -181,11 +181,11 @@ describe("R47 — how high the race is", () => {
     }
   });
 
-  /** How steep this country's ground actually STANDS, m per m: the 99th
+  /** How steep this biome's ground actually STANDS, m per m: the 99th
    * percentile of the local grade over the stage's own box, read across a
    * ground-lattice cell so it is the slope the world is drawn at. A
    * percentile rather than a maximum, because the maximum on a mountain is
-   * one cliff and says nothing about the country around it. */
+   * one cliff and says nothing about the land around it. */
   const steepness = (knobs: ReturnType<typeof resolveKnobs>): number => {
     const geology = createGeology(1, knobs);
     const grades: number[] = [];
@@ -204,7 +204,7 @@ describe("R47 — how high the race is", () => {
     return grades[Math.round(grades.length * 0.99)];
   };
 
-  it("stands the country up as it raises it, and never lifts the valley floor off the lake table", () => {
+  it("stands the land up as it raises it, and never lifts the valley floor off the lake table", () => {
     let steeper = 0;
     for (const dial of [0.2, 0.35, 0.5, 0.7, 0.85, 1]) {
       const knobs = at(dial);
@@ -220,17 +220,17 @@ describe("R47 — how high the race is", () => {
       else expect(grade).toBeGreaterThanOrEqual(steeper - 1e-9);
       steeper = grade;
       // ...and the floor stays where it always was: the mountain COMES
-      // DOWN to the country the lakes and the villages are in, whatever it
+      // DOWN to the biome the lakes and the villages are in, whatever it
       // does above.
       expect(landOf(knobs).floor).toBe(BIOMES.alpine.land.floor);
     }
-    // A dialled-up country stands ground the tuned one never does — half
+    // A dialled-up land stands ground the tuned one never does — half
     // again as steep, and NOT the wall it used to be: at 0.3 of ground
     // spread the top of the dial measured a 99th-percentile grade of 16.5,
     // which `ground.cliff` now refuses as a spike rather than a mountain.
     expect(steepness(at(1))).toBeGreaterThan(1.5 * steepness(at(DEFAULT_KNOBS.altitude)));
     expect(steepness(at(1))).toBeLessThan(3 * steepness(at(DEFAULT_KNOBS.altitude)));
-    // ...and past the relief cap it is the COUNTRY that rises, not the crest.
+    // ...and past the relief cap it is the BIOME that rises, not the crest.
     expect(altitudeScale(at(1)).base).toBeGreaterThan(altitudeScale(at(0.85)).base);
     expect(altitudeScale(at(DEFAULT_KNOBS.altitude)).base).toBe(0);
   });
@@ -241,7 +241,7 @@ describe("R47 — how high the race is", () => {
     // R47 — a band is an ABSOLUTE line: a snowline is a height above the
     // sea, not above whatever valley happens to lie under it. `landOf`
     // hands back each line in the STAGE's own coordinates, so the absolute
-    // one is the line plus the country's base.
+    // one is the line plus the biome's base.
     const base = altitudeScale(at(1)).base;
     const absolute = {
       treeline: top.treeline + base,
@@ -259,7 +259,7 @@ describe("R47 — how high the race is", () => {
     expect(absolute.snow).toBeGreaterThan(2600);
     expect(absolute.snow).toBeLessThan(3200);
     expect(absolute.rockTo).toBeLessThan(absolute.snow);
-    // A country standing two kilometres over its own snowline is white from
+    // A biome standing two kilometres over its own snowline is white from
     // its valley floor up, and says so by handing back a NEGATIVE line.
     expect(top.snow as number).toBeLessThan(0);
     expect(top.treeline).toBeLessThan(0);
@@ -273,7 +273,7 @@ describe("R47 — how high the race is", () => {
     // R35 sites the start on the highest shoulder it can hold a grid on,
     // and at the top of this dial that shoulder is the LEDGE across the
     // summit — not the valley floor, which is the flattest ground in the
-    // country and which an earlier shape put every stage on. What the
+    // biome and which an earlier shape put every stage on. What the
     // claim is really about is the DROP: how much mountain there is under
     // the start line to come down.
     const knobs = at(1);
@@ -289,7 +289,7 @@ describe("R47 — how high the race is", () => {
           high = Math.max(high, y);
         }
       }
-      // The start stands in the top quarter of the country around it —
+      // The start stands in the top quarter of the land around it —
       // MEASURED at 0.79 to 0.94 of the way up over seeds 3, 4 and 6. It is
       // a shoulder near the summit and not the summit itself, because the
       // ledge is only as wide as a start's own footprint needs and no
@@ -323,7 +323,7 @@ describe("R47 — how high the race is", () => {
     // enough that the road cannot follow it down and not yet big enough to
     // have bent itself into an apron. The ruin these budgets hold the line
     // against is a different order of thing — 31% and 893 m, which is what
-    // this same country comes out at with the flank left un-bent
+    // this same biome comes out at with the flank left un-bent
     // (`massif.altitude.sharpen`) or the start let up onto it (`siting`).
     // Two seeds here rather than four, for the file's own minute; they run
     // 0.0%, 19.0% and 1.8% at the three positions below.
@@ -341,7 +341,7 @@ describe("R47 — how high the race is", () => {
       }
       return over / n;
     };
-    // The two ends of the travel are held to the tuned country's own order
+    // The two ends of the travel are held to the tuned biome's own order
     // of magnitude...
     expect(share(DEFAULT_KNOBS.altitude)).toBeLessThan(0.08);
     expect(share(1)).toBeLessThan(0.1);
@@ -435,7 +435,7 @@ describe("R47 — the stage is made to fit the mountain", () => {
       // search's crest ceiling used to read the massif's row amplitude as
       // though it were the mountain's summit, which sits a third of the way
       // down the real one; reading the ground's own crest lets the start
-      // stand where the country actually tops out, and on the tuned country
+      // stand where the biome actually tops out, and on the tuned biome
       // that is a few tens of metres higher than it was.
       expect(start).toBeLessThan(snow + 110);
       expect(start).toBeGreaterThan(LAKE_Y + 100);
@@ -464,12 +464,12 @@ describe("R47 — the stage is made to fit the mountain", () => {
     expect(snowy).toBeGreaterThan(0);
   });
 
-  it("bores a tunnel through a shoulder: level inside, the country over it, walls beside it", () => {
+  it("bores a tunnel through a shoulder: level inside, the land over it, walls beside it", () => {
     const T = STAGE_RULES.tunnel;
     let tunnels = 0;
     // Seeds that actually bore one at the dial's default. A tunnel is cut
     // where a shoulder is in the way, so which seeds get one is a property
-    // of the country and moves whenever the massif's shape does — 4 of the
+    // of the biome and moves whenever the massif's shape does — 4 of the
     // first 20 seeds bore at the default, and 12 of them at the top of the
     // ALTITUDE dial, where there is more mountain to be in the way.
     for (const seed of [2, 5, 8]) {
@@ -496,11 +496,11 @@ describe("R47 — the stage is made to fit the mountain", () => {
       }
       for (const [a, b] of runs) {
         const mid = track.samples[Math.floor((a + b) / 2)];
-        const country = terrain.geology.surfaceAt(mid.x, mid.z);
-        expect(country - mid.elevation).toBeGreaterThan(T.depth - 3);
+        const biome = terrain.geology.surfaceAt(mid.x, mid.z);
+        expect(biome - mid.elevation).toBeGreaterThan(T.depth - 3);
         // ...and a MOUNTAIN over it somewhere along the run: a bore is
         // what the search chose over blasting a shoulder open, so the
-        // country stands `cover` over the road at its deepest (the search
+        // land stands `cover` over the road at its deepest (the search
         // measured it on its own coarser walk; a few metres of slack).
         let deepest = 0;
         for (let i = a; i <= b; i++) {
@@ -512,11 +512,11 @@ describe("R47 — the stage is made to fit the mountain", () => {
         // level along the bore, the bare mountain beyond the lip — the lid
         // over it is the renderer's (tunnel.ts). So the analytic field over
         // the centreline is the road's own level, and a road's width and a
-        // lattice cell out it is the country again.
+        // lattice cell out it is the biome again.
         expect(Math.abs(terrain.heightAt(mid.x, mid.z) - mid.elevation)).toBeLessThan(1.5);
         // ...and the lid the lining draws over it is the mountain inside
         // the lip and the lattice itself beyond, so it never floats.
-        expect(Math.abs(terrain.lidAt(mid.x, mid.z) - country)).toBeLessThan(0.75);
+        expect(Math.abs(terrain.lidAt(mid.x, mid.z) - biome)).toBeLessThan(0.75);
         const out =
           track.width / 2 + ROAD_CROSS.reach + tunnelTrench(track.width) + GROUND_CELL + 2;
         const nx = Math.cos(mid.heading);
@@ -543,7 +543,7 @@ describe("R47 — the stage is made to fit the mountain", () => {
   });
 });
 
-describe("R47 — the other countries are untouched", () => {
+describe("R47 — the other biomes are untouched", () => {
   it("builds the taiga and the desert exactly as before the mountains existed", () => {
     // Digests of seeds 1 and 2 at medium on the tree before R47, taken by
     // the same arithmetic. A change here is a re-roll of every stage in the

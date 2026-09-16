@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE CAMPAIGN'S COUNTRIES, and the six stages each of them runs. Every
+// THE CAMPAIGN'S BIOMES, and the six stages each of them runs. Every
 // level is a SEED plus the dials it is built at — the stages are generated,
 // not authored — so a location is a short table of them with the banner
 // and the name the menu shows. Curating one is the `level-rating` skill's
@@ -14,11 +14,11 @@
 
 import type { CampaignLocation } from "./campaign.ts";
 
-/** The Taiga ladder — the first country, and the game's opening hour.
+/** The Taiga ladder — the first biome, and the game's opening hour.
  * Gravel through spruce, a village with tarmac through it, and water the
  * road fords rather than crosses.
  *
- * IT RUNS SPRING TO AUTUMN, and never in winter. The cold country is the
+ * IT RUNS SPRING TO AUTUMN, and never in winter. The cold biome is the
  * ALPINE's, six levels later, and a taiga that opened on ice said the game
  * had one landscape rather than three — the boreal forest under snow is a
  * different biome to look at, not a fourth face of this one. Winter here is
@@ -39,7 +39,7 @@ import type { CampaignLocation } from "./campaign.ts";
  *   seed 11 medium  circuit  1.72×3   225 s   82 km/h   16 calls a lap, 28 m of climb
  *   seed 48 medium  sprint   4.85 km  208 s   84 km/h   43 calls, two jumps, a bridge
  *   seed 46 long    circuit  2.74×3   372 s   80 km/h   28 bends a lap, 28% sealed
- *   seed 45 long    sprint   7.48 km  344 s   78 km/h   the country stands up, in rain
+ *   seed 45 long    sprint   7.48 km  344 s   78 km/h   the land stands up, in rain
  *   seed  1 xlong   sprint  10.42 km  457 s   82 km/h   92 calls, 17 of them hard
  *
  * The bot drives all eighteen clean in all three cars: no spin, no roll,
@@ -116,7 +116,7 @@ const TAIGA: CampaignLocation = {
       hour: 22,
       weather: "rain",
       season: "autumn",
-      blurb: "The country stands up, and the rain comes with it",
+      blurb: "The land stands up, and the rain comes with it",
     },
     {
       id: "taiga-6",
@@ -132,7 +132,7 @@ const TAIGA: CampaignLocation = {
   ],
 };
 
-/** The Desert ladder — the second country (R40), opened by winning the
+/** The Desert ladder — the second biome (R40), opened by winning the
  * taiga's table. Sand off the mountain, one length of real blacktop, and a
  * sky with two weathers in it: clear, and the dust coming across.
  *
@@ -223,9 +223,9 @@ const DESERT: CampaignLocation = {
   ],
 };
 
-/** The Alpine ladder — the third country (R47), opened by winning the
+/** The Alpine ladder — the third biome (R47), opened by winning the
  * desert's table. Every stage of it starts beside the snow, and every
- * sprint COMES DOWN — which is the country's whole character and is
+ * sprint COMES DOWN — which is the biome's whole character and is
  * test-enforced (`tests/campaign_test.ts`). The circuits close on
  * themselves and so stay up on the shoulder they start on.
  *
@@ -236,7 +236,7 @@ const DESERT: CampaignLocation = {
  *   seed  3 long    sprint   7.48 km  361 s   75 km/h   259 m down, half of it sealed
  *   seed 38 xlong   sprint  10.96 km  594 s   66 km/h   306 m down, two tunnels
  *
- * Its dials are the country rather than the level: a high massif, and a
+ * Its dials are the biome rather than the level: a high massif, and a
  * pass sealed to halfway up the rock band. */
 const ALPINE_KNOBS = { elevation: 0.6, steepness: 0.6, asphalt: 0.5 };
 const ALPINE: CampaignLocation = {

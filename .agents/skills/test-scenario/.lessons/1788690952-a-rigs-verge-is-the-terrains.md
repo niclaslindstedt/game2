@@ -17,7 +17,7 @@ went red, on a change that never touched the car.
 State the ground: a helper in the file (`onEmbankment`) replaces
 `terrain.groundAt` past the lip with the bank the scenario means —
 `ground(lip) − out · verge.climb`, bounded below by `farHeightAt` the way
-a fill lands on the country — applied in `game()` so the whole file rides
+a fill lands on the land — applied in `game()` so the whole file rides
 one stated slope. The file already did this for its flat cases
 (`groundAt = () => flat`); the rolling ones had inherited theirs.
 

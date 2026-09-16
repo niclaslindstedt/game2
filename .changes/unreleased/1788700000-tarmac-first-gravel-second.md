@@ -3,7 +3,7 @@ type: Fixed
 title: Tarmac is laid first, and the rally road takes off from it
 ---
 
-The public roads are now part of the country: they are laid across the seed
+The public roads are now part of the biome: they are laid across the seed
 before the stage is routed, and they run whole, off the edge of the map, from
 one side to the other. The rally road is what comes afterwards — it may borrow
 a stretch of tarmac, and it may meet one at a junction, but it can no longer
@@ -14,7 +14,7 @@ only for the mouth, the centre line no longer disappears, and the gravel road's
 dirt stays off the carriageway. The road the stage does not take is blocked, so
 it is clear which way the stage goes.
 
-Two things the new roads turned up on the way. Every seed's country now carries
+Two things the new roads turned up on the way. Every seed's biome now carries
 a public road — the rule that kept them out of lakes was measuring a height
 instead of a distance, and on a gently shelving shore that reaches inland far
 enough to have vetoed the road on one seed in six. And a ford's water no longer

@@ -28,7 +28,7 @@
 //   dimmer and thinner. Individually these are barely there; together they
 //   are the hatching that carries the rain out of the near field and into
 //   the distance, which is the difference between "it is raining on the
-//   car" and "it is raining on the country".
+//   car" and "it is raining on the land".
 //
 //   BEYOND — nothing here at all: it is the FOG, shortened live with the
 //   squall (`precipReach`, weather.ts). Past thirty-odd metres a real drop
@@ -170,7 +170,7 @@ export function createRain(): Rain {
     // Interleaved rather than split front-and-back: `setIntensity` submits
     // a PREFIX of the pool, so a shell parked at the end of it would be
     // the first thing light rain lost — and light rain over an open
-    // country is exactly when the far hatching is doing the most work.
+    // biome is exactly when the far hatching is doing the most work.
     const far = i % 10 >= Math.round(NEAR_SHARE * 10);
     const half = far ? BOX.far : BOX.near;
     drops[i * 3] = (Math.random() * 2 - 1) * half;

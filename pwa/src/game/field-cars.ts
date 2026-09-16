@@ -447,7 +447,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       // The same gate the bodies are behind, and the dust needs it MORE than
       // they do. Past the line the classification is settled by stepping
       // every remaining crew thousands of times a frame (R30's
-      // `settleField`), so a car is a streak across the country — and a
+      // `settleField`), so a car is a streak across the land — and a
       // cloud raised off one is a line of puffs drawn from here to the
       // finish. Nothing on the road is worth drawing in those beats.
       const beat = onScreen(viewer.phase);

@@ -1,24 +1,24 @@
 ---
-title: When a placer suddenly refuses everything, suspect the shape of its search before the country — three traps that each looked like "no room"
+title: When a placer suddenly refuses everything, suspect the shape of its search before the biome — three traps that each looked like "no room"
 date: 2026-09-03
 scope: engine/mapgen/carparks.ts, engine/mapgen/carpark-map.ts
 concepts: [carparks, search, clearances, tally, r23]
 ---
 
 Tightening R42 produced three total or near-total placement failures, and
-all three read as "the country refuses this" in `carParkTally`. None of them
+all three read as "the biome refuses this" in `carParkTally`. None of them
 was. Read the tally, then check these before touching a rule:
 
 **A try counter must sit AFTER the cheap global filter.** `tryBuiltOut`
 walks candidate cells nearest-first and gives up after 80 tried. Adding a
 stand-off test AFTER `++tried` spent the whole budget on cells inside the
-stand-off and never reached the country the pad belonged in: 8651 refusals,
+stand-off and never reached the biome the pad belonged in: 8651 refusals,
 zero car parks. Moving one line above the counter fixed it entirely.
 
 **A lattice's extent and its escape box are different questions.** The
-country map was built over `track.bounds` plus the escape, so its cells
+ground map was built over `track.bounds` plus the escape, so its cells
 stopped 188 m past the box — and the tarmac a lane wanted stood 175-970 m
-out, uncovered on ten seeds in twelve. Grow the LATTICE (`createCountryMap`'s
+out, uncovered on ten seeds in twelve. Grow the LATTICE (`createGroundMap`'s
 `reach`) and leave `bounds` alone; growing `bounds` instead makes every lane
 that runs off the map run that much further before it has left.
 

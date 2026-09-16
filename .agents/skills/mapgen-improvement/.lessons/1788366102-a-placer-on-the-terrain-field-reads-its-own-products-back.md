@@ -27,7 +27,7 @@ through a shell heredoc: the first attempt did, and it is exactly the
 rewrite `write-code` forbids).
 
 Also: on an endless stage a placer like this reads the route as far as it
-has been laid. A pad or a lane searched over that country can differ with
+has been laid. A pad or a lane searched over that biome can differ with
 how the stream was chunked, however long `hold` is, because the route may
 fold back into the box kilometres later — the chunked-vs-single test for
 such a feature asserts the rules and the served stands, not the metre.

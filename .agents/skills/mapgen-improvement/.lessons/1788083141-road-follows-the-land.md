@@ -1,5 +1,5 @@
 ---
-title: A road laid at a height of its own makes the country beside it flat, whatever the geology says
+title: A road laid at a height of its own makes the land beside it flat, whatever the geology says
 date: 2026-08-30
 scope: engine/mapgen/compile.ts, engine/mapgen/terrain.ts
 concepts: [elevation, terrain, plausibility, road, cut-and-fill]
@@ -20,7 +20,7 @@ The fix is a causal lag + gradient clamp + vertical-curvature clamp on the
 land height along the route (`elevation.follow`). All three are needed: the
 lag alone leaves brows the cars land on (sim air time nearly doubled and three
 of twenty-four cars wrecked), and lengthening the lag to fix that stops the
-road following the country at all, which takes the cuttings with it.
+road following the land at all, which takes the cuttings with it.
 
 Two things it breaks that are not obvious. Synthetic rigs (`compileTrack`)
 signalled "flat" by passing `rolling = () => 0`; a follower inside

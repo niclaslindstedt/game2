@@ -21,7 +21,7 @@
 import * as THREE from "three";
 import type { Track } from "@engine";
 
-/** How much country the map shows around the route, m. Wide enough that the
+/** How much land the map shows around the route, m. Wide enough that the
  * road never runs along its own coast and the hills it crosses are part of
  * the picture; short of the corridor's own reach (terrain.ts), so the
  * cut always lands on built ground rather than exposing the tile edges it

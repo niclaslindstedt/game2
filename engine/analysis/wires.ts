@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE GRID, MEASURED (R45). The transmission line is planned against the
-// SURVEY — the bare country, and the route's own samples where a road
+// SURVEY — the bare land, and the route's own samples where a road
 // stands over it. What gets built is neither: the terrain shapes the ground
 // around every road, pad and clearing on the map, and the wire hangs where
 // the towers actually ended up standing.
@@ -26,7 +26,7 @@
 //   ARE THE SPANS A LINE'S. Inside the band the tension was designed for,
 //   with the stretched ones the exception rather than the rule.
 //
-//   DOES IT CROSS THE COUNTRY. A line that begins or ends inside the fog is
+//   DOES IT CROSS THE BIOME. A line that begins or ends inside the fog is
 //   a line with a cut end standing in a field, which is the loudest mistake
 //   on the map — worse than no line at all.
 //
@@ -47,7 +47,7 @@ const W = ANALYSIS.wires;
 
 /** R45 — measure every transmission line on a stage. A stage with no line
  * on it scores a clean sheet on every check: most of them have none, and a
- * country without a grid is not a country with a broken one. */
+ * biome without a grid is not a biome with a broken one. */
 export function analyzeWires(track: Track, terrain: TerrainField): MetricReport {
   const started = Date.now();
   const findings: Finding[] = [];
@@ -85,7 +85,7 @@ export function analyzeWires(track: Track, terrain: TerrainField): MetricReport 
         if (y < lo) lo = y;
         if (y > hi) hi = y;
       }
-      // The ground the terrain BUILT, not the country the survey read: a
+      // The ground the terrain BUILT, not the biome the survey read: a
       // tower at the top of a cutting stands on ground the road blasted.
       if (hi - lo > P.tower.level * W.levelSlack) {
         wrong.push(`${(hi - lo).toFixed(1)} m of fall across its base`);
@@ -160,7 +160,7 @@ export function analyzeWires(track: Track, terrain: TerrainField): MetricReport 
       });
     }
 
-    // ── Does it cross the country ──────────────────────────────────────
+    // ── Does it cross the biome ──────────────────────────────────────
     // Both ends have to be outside the box the stage occupies, by more than
     // the fog can see: a line that stops where a player can watch it stop
     // is a cut end standing in a field.
@@ -182,7 +182,7 @@ export function analyzeWires(track: Track, terrain: TerrainField): MetricReport 
       findings.push({
         code: "wires.crossing",
         severity: "error",
-        message: `the line ends ${(-outside).toFixed(0)} m inside the country a player can see (R45)`,
+        message: `the line ends ${(-outside).toFixed(0)} m inside the biome a player can see (R45)`,
         at: { x: end.x, z: end.z },
         value: -outside,
       });
@@ -232,7 +232,7 @@ export function analyzeWires(track: Track, terrain: TerrainField): MetricReport 
     },
     {
       id: "crossing",
-      label: "the line crosses the whole country and ends out of sight (R45)",
+      label: "the line crosses the whole biome and ends out of sight (R45)",
       score: rate(strandedEnds, Math.max(1, ends)),
       weight: 2,
       value: strandedEnds,

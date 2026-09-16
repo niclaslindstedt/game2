@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE GROUND — R32's layers, swept over the country the stage is set in and
+// THE GROUND — R32's layers, swept over the land the stage is set in and
 // asked whether they came out as a place.
 //
 // The layered model (bedrock, then the groundwater in it, then the soil on
@@ -20,8 +20,8 @@
 //   WHAT GROWS, GROWS ON SOIL. Trees need a rooting depth. A forest
 //   standing on bare bedrock is the same mistake seen from the other side.
 //
-// ...and two are about the country the road actually runs THROUGH, which is
-// a different country from the one the stage is set in and has to be
+// ...and two are about the biome the road actually runs THROUGH, which is
+// a different biome from the one the stage is set in and has to be
 // measured separately (R31, R34):
 //
 //   THE ROAD RUNS THROUGH SOMETHING. R31 cuts the landscape back to a cone
@@ -33,7 +33,7 @@
 //
 //   WHERE IT CANNOT GO ROUND, IT GOES THROUGH. A road that meets rock is
 //   cut through it, and a stage with no cuttings anywhere is one whose
-//   roads went round everything — which is what a country with no rock in
+//   roads went round everything — which is what a biome with no rock in
 //   it looks like from the driver's seat.
 
 import { TUNING } from "../game/defs/tuning.ts";
@@ -62,7 +62,7 @@ function percentile(sorted: number[], p: number): number {
   return sorted[i];
 }
 
-/** What the fold sweep found: how many lattice edges the country has past
+/** What the fold sweep found: how many lattice edges the biome has past
  * the road's bench, how many of them fold past `crease.fold`, the worst
  * such fold in degrees, how many triangles stand as walls — and, R31's
  * own count, how many triangles the sweep saw at all and how many of them
@@ -78,8 +78,8 @@ type Creases = {
   steepest: number;
 };
 
-/** R32 — THE COUNTRY IS CURVES: every fold on the ground lattice, sorted
- * into the road's, the rock's deliberate ones and the country's own.
+/** R32 — THE BIOME IS CURVES: every fold on the ground lattice, sorted
+ * into the road's, the rock's deliberate ones and the biome's own.
  *
  * Read off the same 14 m corners the tiles are built from and folded
  * across the same diagonal, so the angle measured is the one drawn — the
@@ -88,7 +88,7 @@ type Creases = {
  * two triangles it lies between (the ground there is not the bare land):
  * a cutting's brow, an embankment's toe, the cone's edge, and a cutting
  * has an edge. It is SHARP where R32 says the rock is deliberately so. Only
- * the rest is the country, and only the country is held to a curve. A
+ * the rest is the biome, and only the biome is held to a curve. A
  * WALL — a triangle steeper than rock is ever held at — is reported
  * wherever it stands, because nothing builds one on purpose.
  *
@@ -150,7 +150,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
     (Math.acos(Math.max(-1, Math.min(1, a[0] * c[0] + a[1] * c[1] + a[2] * c[2]))) * 180) / Math.PI;
   /** A triangle's slope, m per m, off its normal. */
   const slope = (n: number[]): number => Math.hypot(n[0], n[2]) / n[1];
-  // The road's own strip is the rollers' to judge; the country starts past
+  // The road's own strip is the rollers' to judge; the land starts past
   // the bench, a cell out, where R31 promises a hill worth going round.
   const clear = STAGE_RULES.verge.bench + cell;
   const out: Creases = {
@@ -171,13 +171,13 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
   const L = ANALYSIS.ground.climb;
   const limit = TUNING.collision.climbLimit;
   const steepAt = { x: 0, z: 0, built: false };
-  /** Whether the BARE country here is a rock flank: a hillside steeper
+  /** Whether the BARE land here is a rock flank: a hillside steeper
    * than the runoff a road batters beside itself (`verge.climb`), with the
    * soil scoured off it (R32) — which is what the geology strips a flank
    * to, what the renderer paints as bedrock, and what nothing roots on.
    * A road's embankment standing on such a flank has nowhere gentler to
    * come down to than the flank itself. Read off the bare land, so a fill
-   * or a cut on gentle, soil-covered country never hides behind it. */
+   * or a cut on gentle, soil-covered biome never hides behind it. */
   const far = terrain.farHeightAt;
   const rockFlank = (x: number, z: number): boolean => {
     if (terrain.geology.soilAt(x, z) >= ANALYSIS.ground.bare) return false;
@@ -189,7 +189,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
   /** R47 — whether this ground stands over a BORE's trench: the lattice
    * there is the trench's own wall up to the mountain, rock by rule
    * (`cutAt`) and under the lid the lining draws over it, so a step there
-   * is not a wall the country stands. As far out as the trench and the
+   * is not a wall the land stands. As far out as the trench and the
    * cell that ramps off its edge. */
   const lidReach =
     track.width / 2 + ROAD_CROSS.reach + tunnelTrench(track.width) + GROUND_CELL * Math.SQRT2;
@@ -231,7 +231,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
       const sharp = terrain.geology.sharpAt(x, z) >= B.explicit;
       // WHETHER THE ROCK HAS BEEN DECLARED HERE: a face a road was cut
       // through (R34, or a cone letting go of a mountain — the field's own
-      // word, `cutAt`), or the country's own scoured flank — bare land
+      // word, `cutAt`), or the biome's own scoured flank — bare land
       // standing steeper than a road may build, with the soil off it. Both
       // checks below want the same answer and it costs land queries, so it
       // is asked once and only once a triangle is steep enough for either
@@ -267,7 +267,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
             severity: "error",
             message: `a wall stands at ${(Math.atan(steepest) * (180 / Math.PI)).toFixed(
               0,
-            )}° ${built ? "at the side of a road's shelf" : "in open country"} — no rule stands ground that steep`,
+            )}° ${built ? "at the side of a road's shelf" : "in open land"} — no rule stands ground that steep`,
             at: { x, z },
             value: steepest,
           });
@@ -282,7 +282,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
       }
     }
   }
-  // One finding, after the sweep, and only for a defect: a country of
+  // One finding, after the sweep, and only for a defect: a biome of
   // forty thousand edges has a handful just over the bar wherever two
   // layers happen to run steep together, and listing each of them is
   // noise a session learns to skip. What is worth standing in front of
@@ -290,7 +290,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
   // knife-edge, wherever it is.
   const steepShare = out.steep / Math.max(1, out.triangles);
   if (out.steep > 0) {
-    const where = steepAt.built ? "on ground a road shaped" : "in open country";
+    const where = steepAt.built ? "on ground a road shaped" : "in open land";
     findings.push({
       code: "ground.climb",
       severity: steepShare > L.tolerated ? "error" : "note",
@@ -307,7 +307,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
     findings.push({
       code: "ground.crease",
       severity: "warn",
-      message: `${(share * 100).toFixed(2)}% of the country's lattice edges fold past ${
+      message: `${(share * 100).toFixed(2)}% of the biome's lattice edges fold past ${
         B.fold
       }° on ground nothing made sharp (worst ${out.worst.toFixed(0)}°)`,
       at: { x: worstAt.x, z: worstAt.z },
@@ -317,7 +317,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
     findings.push({
       code: "ground.crease",
       severity: "warn",
-      message: `the country folds ${out.worst.toFixed(
+      message: `the biome folds ${out.worst.toFixed(
         0,
       )}° across one lattice edge — a crease, on ground nothing made sharp`,
       at: { x: worstAt.x, z: worstAt.z },
@@ -328,10 +328,10 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
 }
 
 /** R47 — IS THE HIGH GROUND A SUMMIT, OR A TABLELAND? The share of the box
- * standing within `near` of its own summit, off the grid the country was
+ * standing within `near` of its own summit, off the grid the biome was
  * swept on (row-major, `cells` square).
  *
- * A peak is a small share of its own country and a tableland is a large
+ * A peak is a small share of its own biome and a tableland is a large
  * one, and nothing else in this metric can tell them apart: `relief` sees
  * the same spread either way, so a mesa with a road laid along it scored
  * 97.5 and reported nothing. `cliff` answers the companion question — is
@@ -339,7 +339,7 @@ function creases(track: Track, terrain: TerrainField, findings: Finding[]): Crea
  * "this is not a mountain" are both covered.
  *
  * It is a BAND, not a ceiling: no ground near the summit at all is a spike,
- * which is the shape a country gets when its crest outgrows the ground it
+ * which is the shape a biome gets when its crest outgrows the ground it
  * stands on. */
 function summitShare(grid: number[], near: number): number {
   let summit = -Infinity;
@@ -358,9 +358,9 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
   const started = Date.now();
   const findings: Finding[] = [];
   const G = ANALYSIS.ground;
-  // R40 — the country the shares are judged against, and its quilt.
+  // R40 — the biome the shares are judged against, and its quilt.
   const biome = biomeRules(track.knobs.biome);
-  const country = G.country[biome.id];
+  const bands = G.biome[biome.id];
   const cells = ANALYSIS.sampling.groundGrid;
   const margin = ANALYSIS.sampling.groundMargin;
   const b = track.bounds;
@@ -400,7 +400,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
         flooded++;
         // R32 — WHAT KIND of water. Depth is the whole difference between a
         // lake and a swamp, and it is worth measuring separately because
-        // they are not interchangeable: a country of nothing but open water
+        // they are not interchangeable: a biome of nothing but open water
         // has no reeds in it, and one of nothing but swamp has no horizon.
         const depth = LAKE_Y - ground.surface;
         if (depth < ANALYSIS.ground.swamp.deep) {
@@ -419,7 +419,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       const dx = (geology.surfaceAt(x + step, z) - geology.surfaceAt(x - step, z)) / (2 * step);
       const dz = (geology.surfaceAt(x, z + step) - geology.surfaceAt(x, z - step)) / (2 * step);
       const slope = Math.hypot(dx, dz);
-      if (slope > country.soilSteep) {
+      if (slope > bands.soilSteep) {
         steepCells++;
         if (ground.soil > G.soil.deep) {
           soilOnCliffs++;
@@ -457,7 +457,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
   // ── The corridor, and the cuttings in it (R31, R34) ──────────────────
   // Walked along the road rather than swept over the map, because the
   // question is about the ground BESIDE THE ROAD and nothing else: how much
-  // of the country survives the verge cone, and how much of what survives
+  // of the biome survives the verge cone, and how much of what survives
   // is a face the road was cut through. Both are read off `heightAt` — the
   // terrain field, which is what the game draws and the car rides — where
   // every other check in this metric reads the bare geology underneath it.
@@ -527,7 +527,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       severity: "warn",
       message: `the ground beside the road stands only ${corridorRise.toFixed(
         1,
-      )} m over it — the stage is a ribbon on a table, whatever the country behind it is doing`,
+      )} m over it — the stage is a ribbon on a table, whatever the land behind it is doing`,
       value: C.rise.min - corridorRise,
     });
   }
@@ -557,7 +557,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
   const meanSwampDepth = swamp > 0 ? swampDepth / swamp : 0;
   const meanSoil = soilSum / Math.max(1, total);
 
-  if (waterShare > country.water.max) {
+  if (waterShare > bands.water.max) {
     // Past the DROWNED ceiling this is not a wet stage, it is a seascape
     // with a causeway drawn on it — the road stands up out of the water on
     // its own verge cone and everything else has gone. That is an error, not
@@ -570,26 +570,26 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       message: drowned
         ? `${(waterShare * 100).toFixed(
             0,
-          )}% of the country is under water — the stage is a causeway across a sea`
-        : `${(waterShare * 100).toFixed(0)}% of the country is under water`,
+          )}% of the biome is under water — the stage is a causeway across a sea`
+        : `${(waterShare * 100).toFixed(0)}% of the biome is under water`,
       value: waterShare,
     });
   }
-  if (relief < country.relief.min) {
+  if (relief < bands.relief.min) {
     findings.push({
       code: "ground.flat",
       severity: "warn",
-      message: `${relief.toFixed(0)} m of relief across the whole map — the country is a table`,
-      value: country.relief.min - relief,
+      message: `${relief.toFixed(0)} m of relief across the whole map — the biome is a table`,
+      value: bands.relief.min - relief,
     });
   }
-  if (country.swamps && swampShare < G.swamp.share.min) {
+  if (bands.swamps && swampShare < G.swamp.share.min) {
     findings.push({
       code: "ground.swamp",
       severity: "note",
       message: `only ${(swampShare * 100).toFixed(
         1,
-      )}% of the country is shallow standing water — a landscape with lakes but no swamps has no reed beds in it`,
+      )}% of the biome is shallow standing water — a landscape with lakes but no swamps has no reed beds in it`,
       value: G.swamp.share.min - swampShare,
     });
   }
@@ -611,38 +611,38 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       // property a single dial can destroy from end to end — a map that is
       // four fifths lake still has plausible soil, forest and relief on the
       // fifth that is left, so every other check in this metric goes on
-      // reporting a healthy country.
+      // reporting a healthy biome.
       id: "water",
       label:
-        country.water.max > 0
-          ? "some of the country is water, and not most of it"
-          : "the country is dry (R40)",
-      score: within(waterShare, country.water, G.slack),
+        bands.water.max > 0
+          ? "some of the biome is water, and not most of it"
+          : "the biome is dry (R40)",
+      score: within(waterShare, bands.water, G.slack),
       weight: 3,
       value: waterShare,
     },
     {
       id: "forest",
-      label: country.forest.min > 0 ? "the country is forested" : "the country is open (R40)",
-      score: within(forestShare, country.forest, G.slack),
+      label: bands.forest.min > 0 ? "the biome is forested" : "the biome is open (R40)",
+      score: within(forestShare, bands.forest, G.slack),
       weight: 1,
       value: forestShare,
     },
     {
       id: "rock",
       label: "the bedrock shows where the soil is thin",
-      score: within(rockShare, country.rock, G.slack),
+      score: within(rockShare, bands.rock, G.slack),
       weight: 1,
       value: rockShare,
     },
     {
       id: "relief",
-      label: "the country has shape to it",
-      score: within(relief, country.relief, G.reliefSlack),
+      label: "the biome has shape to it",
+      score: within(relief, bands.relief, G.reliefSlack),
       weight: 1.5,
       value: relief,
     },
-    // R47 — asked only of a country that HAS a mountain. The taiga's chains
+    // R47 — asked only of a biome that HAS a mountain. The taiga's chains
     // and the desert's ranges are a different shape with different right
     // answers, and a band written for a massif would fail them on every
     // seed.
@@ -659,8 +659,8 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
         ]),
     {
       id: "cliffs",
-      label: "the country is mostly ground a car could cross",
-      score: within(cliffShare, { min: 0, max: country.cliff.max }, G.slack),
+      label: "the biome is mostly ground a car could cross",
+      score: within(cliffShare, { min: 0, max: bands.cliff.max }, G.slack),
       weight: 1,
       value: cliffShare,
     },
@@ -671,12 +671,12 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       // tarns and no mires, and pits that are all shallow make a marsh with
       // nothing to drive past. The band wants both on the map.
       id: "swamp",
-      label: country.swamps
-        ? "the country has shallow water as well as deep (R32)"
+      label: bands.swamps
+        ? "the biome has shallow water as well as deep (R32)"
         : "no water stands in the pans (R40)",
-      // A dry country is held to no swamp at all: the band is the wet
+      // A dry biome is held to no swamp at all: the band is the wet
       // one's, and here it is a point.
-      score: within(swampShare, country.swamps ? G.swamp.share : { min: 0, max: 0 }, G.slack * 0.3),
+      score: within(swampShare, bands.swamps ? G.swamp.share : { min: 0, max: 0 }, G.slack * 0.3),
       weight: 1,
       value: swampShare,
     },
@@ -700,7 +700,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       // matters. A stage is looked at from the road, and this is the only
       // check in the metric standing there.
       id: "corridor",
-      label: "the road runs THROUGH the country, not across it (R31)",
+      label: "the road runs THROUGH the biome, not across it (R31)",
       score: within(corridorRise, C.rise, C.slack),
       weight: 1.5,
       value: corridorRise,
@@ -717,12 +717,12 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       value: cutShare,
     },
     {
-      // Weighted like `relief`: the same country, asked whether it is drawn
+      // Weighted like `relief`: the same biome, asked whether it is drawn
       // as curves. The walls take their share off it too — a stage whose
-      // country is smooth everywhere but one vertical seam has the one
+      // biome is smooth everywhere but one vertical seam has the one
       // thing a player photographs.
       id: "crease",
-      label: "the country is curves, and a sharp edge is one that was asked for (R32)",
+      label: "the biome is curves, and a sharp edge is one that was asked for (R32)",
       score:
         under(creasedShare, G.crease.share.tolerated, G.crease.share.fail) *
         under(folds.walls, 0, G.crease.wall.fail),

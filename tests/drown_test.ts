@@ -6,7 +6,7 @@
 // — are `tests/water_test.ts`; these are about the car.
 //
 // Both suites SEARCH for their scenario rather than naming a seed, because
-// the drive that finds the water is a minute of held lock over open country
+// the drive that finds the water is a minute of held lock over open land
 // and where it finishes moves with the roads and with the handling alike.
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -258,14 +258,14 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   // WHICH seeds those are is not stable across generator changes and is not
   // meant to be: the drive that carries the car into the water is 60 s of
   // full lock off whatever road the seed built, so a stage whose road moves
-  // puts the car in different water. R34 laid the roads along the country
+  // puts the car in different water. R34 laid the roads along the land
   // and every one of them moved; R17's junction placement moved them again.
   // So the leading names are a shortcut, not the fixture: the tail is the
   // search SPACE, and it is wide on purpose so that a generator change
   // costs the suite a few seconds of scanning rather than a red test.
   const SHORE_SEEDS = [
     // 219 leads because it is the first that scrambles out — the drive that
-    // finds the water is a minute of held lock over open country, so a car
+    // finds the water is a minute of held lock over open land, so a car
     // that reaches a given shore is a car that has not rolled, wedged or
     // drowned on the way, and which seeds those are moves with the handling
     // as readily as with the roads. The names behind it are the rest of
@@ -345,7 +345,7 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   /** A seed and the lock the car goes looking for water on — the two halves
    * of the fixture, because BOTH of them decide where in the lake it ends
    * up. The list used to search only the first, and that was the bug: the
-   * plunge is a minute of held lock across open country and a handling
+   * plunge is a minute of held lock across open land and a handling
    * change moves where it finishes as surely as a generator change does, so
    * a roster that slid less put every listed seed in water too deep to
    * drive out of and the fixture had nothing left to find. How HARD the car

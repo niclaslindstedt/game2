@@ -122,7 +122,7 @@ export type MapCamera = {
   /** The same framing, for a NEW STAGE rather than for a gesture: a seed
    * stepped on Roam, a level opened in the map viewer. Nobody is holding
    * anything, and the zoom and pan that were walked onto the last stage
-   * describe country that no longer exists — so the framing goes back to
+   * describe biome that no longer exists — so the framing goes back to
    * the whole of the new one and the turn picks up from the first frame.
    * (Still the turn's own terms: a map being READ holds still — see
    * `hold`.) */

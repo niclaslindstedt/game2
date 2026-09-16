@@ -19,7 +19,7 @@
 // state of one box.
 //
 // The banners behind a LOCATION are a different problem and a different
-// tool: a country is many stages, so it gets a real render of the landscape
+// tool: a biome is many stages, so it gets a real render of the landscape
 // rather than a map of any one road (scripts/biome-preview.mjs).
 //
 //   npm run routes

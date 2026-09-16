@@ -76,7 +76,7 @@ export function musicPlaying(): boolean {
  * which is what covers a stall nobody could have predicted. What it cannot do
  * is cover the FIRST one, and a load is nothing but first ones: standing a
  * stage up blocks the main thread in indivisible calls — compiling the road,
- * building the country and its forest — and while it is blocked the
+ * building the biome and its forest — and while it is blocked the
  * scheduler's 90 ms timer does not fire at all. Measured on a desktop the
  * card's longest single block is about three and a half seconds and the timer
  * has gone five without a tick, so the theme goes quiet for most of a load,

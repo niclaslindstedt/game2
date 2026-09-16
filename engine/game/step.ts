@@ -101,7 +101,7 @@ function checkIn(state: GameState, events: GameEvent[]): void {
   state.checkpointTimes.push(state.raceTime);
 }
 
-/** HOW MUCH OF A POINT IS OPEN COUNTRY rather than road, 0..1 — the weight
+/** HOW MUCH OF A POINT IS OPEN BIOME rather than road, 0..1 — the weight
  * the terrain lattice carries against the road's own ribbon, and the weight
  * the body's corners carry against the ground under its middle (ground.ts,
  * `readSeat`).
@@ -116,13 +116,13 @@ function checkIn(state: GameState, events: GameEvent[]): void {
  * A DECK has no verge to ramp across: past a parapet is air rather than a
  * shoulder leaning away, so a bridge keeps the hard edge it has always had
  * — the ribbon, clamped to the mat (track.ts, `profileOf`), for a corner
- * hanging over the parapet with the car still on the deck, and the country
+ * hanging over the parapet with the car still on the deck, and the biome
  * outright for a car that has left it, which over a bridge is the river bed
  * and a car falling into it. And off the END of the road — past the apron
  * R24 shelves — the terrain owns the ground however little lateral offset
  * the fix reports.
  */
-function countryShare(track: Track, fix: TrackPoint): number {
+function groundShare(track: Track, fix: TrackPoint): number {
   if (track.samples[fix.index].deck != null) return fix.offRoad ? 1 : 0;
   if (fix.offRoad) return 1;
   const out = (Math.abs(fix.lateral) - track.width / 2) / T.offTrack.verge;
@@ -154,7 +154,7 @@ const GROUND: GroundContext = {
   rng: createRng(0),
   drive: 1,
   groundAt: () => 0,
-  country: 0,
+  share: 0,
 };
 
 /** The reader `groundAt` uses on a green stage: no snow has ever been
@@ -457,12 +457,12 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // is the direction half of the same idea.)
   const dirX = sinH * car.u + cosH * car.w;
   const dirZ = cosH * car.u - sinH * car.w;
-  // ONE GROUND, road and country alike — the surface every height in the
+  // ONE GROUND, road and biome alike — the surface every height in the
   // step below is read off, wherever it is asked about.
   //
   // The two are stated in different places: the mat is the road's own
   // ribbon (`locate` — its crown, its wheel tracks, the shoulder), and the
-  // country is the terrain lattice, which is what the renderer draws and
+  // biome is the terrain lattice, which is what the renderer draws and
   // what R16's hand-over leans the shoulder onto. They agree over the mat
   // and for the bare metre and a half past it, and then they part: the
   // ribbon's cross-section is a FORMULA and runs on for ever, gently, where
@@ -476,7 +476,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // tens of m/s — a whole loft opened in a single hundred-and-twentieth of
   // a second, on ground that only ever went down, and the car thrown up
   // into the air at the verge line and left riding the fiction across the
-  // country. A seam between two readers is not a shape; it is a teleport.
+  // biome. A seam between two readers is not a shape; it is a teleport.
   //
   // So the ribbon hands over to the terrain ACROSS the verge, on the same
   // smoothstep R16 draws with, and by the line where the car counts as off
@@ -495,17 +495,17 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const cut = snow.white ? snow.cutAt : ZERO_CUT;
   const groundAt = (x: number, z: number): number => {
     const fix = locate(track, x, z, preFix.index);
-    const share = countryShare(track, fix);
+    const share = groundShare(track, fix);
     const sank = cut(x, z);
     if (share <= 0) return fix.elevation - sank;
     if (share >= 1) return terrain.groundAt(x, z) - sank;
     return fix.elevation + (terrain.groundAt(x, z) - fix.elevation) * share - sank;
   };
-  const country = countryShare(track, preFix);
+  const startShare = groundShare(track, preFix);
   // The ground under the car as the step BEGINS, read off that same one
   // surface: `wheelSpeed` divides the move by `dt`, so a pre-move height
   // from a different reader than the post-move one is the seam again.
-  const groundY = country <= 0 ? preFix.elevation - cut(car.x, car.z) : groundAt(car.x, car.z);
+  const groundY = startShare <= 0 ? preFix.elevation - cut(car.x, car.z) : groundAt(car.x, car.z);
   let ctx: GroundContext;
   if (preFix.offRoad) {
     // The wild: the terrain owns the ground — the RIDDEN lattice surface
@@ -544,7 +544,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.slope = (ahead - behind) / (2 * grade);
     ctx.slopeLat = (right - left) / (2 * grade);
     ctx.roadCurve = (fwd + back - 2 * here) / (span * span);
-    // A brow out in the country is a shape the ground happens to have, and
+    // A brow out in the land is a shape the ground happens to have, and
     // the car bobs over it or is thrown by it on the strength of its own
     // momentum alone. The training ground is the one place off a road where
     // something was BUILT to throw the car (`mapgen/arena.ts`), and its
@@ -562,7 +562,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     // corner over a road is standing on the road: the shared surface above,
     // not the bare lattice, which is why this is not `terrain.groundAt`.
     ctx.groundAt = groundAt;
-    ctx.country = country;
+    ctx.share = startShare;
   } else {
     // How sharply the road curves under the car ALONG ITS PATH — what
     // decides whether it throws the car, and how much of the car's weight
@@ -615,12 +615,12 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     // On the mat the road IS the ground: its own profile — crown, tracks,
     // shoulder and the grassed slope past it (R16), interpolated between
     // samples — read wherever the step lands the car, and handed over to
-    // the country past the verge by the shared reader above. Nothing is
+    // the biome past the verge by the shared reader above. Nothing is
     // seated on the profile: a road is smooth across the body's length, and
     // the cross-section under the wheels is what the car is meant to ride,
-    // not a face to be lifted clear of — which is what `country` says.
+    // not a face to be lifted clear of — which is what `biome` says.
     ctx.groundAt = groundAt;
-    ctx.country = country;
+    ctx.share = startShare;
   }
   // R47 — ...and the winter on top of whichever of the two it was: how
   // deep the snow the wheels are pushing through is, how worked it is,

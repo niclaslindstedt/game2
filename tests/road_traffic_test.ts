@@ -129,7 +129,7 @@ describe("the routes (R44)", () => {
     for (const limit of posted) {
       expect(Object.values(TRAFFIC_LIMITS)).toContain(limit);
     }
-    expect(posted.has(TRAFFIC_LIMITS.country)).toBe(true);
+    expect(posted.has(TRAFFIC_LIMITS.biome)).toBe(true);
     const driven = new Set<number>();
     for (const route of plan.routes) {
       for (const p of route.points) driven.add(Math.round(p.limit * 3.6));

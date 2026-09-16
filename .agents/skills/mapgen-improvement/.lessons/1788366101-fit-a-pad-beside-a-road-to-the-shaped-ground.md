@@ -7,7 +7,7 @@ concepts: [pads, r31, r34, terrain, placement, measurement]
 
 A pad within a hundred metres of the route sits on ground R31 has already
 cut back to the cone. Fitting its level to `land.heightAt` — the bare
-country, which the yard placer uses — and then asking `shelfBand` whether
+biome, which the yard placer uses — and then asking `shelfBand` whether
 that level stands inside the cone refused half of every sweep's
 candidates (`pad:band` 500-950 refusals over 24 seeds, the single largest
 reason) on any stage with relief: the bare hill was higher than the road

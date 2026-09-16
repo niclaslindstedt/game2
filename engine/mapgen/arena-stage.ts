@@ -22,7 +22,7 @@ import type { SegmentPlan } from "./rules.ts";
  * to be stood on, to be pointed down, and to be back on in a second. */
 const APPROACH = 100;
 
-/** The seed the training ground's country is built from. It is a level and
+/** The seed the training ground's biome is built from. It is a level and
  * not a roll: the trees outside the berm are in the same places for every
  * player, every session, forever. */
 export const ARENA_SEED = 71903;

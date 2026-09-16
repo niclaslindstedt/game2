@@ -10,7 +10,7 @@ density each, which still reads as evenly sprinkled — every spruce wood
 looks like every other spruce wood. Three scales fix it, all in
 `engine/mapgen/props.ts` because the trunks are solid:
 
-- `REGIONS` (~900 m) says what kind of country this is and re-weights the
+- `REGIONS` (~900 m) says what kind of biome this is and re-weights the
   groves under it, so a stage crosses a handful of PLACES.
 - `GROVES` (~150 m) picks the community, as before.
 - `standDensity` (~42 m noise, squared and re-centred so its mean is

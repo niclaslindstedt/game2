@@ -26,7 +26,7 @@ Two traps that follow:
   the zones the search reads (`geology.ts`, `paving.sealAbove` both read
   `zones.snow`): a lowered snowline there re-rolls the route. State the
   effective line as a SECOND number (`snowlineOf`, the lower of the
-  country's own and the frost line) and read it only where the surface and
+  biome's own and the frost line) and read it only where the surface and
   the paint are decided.
 - **`heightAt` cannot be redefined in place.** The terrain's analytic
   height is closed over by a dozen readers defined before the road-clearance

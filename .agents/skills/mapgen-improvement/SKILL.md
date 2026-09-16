@@ -37,7 +37,7 @@ Step 8's first half is the one that catches what this loop cannot. `analyze`
 asks whether a stage is BROKEN, one seed at a time, and a change can leave
 every seed legal while making all of them duller — a corner vocabulary that
 quietly collapses onto one radius, a feature that stops being placed, a
-country that stops varying. That is a change to a DISTRIBUTION, and
+biome that stops varying. That is a change to a DISTRIBUTION, and
 `make rate COUNT=120 ARGS=--stats` is the only thing here that reads one:
 
 ```sh
@@ -73,7 +73,7 @@ browser, a couple of seconds. Both halves live under `scripts/level-map.mjs`: th
 **The campaign's committed previews are generator OUTPUT.** `make previews`
 regenerates both halves — `make routes` (`scripts/stage-routes.mjs`) writes
 every campaign stage's road into `pwa/src/game/stage-routes.ts` (pure Node,
-~13 s), `make biomes` re-renders each country over its FIRST stage's start
+~13 s), `make biomes` re-renders each biome over its FIRST stage's start
 line (needs a build + Chromium). But read the version call above BEFORE
 running it: a rule change re-rolling a campaign road is a version to add,
 not a preview to regenerate.
@@ -269,14 +269,14 @@ hold water" rather than "did my change cost anything".
 | File | Job |
 | --- | --- |
 | `rules.ts` | **The rule book.** Every constraint and vocabulary number as DATA. Tuning the generator means editing this file. |
-| `biomes.ts` | **The countries (R40).** The quilt, the water, the loose surface, the relief, the dunes and the sky per biome, as rows. `knobs.biome` picks one; nothing else in `mapgen/` names a country. |
+| `biomes.ts` | **The biomes (R40).** The quilt, the water, the loose surface, the relief, the dunes and the sky per biome, as rows. `knobs.biome` picks one; nothing else in `mapgen/` names a biome.      |
 | `generate.ts` | **The search.** Draws candidates, validates against the rules, retries bounded, backtracks, rejects a whole attempt rather than ever shipping a violation. |
 | `compile.ts` | **The geometry.** Turns the plan into evenly spaced samples — the single geometric truth read by physics, renderer and bots alike. |
-| `geology.ts` | **The GROUND, in layers (R32)**, its numbers in `STAGE_RULES.geology`. Bedrock with its glacial smoothness, the groundwater table in it, the soil on top. Everything about the country that is not the road. |
+| `geology.ts` | **The GROUND, in layers (R32)**, its numbers in `STAGE_RULES.geology`. Bedrock with its glacial smoothness, the groundwater table in it, the soil on top. Everything about the biome that is not the road.   |
 | `land.ts` | The road builder's view of that ground: how high is it, can I build here. |
 | `road.ts` | **The cross-section.** What a road is ACROSS its width. Read by renderer, terrain AND physics — change it once, all three move. |
 | `spurs.ts` | **The other roads.** The branch each junction abandons: real road that runs off the map. |
-| `homesteads.ts` | **The country somebody lives in (R37).** A house on a yard, a car or two, a lane of trees, and a dirt drive meeting the stage square. Its own list on the track, NOT a spur: the analysis judges a branch by whether it leaves the map. |
+| `homesteads.ts` | **The land somebody lives in (R37).** A house on a yard, a car or two, a lane of trees, and a dirt drive meeting the stage square. Its own list on the track, NOT a spur: the analysis judges a branch by whether it leaves the map.    |
 | `guards.ts` | **The corner guards (R14).** |
 | `river.ts` | **The water (R18).** One watercourse per valley, traced by the rules of nature. |
 | `terrain.ts` | The field that shapes all of it around the road, and answers every query the game makes about the world. |
@@ -294,7 +294,7 @@ Two rules that live outside `mapgen/` but decide what it may build:
   `road.ts` is the shape, `road-mesh.ts` the paint, `pwa/src/game/road-spill.ts`
   the stones.
 - **Ice.** WHEN standing water freezes is `CLIMATE.ice` + `waterFrozen` /
-  `icyCountry` in `engine/game/climate.ts`, and the floor it becomes is
+  `icyBiome` in `engine/game/climate.ts`, and the floor it becomes is
   `iceAt` on the `LandField`. Whether the rally may be ROUTED across a frozen
   lake is R48 in `STAGE_RULES.ice`, over `nearOpenWater` / `nearIce` /
   `buildableAt` in `land.ts` — the searches read them through `keepsDry` and
@@ -319,7 +319,7 @@ is how these modules rot.
 ## Rules of nature
 
 The generator's job is not just legality, it is PLAUSIBILITY — a stage has to
-read as country somebody laid a road across. Each of these is now also a
+read as biome somebody laid a road across. Each of these is now also a
 CHECK, which is the point: a rule of nature that is only prose gets undone by
 the next tuning pass without anybody noticing.
 
@@ -359,7 +359,7 @@ before reaching for a number.
 
 ## The dials
 
-A COUNTRY first (`knobs.biome`, R40 — the taiga or the desert: which set of
+A BIOME first (`knobs.biome`, R40 — the taiga or the desert: which set of
 ranges everything below is read against; `--biome desert` on every tool),
 then four knobs — `elevation`, `water`, `trees`, `asphalt` (plus `width`), each
 `0..1` — say what KIND of stage a seed builds. They must never break a rule: a
@@ -368,7 +368,7 @@ entry point takes them, and a track carries the dials it was built with
 (`track.knobs`).
 
 **The geology's `smoothness` is deliberately NOT a dial.** It is drawn per
-seed, because it says which COUNTRY a stage is in — how long the ice sat on it
+seed, because it says which BIOME a stage is in — how long the ice sat on it
 — and that is not a slider anybody was asked about. Sweden and Norway are the
 same rock.
 
@@ -424,8 +424,8 @@ undoes it without knowing it was ever a rule.
   overlaps went unreported across seeds 1-12.
 - **Where the search TRIAL-BUILDS what the compiler builds for real, the trial
   is the stricter of the two.** Several rules are decided twice — "could a
-  branch leave the map from this corner" against the country the plan
-  describes, then the real arm against the country that got built — and the
+  branch leave the map from this corner" against the biome the plan
+  describes, then the real arm against the biome that got built — and the
   two answers are never identical. A trial more OPTIMISTIC than the build
   accepts a corner whose arm is then cut short, and ships a stub of tarmac
   standing in a field; a trial more pessimistic just loses a junction and the
@@ -447,8 +447,8 @@ undoes it without knowing it was ever a rule.
   That is what the sim sweep is for.
 - **Stages must stay finishable by both cars.** `tests/simulation_test.ts` is
   the contract.
-- **A COUNTRY change is gated by its biome row, and proved by a digest.**
-  Everything a new or changed country asks of the generator — a steer, a
+- **A BIOME change is gated by its biome row, and proved by a digest.**
+  Everything a new or changed biome asks of the generator — a steer, a
   bore, a grade, a floor, a seal — is a field on its `BiomeRules` row that
   the taiga's row holds at its neutral value, so no taiga or desert seed
   re-rolls (R40/R47). Prove it rather than trust it: build a worktree of
@@ -467,14 +467,14 @@ undoes it without knowing it was ever a rule.
   and runs away. Every call needs `clamp01` around its argument.
 - **A `min` against a field that stops being asked at a range ends in a
   WALL.** R31's cone is a min over every road within its query reach; where
-  the reach ends and the country is still above the cone, the ground stands
+  the reach ends and the biome is still above the cone, the ground stands
   up the whole difference in one lattice column. Anything shaped off a
   distance query has to be finished — lifted off, blended out — INSIDE the
   reach the index guarantees (`verge.fade`, `SPUR_INDEX_REACH`), and
   `ground.wall` is the check that says whether it was.
 - **Nothing a road builds is steeper than `verge.climbable` unless it is
   rock and says so (R31).** Every pass that eases something level back
-  onto the country — a cone letting go, a shelf, a bank, a rim, a mound —
+  onto the land — a cone letting go, a shelf, a bank, a rim, a mound —
   is sized to the DROP it takes up, never to a fixed length, and what
   cannot be made climbable is declared through `terrain.cutAt` so the
   props, the paint and the analysis all read it as rock. `ground.climb`
@@ -482,7 +482,7 @@ undoes it without knowing it was ever a rule.
   clean sweep before it ships.
 - **Sharp is measured on the drawn lattice, never on the field.** Every
   layer is C1; what creases is the 14 m triangulation of it. `ground.crease`
-  folds the lattice and holds the country to a curve, exempting only what a
+  folds the lattice and holds the biome to a curve, exempting only what a
   road built and what `geology.sharpAt` says the rock made sharp on purpose
   — and sharp is the `steepness` dial's, opened past its midpoint, never a
   side effect of the seed.

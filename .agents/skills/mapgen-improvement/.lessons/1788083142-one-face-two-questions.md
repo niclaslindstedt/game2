@@ -11,7 +11,7 @@ Those look like one question and are not.
 
 Adding the hills' own gradient to `face` — correct for soil, and needed the
 moment the hills carry real amplitude — shut the pits off across most of a
-hilly country, because an ordinary hillside reads as 0.3+ against `pits.flat`.
+hilly biome, because an ordinary hillside reads as 0.3+ against `pits.flat`.
 What survived was the deep sea basins, whose shores drop away too steeply to
 drive out of: `tests/water_test.ts`'s shallows scenario could not find a
 wadeable shore in seventy seeds.

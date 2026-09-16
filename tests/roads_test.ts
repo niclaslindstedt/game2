@@ -2,7 +2,7 @@
 // The ROAD itself, as opposed to the route it takes: the cross-section
 // every ribbon is built from (R16), and the junctions where the stage
 // meets the sealed road it borrows (R17). These are the rules that decide
-// whether a stage reads as country somebody laid roads across, or as a
+// whether a stage reads as biome somebody laid roads across, or as a
 // stripe painted on a heightfield.
 import { describe, expect, it } from "vitest";
 
@@ -260,7 +260,7 @@ describe("the road's cross-section (R16)", () => {
       // centimetres on all three.
       //
       // R36 — and a LEVEL CROSSING's rim is the tallest of them, because a
-      // crossing's platform is the one that stands PROUD of the country
+      // crossing's platform is the one that stands PROUD of the biome
       // (`crossing.stand`). The plane is level along the public road, so at
       // the rally's own corridor lip — fourteen metres out, still well
       // inside the platform — it is a metre over the ground, and the metre
@@ -286,13 +286,13 @@ describe("junctions (R17)", () => {
 
   /** The first of these seeds whose stage actually has a branch on it.
    *
-   * R17 — a stage has tarmac on it only where its COUNTRY carries a public
+   * R17 — a stage has tarmac on it only where its BIOME carries a public
    * road the route could reach. The roads are laid on the bare land before
    * the rally is routed over it (`highway.ts`), so a seed whose land will
    * not carry one — or whose route never comes within reach of the one it
    * has — is all gravel, and that is the right answer rather than a
    * failure. A test that names a seed and expects a junction on it is
-   * testing the country, not the junction. */
+   * testing the biome, not the junction. */
   function firstBranch(asphalt: number): {
     seed: number;
     track: ReturnType<typeof compileStage>;
@@ -322,7 +322,7 @@ describe("junctions (R17)", () => {
   const branchesOf = (track: ReturnType<typeof compileStage>) =>
     track.spurs.filter((s) => !s.crossing);
 
-  it("never forks two branches down one face closer than the country can climb (R23 + R31)", () => {
+  it("never forks two branches down one face closer than the biome can climb (R23 + R31)", () => {
     // Two branches are two roads, and the ground between them is whatever
     // joins their shelves: where one stands more over the other than
     // `verge.climb` past the bench allows across the gap, that ground is a
@@ -456,7 +456,7 @@ describe("junctions (R17)", () => {
           end.z > track.bounds.maxZ;
         // A branch leads somewhere: off the edge of the world, to the shore
         // of the lake that stopped it, or up to the ground the stage had
-        // already taken (R23). Never into open country for no reason, and
+        // already taken (R23). Never into open land for no reason, and
         // never out ACROSS the water on an embankment.
         expect(out || spur.endsAt === "water" || spur.endsAt === "stage").toBe(true);
         // ...and wherever it stops, it stops on dry ground: a road ending
@@ -744,7 +744,7 @@ describe("junctions (R17)", () => {
     // A branch is TARMAC end to end (R17) — the sealed road the route
     // borrowed, carried on past the junction — so a car that leaves the
     // route and explores one has to find tarmac grip under it, not the
-    // open country's. Sampled well out along it: the head of a branch sits
+    // open land's. Sampled well out along it: the head of a branch sits
     // INSIDE its junction, which is still the stage road.
     const on = spur.samples.find((sample) => sample.s > junctionReach(track));
     expect(on, "branch carries no road clear of its junction").toBeDefined();
@@ -801,7 +801,7 @@ describe("junctions (R17)", () => {
     }
     // A sweep where nothing is placed proves nothing about placement. The
     // bar is the branches the sweep actually built, not the seeds it
-    // walked: R17 gives a stage a branch only where its country carries a
+    // walked: R17 gives a stage a branch only where its biome carries a
     // public road for the route to leave, so some seeds have none.
     expect(branches).toBeGreaterThan(0);
     expect(placed).toBeGreaterThan(branches / 2);
@@ -955,7 +955,7 @@ describe("locating the car against the centerline", () => {
    * length, and it belongs to the end sample: without that clause a car
    * sitting on the run-up is attributed to whichever piece of the route
    * happens to pass nearest, which on a stage that comes back past its own
-   * start is a car on the grid reported as being out in the country. */
+   * start is a car on the grid reported as being out in the land. */
   function brute(track: ReturnType<typeof compileStage>, x: number, z: number) {
     let best = 0;
     let bestD2 = Infinity;
@@ -999,11 +999,11 @@ describe("locating the car against the centerline", () => {
       for (const shape of ["sprint", "circuit"] as const) {
         const track = stageTrack(seed, "medium", {}, shape);
         const n = track.samples.length;
-        // Probes on the road, out on the verge and far into the country —
+        // Probes on the road, out on the verge and far into the land —
         // each asked with a hint a step behind the car, one a long way up
         // the stage, and one at either end of it. A hint that has gone
         // stale is the ordinary case, not the exotic one: a car that has
-        // been off in the country, or turned round and driven back down the
+        // been off in the biome, or turned round and driven back down the
         // stage, leaves whatever the last answer was standing.
         for (let i = 0; i < n; i += 7) {
           const s = track.samples[i];
@@ -1078,7 +1078,7 @@ describe("progress and position", () => {
       step(state, { ...NEUTRAL_INPUT, throttle: 0.6 });
     }
     expect(state.progressIndex).toBe(reached);
-    // How far back is the country's business — the road it turned round
+    // How far back is the biome's business — the road it turned round
     // on bends, and a car driven straight back leaves it — but the place it
     // is measured from has moved and progress has not.
     expect(state.nearIndex).toBeLessThan(reached - 10);

@@ -1,5 +1,5 @@
 ---
-title: Only WINTER moves a road, and only in a country with lakes — spring and autumn are dressing
+title: Only WINTER moves a road, and only in a biome with lakes — spring and autumn are dressing
 date: 2026-09-08
 scope: engine/rating/, engine/analysis/, engine/mapgen/
 concepts: [seasons, seeds, campaign, calibration]
@@ -7,7 +7,7 @@ concepts: [seasons, seeds, campaign, calibration]
 
 R48 says the climate can move a line, so the natural fear when a level's season
 changes is that every rating and every preview has to be re-swept per season.
-Measured instead of assumed (`compileStage` digests over six seeds a country,
+Measured instead of assumed (`compileStage` digests over six seeds a biome,
 all four seasons against summer): spring, summer and autumn build the IDENTICAL
 road everywhere, and winter differs in the taiga and the alps and NOT in the
 desert — which has no lakes to freeze.

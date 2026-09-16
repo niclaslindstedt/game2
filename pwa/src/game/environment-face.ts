@@ -30,7 +30,7 @@ export const FLASH_COLOR = 0xdfe9ff;
  * second walked those up in visible steps. */
 export const RELIGHT_EVERY = 1 / 240;
 
-/** How far the sun has to move before the country's shadow is marched
+/** How far the sun has to move before the biome's shadow is marched
  * again, radians — half a degree, a few seconds of racing.
  *
  * The march is three milliseconds, so this is as often as it can be
@@ -77,7 +77,7 @@ export const SAND_SKY = new THREE.Color(0x9a6b3d);
 
 /** The stage the sky stands over: where its road goes lowest and highest,
  * m over the sea (the mist pools at the floor; the deck hangs over the
- * road), and the country's heightfield for the shadow march. */
+ * road), and the biome's heightfield for the shadow march. */
 export type Ground = {
   floor: number;
   peak: number;
@@ -86,7 +86,7 @@ export type Ground = {
 
 export type Environment = {
   /** Re-color the whole atmosphere for the run's conditions, over the
-   * country they are in (R40): the same storm is a downpour in one and a
+   * biome they are in (R40): the same storm is a downpour in one and a
    * wall of sand in the other. Once per stage; the clock does the rest. */
   apply: (env: RaceEnv, biome?: BiomeId) => void;
   /** The ground under the sky — for the mist, the deck and the shadow.

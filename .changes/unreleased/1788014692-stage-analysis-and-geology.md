@@ -3,7 +3,7 @@ type: Changed
 title: Stages are scored, and the ground they are laid on comes in layers
 ---
 
-The stage generator now builds its country in layers — bedrock, the
+The stage generator now builds its biome in layers — bedrock, the
 groundwater in it, and the soil on top — with a per-seed smoothness that says
 how long the ice sat on it, so one stage is planed into Swedish whalebacks and
 the next keeps its Norwegian crests. Trees only grow where there is soil to

@@ -22,7 +22,7 @@
 //   IT IS A FIELD OFF THE COURSE, NOT A LAY-BY BESIDE IT. The pad stands
 //   `standOff` metres clear of the route at least, which is most of the way
 //   to the walk a spectator will make. An unconstrained search finds the
-//   NEAREST place the country will take, which is sixty metres off the
+//   NEAREST place the biome will take, which is sixty metres off the
 //   road, and twenty cars parked that close to a live stage is the one
 //   thing a rally never has.
 //
@@ -30,7 +30,7 @@
 //   end on tarmac — an arm, a public road, or a lane that reaches one —
 //   rather than on the rim (`RIM_PENALTY`). It does not always find one, and
 //   the reason is structural rather than a shortcoming to fix: a rally route
-//   folded into its own box partitions the country it occupies, so the
+//   folded into its own box partitions the biome it occupies, so the
 //   pocket a given corner sits in often carries no road at all. There the
 //   lane runs off the map the way a branch does, which is where the tarmac
 //   it would have joined runs too.
@@ -50,10 +50,10 @@
 //
 // And it is placed by SEARCH, not by steering. A stage is kilometres of
 // road folded into a box a couple of kilometres across, and most of the
-// country beside it is a pocket between two arms of it; a lane driven out
+// biome beside it is a pocket between two arms of it; a lane driven out
 // of a pocket by looking a hundred metres ahead runs into the far arm and
 // is cut there, which is what R23 demands and what happened to nine in ten
-// of them. So the country is read as a coarse map first — which cells a
+// of them. So the biome is read as a coarse map first — which cells a
 // road may be driven through, which a person may walk across — and a pad
 // is put where the crowd can walk from and a lane can reach a road from,
 // or it is not put at all.
@@ -68,7 +68,7 @@ import { cellKey } from "../lib/math.ts";
 import { createRng, type Rng } from "../lib/prng.ts";
 import { parkedSolids } from "./buildings.ts";
 import type { Track } from "./compile.ts";
-import { CELL, routeCorridor, walkFrom, wayOut, type CountryMap } from "./carpark-map.ts";
+import { CELL, routeCorridor, walkFrom, wayOut, type GroundMap } from "./carpark-map.ts";
 import { signTrail, standBack, trailClearance, walkTrail } from "./carpark-trail.ts";
 import { corridorOffset, ROAD_CROSS, roadClearance } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";
@@ -194,7 +194,7 @@ export function createCarParkField(track: Track): CarParkField {
   };
 
   const {
-    countryMap,
+    groundMap,
     accessPoints,
     nearestJoin,
     joinPoints,
@@ -237,7 +237,7 @@ export function createCarParkField(track: Track): CarParkField {
     const fit = padFits(ctx, cx, cz, radius, stands, { x: at.x, z: at.z, heading });
     if (fit === null) return null;
     // The lane: on the public road's own cross-section while inside its
-    // lip, then following the country at the road's grade and the route's
+    // lip, then following the land at the road's grade and the route's
     // crest rule, held inside the stage's cone — and, from the pad's blend
     // in, climbing onto the pad's own plane, so that it arrives ON the pad
     // rather than beside it.
@@ -265,7 +265,7 @@ export function createCarParkField(track: Track): CarParkField {
       } else {
         if (!pad) {
           // The pad's LEVEL is settled where the lane steps off the road:
-          // the country's own fit, moved no further toward the level that
+          // the biome's own fit, moved no further toward the level that
           // puts the plane exactly under the lane here than the run to
           // the rim can make up at most of a road's grade. Settled from
           // the centre instead, the whole difference lands in the pad's
@@ -349,13 +349,13 @@ export function createCarParkField(track: Track): CarParkField {
    * pad's centre to `join` — a point on a road already there, which it runs
    * into at that road's own height — or, where the search found none, out
    * past the edge of the map: a walk that steers for the next cell at a
-   * road's own radius, follows the country at a minor road's grade, and is
+   * road's own radius, follows the land at a minor road's grade, and is
    * held inside the stage's cone (R31). Null where a step of it would stand
    * where a road may not (R23), which the search's slack makes rare. Samples
    * run OUTWARD, pad first. */
   const layRoadOut = (
     ctx: CarParkContext,
-    map: CountryMap,
+    map: GroundMap,
     pad: CarParkPad,
     heading0: number,
     path: number[],
@@ -439,7 +439,7 @@ export function createCarParkField(track: Track): CarParkField {
           const run = Math.hypot(at.x - last.x, at.z - last.z);
           // ...and the lane has to have got to the road's height. The
           // closing starts far enough out for a road's grade to make it
-          // up, but the country between can refuse it — a band clamp, a
+          // up, but the land between can refuse it — a band clamp, a
           // shelf — and a lane that arrives standing over the road it joins
           // would meet it as a wall. Refused instead, and the search tries
           // another cell.
@@ -489,7 +489,7 @@ export function createCarParkField(track: Track): CarParkField {
       }
       // On the pad, and for a short run past its rim, the lane IS the pad's
       // plane: it leaves the car park at the car park's own grade. Then
-      // R34 — following the country at a minor road's grade and the
+      // R34 — following the land at a minor road's grade and the
       // minor road's crest rule, off that plane; R31 — inside the stage's cone
       // while it is in it. On the way into a join the height closes on
       // the joined road's instead, so the two meet on one plane — from
@@ -529,7 +529,7 @@ export function createCarParkField(track: Track): CarParkField {
   };
 
   /** A car park with a road of its own: a pad found by WALKING out from the
-   * stand over the country map, and a lane from it out to the edge of the
+   * stand over the land map, and a lane from it out to the edge of the
    * map found by driving over the same map. */
   const tryBuiltOut = (
     ctx: CarParkContext,
@@ -537,14 +537,14 @@ export function createCarParkField(track: Track): CarParkField {
     stand: Stand,
     stands: readonly Stand[],
     plan: { bays: number; cars: number; heads: number; radius: number },
-  ): { park: CarPark; map: CountryMap } | null => {
+  ): { park: CarPark; map: GroundMap } | null => {
     const radius = plan.radius;
     const back = standBack(stand);
-    const map = countryMap(ctx, back);
+    const map = groundMap(ctx, back);
     const start = map.at(back.x, back.z);
     if (start < 0) return null;
     // Everywhere the crowd could walk to from the stand, nearest first —
-    // the pad goes on the first of them the country will take, and that
+    // the pad goes on the first of them the biome will take, and that
     // has a way out for a road.
     const { dist } = walkFrom(map, start, P.walk);
     const cells: number[] = [];
@@ -560,12 +560,12 @@ export function createCarParkField(track: Track): CarParkField {
       // not let stand at its own ground's height is a pad the cone would
       // cut, whatever the rings say.
       // The stand-off FIRST, and before the try counter: the cells come
-      // nearest-first, most of a stage's country is inside the stand-off,
+      // nearest-first, most of a stage's biome is inside the stand-off,
       // and counting those against the budget spends the whole of it a
       // hundred metres from the stand without ever reaching the field the
       // pad belongs in.
       if (nearRoute(c.x, c.z)) continue;
-      // ...and inside the country the stage occupies. A cell past the rim
+      // ...and inside the land the stage occupies. A cell past the rim
       // is a cell a lane has already "left" the map from, so the pad gets
       // no lane at all — a car park standing in a field beyond the fog with
       // nothing leading to it, which is what five of the fifty-odd pads on
@@ -619,7 +619,7 @@ export function createCarParkField(track: Track): CarParkField {
         distance: roughly,
       });
       // A pocket the stage has closed has no way out from anywhere in it:
-      // two pads that fail to leave are the country's answer.
+      // two pads that fail to leave are the biome's answer.
       if (!path) {
         ctx.note?.("road:no-way-out");
         if (++roads >= 2) break;
@@ -678,7 +678,7 @@ export function createCarParkField(track: Track): CarParkField {
 
   /** Serve one stand: a car park a walk away, off a public road if one is
    * in reach and down a lane of its own otherwise, with trails to every
-   * unserved stand that walk reaches. Null where the country refuses. */
+   * unserved stand that walk reaches. Null where the biome refuses. */
   const serve = (
     ctx: CarParkContext,
     stand: Stand,
@@ -701,11 +701,11 @@ export function createCarParkField(track: Track): CarParkField {
     };
     const back = standBack(stand);
     let park: CarPark | null = null;
-    let map: CountryMap | null = null;
+    let map: GroundMap | null = null;
     for (const access of accessPoints(back).slice(0, 3)) {
       park = tryAccess(ctx, rng, access, stand, stands, plan);
       if (!park) continue;
-      map = countryMap(ctx, back);
+      map = groundMap(ctx, back);
       const own = walkTrail(trailProbe(ctx), map, park.pad, stand);
       if (own) {
         park.trails.push(own);
@@ -778,7 +778,7 @@ export function createCarParkField(track: Track): CarParkField {
       // crowd that found its own way to a corner: the finish is where the
       // organisers put everything — the service area, the trucks, the road
       // the timing crew drove in on — so access to it is a property of the
-      // event rather than something the country has to offer. A stage whose
+      // event rather than something the biome has to offer. A stage whose
       // finish is unwatched because no pad would grade behind it is a stage
       // that has lost the one crowd R27 guarantees.
       if (!found) {

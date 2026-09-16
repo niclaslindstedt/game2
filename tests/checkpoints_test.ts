@@ -432,7 +432,7 @@ describe("the stage is all of its boards", () => {
         s.x + rightX * offset + fwdX,
         s.z + rightZ * offset + fwdZ,
       );
-    // The verge is not a miss; a car out in the country is.
+    // The verge is not a miss; a car out in the land is.
     expect(across(0)).toBe(true);
     expect(across(half - 0.5)).toBe(true);
     expect(across(-(half - 0.5))).toBe(true);

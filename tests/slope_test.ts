@@ -71,7 +71,7 @@ function crossRoad(
   // All three read over the CROSSING — the verge, the mat and the verge
   // beyond — and not over the field the car is put down in. The car is
   // created on the mat and set down on a cut bench rising toward the
-  // country, with its tail half a metre up the bank: that is a car
+  // biome, with its tail half a metre up the bank: that is a car
   // propped on a face for a step, whose body then sets off down the bank
   // from rest while the wheels do not, and the loft of THAT was the
   // biggest number in the whole run, on every road alike.

@@ -6,7 +6,7 @@ concepts: [physics, terrain, verification]
 ---
 
 The car's ground is stated twice — the road's ribbon (`track.ts`, `locate`)
-on the mat, the terrain lattice out in the country — and `step.ts` used to
+on the mat, the terrain lattice out in the land — and `step.ts` used to
 swap readers the moment `preFix.offRoad` flipped. Anywhere the two disagree,
 that swap is a TELEPORT, and nothing downstream reads heights: `wheelSpeed`
 and the foot's speed are both a height difference over `T.dt`. A 22 cm
@@ -16,7 +16,7 @@ the whole loft in one step and threw the car upward off the verge — and fed
 
 The rule this leaves: **anything a step differences across `dt` must read one
 surface at both ends, and that surface must be continuous in space.** Where
-two authorities meet, hand over with a ramp (`countryShare` in `step.ts` does
+two authorities meet, hand over with a ramp (`groundShare` in `step.ts` does
 it on R16's own smoothstep); never switch on a boolean. The same applies to
 any per-car offset carried between steps (`CarState.foot` is one) — an offset
 measured on one surface and spent on another is the same bug wearing a

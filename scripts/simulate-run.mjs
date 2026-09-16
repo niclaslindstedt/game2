@@ -15,11 +15,11 @@
 //   npm run sim -- --weather storm       # race in rain/storm wind
 //   npm run sim -- --biome desert --sandstorms 0   # the desert road with no front on it
 //   npm run sim -- --season winter       # the climate (climate.ts): a frozen
-//   npm run sim -- --temperature -15     # country is snow roads and a blanket
+//   npm run sim -- --temperature -15     # biome is snow roads and a blanket
 //   npm run sim -- --asphalt 0.8         # generator dials, each 0..1:
 //                                        # --elevation --water --trees --asphalt --width
 //                                        # --steepness
-//   npm run sim -- --biome desert        # the other country (R40): sand roads, dunes
+//   npm run sim -- --biome desert        # the other biome (R40): sand roads, dunes
 //   npm run sim -- --gearbox manual      # drive the bot with a manual box
 //   npm run sim -- --sweep               # the ROSTER BALANCE table: every
 //                                        # car over five stage archetypes,
@@ -223,7 +223,7 @@ const ARCHETYPES = [
     knobs: { asphalt: 0.25, water: 1, trees: 0.9 },
   },
   { id: "gravel", label: "loose, dry, flat", pick: "all", knobs: { asphalt: 0, elevation: 0.15 } },
-  // THE FROZEN COUNTRY, which the table could not see before: every loose
+  // THE FROZEN BIOME, which the table could not see before: every loose
   // road under packed snow and the sealed ones glazed (climate.ts), which is
   // the one ground where how a layout SHARES its torque is worth more than
   // how much of it there is. A roster whose four-wheel-drive has nothing to

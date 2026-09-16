@@ -20,7 +20,7 @@ import { SPUR } from "./spurs.ts";
 import { drawSchedule, type RailCrossing } from "./railway.ts";
 import type { Cursor } from "./compile-road.ts";
 import { armsKeepHeight, branchClearance } from "./compile-road.ts";
-import { type Country } from "./compile-country.ts";
+import { type LandPlan } from "./compile-land.ts";
 import { isLoose } from "./track-shape.ts";
 import type { RoadJunction, Track, TrackSample } from "./track-shape.ts";
 
@@ -30,7 +30,7 @@ export function createJunctionNoting(
   track: Track,
   walk: Walk,
   rolling: (s: number) => number,
-  country: Country | undefined,
+  landPlan: LandPlan | undefined,
 ) {
   const { land } = walk;
   const { junctions, railMeets } = walk;
@@ -40,30 +40,30 @@ export function createJunctionNoting(
     atS: number,
     end: "entry" | "exit",
   ): boolean => {
-    if (!country) return true;
-    const stage = country.roadDistance(pose);
+    if (!landPlan) return true;
+    const stage = landPlan.roadDistance(pose);
     const others = branchClearance(trialArms);
     const trial = buildSpur(
       track.seed,
       pose,
       atS,
       end,
-      country.bounds,
+      landPlan.bounds,
       land,
       track.width,
       (x: number, z: number, ignoringJunction?: boolean) =>
         Math.min(stage(x, z, ignoringJunction), others(x, z)),
-      country.shelfHolds,
-      country.shelfBand,
+      landPlan.shelfHolds,
+      landPlan.shelfBand,
     );
     const last = trial.samples[trial.samples.length - 1];
     if (!last) return false;
-    const b = country.bounds;
+    const b = landPlan.bounds;
     const out = Math.max(b.minX - last.x, last.x - b.maxX, b.minZ - last.z, last.z - b.maxZ);
     if (out < R.junction.armReach * SPUR.escape) return false;
     if (!armsKeepHeight(trial, trialArms, trialBench)) return false;
     // A true answer here is always taken — the caller flips the surface on
-    // it — so this arm is part of the country the next trial is measured
+    // it — so this arm is part of the biome the next trial is measured
     // against.
     trialArms.push(trial);
     return true;
@@ -94,7 +94,7 @@ export function createJunctionNoting(
     const z = joining ? cz + Math.sin(exit) * radius * dir : at.z;
     const rollS = at.rollS + (joining ? plan.length * straightness(dir / radius) : 0);
     // R34 — the height the road is at, not the height its roll is at: the
-    // base the builder's eye has followed the country to, carried forward
+    // base the builder's eye has followed the land to, carried forward
     // on its current grade where the corner has yet to be walked. A trial
     // branch started tens of metres under the road it leaves is one the
     // shelf refuses for a reason that has nothing to do with the junction.
@@ -154,7 +154,7 @@ export function createJunctionNoting(
     // Joining, that is the tangent at the END of the corner and it points
     // BACK the way the tarmac came; leaving, the tangent at its start.
     const heading = joining ? at.heading + Math.PI : at.heading;
-    // R34 — the country the road is following here, plus its roll. The
+    // R34 — the land the road is following here, plus its roll. The
     // branch and its platform are built on the SAME height the route is at,
     // so a junction is one plane whatever the ground under it was doing.
     const y = at.baseY + rolling(at.rollS);
@@ -243,21 +243,21 @@ export function createJunctionNoting(
     //
     // Both halves of that are load-bearing and the second one was learned
     // the hard way. A dead level platform is what a formation actually is,
-    // and on flat country it is right — but the moment the rally crosses on
+    // and on flat land it is right — but the moment the rally crosses on
     // a slope the two edges of it are at two different heights above the
-    // route's own line, and where the country falls faster than `stand` the
+    // route's own line, and where the land falls faster than `stand` the
     // far edge is BELOW it. That is not a jump, it is a hole with a road in
     // it: measured over seeds 1-24 the level plane gave steps of 2.0 to 2.9
     // m and ramps at 27-33%, none of it the number `stand` says. Tilted at
     // the route's grade the step is exactly `stand` on both sides of every
     // crossing on every seed, which is what makes this a feature that can be
-    // tuned rather than a lottery the country runs.
+    // tuned rather than a lottery the biome runs.
     //
     // What it costs is cross-fall on the sealed mat — the route's grade over
     // `reach`, so a few per cent over a road width. A public road laid
     // across a hillside does that.
     //
-    // The grade is the road's WHOLE slope, not the country's: the base the
+    // The grade is the road's WHOLE slope, not the biome's: the base the
     // builder's eye has followed the land to, plus the rate its own roll
     // (R34) is climbing at. Reading only the base left the roll to diverge
     // across the ramp — a wave a metre deep over twenty is another five per
@@ -392,7 +392,7 @@ export function createJunctionNoting(
 
   /** R36 — how much of the CROSSING's own plane a sample of the rally road
    * takes at this arc position, 1 up on the formation to 0 back down on the
-   * country. The ramp: the road climbs onto the public road's formation and
+   * biome. The ramp: the road climbs onto the public road's formation and
    * drops off the far side, and the drop is the jump.
    *
    * Measured along the route's ARC and not across the ground, because that
@@ -403,7 +403,7 @@ export function createJunctionNoting(
    * begins) so the two hand over with no seam, then eases off over
    * `crossing.ramp` metres of gravel.
    *
-   * A smoothstep, so the road leaves the formation and rejoins the country
+   * A smoothstep, so the road leaves the formation and rejoins the land
    * with no kink at either end — a linear ramp puts a crease at the toe that
    * reads as a step in the road and measures as one. */
   const crossingRamp = (junction: RoadJunction, s: number): number => {
@@ -437,7 +437,7 @@ export function createJunctionNoting(
    * The widening is CAPPED at the corridor's own reach (R16), and that cap
    * is the thing standing between this mouth and the one a real junction
    * has. The ground lattice is shaped out to the corridor's lip and hands
-   * over to the country past it, so a mat that flares further is a mat over
+   * over to the biome past it, so a mat that flares further is a mat over
    * ground nothing shelved — a vertical face along the outside of the
    * mouth. Enlarging the PLATFORM to cover a wider mouth does not buy it
    * either: measured on seed 1, spreading the graded ellipse by the mouth's
@@ -541,7 +541,7 @@ export function createJunctionNoting(
     for (const junction of track.junctions) {
       // R36 — A CROSSING HAS NO MOUTH, and that is what squareness buys.
       // A mouth exists because a junction is a CORNER: the dirt road meets
-      // the tarmac at an angle, which leaves a wedge of country tapering to
+      // the tarmac at an angle, which leaves a wedge of land tapering to
       // a knife point between the two mats, and the flare is what traffic
       // wears away to close it. Crossed at right angles there is no wedge —
       // a rectangle meeting a rectangle square meets it along a straight

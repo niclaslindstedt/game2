@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R17 — THE PUBLIC ROAD, BUILT. The tarmac a country carries is laid before
+// R17 — THE PUBLIC ROAD, BUILT. The tarmac a biome carries is laid before
 // the rally is routed across it (`highway.ts`): whole roads, edge of the map
 // to edge of the map, steering round the lakes. Where the route MEETS one it
 // gets built — the borrowed run the rally drives, and the arms the tape shuts
 // either side of the junction (`cutSpur`). Where the route never meets one,
-// nothing was built at all: the line stayed a plan, and the country came out
+// nothing was built at all: the line stayed a plan, and the land came out
 // with no sealed road anywhere on it.
 //
 // That was fine while nothing else needed a road. R42 does. A rally crowd
@@ -17,7 +17,7 @@
 // edge of the map because there was nothing else to leave from.
 //
 // So this module builds the rest of them: the stretch of a highway line the
-// country actually carries, at the country's own height, as an ordinary road
+// biome actually carries, at the land's own height, as an ordinary road
 // off the stage. It is a `SpurLine` like an abandoned arm or a homestead's
 // drive, which is what makes it nearly free — the terrain already shelves
 // one, the forest already keeps off one, the renderer already draws one, and
@@ -30,7 +30,7 @@
 //   built at all. A public road that stops in a field is the loudest mistake
 //   on the map, and refusing the road is always cheaper than drawing one.
 //
-//   IT IS REFUSED, NEVER REPAIRED. The height follows the country at a minor
+//   IT IS REFUSED, NEVER REPAIRED. The height follows the land at a minor
 //   road's grade inside the stage's own verge cone (R31), and where the cone
 //   will not have it — the stage passing twice at two heights, a clamp that
 //   would be a step — there is no public road on this seed. The route was
@@ -92,7 +92,7 @@ function advance(
  * be driven from a test. */
 export type PublicRoadContext = {
   land: LandField;
-  /** The country the stage occupies — a road has to leave it at both ends. */
+  /** The biome the stage occupies — a road has to leave it at both ends. */
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
   /** R23 — distance from a point to the nearest piece of ROUTE, its aprons
    * included. */
@@ -123,7 +123,7 @@ export function buildPublicRoads(
   return built;
 }
 
-/** Is a point past the fog — clear of the country the stage occupies by more
+/** Is a point past the fog — clear of the land the stage occupies by more
  * than anything can be seen from inside it? */
 function escaped(ctx: PublicRoadContext, p: { x: number; z: number }): boolean {
   const b = ctx.bounds;
@@ -140,7 +140,7 @@ function buildOne(
   ctx: PublicRoadContext,
   /** The public roads already built on this stage, which this one keeps off
    * — the candidates come from several draws and two of them can be laid
-   * over the same country. */
+   * over the same land. */
   standing: readonly PublicRoad[],
 ): PublicRoad | null {
   // R41 — a railway is not a road, and its own crossing already builds the
@@ -165,7 +165,7 @@ function buildOne(
     }
     return true;
   };
-  // The piece of the line the country carries: out of the water and off the
+  // The piece of the line the biome carries: out of the water and off the
   // shore, clear of the route (R23 — where the route comes inside that, the
   // route is ON the line, and the road there is already built as the run
   // the rally drives and the two arms the tape shuts) and clear of the
@@ -199,8 +199,8 @@ function buildOne(
   // It leaves the map at BOTH ends, or it is a road that stops in a field.
   if (!escaped(ctx, kept[0]) || !escaped(ctx, kept[kept.length - 1])) return null;
 
-  // R34 — the height: the country's own at the first point, then following
-  // the country at the route's lag inside a minor road's grade, and never
+  // R34 — the height: the biome's own at the first point, then following
+  // the biome at the route's lag inside a minor road's grade, and never
   // outside the stage's verge cone (R31).
   const follow = 1 - Math.exp(-SPUR.step / R.elevation.follow.lag);
   const samples: SpurSample[] = [];
@@ -230,7 +230,7 @@ function buildOne(
     s += SPUR.step;
     const band = ctx.shelfBand(cursor.x, cursor.z);
     // An EMPTY band — the stage passing twice at two heights either side of
-    // the line — is the country saying no road stands here, and half a
+    // the line — is the biome saying no road stands here, and half a
     // public road is not the answer to it.
     if (band.floor > band.ceiling) return null;
     const want =
@@ -250,7 +250,7 @@ function buildOne(
     if (Math.abs(y - bent) > SPUR.maxGrade * SPUR.step * 1.5) return null;
   }
   if (samples.length < 3) return null;
-  // R17 — the mat stands proud of the country it is laid on, and it does it
+  // R17 — the mat stands proud of the biome it is laid on, and it does it
   // over a joint at each end rather than in one step. Both ends are past the
   // fog, so nobody sees the joint; the terrain shelf under it is what the
   // ramp is for.

@@ -5,7 +5,7 @@
 // per point and the road's is the one the car needs. Seen from outside,
 // that is a road-level slot cut through the massif along every bore. This
 // draws the rock back over the slot: a surface following the bore's
-// centreline at the height the country would stand at with the trench
+// centreline at the height the land would stand at with the trench
 // filled back in (`lidAt` — the bare mountain inside the lip, the ground
 // as built everywhere else, so a neighbouring arm's cutting is followed
 // rather than floated over), reaching a lattice cell past the lip on either
@@ -90,7 +90,7 @@ export function lidHalfWidth(track: Track, index: number): number {
 export type LidGround = {
   /** The ground with the trench filled back in — the lid's own height. */
   lidAt: (x: number, z: number) => number;
-  /** The bare country. `lidAt` reads it under the lip of a BORE sample;
+  /** The bare land. `lidAt` reads it under the lip of a BORE sample;
    * the lid's front edge stands outside the mouth, where the nearest road
    * is the open approach and `lidAt` is its cutting — road level — so the
    * face over the road is read off the mountain directly. */
@@ -98,7 +98,7 @@ export type LidGround = {
   /** The drawn ground lattice — what the lid's edge and the skirt's foot
    * have to meet. */
   latticeAt: (x: number, z: number) => number;
-  /** The country's paint for a surface with a height and slope of its own. */
+  /** The biome's paint for a surface with a height and slope of its own. */
   paintLand: (x: number, z: number, y: number, normalY: number, out: THREE.Color) => void;
   /** The tiles' own detail map, so the lid carries the ground's grain.
    * Handed in rather than imported: the map is drawn on a canvas, and this
@@ -212,7 +212,7 @@ export function buildTunnelLid(
       let y: number;
       if (Math.abs(j) === cols) {
         // The outer edge is put ON the drawn lattice rather than on the
-        // analytic country, because the two disagree by up to a metre
+        // analytic biome, because the two disagree by up to a metre
         // between lattice corners and the seam has to close exactly.
         y = ground.latticeAt(px, pz);
       } else if (mouth !== null && Math.abs(u) <= lip) {
@@ -236,7 +236,7 @@ export function buildTunnelLid(
 
   /** The lid's own slope at each vertex of a run — central differences
    * over the drawn grid, the way the tiles take theirs off their lattice —
-   * and the country's paint read with it, so a steep band the lid makes
+   * and the biome's paint read with it, so a steep band the lid makes
    * where it meets a cutting's end paints as the rock it is. */
   const shade = (run: Station[]): { normals: THREE.Vector3[][]; colors: THREE.Color[][] } => {
     const across = new THREE.Vector3();

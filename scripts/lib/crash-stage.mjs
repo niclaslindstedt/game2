@@ -347,7 +347,7 @@ function standProps(state, scenario, origin) {
   const touched = new Set();
   const own = state.terrain.fixturesNear;
   const fell = state.terrain.fell;
-  // A BARE scenario has the country's own trees and stones swept out of the
+  // A BARE scenario has the biome's own trees and stones swept out of the
   // way, and it has to be asked for: a stage's wild is dense enough that a
   // car tumbling off the road through it is measuring the forest, not the
   // roll. "Nothing to hit" is a claim a lab has to actually arrange.

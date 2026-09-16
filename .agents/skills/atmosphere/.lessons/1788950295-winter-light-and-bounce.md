@@ -18,10 +18,10 @@ expectation — one `debug-shot` per season at identical `g…=` params. The
 difference (brown gravel vs grey-blue packed snow, green vs white) is
 unambiguous where either frame alone is not.
 
-**And a snowy country is lit differently, on purpose.** The hemisphere's
-lower half is light coming back UP off the ground: bare country returns
+**And a snowy biome is lit differently, on purpose.** The hemisphere's
+lower half is light coming back UP off the ground: bare land returns
 about a fifth of what falls on it, snow returns most of it. That is
-`environment.ts`'s `BOUNCE`, keyed off `snowCoverAt` at the country's own
+`environment.ts`'s `BOUNCE`, keyed off `snowCoverAt` at the biome's own
 FLOOR (not its peak — the bounce arrives when the low ground has gone over,
-not when a summit has). Without it a winter is a beige country with nothing
+not when a summit has). Without it a winter is a beige biome with nothing
 lifting the shadow side of anything, which reads as a bug in the paint.

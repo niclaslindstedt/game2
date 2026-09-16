@@ -44,11 +44,11 @@ job; load it at both ends of the session. Load **`write-code`** too.
 | `pwa/src/game/audio/route.ts` | **WHICH sound an event makes**, and how big — a pure function from `GameEvent` to a bank id plus a `PlayShape`. |
 | `pwa/src/game/audio/play.ts` | Firing one def: voices go to the synth verbatim, scaled by the shape. |
 | `pwa/src/game/audio/bank-stage.ts` | The STAGE's sounds — the lights, the split boards, the line, the crowd, the blocks, the sky. Served with the car's as `RUN_BANK`. |
-| `pwa/src/game/audio/bank-world.ts` | The COUNTRY's sounds — birds, insects, an owl, a coyote, livestock, a train's horn, a crossing bell, the marshal's whistle. Raised by `ambience.ts`, never by the router. |
+| `pwa/src/game/audio/bank-world.ts` | The BIOME's sounds — birds, insects, an owl, a coyote, livestock, a train's horn, a crossing bell, the marshal's whistle. Raised by `ambience.ts`, never by the router.   |
 | `pwa/src/game/audio/listener.ts` | **WHERE THE EAR IS.** One row per camera: what each seat does to the engine, the exhaust, the tyres, the wind, the weather, the world, the one-shots. The beds and the router both read it. |
 | `pwa/src/game/audio/engine-voice.ts` | The engine, as six LAYERS: `engineTargets` is a pure function from revs, load, wear and a seat to where each should be. The one sound whose pitch is arithmetic rather than taste. |
 | `pwa/src/game/audio/road-voice.ts` | The tyres, the wind, the weather, the gale and the DRIFT's scrub — fourteen layers, as a pure function of how the car is going. |
-| `pwa/src/game/audio/ambience.ts` | The WORLD: three layers (the canopy, the crowd, a train) and the roster of calls a country makes at an hour, raised on a loose clock and thinned by speed. |
+| `pwa/src/game/audio/ambience.ts` | The WORLD: three layers (the canopy, the crowd, a train) and the roster of calls a biome makes at an hour, raised on a loose clock and thinned by speed.   |
 | `pwa/src/game/audio/rack.ts` | The plumbing every bed shares: build a layer, rebuild one whose context died under it, steer it on its glide. |
 | `pwa/src/game/audio/drive-bed.ts` | The scheduler: reads `GameState` once a frame, turns it into every layer's target, and raises the cues nothing reports — the lights, the lift's crackle, the wipers, the whistle. |
 | `pwa/src/game/audio/bus.ts` | One synth, two volume-scaled views (effects / music), and the unlock. |
@@ -62,7 +62,7 @@ job; load it at both ends of the session. Load **`write-code`** too.
 | **An EVENT sound** | The simulation reported a moment: `step()` pushed a `GameEvent` | A def in `bank.ts` + a rung in `route.ts` |
 | **A CUE** | The APP knows something happened and the engine never said so — the countdown lights, a menu click | Raised directly (`playUi`, or the bed's own clock) |
 | **A BED** | It has no beginning and no end: the engine, the tyres, the wind, a slide, the birds' floor | A LAYER in `engine-voice.ts` / `road-voice.ts` / `ambience.ts`, steered per frame by `drive-bed.ts` |
-| **A WORLD CALL** | The country did it, not the car: a bird, a cow, a horn | A def in `bank-world.ts` + a row in `worldRoster` (`ambience.ts`) |
+| **A WORLD CALL** | The biome did it, not the car: a bird, a cow, a horn   | A def in `bank-world.ts` + a row in `worldRoster` (`ambience.ts`) |
 
 The trap is reaching for a new engine event to make a noise. **Never add a
 `GameEvent` for presentation**: if the app can work it out from the state it

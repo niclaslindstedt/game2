@@ -265,7 +265,7 @@ describe("what a stage actually sees of them", () => {
     expect(stages.filter((s) => s.closest < 300).length).toBeGreaterThanOrEqual(5);
   });
 
-  it("flies nothing at all where a country has no skeins", () => {
+  it("flies nothing at all where a biome has no skeins", () => {
     const skeins = createSkeins(2, dice(7));
     skeins.setSeason(0, "autumn");
     const cam = driver();

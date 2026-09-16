@@ -5,7 +5,7 @@ scope: engine/mapgen/highway.ts, engine/mapgen/generate.ts
 concepts: [railway, start, search, seeds, r24, r41]
 ---
 
-`generateStage` retries forty sub-seeds, but the COUNTRY is built once from
+`generateStage` retries forty sub-seeds, but the BIOME is built once from
 the stage seed: the land, the public roads and the railway are the same on
 every attempt, and so is the opening straight (it is laid from the origin
 up +z, never drawn). Anything that makes the opening illegal therefore fails
@@ -21,6 +21,6 @@ a straight to line up on). A ROAD there is fine — the route turns onto it
 first campaign stage for nothing. The railway alone keeps the opening plus
 two clearances of room past it.
 
-Diagnose a fast total failure by mutating the country in a scratch script
+Diagnose a fast total failure by mutating the biome in a scratch script
 (`E.BIOMES.alpine.railway = false`, `asphalt: 0`) rather than by reading the
 search: whichever removal makes the seed generate names the obstacle.

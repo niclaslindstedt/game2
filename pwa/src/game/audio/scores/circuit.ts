@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// SHORT CIRCUIT — the score for a circuit stage, whatever the country.
+// SHORT CIRCUIT — the score for a circuit stage, whatever the biome.
 //
 // G minor at 150 bpm: 56 bars, ninety seconds. A circuit is laps of one loop
 // and the player will be round it three times before the finish, so the

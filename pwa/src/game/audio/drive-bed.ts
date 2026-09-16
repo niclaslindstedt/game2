@@ -2,7 +2,7 @@
 // THE BED'S SCHEDULER — the half that reads the live `GameState` once a frame
 // and steers every continuous voice the run has. What a voice IS lives in
 // `engine-voice.ts` (the machinery), `road-voice.ts` (the tyres, the wind,
-// the weather and the slide) and `ambience.ts` (the country); this is the
+// the weather and the slide) and `ambience.ts` (the biome); this is the
 // one place that turns a state into their targets, and the one place the
 // CUES the simulation never reports are raised from: the start lights, the
 // exhaust crackle on a lift, the wipers, the marshal's whistle.
@@ -369,7 +369,7 @@ export function createDriveBed(synth: Synth, random: () => number = Math.random)
             spin: Math.max(car.launchSpin, Math.min(1, car.wheelspin / SPIN_FULL)),
             sideways: car.w,
             airborne: car.airborne,
-            // The weather, as one number, read against the country it is
+            // The weather, as one number, read against the biome it is
             // over (a desert storm is dry). Fixed for the whole run.
             wet,
             // The weather's two live numbers. Both come off the wind, so the
@@ -421,7 +421,7 @@ export function createDriveBed(synth: Synth, random: () => number = Math.random)
           season: state.env.season,
           wet,
           gale,
-          // Where the car stands against the country's own zones: the pass
+          // Where the car stands against the biome's own zones: the pass
           // wind, and who lives at this height.
           exposure: exposureOf(car.y, landOf(state.track.knobs).zones),
           water: waterNear(state),

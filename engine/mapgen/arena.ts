@@ -23,11 +23,11 @@
 //
 // THE LATTICE IS THE CONSTRAINT THAT SHAPES EVERYTHING HERE. The ground the
 // car rides is the height field sampled on a fixed grid and interpolated
-// across the triangles the renderer draws, and the country's own grid is
+// across the triangles the renderer draws, and the biome's own grid is
 // GROUND_CELL — 14 m. A jump ramp eight metres long does not exist on a
 // 14 m lattice; it is smoothed away before the car ever reaches it. So the
 // arena carries its own finer lattice (`ARENA_CELL`, a quarter of the
-// country's, which is what makes the two nest at shared corners), and every
+// biome's, which is what makes the two nest at shared corners), and every
 // feature in the layout below is sized to be RESOLVED by it: the ramp runs
 // thirty metres, the table-top is sixty end to end, the banked corner is a
 // bowl and not a kerb. Anything that has to be smaller than that — the
@@ -39,8 +39,8 @@ import type { Surface } from "./compile.ts";
 import type { SolidKind, WildObstacle } from "./solids.ts";
 import { buildCourse } from "./arena-course.ts";
 
-/** The arena's own ground lattice, m. A quarter of the country's cell, so
- * every country corner is also an arena corner and the two fields meet
+/** The arena's own ground lattice, m. A quarter of the biome's cell, so
+ * every biome corner is also an arena corner and the two fields meet
  * without a seam at the rim. Fine enough that a thirty-metre ramp is nine
  * cells of climb and its lip is a real edge rather than a rounded shoulder. */
 export const ARENA_CELL = GROUND_CELL / 4;
@@ -75,7 +75,7 @@ export const TARMAC_TO = -8;
 /** THE EARTH BANKS — the arena sits in a shallow bowl. `rise` is how far
  * out the berm climbs from the pad's rim, `height` how high it stands, and
  * `fall` how far past its crest it lets itself back down into whatever
- * country the seed built. It is a boundary and not a wall: a car that wants
+ * biome the seed built. It is a boundary and not a wall: a car that wants
  * out drives over it, which is the whole difference between a training
  * ground and an arena with the lid on. */
 const BANK = { rise: 16, height: 3.6, fall: 26 } as const;
@@ -104,7 +104,7 @@ export const RAMP = { u: 72, v: -30, run: 22, lip: 3, half: 7, flank: 5, drop: 3
  * throws the car, and the flat top is where you find out how fast that is. */
 export const TABLE = { u: 34, v: 55, climb: 15, flat: 20, height: 2, half: 8, flank: 5 } as const;
 
-/** THE COUNTRY the training ground stands in. Exported because the app
+/** THE BIOME the training ground stands in. Exported because the app
  * builds a stage spec for the run and the debug overlay prints its dials:
  * handing it the rule book's defaults would have the overlay report a
  * hilly, wet, half-sealed stage over a flat dry pad. */
@@ -184,8 +184,8 @@ export type ArenaPlan = {
   heightAt: (x: number, z: number) => number;
   /** What the arena is made of at a world position, or null off the pad. */
   surfaceAt: (x: number, z: number) => Surface | null;
-  /** How much the arena owns the ground here, 0 (open country, out past the
-   * berm) to 1 (the pad itself). The terrain field blends the country's own
+  /** How much the arena owns the ground here, 0 (open land, out past the
+   * berm) to 1 (the pad itself). The terrain field blends the land's own
    * height into the arena's across this. */
   weightAt: (x: number, z: number) => number;
   /** Whether a world position stands on a BUILT jump lip — the one place
@@ -327,7 +327,7 @@ function gateCut(u: number, v: number): number {
 /** THE BERM, as a height and a weight together: how far the ground has been
  * pushed up outside the pad's rim, and how much of the arena's own shape is
  * still being asserted there. They are one function because they are one
- * decision — past the point the berm has let itself back down, the country
+ * decision — past the point the berm has let itself back down, the biome
  * the seed built is the ground, and the arena has nothing more to say. */
 function berm(d: number): { height: number; weight: number } {
   if (d <= 0) return { height: 0, weight: 1 };
@@ -426,7 +426,7 @@ function baysOf(s: ArenaStructure, heightAt: (x: number, z: number) => number): 
 }
 
 /** The arena's ground lattice, sampled and interpolated exactly the way the
- * country's is (`TerrainField.groundAt`) — same diagonal, same triangles,
+ * biome's is (`TerrainField.groundAt`) — same diagonal, same triangles,
  * finer cell. It is what the car RIDES and what the renderer DRAWS, and
  * they are the same surface because they are the same function.
  *
@@ -467,14 +467,14 @@ function latticeSampler(
 
 /** How far the arena reaches from its middle, m — the pad plus the whole
  * berm. Past this the training ground has no opinion about the ground and
- * the country the seed built is simply the country. */
+ * the biome the seed built is simply the biome. */
 export const ARENA_REACH = PAD + BANK.rise + BANK.fall;
 
 /** Build the training ground standing on `frame`.
  *
  * The plan is pure geometry: it knows where everything is and what shape
  * the ground is, and nothing at all about how any of it is drawn or how the
- * car is stepped over it. The terrain field lays it over the country
+ * car is stepped over it. The terrain field lays it over the land
  * (`arenaTerrain`), the renderer draws it (`pwa/src/game/arena.ts`), and
  * both read this one object. */
 export function buildArena(frame: ArenaFrame): ArenaPlan {

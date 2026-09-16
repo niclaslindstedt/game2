@@ -64,9 +64,9 @@ describe("the stage dials", () => {
   });
 
   // R49 — a POPULATION property, and it has to be: the dial moves where the
-  // stage starts, and one seed's country can put high ground anywhere. A
+  // stage starts, and one seed's biome can put high ground anywhere. A
   // per-seed assertion here would be a fixture pinned to a noise field.
-  it("R49 — the tilt dial decides which way a stage runs through its country", () => {
+  it("R49 — the tilt dial decides which way a stage runs through its biome", () => {
     const meanDrop = (tilt: number): number => {
       let total = 0;
       for (const seed of SEEDS) {
@@ -87,7 +87,7 @@ describe("the stage dials", () => {
 
   it("R49 — the middle of the tilt dial is the stage that was built before it", () => {
     // The one position that must change nothing: `siteBiasOf` comes out at
-    // zero in a country that does not start high, and R35's plain spiral
+    // zero in a biome that does not start high, and R35's plain spiral
     // runs exactly as it always did.
     for (const seed of [4, 7, 19]) {
       expect(compileStage(seed, "medium", { tilt: 0.5 }).samples).toEqual(
@@ -107,9 +107,9 @@ describe("the stage dials", () => {
   });
 
   // R49 — a POPULATION property, and it has to be: the dial moves where the
-  // stage starts, and one seed's country can put high ground anywhere. A
+  // stage starts, and one seed's biome can put high ground anywhere. A
   // per-seed assertion here would be a fixture pinned to a noise field.
-  it("R49 — the tilt dial decides which way a stage runs through its country", () => {
+  it("R49 — the tilt dial decides which way a stage runs through its biome", () => {
     const meanDrop = (tilt: number): number => {
       let total = 0;
       for (const seed of SEEDS) {
@@ -130,7 +130,7 @@ describe("the stage dials", () => {
 
   it("R49 — the middle of the tilt dial is the stage that was built before it", () => {
     // The one position that must change nothing: `siteBiasOf` comes out at
-    // zero in a country that does not start high, so R35's plain spiral
+    // zero in a biome that does not start high, so R35's plain spiral
     // runs exactly as it always did.
     for (const seed of [4, 7, 19]) {
       expect(compileStage(seed, "medium", { tilt: 0.5 }).samples).toEqual(

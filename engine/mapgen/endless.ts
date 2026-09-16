@@ -6,7 +6,7 @@
 // questions with the same pieces. A sprint knows where it is going and may
 // throw the whole attempt away to get there (R9, R2, the sub-seed retry);
 // a stream has nowhere to be and can never start over, so everything it
-// does about a country that boxes it in has to happen IN PLACE — the course
+// does about a biome that boxes it in has to happen IN PLACE — the course
 // it steers back onto, the commit lag it keeps as backtrack runway, and the
 // water ladder it walks down a rung at a time rather than re-rolling. Those
 // three mechanisms are the whole of this module; the cursor, the point
@@ -73,7 +73,7 @@ export function createStageStream(
   seed: number,
   knobs?: Partial<StageKnobs>,
   /** R48 — the cold. A frozen lake is ground the stream may run across
-   * instead of a wall it has to squeeze past, which on a country full of
+   * instead of a wall it has to squeeze past, which on a biome full of
    * water is the difference between a journey and a shore road. */
   climate?: Climate,
 ): StageStream {
@@ -82,8 +82,8 @@ export function createStageStream(
   const clear = roadClearance(roadWidthOf(dials));
   const field = createPointField(clear);
   // R35 — the same water the finite search steers round. An endless run
-  // meets more of the country than any stage does, so it meets more of the
-  // country's lakes; the pour's block cache is what keeps asking about
+  // meets more of the biome than any stage does, so it meets more of the
+  // biome's lakes; the pour's block cache is what keeps asking about
   // them flat as the road runs on.
   const land = createLandField(seed, dials, climate);
   /** ...and how much of it the DIAL leaves: a lakeland road runs the shore
@@ -107,7 +107,7 @@ export function createStageStream(
     const rung = Math.floor(stuck / R.endless.wetPatience);
     // Off the bottom of the ladder the rule lets go altogether, and the
     // road is allowed to cross. That is not the rule failing: a stream
-    // has a COURSE to keep and cannot turn round, so a country that walls
+    // has a COURSE to keep and cannot turn round, so a biome that walls
     // it in with water leaves exactly two options — cross, or stop
     // forever. A finite stage in the same spot throws the attempt away and
     // re-rolls, which is why only the endless search needs this.

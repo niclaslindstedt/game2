@@ -176,7 +176,7 @@ nothing at all until a lake turns up somewhere impossible.
 
 **DEVELOPER → MAP VIEWER** is where they are, and the only place: its map
 fills the screen and carries a strip along its foot — **OFF · BEDROCK ·
-GROUNDWATER · SOIL · FOLIAGE · ROADS · SCREENSHOT**. The layers are in the order the country was made (R32), which is also the
+GROUNDWATER · SOIL · FOLIAGE · ROADS · SCREENSHOT**. The layers are in the order the land was made (R32), which is also the
 order a defect is chased in — the rock decides where the water goes, the
 water decides where the soil stays, the soil decides where the forest grows,
 and the road is cut through whatever that left. Each is sampled off the SAME
@@ -194,7 +194,7 @@ Two things make it a debug tool rather than a picture:
   could only zoom into its own centre would be useless — the defect is never
   in the middle. Stepping the seed, or opening another level in the viewer,
   frames the whole of the new stage again: the pan and zoom belonged to the
-  country the last one was made of.
+  biome the last one was made of.
 - **COPY DEBUG INFO puts the whole caption on the clipboard**: seed, dials,
   what the stage was assembled from (turns, straights, jumps, crests, fords,
   bridges), its spread, its spurs and splits, what the painted layer measured
@@ -211,9 +211,9 @@ frame per layer, one leaned in and panned onto the road, and one after dark.
 
 Roam builds a stage from whatever the dials happen to say, which is right for
 choosing a seed and wrong for finding a defect in a SHIPPED map. **SELECT
-LEVEL → a country → a stage** loads a campaign level's exact spec — its seed,
+LEVEL → a biome → a stage** loads a campaign level's exact spec — its seed,
 its band, its shape, the campaign's own dials, the hour and weather it is set
-in — onto the map. It is the campaign's own country rows and the campaign's
+in — onto the map. It is the campaign's own biome rows and the campaign's
 own stage boxes with the padlocks off (`StagePicker`, in `menu-levels.tsx`),
 so the road is picked by the same picture it is picked by on the ladder.
 
@@ -397,7 +397,7 @@ These four are for photographing the WORLD rather than the run.
 **`air=` is the one to reach for from any height.** The game only builds
 ground within 560 m of the car and only draws it to the fog's ceiling, and
 `drawdistance=far` opens the fog PAST that — so a shot from above shows the
-country simply stopping, with the camera-locked ridge backdrop standing where
+biome simply stopping, with the camera-locked ridge backdrop standing where
 the land should be. It reads as a generator bug and is not one. `air=` moves
 the three numbers that matter together (the built ground, the camera's far
 plane, and a fog set to close exactly at the drawn edge), which a still can

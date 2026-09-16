@@ -3,7 +3,7 @@ type: Changed
 title: Lakes, swamps, and a gravel road that is not a plane
 ---
 
-The country a stage is set in now has hollows in it that hold water, in
+The biome a stage is set in now has hollows in it that hold water, in
 three sizes: small deep pools, proper tarns, and broad shallow meres. The
 shallow ones are SWAMPS — you can see the bottom, reeds and bulrushes stand
 in them, and willows and alders lean out over the edges. Drowned trunks

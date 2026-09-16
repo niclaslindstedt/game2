@@ -20,13 +20,13 @@
 //     through and the player is top of its table.
 //
 // The TIME TRIAL is held behind the second of those and not the first — the
-// whole country at once, the moment the campaign opens the country. See
+// whole biome at once, the moment the campaign opens the biome. See
 // `timeTrialOpen`; it is the one place in the game a mode is allowed to run
-// ahead of the ladder, and it only ever runs ahead INSIDE a country.
+// ahead of the ladder, and it only ever runs ahead INSIDE a biome.
 //
 // And nothing here is ever spent: a stage can be run again as often as the
 // player likes, and the board keeps the better afternoon. That is the whole
-// shape of the thing — see the country, then go back for the wins it costs to
+// shape of the thing — see the biome, then go back for the wins it costs to
 // leave it — and it is why a stage already cleared is still worth driving.
 //
 // Progress lives in one localStorage record: what has been driven to the line
@@ -66,7 +66,7 @@ export type CampaignLevel = {
    * it was curated under is a level that silently becomes another road.
    *
    * Moving one is a CURATION, not an edit — the road changes, so the rating,
-   * the sim times, the route in the menu, the banner behind the country and
+   * the sim times, the route in the menu, the banner behind the biome and
    * the blurb on the box all have to be made true again. `level-rating`'s
    * Loop B is that job. Bumping all eighteen in one commit because the
    * suite went red is the exact thing this field exists to prevent. */
@@ -79,12 +79,12 @@ export type CampaignLevel = {
   /** The hour the stage STARTS at, 0..24 local solar time — the sun's
    * clock runs on from it at an hour a minute, so a level set at sunset is
    * driven into the dark and one set before dawn drives into the light.
-   * Read with the season and the country: 17:00 is a low autumn sun over
+   * Read with the season and the biome: 17:00 is a low autumn sun over
    * the taiga and broad daylight over the desert. */
   hour: number;
   weather: Weather;
   /** Which season the stage is run in — as much of a level's identity as
-   * the hour it starts at, and the reason two levels on the same country
+   * the hour it starts at, and the reason two levels on the same biome
    * do not look like the same stage twice. */
   season: Season;
   /** The generator's dials this stage is built on, for any it does not take
@@ -96,7 +96,7 @@ export type CampaignLevel = {
    * It exists so that a level is a COMPLETE description of its road — every
    * lever Roam has, written down — and so a level that wants one of them
    * moved (R46's difficulty, say, up the ladder) can say so here rather
-   * than by being a seed that happens to come out that way. The COUNTRY is
+   * than by being a seed that happens to come out that way. The BIOME is
    * not among them: a location IS a biome (R40), so it always wins. */
   knobs?: Partial<StageKnobs>;
   /** One line of billing on the level's box. */
@@ -123,7 +123,7 @@ export function levelLaps(level: CampaignLevel): number {
  * own (`campaignKnobs`), which is the rule book's defaults unless that
  * level says otherwise: a seed driven on a wider road, or with the
  * difficulty wound up, is a different road that happens to share a number.
- * So is the COUNTRY (R40): the same seed in the desert is a different road
+ * So is the BIOME (R40): the same seed in the desert is a different road
  * again. */
 export function levelForRoad(
   seed: number,
@@ -149,30 +149,30 @@ export type CampaignLocation = {
   id: string;
   name: string;
   blurb: string;
-  /** R40 — the country every stage of the location is built in. A
-   * location IS a biome: the ladder walks the countries in order. */
+  /** R40 — the biome every stage of the location is built in. A
+   * location IS a biome: the ladder walks the biomes in order. */
   biome: BiomeId;
   levels: CampaignLevel[];
 };
 
 /** The dials a campaign stage is built on: the rule book's defaults, in the
- * location's own country, and whatever that level says for itself. The same
+ * location's own biome, and whatever that level says for itself. The same
  * road for everybody — the dials are Roam's to play with, and the
  * campaign's only where a level has written one down. */
 export function campaignKnobs(level: CampaignLevel): StageKnobs {
   return levelKnobs(findLevel(level.id)?.location.biome ?? DEFAULT_KNOBS.biome, level);
 }
 
-/** ...with the country handed in, for the callers that already know which
+/** ...with the biome handed in, for the callers that already know which
  * one it is. The biome and the generator's version go on LAST: a location
- * is a country (R40) and a level cannot be built somewhere else, and the
+ * is a biome (R40) and a level cannot be built somewhere else, and the
  * version is the level's own field rather than one of the dials it may
  * write — `knobs: { version }` is not a thing a level gets to say. */
 function levelKnobs(biome: BiomeId, level: CampaignLevel): StageKnobs {
   return resolveKnobs({ ...DEFAULT_KNOBS, ...level.knobs, biome, version: level.version });
 }
 
-/** THE RUNG ORDER, and it is the same in all three countries: a sprint, a
+/** THE RUNG ORDER, and it is the same in all three biomes: a sprint, a
  * loop, a sprint, a loop, a sprint, and the long one.
  *
  *   1  short  sprint     2  medium circuit    3  medium sprint
@@ -181,8 +181,8 @@ function levelKnobs(biome: BiomeId, level: CampaignLevel): StageKnobs {
  * The circuits are INSIDE the climb rather than bolted onto the end of it.
  * Four sprints up the length bands and then two loops is the arrangement
  * this campaign shipped with, and it is the one thing `make rate CAMPAIGN=1`
- * refused every country for: a 1.7 km ring after an eleven-kilometre finale
- * is a rung the ladder steps DOWN, and all three countries did it in the
+ * refused every biome for: a 1.7 km ring after an eleven-kilometre finale
+ * is a rung the ladder steps DOWN, and all three biomes did it in the
  * same place. Interleaved, every rung asks more than the one before it in
  * all three — and the player meets the second discipline (R22: three laps
  * of a road that comes back to its own start line, learnable, the clock the
@@ -193,11 +193,11 @@ function levelKnobs(biome: BiomeId, level: CampaignLevel): StageKnobs {
  * below are not simply sorted by how hard the geometry is: an hour, a
  * weather and a season are the cheapest levers the game has, they cost
  * nothing that has to be re-verified, and used properly they carry a third
- * of the climb. Each country runs all four seasons, all three day-parts and
+ * of the climb. Each biome runs all four seasons, all three day-parts and
  * every weather its own sky offers — the desert has no rain (biomes.ts), so
  * it has the other two.
  *
- * HOW THE SEEDS WERE PICKED. A sweep of 1..48 per country per slot, rated
+ * HOW THE SEEDS WERE PICKED. A sweep of 1..48 per biome per slot, rated
  * (`engine/rating/`) and analyzed (`engine/analysis/`), then searched for
  * the SET of six that scores best as a ladder rather than the six best
  * stages — which are reliably the same road six times. The brief the search
@@ -205,7 +205,7 @@ function levelKnobs(biome: BiomeId, level: CampaignLevel): StageKnobs {
  *
  *   * every rung asks MORE than the one under it, by enough to feel (0.035)
  *     and not so much it is a wall (0.14)
- *   * no seed twice in a country, and no two rungs under the same sky
+ *   * no seed twice in a biome, and no two rungs under the same sky
  *   * every car the right car somewhere, every season, every day-part
  *   * as few `make analyze` errors as the slot allows
  *
@@ -222,7 +222,7 @@ function levelKnobs(biome: BiomeId, level: CampaignLevel): StageKnobs {
  * generator does — `npm run sim -- --seeds N --length L` says what they are
  * today. Note the clock is NOT the order: a three-lap circuit takes longer
  * than the sprint above it in the same band, because a lap is a slower road
- * than a run through the country, and the ladder is ordered on what a stage
+ * than a run through the land, and the ladder is ordered on what a stage
  * ASKS rather than on how long the bot is out there.
  */
 
@@ -470,10 +470,10 @@ export function levelCleared(progress: CampaignProgress, id: string): boolean {
 }
 
 /** THE DEVELOPER'S LOCKS, and the rule both halves are built on: THE LADDER
- * IS A PREFIX. A country opens once the one before it has been won
- * (`locationUnlocked`), so opening one country means opening the run up TO
+ * IS A PREFIX. A biome opens once the one before it has been won
+ * (`locationUnlocked`), so opening one biome means opening the run up TO
  * it and shutting one means shutting everything IN FRONT of it — a board
- * with a hole in the middle is a country the game itself still refuses to
+ * with a hole in the middle is a biome the game itself still refuses to
  * open. Best times and best places are left alone by both: a lock is no
  * more a result than an unlock is, and wiping the board would cost a real
  * one. */
@@ -489,7 +489,7 @@ function openLevels(
 
 /** Every stage of these locations back to never having been driven. The
  * points go, and so does the FINISH LINE — a stage merely un-scored stays
- * open in the time trial (`timeTrialOpen`), and a country meant to read as
+ * open in the time trial (`timeTrialOpen`), and a biome meant to read as
  * unreached cannot have six roads open in another mode. */
 function shutLevels(
   progress: CampaignProgress,
@@ -502,27 +502,27 @@ function shutLevels(
 }
 
 /** Mark every stage in every location won, which is what opens all of them in
- * the campaign, opens every country behind them, and opens the lot in time
+ * the campaign, opens every biome behind them, and opens the lot in time
  * trial. */
 export function unlockEverything(): CampaignProgress {
   return openLevels(loadProgress(), LOCATIONS);
 }
 
-/** Open the campaign AS FAR AS one country — its stages and every stage
+/** Open the campaign AS FAR AS one biome — its stages and every stage
  * behind it, which is the only shape the ladder has (see `openLevels`). */
 export function unlockLocation(locationId: string): CampaignProgress {
   const index = LOCATIONS.findIndex((l) => l.id === locationId);
   return openLevels(loadProgress(), index < 0 ? LOCATIONS : LOCATIONS.slice(0, index + 1));
 }
 
-/** Shut one country and everything in FRONT of it: the campaign reads as
- * having stopped at the country before this one. */
+/** Shut one biome and everything in FRONT of it: the campaign reads as
+ * having stopped at the biome before this one. */
 export function lockLocation(locationId: string): CampaignProgress {
   const index = LOCATIONS.findIndex((l) => l.id === locationId);
   return shutLevels(loadProgress(), index < 0 ? LOCATIONS : LOCATIONS.slice(index));
 }
 
-/** Back to a save that has never driven a stage — every country shut, every
+/** Back to a save that has never driven a stage — every biome shut, every
  * best time kept. */
 export function lockEverything(): CampaignProgress {
   return shutLevels(loadProgress(), LOCATIONS);
@@ -578,7 +578,7 @@ export type StandingsRow = {
 
 /** THE TABLE — every crew entered in the location, the player included,
  * best first. Ties go to stage wins, and then to the player: a location that
- * ends level and hands the country to the machine is a lock with no visible
+ * ends level and hands the biome to the machine is a lock with no visible
  * way in. Below that, the field's own reputation order breaks it.
  *
  * The crews are the ENTRY LIST rather than the roster: a field is a spread of
@@ -640,8 +640,8 @@ export function stagesDriven(location: CampaignLocation, progress: CampaignProgr
 }
 
 /** How many of the location's stages have a TIME on them — what the time
- * trial counts of a country, where the campaign counts stages cleared. Now
- * that the whole country opens at once, "how many are open" says nothing
+ * trial counts of a biome, where the campaign counts stages cleared. Now
+ * that the whole biome opens at once, "how many are open" says nothing
  * about a player and this does. */
 export function stagesTimed(location: CampaignLocation, progress: CampaignProgress): number {
   return location.levels.filter((level) => progress.best[level.id] !== undefined).length;
@@ -656,7 +656,7 @@ export function locationComplete(location: CampaignLocation, progress: CampaignP
 
 /** WON — every stage driven and the player top of the location's table. Both
  * halves matter: a table nobody has scored on is a table the player leads on
- * the tie-break, and an empty board must not open a country. */
+ * the tie-break, and an empty board must not open a biome. */
 export function locationWon(location: CampaignLocation, progress: CampaignProgress): boolean {
   return locationComplete(location, progress) && playerStanding(location, progress).place === 1;
 }
@@ -670,11 +670,11 @@ export function locationUnlocked(location: CampaignLocation, progress: CampaignP
   return locationWon(LOCATIONS[index - 1], progress);
 }
 
-/** THE TIME TRIAL'S GATE, and it is a COUNTRY rather than a stage: all six
+/** THE TIME TRIAL'S GATE, and it is a BIOME rather than a stage: all six
  * of a location's roads open together, the moment the campaign opens the
  * location itself.
  *
- * It is not a way past the campaign's own lock — the country is behind the
+ * It is not a way past the campaign's own lock — the biome is behind the
  * same table it always was — it is a way past the LADDER INSIDE it, which
  * the clock has no business being held behind. A player who has earned the
  * desert has earned all six of its roads, and making them podium their way
@@ -688,7 +688,7 @@ export function locationUnlocked(location: CampaignLocation, progress: CampaignP
  * The second half is what a gate hung off the board cannot say on its own: a
  * stage driven to the line is open here FOREVER, whatever the points do
  * afterwards. Tearing a location's points up (`resetPoints`) shuts the
- * country behind it in the campaign, and a road whose finish line has been
+ * biome behind it in the campaign, and a road whose finish line has been
  * seen cannot be un-seen. */
 export function timeTrialOpen(location: CampaignLocation, progress: CampaignProgress): boolean {
   if (locationUnlocked(location, progress)) return true;
@@ -735,7 +735,7 @@ export function latestOpen(
 
 /** The stage after this one, or null at the end of the ladder. The ladder
  * carries on into the next LOCATION rather than stopping at the end of one, so
- * a finished location hands the player straight into the next country. */
+ * a finished location hands the player straight into the next biome. */
 export function nextLevel(id: string): CampaignLevel | null {
   const found = findLevel(id);
   if (!found) return null;
@@ -756,7 +756,7 @@ export function findLevel(
   return null;
 }
 
-/** Where the ladder goes after a stage: the next rung, the next COUNTRY
+/** Where the ladder goes after a stage: the next rung, the next BIOME
  * behind the table it is locked to, or the end of the road. */
 export type LadderStep =
   | { kind: "next"; level: CampaignLevel }

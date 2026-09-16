@@ -402,7 +402,7 @@ export async function holdTheSlide(page) {
 // Two frames of a car on gravel from behind is one claim made twice.
 //
 // The second rule is PALETTE VARIETY, and it is not decoration. The three
-// countries are the reason this game does not look like one screenshot: taiga
+// biomes are the reason this game does not look like one screenshot: taiga
 // green under a high sun, desert gold, alpine white and grey. A set shot
 // entirely on `taiga-1` because that is the stage the tooling defaults to is a
 // set that says the game has one road.
@@ -440,7 +440,7 @@ export const SHOTS = [
     // `far` rather than `heli`: the helicopter rig looks down the grid and the
     // column recedes into single file with the name plates stacked into an
     // unreadable pile, where the high chase rig holds BOTH columns, the gantry
-    // and the country the stage runs through in one frame.
+    // and the biome the stage runs through in one frame.
     //
     // THE LAUNCH, NOT THE COUNTDOWN, and that is a correction rather than a
     // preference. A static grid was the obvious frame and it is not reliably
@@ -550,7 +550,7 @@ export const SHOTS = [
     sweepAtS: [0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6],
   },
   {
-    id: "country",
+    id: "biome",
     caption: "EVERY STAGE BUILT FROM ITS SEED",
     // THE CLAIM: the roads are generated, and a generated road still goes
     // somewhere. This is the one frame about the WORLD rather than about the

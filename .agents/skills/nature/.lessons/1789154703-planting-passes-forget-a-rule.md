@@ -8,7 +8,7 @@ concepts: [placement, planting, ground-cover, snow, biome]
 The app plants soft flora in six separate loops, not one: in
 `world-scenery.ts` the brush between the trunks, the three ground-cover
 bands, and THE VERGE'S OWN FRINGE coming back into the road's bare
-shoulder; in `wild.ts` the same brush and cover for the country past 150 m;
+shoulder; in `wild.ts` the same brush and cover for the biome past 150 m;
 the skirt round one trunk (`understoryAround`, planting.ts); and a
 paddock's grass (`buildMeadow`, paddock.ts). Each has its own `continue`
 guards, so a placement rule added to one silently does not hold in the

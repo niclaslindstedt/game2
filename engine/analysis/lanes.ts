@@ -7,7 +7,7 @@
 // rots. An abandoned branch (R17), a homestead's drive (R37) and the lane
 // into a car park (R42) are all real road — the terrain shelves them, the
 // physics gives them gravel, a player who ignores the tape drives them —
-// and every one of them is built by a walk that follows the country at a
+// and every one of them is built by a walk that follows the land at a
 // grade, off a road, into a pad or a join. Each of those is a place the
 // profile can kink, and the terrain under it is a second surface built
 // from the first: the two can disagree by exactly the kind of step this

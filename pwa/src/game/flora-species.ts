@@ -952,9 +952,9 @@ const TAIGA_VARIANTS: Record<string, VariantDef> = {
   },
 };
 
-/** Everything plantable, every country's roster in one table: the ids a
+/** Everything plantable, every biome's roster in one table: the ids a
  * biome's mixes name, and the one place `buildFlora` looks them up. Two
- * countries may not spell a species the same way — a `yucca` is a yucca —
+ * biomes may not spell a species the same way — a `yucca` is a yucca —
  * so the merge is checked for collisions at import. */
 export const VARIANTS: Record<string, VariantDef> = {
   ...TAIGA_VARIANTS,

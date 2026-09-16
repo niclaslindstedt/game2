@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE COUNTRY A STAGE IS COMPILED INTO, before and after the walk. Before:
+// THE LAND A STAGE IS COMPILED INTO, before and after the walk. Before:
 // the box the route will occupy and every road, railway, homestead, town,
 // farm and power line the seed put on it — surveyed once, so the walk can
 // ask whether an arm it is about to leave behind can get OUT of the map
-// (`planCountry`), and so a conductor's sag is measured over the ground a
+// (`planLand`), and so a conductor's sag is measured over the ground a
 // road's shelf will really stand at (`roadTopField`). After: the empty
 // `Track` a compile starts from, and the height closure a circuit's last
 // sample owes its first.
@@ -21,32 +21,32 @@ import type { Track } from "./track-shape.ts";
 import { ROAD_DISTANCE_REACH } from "./compile-road.ts";
 
 /** R45 — what a WIRE has to clear at a point, and by how much: the bare
- * country, or a ROAD standing over it — the route, an abandoned branch, a
+ * biome, or a ROAD standing over it — the route, an abandoned branch, a
  * homestead's drive, a public road the rally never met — with the road's
  * own clearance owed wherever one is under it.
  *
  * Not `land.heightAt`, and the difference is a defect rather than a
- * refinement. A road is laid ALONG the country but not ON it: it rides
- * embankments and shelves, and the terrain blends the country up onto them
+ * refinement. A road is laid ALONG the land but not ON it: it rides
+ * embankments and shelves, and the terrain blends the land up onto them
  * over its corridor range. A span planned against the bare land came out
  * clearing the BUILT road by seven metres where it had promised twelve, and
  * another was drawn through a branch's embankment seventy metres up.
  *
  * The shelf is modelled the way the terrain builds one: the road's own
- * level on its centerline, easing back to the country over `REACH`. It has
+ * level on its centerline, easing back to the biome over `REACH`. It has
  * to EASE rather than hold — held flat across its whole reach it demanded a
  * road's clearance over the highest road within a hundred and fifty metres,
  * which refused a third of the lines that had been fitting and bought
  * nothing, since no wire is measured against a road that far to one side.
  *
  * A cell grid over every road's samples, so away from all of them the
- * answer is the country and one failed set lookup. */
+ * answer is the biome and one failed set lookup. */
 export function roadTopField(
   track: Track,
   land: { heightAt: (x: number, z: number) => number },
 ): (x: number, z: number) => { ground: number; need: number } {
   const CELL = 48;
-  /** How far a road's shelf reaches into the country, m — the terrain's own
+  /** How far a road's shelf reaches into the land, m — the terrain's own
    * `CORRIDOR_RANGE`, restated here because the terrain does not exist yet
    * when a line is surveyed. Over-reaching costs a longer span; under it
    * buries a conductor in an embankment. */
@@ -75,7 +75,7 @@ export function roadTopField(
   }
   const rings = Math.ceil(REACH / CELL);
   return (x, z) => {
-    const country = land.heightAt(x, z);
+    const bare = land.heightAt(x, z);
     const ix = Math.floor(x / CELL);
     const iz = Math.floor(z / CELL);
     let top = -Infinity;
@@ -92,9 +92,9 @@ export function roadTopField(
         }
       }
     }
-    if (top === -Infinity) return { ground: country, need: R.powerline.clearance.ground };
+    if (top === -Infinity) return { ground: bare, need: R.powerline.clearance.ground };
     return {
-      ground: Math.max(country, country + (top - country) * (1 - nearest / REACH)),
+      ground: Math.max(bare, bare + (top - bare) * (1 - nearest / REACH)),
       need: nearest < OVER ? R.powerline.clearance.road : R.powerline.clearance.ground,
     };
   };
@@ -107,11 +107,11 @@ export const STREAMED_HOLD = 250;
 /** How far a homestead or a town looks for a public road, m. Past this the
  * answer is "none near", which is all either placer ever asks: the widest
  * clearance they hold is `homestead.drive.clear` plus a road width, well
- * inside it. Under the index's `NEAR`, so a probe out in the country is one
+ * inside it. Under the index's `NEAR`, so a probe out in the land is one
  * set lookup rather than a walk of every ring. */
 export const HIGHWAY_LOOK = 96;
 
-/** R17 — THE COUNTRY, walked off the plan before anything is built.
+/** R17 — THE BIOME, walked off the plan before anything is built.
  *
  * A junction is only worth building where the arm it abandons can leave the
  * map, and the only honest way to know that is to drive the branch — which
@@ -125,7 +125,7 @@ export const HIGHWAY_LOOK = 96;
  * rather than every two — because what it feeds are clearances measured in
  * tens of meters, and the slack is subtracted off every answer so the field
  * can only ever under-report the room a branch has, never invent some. */
-export type Country = {
+export type LandPlan = {
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
   /** R23 — the keep-out field, with the ground around the junction under
    * test excluded (a branch leaves a junction ON the road it is leaving). */
@@ -175,11 +175,11 @@ export const PLAN_DISTANCE_SLACK = PLAN_STEP / 2;
 export const TRIAL_PARTING = R.junction.parting - PLAN_DISTANCE_SLACK;
 export const BUILT_PARTING = R.junction.parting + STAGE_DISTANCE_SLACK;
 
-export function planCountry(
+export function planLand(
   plans: SegmentPlan[],
   width: number,
   rolling: (s: number) => number,
-  /** R47 — the dials, for the grade this country's roads follow at. */
+  /** R47 — the dials, for the grade this biome's roads follow at. */
   knobs: StageKnobs,
   /** R34 — the ground the road will be laid ALONG. Without it the trial
    * walks a road at its roll alone, which on any stage with relief in it is
@@ -191,7 +191,7 @@ export function planCountry(
    * (`Track.startApron`): a deeper grid stands on more of it, and a branch
    * may no more cross the extra metres than the original ones. */
   apron: number,
-): Country {
+): LandPlan {
   const box = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
   const pts: { x: number; z: number; y: number; s: number }[] = [];
   const CELL = 48;
@@ -423,7 +423,7 @@ export function emptyTrack(
 /** R22 — a circuit has to close IN HEIGHT as well as on the map.
  *
  * Its last sample lands on its first (that is what makes laps possible),
- * but the road's height is walked forward along the country and there is
+ * but the road's height is walked forward along the land and there is
  * nothing in that walk to make the last step arrive back where the first
  * one started. What is left is a step at the start line: a car crossing it
  * on lap two drops or climbs it in one sample, which is a wall.
@@ -444,7 +444,7 @@ export function emptyTrack(
  * from inside the compiler rather than after it: BEFORE anything is hung
  * off the road. The samples and the junctions are the only things a ramp
  * can move by arithmetic — every other road on the map is anchored to this
- * one at one end and to the COUNTRY at the other, and there is no offset
+ * one at one end and to the BIOME at the other, and there is no offset
  * that is right for both ends of it. What those have instead is their own
  * walk, which starts at the junction's height and follows the land back
  * down at a road's grade; run that walk against a road this has not moved
@@ -473,6 +473,6 @@ export function closeCircuitHeight(
   // R41 — a level crossing's rails are laid FLUSH with the road across
   // them, so its height is the route's and rides with it; the arms cut off
   // it (`buildRailArms`) leave from that same height. A culvert's water is
-  // not: that is the valley's own level, and the country does not move.
+  // not: that is the valley's own level, and the biome does not move.
   for (const rail of track.rails) rail.y -= step * (rail.s / track.length);
 }

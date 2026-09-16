@@ -23,7 +23,7 @@ jump's step and the fan of strips in a tight bend — a single interpolated
 plane put a tile through a landing on seed 11), but a same-stretch
 neighbour that does not COVER the point is read in road coordinates:
 `top_k + slope_k·(s_near − s_k) − bank_here·lateral_here`. Halved the edge
-faces on both old countries with no seed re-rolled. The class that remains
+faces on both old biomes with no seed re-rolled. The class that remains
 at 14–16 m is the fill's CREST at the lip drawn on a 14 m lattice, and that
 is a cross-section change (`shelfBeyond`, `fillBeyond`, `runout`), not a
 reading error.

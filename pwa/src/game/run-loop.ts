@@ -228,7 +228,7 @@ export function startRun(store: RunStore, actions: RunActions): (() => void) | u
       const r = raceRef.current;
       const { mode, levelId } = runRef.current;
       // A link that names a campaign level opens THAT stage — its seed,
-      // its country, its conditions — exactly as `playLevel` would, so the
+      // its biome, its conditions — exactly as `playLevel` would, so the
       // card at the end of it has a book, a field and a ladder to read.
       const level = levelId ? findLevel(levelId)?.level : undefined;
       const spec: StageSpec =

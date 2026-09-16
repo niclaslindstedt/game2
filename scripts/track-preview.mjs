@@ -26,10 +26,10 @@
 //   npm run track -- --length endless --km 8   # a streamed endless stretch
 //   npm run track -- --asphalt 0.6 --water 0.9 --elevation 1 --trees 0.2 --width 0.2
 //   npm run track -- --steepness 1 --asphalt 1   # R34: the cuttings, at their deepest
-//   npm run track -- --biome desert    # R40: the other country — sand, dunes, no water
+//   npm run track -- --biome desert    # R40: the other biome — sand, dunes, no water
 //   npm run track -- --only render     # skip the other picture
 //   npm run track -- --zoom junctions  # one close-up per junction, and
-//   npm run track -- --zoom junctions --span 70   # ...how much country
+//   npm run track -- --zoom junctions --span 70   # ...how much land
 //
 // The whole-stage frame resolves a junction, a bridge or a guarded hairpin
 // as a few dozen pixels, which is not enough to tell a built place from a

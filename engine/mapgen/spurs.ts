@@ -3,7 +3,7 @@
 // the route: it is a public road the stage borrows. The gravel arrives at
 // a junction, joins the tarmac, runs it for a kilometer, and turns off it
 // again — and at both junctions the branch the route does NOT take is
-// still there, running away into the country, shut off with a barrier and a
+// still there, running away into the land, shut off with a barrier and a
 // chevron board so nobody in the field is in any doubt which way the stage
 // goes. WHERE that barrier stands is this module's too, and it is not a
 // detail: it has to clear the road the stage actually takes, at both ends
@@ -21,7 +21,7 @@
 // And because the terrain flattens a shelf under it, R23 binds it: the
 // shelf can only be laid under ONE road, so a branch that wanders back over
 // the stage leaves one of the two ribbons hanging in the air over the
-// country — a wall of road with nothing under it, which is exactly what the
+// biome — a wall of road with nothing under it, which is exactly what the
 // player sees. So the stage, and the ground its start stands on, are as
 // solid an obstacle to a branch as the lake is: it turns away from them,
 // and where it cannot, it stops.
@@ -146,7 +146,7 @@ export type Spur = SpurLine & {
 };
 
 /** Spur geometry, meters. A branch is not a stub: it runs until it is OUT
- * of the country the stage occupies, because a road that stops in the
+ * of the land the stage occupies, because a road that stops in the
  * middle of a field is not a road — it is a mistake the player can see
  * from a kilometer away. Where it goes after that is nobody's business,
  * which is exactly what makes it worth following. */
@@ -161,7 +161,7 @@ export const SPUR = {
    *
    * The ceiling is generous because LEAVING is the point. A junction sits
    * wherever the paving field put it, which is usually in the middle of the
-   * country the stage occupies — and from there a branch that has to steer
+   * biome the stage occupies — and from there a branch that has to steer
    * round a lake and keep off the stage covers a lot of ground to get to an
    * edge. A ceiling that binds turns a public road into a road that stops
    * in a field, which is the loudest mistake on the map. */
@@ -201,14 +201,14 @@ export const SPUR = {
    * wet the ground is. A junction whose other arm simply is not there
    * reads as the main road stopping dead at the crossing, which is worse
    * than a short causeway: the road has to be seen to go somewhere even
-   * when the country will not let it go far. */
+   * when the biome will not let it go far. */
   keep: 60,
 
   /** R17 — where the barrier across the branch may stand. `from` keeps it
    * off the junction's own platform, where it would be buried under the
    * crossing; `to` keeps it in sight of a driver arriving at the junction,
    * because a block nobody sees until they are past the turn is not a
-   * sign. `clear` is the bare country the whole barrier LINE — both ends of
+   * sign. `clear` is the bare land the whole barrier LINE — both ends of
    * it, not its middle — has to leave between itself and the route's outer
    * lip: a driver on the correct road must never have to steer around the
    * thing telling them which road is correct. `least` is the fallback bar
@@ -229,7 +229,7 @@ export const SPUR = {
  *
  * `routeClear` is the same road-distance field the branch was steered by:
  * distance from a point to the nearest piece of the route (capped out in the
- * country the branch has to itself). Every point along the line is tested,
+ * biome the branch has to itself). Every point along the line is tested,
  * because a line is not its midpoint — the end nearer the route is the one
  * a driver hits.
  *
@@ -312,13 +312,13 @@ export function spurReach(spur: SpurLine): number {
  * m of its own arc: the platform's longest reach and a half, which is also
  * as far as the compiler's warp onto that plane looks. Inside it the
  * branch holds the junction's height and grade instead of following the
- * country, and does not ask the stage's shelf band, which is degenerate
+ * biome, and does not ask the stage's shelf band, which is degenerate
  * beside the junction (`buildSpur` says why). */
 export const PLATFORM_HOLD = R.junction.reach.max * 1.5;
 
 /** R34 — ONE STEP OF A MINOR ROAD'S HEIGHT, stated once for every road
  * that hangs off the stage: a branch, a drive, a car park's lane. The road
- * wants `target` — the country it is following, the road it is closing on,
+ * wants `target` — the biome it is following, the road it is closing on,
  * the pad it is running onto — and gets as much of it as a road is built
  * to: no steeper than `maxGrade`, and bending toward it no faster than a
  * minor road's crest rule (`elevation.follow.minorCrest`). The second clamp

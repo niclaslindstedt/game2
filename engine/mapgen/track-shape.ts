@@ -4,7 +4,7 @@
 // the centerline, the pacenotes called off them, the junctions onto the
 // public roads and the crossings over them, the checkpoints and the
 // culverts, and the `Track` they all hang off — the road plus everything
-// the country around it turned out to hold.
+// the land around it turned out to hold.
 //
 // It is only the SHAPE. How one is built is `compile.ts`'s.
 
@@ -25,13 +25,13 @@ import { type RailCrossing } from "./railway.ts";
  * taiga's graded gravel and the desert's sand (R40) — and everything about
  * a road that is bladed rather than laid (the wander, the bumps, the berm,
  * the mouth at a junction, the marker posts) asks `isLoose` rather than
- * naming one of them. Which loose surface a country's roads are is the
+ * naming one of them. Which loose surface a biome's roads are is the
  * biome's (`BiomeRules.loose`); the physics tells them apart in
  * `TUNING.surfaces`. */
 export type Surface = "gravel" | "sand" | "asphalt" | "water" | "snow" | "ice";
 /** What a car can be STANDING ON, which is more than what a road can be
- * made of: the road's own surfaces, the open country (`nature`), and the
- * open country under a winter's blanket (`snowfield`, climate.ts) — deep
+ * made of: the road's own surfaces, the open land (`nature`), and the
+ * open land under a winter's blanket (`snowfield`, climate.ts) — deep
  * snow the car ploughs rather than a road it drives. */
 export type Underfoot = Surface | "nature" | "snowfield";
 
@@ -102,7 +102,7 @@ export type RoadJunction = {
    * goes square over the public road and out the far side, so the minor
    * road has two collinear arms instead of one, the sealed road has TWO
    * abandoned arms instead of one, and the whole platform stands `stand`
-   * proud of the country the rally crossed it on. */
+   * proud of the biome the rally crossed it on. */
   crossing?: boolean;
 };
 
@@ -133,7 +133,7 @@ export type TrackSample = {
    * a channel of water under it instead of ground, and the kind says what
    * carries it — trunks and planks, or concrete piers (R13). */
   deck: BridgeDeck | null;
-  /** R47 — true where the road is BORED: the country stands over it
+  /** R47 — true where the road is BORED: the land stands over it
    * untouched, the terrain shapes nothing off this sample, its walls are
    * solid and the renderer lines it. Never together with a deck. */
   tunnel: boolean;
@@ -256,7 +256,7 @@ export type Track = {
    * grid is one row per car and the back row has to be inside this
    * (`apronForGrid` in sim/grid.ts). The route never moves for it: what
    * grows is the ground behind the line and the room the branches, the props
-   * and the country are kept out of. */
+   * and the biome are kept out of. */
   startApron: number;
   /** True when the stage streams forever instead of finishing. */
   endless: boolean;
@@ -278,13 +278,13 @@ export type Track = {
   knobs: StageKnobs;
   /** The season and the cold the stage is driven in (`climate.ts`) — on
    * the track rather than only on the run, because they reach the ROAD:
-   * which samples are snow and how deep the country beside them lies
+   * which samples are snow and how deep the land beside them lies
    * under it are compiled from this, and the terrain, the renderer and
    * every rival's game read the same answer off the same track. It never
    * moves a plan: the same seed builds the same road in every season, and
    * only what the road is made of changes. */
   climate: Climate;
-  /** R17 — THE TARMAC this country carries, laid before the rally was
+  /** R17 — THE TARMAC this biome carries, laid before the rally was
    * routed across it (`highway.ts`): whole public roads, edge of the map to
    * edge of the map, that the route may meet at a junction and borrow but
    * may never cross.
@@ -295,13 +295,13 @@ export type Track = {
    * the analysis measures the gravel against them, and anything later that
    * wants to know where a place would BE — a farm, a hamlet, a signpost —
    * wants a road to put it on. Empty on a synthetic rig, and on any stage
-   * whose country would not carry a road (a seed that is mostly water). */
+   * whose biome would not carry a road (a seed that is mostly water). */
   highways: Highway[];
   /** R17 — the branches the route abandons at every asphalt junction: real
    * road, taped off, there to be explored by anyone who ignores the tape. */
   spurs: Spur[];
   /** R17 — the public roads the route never met, BUILT (`publicroad.ts`):
-   * the stretch of each `highways` line the country carries, rim to rim,
+   * the stretch of each `highways` line the biome carries, rim to rim,
    * on nobody's junction and with nothing taped across it. What the crowd
    * (R42) drove in on where the rally never crossed a road. Empty on an
    * endless stage, which carries no tarmac at all, and on a synthetic rig. */
@@ -324,7 +324,7 @@ export type Track = {
   /** R43 — the solar farms: each a fenced rectangle of panel tables on
    * level ground beside the stage, a clearing the forest keeps off. */
   solarFarms: SolarFarm[];
-  /** R45 — THE GRID: the transmission line the country carries, laid rim
+  /** R45 — THE GRID: the transmission line the biome carries, laid rim
    * to rim across the map and passing over the stage wherever it happens
    * to. At most one, and none on a little under half the seeds. Empty on
    * an endless stage, which carries no grid for the tarmac's reason, and

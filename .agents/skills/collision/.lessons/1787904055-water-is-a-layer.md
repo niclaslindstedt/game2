@@ -20,5 +20,5 @@ that stays wet, and it needs a lip (`WADE_LIP`, 0.2 m) because the ribbon's
 crown sits a hand's width proud of the water it wades.
 
 Skipping the deck case silently deletes the water under every bridge, which
-`tests/water_test.ts` catches only if the assertion is scoped to open country —
+`tests/water_test.ts` catches only if the assertion is scoped to open land —
 a blanket "ground is never above the water" assertion fails ON the deck.

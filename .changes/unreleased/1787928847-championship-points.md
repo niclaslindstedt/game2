@@ -10,7 +10,7 @@ and where the location's season now stands, and FULL RESULTS opens the whole
 classification: all fifteen crews in finishing order, with their times, what
 the stage paid them and what they have for the location.
 
-Those points are the lock on the next country: drive every stage of a
+Those points are the lock on the next biome: drive every stage of a
 location and finish top of its table to open the one after it. The stage list
 carries a CHAMPIONSHIP panel — where you stand, CONTINUE to pick the season
 back up, STANDINGS for the full table, and RESET SEASON to start it again. A

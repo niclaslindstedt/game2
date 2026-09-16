@@ -522,7 +522,7 @@ export const CONTACT_TUNING = {
    * way up until it is not. Past `wallSlope` the face is a wall at any
    * speed, and it folds the nose. Whatever the ground is made of: rock
    * and soil are the same face to a wheel, and what tells them apart is
-   * how steep the country stands them (R31 keeps built soil under
+   * how steep the land stands them (R31 keeps built soil under
    * `climbLimit`; rock stands where it stands). */
   climbSpeed: { from: 6, to: 22 },
   /** Closing speed into a FACE under which the contact is a scrape and

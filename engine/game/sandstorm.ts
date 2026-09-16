@@ -10,9 +10,9 @@
 // and then it is on you and the world is gone.
 //
 // So the model here is a SCHEDULE rather than a level: fronts crossing the
-// country at their own times, each with its own strength, and a run that
+// biome at their own times, each with its own strength, and a run that
 // meets however many of them its length puts it in the way of. What the
-// dial says is how OFTEN they come — from a country the wind has left
+// dial says is how OFTEN they come — from a biome the wind has left
 // alone to one where the next wall is always on the horizon.
 //
 // Every part of it is drawn from the run's own seed, analytically, from the
@@ -62,7 +62,7 @@ export type SandState = {
   approach: number;
 };
 
-/** A fresh, calm reading — what a country the wind never picks up is in,
+/** A fresh, calm reading — what a biome the wind never picks up is in,
  * and the record the readers start from. */
 export function calmSand(): SandState {
   return { sand: 0, approach: 0 };

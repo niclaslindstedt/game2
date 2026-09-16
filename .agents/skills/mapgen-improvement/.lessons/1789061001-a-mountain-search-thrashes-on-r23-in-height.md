@@ -24,7 +24,7 @@ a hundred solves.
 What worked: every WINNING attempt closed inside 2,500 iterations while
 every failing one burned the taiga's 6,000, so a mountain attempt is given
 up on at 2,500 (`massif.iterations`) — restarting beats unpicking, as the
-circuit found; and a massif country lays no public road at all
+circuit found; and a massif biome lays no public road at all
 (`highwayCount` → 0), its tarmac being the pass itself sealed by height.
 Long seeds went from 17 s to a few. The R23-in-height rule was left alone
 on purpose: loosening it promises the terrain a face between stacked legs

@@ -28,12 +28,12 @@ underneath it (`nearestSample` 8%, `nearestRoad` 3.4%, `spurs.nearest` 2.9%,
 `exposureAt` was keyed on the `TerrainField`, and each rival gets its own
 terrain — so a 15-car field filled fifteen byte-identical copies of one table
 (verified identical; ~60 ms each). `createTerrain` takes the track and nothing
-else, so the country is a fact about the TRACK: re-keying on it took a whole
+else, so the biome is a fact about the TRACK: re-keying on it took a whole
 race from 2907 ms to 2405 ms, **−17%**, with the `make sim` table
 byte-identical.
 
 The guard is worth copying. The old comment defended the terrain key because a
-test spreading its own `waterAt` over a field must not get the real country's
+test spreading its own `waterAt` over a field must not get the real biome's
 answers — true, and a spread defeats any flag or property on the object. A
 `WeakSet` filled inside `createTerrain` (`builtTerrain`) does not care: a
 spread makes a NEW object, so it falls back to its own table.

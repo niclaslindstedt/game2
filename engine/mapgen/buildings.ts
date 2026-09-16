@@ -51,7 +51,7 @@ export type RoofKind = "tile" | "metal" | "slate" | "flat" | "gambrel";
  * and the green a village's bigger buildings are done in. */
 export type WallPaint = "red" | "yellow" | "white" | "grey" | "brick" | "green";
 
-/** R40 — what KIND of house the country builds (`BiomeRules.houses`): the
+/** R40 — what KIND of house the biome builds (`BiomeRules.houses`): the
  * Nordic timber house on its stone plinth, or the alpine CHALET — a stone
  * ground floor under storeys of dark timber, a low roof with deep eaves, and
  * a balcony across the front. One plan, two vocabularies: the renderer

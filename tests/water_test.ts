@@ -170,7 +170,7 @@ describe("crossings (R13)", () => {
 });
 
 /** R35 — what a course can sense of the water already standing on the
- * country, as the terrain field reports it. The tracer takes this rather
+ * biome, as the terrain field reports it. The tracer takes this rather
  * than one sea level, because a river ends in whatever body it reaches. */
 function sensed(terrain: ReturnType<typeof createTerrain>): StandingWater {
   return { levelAt: terrain.water.shoreLevelAt, nearestAt: terrain.water.nearestAt };
@@ -264,7 +264,7 @@ describe("the river (R18)", () => {
     }
   });
 
-  it("lies in the ground the WORLD DRAWS, not in the country before the road", () => {
+  it("lies in the ground the WORLD DRAWS, not in the biome before the road", () => {
     // R18's float check, on the field the water actually obeys
     // (`waterGroundAt`): the bare land held under whatever the corridor cut
     // out of it. Measured on the bare land alone it passes by construction
@@ -314,7 +314,7 @@ describe("the river (R18)", () => {
         if (anchor.culvert) continue;
         const water = terrain.waterAt(anchor.x, anchor.z);
         expect(water).not.toBeNull();
-        // ...unless the crossing stands in country already under the water
+        // ...unless the crossing stands in biome already under the water
         // table, where the lake IS the water the road crosses.
         const level = water ?? 0;
         expect(Math.abs(level - anchor.waterY) < 1.2 || level === LAKE_Y).toBe(true);
@@ -486,7 +486,7 @@ describe("the river (R18)", () => {
           const z = b.minZ + ((b.maxZ - b.minZ) * j) / 39;
           const water = terrain.waterAt(x, z);
           if (water === null) continue;
-          // Out in the country, where the ground the car rides IS the
+          // Out in the biome, where the ground the car rides IS the
           // ground: over a road the surface under the wheels is the
           // ribbon, and a bridge deck stands metres over the river it
           // spans on purpose (R13).
@@ -497,12 +497,12 @@ describe("the river (R18)", () => {
     }
   });
 
-  it("answers the water dial, from dry country to lakeland", () => {
+  it("answers the water dial, from dry biome to lakeland", () => {
     // Measured on the BARE LANDSCAPE over a fixed box, which is what the
     // claim is about. Sampling `terrain.heightAt` inside `track.bounds`
     // instead asks a different question: the bounds move with the dial —
     // a wetter seed generates a differently shaped stage — so the window
-    // slides over different country at every dial position and the trend
+    // slides over different biome at every dial position and the trend
     // it reports is partly the stage moving rather than the water rising.
     const wetness = (water: number): number => {
       let wet = 0;

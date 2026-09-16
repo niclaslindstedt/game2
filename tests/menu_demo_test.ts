@@ -25,7 +25,7 @@ const RACE: DemoConditions = {
   knobs: { ...DEFAULT_KNOBS },
 };
 
-/** A campaign stage on the road: a different country from the player's
+/** A campaign stage on the road: a different biome from the player's
  * settings, raced over laps, off a grid, with a field's apron behind it. */
 const STANDING: StageSpec = {
   seed: 4821,

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE COAT OF SNOW THE COUNTRY WEARS — the winter's blanket as a surface of
+// THE COAT OF SNOW THE BIOME WEARS — the winter's blanket as a surface of
 // its own, lying on top of the ground rather than mixed into it.
 //
 // WHY IT IS NOT THE GROUND MESH. The ground lattice is fourteen metres
-// between corners (`lattice.ts`), which is right for a country — a hillside
+// between corners (`lattice.ts`), which is right for a biome — a hillside
 // is the same hillside either side of a cell — and useless for snow. Snow
 // is a LAYER, and the whole of what the eye reads it by is its BOUNDARY:
 // the bank standing at a ploughed road's lip, four metres from nothing to
@@ -13,7 +13,7 @@
 // like.
 //
 // So the coat is its own mesh on its own grid, `STEP` metres, laid over the
-// bare country: a sheet whose height is the blanket the engine put there
+// bare land: a sheet whose height is the blanket the engine put there
 // (`TerrainField.blanketAt`, sampled on the same fine grid the physics
 // reads) less whatever the wheels have packed out of it
 // (`Snowpack.sunkAt`). That last term is why the sheet is rebuilt rather
@@ -28,7 +28,7 @@
 // stripes on it. Nothing here may ever go below `bareLatticeAt + rest -
 // coatRoom(rest)`, and nothing that lies on the coat may either.
 //
-// IT FOLLOWS THE CAR. A coat over the whole country would be a million
+// IT FOLLOWS THE CAR. A coat over the whole biome would be a million
 // triangles of ground nobody is near; a square `REACH` metres across,
 // re-anchored as the car drives out of it, is the same picture for a
 // fraction of it. Everything past that edge is the ground tiles' own white
@@ -77,7 +77,7 @@ const WORK_REDRAW = 24;
 /** THE ROOM UNDER THE COAT, m — how far the drawn snow may be pressed
  * before it reaches the ground the rest of the world is drawn at.
  *
- * The country's tiles are a fourteen-metre lattice, and on a white stage
+ * The biome's tiles are a fourteen-metre lattice, and on a white stage
  * they are laid THIS FAR UNDER the top of the untouched snow
  * (`terrain.ts`). That is not a fudge, it is the whole reason the coat can
  * show anything at all. A sheet that sinks below the tile is a sheet the
@@ -208,7 +208,7 @@ export function coatHeightAt(
 function snowMaterial(grain: THREE.Texture): THREE.MeshLambertMaterial {
   // ...and the SAME detail grain the ground tiles carry, on the same world
   // uv (metres / 16). It is the finest thing either surface has, so a coat
-  // without it reads as the smooth patch in the middle of a grainy country
+  // without it reads as the smooth patch in the middle of a grainy biome
   // however well the two whites are matched — and the grain runs straight
   // across the rim because both are sampling one texture in world space.
   //
@@ -236,7 +236,7 @@ export type SnowMantle = {
   dispose: () => void;
 };
 
-/** Lay a coat of snow over the country, or nothing at all where the climate
+/** Lay a coat of snow over the land, or nothing at all where the climate
  * leaves it green — a green stage builds no mesh and pays nothing. */
 export function createSnowMantle(
   field: TerrainField,
@@ -332,7 +332,7 @@ export function createSnowMantle(
         uvs[k * 2] = x / 16;
         uvs[k * 2 + 1] = z / 16;
         depths[k] = depth;
-        // The country's own white at this point (`snowAlbedo`), which is
+        // The biome's own white at this point (`snowAlbedo`), which is
         // the SAME field the ground tiles past the rim are painted from —
         // the slow lean toward blue-grey runs through both, so the sheet's
         // edge has no tone of its own to give itself away with.
