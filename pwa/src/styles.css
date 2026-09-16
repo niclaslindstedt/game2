@@ -151,25 +151,40 @@ body {
 /* ── HUD chrome ─────────────────────────────────────────────────────────── */
 
 .hud {
+  /* WHERE THE RIGHT-HAND COLUMN STARTS. Every instrument in that corner —
+     the map, the presses under it, the run's label, the schematic — is
+     placed off these two, so the safe area is read once rather than copied
+     into each rule. */
+  --hud-dock-top: max(0.6rem, env(safe-area-inset-top));
+  --hud-dock-right: max(0.8rem, env(safe-area-inset-right));
   /* The minimap's edge length — the top bar reserves it, the dock spends it,
-     and the condition schematic under it takes the same width, so the whole
+     and the row of presses under it takes the same width, so the whole
      right-hand column is this one number. The map is the instrument that is
      read while the road is moving, and at seven rem a schematic of three
      hundred metres of country was a squiggle: it is sized to be legible at a
      glance rather than to be unobtrusive. */
   --hud-map: clamp(6.24rem, 20.8vmin, 9.75rem);
   /* The glyph buttons' edge: half the map, so the two of them side by side
-     and the place under them come to the map's own height. That is the whole
-     of the sizing rule — the group beside the map is as tall as the map. */
+     with the gap between them come to the map's own WIDTH. That is the whole
+     of the sizing rule — the row of presses under the map is exactly as wide
+     as the map. */
   --hud-mini-gap: 0.3rem;
   --hud-mini: calc((var(--hud-map) - var(--hud-mini-gap)) / 2);
-  /* Room the stage chip takes under the map — ONE line, since the chip names
-     the stage and nothing else. The pacenote strip clears it in portrait,
-     where everything is stacked down the same column. */
+  /* ...and the room that row takes under the map, its own air included.
+     RESERVED whether or not a press is in it: there are none on the grid and
+     none in a replay, and a label and a schematic that stepped up the screen
+     the moment the lights went out would move exactly while they are first
+     being read. */
+  --hud-actions-row: calc(var(--hud-mini) + 0.3rem);
+  /* The foot of the map-and-presses block, which is what the rest of the
+     column hangs off. */
+  --hud-dock-bottom: calc(var(--hud-dock-top) + var(--hud-map) + var(--hud-actions-row));
+  /* Room the stage chip takes under the presses — ONE line, since the chip
+     names the stage and nothing else. The pacenote strip clears it in
+     portrait, where everything is stacked down the same column. */
   --hud-stage: 1.4rem;
-  /* ...and the room the condition schematic takes under both of them, at
-     the foot of that column, stated as its two halves so neither can drift
-     out of step with the other. The MARKS reserve two rows whatever is on
+  /* ...and the room the condition schematic takes, stated as its two halves
+     so neither can drift out of step with the other. The MARKS reserve two rows whatever is on
      them: they are three to a row and there are six systems, so two is the
      most the split can ever make (`markRows`) — and reserving the worst
      case is what keeps the drawing above a fixed size instead of shrinking
@@ -179,14 +194,14 @@ body {
   --hud-health-marks: calc(var(--hud-health-row) * 2 + 0.12rem);
   --hud-health-car: calc(var(--hud-map) * 0.78);
   --hud-health: calc(var(--hud-health-car) + var(--hud-health-marks) + 0.15rem);
-  /* ...and where that schematic's box STARTS, which is the foot of the
-     right-hand column: the map, the run's label, then this. Stated here
-     rather than on `.hud-health` because the spectator's banner lines itself
-     up with the schematic on a phone, and a second copy of this sum is a bug
-     the day the column above it gains or loses a row. */
-  --hud-health-top: calc(
-    max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) + 0.35rem
-  );
+  /* ...and where that schematic's box starts WHERE IT IS STACKED — held
+     upright, at the foot of the right-hand column: the map, the presses, the
+     run's label, then this. (Landscape has the width to stand it BESIDE the
+     map instead; see `.hud-health` below.) Stated here rather than on
+     `.hud-health` because the spectator's banner lines itself up with the
+     schematic on a phone, and a second copy of this sum is a bug the day the
+     column above it gains or loses a row. */
+  --hud-health-top: calc(var(--hud-dock-bottom) + var(--hud-stage) + 0.35rem);
   /* The OTHER corner's one number: the tach's edge length, which is also the
      height of the whole instrument cluster, because the dial is the tallest
      thing in that row. Anything that has to stand clear of the panel — the
@@ -369,10 +384,12 @@ body {
 
 .hud-top {
   position: absolute;
-  top: max(0.6rem, env(safe-area-inset-top));
+  top: var(--hud-dock-top);
   left: max(0.8rem, env(safe-area-inset-left));
-  /* Stops short of the minimap dock rather than running under it. */
-  right: calc(max(0.8rem, env(safe-area-inset-right)) + var(--hud-map) + 0.55rem);
+  /* Stops short of the minimap dock rather than running under it. In
+     landscape the schematic stands between the two and the bar stops short of
+     that instead — the rule is beside `.hud-health`, where the reason is. */
+  right: calc(var(--hud-dock-right) + var(--hud-map) + 0.55rem);
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
@@ -405,9 +422,9 @@ body {
   opacity: 0.9;
 }
 
-/* Which stage: under the minimap. It is read once at the start of a run, so
-   it sits where a label is looked FOR rather than in the corner the clock
-   has earned.
+/* Which stage: under the map and the presses beneath it. It is read once at
+   the start of a run, so it sits where a label is looked FOR rather than in
+   the corner the clock has earned.
 
    Flush RIGHT is the PORTRAIT rule, for the reason `.hud-health` below is
    flush right there: on a phone held upright the map is only 18vw wide and
@@ -416,8 +433,8 @@ body {
    push out over both. Landscape centres it under the map instead. */
 .hud-stage {
   position: absolute;
-  top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + 0.3rem);
-  right: max(0.8rem, env(safe-area-inset-right));
+  top: calc(var(--hud-dock-bottom) + 0.3rem);
+  right: var(--hud-dock-right);
   align-items: flex-end;
   text-align: right;
   font-size: clamp(0.7rem, 2vmin, 1rem);
@@ -529,41 +546,44 @@ body {
   color: var(--hud-bad);
 }
 
-/* The top bar's right-hand group: the two presses on a row, the place under
-   them, and the whole thing EXACTLY ONE MAP TALL. Its height is stated
-   rather than left to what it holds, so the buttons start on the map's top
-   edge and the place lands on its bottom one — the map is the fixed thing in
-   this corner and the group beside it is measured against nothing else. It
-   hangs off its own RIGHT edge, which is the minimap's left, so the board is
-   free to be wider than the buttons without shifting them. */
+/* The top bar's right-hand group: the place, at the far end of the bar and
+   so hard against whatever the right-hand column puts beside it. It hangs
+   off its own RIGHT edge and takes its height from what it holds, since the
+   presses that used to share it now live under the map. */
 .hud-actions {
   margin-left: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: space-between;
-  height: var(--hud-map);
   flex: none;
 }
 
-/* The presses themselves, side by side: two targets a thumb finds without
-   leaving the road, on the one row a driver already glances at. */
+/* THE PRESSES, on their own row directly UNDER the map: two targets a thumb
+   finds without leaving the road, in the corner it is already going to for
+   the route. The row is given the map's own width and the buttons are half
+   of it each (`--hud-mini`), so the pair fills the map's edge exactly —
+   press, press, map, one column. Centred rather than flush, because on a
+   keyboard there is only ever one of them and a lone button under the middle
+   of the map reads as placed rather than as one that lost its partner. */
 .hud-action-stack {
+  position: absolute;
+  top: calc(var(--hud-dock-top) + var(--hud-map) + 0.3rem);
+  right: var(--hud-dock-right);
+  width: var(--hud-map);
   display: flex;
   align-items: flex-start;
+  justify-content: center;
   gap: var(--hud-mini-gap);
 }
 
-/* R29 — THE POSITION BOARD. Under the two presses and still hard against
-   the minimap: place and route are the two things a driver glances right
-   for, and they should cost one glance rather than two. It is what fills the
-   group's lower half, which is why the buttons above it are sized at half
-   the map rather than to their own glyphs.
+/* R29 — THE POSITION BOARD, hard against the right-hand column and level
+   with the top of the map: place and route are the two things a driver
+   glances right for, and they should cost one glance rather than two.
    Built like the clock in the opposite corner — a quiet label over a big
    figure, and no plate under either. The two numbers that say how a run is
    going are read the same way whichever side of the screen they are on, and
    the box this used to carry made a READOUT look like one of the controls
-   it now sits beneath. */
+   it once sat beneath. */
 .hud-place {
   display: flex;
   flex-direction: column;
@@ -627,7 +647,7 @@ body {
    These are the two presses made while the car is moving (the way back to
    the last board, and the camera), so they are targets before they are
    labels: a thumb has to find one without leaving the road, and the map
-   beside them is the one thing on that corner of the screen whose size the
+   above them is the one thing on that corner of the screen whose size the
    player already knows. */
 .hud-mini-icon {
   display: flex;
@@ -2522,8 +2542,8 @@ body {
    this number moves with them. */
 .hud-minimap-dock {
   position: absolute;
-  top: max(0.6rem, env(safe-area-inset-top));
-  right: max(0.8rem, env(safe-area-inset-right));
+  top: var(--hud-dock-top);
+  right: var(--hud-dock-right);
 }
 
 .hud-minimap {
@@ -2814,7 +2834,7 @@ body {
 }
 
 /* ── The condition schematic ─────────────────────────────────────────────
-   Under the map, in the corner a driver already glances at for the route:
+   Beside the map, in the corner a driver already glances at for the route:
    a plan of their own car with a colour per piece, and a row of marks under
    it for the machinery that has no shape worth drawing (hud-health.tsx).
 
@@ -2850,12 +2870,14 @@ body {
 
 .hud-health {
   position: absolute;
-  /* The FOOT of the right-hand column (`--hud-health-top`). The two above it
-     are read once — where you are, and what you are in — and this one is read
-     all the way down the stage, so it takes the edge of the group that
-     nothing else can push around. */
+  /* STACKED is the portrait rule: at the FOOT of the right-hand column
+     (`--hud-health-top`), under the map, the presses and the run's label.
+     Held upright there is no room to stand it beside the map — the strip the
+     column has is pinched between the screen edge and the mirror across the
+     middle of the top — so it takes the row below instead. Landscape stands
+     it beside the map; the rule is in the landscape block further down. */
   top: var(--hud-health-top);
-  right: max(0.8rem, env(safe-area-inset-right));
+  right: var(--hud-dock-right);
   width: var(--hud-map);
   height: var(--hud-health);
   display: flex;
@@ -2934,18 +2956,45 @@ body {
   gap: 0.18rem;
 }
 
-/* ...but on a WIDE screen the car goes in the MIDDLE of the map's column.
+/* ...but on a WIDE screen the schematic moves out beside the map, and its
+   car is CENTRED in the box rather than shoved against one wall of it.
    Written immediately after the rules it overrides.
 
-   Landscape has room the phone does not: the map sits in a clear corner with
-   nothing crowding it from the left, so the column reads as a column rather
-   than as a strip squeezed against the edge — and once it does, the eye takes
-   the map's own centre line as the axis the whole stack hangs on. The
-   schematic IS a symmetrical drawing of a car, so centring it puts its spine
-   under the middle of the map and the marks under the middle of the car; hard
-   against the right edge it instead sits off-axis under a square, which reads
-   as a drawing that slipped rather than as one that was placed. */
+   Landscape has room the phone does not: the dock sits in a clear corner
+   with nothing crowding it from the left, so the schematic can take a box of
+   its own rather than a row at the bottom of a strip squeezed against the
+   edge — and once it has one, its own centre line is the axis the drawing
+   hangs on. The schematic IS a symmetrical drawing of a car, so centring it
+   puts its spine down the middle of the box and the marks under the middle
+   of the car; hard against one edge it instead sits off-axis in a square,
+   which reads as a drawing that slipped rather than one that was placed. */
 @media (orientation: landscape) {
+  /* ...and on a wide screen it stands BESIDE the map rather than under it.
+     The three things read while the road is moving — condition, route, and
+     the presses under the route — then sit in one block in the corner the
+     eye already goes to, and the column below the map is left to the label
+     alone. Its top is the map's own, so the two instruments share a line. */
+  .hud-health {
+    top: var(--hud-dock-top);
+    right: calc(var(--hud-dock-right) + var(--hud-map) + 0.55rem);
+  }
+
+  /* ...which means the top bar has to stop short of BOTH of them. */
+  .hud-top {
+    right: calc(var(--hud-dock-right) + var(--hud-map) * 2 + 1.1rem);
+  }
+
+  /* ...and that the schematic gives the row back when a REPLAY's strip wants
+     it. The strip stands across the head of the frame and is the widest
+     thing the HUD ever draws (`.hud-replay`), so beside the map there is no
+     longer room for both; watching a recording, the schematic takes the
+     portrait stack instead — under the map, the presses and the label. The
+     run is not being driven, so an instrument a row lower costs nothing. */
+  .hud[data-replay] .hud-health {
+    top: var(--hud-health-top);
+    right: var(--hud-dock-right);
+  }
+
   .hud-health,
   .hud-health-systems {
     align-items: center;
@@ -2955,11 +3004,11 @@ body {
     justify-content: center;
   }
 
-  /* The run's label hangs on the same axis, between the two: given the map's
-     own width to be centred in, it reads as the caption under the map rather
-     than as a line that drifted off the corner of it. A stage number wider
-     than the map simply overhangs both sides evenly, which is still centred
-     — the chip never wraps (`.hud-chip`). */
+  /* The run's label hangs on the map's own axis, under the row of presses:
+     given the map's width to be centred in, it reads as the caption under
+     that column rather than as a line that drifted off the corner of it. A
+     stage number wider than the map simply overhangs both sides evenly,
+     which is still centred — the chip never wraps (`.hud-chip`). */
   .hud-stage {
     width: var(--hud-map);
     align-items: center;
@@ -3054,14 +3103,11 @@ body {
     --hud-map: clamp(3.4rem, 18vw, 9.75rem);
   }
 
-  /* THE PLACE IS SIZED TO THE ROOM HERE, not to the clock. The group is one
-     map tall and the map is 18vw on a phone, so the half left under the
-     buttons is a third of what landscape gives it; a figure at the clock's
-     size overruns that half and takes the group down past the map's foot,
-     into the top corner of the driver's mirror (`--glass-top`, which the
-     centred glass hangs across the one part of this column the board reaches
-     into). Sized to the room it fits, and the group keeps the map's height
-     on a phone as well. */
+  /* THE PLACE IS SIZED TO THE ROOM HERE, not to the clock. The strip it
+     stands in is what the top bar has left once the map's column is taken
+     off the right — a few vw on a phone, pinched further by the mirror that
+     hangs across the middle of this line (`--glass-top`) — so a figure at the
+     clock's size runs out over both. Sized to the room it has instead. */
   .hud-place-label {
     font-size: 0.5rem;
     margin-bottom: 0.08rem;

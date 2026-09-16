@@ -641,12 +641,12 @@ export function Hud({
           over the ends of the strip. */}
       {glass !== "off" && <MirrorSwitch live={glass === "live"} onToggle={onMirror} />}
 
-      {/* Top bar: the CLOCK, and the one press that belongs on the road —
-          the way back to the last board, which is reached for with the car
-          in a ditch. Which stage this is rides under the minimap instead:
-          the top-left corner belongs to the time, because the time is what
-          the driver is racing. Race setup lives behind the minimap, one tap
-          away and out of the sky. */}
+      {/* Top bar: the CLOCK, and — in a campaign run — the place at the far
+          end of it. The top-left corner belongs to the time, because the time
+          is what the driver is racing. Everything else that corner used to
+          carry hangs off the minimap instead: which stage this is, the two
+          presses, and the car's condition. Race setup lives behind the
+          minimap, one tap away and out of the sky. */}
       <div className="hud-top">
         <div className="hud-topleft">
           {show.timer && !snap.training && <RaceClock face={snap} live={live} />}
@@ -668,42 +668,10 @@ export function Hud({
             </div>
           )}
         </div>
+        {/* R29 — the position board, at the far end of the bar and so hard
+            against the right-hand column: place and route are the two things
+            a driver glances right for, and they should be one glance. */}
         <div className="hud-actions pointer-events-auto">
-          {/* THE PRESSES, on a row above the place rather than beside it. The
-              group they head is one map tall (styles.css), which is what
-              sizes them: half the map each, with the board making up the
-              rest, so this corner reads as the map and one column beside
-              it. */}
-          <div className="hud-action-stack">
-            {/* R28 — the way back to the last board. Only while there is a
-                run to put back: on the grid there is no road behind the car,
-                and while a run-out is watched the car on the screen is
-                somebody else's. */}
-            {!handsOff && snap.phase === "racing" && <RecoverButton onReset={onReset} />}
-            {/* TOUCH ONLY: a keyboard or a controller has the bind, and the
-                angle is also a row on the options page — a button for it on
-                the one strip a driver glances at mid-stage is a third door to
-                something nobody changes twice a run. On a phone it is the
-                ONLY door, which is the whole of its case.
-                Off while a run-out is watched, because the press is: the
-                ladder's in-car views are mounted off the silhouette of the
-                player's OWN car, so App refuses to walk it onto somebody
-                else's. A button that does nothing is worse than no button. */}
-            {show.cameraButton && thumbs && !spectate && (
-              <button
-                type="button"
-                className="hud-mini hud-mini-icon"
-                onClick={onCamera}
-                title="Camera (V)"
-                aria-label="Camera"
-              >
-                <CameraGlyph />
-              </button>
-            )}
-          </div>
-          {/* R29 — the position board, under the presses and still hard
-              against the minimap: place and route are the two things a
-              driver glances right for, and they should be one glance. */}
           {show.position && snap.standing && <PositionBoard standing={snap.standing} />}
         </div>
       </div>
@@ -730,7 +698,41 @@ export function Hud({
         </div>
       )}
 
-      {/* WHICH STAGE — hung off the bottom edge of the map, where a label the
+      {/* THE PRESSES, on their own row directly UNDER the map and given the
+          map's own width to fill: two targets a thumb finds without leaving
+          the road, in the corner it is already going to for the route. The
+          row is there whether or not a press is in it (`--hud-actions-row`) —
+          there are none on the grid and none in a replay, and a label and a
+          schematic that stepped up the screen at lights-out would be moving
+          exactly while they are first read. */}
+      <div className="hud-action-stack pointer-events-auto">
+        {/* R28 — the way back to the last board. Only while there is a run to
+            put back: on the grid there is no road behind the car, and while a
+            run-out is watched the car on the screen is somebody else's. */}
+        {!handsOff && snap.phase === "racing" && <RecoverButton onReset={onReset} />}
+        {/* TOUCH ONLY: a keyboard or a controller has the bind, and the angle
+            is also a row on the options page — a button for it on the one
+            strip a driver glances at mid-stage is a third door to something
+            nobody changes twice a run. On a phone it is the ONLY door, which
+            is the whole of its case.
+            Off while a run-out is watched, because the press is: the ladder's
+            in-car views are mounted off the silhouette of the player's OWN
+            car, so App refuses to walk it onto somebody else's. A button that
+            does nothing is worse than no button. */}
+        {show.cameraButton && thumbs && !spectate && (
+          <button
+            type="button"
+            className="hud-mini hud-mini-icon"
+            onClick={onCamera}
+            title="Camera (V)"
+            aria-label="Camera"
+          >
+            <CameraGlyph />
+          </button>
+        )}
+      </div>
+
+      {/* WHICH STAGE — hung off the bottom of that column, where a label the
           player reads once a run belongs. The stage is the only thing on it:
           what the car is was chosen two cards ago and is in front of the
           player for the whole run, so naming it here is a line of screen
@@ -738,18 +740,20 @@ export function Hud({
       {show.stage && (
         <div className="hud-chip hud-stage">
           {snap.training ? "TRAINING" : `STAGE ${snap.seed}`}
-          {/* The frame rate, under the map with the rest of the run's
-              label — OPTIONS ▸ HUD ▸ FPS, off unless it was asked for. */}
+          {/* The frame rate, on the run's label with the rest of it —
+              OPTIONS ▸ HUD ▸ FPS, off unless it was asked for. */}
           {show.fps && <span className="hud-chip-sub hud-fps">{fps} FPS</span>}
         </div>
       )}
 
-      {/* THE CAR'S OWN CONDITION, at the foot of the right-hand column —
-          under the map and under the label, because those two are read once
-          at the start of a run and this one is read all the way down the
-          stage. Over there rather than beside the cluster because the
-          cluster is a fixed cast sized to the narrowest phone (see
-          `hud-speed` below), and this is a fifth instrument. */}
+      {/* THE CAR'S OWN CONDITION — LEFT of the map with a wide screen to put
+          it there, and stacked under the whole column on a phone, where the
+          mirror leaves no room beside it (styles.css owns both). It is read
+          all the way down the stage, unlike the label and the route beside
+          it, so it takes a box of its own rather than the bottom of theirs.
+          Over here rather than beside the cluster because the cluster is a
+          fixed cast sized to the narrowest phone (see `hud-speed` below), and
+          this is a fifth instrument. */}
       {show.damage && !flying && <CarHealthPanel health={snap.health} />}
 
       {/* R28 — the split, in its own band under the mirror. It is read in the
