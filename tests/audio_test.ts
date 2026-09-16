@@ -1116,7 +1116,7 @@ describe("the world", () => {
   const gainOf = (voice: Partial<WorldVoice>, id: string): number =>
     worldRoster({ ...STILL, ...voice }).find((c) => c.id === id)?.gain ?? 0;
 
-  it("gives each country and each hour its own roster", () => {
+  it("gives each biome and each hour its own roster", () => {
     expect(ids({})).toContain("bird_chirp");
     expect(ids({})).not.toContain("cicada");
     expect(ids({ biome: "desert" })).toContain("cicada");
@@ -1159,9 +1159,9 @@ describe("the world", () => {
     // Nothing chatters in a storm, and a gale keeps the flock on the rock.
     expect(gainOf({ ...alpine, wet: 1 }, "chough")).toBeLessThan(0.05);
     expect(gainOf({ ...alpine, gale: 1 }, "chough")).toBeLessThan(gainOf(alpine, "chough"));
-    // How high the road is comes off the country's own zones: nothing
+    // How high the road is comes off the land's own zones: nothing
     // below the treeline, everything at the snowline, and no pass at all in
-    // a country with no snow on its tops.
+    // a biome with no snow on its tops.
     const zones = { treeline: 190, rock: { from: 220, to: 320 }, snow: 340 };
     expect(exposureOf(100, zones)).toBe(0);
     expect(exposureOf(190, zones)).toBe(0);
@@ -1187,7 +1187,7 @@ describe("the world", () => {
   });
 
   it("puts geese and swans over the north, and puts the season in what they do", () => {
-    // Passage is a spring and an autumn event: both countries hear it,
+    // Passage is a spring and an autumn event: both biomes hear it,
     // often, and geese go over at night as well — which is the one call on
     // the roster that survives the dark.
     for (const biome of ["taiga", "alpine"] as const) {

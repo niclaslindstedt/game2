@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// How an abandoned branch is DRAWN. Two ways onto the country, and they are
+// How an abandoned branch is DRAWN. Two ways onto the land, and they are
 // not the same job: a branch off a junction the rally invented is BUILT —
 // steered away from the route and the water over a few hundred metres until
 // it is out of the world — while an arm of a road the route BORROWED is
 // CUT, because that road was laid across the seed before the route existed
 // and the line is already there. What both must decide is height, and both
 // answer it the same way: off the junction's own grade, following the
-// country at the route's lag, never outside the stage's verge cone (R31).
+// biome at the route's lag, never outside the stage's verge cone (R31).
 //
 // The vocabulary they draw from, and the index everything downstream reads
 // them through, are `spurs.ts` and `spur-index.ts`.
@@ -33,11 +33,11 @@ export function buildSpur(
   junction: { x: number; z: number; heading: number; elevation: number; slope: number },
   atS: number,
   end: "entry" | "exit",
-  /** The country the stage occupies — the branch runs until it is clear of
+  /** The biome the stage occupies — the branch runs until it is clear of
    * this box (plus `SPUR.escape`), so it always leaves the map rather than
    * stopping somewhere. */
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
-  /** The bare country it is being laid across — what tells it where the
+  /** The bare land it is being laid across — what tells it where the
    * lakes are. */
   land: LandField,
   /** Full width of the road, m. A branch is not a road of its own: it is
@@ -47,7 +47,7 @@ export function buildSpur(
   width: number,
   /** R23 — distance from a point to the nearest piece of ground that is
    * already road: the stage outside this junction's own neighbourhood, and
-   * the aprons its start and finish stand on. Infinity where the country is
+   * the aprons its start and finish stand on. Infinity where the land is
    * the branch's to take. */
   roadDistance: (x: number, z: number, ignoringJunction?: boolean) => number,
   /** R23 + R31 — whether the ground is still there for a road standing at
@@ -74,7 +74,7 @@ export function buildSpur(
     z < bounds.minZ - SPUR.escape ||
     z > bounds.maxZ + SPUR.escape;
   // R34 — the branch leaves on the road's own grade and then follows the
-  // country, at the same lag the route does, inside a grade a minor road
+  // biome, at the same lag the route does, inside a grade a minor road
   // would actually be built on. `follow` is that lag as a per-step share:
   // the branch walks in `SPUR.step` metres, not the compiler's, so the
   // response length is converted here rather than restated as a number of
@@ -97,7 +97,7 @@ export function buildSpur(
   // a second pass below.
   let length: number = SPUR.length.max;
   let endsAt: Spur["endsAt"] = "map";
-  /** The bearing out of the country: toward whichever edge of the box is
+  /** The bearing out of the land: toward whichever edge of the box is
    * nearest. Once the branch has had its wander, this is what it follows —
    * a road heading out of the map has decided where it is going. */
   const exitBearing = (px: number, pz: number): number => {
@@ -112,7 +112,7 @@ export function buildSpur(
     return 0;
   };
 
-  /** How much dry ground this bearing offers: the lowest the bare country
+  /** How much dry ground this bearing offers: the lowest the bare land
    * gets above the water table anywhere inside the look-ahead, m. Negative
    * is a lake in the way. */
   const clearance = (px: number, pz: number, bearing: number): number => {
@@ -189,8 +189,8 @@ export function buildSpur(
     //
     // The distance to the road is also a PROMISE about the next few steps:
     // nothing can come inside the look-ahead until the branch has covered
-    // the slack, so a branch out in open country walks on without asking
-    // again. Most of a branch is open country and the query is a grid
+    // the slack, so a branch out in open land walks on without asking
+    // again. Most of a branch is open land and the query is a grid
     // probe — without the skip it is most of the cost of compiling a stage.
     if (s > 0 && stageSkip > 0) stageSkip -= 1;
     else if (s > 0) {
@@ -241,11 +241,11 @@ export function buildSpur(
     heading += curvature * SPUR.step;
     x += Math.sin(heading) * SPUR.step;
     z += Math.cos(heading) * SPUR.step;
-    // R34 — and the branch FOLLOWS THE COUNTRY, by the same lag the route
+    // R34 — and the branch FOLLOWS THE LAND, by the same lag the route
     // does (`elevation.follow`), off the junction's own height, at a minor
     // road's grade and crest (`followStep`). The two have to follow the
     // same ground: a branch at a height of its own invention is a wall down
-    // the side of the junction the moment the route is laid on the country.
+    // the side of the junction the moment the route is laid on the land.
     //
     // Its own `maxGrade` and not the route's: a branch is a minor road, and
     // it is allowed to be gentler about what it will climb.
@@ -260,7 +260,7 @@ export function buildSpur(
     // Past the platform the band is AIMED AT, not only clamped to: a floor
     // met as a hard clamp is a step the height of the difference, and
     // beside a route on ten metres of fill the cone's floor stands a metre
-    // over the country the branch is following. Aimed at through
+    // over the land the branch is following. Aimed at through
     // `followStep`, the branch climbs to it at a road's grade; the clamp
     // after is the last resort for a band the grade could not keep up with.
     const band = shelfBand(x, z);
@@ -278,7 +278,7 @@ export function buildSpur(
     // R23 + R31 — and it may not climb out of the STAGE's verge cone while
     // it is still inside it.
     //
-    // Following the country is right in open ground and wrong beside the
+    // Following the land is right in open ground and wrong beside the
     // road it just left: the two part company in height long before they
     // part on the map, and a branch three metres from the stage and seven
     // above it leaves the terrain an impossible job. Holding the ground up
@@ -287,7 +287,7 @@ export function buildSpur(
     // forbid. Neither rule can give way there, so the branch gives way
     // here, and the two roads run at one height until they have genuinely
     // separated. Past the cone's reach the band is unbounded and the branch
-    // follows the country as it always did.
+    // follows the land as it always did.
     //
     // The FLOOR matters as much as the ceiling: a branch that drops away
     // beside the route leaves the terrain the same impossible job, and the
@@ -401,7 +401,7 @@ export function buildSpur(
     sample.lift = ROAD_CROSS.asphaltLift * Math.min(1, sample.s / ROAD_CROSS.liftRamp);
   }
   // The box is the branch that SURVIVED the trims, not the walk that built
-  // it: a cut branch reporting the country it never reached is a lie the
+  // it: a cut branch reporting the biome it never reached is a lie the
   // next reader has no way to spot.
   for (const sample of samples) {
     if (sample.x < box.minX) box.minX = sample.x;
@@ -430,7 +430,7 @@ export function buildSpur(
  * header gives: a stage's elevation is a profile along the route's arc, not
  * a heightfield, so the tarmac's height is only settled once it is known
  * which piece of it the route drives. It is settled the way a branch's
- * always was — off the junction's own grade, following the country at the
+ * always was — off the junction's own grade, following the land at the
  * route's lag inside a minor road's grade, and never outside the stage's
  * verge cone (R31). */
 export function cutSpur(
@@ -496,7 +496,7 @@ export function cutSpur(
     if (pz > box.maxZ) box.maxZ = pz;
     // It runs to THE END OF THE ROAD, not to the edge of the stage's own
     // bounding box. A built branch stops as soon as it is clear of the
-    // country the rally occupies, because every further metre of it is a
+    // biome the rally occupies, because every further metre of it is a
     // metre of road invented for nobody; a cut one has no such cost —
     // the road is already there, it is already laid edge to edge of the
     // map (`highway.ts` walks it from `worldBound + overrun` to the same
@@ -530,7 +530,7 @@ export function cutSpur(
     }
     if (left > 1e-6) break;
     s += SPUR.step;
-    // R34 — and it FOLLOWS THE COUNTRY, at the route's own lag, inside a
+    // R34 — and it FOLLOWS THE LAND, at the route's own lag, inside a
     // minor road's grade and the crest rule, and never outside the stage's
     // verge cone (R31).
     const want = y + (Math.max(land.heightAt(px, pz), LAKE_Y + SPUR.shoreFreeboard) - y) * follow;

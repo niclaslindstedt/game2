@@ -1,5 +1,5 @@
 ---
-title: A surface that FOLLOWS THE CAR must be shaded by the same rules as the country past it — its rim is a straight line that walks outwards, and nothing else in a frame moves like that
+title: A surface that FOLLOWS THE CAR must be shaded by the same rules as the biome past it — its rim is a straight line that walks outwards, and nothing else in a frame moves like that
 date: 2026-09-12
 scope: pwa/src/game/snow-mantle.ts, pwa/src/game/terrain.ts, pwa/src/game/snow-shader.ts
 concepts: [snow, materials, terrain, seam, streaming, review]
@@ -19,7 +19,7 @@ Three things had to match, and matching only one or two leaves the line:
 - **the albedo**, as a FIELD and not a constant (`snowAlbedo`, off the stage's
   paint seed) — two flat whites of equal value still show their boundary;
 - **the grain**, on the same world uv (metres / 16) — a coat without it is
-  the smooth patch in the middle of a grainy country however well the whites
+  the smooth patch in the middle of a grainy biome however well the whites
   match. Take the ground's detail map NEUTRALISED and weakened, never whole:
   it is a GRIT texture and its warm flecks are hand-sized two metres from
   the lens, which reads as gravel rather than snow;

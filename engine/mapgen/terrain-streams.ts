@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE WATER THE GROUND CARRIES. A river (`river.ts`) is traced as a course
-// over the bare country; this is what the TERRAIN then makes of it — the
+// over the bare land; this is what the TERRAIN then makes of it — the
 // bed cut down into the ground, the banks run out either side of it, the
 // pools and the ice, and the queries every consumer of the field asks
 // about it: how deep the valley under a point is, where the nearest bed
@@ -60,7 +60,7 @@ export type Stream = {
   minZ: number;
   maxZ: number;
   /** The lowest the bed gets along this piece, m — what bounds the widest
-   * bank any point could owe it, so a query over flat country is rejected
+   * bank any point could owe it, so a query over flat land is rejected
    * on the nine-metre bank and not the fifty-metre one. */
   bedMin: number;
   /** R48 — TRUE WHERE THE COLD HAS CLOSED THIS REACH: the sheet is the
@@ -76,11 +76,11 @@ export type Stream = {
 /** How far below the water surface a ford's bed is carved, meters. */
 export const BED_DEPTH = 0.45;
 /** R31 — a BANK IS A SLOPE A CAR CAN CLIMB OUT OF. The channel blends from
- * its bed back onto the country over `BANK` metres at least, and further
- * wherever the country stands high enough over the bed that nine metres
+ * its bed back onto the land over `BANK` metres at least, and further
+ * wherever the land stands high enough over the bed that nine metres
  * would make a wall of it: the blend is a smoothstep, whose steepest point
  * is one and a half times its mean, so the run a drop needs is that over
- * `verge.climbable`. A brook in flat country keeps its nine-metre banks; a
+ * `verge.climbable`. A brook in flat land keeps its nine-metre banks; a
  * river ten metres down in a valley gets a bank twenty-five metres wide,
  * which is what a river bank is. `BANK_MAX` bounds it, and sizes the box a
  * stream's carve is rejected by. */
@@ -239,7 +239,7 @@ export function collectAnchors(
    * valley whatever the road was doing: a road crossing the valley on an
    * embankment stands that much higher over it, the way a viaduct does.
    * Held at the deck's own clearance instead, a bridge on fill anchored
-   * its river fifteen metres over the country and R18 drew it floating
+   * its river fifteen metres over the land and R18 drew it floating
    * above both banks. Optional, for tooling that only wants the crossings;
    * without it the water sits at the clearance. */
   valleyAt?: (x: number, z: number) => number,
@@ -370,7 +370,7 @@ export function carveGround(streams: Stream[], x: number, z: number, base: numbe
   for (const s of streams) {
     // The widest bank this piece could owe a point at this height, and the
     // box shrunk to it: the walk down the piece's points is the whole cost
-    // of the carve, and over flat country almost every piece in the box is
+    // of the carve, and over flat land almost every piece in the box is
     // thrown away here on its nine-metre bank.
     const widest = Math.min(BANK_MAX, Math.max(BANK, (base - s.bedMin) * BANK_RUN));
     const slack = BANK_MAX - widest;

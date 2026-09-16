@@ -1,11 +1,11 @@
 ---
-title: An 8-12 seed finding tally is too noisy to judge a country change — take the baseline from a worktree at the SAME count, and hold one variable at a time with the dial
+title: An 8-12 seed finding tally is too noisy to judge a biome change — take the baseline from a worktree at the SAME count, and hold one variable at a time with the dial
 date: 2026-09-08
 scope: engine/mapgen/
 concepts: [measurement, analysis, seeds, baseline]
 ---
 
-Any change to a country re-rolls the search, so `make analyze COUNT=12`
+Any change to a biome re-rolls the search, so `make analyze COUNT=12`
 before and after are twelve DIFFERENT stages and the finding tally moves for
 reasons that have nothing to do with the change. A desert dune change read as
 `rollers.bump` 162 → 230 and 3 → 6 failing seeds at COUNT=12, and as 229 → 252

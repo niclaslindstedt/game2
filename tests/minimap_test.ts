@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE MINIMAP — the square of country it draws, and what stands on it
+// THE MINIMAP — the square of land it draws, and what stands on it
 // (pwa/src/game/minimap-scene.ts, minimap-view.ts).
 //
 // It is tested rather than looked at because a screenshot only ever shows
@@ -8,11 +8,11 @@
 //
 //   * the window is centred on the CAR, not on the stage — on the road, a
 //     hundred metres off it in a field, and turned round facing back up it;
-//   * it holds a fixed square of country, so a sprint and an epic are drawn
+//   * it holds a fixed square of land, so a sprint and an epic are drawn
 //     at the same scale and the road is a ribbon on both;
 //   * the schematic is cut around an ANCHOR and slid, so the picture moves
 //     every frame while the geometry behind it is rebuilt now and then —
-//     and the two must agree, or the country lags the car;
+//     and the two must agree, or the biome lags the car;
 //   * the marks that can leave the window behave the way each of them has
 //     to: a rival goes, the board the run still owes rides the rim.
 
@@ -36,7 +36,7 @@ import {
 import { buildMinimap } from "../pwa/src/game/minimap-view.ts";
 
 /** A long straight with a corner in it, wide enough that a car parked a
- * hundred metres off the road is still a car in this country rather than a
+ * hundred metres off the road is still a car in this biome rather than a
  * respawn waiting to happen. */
 const RIG: SegmentPlan[] = [
   { kind: "straight", length: 400, feature: "none" },
@@ -78,7 +78,7 @@ describe("minimap window", () => {
     }
   });
 
-  it("holds one fixed square of country, whatever the stage is", () => {
+  it("holds one fixed square of land, whatever the stage is", () => {
     const state = game();
     // A point half the span away lands on the frame; one twice that is off
     // the window entirely. That is the whole difference from a map fitted
@@ -132,7 +132,7 @@ describe("minimap schematic", () => {
     expect(Math.abs(recut.offset.x)).toBeLessThan(VIEW / 2);
   });
 
-  it("keeps drawing the country when the car is off the road", () => {
+  it("keeps drawing the biome when the car is off the road", () => {
     const state = game();
     // Out in a field, well beyond the road's own width: the window has left
     // the stage and the stage is still on it, which is the case a map fitted
@@ -143,7 +143,7 @@ describe("minimap schematic", () => {
     expect(scene.offset).toEqual({ x: 0, y: 0 });
   });
 
-  it("does not cut the last stage's country onto this one", () => {
+  it("does not cut the last stage's biome onto this one", () => {
     // Two stages the car stands on the same spot of: the cut is keyed on the
     // TRACK, so the second one may not be handed the first one's road — and
     // a seed is not enough to tell them apart, because a synthetic rig and a
@@ -225,7 +225,7 @@ describe("minimap zoom", () => {
       last = span;
     }
     // The whole range is worth looking at rather than merely nudging the
-    // frame — near three times as much country at speed as at rest.
+    // frame — near three times as much biome at speed as at rest.
     expect(spanFor(SPAN.solo, 180) / spanFor(SPAN.solo, 0)).toBeGreaterThan(2.5);
     // Past the top of the ramp the picture settles: a map that kept opening
     // would end the stage showing a squiggle again.
@@ -245,10 +245,10 @@ describe("minimap zoom", () => {
     expect(buildMinimap(state).next?.edge).toBe(false);
   });
 
-  it("shows the same country whatever span it was cut at", () => {
+  it("shows the same biome whatever span it was cut at", () => {
     // The cut is quantised and the zoom carries the remainder, so the two
     // have to compose back to the honest projection — every span, including
-    // the ones that land on a different step. Get this wrong and the country
+    // the ones that land on a different step. Get this wrong and the biome
     // slides out from under the car every time the speedo crosses a step.
     const state = game();
     expect(state.nearIndex).toBe(0);

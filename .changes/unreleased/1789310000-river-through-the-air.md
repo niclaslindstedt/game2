@@ -3,7 +3,7 @@ type: Fixed
 ---
 
 Rivers no longer hang in the air beside a cutting. A watercourse was
-routed against the country as it stood BEFORE the road was built, so
+routed against the biome as it stood BEFORE the road was built, so
 where the corridor had taken several metres off a hillside the water
 kept the old level and was drawn as a sheet standing over the ground —
 on level 2's taiga, five metres up and forty metres off the road. Water

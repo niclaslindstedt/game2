@@ -187,7 +187,7 @@ export function useMapActions(store: RunStore, applyRace: (next: RaceSettings) =
    * the conditions, the car, and DRIVE IT.
    *
    * The dials are RESET rather than inherited. The campaign's stages are the
-   * same country for everybody — they are built off the rule book's defaults
+   * same biome for everybody — they are built off the rule book's defaults
    * (see `playLevel`) — and a stage loaded onto whatever Roam happened to be
    * left on would be a road no player has ever driven wearing that stage's
    * name. Everything else here is a starting point the player may then move,

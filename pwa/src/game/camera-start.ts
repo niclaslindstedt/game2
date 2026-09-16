@@ -23,7 +23,7 @@
 //
 //   IT AIMS OVER THE CAR, NOT AT IT. The lens is held near level and led a
 //   couple of car lengths up the road, so the subject is the start CONTROL
-//   with the country behind it rather than a car on a field of gravel.
+//   with the land behind it rather than a car on a field of gravel.
 //
 // …and a fourth that only shows up when the shot is CUT SHORT: skipping it
 // is a request to start driving, not a cut. The engine's own skip is
@@ -53,7 +53,7 @@ const FOV = { from: 62, to: 54 };
 /** How far ahead of the car the shot aims, m, and how far above the road.
  * Two separate jobs, and they pull against each other. The HEIGHT is what
  * levels the lens: aimed at the car's own wheels the shot pitches down hard
- * and fills its bottom half with gravel, and the country the stage runs
+ * and fills its bottom half with gravel, and the biome the stage runs
  * through — the reason to fly a camera over a start line at all — never
  * gets into frame. The LEAD is what the shot is about, and it has to stay
  * short: the camera is off to the side, so aiming far up the road swings it

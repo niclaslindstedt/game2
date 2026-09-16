@@ -105,7 +105,7 @@ export type FinishStandings = {
   /** …and whether it is. */
   settled: boolean;
   /** Set when this result topped the location's table with every stage of it
-   * driven — the country behind this one is open. */
+   * driven — the land behind this one is open. */
   won: boolean;
 };
 
@@ -157,7 +157,7 @@ export type FinishCardProps = {
   /** The heads-up race's own sheet — set only on that mode, and never at the
    * same time as `campaign`: a race is one or the other. */
   race: FinishRace | null;
-  /** The location whose table stands between the player and the next country,
+  /** The location whose table stands between the player and the next biome,
    * named — set only when the ladder's next rung is in a location the points
    * have not opened yet. */
   locked: string | null;
@@ -548,7 +548,7 @@ export function FinishCard({
             </div>
           )}
           {campaign?.won && <div className="fin-record">{campaign.location.toUpperCase()} WON</div>}
-          {/* The lock between this country and the next one, said where the
+          {/* The lock between this biome and the next one, said where the
               player is looking for the way on. */}
           {locked && <div className="fin-note">TOP THE {locked.toUpperCase()} TABLE TO GO ON</div>}
         </section>

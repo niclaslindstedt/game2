@@ -3,7 +3,7 @@
 //
 // Standing a stage up is the most expensive thing this game does, and almost
 // none of it is the road: the generator compiles the route, the renderer
-// builds a country and a forest to put it in, fourteen crews each get a game
+// builds a biome and a forest to put it in, fourteen crews each get a game
 // of their own, and then — on a field of ghosts — every one of those crews
 // DRIVES THE WHOLE STAGE before the player's lights run, because that is what
 // a trace is (`engine/sim/field.ts`). On a short campaign stage that is about
@@ -75,7 +75,7 @@ export type LoadStep = {
   label: string;
   /** How far through this step is, 0–1, where the WORK can honestly say —
    * crews entered out of an entry list, road written out of a stage. Left
-   * off by the steps that cannot: compiling a road and building a country
+   * off by the steps that cannot: compiling a road and building a biome
    * are single calls that are nought and then one, and a number invented for
    * them would be a number the card was making up. What the card does
    * instead is `expectedMs` on the phase. */

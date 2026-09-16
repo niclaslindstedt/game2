@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE MINIMAP'S SCHEMATIC — the country around the car, drawn from above.
+// THE MINIMAP'S SCHEMATIC — the land around the car, drawn from above.
 //
 // The map does not show the stage. It shows a fixed square of WORLD, `SPAN`
 // metres across, with the car in the middle of it, and it travels with the
@@ -41,7 +41,7 @@ import {
 /** The map's own square user space; everything below is in these units. */
 export const VIEW = 100;
 
-/** How much country the box holds, edge to edge, m, at the middle of the
+/** How much land the box holds, edge to edge, m, at the middle of the
  * speedo's range — one of two framings, because the map has two jobs and
  * only one of them is on every run. It is the figure the zoom below works
  * from rather than one the map often sits at.
@@ -71,7 +71,7 @@ export const SPAN = {
  * way through a farmyard at walking pace, it closes right in and the map is a
  * plan of the ground under the car; at rally pace it opens to most of half a
  * kilometre and the map is the road about to arrive. The zoom is then
- * something the eye reads as SPEED — the country visibly pulling back as the
+ * something the eye reads as SPEED — the biome visibly pulling back as the
  * car winds up, and settling as it slows for a corner.
  *
  * `at` is the speed the opening is full at (km/h), `close` the fraction of
@@ -94,7 +94,7 @@ export function spanFor(base: number, speedKmh: number): number {
  * is carried as a SCALE on the group.
  *
  * Rounding UP is what makes it safe: the cut always covers at least the box
- * being shown, so the scale only ever magnifies country that was drawn.
+ * being shown, so the scale only ever magnifies biome that was drawn.
  * And because the scale compensates the cut exactly, crossing a step is
  * invisible — the same picture, cut at a different size. */
 const CUT_STEP = 40;
@@ -123,12 +123,12 @@ const GROUND_CELL = 8;
  * the whole of why it is worth drawing. A boreal stage is forest nearly
  * everywhere, so a tint on the woods is a wash over the whole map that says
  * nothing; a tint on the clearings, the bogs and the felled blocks is the
- * short answer to the only question a driver in the country actually has,
+ * short answer to the only question a driver in the biome actually has,
  * which is where they could get through. */
 const OPEN_DENSITY = 0.35;
 
 /** How many ground cells are remembered. The window holds about 1500 of
- * them, so this is a couple of minutes of driving before the oldest country
+ * them, so this is a couple of minutes of driving before the oldest biome
  * is dropped and re-sampled — and it is a cap rather than an eviction queue
  * because a map that has to forget something can forget all of it: the next
  * cut pays for one window, which is what it pays anyway on the first frame
@@ -165,7 +165,7 @@ export type MinimapScene = {
    * the frame it changes on is the one frame the group's transform must not
    * be tweened: the offset and the zoom both jump there, and the new paths
    * jump with them, so the picture is continuous ONLY if the transform
-   * lands immediately. Tweened, the country slides half a box sideways
+   * lands immediately. Tweened, the biome slides half a box sideways
    * twice a second at speed. */
   cut: number;
   /** What the group is scaled by, about the middle of the box: the cut's
@@ -173,7 +173,7 @@ export type MinimapScene = {
    * held off it (`vector-effect`), because a road drawn thinner at speed is
    * a road that reads as further away rather than as more of it. */
   zoom: number;
-  /** The openings in the country — clearings, bogs, meadows, felled blocks
+  /** The openings in the biome — clearings, bogs, meadows, felled blocks
    * — as filled cells. */
   open: string;
   /** Standing water, as filled cells. */
@@ -237,7 +237,7 @@ export function inView(p: Pt): boolean {
  *
  * The TRACK ITSELF is the identity, not its seed: a seed is a number two
  * different tracks can share (a synthetic rig and a generated stage), and a
- * cache that answered for the wrong one would draw the other country's
+ * cache that answered for the wrong one would draw the other biome's
  * roads. Its sample and stream counts are carried beside it because an
  * endless stage grows both under a track that never changes. */
 let cache: {
@@ -254,7 +254,7 @@ let cache: {
 let cuts = 0;
 
 /** Ground cells already sampled, keyed by their world lattice index — and
- * the track whose country they describe. */
+ * the track whose biome they describe. */
 let ground = new Map<number, 0 | 1 | 2>();
 let groundOf: Track | null = null;
 
@@ -298,10 +298,10 @@ function fill(points: readonly Pt[]): string {
   return `${out}Z `;
 }
 
-/** What the ground under one cell is: closed country, an opening, or water.
+/** What the ground under one cell is: closed land, an opening, or water.
  * Cached
  * per world cell, because the window re-cut every twenty metres re-asks for
- * all but one row of the country it asked about last time. */
+ * all but one row of the biome it asked about last time. */
 function groundAt(
   terrain: TerrainField,
   quilt: ReturnType<typeof biomeRules>,
@@ -329,7 +329,7 @@ function groundAt(
 
 /** The ground layers: one walk of a WORLD-ALIGNED lattice, emitting each
  * row's runs as rectangles. World-aligned so a cell belongs to a piece of
- * country rather than to the window — without it the whole tint crawls
+ * biome rather than to the window — without it the whole tint crawls
  * sideways every time the map is re-cut. */
 function groundLayers(
   terrain: TerrainField,
@@ -514,7 +514,7 @@ export function minimapScene(state: GameState, span: number = SPAN.solo): Minima
     Math.abs(cache.cut.x - car.x) > REBUILD ||
     Math.abs(cache.cut.z - car.z) > REBUILD;
   if (stale) {
-    // The ground cells describe one country; keeping them across a change of
+    // The ground cells describe one biome; keeping them across a change of
     // stage would paint the last one's lakes on this one. The span does not
     // touch them: a cell is a piece of ground, not a piece of the picture.
     if (groundOf !== track) {

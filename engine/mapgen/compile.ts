@@ -41,7 +41,7 @@ import {
   segmentElevation,
   SEVERITY_RANK,
 } from "./compile-road.ts";
-import { closeCircuitHeight, emptyTrack, planCountry, type Country } from "./compile-country.ts";
+import { closeCircuitHeight, emptyTrack, planLand, type LandPlan } from "./compile-land.ts";
 import type { BridgeDeck, Pacenote, Surface, Track, TrackSample } from "./track-shape.ts";
 
 export * from "./track-shape.ts";
@@ -55,14 +55,14 @@ function createCompiler(
   paving: Paving,
   bumps: (s: number, surface: Surface, shaped: boolean) => number,
   widthAt: WidthAt,
-  /** R17 — the country the finished stage will occupy, known before it is
+  /** R17 — the biome the finished stage will occupy, known before it is
    * walked (see `planBounds`). A junction is only worth building where the
    * arm it abandons can LEAVE, and which way is out is a question about the
    * whole map that the cursor cannot answer halfway down it. Absent on an
    * endless stage, which has no box and whose branches only have to get out
    * of their own junction's neighbourhood. */
-  country?: Country,
-  /** R34 — whether the road is laid ALONG the country (every generated
+  landPlan?: LandPlan,
+  /** R34 — whether the road is laid ALONG the land (every generated
    * stage) or at a height of its own (a synthetic rig). A rig is a
    * measuring device: flat, smooth and repeatable, so a physics test
    * measures the car and not the hillside it happens to have been built
@@ -72,7 +72,7 @@ function createCompiler(
   followsLand = true,
   /** R17 — is this stage's tarmac BORROWED or PAINTED?
    *
-   * Borrowed is the sprint search: the tarmac was laid on the bare country
+   * Borrowed is the sprint search: the tarmac was laid on the bare land
    * first (`highway.ts`) and the route went and found a piece of it
    * (`borrow.ts`), so the plan already says which segments are a public
    * road and every junction's abandoned arm is the rest of that road. There
@@ -86,7 +86,7 @@ function createCompiler(
    *
    * Passed in rather than sniffed off the plan, because the two answers
    * differ most exactly where sniffing fails: a borrowed stage whose
-   * country carried no public road has no paved segment in its plan, and
+   * biome carried no public road has no paved segment in its plan, and
    * that must come out ALL GRAVEL rather than quietly falling back to
    * painting stripes on the racing line. */
   borrowed = false,
@@ -97,7 +97,7 @@ function createCompiler(
   stream?: Pick<StageStream, "ahead" | "keepOff">,
 ): Compiler {
   const walk = createWalk(track, rolling, followsLand);
-  const junctionNoting = createJunctionNoting(track, walk, rolling, country);
+  const junctionNoting = createJunctionNoting(track, walk, rolling, landPlan);
   const {
     cursor,
     land,
@@ -131,7 +131,7 @@ function createCompiler(
   // and find a road before it can be driving on one.
   /** R47 — a mountain road is sealed BY HEIGHT: the pass is tarmac from
    * the valley up to a line the `asphalt` dial raises, and the rally's own
-   * gravel above it. Null in every other country, where the paving field
+   * gravel above it. Null in every other biome, where the paving field
    * (or the search's borrows) says what is sealed. */
   const sealBelow =
     biome.land.massif !== null && track.knobs.asphalt >= R.paving.floor
@@ -149,7 +149,7 @@ function createCompiler(
    * `asphalt` dial the whole route is a public road, which is a different
    * kind of event and not a borrow, so the rule that keeps hairpins off
    * borrowed tarmac has nothing to say about it. Nor does it in a mountain
-   * country (R47): a pass road is the rally's own, hairpins and all. */
+   * biome (R47): a pass road is the rally's own, hairpins and all. */
   const mixedSurface = track.knobs.asphalt <= 1 - R.paving.floor && sealBelow === null;
   let flipWanted = false;
   const {
@@ -247,7 +247,7 @@ function createCompiler(
       // the exception is deliberate rather than a gap. A borrow can only be
       // refused where it STARTS, and where a seal ends is decided by
       // whether the arm it would abandon can leave the map — a question
-      // about country the join has no cheap way to ask, and one that has to
+      // about biome the join has no cheap way to ask, and one that has to
       // be answered by walking geometry that is not walked yet. Both of the
       // places the rule could have gone instead were tried and measured:
       // capping the corner in the SEARCH straightens the route enough to
@@ -464,7 +464,7 @@ function createCompiler(
         }
       }
       /** The two halves of the road's height at a local position in this
-       * segment — the country it follows, and its own roll on top. The
+       * segment — the biome it follows, and its own roll on top. The
        * crossings read both, and read them differently (see `fordDip`); the
        * samples simply add them. `u` is clamped to the segment, which is
        * what the aprons either side of a crossing want anyway. */
@@ -547,7 +547,7 @@ function createCompiler(
         // crossing is sealed, because it is on one.
         const paved = !ford && (pavedNow || onCrossingSeal(cursor.x, cursor.z));
         // R47 — inside the bore the sample is a tunnel's, as long as the
-        // country stands a brow's depth over the road there: the search
+        // land stands a brow's depth over the road there: the search
         // found the portals on a coarser profile, and where the compiled
         // road comes out from under the shoulder a few metres before that
         // profile said, the mouth moves back to the rock.
@@ -567,7 +567,7 @@ function createCompiler(
         // R47 — ABOVE THE SNOWLINE THE ROAD IS SNOW, whatever it was laid
         // as: a packed snow road, loose to everything about its shape and
         // a surface of its own to the physics. Not in a bore, and not on
-        // the water or a deck over it. The line is the country's own or
+        // the water or a deck over it. The line is the biome's own or
         // the climate's frost line, whichever stands lower (climate.ts):
         // a winter brings the whole stage under it, and the snow is as
         // hard as the air at THIS height makes it.
@@ -682,7 +682,7 @@ function createCompiler(
     // them is held inside the verge cone (R31), which is read off these
     // samples. Close the lap after they are built and the ramp moves the
     // road out from under all of it — half a lap along, that is a metre or
-    // more of tarmac hanging over the country beside it, with the arm's own
+    // more of tarmac hanging over the land beside it, with the arm's own
     // walk back down to the land turning into the cliff it never had room
     // to be.
     if (track.circuit && !track.endless) closeCircuitHeight(track, junctions);
@@ -716,12 +716,12 @@ function createCompiler(
 }
 
 /** R45 — the highest surface a WIRE has to clear at a point: the bare
- * country, or a ROAD standing over it — the route, an abandoned branch, a
+ * biome, or a ROAD standing over it — the route, an abandoned branch, a
  * homestead's drive, a public road the rally never met.
  *
  * Not `land.heightAt`, and the difference is a defect rather than a
- * refinement. A road is laid ALONG the country but not ON it: it rides
- * embankments and shelves, and the terrain blends the country up onto them
+ * refinement. A road is laid ALONG the land but not ON it: it rides
+ * embankments and shelves, and the terrain blends the land up onto them
  * over its corridor range. A span planned against the bare land came out
  * clearing the BUILT road by seven metres where it had promised twelve,
  * and another was drawn through a branch's embankment seventy metres up.
@@ -729,13 +729,13 @@ function createCompiler(
  * anybody is standing under the wire.
  *
  * The shelf is modelled the way the terrain builds one: the road's own
- * level on its centerline, easing back to the country over `REACH`. It has
+ * level on its centerline, easing back to the biome over `REACH`. It has
  * to EASE rather than hold — held flat across its whole reach it demanded
  * twelve metres of air over the highest road within a hundred and fifty
  * metres, which refused a third of the lines that had been fitting and
  * bought nothing, since no wire is ever measured against a road that far to
  * one side. A cell grid over every road's samples, so away from all of them
- * the answer is the country and one failed set lookup. */
+ * the answer is the biome and one failed set lookup. */
 
 /** Compile the GENERATED stage for a seed at a menu length. Finite lengths
  * build the whole stage; `endless` builds the opening stretch and hands
@@ -744,7 +744,7 @@ function createCompiler(
  * at the default positions. `shape` (R22) picks between a sprint and a
  * circuit; an endless stage has no shape to pick — it never closes.
  * `climate` is the season and the cold the stage is driven in (climate.ts)
- * — omitted, a summer at the country's own temperature; it changes what the
+ * — omitted, a summer at the biome's own temperature; it changes what the
  * road is MADE OF where the ground is frozen, never where the road goes.
  * `startApron` (R24) is how much run-up to lay behind the start gate, for a
  * MASS START too deep for the rule book's own — omitted, the rule book's. It
@@ -769,12 +769,12 @@ export function compileStage(
     const circuit = shape === "circuit";
     const track = emptyTrack(seed, false, dials, weather, circuit, startApron);
     const plans = generateStage(seed, length, dials, shape, weather);
-    // R17 — THE TARMAC, laid on the bare country from the seed alone and
+    // R17 — THE TARMAC, laid on the bare land from the seed alone and
     // rebuilt here identically to the copy the search planned against. It
     // is not handed over: both sides derive it, which is what keeps a track
     // a pure function of its seed however it was built.
     track.highways = layStageHighways(seed, dials, createLandField(seed, dials, weather), length);
-    // R17 — the country the stage will occupy, walked before it is
+    // R17 — the biome the stage will occupy, walked before it is
     // compiled. A junction may only be built where the arm it abandons can
     // leave the map, and which way is out is a question about the whole box
     // that the cursor cannot answer halfway down it.
@@ -784,7 +784,7 @@ export function compileStage(
       paving,
       bumps,
       widthAt,
-      planCountry(
+      planLand(
         plans,
         track.width,
         rolling,
@@ -845,7 +845,7 @@ export function compileTrack(
     buildPaving(seed, dials.asphalt),
     () => 0,
     () => 1,
-    // No country: a rig has no box for a junction's abandoned arm to leave,
+    // No biome: a rig has no box for a junction's abandoned arm to leave,
     // and it does not follow the land either.
     undefined,
     false,

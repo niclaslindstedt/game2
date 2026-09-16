@@ -4,7 +4,7 @@
 //
 // Three scales of story, coarsest first:
 //
-//   REGION  (~900 m)  what this stretch of country IS — dense forest, open
+//   REGION  (~900 m)  what this stretch of land IS — dense forest, open
 //                     taiga, a logging block, a bog, an old burn. A region
 //                     never plants anything itself; it re-weights the
 //                     groves below it and scales the forest's density, so
@@ -152,7 +152,7 @@ const CLUMP_FAR = 4.6;
  * the renderer each build their own field and always agree. */
 export type PropContext = {
   seed: number;
-  /** R40 — the country: its quilt, and whether its woods shed timber. */
+  /** R40 — the biome: its quilt, and whether its woods shed timber. */
   biome: BiomeRules;
   /** Road half-width, m. */
   half: number;
@@ -191,11 +191,11 @@ export type PropContext = {
   guards: GuardField;
   /** R47 — THE SNOW STANDING OVER A POINT, m (`blanketAt`, climate.ts): what
    * decides whether a solid here is still a solid. Zero on every green
-   * country, which is what makes the burial rule below cost one nothing. */
+   * biome, which is what makes the burial rule below cost one nothing. */
   blanketAt: (x: number, z: number) => number;
   /** R47 — THE SURFACE THE EYE SEES, m: the ground tiles with the winter's
    * blanket lying on them. The burial rule measures against this and not
-   * against the bare country, because what a driver has to pick a thing
+   * against the bare land, because what a driver has to pick a thing
    * out of is the snow, not the hillside under it. */
   latticeAt: (x: number, z: number) => number;
 };
@@ -249,7 +249,7 @@ export function createPropField(ctx: PropContext): PropField {
   const groveSeed = (ctx.seed ^ 0x9e3779b9) >>> 0;
   const groveAt = (x: number, z: number): number => {
     // R32 — WET GROUND OVERRULES THE QUILT. The quilt is a noise field that
-    // says what KIND of country a patch is, and it has no idea where the
+    // says what KIND of biome a patch is, and it has no idea where the
     // water is; a bog rolled onto a hillside is a bog nothing feeds, and a
     // spruce wood rolled onto the edge of a swamp is a wood standing in
     // water. So wherever the ground is actually within a boot's depth of
@@ -315,7 +315,7 @@ export function createPropField(ctx: PropContext): PropField {
    * what the snow happens to have covered: the solid's own top against the
    * drawn surface, which is the one thing a driver is looking at. A stone
    * whose last hand's breadth pokes out of a drift is white on white, and a
-   * white country that stops a car on something it never showed is the
+   * white biome that stops a car on something it never showed is the
    * whole complaint — so the bar is a real one and everything under it goes.
    * What still stands proud stays a solid at full strength: a fallen trunk
    * with a metre of itself above the drift is a fallen trunk, and driving
@@ -334,7 +334,7 @@ export function createPropField(ctx: PropContext): PropField {
   };
 
   /** A freshly built cell's solids, less whatever the snow has taken. The
-   * array itself where nothing went, so a green country allocates nothing
+   * array itself where nothing went, so a green biome allocates nothing
    * on top of what it always did. */
   const unburied = (found: WildObstacle[]): WildObstacle[] => {
     for (let i = 0; i < found.length; i++) {
@@ -408,7 +408,7 @@ export function createPropField(ctx: PropContext): PropField {
 
   /** How badly the wind has been through this wood, 0 outside a blowdown and
    * up to 1 in the middle of one — the same shape of field as `bouldery`
-   * below, and for the same reason: a patch of country that reads as ONE
+   * below, and for the same reason: a patch of land that reads as ONE
    * event beats dice that happened to run hot. */
   const windthrown = (x: number, z: number): number => {
     if (!biome.deadwood) return 0;
@@ -431,8 +431,8 @@ export function createPropField(ctx: PropContext): PropField {
     const gale = windthrown(x, z);
     if (hash2(cx, cz, obSeed) < OB_DENSITY * (1 + gale * (WINDTHROW_DENSITY - 1))) {
       // Stone is what the ground sheds and wood is what the weather takes
-      // down, so a blowdown is nearly all timber even where the same country
-      // is otherwise strewn with boulders — and a country with no forest to
+      // down, so a blowdown is nearly all timber even where the same biome
+      // is otherwise strewn with boulders — and a biome with no forest to
       // blow down sheds nothing but stone.
       const boulder = !biome.deadwood || hash2(cx, cz, obSeed + 3) < 0.55 * (1 - gale * 0.85);
       const roll = hash2(cx, cz, obSeed + 6);
@@ -555,7 +555,7 @@ export function createPropField(ctx: PropContext): PropField {
 
   // ── Rocky outcrops: the bedrock breaking surface, in company ─────────
   // A slab (below) is the cut wall beside the road showing through. This is
-  // the same rock out in the country, and the difference that matters is
+  // the same rock out in the land, and the difference that matters is
   // that it never comes alone: a bed of stone breaks surface as a knot of
   // boulders strung along the contour, half-buried, biggest in the middle.
   const outcropSeed = (ctx.seed ^ 0x9e3d7c11) >>> 0;

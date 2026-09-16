@@ -223,7 +223,7 @@ export const ROUTE_RULES = {
   maxSameDirectionAngle: Math.PI * 1.15,
 
   /** R21 — road width, meters (full width; centerline to edge is half).
-   * The `width` dial reads this band: the low end is a real country lane,
+   * The `width` dial reads this band: the low end is a real biome lane,
    * where the road is the only line and a corner is a commitment; the high
    * end is an arcade boulevard with room to place the car sideways and
    * still land on tarmac. The default position (0.55) is the width the
@@ -253,7 +253,7 @@ export const ROUTE_RULES = {
    * the road: this is only the least it may ever be. */
   minSelfDistance: 30,
 
-  /** R23 — the room a road keeps to itself. `margin` is the bare country
+  /** R23 — the room a road keeps to itself. `margin` is the bare land
    * left between two corridors' outer LIPS, m; what the rule enforces is
    * that plus both corridors' full reach, so it widens with the `width`
    * dial instead of letting a boulevard-wide stage lay its mats over each

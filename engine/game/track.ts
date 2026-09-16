@@ -267,7 +267,7 @@ export function locatePoint(track: Track, x: number, z: number, hint: number): T
   const near = inWindow(flat, x, z, lo, hi, Math.sqrt(seedX * seedX + seedZ * seedZ));
   // THE WINDOW IS A HEAD START, NOT THE ANSWER. It holds the nearest sample
   // only while the hint is honest about where the car is — and a hint is the
-  // caller's last answer, which a car that has been off in the country, or
+  // caller's last answer, which a car that has been off in the biome, or
   // turned round and driven back down the stage, has long since left behind.
   // A window that has cut the real answer off does not say so: it returns
   // whichever sample it was cornered into, and since `lateral` only measures
@@ -538,7 +538,7 @@ export function crossCurvature(track: Track, fix: TrackPoint, share: number): nu
   if (span < 1e-6) return 0;
   // The corridor is only the ground as far as the ribbon's own geometry
   // goes (R16's hand-over): past `reach` the profile holds its last value
-  // for want of anything to say, and the country out there belongs to the
+  // for want of anything to say, and the biome out there belongs to the
   // terrain lattice. Probing into that flat would invent a trough at the
   // edge of every wide road, so the arms stop at the corridor's own limit
   // and the stencil takes the two it actually got — the same uneven-arm
@@ -599,7 +599,7 @@ export function pathCurvature(track: Track, fix: TrackPoint, dirX: number, dirZ:
  * on the run-up behind the start gate is on the first sample's own line
  * however far back it stands, but the nearest SAMPLE to it can easily be a
  * piece of the route that comes back past the start — and then the fix
- * reports a car sitting on the grid as a hundred metres out in the country,
+ * reports a car sitting on the grid as a hundred metres out in the land,
  * on grass, at the wrong height. So each end is also measured by its SPINE
  * — the end sample's line, out to the length of the apron on it — exactly
  * as the terrain measures the same ground (`nearerApron` in
@@ -649,7 +649,7 @@ function nearerEnd(track: Track, flat: FlatTrack, x: number, z: number, best: nu
  * Two stages have no such end. An endless one has only a frontier the stream
  * has not reached yet, and a CIRCUIT (R22) closes onto its own start line —
  * its last sample IS its first, so the road past either of them is the lap
- * carrying on, not country. */
+ * carrying on, not biome. */
 function pastApron(
   track: Track,
   index: number,

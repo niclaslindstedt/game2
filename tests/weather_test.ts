@@ -78,7 +78,7 @@ describe("how heavy a stage's weather is", () => {
 });
 
 describe("how wet a stage is", () => {
-  it("reads the weather against the country it is over", () => {
+  it("reads the weather against the biome it is over", () => {
     expect(wetnessOf(conditions({ weather: "clear" }), "taiga")).toBe(0);
     expect(wetnessOf(conditions({ weather: "rain" }), "taiga")).toBeGreaterThan(0);
     expect(wetnessOf(conditions({ weather: "storm" }), "taiga")).toBeGreaterThan(
@@ -230,7 +230,7 @@ describe("what the falling weather leaves of the view", () => {
   it("closes snow down harder than rain — a white-out is not a shower", () => {
     // The whole reason the two are separate numbers: at the same rate of
     // fall a flake scatters light in every direction where a drop bends it
-    // onward, so heavy snow takes the country away and heavy rain only
+    // onward, so heavy snow takes the land away and heavy rain only
     // greys it.
     expect(precipReach(1, 1)).toBeLessThan(precipReach(1, 0) * 0.75);
   });

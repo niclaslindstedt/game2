@@ -2,7 +2,7 @@
 // R41 — THE RAILWAY, and the train on it.
 //
 // A railway is laid the way the tarmac is (R17): across the map, edge to
-// edge, on nothing but the seed and the bare country, BEFORE the rally is
+// edge, on nothing but the seed and the bare land, BEFORE the rally is
 // routed — so the route plans around it and, where it has to get past,
 // crosses it SQUARE (R36's solve, `crossing.ts`). It is a `Highway` of kind
 // `rail` in the same network as the public roads, which is what makes every

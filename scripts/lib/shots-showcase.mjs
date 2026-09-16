@@ -78,7 +78,7 @@ export async function showcaseShots(shot) {
 
   /** Wait until the car is ON THE ROAD — the CAR box's own `track` row, which
    * carries ` · OFF` for exactly as long as the engine considers it off. A wide
-   * shot of the country is spoiled by a car standing in a field, and a bot on
+   * shot of the biome is spoiled by a car standing in a field, and a bot on
    * an alpine stage spends real seconds out there.
    *
    * Read from that row rather than from a distance, because the distance the
@@ -222,7 +222,7 @@ export async function showcaseShots(shot) {
   );
 
   // 2 — ROAM, which is the generator's own shop window: a seed on the left as
-  // an island of real country with the route drawn over it, and on the right
+  // an island of real biome with the route drawn over it, and on the right
   // every dial that built it. The page is the argument that the stages are
   // made rather than drawn, so it is shot at a seed with RELIEF in it — an
   // alpine winter, rugged, where the land does something the eye can read at
@@ -244,7 +244,7 @@ export async function showcaseShots(shot) {
       seed: "20704",
       biome: "alpine",
       // SPRING rather than winter. An alpine winter puts the sun low enough at
-      // midday that the sky goes pink and the whole country reads as dusk — a
+      // midday that the sky goes pink and the whole biome reads as dusk — a
       // handsome frame, and not the one this scene is for, which is the Alps in
       // daylight. The snow that matters is on the peaks either way.
       season: "spring",
@@ -256,7 +256,7 @@ export async function showcaseShots(shot) {
       elevation: "1",
       steepness: "0.85",
       peaks: "1",
-      // High COUNTRY, low ROAD. The peaks dial is what puts mountains in the
+      // High BIOME, low ROAD. The peaks dial is what puts mountains in the
       // frame; the altitude dial is where the stage itself sits, and wound up
       // it puts the road above the treeline, where a winter stage is grey
       // scree under grey sky and the only colour left is the marker posts.
@@ -304,7 +304,7 @@ export async function showcaseShots(shot) {
     },
   );
 
-  // 4 — THE ALPS: the one country where the shot is the COUNTRY, so the car is
+  // 4 — THE ALPS: the one biome where the shot is the BIOME, so the car is
   // small in it and the frame is mostly mountain, on the longest lens on the
   // boom. Three things this scene needs that no other one does:
   //
@@ -321,7 +321,7 @@ export async function showcaseShots(shot) {
   //   `?drawdistance=far` is the setting a player with a good machine has.
   //
   //   IT WAITS FOR THE CAR TO BE ON THE ROAD. `atOpenRoad` is what every other
-  //   country would use for a wide shot — no call in the co-driver's window
+  //   biome would use for a wide shot — no call in the co-driver's window
   //   means no corner inside its lead — but the Alps never clear that call:
   //   the stage is hairpin into hairpin for its whole length, so a scene that
   //   waited for open road here would wait forever. What it can ask for
@@ -339,7 +339,7 @@ export async function showcaseShots(shot) {
       ...CLEAN,
       biome: "alpine",
       // SPRING rather than winter. An alpine winter puts the sun low enough at
-      // midday that the sky goes pink and the whole country reads as dusk — a
+      // midday that the sky goes pink and the whole biome reads as dusk — a
       // handsome frame, and not the one this scene is for, which is the Alps in
       // daylight. The snow that matters is on the peaks either way.
       season: "spring",
@@ -352,12 +352,12 @@ export async function showcaseShots(shot) {
       hour: "13",
       weather: "clear",
       drawdistance: "far",
-      // The same dials the Roam shot names, for the same reason: a country
+      // The same dials the Roam shot names, for the same reason: a biome
       // asked for by name still arrives on the default relief.
       elevation: "1",
       steepness: "0.85",
       peaks: "1",
-      // High COUNTRY, low ROAD. The peaks dial is what puts mountains in the
+      // High BIOME, low ROAD. The peaks dial is what puts mountains in the
       // frame; the altitude dial is where the stage itself sits, and wound up
       // it puts the road above the treeline, where a winter stage is grey
       // scree under grey sky and the only colour left is the marker posts.

@@ -20,7 +20,7 @@ import { ROAD_CROSS } from "./road.ts";
 import { type Spur } from "./spurs.ts";
 import { type PublicRoad } from "./publicroad.ts";
 import { isLoose, type Surface } from "./track-shape.ts";
-import { BRANCH_DISTANCE_SLACK } from "./compile-country.ts";
+import { BRANCH_DISTANCE_SLACK } from "./compile-land.ts";
 
 export const SEVERITY_RANK: Record<TurnSeverity, number> = { soft: 0, medium: 1, hard: 2 };
 
@@ -289,7 +289,7 @@ export function fordDip(
   // above the LAND there. A ford's water is the stream's, and the stream
   // lies in the valley floor: a road crossing it on an embankment dips down
   // to it, it does not lift the water up to the road. Laid against the road
-  // instead, a ford on fill anchored its river metres over the country and
+  // instead, a ford on fill anchored its river metres over the land and
   // R18 drew the reach floating above both its banks.
   const wanted =
     Math.min(base((plan.featureStart + plan.featureEnd) / 2) + low, valley()) - R.water.bedDepth;
@@ -369,11 +369,11 @@ export type Cursor = {
   s: number;
   rollS: number;
   /** R34 — the LANDSCAPE the road is laid along, at the cursor: the bare
-   * country's height, lagged and grade-clamped into something drivable
+   * biome's height, lagged and grade-clamped into something drivable
    * (`R.elevation.follow`). The road's own rolling noise rides on this
    * rather than being the whole of its height, which is what puts a stage
    * down the valleys instead of at an arbitrary altitude the terrain then
-   * has to plane the country away to reach.
+   * has to plane the land away to reach.
    *
    * Carried on the cursor because the filter is CAUSAL: it is the road
    * builder walking forward, and it has to survive both a segment boundary
@@ -408,7 +408,7 @@ export const ROAD_DISTANCE_REACH = 220;
  *
  * Two branches off two different junctions are two roads like any other
  * pair, and nothing else asks them to keep apart: they cross in open
- * country a kilometre from anything, which is a junction nobody built.
+ * biome a kilometre from anything, which is a junction nobody built.
  *
  * Strided to match the stage's own coarsening, and the slack is taken off
  * the answer so this can only ever under-report the room a branch has,
@@ -448,7 +448,7 @@ export function branchClearance(
 /** R23 + R31 — does a trial arm keep its distance from the other arms IN
  * HEIGHT? Two branches down one hillside are two roads like any other pair,
  * and the ground between them is whatever joins their two shelves: where
- * the higher one stands more over the lower than the country may climb
+ * the higher one stands more over the lower than the biome may climb
  * across the gap (`verge.climb` past the bench), that ground is a face. The
  * route is held off its own stacked legs by exactly this rule
  * (`search.ts`'s `armSeparation`); the branches forked off two of those

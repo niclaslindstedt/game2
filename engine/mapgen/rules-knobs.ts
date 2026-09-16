@@ -6,8 +6,8 @@
 // and the one way a dial ever reaches a rule (`knobScale`).
 //
 // It is the leaf of the rule book: the chapters under `rules-*.ts` and the
-// dial readings in `rules-country.ts` all import it, and it imports nothing
-// but the countries and the generator's own versions.
+// dial readings in `rules-biome.ts` all import it, and it imports nothing
+// but the biomes and the generator's own versions.
 
 import { isBiomeId, type BiomeId } from "./biomes.ts";
 import {
@@ -40,12 +40,12 @@ export type Crossing = "ford" | "timber" | "concrete" | "culvert";
  * turns to ask for a different kind of stage. They never break a rule — they
  * move the ranges the rules draw from, and 0.5 on every dial is the stage
  * this generator built before they existed. The two that are not dials are
- * the COUNTRY, which is a name rather than a position, and the VERSION,
+ * the BIOME, which is a name rather than a position, and the VERSION,
  * which is not the player's at all; both are at the bottom of the list and
  * both are outside `NUMERIC_KNOBS`. */
 export type StageKnobs = {
   /** How hilly: the rolling road profile's amplitude and the landscape's
-   * relief around it. 0 is a plain, 1 is mountain country. */
+   * relief around it. 0 is a plain, 1 is mountain biome. */
   elevation: number;
   /** How wet: how often water crosses the road (and how wide, which is
    * what decides ford vs bridge), and how much of the nature is lake. */
@@ -61,7 +61,7 @@ export type StageKnobs = {
    * boulevard with room to throw the car at a corner and still be on the
    * road when it lands. */
   width: number;
-  /** R34 — how STEEP the country stands. Not how HIGH it stands, which is
+  /** R34 — how STEEP the land stands. Not how HIGH it stands, which is
    * `elevation`: this is the angle the same relief is held at. At 0 the
    * ice has been over everything — long slopes, whaleback summits, fault
    * steps worn back into hillsides, and a road that is graded gently into
@@ -70,12 +70,12 @@ export type StageKnobs = {
    * a CUT: a blasted face standing over the verge instead of a bank
    * battered back to something a car could climb. */
   steepness: number;
-  /** R49 — WHICH WAY THE STAGE RUNS THROUGH THE COUNTRY, 0..1: 0 is a
+  /** R49 — WHICH WAY THE STAGE RUNS THROUGH THE BIOME, 0..1: 0 is a
    * stage that climbs, 1 is a stage that comes down, and 0.5 is neither —
-   * a road that takes the country as it finds it, which is every stage
+   * a road that takes the land as it finds it, which is every stage
    * this generator built before the dial existed.
    *
-   * It is not `elevation`, which says how much height the country HAS, nor
+   * It is not `elevation`, which says how much height the land HAS, nor
    * `steepness`, which says what angle it is held at. Those two describe
    * the ground; this one describes the JOURNEY across it, and it is the
    * half of a rally stage a player feels first — a road that loses height
@@ -83,15 +83,15 @@ export type StageKnobs = {
    * the whole stage paying for the view.
    *
    * It works by moving WHERE THE STAGE STARTS, which is the one lever a
-   * country of bounded hills actually answers to (R35, R49). The road
+   * biome of bounded hills actually answers to (R35, R49). The road
    * follows the land through a lag, so its height at any point is the
-   * country's; what the stage does over its whole length is therefore
+   * biome's; what the stage does over its whole length is therefore
    * decided almost entirely by how high the ground under the start line
-   * is against the country's average. Sited on a shoulder, a stage spends
+   * is against the biome's average. Sited on a shoulder, a stage spends
    * the rest of itself coming down off it.
    *
    * That is also why it is a MILD instrument, and deliberately so. It can
-   * only trade within the relief the country actually has — a taiga at the
+   * only trade within the relief the biome actually has — a taiga at the
    * top of the dial comes down a few tens of metres over a stage, not a
    * mountainside — and it cannot make the road steeper than R34 already
    * allows, because it never touches the road's own grade. A stage that
@@ -99,7 +99,7 @@ export type StageKnobs = {
   tilt: number;
   /** R46 — HOW HARD THE ROAD IS, 0..1. The one dial that is not about a
    * single thing the stage has in it: it leans on the corner vocabulary,
-   * the jumps, the road's width and the country's relief at once, always
+   * the jumps, the road's width and the biome's relief at once, always
    * inside what the rules already allow. 0.5 is the game as it is tuned,
    * and is exactly that — the middle of this dial changes nothing.
    *
@@ -107,20 +107,20 @@ export type StageKnobs = {
    * is the ROAD, and it is the only one of the two Roam has any use for:
    * a seed driven on your own has nobody to be faster than. */
   challenge: number;
-  /** R47 — HOW MANY PEAKS the country has, 0..1 — the one dial only a
-   * mountain country reads (`BiomeLand.massif`; the taiga and the desert
+  /** R47 — HOW MANY PEAKS the biome has, 0..1 — the one dial only a
+   * mountain biome reads (`BiomeLand.massif`; the taiga and the desert
    * have no peaks to count). At 0 ONE mountain stands alone in a plain:
    * the ridge system's period is stretched past the stage's box and the
    * valley floor widened to most of it, so the stage is laid on the one
    * flank and off the road there is nothing but the drop to the ground.
    * At 1 the period is tightened to a RANGE — a crest every kilometre and
    * a valley between each pair — and the road threads them. The middle is
-   * the country the rules were tuned on: one valley and the ridge beside
+   * the biome the rules were tuned on: one valley and the ridge beside
    * it inside a medium stage's box. */
   peaks: number;
   /** R47 — HOW HIGH THE RACE IS, 0..1, read onto a band of METRES by
-   * `altitudeOf` — the second dial only a mountain country reads. `peaks`
-   * says how many crests the country has; this says how far the one the
+   * `altitudeOf` — the second dial only a mountain biome reads. `peaks`
+   * says how many crests the biome has; this says how far the one the
    * stage is laid on stands over the valley floor, and the valley floor
    * stays where it is: at the dial's bottom the crest is a few hundred
    * metres of worn shoulder a rally can run up and down, and at the top it
@@ -131,14 +131,14 @@ export type StageKnobs = {
    * ridge system's period grows too, but only `R.massif.altitude.spread`
    * as fast, so every metre of height is also a steeper flank. That is the
    * whole point of the dial — high is not merely far up, it is sheer — and
-   * it is why the country's zones, the air's lapse rate and the earthworks
+   * it is why the biome's zones, the air's lapse rate and the earthworks
    * a road may be built on all read it (`landOf`). */
   altitude: number;
   /** R40 — HOW HIGH THE SAND STANDS, 0..1, read onto a band of METRES by
-   * `duneHeightOf` — the dial only a sand country reads (`BiomeLand.dunes`;
+   * `duneHeightOf` — the dial only a sand biome reads (`BiomeLand.dunes`;
    * the taiga and the alpine have no sand to pile). It is a MAXIMUM: what
    * a full-grown dune stands over the trough beside it, where the wind has
-   * heaped the deepest sand. Most of the country is lower, because the
+   * heaped the deepest sand. Most of the land is lower, because the
    * mask that says where the sand sea is at all fades the field out
    * between its ergs, and the pans between them carry none.
    *
@@ -149,14 +149,14 @@ export type StageKnobs = {
    * dune that got taller without getting longer would be a wall of
    * something that is physically a liquid — and at the top of the travel
    * the faces come out right at repose, which is what a real erg looks
-   * like. At 0 the wind has left the country bare: no sand at all, and the
+   * like. At 0 the wind has left the land bare: no sand at all, and the
    * rock and the pans are the whole of it.
    *
    * `dunes: 0` is therefore the only dial position that removes something
    * rather than shrinking it, and it says so honestly — `landOf` hands
-   * back a country with no dune row at all. */
+   * back a biome with no dune row at all. */
   dunes: number;
-  /** R40 — which COUNTRY the stage is built in (`biomes.ts`). The one dial
+  /** R40 — which BIOME the stage is built in (`biomes.ts`). The one dial
    * that is a name rather than a number: it does not move a range, it says
    * which set of ranges — the taiga's lakes and spruce, or the desert's
    * dunes and saguaros — the other five are read against. */
@@ -178,7 +178,7 @@ export type StageKnobs = {
 };
 
 /** The numeric dials — everything in `StageKnobs` that is a position on a
- * band rather than the name of a country or the version that built it.
+ * band rather than the name of a biome or the version that built it.
  * What the menus put a row of stops under and the URL readers parse as a
  * number. */
 export type NumericKnob = Exclude<keyof StageKnobs, "biome" | "version">;
@@ -211,11 +211,11 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // The width the stage vocabulary — turn radii, the bot's line, the drift
   // tuning — was measured against.
   width: 0.55,
-  // Middling country: rock faces where the road has to force a shoulder,
+  // Middling biome: rock faces where the road has to force a shoulder,
   // worn slopes everywhere it does not.
   steepness: 0.5,
   // R49 — the middle of the tilt dial, which is the one position that asks
-  // the search for nothing: the country decides where the road goes, as it
+  // the search for nothing: the biome decides where the road goes, as it
   // did before there was a dial. Every campaign stage but the ones that
   // name a tilt is built here.
   tilt: 0.5,
@@ -225,7 +225,7 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // R47 — a valley and the ridge beside it; read by a massif and by
   // nothing else.
   peaks: 0.5,
-  // R47 — the ALTITUDE dial's own pivot: the country the alpine's row was
+  // R47 — the ALTITUDE dial's own pivot: the biome the alpine's row was
   // written for, and the height every alpine seed was built at before
   // there was a dial (`altitudeMul` is exactly 1 here, so it is). It sits
   // low on the travel rather than in the middle because what is above it
@@ -233,10 +233,10 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // dial for the two thirds of the idea.
   altitude: 0.35,
   // R40 — the DUNE dial's own pivot: the sand the desert's row was written
-  // for, and the country every desert seed is built in until somebody moves
+  // for, and the biome every desert seed is built in until somebody moves
   // it (`landOf` hands the row itself back here, so it is). Low on the
   // travel because what is above it is an erg out of the Empty Quarter and
-  // what is below it is a beach — a quarter of the dial for the country a
+  // what is below it is a beach — a quarter of the dial for the biome a
   // rally is actually laid across.
   dunes: 0.22,
   // The rules as they stand in this tree. A campaign level overrides it
@@ -254,7 +254,7 @@ export function clamp01(v: number): number {
 export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
   return {
     // A biome this build does not know — a stale URL, a save from another
-    // version — is the taiga, which is the country every seed was built in
+    // version — is the taiga, which is the biome every seed was built in
     // before there was a choice.
     biome: isBiomeId(knobs?.biome) ? knobs.biome : DEFAULT_KNOBS.biome,
     elevation: clamp01(knobs?.elevation ?? DEFAULT_KNOBS.elevation),

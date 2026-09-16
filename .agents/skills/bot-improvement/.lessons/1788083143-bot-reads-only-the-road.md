@@ -9,7 +9,7 @@ concepts: [bot-tuning, corner-speed, hazards, water, terrain]
 `obstaclesNear`, no `treesNear`. That is invisible while the answer to running
 wide is always "a bit of grass", and it stops being invisible the moment a
 generator change puts something else there. When R34 laid stages along the
-country, one seed put a tarn on the outside of a fast corner and the hard
+biome, one seed put a tarn on the outside of a fast corner and the hard
 field drowned in it 319 times per run — while easy and medium, which do not
 run as wide, were unaffected at 0.1.
 

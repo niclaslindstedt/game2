@@ -12,7 +12,7 @@
 // Asphalt is laid ON the ground rather than
 // cut into it, so the mat stands proud of the verge with its chippings
 // spilled down the edge — and past the shoulder, on both, the ground
-// simply falls away into the country. No ditch: a trench ruled down each
+// simply falls away into the land. No ditch: a trench ruled down each
 // side of the road reads as a scar cut by a machine, and it is a trap
 // that swallows a car the moment it puts a wheel wide.
 //
@@ -90,7 +90,7 @@ export const ROAD_CROSS = {
 
   /** Beside the road: the strip of grubbed, gravel-dusted ground the
    * traffic and the blade keep bare, then the ground tipping gently away
-   * into whatever the country was doing. Distances are from the road
+   * into whatever the land was doing. Distances are from the road
    * EDGE; `shoulder` is how far below the mat's own base the bare strip
    * sits, and `drop` how much further the ground has leaned away by the
    * time the landscape takes over — a slope a car can run out onto and get
@@ -151,9 +151,9 @@ export function handoverAt(out: number): number {
 
 /** R23 — the room a road of `width` keeps to itself, m, measured
  * CENTERLINE to centerline: both corridors' full reach (mat plus the verge
- * the ribbon draws beside it) plus the bare country between them. The
+ * the ribbon draws beside it) plus the bare land between them. The
  * terrain can only lay its shelf under one road, so two corridors closer
- * than this leave one of them hanging over the country with nothing under
+ * than this leave one of them hanging over the land with nothing under
  * it. It has to scale with the `width` dial: a fixed number that clears two
  * lane-wide roads is inside the mats of two boulevard-wide ones. */
 export function roadClearance(width: number): number {

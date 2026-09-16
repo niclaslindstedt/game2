@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// READING THE COUNTRY a watercourse is being traced across: which way is
+// READING THE BIOME a watercourse is being traced across: which way is
 // downhill, whether a point has left the world, whether the walk is on a
 // crest it should not be crossing, how a course steps over the road and
 // away from it again, and how a tail with nowhere lower to go is flattened

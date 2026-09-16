@@ -259,11 +259,11 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
       budget: D.tilt.min,
     },
     {
-      // R34 — and the road is laid ALONG a country rather than ruled across
+      // R34 — and the road is laid ALONG the land rather than ruled across
       // one. A band: a stage that never climbs or falls is a table, and one
       // that never stops is a rollercoaster.
       id: "rolling",
-      label: "the road rises and falls with the country it crosses (R34)",
+      label: "the road rises and falls with the biome it crosses (R34)",
       score: within(rolling, D.rolling, D.rollingSlack),
       weight: 1.5,
       value: rolling,
@@ -451,12 +451,12 @@ function cornerTilt(track: Track, findings: Finding[]): number | null {
  * of it. Add up every step the surface takes, up or down, and divide by the
  * distance — the simplest honest statement of "this road is not a plane",
  * and the one number that moves when the road is laid closer along the
- * country (`STAGE_RULES.elevation.follow.lag`).
+ * biome (`STAGE_RULES.elevation.follow.lag`).
  *
  * The whole road, both surfaces, because this is a question about the LINE
  * and not about what it is surfaced with. Jumps are stepped over: a lip is
  * a metre of climb inside twenty, and a stage with three of them would read
- * as rolling country for having three ramps on it.
+ * as rolling biome for having three ramps on it.
  *
  * A band, not a floor. A stage that never leaves its own datum is a table
  * with a ribbon on it — but the far end is a road that is never level long

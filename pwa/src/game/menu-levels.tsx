@@ -3,8 +3,8 @@
 //
 // Three pages show the same stages behind three different gates, and they
 // have to look identical while they do it: the CAMPAIGN opens the next rung
-// of the ladder, the TIME TRIAL opens a whole COUNTRY at a time (all six the
-// moment the campaign opens the country), and HEADS UP opens anything driven
+// of the ladder, the TIME TRIAL opens a whole BIOME at a time (all six the
+// moment the campaign opens the biome), and HEADS UP opens anything driven
 // to the end, to race the field over again. So the boxes live here and the
 // gate is passed in — a page decides what is open and what a locked box asks
 // for, and nothing else about a stage box is a page's business.
@@ -12,11 +12,11 @@
 // The same stages come round a fourth time behind NO gate at all —
 // `StagePicker`, at the foot of this file — for Roam and for the developer's
 // map viewer, which put a road on the map rather than on a start line: the
-// same country rows and the same boxes, with every padlock off, because a
+// same biome rows and the same boxes, with every padlock off, because a
 // stage should look like itself wherever it is offered.
 //
 // And ABOVE the grid, on all of those pages, sits the step that chooses
-// which country's six are being looked at: `LocationList`. It is the same
+// which biome's six are being looked at: `LocationList`. It is the same
 // row of banners everywhere because the question is the same one — where
 // am I driving — and only the gate behind it differs.
 
@@ -256,18 +256,18 @@ export function LevelGrid({
   );
 }
 
-/** THE COUNTRY, behind the row that opens it — a real render taken by the
- * game from two hundred metres over the country's first start line
+/** THE BIOME, behind the row that opens it — a real render taken by the
+ * game from two hundred metres over the biome's first start line
  * (`make biomes`), not a map of any one stage: a location is six roads, and
  * a picture of one of them would be advertising the wrong thing.
  *
  * It fills the row and the text sits on it, which is the only layout that
  * does not cost the page height it has not got. Decorative, so it is hidden
- * from a reader — the row already says the country's name and what it is
+ * from a reader — the row already says the biome's name and what it is
  * like in words.
  *
  * A missing file takes itself off the page rather than leaving a broken
- * image in the menu: the banners are generated, and a country added to
+ * image in the menu: the banners are generated, and a biome added to
  * `campaign.ts` before `make biomes` is next run has none. */
 function BiomeShot({ location }: { location: CampaignLocation }) {
   const [gone, setGone] = useState(false);
@@ -285,18 +285,18 @@ function BiomeShot({ location }: { location: CampaignLocation }) {
   );
 }
 
-/** THE COUNTRIES, as the step before the stages — the campaign's board, and
+/** THE BIOMES, as the step before the stages — the campaign's board, and
  * the same board in front of the time trial's grid and heads up's.
  *
- * All three used to differ here: the campaign asked which country, and the
- * other two printed every country's six boxes down one page. Six became
- * twelve the moment a second country landed, and a page that is two grids
+ * All three used to differ here: the campaign asked which biome, and the
+ * other two printed every biome's six boxes down one page. Six became
+ * twelve the moment a second biome landed, and a page that is two grids
  * deep is a page where the stage you want is below the fold. So the question
  * is asked once, the same way, on all three — and what changes between them
- * is only the gate: a country the campaign has not opened, against one you
+ * is only the gate: a biome the campaign has not opened, against one you
  * have never driven a stage of.
  *
- * A locked country is still SHOWN, dimmed: what is on the other side of the
+ * A locked biome is still SHOWN, dimmed: what is on the other side of the
  * padlock is the reason to go through it, and a grey box is a reason to stop
  * looking. */
 export function LocationList({
@@ -306,14 +306,14 @@ export function LocationList({
   next,
   onPick,
 }: {
-  /** Whether this country's stages can be reached from the page asking. */
+  /** Whether this biome's stages can be reached from the page asking. */
   open: (location: CampaignLocation, index: number) => boolean;
   /** What a locked row asks for. A padlock with no reason on it is a wall. */
   hint: (location: CampaignLocation, index: number) => string;
-  /** The row's third line — what has been got out of the country so far.
+  /** The row's third line — what has been got out of the biome so far.
    * Omitted where a page has nothing to say about it. */
   line?: (location: CampaignLocation) => ComponentChildren;
-  /** The country the page would pick for you: where the controller's cursor
+  /** The biome the page would pick for you: where the controller's cursor
    * lands and what START takes. */
   next?: CampaignLocation | null;
   onPick: (location: CampaignLocation) => void;
@@ -370,7 +370,7 @@ export function LocationList({
  * scored, and what comes back is a setup rather than a race.
  *
  * It is the campaign's own two surfaces, though, and deliberately so: the
- * country rows with their banners, then that country's six stage boxes with
+ * biome rows with their banners, then that biome's six stage boxes with
  * their roads drawn on them. A player who has picked a stage on the campaign
  * ladder has already learnt this screen, and a picture of the road is worth
  * more than the seed number the list used to print — the seed is on the page
@@ -429,7 +429,7 @@ export function StagePicker({
           onPlay={onPick}
         />
       ) : (
-        // The same country rows the campaign, the time trial and heads up
+        // The same biome rows the campaign, the time trial and heads up
         // open on — with the gate held open, since nothing here is earned.
         <LocationList
           open={() => true}

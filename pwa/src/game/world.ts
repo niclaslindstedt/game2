@@ -104,7 +104,7 @@ export type World = {
    * kilometres of forest to draw a few hundred metres of it. `range` is the
    * fog's far distance: past it every fragment is pure fog color, so what
    * is dropped could not have been seen. The frustum does the other half,
-   * for the open country, which is pooled into meshes three cannot cull
+   * for the open land, which is pooled into meshes three cannot cull
    * because the camera stands inside every one of them. */
   cull: (camera: THREE.Camera, range: number, also?: THREE.Camera | null) => void;
   /** A solid the engine has taken OUT of the world (`solidBreak`): stop
@@ -188,7 +188,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   // material that wears it, and it is set HERE because it belongs to the
   // stage rather than to any one thing in it (snow-cap.ts).
   setSnowCap(track.knobs, track.climate);
-  // R40 — the country the stage's dials name. The engine placed every
+  // R40 — the biome the stage's dials name. The engine placed every
   // solid thing from the same id; this is what dresses it.
   const biome = biomeFor(track.knobs.biome);
   const terrain = buildTerrain(track, biome, season);
@@ -198,7 +198,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   terrain.group.name = "terrain";
   group.add(terrain.group);
   // R47 — THE COAT. The ground's own lattice is too coarse to hold a
-  // winter's blanket (`snow-mantle.ts` says why), so on a white country the
+  // winter's blanket (`snow-mantle.ts` says why), so on a white biome the
   // snow is laid over it as a surface of its own, following the car. Null
   // on every green stage, and nothing anywhere pays for it there.
   const mantle = createSnowMantle(terrain.field, terrain.paintSeed, detailTexture());
@@ -291,7 +291,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
    * chunk the road placed it from, and because its rotors turn every frame. */
   const windFarms = createWindFarms();
   group.add(windFarms.group);
-  /** R45 — the transmission line, if the country carries one. Outside the
+  /** R45 — the transmission line, if the biome carries one. Outside the
    * chunks and never pruned, for the wind farms' reason and more so: it
    * crosses the whole map, so the tower on the skyline belongs to no chunk
    * and the wayleave belongs to all of them. Built on the first chunk,
@@ -384,7 +384,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     }
     // R17 — the public roads the route never met, ordered by the arc of the
     // route they run nearest. Whole roads rather than per-chunk pieces: one
-    // crosses the country the stage folds through, so there is no stretch of
+    // crosses the land the stage folds through, so there is no stretch of
     // stage it belongs to more than another.
     for (; publicScan < track.publicRoads.length; publicScan++) {
       const road = track.publicRoads[publicScan];
@@ -597,7 +597,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
    * The chunk pass does not care about it: both cameras stand on the car,
    * so they agree about what is within reach. The frustum pass does, and
    * missing it is what leaves the mirror looking at bare ground where the
-   * open country's trees should be. */
+   * open land's trees should be. */
   const cull = (camera: THREE.Camera, range: number, also?: THREE.Camera | null): void => {
     const at = camera.position;
     const reach = range + SCENERY_REACH;

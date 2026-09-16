@@ -126,11 +126,11 @@ const phone = reviewPhone(root);
 if (!phone) {
   fail(
     "no App Store review phone (ASC_REVIEW_PHONE)",
-    "Apple rings it, so it has to be reachable and carry a country code. Put it in " +
+    "Apple rings it, so it has to be reachable and carry a biome code. Put it in " +
       `${rel(env.file)} — NEVER in listing.mts, which is committed to a public repository.`,
   );
 } else if (!phone.startsWith("+")) {
-  fail(`ASC_REVIEW_PHONE (${phone}) has no country code`, "Apple requires the + prefix, e.g. +46…");
+  fail(`ASC_REVIEW_PHONE (${phone}) has no biome code`, "Apple requires the + prefix, e.g. +46…");
 } else {
   ok(`review contact ${phone}`);
 }

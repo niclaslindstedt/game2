@@ -70,7 +70,7 @@ export type RaceSettings = {
   weather: Weather;
   season: Season;
   /** The air at the datum, °C, or null for the season's own in the
-   * country (climate.ts) — what the TEMPERATURE row stores as AUTO. */
+   * biome (climate.ts) — what the TEMPERATURE row stores as AUTO. */
   temperature: number | null;
   /** R40 — how often the SANDSTORMS come, 0..1 (`game/sandstorm.ts`).
    * Kept beside the weather rather than among the generator's dials
@@ -308,7 +308,7 @@ export const STAGE_DIALS: {
   key: NumericKnob;
   label: string;
   stops: DialStop[];
-  /** R47 — a dial only one country reads is only offered there. */
+  /** R47 — a dial only one biome reads is only offered there. */
   biome?: BiomeId;
 }[] = [
   {
@@ -321,7 +321,7 @@ export const STAGE_DIALS: {
     ],
   },
   {
-    // R34 — how steep the country stands, as against how high `elevation`
+    // R34 — how steep the land stands, as against how high `elevation`
     // stands it. The two read as one thing on a map and as two entirely
     // different stages from the driver's seat: ALPINE hills on a WORN dial
     // are long open slopes you can see across, and the same hills on SHEER
@@ -335,7 +335,7 @@ export const STAGE_DIALS: {
     ],
   },
   {
-    // R49 — WHICH WAY the stage runs through that country, as against how
+    // R49 — WHICH WAY the stage runs through that biome, as against how
     // much of it there is (`elevation`) and how steep it stands
     // (`steepness`). A DESCENT is the one a player feels first: the road
     // gives back speed the whole way instead of asking for it.
@@ -441,7 +441,7 @@ export const STAGE_LENGTH_OPTIONS: { id: StageLength; label: string }[] = [
   { id: "endless", label: "ENDLESS" },
 ];
 
-/** The four. Winter is the one that reaches the wheels: a frozen country
+/** The four. Winter is the one that reaches the wheels: a frozen biome
  * is snow on the road and a blanket beside it (climate.ts). */
 export const SEASONS: { id: Season; label: string }[] = [
   { id: "spring", label: "SPRING" },
@@ -462,7 +462,7 @@ export const SEASONS: { id: Season; label: string }[] = [
 export const TEMPERATURE_RANGE = { min: -40, max: 40 } as const;
 
 /** Where the fader's thumb stands, °C: the temperature this stage names, or
- * the season's own in this country (climate.ts) until somebody moves it.
+ * the season's own in this biome (climate.ts) until somebody moves it.
  * There is no AUTO stop to land on — a fader has nowhere to put one, and
  * moving the SEASON hands the row back to the season anyway (see the Roam
  * page). Clamped to the travel, so a temperature dialled in from a link
@@ -484,17 +484,17 @@ export function altitudeLabel(knobs: StageKnobs, altitude: number): string {
   return `${Math.round(altitudeOf({ ...knobs, altitude }))} M`;
 }
 
-/** ...and whether this country has an altitude to dial at all: R47's row
+/** ...and whether this biome has an altitude to dial at all: R47's row
  * is only offered where there is a mountain for it to move. Asked of the
- * country rather than of its name, so a second mountain country would be
+ * biome rather than of its name, so a second mountain biome would be
  * offered it without anybody having to remember to come here. */
 export function hasAltitude(biome: BiomeId | string | undefined): boolean {
   return biomeRules(biome).land.massif !== null;
 }
 
-/** R40 — WHAT THE DUNE ROW READS: how high the sand this country's wind has
+/** R40 — WHAT THE DUNE ROW READS: how high the sand this biome's wind has
  * piled stands over the trough beside it, in metres (`duneHeightOf`). A
- * MAXIMUM, and the row says so — most of the country is lower, and between
+ * MAXIMUM, and the row says so — most of the biome is lower, and between
  * the ergs there is none at all. Metres for the reason ALTITUDE is in
  * metres: a dune is a height, and nobody can picture "0.62" of one. */
 export function duneLabel(knobs: StageKnobs, dunes: number): string {
@@ -502,7 +502,7 @@ export function duneLabel(knobs: StageKnobs, dunes: number): string {
   return m === 0 ? "NONE" : `${m} M`;
 }
 
-/** ...and whether this country has any sand to pile. Asked of the country
+/** ...and whether this biome has any sand to pile. Asked of the biome
  * (`BiomeLand.dunes`) rather than of its name. */
 export function hasDunes(biome: BiomeId | string | undefined): boolean {
   return biomeRules(biome).land.dunes !== null;
@@ -521,7 +521,7 @@ export function sandstormLabel(biome: BiomeId | string | undefined, sandstorms: 
   return `EVERY ${minutes < 10 ? minutes.toFixed(1) : minutes.toFixed(0)} MIN`;
 }
 
-/** ...and whether the wind in this country picks the ground up and carries
+/** ...and whether the wind in this biome picks the ground up and carries
  * it (`BiomeRules.blown`) — whether there are storms of it to space out. */
 export function hasSandstorms(biome: BiomeId | string | undefined): boolean {
   return biomeRules(biome).blown;
@@ -537,9 +537,9 @@ export const WEATHERS: { id: Weather; label: string }[] = [
   { id: "storm", label: "STORM" },
 ];
 
-/** ...of which a COUNTRY offers some (R40) in a SEASON (climate.ts): the
+/** ...of which a BIOME offers some (R40) in a SEASON (climate.ts): the
  * desert has no rain but in its winter, and its storm is sand. The row a
- * page shows is the country's, so the sky can never be set to a weather
+ * page shows is the biome's, so the sky can never be set to a weather
  * the place does not have. Under freezing the same two weathers are named
  * for what they are there — SNOW and a BLIZZARD — because what falls is
  * the temperature's call (`fallsAsSnow`), not the row's. */
@@ -560,7 +560,7 @@ export function weathersOf(
   );
 }
 
-/** R40 — the countries, as the menus name them. First is the default. */
+/** R40 — the biomes, as the menus name them. First is the default. */
 export const BIOME_OPTIONS: { id: BiomeId; label: string }[] = BIOME_IDS.map((id) => ({
   id,
   label: BIOMES[id].label,

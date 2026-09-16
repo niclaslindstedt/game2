@@ -9,7 +9,7 @@ sheer wall rather than a slope. Driving off it was a fall you did not come
 back from.
 
 Three things were behind it. A branch leaving a junction followed the
-country for its height while still running beside the road it had just
+biome for its height while still running beside the road it had just
 left, so the two parted company vertically long before they parted on the
 map — seven metres apart in height, three metres apart on the ground. The
 terrain then had no good answer: hold the ground up under the branch and it
@@ -23,7 +23,7 @@ terrain draws beside a road — a cutting on one side, fill on the other —
 ran on for a hundred metres whether or not it had already met the real
 ground, inventing twenty metres of hillside that was not there.
 
-Roads now stay within reach of the country they cross, branches stay inside
+Roads now stay within reach of the biome they cross, branches stay inside
 the stage's own verge until the two have genuinely separated, and a bench
 stops where it meets the ground. Walls beside the road are down by more
 than half.

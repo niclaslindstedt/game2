@@ -98,7 +98,7 @@ export function initialRace(): RaceSettings {
   }
   // A record written when a stage was set by a WORD carries `timeOfDay`
   // and no hour: it is read as the hour that light happens at in the
-  // season and the country it stored (daylight.ts).
+  // season and the biome it stored (daylight.ts).
   const legacy = (race as { timeOfDay?: unknown }).timeOfDay;
   if (typeof legacy === "string" && typeof race.hour !== "number") {
     race.hour = hourOfWord(legacy, race.season, race.knobs?.biome ?? "taiga");
@@ -124,7 +124,7 @@ export function initialRace(): RaceSettings {
   const params = new URLSearchParams(location.search);
   // ?hour= is the sun's clock at the start (0..24); ?tod= is the word a
   // stage used to be set by, read as the hour that light happens at in the
-  // season and the country the link names (daylight.ts).
+  // season and the biome the link names (daylight.ts).
   const hour = parseHour(params.get("hour"));
   if (hour !== null) race.hour = hour;
   else {
@@ -181,8 +181,8 @@ export function initialRace(): RaceSettings {
     const raw = params.get(key);
     if (raw !== null && Number.isFinite(Number(raw))) race.knobs[key] = Number(raw);
   }
-  // ...and the country (R40), the one dial that is a name. A stored race
-  // from a build with no countries in it resolves to the taiga.
+  // ...and the biome (R40), the one dial that is a name. A stored race
+  // from a build with no biomes in it resolves to the taiga.
   const biome = params.get("biome");
   if (isBiomeId(biome)) race.knobs.biome = biome;
   // ...and WHICH GENERATOR to build it with (`mapgen/versions.ts`), which is
@@ -195,7 +195,7 @@ export function initialRace(): RaceSettings {
     race.knobs.version = Number(genversion);
   }
   race.knobs = resolveKnobs(race.knobs);
-  // A weather the country does not have (a desert save left on RAIN by a
+  // A weather the biome does not have (a desert save left on RAIN by a
   // build that offered it) is cleared rather than drawn as something else.
   if (!weathersIn(race.knobs.biome, race.season).includes(race.weather)) race.weather = "clear";
   return race;
@@ -240,7 +240,7 @@ export function initialSettings(): Settings {
   // tuned for a driver's eye a metre and a half off the road, where 520 m is
   // a long way; a camera lifted a hundred metres up is looking through four
   // times that at the ground in front of it, and on the stored default the
-  // whole middle distance washes out to fog colour. A preview of the COUNTRY
+  // whole middle distance washes out to fog colour. A preview of the BIOME
   // asks for the setting a player with a good machine already has.
   const range = new URLSearchParams(location.search).get("drawdistance");
   if (range === "near" || range === "normal" || range === "far") {

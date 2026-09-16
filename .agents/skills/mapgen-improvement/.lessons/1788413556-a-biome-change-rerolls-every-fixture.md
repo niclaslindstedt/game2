@@ -5,7 +5,7 @@ scope: engine/mapgen/geology.ts, tests/
 concepts: [seeds, test-conventions, measurement, junctions, terrain]
 ---
 
-Changing the country under the search (the crest shape, a rim width) is not
+Changing the land under the search (the crest shape, a rim width) is not
 a change to one stage: every seed becomes a different stage, and every test
 that pins a seed for a property is now asking that property of a stage it
 never saw. On the whaleback pass eleven tests went red across ten files, and

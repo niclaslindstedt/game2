@@ -6,7 +6,7 @@ concepts: [menus, load, performance, stage-spec]
 ---
 
 A race is stood up behind the loading card because compiling a route and
-building the country around it is seconds of indivisible main-thread work
+building the land around it is seconds of indivisible main-thread work
 (`race-loader.ts`). The MENU has no card, and it stands a stage up the same
 way: `showBackdrop` → `backdropFor` → `applyStage`, synchronously, inside the
 effect that reacts to the page change. So any menu press that lands on a

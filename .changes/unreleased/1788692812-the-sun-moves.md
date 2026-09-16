@@ -7,10 +7,10 @@ A stage is no longer set to "dawn" or "dusk": it is set to an HOUR, and the
 sun moves from there at an hour a minute of racing. Start at sunset and the
 stage is driven down through the afterglow into the dark; start in the small
 hours and the dawn comes up over the last corners. Where the sun stands at a
-given hour is real astronomy for the season and the country — 16:00 in a
+given hour is real astronomy for the season and the biome — 16:00 in a
 taiga winter is already night, a midsummer night there never gets darker
 than twilight, and the desert's December four o'clock is a golden afternoon
-— so the same hour is a different sky in every country. Roam's TIME row is
+— so the same hour is a different sky in every biome. Roam's TIME row is
 now HOUR, a clock in whole hours with a sun or a moon on it for the light it
 is; a `?hour=` link sets it, and the old `?tod=` words still work as the
 hour that light happens at. The campaign's stages carry their own hours.
@@ -32,7 +32,7 @@ than a white ceiling over a black stage.
 Morning MIST lies in the valleys: thickest around sunrise, burnt off by
 mid-morning, most in autumn, none in a dry desert — a sheet over the
 taiga's bogs, and a CLOUD SEA in the Alps that a pass looks down onto. The
-sun glows through it, and the country's own shadow is marched off the
+sun glows through it, and the biome's own shadow is marched off the
 heightfield so a low sun stops at the ridge: a valley goes into the
 mountain's shade while the peaks across it are still lit, and the sea in it
 is grey under an orange sky. HIGH adds the sunlit edges on every cloud and

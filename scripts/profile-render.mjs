@@ -324,7 +324,7 @@ await scene(
 
 // THE TRAINING GROUND (engine/mapgen/arena.ts). Its own row because it is
 // the one place in the game whose GROUND is not a stage's: the pad is drawn
-// on a lattice four times finer than the country's, because the ramp and
+// on a lattice four times finer than the biome's, because the ramp and
 // the graded roads on it are shapes a 14 m cell would smooth away — and the
 // physics rides exactly the triangles drawn, so smoothing them away would
 // take them out of the driving too. That resolution is what this row is

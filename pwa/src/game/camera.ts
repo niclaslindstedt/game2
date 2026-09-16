@@ -179,7 +179,7 @@ const DRIVING_FAR = 900;
  * is looking through, and past it there is nothing to draw because there is
  * nothing they could see; a preview taken from two hundred metres up with
  * the horizon in the frame is looking at kilometres, and on the driving pair
- * the country simply stops partway out. The near plane moves with it because
+ * the biome simply stops partway out. The near plane moves with it because
  * the depth buffer is a ratio: a quarter-metre near plane under a six
  * kilometre far one has nothing left to separate a lake from the ground
  * under it — the same trade camera-map.ts makes for the same reason. */

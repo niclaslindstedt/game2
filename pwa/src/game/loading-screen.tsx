@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE CARD OVER A RACE BEING STOOD UP.
 //
-// What is behind it is `race-loader.ts`: the road compiled, the country and
+// What is behind it is `race-loader.ts`: the road compiled, the biome and
 // its forest built, the shaders compiled, fourteen crews entered and every
 // one of them driven through the whole stage before the player's lights run.
 // Seconds of work, and the alternative to a card over it is a frozen page and

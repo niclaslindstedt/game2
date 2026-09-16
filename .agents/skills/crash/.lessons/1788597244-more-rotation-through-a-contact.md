@@ -10,7 +10,7 @@ comes off `slamTurn`'s arrival, so a contact turns the body less and more of
 its rotation survives. Two things moved with it, and neither was a bug:
 
 - **The ledger's air->grd gain grew.** `carry` went from 5.3% on 37 steps to
-  7.7% on 103 with the country's give at 0.25, and back to 6.1% with it at 0.
+  7.7% on 103 with the biome's give at 0.25, and back to 6.1% with it at 0.
   The leak is the known hand-over one (the arm the flight hands up and the
   touchdown takes back), and it scales with how much rotation crosses the
   hand-over — keep more and it leaks more. Not a term to hunt.
@@ -24,4 +24,4 @@ its rotation survives. Two things moved with it, and neither was a bug:
 So a change here owes three readings, not one: `make crash`'s regime split,
 `make roll`'s twelve rows, and the ninety-trip driver sweep. Sweep the road's
 give against the sweep before choosing it — the number that reads right in
-open country is not the number the road wants.
+open land is not the number the road wants.

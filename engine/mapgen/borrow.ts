@@ -5,7 +5,7 @@
 // This is the half of the junction that used to be missing. When the sealed
 // stretches were painted onto the racing line, the "other road" at every
 // crossing had to be invented afterwards — a stub that left the junction on
-// the route's own tangent, wandered, and stopped wherever the country ran
+// the route's own tangent, wandered, and stopped wherever the biome ran
 // out. Nothing about it went anywhere, because there was nothing for it to
 // go to.
 //
@@ -30,7 +30,7 @@
 // search speaks, so the borrowed stretch is validated against R9 and R10
 // exactly like any other candidate: a borrow that would take the route out
 // of the world or back across its own line is rejected whole, and the
-// search carries on down the country on gravel.
+// search carries on down the biome on gravel.
 
 import type { Highway, HighwayNetwork } from "./highway.ts";
 import { STAGE_RULES as R, type SegmentPlan } from "./rules.ts";
@@ -94,7 +94,7 @@ export type Borrow = {
 
 /** R17 — build the whole borrow as one candidate: turn on, run the road,
  * turn off. Returns null where the geometry will not make a junction — the
- * caller then carries on down the country and tries again further on.
+ * caller then carries on down the biome and tries again further on.
  *
  * It is one candidate on purpose. A borrow committed a segment at a time
  * could be half-placed when the run along the road turns out to cross the

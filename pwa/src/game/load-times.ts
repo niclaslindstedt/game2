@@ -2,7 +2,7 @@
 // HOW LONG A LOAD TOOK LAST TIME, on THIS machine.
 //
 // Three of the five phases a race is stood up in are one indivisible call
-// each — compiling the road, building the country and its forest, compiling
+// each — compiling the road, building the biome and its forest, compiling
 // every shader the stage is about to need — so there is nothing inside them
 // to count, and the loading card has nothing to fill a bar from
 // (`race-loader.ts`). What it has instead is history: the same phase on the

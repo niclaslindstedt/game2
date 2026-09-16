@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// SCENERY — the country the road runs through, which on a generated stage
+// SCENERY — the land the road runs through, which on a generated stage
 // is as much of the level as the road is.
 //
 // This is the facet a rally judge would never need and this game cannot do
@@ -19,22 +19,22 @@
 // stage's places differ from each other, rather than how much any metre
 // differs from the one before it, which is noise.
 //
-// The last trait in the facet is about the country making SENSE rather than
+// The last trait in the facet is about the biome making SENSE rather than
 // about it being pretty, and it is the one that catches a fault a picture
 // makes obvious and no other measurement here can see. R17 lays the public
-// roads across the country before the rally is routed, whole, running off
+// roads across the land before the rally is routed, whole, running off
 // one edge of the map and out the other — and a road drawn like that with
 // nothing on it is a road that goes from nowhere to nowhere. Every bend on a
 // real road goes around something and every road runs BETWEEN two things: a
 // village, a farm, a landing on a lake, a place to leave a car. So
 // `roadsGo` walks each sealed road and asks whether there is something at
-// each end of it. A road that has a town at one end and empty country at
+// each end of it. A road that has a town at one end and empty biome at
 // the other is half a road; one with nothing anywhere is scenery pretending
 // to be infrastructure.
 //
 // Everything here is read off the TERRAIN FIELD rather than off the bare
 // geology, for `analysis/ground.ts`'s reason: R31 cuts the landscape back
-// to a cone beside every road, so a stage can be set in magnificent country
+// to a cone beside every road, so a stage can be set in magnificent biome
 // with all of it pushed over the horizon and a lawn either side of the car.
 // What is measured is what is seen from the seat.
 
@@ -154,7 +154,7 @@ export function rateScenery(walk: Walk, terrain: TerrainField): Facet {
   const traits: Trait[] = [
     trait(
       "scenery.enclosure",
-      "share of it the country closes in on",
+      "share of it the biome closes in on",
       "share",
       enclosure,
       S.enclosure,
@@ -162,7 +162,7 @@ export function rateScenery(walk: Walk, terrain: TerrainField): Facet {
     ),
     trait(
       "scenery.enclosureSwing",
-      "how much the country CHANGES along the stage",
+      "how much the biome CHANGES along the stage",
       "spread",
       swing,
       S.enclosureSwing,
@@ -186,7 +186,7 @@ export function rateScenery(walk: Walk, terrain: TerrainField): Facet {
     ),
     trait(
       "scenery.skyline",
-      "how much country the eye reaches over",
+      "how much land the eye reaches over",
       "m",
       skylineSum / probes,
       S.skyline,
@@ -273,7 +273,7 @@ function tallyGround(
     const soil = terrain.geology.soilAt(x, z);
     // A shallow skin over the bedrock IS bedrock from the seat: nothing
     // roots in it and it is painted as rock. The desert's own loose cover
-    // is separated by the country rather than by the depth — sand is deep
+    // is separated by the biome rather than by the depth — sand is deep
     // and still nothing grows.
     if (soil < 0.25) into.rock++;
     else if (terrain.geology.wetAt(x, z) <= 0 && isSand(terrain, x, z)) into.sand++;
@@ -376,12 +376,12 @@ function sayScenery(t: Trait): string {
   switch (t.id) {
     case "scenery.enclosure":
       return short
-        ? `open country the whole way — nothing beside the road`
+        ? `open land the whole way — nothing beside the road`
         : `closed in for ${(t.value * 100).toFixed(0)}% of it — a corridor with no view out`;
     case "scenery.enclosureSwing":
       return short
-        ? `the same country end to end (swing ${t.value.toFixed(2)}) — no sense of going anywhere`
-        : `the country never holds still (swing ${t.value.toFixed(2)})`;
+        ? `the same biome end to end (swing ${t.value.toFixed(2)}) — no sense of going anywhere`
+        : `the biome never holds still (swing ${t.value.toFixed(2)})`;
     case "scenery.landmarks":
       return short
         ? `${t.value.toFixed(1)} built things a km — nobody lives here`
@@ -400,7 +400,7 @@ function sayScenery(t: Trait): string {
         : `${t.value.toFixed(0)} m of relief on the skyline — the road is lost in it`;
     default:
       return short
-        ? `${t.value.toFixed(1)} kinds of ground the whole way — one country, seen once`
+        ? `${t.value.toFixed(1)} kinds of ground the whole way — one biome, seen once`
         : `the ground beside the road never settles on anything`;
   }
 }
@@ -449,7 +449,7 @@ function roadsGoSomewhere(
   let served = 0;
   let counted = 0;
   for (const road of roads) {
-    // Only the stretch of the road that is ON this stage's country. A public
+    // Only the stretch of the road that is ON this stage's biome. A public
     // road is laid edge to edge of the map and most of it can be nowhere
     // near the route; what is being asked is whether the tarmac the RALLY
     // meets goes anywhere, not whether the map's whole network does.

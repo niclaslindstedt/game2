@@ -52,7 +52,7 @@ export type River = {
    * big water darker, and the tooling reports it. */
   bridged: boolean;
   /** HOW IT ENDS. `water` ran into a lake or a sea basin, `map` left the
-   * country, `pool` had nowhere lower to go and stands where it stopped.
+   * biome, `pool` had nowhere lower to go and stands where it stopped.
    * Those are the only three: a watercourse that simply STOPS is the thing
    * this field exists to make impossible to ship unnoticed. */
   endsAt: "water" | "map" | "pool";
@@ -74,7 +74,7 @@ export const SOURCE_RUN = { min: 260, max: 460 };
  * the guard is drawn ending in a POOL — flat water in the lowest ground it
  * reached — because that is what water with nowhere to go actually does. */
 export const MOUTH_RUN = { min: 380, max: 1800 };
-/** How far outside the stage's own country a mouth has to get before
+/** How far outside the stage's own biome a mouth has to get before
  * running off the map counts as having ended somewhere, m. Past the fog
  * ceiling, like a branch's escape (`SPUR.escape`), so it is never seen
  * ending. */
@@ -183,7 +183,7 @@ export const SPRING_RISE = 2.5;
  * down to match — which puts the water at every crossing under its own bed.
  * So an end never takes more than half the fall it has. */
 
-/** The country the stage occupies — a mouth that gets outside it by
+/** The biome the stage occupies — a mouth that gets outside it by
  * `OFF_MAP` has left, which is one of the two honest ways for a river to
  * end. Optional: without one, the only ending is water. */
 export type WorldBounds = { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -195,7 +195,7 @@ export type Field = (x: number, z: number) => number;
 export type RoadClear = (x: number, z: number) => number;
 
 /** R35 — what a course can sense of the water already standing on the
- * country. Both halves matter and they are not the same question: one is
+ * biome. Both halves matter and they are not the same question: one is
  * "have I arrived", the other is "which way is there anything to arrive
  * AT". A tracer with only the first gropes downhill through the contours
  * of its own noise and runs out of length a couple of hundred metres short
@@ -229,4 +229,4 @@ export const SEAWARD_PULL = 0.9;
 export const SEAWARD_REFRESH = 8;
 
 /** No road anywhere: what a caller with no road to report hands in. */
-export const OPEN_COUNTRY: RoadClear = () => Infinity;
+export const OPEN_LAND: RoadClear = () => Infinity;

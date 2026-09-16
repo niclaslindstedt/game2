@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The road's own ROLL: the undulation a stage carries on top of the country
+// The road's own ROLL: the undulation a stage carries on top of the biome
 // it follows (R34). Its own module because two walks read it and they must
 // read the same one. The compiler adds it to every sample it emits; the
 // route search adds it to the height it walks beside each candidate, so
@@ -37,7 +37,7 @@ export function valueNoise1d(values: number[], s: number, spacing: number): numb
  * sines announces itself as a machine on the first two hills. */
 export function buildRolling(seed: number, knobs: StageKnobs): (s: number) => number {
   const rng = createRng((seed ^ 0x7e11a7d1) >>> 0);
-  // R40 — a worn country rolls its road less too, by the same share it
+  // R40 — a worn land rolls its road less too, by the same share it
   // stands its hills lower (`BiomeLand.relief`): the desert's roll rides on
   // dunes and pans, and a taiga's roll laid over a pan is a road that dips
   // under the lake table on flat ground.

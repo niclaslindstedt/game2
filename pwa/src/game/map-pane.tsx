@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE WINDOW ONTO THE MAP — the one element both map surfaces are built
-// around: Roam, where a stage is chosen by looking at the country it runs
-// through, and the developer's MAP VIEWER, where the same country is read
+// around: Roam, where a stage is chosen by looking at the biome it runs
+// through, and the developer's MAP VIEWER, where the same biome is read
 // layer by layer.
 //
 // It draws NOTHING. The game canvas is behind the whole DOM layer and the

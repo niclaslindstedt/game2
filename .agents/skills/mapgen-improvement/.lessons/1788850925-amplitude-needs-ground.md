@@ -7,7 +7,7 @@ concepts: [massif, alpine, altitude, geology, terrain, dials, measurement]
 
 R47's ALTITUDE dial grew the massif's crest 13× while growing its ridge
 PERIOD only 2.2× (`spread: 0.3`). The flank's grade is height over period, so
-the country came out at a measured 99th-percentile ground grade of 16.5
+the land came out at a measured 99th-percentile ground grade of 16.5
 against 0.77 at the dial's default: not a mountain, a spike field. Every
 downstream symptom followed from that one ratio — the summit had to be
 flattened into a mesa before a road could be laid on it, R35 then sited every
@@ -27,5 +27,5 @@ valleyPull)` says in one line whether a dial keeps a landform's character.
   is asked for more than that, SPLIT it: keep the box-sized relief and put the
   rest into a base elevation that no geometry reads (`altitudeScale.base`) and
   only the bands, the air and the printed figure do. The slider still says
-  6,000 M; the mountain is 748 m on a country 4,982 m up, which is how the
+  6,000 M; the mountain is 748 m on a biome 4,982 m up, which is how the
   Andes work.

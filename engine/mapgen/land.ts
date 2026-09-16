@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The BARE LANDSCAPE: the country before anybody laid a road across it —
+// The BARE LANDSCAPE: the biome before anybody laid a road across it —
 // the ground surface of the layered geology (R32), the water standing on
 // it (R35), and both read the way a road builder reads a map.
 //
@@ -9,7 +9,7 @@
 // to know where the water is before it drives into it, and a road built on
 // an embankment across a lake — ending in mid-air over open water — is a
 // mistake you can see from a kilometer up. Deterministic in the seed and
-// the dials, and nothing else: the same country every time.
+// the dials, and nothing else: the same biome every time.
 //
 // The ORDER here is the point. The geology makes the ground, the pour
 // works out what water stands on it, and only then does anything ask where
@@ -24,7 +24,7 @@
 // and everything that cares (what grows, what surfaces, what the ground is
 // painted) asks that.
 
-import { icyCountry, waterFrozen, type Climate } from "../game/climate.ts";
+import { icyBiome, waterFrozen, type Climate } from "../game/climate.ts";
 import { createGeology, type GeologyField } from "./geology.ts";
 import { createWaterField, SEA, type WaterField } from "./water.ts";
 import { NUMERIC_KNOBS, STAGE_RULES as R, landOf, type StageKnobs } from "./rules.ts";
@@ -71,7 +71,7 @@ export type LandField = {
   /** R48 — the same setback, counting only the water that is still WATER.
    * A body the cold has frozen solid is a floor rather than an obstacle,
    * so the rally's own route steers by this one and drives across what it
-   * skips. Everything laid on the country for good — a public road, a
+   * skips. Everything laid on the land for good — a public road, a
    * railway, a farm — keeps using `nearWater`: a tarmac road is built for
    * every season, and a season is not a reason to put one on a lake. */
   nearOpenWater: (x: number, z: number, within: number) => boolean;
@@ -107,15 +107,15 @@ export type LandField = {
   geology: GeologyField;
 };
 
-/** How many countries are kept built. The same seed's land is asked for by
- * the route search, the country the plan is sized against, the compiler and
+/** How many biomes are kept built. The same seed's land is asked for by
+ * the route search, the biome the plan is sized against, the compiler and
  * the terrain field — four times over, for one stage — and each of those
  * would otherwise pour the same water again from scratch. Two is enough to
  * hold a stage while a menu builds the next one behind it. */
 const MEMO = 2;
 const memo: { key: string; land: LandField }[] = [];
 
-/** The country a seed's stage is laid across, at its dial positions.
+/** The biome a seed's stage is laid across, at its dial positions.
  *
  * Memoized, because it is a pure function of exactly those two things and
  * because the pour inside it is the most expensive thing in the generator.
@@ -124,20 +124,20 @@ const memo: { key: string; land: LandField }[] = [];
 export function createLandField(
   seed: number,
   knobs: StageKnobs,
-  /** R48 — the cold the country is under, which decides which of its
+  /** R48 — the cold the land is under, which decides which of its
    * bodies are ice rather than water. Omitted, nothing is frozen: the
-   * water is the country's own and every road keeps off all of it, which
+   * water is the biome's own and every road keeps off all of it, which
    * is what a summer stage and every tool that only wants the LAND want. */
   climate?: Climate,
 ): LandField {
   const cold = climate === undefined ? "" : `${climate.season}|${climate.temperature}`;
-  // Every dial, walked rather than listed. The country a stage is laid
+  // Every dial, walked rather than listed. The biome a stage is laid
   // across is a function of the seed and the dials, and a key that names
   // them by hand is a key that goes stale the next time one is added — it
   // had already lost `dunes`, so two desert stages a dune apart shared one
-  // country, and R49's tilt would have joined it. A dial the land does not
+  // biome, and R49's tilt would have joined it. A dial the land does not
   // read costs a cache miss nobody will notice; a dial it reads and the
-  // key does not is a stage built from another stage's country.
+  // key does not is a stage built from another stage's biome.
   const dials = NUMERIC_KNOBS.map((dial) => knobs[dial]).join("|");
   const key = `${seed}|${knobs.biome}|${knobs.version}|${dials}|${cold}`;
   const had = memo.find((entry) => entry.key === key);
@@ -152,13 +152,13 @@ function buildLandField(seed: number, knobs: StageKnobs, climate?: Climate): Lan
   const geology = createGeology(seed, knobs);
   const heightAt = geology.surfaceAt;
   const water = createWaterField(geology.groundAt, heightAt);
-  // R48 — CAN this country hold ice at all? Every ice reader below is the
+  // R48 — CAN this biome hold ice at all? Every ice reader below is the
   // plain one when it cannot, predicate and all, because the search asks
   // them of every probe point of every candidate segment: a summer that
   // paid for a callback and a second block lookup per step measured a
   // fifth again on the plan phase of `make analyze`, to answer "no" a
   // million times.
-  const icy = climate !== undefined && icyCountry(climate, landOf(knobs).zones);
+  const icy = climate !== undefined && icyBiome(climate, landOf(knobs).zones);
   const frozen = icy
     ? (level: number) => waterFrozen(climate as Climate, level)
     : (): boolean => false;
@@ -216,11 +216,11 @@ function buildLandField(seed: number, knobs: StageKnobs, climate?: Climate): Lan
  *   metres up reads the sea's level, decides it is comfortably clear, and
  *   drives straight through the lake.
  *
- *   THE COUNTRY, everywhere else.
+ *   THE BIOME, everywhere else.
  *
  * Stated once because THREE walks read it: the search's, which judges the
  * height of a road; the compiler's, which builds it; and the trial walk
- * that sizes the country around it. Two copies of this rule that drift
+ * that sizes the land around it. Two copies of this rule that drift
  * apart is a stage validated against a road nobody laid, or a landscape
  * that does not fit its own stage.
  *
@@ -237,7 +237,7 @@ export function buildableAt(land: LandField, x: number, z: number, roll: number)
 }
 
 /** ...and the BARE ground under a point for the fill-and-cut caps (R34):
- * the country, or the ice where a body is frozen. A road across a frozen
+ * the biome, or the ice where a body is frozen. A road across a frozen
  * lake stands on the lake — measured against the bed under it, every metre
  * of it would read as an embankment nobody built. */
 export function landUnder(land: LandField, x: number, z: number): number {

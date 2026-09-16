@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The desert's roster: every cactus, tree, shrub, tuft and bone the scenery
-// can plant in that country, each a recipe over the builder's primitives
+// can plant in that biome, each a recipe over the builder's primitives
 // (flora-build.ts) exactly as the taiga's are (flora-species.ts). WHICH of
 // them a stage plants, and where, is the biome's (biome-desert.ts) and the
 // placement code's business; this module only knows how each is SHAPED.
@@ -8,7 +8,7 @@
 // The layers a desert reads as, tallest first: the columnar cacti and the
 // Joshua trees, which are the only things that break the horizon; the low
 // trees of the washes; the spiky middle storey — ocotillo, cholla, agave,
-// yucca; the knee-high scrub that is most of the country; and the tufts,
+// yucca; the knee-high scrub that is most of the biome; and the tufts,
 // crusts and bones on the ground. Everything is seen at eighty miles an
 // hour, and what survives that is the SILHOUETTE: a saguaro is two arms
 // and a column, a Joshua tree is a fist of daggers, an ocotillo is a spray
@@ -379,7 +379,7 @@ function joshua(b: GeoBuilder, h: number, r: number, tiers: number): void {
 
 export const DESERT_VARIANTS: Record<string, VariantDef> = {
   // ── The columnar cacti: SOLID trunks the engine places, and the only
-  // things in this country that break the horizon. A saguaro grows an arm
+  // things in this biome that break the horizon. A saguaro grows an arm
   // a century, so the young one is a post, the ordinary one has two, and
   // the old one is a candelabra.
   saguaro: {
@@ -593,7 +593,7 @@ export const DESERT_VARIANTS: Record<string, VariantDef> = {
    * that says Joshua tree from four hundred metres. */
   joshuaTree: { build: (b) => joshua(b, 3.1, 0.26, 2) },
   joshuaYoung: { build: (b) => joshua(b, 1.5, 0.17, 1) },
-  // ── The wash trees — solid, and the only shade in the country.
+  // ── The wash trees — solid, and the only shade in the biome.
   /** Mesquite: low, wide and gnarled, on four or five dark stems, its fine
    * foliage hanging almost to the ground. The densest of the three. */
   mesquite: {
@@ -648,7 +648,7 @@ export const DESERT_VARIANTS: Record<string, VariantDef> = {
       b.blob(PINYON, 0.75, 0, 3.9, 0);
     },
   },
-  // ── The scrub — all of it soft, and most of the country.
+  // ── The scrub — all of it soft, and most of the biome.
   /** Creosote: a dozen thin whips and a scrap of olive foliage at the end
    * of each — an airy bush you can see straight through, which is what a
    * creosote flat looks like: bushes, and the ground between them. */

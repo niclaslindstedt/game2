@@ -12,7 +12,7 @@ back to 33 s, in descending order of payoff:
 
 1. **The answer is a PROMISE.** A distance of `d` means nothing can come inside
    the look-ahead for `(d − clearance − look) / step` steps, so a branch out in
-   open country skips the query entirely. This only works if the query resolves
+   open land skips the query entirely. This only works if the query resolves
    FAR ENOUGH: capping the reach below `clearance + look` silently makes the
    promise a lie, and the branches walk straight back over the stage.
 2. **Search the grid ring by ring, nearest first**, breaking once the nearest

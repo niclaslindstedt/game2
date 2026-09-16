@@ -281,7 +281,7 @@ export function buildScenery(
   }
 
   // ── The road's own edge. A ribbon that ends on a ruled line reads as
-  // laid on top of the country whatever its colours do; what breaks the
+  // laid on top of the land whatever its colours do; what breaks the
   // line is stuff STANDING across it. Two passes do it: grass coming back
   // into the bare shoulder from the field side, and the loose gravel the
   // blade and the traffic push off the mat. Both are small on purpose —
@@ -378,7 +378,7 @@ export function buildScenery(
     q.setFromAxisAngle(UP, p.s * 20);
     m.compose(v.set(p.x, p.y + scale * 0.35, p.z), q, sc.set(scale, scale * 0.7, scale));
     rockMesh.setMatrixAt(i, m);
-    // Every third stone carries a mossy cast where the country grows
+    // Every third stone carries a mossy cast where the biome grows
     // moss at all; the rest vary in grey.
     tint.setScalar(0.8 + p.s * 0.35);
     if (biome.mossyStone > 0 && i % 3 === 0) tint.lerp(mossy, 0.5);

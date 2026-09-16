@@ -1,5 +1,5 @@
 ---
-title: A compile-time placer plans against the BARE country, and the terrain reshapes the ground afterwards — measure the built surface or ship the gap
+title: A compile-time placer plans against the BARE land, and the terrain reshapes the ground afterwards — measure the built surface or ship the gap
 date: 2026-09-03
 scope: engine/mapgen/, engine/analysis/
 concepts: [placement, terrain, measurement, roads, plausibility]
@@ -8,7 +8,7 @@ concepts: [placement, terrain, measurement, roads, plausibility]
 Everything placed in `compile.ts` reads `land.heightAt` — the geology's own
 surface. What the player meets is `terrain.groundAt`, which is that surface
 after the field has shelved every road, graded every pad and blended the
-country up onto them. The two disagree by **tens of metres** near a road,
+biome up onto them. The two disagree by **tens of metres** near a road,
 and a placer that never asks is placing against a surface that does not
 exist.
 
@@ -22,7 +22,7 @@ query that only knew the route).
 Three things follow, and they are the fix:
 
 - **Model the shelf, do not ignore it.** A field of every road's own sample
-  heights, eased back to the country over the terrain's `CORRIDOR_RANGE`
+  heights, eased back to the biome over the terrain's `CORRIDOR_RANGE`
   (150 m), is enough. Holding it flat across that reach instead is
   over-strict and refused a third of the lines for nothing.
 - **`shelfBand` is the compiler saying in advance where the cone will move

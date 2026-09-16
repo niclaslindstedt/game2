@@ -121,7 +121,7 @@ function darkness(hour: number): number {
   return 0.5;
 }
 
-/** Score ONE location's ladder — six stages of a country, in the order they
+/** Score ONE location's ladder — six stages of a biome, in the order they
  * are played. */
 export function rateLadder(id: string, label: string, steps: LadderStep[]): LadderReport {
   const L = RATING.ladder;
@@ -274,9 +274,9 @@ export function rateCampaign(ladders: LadderReport[]): CampaignReport {
   const characters = everyStep.map((step) => step.rating.character);
   const closest = closestPair(characters);
 
-  // The countries are the campaign's own biggest lever of variety and the
+  // The biomes are the campaign's own biggest lever of variety and the
   // one it cannot lose by accident, so this is a coverage check rather than
-  // a band: a campaign that visits one country is a campaign with one
+  // a band: a campaign that visits one biome is a campaign with one
   // landscape in it.
   const biomes = new Set(everyStep.map((step) => step.conditions.biome));
   const cars = carCoverage(everyStep);
@@ -313,7 +313,7 @@ export function rateCampaign(ladders: LadderReport[]): CampaignReport {
     notes.push({
       code: "campaign.apart",
       sense: "thin",
-      message: `${everyStep[closest.a].name} and ${everyStep[closest.b].name} are the same stage in two countries (${closest.distance.toFixed(2)} apart)`,
+      message: `${everyStep[closest.a].name} and ${everyStep[closest.b].name} are the same stage in two biomes (${closest.distance.toFixed(2)} apart)`,
       value: closest.distance,
     });
   }
@@ -333,7 +333,7 @@ export function rateCampaign(ladders: LadderReport[]): CampaignReport {
     stats: {
       ladders: ladders.length,
       levels: everyStep.length,
-      countries: biomes.size,
+      biomes: biomes.size,
       closestPair: Math.round(closest.distance * 1000) / 1000,
       ladderMean: Math.round(ladderMean * 10) / 10,
     },

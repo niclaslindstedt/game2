@@ -9,7 +9,7 @@ were still being worked out behind the racing.
 
 Now there is a loading card — the app's own skid marks, laid from nothing to
 full and again — and everything happens behind it: the road is compiled, the
-country and its forest are built, every shader the stage needs is compiled,
+biome and its forest are built, every shader the stage needs is compiled,
 the fourteen crews are entered, and all fourteen drive the whole stage before
 your lights run. When the card lifts there is nothing left to pay for. A
 restart loads the same way.

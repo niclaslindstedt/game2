@@ -33,7 +33,7 @@ const STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 1500, feature: "non
  * the car.
  *
  * Both widths, because they answer different questions and have to agree:
- * the track's decides where the road stops and the country starts, the
+ * the track's decides where the road stops and the biome starts, the
  * sample's is what the corridor profile is drawn from. Set only the first
  * and a long slide leaves the car sixty metres from a sixteen-metre road
  * while still counting as being on it — driving on the road's surface, over

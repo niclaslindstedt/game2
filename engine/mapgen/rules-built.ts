@@ -19,7 +19,7 @@ export const BUILT_RULES = {
 
     /** R17 — THE MOUTH: how the MINOR road opens out where it meets the
      * sealed one. A dirt road that arrives at a junction the same width it
-     * ran at leaves a wedge of country between its near edge and the main
+     * ran at leaves a wedge of land between its near edge and the main
      * road's, tapering to a knife point — which is the tell that two
      * ribbons collided rather than two roads meeting. In life there is no
      * wedge, and the reason is traffic: every car that turns out of the
@@ -47,14 +47,14 @@ export const BUILT_RULES = {
      * mouth of a lane and the mouth of a boulevard are the same PLACE at two
      * scales. At 0.6 and 1.1 the throat is a little over twice the road and
      * opens over a road and a bit of it — which is what a graded side road
-     * meeting a country highway looks like. `run` bounds how far back the
+     * meeting a biome highway looks like. `run` bounds how far back the
      * widening may reach at all, in road widths: a corner that hugs the main
      * road for a hundred meters is not a hundred meters of mouth. */
     mouth: { run: 3, wide: 0.45, taper: 1.1 },
     /** R17 — how far a junction's abandoned arm is allowed to be from the
      * edge of the map, as a share of the run a branch may take getting
      * there. A junction is only built where the arm it abandons can LEAVE:
-     * a branch that cannot get clear of the country stops in a field, and a
+     * a branch that cannot get clear of the land stops in a field, and a
      * tarmac road ending in a field is the loudest mistake the generator
      * can make. Measured as a share of the box's own diagonal, so it means
      * the same on a sprint and on a stage four times the size — and well
@@ -137,7 +137,7 @@ export const BUILT_RULES = {
      * closure the borrow pays for (`paving.borrow.look` says why). */
     look: 200,
 
-    /** R36 — HOW HIGH THE TARMAC STANDS above the country the rally crosses
+    /** R36 — HOW HIGH THE TARMAC STANDS above the biome the rally crosses
      * it on, m, and over how much gravel the climb happens.
      *
      * This is the jump, and it is a jump nobody built. A public road is laid
@@ -155,7 +155,7 @@ export const BUILT_RULES = {
      * smoothstep and a smoothstep's peak slope is 1.5. That is the
      * arithmetic to do before touching either number, and it is the one that
      * was missed the first time these were chosen: 1.3 m over an
-     * eight-metre ramp measured 22% at the middle before the country under
+     * eight-metre ramp measured 22% at the middle before the land under
      * it was counted, and with it, 33%.
      *
      * At 1 m and 14 the steepest point is 11%, and the curvature over the
@@ -203,7 +203,7 @@ export const BUILT_RULES = {
   /** R41 — THE RAILWAY, and the ramp the rally crosses it on. Meters and
    * seconds unless noted. */
   rail: {
-    /** How many of a railway country's seeds carry a line at all. Most:
+    /** How many of a railway biome's seeds carry a line at all. Most:
      * the train is the point, and a railway with no crossing on the stage
      * costs nothing but the search's clearance round it. The land still
      * refuses some (a rim in a lake, a line that never gets clear). */
@@ -269,7 +269,7 @@ export const BUILT_RULES = {
        * longest train (`rules_test` holds it), or two trains would be on
        * one line pointing at each other. */
       period: { min: 90, max: 140 },
-      /** Line speed, m/s — a country railway's, not a main line's. */
+      /** Line speed, m/s — a biome railway's, not a main line's. */
       speed: { min: 18, max: 26 },
       /** How often the train is a RAILBUS (one or two cars, no wagons)
        * rather than a locomotive and freight. */

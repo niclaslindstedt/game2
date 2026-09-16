@@ -16,7 +16,7 @@ material class, `vertexColors`, a `map`, `fog`, lights — get one compiled
 program, whichever compiled first. The graft's BODY differs per caller and
 the key cannot see it.
 
-What that looks like: the snow coat and the country's ground tiles collided.
+What that looks like: the snow coat and the biome's ground tiles collided.
 The coat drew with the tiles' shader, read a `snow` vertex attribute its own
 geometry does not have (so `0`), took the cover weight from it, and lost its
 wrap lighting, its glitter and its blanket-depth discard. Nothing threw,

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// EVERYTHING THE COUNTRY TURNED OUT TO HOLD, built once the road through it
+// EVERYTHING THE BIOME TURNED OUT TO HOLD, built once the road through it
 // exists: the public roads the route never met (R17), the towns down the
 // tarmac (R39), the homesteads off the stage (R37), the wind and solar
 // farms (R43) and the transmission line that carries their power away
 // (R45). None of them moves the route — the route is already drawn — and
-// each is a pure function of the seed and the country, so each is built
+// each is a pure function of the seed and the biome, so each is built
 // once and appended to the track.
 
 import { STAGE_RULES as R } from "./rules.ts";
@@ -17,7 +17,7 @@ import { placeSolarFarms, placeWindFarms } from "./energy.ts";
 import { placePowerLines } from "./powerline.ts";
 import { rectDistance } from "./farms.ts";
 import { branchClearance } from "./compile-road.ts";
-import { HIGHWAY_LOOK, roadTopField, STREAMED_HOLD } from "./compile-country.ts";
+import { HIGHWAY_LOOK, roadTopField, STREAMED_HOLD } from "./compile-land.ts";
 import type { Track } from "./track-shape.ts";
 
 import type { Walk } from "./compile-walk.ts";
@@ -35,7 +35,7 @@ export function createPlaces(
   const { land, biome, loose, highways } = walk;
   /** R17 — build the public roads the route never met (`publicroad.ts`).
    * Once per stage: the lines are a pure function of the seed and the
-   * country, and an endless stage carries none of them. */
+   * biome, and an endless stage carries none of them. */
   const buildPublic = (): void => {
     if (track.endless || track.publicRoads.length > 0 || track.highways.length === 0) return;
     const whole = roadDistanceField()({ x: 0, z: 0 });
@@ -68,7 +68,7 @@ export function createPlaces(
    * streaming frontier on an endless one, for the homesteads' reason. */
   let townFrom = 0;
   const buildTowns = (): void => {
-    // R40 — only in a country somebody lives in.
+    // R40 — only in a biome somebody lives in.
     if (!followsLand || !biome.settled) return;
     let to = track.samples.length;
     if (track.endless) {
@@ -122,9 +122,9 @@ export function createPlaces(
   let homesteadFrom = 0;
   const buildHomesteads = (): void => {
     // A synthetic rig is a measuring device, and a house beside a drift
-    // test's straight is a wall the car under test slides into. No country,
+    // test's straight is a wall the car under test slides into. No biome,
     // no homesteads — the same line every other piece of the landscape
-    // draws on a rig. R40 — and no country nobody lives in.
+    // draws on a rig. R40 — and no biome nobody lives in.
     if (!followsLand || !biome.settled) return;
     let to = track.samples.length;
     if (track.endless) {
@@ -165,7 +165,7 @@ export function createPlaces(
 
   /** R43 — the wind farms and the solar farms whose slots fall on road
    * committed since the last call, on the homesteads' window and for the
-   * homesteads' reasons: none on a synthetic rig, none in a country that
+   * homesteads' reasons: none on a synthetic rig, none in a biome that
    * makes no power. */
   let energyFrom = 0;
   const buildEnergy = (): void => {
@@ -242,10 +242,10 @@ export function createPlaces(
     energyFrom = to;
   };
 
-  /** R45 — the transmission line this country carries, laid once per stage
+  /** R45 — the transmission line this biome carries, laid once per stage
    * across the whole map. Once, and not on the placers' streaming window,
    * because a line is not decided from the stage at all: it is a fact
-   * about the country from rim to rim, and there is no rim on an endless
+   * about the biome from rim to rim, and there is no rim on an endless
    * one — which is the same reason an endless stage carries no tarmac. */
   const buildPowerLines = (): void => {
     if (track.endless || !followsLand || !biome.energy) return;
@@ -257,7 +257,7 @@ export function createPlaces(
     track.powerLines.push(
       ...placePowerLines({
         seed: track.seed,
-        // The country the STAGE occupies, not the length's nominal box:
+        // The biome the STAGE occupies, not the length's nominal box:
         // the line has to cross what a player can see, and what a player
         // can see is the road and the fog's reach either side of it. The
         // module's own `overrun` puts both ends well outside that.
@@ -285,9 +285,9 @@ export function createPlaces(
           }
           return best;
         },
-        // The wire clears every ROAD, not the country under them: a road
+        // The wire clears every ROAD, not the land under them: a road
         // rides its embankments and shelves metres over the ground the
-        // survey read, and the terrain blends the country up onto them.
+        // survey read, and the terrain blends the land up onto them.
         clearanceAt: roadTop,
         shelfBand,
         energyDistance: (x, z) => {

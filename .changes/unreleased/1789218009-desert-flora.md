@@ -1,6 +1,6 @@
 ---
 type: Changed
-title: The desert's cacti are cacti again — every plant in the country rebuilt, and six new ones beside them
+title: The desert's cacti are cacti again — every plant in the biome rebuilt, and six new ones beside them
 ---
 
 The desert was being carried by the wrong plant. What broke its horizon was
@@ -43,7 +43,7 @@ hanging chains, the century plant's six-metre flowering mast, and — most
 importantly — the triangle-leaf bursage, the commonest plant in the Sonoran
 desert and the nurse plant most of the saguaros standing over it started
 their first fifty years under. Its grey domes are now the ground layer
-everywhere, which is what the country was missing more than any cactus.
+everywhere, which is what the biome was missing more than any cactus.
 
 And every green in the paint box was pulled toward grey. A cactus's skin is
 a dull, slightly blue grey-green under a waxy bloom, and the distance

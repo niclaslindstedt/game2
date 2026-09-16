@@ -368,11 +368,11 @@ describe("the Mac App Store listing", () => {
     expect(new Set(captions).size).toBe(captions.length);
   });
 
-  it("spreads the set across all three countries", () => {
-    // The three countries are the reason this game does not look like one
+  it("spreads the set across all three biomes", () => {
+    // The three biomes are the reason this game does not look like one
     // screenshot, and a set shot entirely on the stage the tooling defaults to
     // is a set that says the game has one road.
-    const countries = new Set(SHOTS.map((s) => s.params.level?.split("-")[0]).filter(Boolean));
-    expect([...countries].sort()).toEqual(["alpine", "desert", "taiga"]);
+    const biomes = new Set(SHOTS.map((s) => s.params.level?.split("-")[0]).filter(Boolean));
+    expect([...biomes].sort()).toEqual(["alpine", "desert", "taiga"]);
   });
 });

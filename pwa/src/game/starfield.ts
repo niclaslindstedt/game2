@@ -7,7 +7,7 @@
 // Three ideas, and the whole module is them:
 //
 //   THE TURN     The stars are on a sphere that wheels once a day about a
-//                pole standing at the country's own latitude (R40, the same
+//                pole standing at the biome's own latitude (R40, the same
 //                number `daylight.ts` puts the sun's arc on). The hour
 //                spins it and the SEASON offsets it, so a winter midnight
 //                and a summer one look out at different parts of the sky —
@@ -49,7 +49,7 @@ export const GALAXY_OCTAVES = 3;
 /** Where the sphere of fixed stars stands: the pole it turns about, and how
  * far round it has come. */
 export type SkyTurn = {
-  /** The celestial pole's elevation, radians — the country's latitude. */
+  /** The celestial pole's elevation, radians — the biome's latitude. */
   pole: number;
   /** …and the heading it stands at: due north, in the engine's convention. */
   bearing: number;
@@ -70,7 +70,7 @@ const SIDEREAL: Record<Season, number> = {
 };
 
 /** Where the sphere of stars has turned to at `hour`, this season, over
- * this country. */
+ * this biome. */
 export function skyTurnAt(hour: number, season: Season, biome: BiomeId): SkyTurn {
   return {
     pole: biomeRules(biome).latitude * DEG,

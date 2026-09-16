@@ -415,7 +415,7 @@ type Live = {
 
 export type Skeins = {
   group: THREE.Group;
-  /** How many crossings this country holds at once, and which season it is
+  /** How many crossings this biome holds at once, and which season it is
    * flying. Idempotent, and cheap to call on every re-light — but a change
    * of either re-pitches everything, because a skein's bearing, its height
    * and the birds in it are all decisions the season made. */
@@ -434,8 +434,8 @@ export type Skeins = {
 const aim = new THREE.Vector3();
 
 /**
- * `most` is how many crossings the busiest country holds. They are all
- * planned once and hidden down to the count a given country wants, exactly
+ * `most` is how many crossings the busiest biome holds. They are all
+ * planned once and hidden down to the count a given biome wants, exactly
  * as the flocks and the birds of prey are.
  *
  * `random` is injected, exactly as `createWorld`'s is: everything about a

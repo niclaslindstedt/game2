@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import { compileTrack, createTerrain, type WildObstacle } from "@engine";
 
-/** A wide patch of country, well clear of the start, to gather props over. */
+/** A wide patch of land, well clear of the start, to gather props over. */
 const PATCH = 600;
 
 function propsOver(

@@ -127,7 +127,7 @@ Read the whole-run summary above it for damage and where it came to rest.
 - **`make verge`** — THE VERGE LAB: a car LEAVING THE ROAD, drawn from
   behind, with the ground under each frame shown from BOTH readers. Required
   before and after any change to the ground under the car
-  (`engine/game/ground.ts` — one rule for the road and the country — plus
+  (`engine/game/ground.ts` — one rule for the road and the biome — plus
   `TUNING.air`'s edges and `TUNING.suspension`'s bumps). A trip that starts
   with the car reading the wrong ground is not a roll bug.
 - **`make sim` is BLIND to all of this.** Bots do not roll — the table's

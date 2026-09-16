@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R40 — THE COUNTRY. A stage is built in a biome, and the desert is the
+// R40 — THE BIOME. A stage is built in a biome, and the desert is the
 // one that is not the taiga: no water anywhere (no lake, no river, no ford,
 // no bridge), no dead wood, a sand road with its own physics, and a quilt
 // of its own that the renderer's tables have to match row for row.
@@ -62,8 +62,8 @@ function propsAlong(
   return [...seen.values()];
 }
 
-describe("R40 — the country is a dial", () => {
-  it("defaults to the taiga, and falls back to it for a country this build does not know", () => {
+describe("R40 — the biome is a dial", () => {
+  it("defaults to the taiga, and falls back to it for a biome this build does not know", () => {
     expect(DEFAULT_KNOBS.biome).toBe("taiga");
     expect(resolveKnobs().biome).toBe("taiga");
     expect(resolveKnobs({ biome: "desert" }).biome).toBe("desert");
@@ -71,7 +71,7 @@ describe("R40 — the country is a dial", () => {
     expect(biomeRules("nowhere").id).toBe("taiga");
   });
 
-  it("carries the country on the track, and the taiga's rules are the ones every other rule was written against", () => {
+  it("carries the biome on the track, and the taiga's rules are the ones every other rule was written against", () => {
     expect(compileStage(1, "short").knobs.biome).toBe("taiga");
     const taiga = BIOMES.taiga;
     expect(taiga.land.relief).toBe(1);
@@ -108,7 +108,7 @@ describe("R40 — the desert", () => {
       expect(unsealed.length).toBeGreaterThan(0);
       expect(unsealed.every((s) => s.surface === "sand")).toBe(true);
       expect(track.samples.some((s) => s.surface === "gravel")).toBe(false);
-      // ...and a bladed road is a bladed road whichever country it is in:
+      // ...and a bladed road is a bladed road whichever biome it is in:
       // the wander, the bumps and the berm all ask the same question.
       expect(isLoose("sand")).toBe(true);
       expect(isLoose("gravel")).toBe(true);
@@ -127,7 +127,7 @@ describe("R40 — the desert", () => {
         false,
       );
       expect(props.some((ob) => ob.kind === "boulder" || ob.kind === "rock")).toBe(true);
-      // Still a country with things standing in it: the saguaros and the
+      // Still a biome with things standing in it: the saguaros and the
       // Joshua trees are trunks the engine places.
       expect(propsAlong(track, terrain.treesNear).length).toBeGreaterThan(20);
     }
@@ -170,7 +170,7 @@ describe("R40 — the desert", () => {
 });
 
 describe("R40 — the two halves agree", () => {
-  it("dresses every grove and region the engine quilts, in every country, and names only species a roster builds", () => {
+  it("dresses every grove and region the engine quilts, in every biome, and names only species a roster builds", () => {
     for (const id of BIOME_IDS) {
       const rules = BIOMES[id];
       const look = LOOKS[id];
@@ -204,7 +204,7 @@ describe("R40 — the two halves agree", () => {
     }
   });
 
-  it("grows a different roster in each country", () => {
+  it("grows a different roster in each biome", () => {
     const grows = (id: BiomeId): Set<string> =>
       new Set(LOOKS[id].communities.flatMap((c) => Object.keys(c.trees)));
     const taiga = grows("taiga");

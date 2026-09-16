@@ -3,7 +3,7 @@
 // Nordic house is (`HousePlan`, with `style: "chalet"`). The plan says how
 // big, how many storeys, what roof, whether there is a wing; this module
 // says what a house in the mountains is made of, because at thirty metres
-// that is what tells one country from another.
+// that is what tells one biome from another.
 //
 // The vocabulary is the real one. A GROUND FLOOR of stone or white render,
 // where the byre and the cellar were; STOREYS OF DARK TIMBER above it,
@@ -446,7 +446,7 @@ export function buildChalet(plan: HousePlan, rand: () => number): THREE.Mesh {
   return mesh;
 }
 
-/** A house in the country's own style: the plan's `style` decides, so the
+/** A house in the biome's own style: the plan's `style` decides, so the
  * yards and the streets ask this rather than either builder. */
 export function buildDwelling(plan: HousePlan, rand: () => number): THREE.Mesh {
   return plan.style === "chalet" ? buildChalet(plan, rand) : buildHouse(plan, rand);

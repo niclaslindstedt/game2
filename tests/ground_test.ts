@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// Where the car STANDS (engine/game/ground.ts): the road and the country as
+// Where the car STANDS (engine/game/ground.ts): the road and the biome as
 // one surface, the bump a step in the ground puts into the springs, the kink
 // the wheels cannot follow, and the wheels' own speed read along the path.
 
@@ -62,7 +62,7 @@ function intoTheWild(state: GameState, ground: (from: number) => (x: number) => 
   return car.x;
 }
 
-describe("the road and the country", () => {
+describe("the road and the biome", () => {
   it("agree on the ground at the verge line, on a graded road", () => {
     // The car is on the road out to `offTrack.verge` past the mat's edge and
     // on the terrain beyond it; the two readers have to hand over at a
@@ -94,16 +94,16 @@ describe("the road and the country", () => {
         // R31/R34 — NOT where the road was cut through rock. A face the
         // shaping could not take up at a climbable grade is declared
         // through `cutAt`, and standing proud of the road is what a cut
-        // face IS: the country there is rock the blasting left, not ground
+        // face IS: the biome there is rock the blasting left, not ground
         // the two readers disagree about. `cutAt` is the one declaration
         // the props, the paint and the analysis all read, so it is what
         // this reads too. (Seed 3's road runs through one at 3842 m, where
-        // the country stands 16 cm over the verge line and `cutAt` says so;
+        // the land stands 16 cm over the verge line and `cutAt` says so;
         // everywhere else on the stage the two agree to a millimetre.)
         if (terrain.cutAt(x, z) > 0) continue;
         const road = locate(track, x, z, i).elevation;
-        const country = terrain.groundAt(x, z);
-        worst = Math.max(worst, Math.abs(road - country));
+        const biome = terrain.groundAt(x, z);
+        worst = Math.max(worst, Math.abs(road - biome));
       }
     }
     expect(graded).toBeGreaterThan(20);

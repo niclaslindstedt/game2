@@ -4,7 +4,7 @@
 // trees on the higher, colder ground, mesquite thickets in the dry washes,
 // dune fields with nothing on them but bunch grass, and the salt-white pans
 // where a lake would be if there were any water — and there is none, not
-// a drop, which the engine's rules for this country guarantee
+// a drop, which the engine's rules for this biome guarantee
 // (engine/mapgen/biomes.ts). The types are biome.ts's; the grove and
 // region ids match the engine's row for row.
 //
@@ -249,7 +249,7 @@ export const DESERT: Biome = {
       groundCover: 0.7,
     },
   ],
-  // There is no water in this country, so the two waterside mixes are
+  // There is no water in this biome, so the two waterside mixes are
   // never asked for (planting.ts checks the engine's rules before the
   // height). They are the wash's own plants, so that a dial that ever did
   // put water here would grow the right thing beside it.

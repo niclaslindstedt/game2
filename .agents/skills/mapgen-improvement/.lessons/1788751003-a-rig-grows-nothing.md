@@ -7,7 +7,7 @@ concepts: [synthetic-tracks, test-conventions, placement, homesteads]
 
 `compileTrack(seed, segments)` builds the physics suites' rigs through the
 same `createCompiler` as a real stage, with `followsLand = false` and no
-country. A new placement pass added to `append` runs on those rigs too
+biome. A new placement pass added to `append` runs on those rigs too
 unless it says otherwise — and the first homestead pass did, so a drift
 test's dead-straight 2 km rig grew a house 240 m down it with a lane of
 solid trees fifteen metres off the centerline, exactly where a car in a

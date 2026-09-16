@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE DIALS THE WILD IS DRAWN FROM — every number `props.ts` reads when it
-// decides what stands on a patch of open country, and nothing that decides
+// decides what stands on a patch of open land, and nothing that decides
 // it. The builders there are a page of arithmetic each; these are the
 // authored figures under them, and keeping the two apart is what lets a
 // reader change the size of a boulder field without reading the search that
@@ -130,7 +130,7 @@ export const OUTCROP_SINK = 0.45;
 /** One CUT-WALL SLAB candidate per grid cell of this edge, m — a fine grid,
  * because a slab only ever stands in the narrow band beside the road where
  * the ground is climbing out of a cut. (The outcrops above are the same rock
- * out in the country; these are the face the road was cut through.) */
+ * out in the land; these are the face the road was cut through.) */
 export const SLAB_CELL = 16;
 /** ...and the share of those that stand up where the ground allows one. */
 export const SLAB_CHANCE = 0.7;

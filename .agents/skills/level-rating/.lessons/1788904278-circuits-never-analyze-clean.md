@@ -5,7 +5,7 @@ scope: engine/rating/, engine/analysis/, pwa/src/game/campaign.ts
 concepts: [campaign, circuits, analysis, calibration]
 ---
 
-Swept over 1..48 in all three countries, EVERY circuit slot came back 0/48
+Swept over 1..48 in all three biomes, EVERY circuit slot came back 0/48
 clean under `analyzeSeed`, against 27–45 of 48 clean for the sprint slots. Two
 of the errors are the analyzer not knowing about R22: a lap rejoining its own
 start line reads as `roads.overlap` (route and route inside R23's 42 m) and as

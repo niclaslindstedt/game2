@@ -2,7 +2,7 @@
 // WHAT MAKES SNOW LOOK LIKE SNOW, stated once for every surface made of it.
 //
 // Two surfaces draw the winter ground and they are built for different
-// jobs: the coat is a sheet over the whole country that BENDS
+// jobs: the coat is a sheet over the whole biome that BENDS
 // (`snow-mantle.ts`), and the trail is a narrow band laid where a tyre
 // actually went (`snow-marks.ts`). What they must never be is two different
 // whites. A trail shaded by one set of rules and the field around it by
@@ -37,9 +37,9 @@
 // all, and the one tint that used to stand in for it could not tell the sunlit
 // side of a drift from the shaded one.
 //
-// ...AND THE COUNTRY PAST THE COAT IS THE THIRD SURFACE MADE OF SNOW. The
+// ...AND THE BIOME PAST THE COAT IS THE THIRD SURFACE MADE OF SNOW. The
 // coat is a fine sheet that follows the CAR, because a 2.5 m grid over the
-// whole country is a quarter of a million vertices re-sampled every time the
+// whole biome is a quarter of a million vertices re-sampled every time the
 // car walks a cell. Everything past it is the ground tiles on their own
 // fourteen-metre lattice — and the tiles are drawn out to 640 m ANYWAY, so
 // what the far snow needs is not a mesh, it is this file. Give them a white
@@ -119,7 +119,7 @@ export const SNOW_PACK = { r: 0.873, g: 0.899, b: 0.933 };
  *
  * `detailTexture()` is a GRIT map: a white ground flecked with warm greys,
  * authored so grass and gravel have a grain between the tile lattice's
- * fourteen-metre vertices. On the country's tiles that is invisible and
+ * fourteen-metre vertices. On the biome's tiles that is invisible and
  * useful — at a hundred metres a fleck is well under a pixel and all it does
  * is stop a big colour field reading as plastic. Two metres from the lens on
  * the coat it is neither: the flecks are the size of a hand, and warm specks
@@ -260,7 +260,7 @@ export function snowSurface(glitter = 1, sky = "1.0", cover = "1.0"): string {
  * also agree on every other program parameter (Lambert, vertex colours, a
  * map, fog, lights) are handed whichever program compiled first.
  *
- * The coat and the country's tiles are exactly that pair. Unnamed, the coat
+ * The coat and the biome's tiles are exactly that pair. Unnamed, the coat
  * drew with the TILES' shader, read a `snow` attribute its geometry does
  * not have, took `cover` 0 from it — and silently lost its wrap lighting,
  * its glitter and its blanket-depth discard while still looking like snow.

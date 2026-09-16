@@ -6,7 +6,7 @@ title: Roads that read like roads
 Dirt roads are now tight for most of their length and open out where they
 need to — at the bends, so there is somewhere to put the car sideways, and
 here and there down the stage the way a road that gets bladed every spring
-does. They are laid closer along the country they cross, so the stage rises
+does. They are laid closer along the land they cross, so the stage rises
 and falls with the ground instead of running level across it, and the gravel
 between the heaves has real shape to it rather than being a clean plane.
 Gravel corners now lie over into the turn — the loose stone every car has

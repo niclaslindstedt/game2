@@ -62,20 +62,20 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setAir: (far) => {
       chase.setReach(far);
       // The GROUND has to be built before any of the rest matters: opening
-      // the fog and the far plane over unbuilt country only reveals the
+      // the fog and the far plane over unbuilt biome only reveals the
       // ridge backdrop standing where the land should be.
       setGroundReach(far);
       // The fog is deliberately THINNER than the driving preset's, not just
       // longer. Kept at the preset's own 160-of-520 shape it starts hazing a
       // third of the way out, and since a shot with the horizon in it spends
-      // most of its frame in the far half, the whole country came back white.
+      // most of its frame in the far half, the whole biome came back white.
       // Holding it clear to well past halfway leaves the land readable and
       // still closes the air over the last of it, so the drawn edge arrives
       // as haze rather than as a line.
       // …and the fog closes exactly AT the drawn edge rather than short of
       // it. That is the whole job it has here: the ground stops at `far`
       // whatever the air does, so the air has to have gone solid by then or
-      // the country ends on a visible line. Clear until nearly there, so the
+      // the land ends on a visible line. Clear until nearly there, so the
       // land the shot is actually about stays land rather than haze.
       if (far > 0) environment.setFogRange(far * 0.78, far);
     },
@@ -100,7 +100,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // plant its shot there.
       //
       // ARRIVING at a crew it FLIES — a second, in an arc over whatever
-      // country lies between (camera-sweep.ts) — because the gap between two
+      // land lies between (camera-sweep.ts) — because the gap between two
       // cars on a stage is hundreds of metres and a cut across it says
       // nothing about where either of them is. Standing down is a cut: the
       // destination there is the results card, not a shot.

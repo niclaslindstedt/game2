@@ -5,7 +5,7 @@ description: "Use when working on what PEOPLE put beside the road — homesteads
 
 # The built world: what people put beside the road
 
-The stage runs through a country somebody lives in. This skill owns every
+The stage runs through land somebody lives in. This skill owns every
 man-made thing standing off the racing line — the farm the road passes, the
 village on the borrowed tarmac, the pylons marching over the ridge, the train
 that may be at the crossing when you get there.
@@ -34,7 +34,7 @@ the same landscape, and **`collision`** for what hitting one of these costs.
 | What a BUILDING is — kind, plan, walls | `mapgen/buildings.ts` — the plans both placers draw, and the footprint-to-solids walk | `building.ts` (flats, grocery, post, workshop) over the house's primitives |
 | Where the crowd PARKED, the lane in, the trails | `mapgen/carparks.ts` (R42) over `carpark-map.ts`, on the terrain field from the stands | `carpark.ts` |
 | A car that only STANDS there | — | `parked-car.ts` — a dozen boxes from one roll; NEVER the catalog's builder, which is a thousand times the geometry |
-| A wind farm or a solar farm | `mapgen/energy.ts` (R43); numbers `STAGE_RULES.energy`, the country's say `BiomeRules.energy` | `wind-farm.ts` (reads `state.wind`), `solar-farm.ts` (one instanced mesh of tables per farm) |
+| A wind farm or a solar farm | `mapgen/energy.ts` (R43); numbers `STAGE_RULES.energy`, the biome's say `BiomeRules.energy`   | `wind-farm.ts` (reads `state.wind`), `solar-farm.ts` (one instanced mesh of tables per farm) |
 | The transmission line and its towers | `mapgen/powerline.ts` (R45) surveys the line, spots the towers; numbers `STAGE_RULES.powerline` | `powerline.ts` |
 | The railway, the crossing's ramp, the timetable | `mapgen/railway.ts` (R41) over `highway.ts`'s `rail` line and `crossing.ts`'s solve; numbers `STAGE_RULES.rail` | `train.ts` (the consist, posed off `trainCars`) + `railway.ts` (ballast, sleepers, rails, deck, boards) |
 | Where the TRAFFIC drives, and its speed limit signs | `mapgen/traffic.ts` (R44) plans routes over the arms and car-park lanes; numbers `STAGE_RULES.traffic` | `traffic.ts` (posed off `state.traffic` every frame) |

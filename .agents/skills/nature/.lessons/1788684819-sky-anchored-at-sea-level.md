@@ -16,7 +16,7 @@ level with the contrails drawn across the near slopes.
 
 Everything at INFINITY rides the eye in all three axes (`environment.ts`'s
 `eye` group; `sky.position` in ambient-life.ts). What stands on the
-COUNTRY — the ridge rings, the clouds' base — stays on the ground plane.
+BIOME — the ridge rings, the clouds' base — stays on the ground plane.
 
 A second, independent trap on the same screenshot: a `transparent: true`
 material is drawn AFTER every opaque object whatever its `renderOrder`, and

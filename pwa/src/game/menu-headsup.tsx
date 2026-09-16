@@ -9,7 +9,7 @@
 // a road you can race on; one you have never seen is a road you should be
 // learning in the campaign, where it counts for something.
 //
-// Two steps, the campaign's own: which country, then which of its six. And
+// Two steps, the campaign's own: which biome, then which of its six. And
 // on the second, the two settings that are the whole mode:
 //
 //   DIFFICULTY   how good the field is, and what a hit costs your own car —
@@ -50,7 +50,7 @@ export function HeadsUpPage({
   onBack,
   onPlay,
 }: {
-  /** The country being looked at, or null on the step that chooses one. */
+  /** The biome being looked at, or null on the step that chooses one. */
   locationId: string | null;
   progress: CampaignProgress;
   headsUp: HeadsUpSettings;
@@ -62,7 +62,7 @@ export function HeadsUpPage({
   const gate = (level: CampaignLevel): boolean => levelCompleted(level, progress);
   const raced = (location: CampaignLocation): boolean => location.levels.some(gate);
   if (locationId === null) {
-    // The furthest country with a finished stage in it — where the cursor
+    // The furthest biome with a finished stage in it — where the cursor
     // stands, and the race START takes.
     const resume = LOCATIONS.filter(raced).at(-1);
     return (

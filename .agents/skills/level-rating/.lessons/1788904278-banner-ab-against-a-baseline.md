@@ -5,7 +5,7 @@ scope: scripts/biome-preview.mjs, pwa/public/previews/
 concepts: [campaign, previews, measurement, baseline]
 ---
 
-Re-seeding a country's first level re-shoots its banner, and the new taiga and
+Re-seeding a biome's first level re-shoots its banner, and the new taiga and
 desert banners came back as near-white fog where the committed ones show road,
 trees and a lake. That reads as the new seeds sitting in a hollow, and it was
 not: shot from a `git worktree add ../base origin/main` tree, the OLD seeds

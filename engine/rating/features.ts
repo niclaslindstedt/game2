@@ -192,7 +192,7 @@ function sayFeatures(t: Trait): string {
         : `${t.value.toFixed(2)} jumps a km — a stunt show`;
     case "features.crossings":
       return short
-        ? `${t.value.toFixed(2)} water crossings a km — a dry country`
+        ? `${t.value.toFixed(2)} water crossings a km — a dry biome`
         : `${t.value.toFixed(2)} water crossings a km — the road is in the river`;
     case "features.surfaceMix":
       return `${t.value.toFixed(1)} surfaces the whole way — nothing changes underfoot`;

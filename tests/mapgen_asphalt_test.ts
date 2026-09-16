@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R15 — the asphalt dial, and what a country will actually sell it.
+// R15 — the asphalt dial, and what a biome will actually sell it.
 //
 // One case, and its own file, because it is the single most expensive
 // assertion in the suite: three positions of the dial, eight LONG stages
-// compiled at each, and the public roads laid across the country before the
+// compiled at each, and the public roads laid across the land before the
 // route is even drawn. Sharding splits at FILE granularity, so a case this
 // size sitting beside others makes whichever shard draws it the floor under
 // the whole test job — it was measured at 2m05 on CI doing exactly that.
@@ -15,7 +15,7 @@ const SEEDS = Array.from({ length: 24 }, (_, i) => i * 37 + 1);
 
 describe("the asphalt dial", () => {
   // Twenty-four LONG stages, sixteen of them with the public roads laid
-  // across the country first (R17) and a borrow solved against them. This is
+  // across the land first (R17) and a borrow solved against them. This is
   // the heaviest test in the file by a distance — 50 s against the file-wide
   // 30 s allowance in `vitest.config.ts` — and it is the ONE case here with a
   // timeout of its own. It WIDENS the allowance and never narrows it: a case
@@ -28,7 +28,7 @@ describe("the asphalt dial", () => {
   // what makes "the dial buys some, and more buys no less" a fact about the
   // generator rather than about seed 1.
   //
-  // R15/R17 — the asphalt dial asks for tarmac; the COUNTRY decides how
+  // R15/R17 — the asphalt dial asks for tarmac; the BIOME decides how
   // much of it the rally can actually have.
   //
   // It used to be a promise: the paving field sealed stretches of the
@@ -45,7 +45,7 @@ describe("the asphalt dial", () => {
   // one, and how far it can run along it before R9 puts it out of the world
   // — a bounded map cannot hold four kilometres of straight public road.
   // What is left to assert is the shape of the response, not its value.
-  it("R15 — the asphalt dial buys tarmac, and the country bounds how much", () => {
+  it("R15 — the asphalt dial buys tarmac, and the biome bounds how much", () => {
     const share = (asphalt: number): number => {
       let paved = 0;
       let total = 0;
@@ -56,12 +56,12 @@ describe("the asphalt dial", () => {
       }
       return paved / total;
     };
-    // Under the floor the country carries no public road, so the rally has
+    // Under the floor the biome carries no public road, so the rally has
     // nothing to borrow and the stage is gravel end to end. This half of
     // the contract is exact, and it is the half that matters: a stage with
     // no tarmac asked for has none.
     expect(share(0)).toBe(0);
-    // Past it the dial buys some, up to the ceiling the country sets, which
+    // Past it the dial buys some, up to the ceiling the biome sets, which
     // is where it stops. The ceiling is R38's: a public road runs straight
     // for two or three hundred metres at a time between its bends, the
     // rally may not sit on a straight that long, so a borrow ends where the

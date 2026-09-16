@@ -4,7 +4,7 @@
 // A start/finish gate is set out from the ROAD'S CENTRELINE: the posts at the
 // ends of the timing line, the bale walls out past them, the guns further out
 // again. By the time it reaches any of them the mat has cambered away, the
-// shoulder has stepped down and the verge has leaned off toward the country
+// shoulder has stepped down and the verge has leaned off toward the biome
 // (R16), so the ground under a gate's furniture is most of a metre below the
 // elevation the sample it was measured from carries. Foot it on that elevation
 // and the whole dressing hangs in the air beside the road — which is what it

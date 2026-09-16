@@ -401,7 +401,7 @@ export function useRunActions(store: RunStore) {
     else if (force || previous.spec.id !== spec.carId) renderer.setCar(state);
     else renderer.setConditions(state);
     setSnap(takeSnapshot(state, paceRef.current, null, null, bookRef.current));
-    // The score is a function of the stage — its country, its sky, its
+    // The score is a function of the stage — its biome, its sky, its
     // shape — so it is picked here, where the stage is. Behind a menu the
     // stage is scenery under the menu's own theme, and behind the LOADING
     // CARD the player has not arrived anywhere yet either: whatever they
@@ -542,7 +542,7 @@ export function useRunActions(store: RunStore) {
    * the training ground, which is not a stage and has no boards on it.
    *
    * ROAM keeps none either, and for a different reason: it is the page where
-   * the stage itself is being tried on. A seed, a length, a country and six
+   * the stage itself is being tried on. A seed, a length, a biome and six
    * dials are all a press away, so the road under a board is never the road
    * a driver is settling into — and NEW RECORD! beside a split nobody was
    * chasing reads as noise rather than as the reward it is on a stage that

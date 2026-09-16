@@ -7,7 +7,7 @@ concepts: [terrain, r31, r23, r24, spurs, road-network, measurement]
 
 Every "nearest road shapes the ground" rule leaves a step along the
 Voronoi line with the next road, the height of whatever the nearer road was
-still standing over or under the country there: a route arm's 20 m fill met
+still standing over or under the land there: a route arm's 20 m fill met
 the next arm's run-out as a 20 m step, a branch on a fill met a lower
 branch the same way (seed 10), a route's bench blend was dropped twenty
 metres onto a branch's line across a twelve-metre hand-over (seed 3), and a

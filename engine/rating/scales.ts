@@ -7,7 +7,7 @@
 //
 // HOW THE NUMBERS GOT HERE, and the rule for changing one. Every band was
 // set from a MEASURED POPULATION — `make rate COUNT=… --stats` over the
-// three countries, four length bands and both shapes — and then moved by
+// three biomes, four length bands and both shapes — and then moved by
 // hand only where the population and the craft disagreed. A band is not
 // where the seeds happen to sit: if it were, half of every sweep would score
 // perfectly by construction and the tool would be a very slow random number
@@ -108,7 +108,7 @@ export const RATING = {
     /** Probes around each road station in the scenery rings. */
     spokes: 8,
     /** HOW FAR FROM THE ROAD THE STAGE STILL IS, m — the edge of the
-     * country this rating is about, and the band inside it where a thing is
+     * biome this rating is about, and the band inside it where a thing is
      * simply beside the road.
      *
      * The generator builds a whole map and a rally is a road through part
@@ -129,7 +129,7 @@ export const RATING = {
     /** Corners per km. Under this a stage is a road between two places;
      * over it there is no room left to do anything but turn.
      *
-     * MEASURED over 144 stages — three countries, four length bands, both
+     * MEASURED over 144 stages — three biomes, four length bands, both
      * shapes: 5.7 to 10.5 with a median of 8.8. Counted on the pacenote
      * scale, so a bend a co-driver would call counts whoever drew it. */
     corners: band(8.0, 10.2, 2.5, 3.0),
@@ -314,12 +314,12 @@ export const RATING = {
     enclosureSwing: band(0.11, 0.3, 0.1, 0.2),
     /** Things people built, passed per km: a town, a homestead, a farm, a
      * wind or solar field, a power line crossed, a level crossing, a
-     * grandstand, a car park. A rally goes THROUGH a country. */
+     * grandstand, a car park. A rally goes THROUGH a landscape. */
     landmarks: band(0.5, 2.2, 0.5, 2.0),
     /** Share of the road's metres with standing water in sight — a lake, a
      * river, the sea. */
     water: band(0.04, 0.42, 0.06, 0.3),
-    /** How much country the eye reaches over, m: the mean spread between
+    /** How much land the eye reaches over, m: the mean spread between
      * the high and low ground of the far ring around each station. A stage
      * whose horizon never moves is a stage in a bowl. */
     skyline: band(30, 160, 25, 120),
@@ -329,13 +329,13 @@ export const RATING = {
      * the rally itself meets them at, or open water.
      *
      * A road is a thing built BETWEEN two places. R17 lays these across the
-     * country before the route exists, whole, off one edge of the map and
+     * biome before the route exists, whole, off one edge of the map and
      * out the other — and a sealed road drawn like that with nothing
      * anywhere near it is scenery pretending to be infrastructure. It is
      * the fault a picture makes obvious at a glance and that no count of
      * corners can see.
      *
-     * The floor is not 1: some of a country's roads are passing through on
+     * The floor is not 1: some of a biome's roads are passing through on
      * their way somewhere off the map, and a stage that has to justify
      * every metre of tarmac is a stage in a theme park. A stage with no
      * sealed road near it is not measured here at all — whether it should
@@ -344,7 +344,7 @@ export const RATING = {
     /** HOW MANY KINDS OF GROUND the road actually runs past, as an
      * effective count over the soil / rock / sand / snow / ice / water
      * shares (`effectiveKinds`). Under two is a stage that crosses one
-     * country and sees it once. */
+     * biome and sees it once. */
     groundMix: band(2.0, 4.0, 0.8, 1.5),
   },
 
@@ -361,7 +361,7 @@ export const RATING = {
      * alpine tail reaching 0.8; a threshold up at 0.55 caught precisely
      * nothing anywhere and reported the whole game as unexposed. A little
      * over one in five is where a fall stops being a slope you would rejoin
-     * from — and it separates the countries, which is right: the alps ARE
+     * from — and it separates the biomes, which is right: the alps ARE
      * the exposed one. */
     dropGrade: 0.22,
     /** Solid things within a road-width of the road's edge, per km. What
@@ -397,7 +397,7 @@ export const RATING = {
    * visible in any one stage's rating.
    *
    * Every band here is over the levels of ONE LOCATION, which is the unit
-   * the game actually presents: six stages of a country, in order, on a
+   * the game actually presents: six stages of a biome, in order, on a
    * ladder that has to climb. */
   ladder: {
     /** How well the ladder's difficulties agree with its order, as the
@@ -422,7 +422,7 @@ export const RATING = {
      * MEASURED, and it had to be: an eyeballed 0.14 was a wish that all
      * three committed ladders failed, which is a threshold measuring
      * nothing with a worse score attached. Four thousand random six-slot
-     * ladders per country — one seed per length-and-shape slot, the way a
+     * ladders per biome — one seed per length-and-shape slot, the way a
      * location's ladder is actually built — put the closest pair at a
      * median of 0.074 in the taiga, 0.081 in the desert and 0.103 in the
      * alps, with the whole range 0.03 to 0.20. So the floor sits above the

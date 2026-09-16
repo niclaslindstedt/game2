@@ -13,7 +13,7 @@ tighter tarmac than doing nothing (8.3% of sealed road at worst against
 
 The reason generalises. The search does not know where a seal actually ENDS:
 the surface change waits for a junction whose abandoned arm can leave the
-map, which is a question about country the search has not walked. Covering
+map, which is a question about biome the search has not walked. Covering
 that means dilating the rule over the gravel around the field's bands, and a
 route with its corners capped over a third of its length is a STRAIGHTER
 route — which then runs alongside its own valleys, and R18 traces the water

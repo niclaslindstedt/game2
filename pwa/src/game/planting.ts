@@ -4,7 +4,7 @@
 // through, and how one of the engine's props is dressed as a species.
 //
 // Shared by the two things that plant a stage — the band of scenery each
-// road chunk carries (world.ts) and the open country beyond it (wild.ts) —
+// road chunk carries (world.ts) and the open land beyond it (wild.ts) —
 // so both answer "what grows here" the same way.
 
 import { LAKE_Y, biomeRules, type Climate, type StageKnobs, type WildObstacle } from "@engine";
@@ -16,7 +16,7 @@ import { plantZone, underSnow } from "./ground-rules.ts";
 /** The community a grove-quilt index names — the quilt itself lives in the
  * ENGINE's prop field (terrain.field.groveAt), because the trunks it
  * places are solid; the biome only supplies what grows in each patch. The
- * index is into the engine's grove table for THIS country (R40). */
+ * index is into the engine's grove table for THIS biome (R40). */
 export function communityByGrove(biome: Biome, grove: number): Community {
   const id = biomeRules(biome.id).groves[grove]?.id;
   return biome.communities.find((c) => c.id === id) ?? biome.communities[0];
@@ -80,7 +80,7 @@ const NOT_A_TRUNK = new Set([...SOFT_FLORA, "stump", "fallenLog", "rootLog", "lo
  * stream crossing a spruce wood does not turn the wood into willows. */
 export const RIPARIAN_BAND = 14;
 
-/** Whether a mix has anything in it to plant. Above a country's snowline
+/** Whether a mix has anything in it to plant. Above a biome's snowline
  * `mixAt` answers with nothing at all, and `pickFlora` of nothing is an id
  * no roster builds — so everything that plants off a mix asks this first. */
 export function plantsNothing(mix: FloraMix): boolean {
@@ -98,10 +98,10 @@ export type Ground = {
   grove: number;
 };
 
-/** Nothing grows here — the mix above a country's snowline. */
+/** Nothing grows here — the mix above a biome's snowline. */
 const BARE: FloraMix = {};
 
-/** The mix that owns a patch of ground — the country's context for it
+/** The mix that owns a patch of ground — the biome's context for it
  * (`plantZone`: the shore, the snow, a stream bank, the highland, or the
  * quilt's own community), as the biome's mix for that context. The DIALS
  * come along because the context is a height and the heights the bands
@@ -211,7 +211,7 @@ const UNDERSTORY_SAPLINGS = 0.55;
  * stand on it, and everything the skirt needs to place one. */
 export type Understory = {
   biome: Biome;
-  /** The stage's dials — `mixAt` reads the country's bands off them. */
+  /** The stage's dials — `mixAt` reads the biome's bands off them. */
   knobs: StageKnobs;
   /** ...and its cold, which is what decides whether the skirt is there at
    * all: the trunk stands through a winter, its undergrowth is buried by

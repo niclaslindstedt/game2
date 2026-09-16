@@ -215,9 +215,9 @@ export function buildFlora(
  * `buildFlora` above is right for a patch that is big and densely planted
  * — a chunk of road, which puts hundreds of the same tree in one mesh and
  * can be hidden as a unit when the fog swallows it. It is wrong for the
- * open country, which is planted in small cells that each hold a handful
+ * open land, which is planted in small cells that each hold a handful
  * of two dozen different variants: that comes out as a draw call per two
- * or three plants. The country all lives inside the fog anyway, so there
+ * or three plants. The biome all lives inside the fog anyway, so there
  * is nothing to hide and nothing lost by pooling it.
  *
  * A patch is replanted or cleared as a whole; every change rewrites the
@@ -277,7 +277,7 @@ export function buildFloraField(season: Season): FloraField {
         }
         const room = Math.ceil(list.length / POOL_BLOCK) * POOL_BLOCK;
         // One shape per variant here, chosen off the variant's own name:
-        // the country is background, and the shape variety that matters at
+        // the biome is background, and the shape variety that matters at
         // this distance is between SPECIES, not between builds of one.
         const geo = shapeFor(id, hashId(id) % SHAPES, season);
         mesh = new THREE.InstancedMesh(geo, VARIANTS[id].twoSided ? leafy : solid, room);
@@ -307,8 +307,8 @@ export function buildFloraField(season: Season): FloraField {
     }
     // A variant with nothing left standing is HIDDEN rather than emptied:
     // an instanced mesh with a count of zero is still a draw call. It keeps
-    // its mesh, though — the country ahead is the same country as the
-    // country behind, and it will be asked for again within a few hundred
+    // its mesh, though — the land ahead is the same as the land
+    // behind, and it will be asked for again within a few hundred
     // metres.
     for (const [id, mesh] of meshes) {
       if (!byId.has(id)) mesh.visible = false;

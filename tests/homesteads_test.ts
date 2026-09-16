@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // R37 — the HOMESTEADS: the houses off the stage, the drives down to it and
 // what stands in the yard. These are the rules that decide whether a stage
-// reads as country somebody lives in, and whether the things standing in
-// that country are as solid as they look.
+// reads as biome somebody lives in, and whether the things standing in
+// that biome are as solid as they look.
 import { describe, expect, it } from "vitest";
 
 import {
@@ -21,7 +21,7 @@ const H = R.homestead;
 const SEEDS = Array.from({ length: 24 }, (_, i) => i * 37 + 1);
 
 /** The stages of the sweep, built once: every rule below reads the same
- * country, and compiling one is most of a test's time. */
+ * biome, and compiling one is most of a test's time. */
 const stages = new Map<number, Track>();
 function stage(seed: number): Track {
   let track = stages.get(seed);
@@ -76,7 +76,7 @@ function wrap(a: number): number {
 describe("homesteads (R37)", () => {
   it("stands homesteads on the sweep — far between, never two in sight of each other", () => {
     const all = sweep();
-    // Seen now and then on every stage: not every seed has the country for
+    // Seen now and then on every stage: not every seed has the biome for
     // one, but most do, and the sweep as a whole has plenty.
     expect(all.length).toBeGreaterThan(SEEDS.length);
     const withOne = SEEDS.filter((seed) => stage(seed).homesteads.length > 0);

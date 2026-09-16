@@ -14,5 +14,5 @@ the lane into a car park — was a staircase with a tread every four metres,
 and the lane into one car park in four arrived beside the road it joined and
 dropped onto it. The ground under all of them is a ramp now; the lanes and
 drives are laid to arrive on the pad they run onto and the road they join,
-bending at a minor road's crest rule; a lane the country would leave as a
+bending at a minor road's crest rule; a lane the land would leave as a
 ramp or a wall is not built. `make analyze` scores all of it (`lanes`).

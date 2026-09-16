@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // R40 — WHAT MAKES SAND READ AS SAND: the wind's own fingerprint on it.
 //
-// A desert stage draws a country with real dunes in it — twenty-odd metres
+// A desert stage draws a biome with real dunes in it — twenty-odd metres
 // of sand standing over the trough beside it, three hundred across the wind
 // (`STAGE_RULES.dunes`) — and from the seat it read as bare rolling ground
 // in a warm colour. The relief is there; what was missing is everything at
@@ -67,7 +67,7 @@ const LIES = { from: 0.86, band: 0.16 };
 const SHEEN = 0.34;
 
 /** Graft the wind onto a material that draws sand. Returns the material, so
- * it can wrap a constructor call. Only ever called for a country whose
+ * it can wrap a constructor call. Only ever called for a biome whose
  * loose ground IS sand — everywhere else this is not a cheaper effect, it
  * is a wrong one. */
 export function sandRipple<T extends THREE.Material>(material: T): T {

@@ -9,11 +9,11 @@
 // was not asked to spend, and where the dial is at zero it is not available
 // at all. Before this module a search boxed in against a public road with no
 // borrow in it had exactly one move left, which was to back out and go round
-// — so the road partitioned the country, and the seeds where it partitioned
+// — so the road partitioned the biome, and the seeds where it partitioned
 // it badly are the seeds that took forty sub-seeds to generate or none.
 //
 // A crossing costs nothing and goes nowhere. The route straightens up, goes
-// over the road square, and carries on down the country on gravel.
+// over the road square, and carries on down the biome on gravel.
 //
 // SQUARE is the whole of it, and it is a geometric requirement rather than a
 // stylistic one. R23 forbids two roads sharing ground, because the terrain
@@ -28,7 +28,7 @@
 // crossing that does not happen.
 //
 // What this module does NOT decide is the step. That the tarmac stands proud
-// of the country, and that a car crossing at speed leaves the ground, is a
+// of the biome, and that a car crossing at speed leaves the ground, is a
 // property of the built road (`compile.ts`), not of the plan: the height of
 // a stage is a profile along its own arc and nothing here has one yet.
 
@@ -55,7 +55,7 @@ export type Crossing = {
 /** R36 — plan the whole crossing as one candidate: the turn-straight-turn
  * that lines the route up square on the road, and the straight that takes it
  * over. Returns null where nothing solves, and the caller carries on down
- * the country and asks again further on.
+ * the biome and asks again further on.
  *
  * One candidate, like a borrow, and for a sharper reason: the approach is
  * only legal BECAUSE of the crossing. It runs inside the clearance of a road
@@ -118,7 +118,7 @@ export function planCrossing(
         // The approach aims at a pose standing `clear` short of the road's
         // centerline, pointing across it — so the route is already straight
         // and already square well before it reaches the tarmac, and the
-        // corner that aimed it there is out in open country.
+        // corner that aimed it there is out in open land.
         const goal: Pose = {
           x: at.x - Math.sin(heading) * C.clear,
           z: at.z - Math.cos(heading) * C.clear,

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// One chapter of the stage generator's rule book (`rules.ts`): THE COUNTRY
+// One chapter of the stage generator's rule book (`rules.ts`): THE BIOME
 // THE ROAD RUNS THROUGH — the rolling elevation profile, the massif and the
 // dunes standing on it, how rough the ground is, the bank a corner is laid
 // on, the verge falling away from the road, and how wet and how forested the
-// country is. Spread into `STAGE_RULES` by `rules-book.ts`.
+// biome is. Spread into `STAGE_RULES` by `rules-book.ts`.
 
 export const LAND_RULES = {
   /** Rolling elevation, laid under the feature ramps: seeded value NOISE
@@ -22,13 +22,13 @@ export const LAND_RULES = {
      * A word about what this band is NOT for, because it looks like the
      * knob to reach for and it is not. How far the road actually travels up
      * and down over a kilometre is dominated by `follow` below — the
-     * COUNTRY the road is laid along — and this noise is the road's own
+     * LAND the road is laid along — and this noise is the road's own
      * character riding on top of it. Measured on seeds 1-8 at medium, the
-     * roll contributes about 5 m/km against the country's 29, and raising
+     * roll contributes about 5 m/km against the land's 29, and raising
      * the band by half moved a stage's total travel by under a metre per
      * kilometre while pushing the road's crossings far enough off the
      * ground to float R18's watercourses. Reach for `follow.lag` instead:
-     * that is the number that says how much of the country reaches the
+     * that is the number that says how much of the land reaches the
      * road, and it moves the answer. */
     amplitude: { min: 3, max: 7 },
     /** Length of that longest wave, meters. */
@@ -45,16 +45,16 @@ export const LAND_RULES = {
     knob: { min: 0.4, max: 2 },
 
     /** R34 — and what the roll RIDES ON. A road is not a profile somebody
-     * drew and then laid on a country: it is laid ALONG the country, down
+     * drew and then laid on the land: it is laid ALONG the land, down
      * the valleys, and it climbs only where it has to get over something.
      * The rolling noise above is the road's own character on top of that,
      * not the whole of its height.
      *
      * So the road follows the bare landscape, through a lag and two clamps
      * — which between them are what a road IS. The lag is a road builder's
-     * eye: it takes the broad shape of the country and ignores every
+     * eye: it takes the broad shape of the land and ignores every
      * hummock, so the road runs level across ground that is not. The clamps
-     * are what anything is willing to drive over. Where the country is
+     * are what anything is willing to drive over. Where the biome is
      * gentler than they are the road simply follows it; where it is not the
      * road cannot, and the difference is CUT AND FILL — the embankment
      * across a hollow and the cutting through a shoulder, which is where
@@ -67,18 +67,18 @@ export const LAND_RULES = {
      * `lag` is the response length, m — AND IT IS THE STAGE'S UNEVENNESS,
      * which is not obvious and is worth stating where somebody looking for
      * that knob will find it. How much the road travels up and down is
-     * almost entirely how much of the country reaches it, and this is the
+     * almost entirely how much of the land reaches it, and this is the
      * number that decides that: it is the eye of the man who laid it out.
      * Long, and he is a highway engineer running a graded line across the
      * landscape and reading nothing under a quarter of a kilometre — a
      * road that is smoother than the ground it is on, everywhere, which
-     * over a whole stage reads as a ribbon laid on a picture of a country.
+     * over a whole stage reads as a ribbon laid on a picture of a landscape.
      * Short, and he is following the ground with a bulldozer, and the road
      * rises and dips with every shoulder and hollow it crosses.
      *
      * MEASURED. Over seeds 1, 3 and 7 at medium the road's total travel is
      * 30 / 56 / 33 m per km at 200, 39 / 52 / 41 at 120, and 48 / 64 / 47
-     * at 70. 120 is where the road is plainly following the country
+     * at 70. 120 is where the road is plainly following the land
      * without the cut and fill (and the analyzer's ground findings) that
      * comes with hugging every hummock of it. `analysis/drive.ts`'s
      * `rolling` check is what holds it there.
@@ -92,15 +92,15 @@ export const LAND_RULES = {
      * itself may change. It is the clamp that stops the road being a ramp.
      * A gradient limit alone says nothing about the corner between two
      * gradients, so a follower that ran up to its cap and straight back
-     * down built a brow at every hilltop the country had — the sim came
+     * down built a brow at every hilltop the biome had — the sim came
      * back with air time nearly doubled and three cars in the field wrecked
      * on the landings. Lengthening the lag fixes that by refusing to follow
-     * the country at all, which takes the cuttings with it; this fixes it
+     * the biome at all, which takes the cuttings with it; this fixes it
      * where it happens. It is a real road-building number too: this is the
      * vertical curve every crest on a road is designed around, and 0.0035
      * is a radius of about 280 m.
      *
-     * `freeboard` is the one thing the road refuses to follow the country
+     * `freeboard` is the one thing the road refuses to follow the land
      * into: the water. A road builder goes round a lake or builds a
      * causeway over it, and never lays a carriageway on a lake bed — so
      * the height the road follows is the ground or this far over the water
@@ -120,7 +120,7 @@ export const LAND_RULES = {
       minorCrest: 0.012,
       freeboard: 3.5,
     },
-    /** R34 — how far the road may stand OFF the country it crosses, m: up
+    /** R34 — how far the road may stand OFF the biome it crosses, m: up
      * on fill, down in cut. The lag and the grade clamp say how fast the
      * road may follow the land; nothing said how far behind it was allowed
      * to get, and over ground that falls away faster than the clamp lets
@@ -143,8 +143,8 @@ export const LAND_RULES = {
     /** R34/R47 — THE STEEPEST GROUND A ROAD MAY BE PLANNED ACROSS, m per m
      * of the bare land under a probe point.
      *
-     * The caps above ask how far the road stands OFF the country; this asks
-     * whether there is any country under it to stand off. A road descends
+     * The caps above ask how far the road stands OFF the biome; this asks
+     * whether there is any biome under it to stand off. A road descends
      * at `follow.grade` and no faster, so ground falling away faster than
      * that has to be crossed along its contour — and the search draws its
      * corners blind. Where the land runs at ten to one, a candidate that
@@ -154,15 +154,15 @@ export const LAND_RULES = {
      * finds the drop. So the ground itself is refused, and the search does
      * what it does with any refusal — draws a different line.
      *
-     * Set above anything the countries actually build at the middle of the
+     * Set above anything the biomes actually build at the middle of the
      * ALTITUDE dial (the alpine's flank tops out at 2.5 there), so it is a
      * dead rule on every stage the game shipped with and comes alive only
      * where R47 stands the rock up. MEASURED at the top of the dial over
      * seeds 1-6: without it 31% of a stage's samples stood more than 40 m
      * off the land, the worst of them 893 m — a road in the sky. */
     maxLandGrade: 3,
-    /** ...and how the cap RELAXES when a country will not yield a stage
-     * inside it, the way the water's setback does. Some countries are all
+    /** ...and how the cap RELAXES when a biome will not yield a stage
+     * inside it, the way the water's setback does. Some biomes are all
      * ridge and ravine, and a stage has to cross them somehow; the last
      * rung is no cap at all, which is where this rule started. */
     fillLadder: [1, 1.7, 3, 0],
@@ -172,8 +172,8 @@ export const LAND_RULES = {
    * biome row's, `BiomeLand.massif`, and the bore's numbers are `tunnel`
    * above). */
   massif: {
-    /** How the search READS THE COUNTRY when a corner is drawn in a
-     * country that steers (`BiomeLand.steer`): the mirrored corner is kept
+    /** How the search READS THE BIOME when a corner is drawn in a
+     * biome that steers (`BiomeLand.steer`): the mirrored corner is kept
      * when it fits the land better by `margin` metres, and a corner's fit
      * is charged `climb` metres of misfit per metre of height it gains
      * (and credited the same per metre it loses), so the stage comes down
@@ -213,7 +213,7 @@ export const LAND_RULES = {
      * VALLEY FLOOR (`massif.valley`), read the way the difficulty dial
      * reads its own (`challengeMul`): `easy` is the factor at the bottom
      * of the dial, `hard` at the top, and the middle is exactly the row.
-     * At 0 the period is two and a half times the tuned country's and
+     * At 0 the period is two and a half times the tuned biome's and
      * twice as much of the ground is floor — one mountain in a plain; at 1
      * the period is little over half and the floors are narrow — a range. */
     peaks: { scale: { easy: 2.5, hard: 0.6 }, valley: { easy: 2, hard: 0.7 } },
@@ -222,10 +222,10 @@ export const LAND_RULES = {
      * `down` and `up` are MULTIPLIERS on the row's own crest height
      * (`BiomeLand.massif.height`), read geometrically about the dial's
      * default (`altitudeMul`), so the middle of the dial is exactly the
-     * country the row was written for.
+     * biome the row was written for.
      *
      * `summit` is what turns that amplitude into the number the SLIDER
-     * PRINTS. The massif's own height is not how high the country ends up
+     * PRINTS. The massif's own height is not how high the land ends up
      * standing: the taiga's swell and hills ride on top of it, the
      * `elevation` dial's relief and the `steepness` dial's rise multiply
      * it, and the ground tops out well over the figure in the row.
@@ -245,17 +245,17 @@ export const LAND_RULES = {
      * the flank to be a mountainside rather than a wall the height has to
      * stay under about half that period. Ignoring that is what the dial
      * did — it grew the crest 13-fold and the ground under it 2.2-fold,
-     * and MEASURED at the top of the travel the country came out with a
+     * and MEASURED at the top of the travel the land came out with a
      * median grade of 1.08 and a 99th percentile of 16.5, which is not a
      * mountain but a spike field. `ground.cliff` now refuses it.
      *
      * So only the first `reliefCap` of the travel is RELIEF. Past it the
-     * dial lifts the whole country instead — `AltitudeScale.base`, metres
+     * dial lifts the whole biome instead — `AltitudeScale.base`, metres
      * above the sea that NO geometry reads: the lakes, the pits and the
      * water table keep their origin near 0 and are untouched, while the
      * bands, the air's lapse rate and the figure the slider prints all
-     * read the country as standing that high. At the top of the travel
-     * that is a 748 m massif on a country standing 4,982 m up — the slider
+     * read the biome as standing that high. At the top of the travel
+     * that is a 748 m massif on a biome standing 4,982 m up — the slider
      * still says 6,000 M, and it is now true in the way the Andes are
      * true rather than by drawing a six-kilometre spike in a two-kilometre
      * box. Everything above the snowline is snow and rock, because at
@@ -273,12 +273,12 @@ export const LAND_RULES = {
      *
      * `spread` — how fast the ridge system's PERIOD grows with the relief.
      * It carries the whole of the realism: the flank's grade is the height
-     * over the period, so this is what decides whether the country is a
+     * over the period, so this is what decides whether the land is a
      * mountainside or a wall. At 0.3, where it was, the top of the dial
      * measured a 99th-percentile grade of 16.5 — the spike above. At 0.74
      * the ridges stand 4.7 km apart under a 748 m crest and the same
      * measurement is 0.88 to 1.33, against 0.74 to 0.88 for the tuned
-     * country: a mountain half again as steep as the one the row
+     * biome: a mountain half again as steep as the one the row
      * describes, which is what a dialled-up mountain should be, and one a
      * road can be laid down.
      *
@@ -298,7 +298,7 @@ export const LAND_RULES = {
      * flatten the mountain, which is the failure `ground.summit` was
      * written to catch after an earlier pass spread the summit over
      * 20-75% of the box. It now measures 0.2-0.8%, against 0.1-0.6% for
-     * the tuned country.
+     * the tuned biome.
      *
      * `siting` — how hard a metre of unlevel ground counts against the
      * height it buys when R35 picks its shoulder, as an exponent on the
@@ -310,11 +310,11 @@ export const LAND_RULES = {
      * 66% at 3, and dropping it to 0 puts the grid on a face and costs 26
      * errors against 2.
      *
-     * `zones` — how fast the country's own bands climb, read against the
+     * `zones` — how fast the biome's own bands climb, read against the
      * WHOLE travel rather than the capped part, because a snowline is a
      * height above the sea. Three quarters is what lands the alpine's
      * bands on the real Alps' own lines — a treeline near 1,600 m and
-     * permanent snow near 2,900 — while leaving the tuned country
+     * permanent snow near 2,900 — while leaving the tuned biome
      * untouched at the middle. */
     altitude: {
       down: 0.38,
@@ -328,7 +328,7 @@ export const LAND_RULES = {
       zones: 0.84,
     },
     /** How many iterations one sub-seed attempt is given before it is
-     * given up on, in a country with a massif. The taiga's cap is a
+     * given up on, in a biome with a massif. The taiga's cap is a
      * thousand plus half the band; a mountain attempt that has not found
      * its way down inside this many is walking a pocket on the flank with
      * no way out, and every winning attempt over the first forty long and
@@ -339,11 +339,11 @@ export const LAND_RULES = {
   },
 
   /** R40 — THE SAND, as the DIAL sees it (the field itself is the biome
-   * row's, `BiomeLand.dunes`, and the country a rest dial builds is the
+   * row's, `BiomeLand.dunes`, and the biome a rest dial builds is the
    * numbers in that row). */
   dunes: {
     /** What the DUNE row PRINTS: how high a full-grown dune stands over
-     * the trough beside it, m. Nothing at the bottom — a country the wind
+     * the trough beside it, m. Nothing at the bottom — a biome the wind
      * has stripped to its rock — and a hundred metres at the top, which is
      * a real erg: the Namib's and the Empty Quarter's big transverse dunes
      * run between fifty and a hundred and fifty. The dial reads onto it
@@ -397,7 +397,7 @@ export const LAND_RULES = {
      * The ceiling that IS real is the angle of repose: about 34°, 0.67 m
      * per m, the steepest face dry sand holds before it pours
      * (`budgets.ts`'s desert `soilSteep`). Measured on the SAND'S OWN
-     * surface — the country with the dial on, less the same country with
+     * surface — the biome with the dial on, less the same biome with
      * it off, which is the sand and nothing else — over twenty seeds at
      * the top of the dial, where it stands steepest:
      *
@@ -411,7 +411,7 @@ export const LAND_RULES = {
      * from 37% to 44% at its rest.
      *
      * WHAT STOPS IT BEING 2 IS THE RAILWAY. A level crossing's approach
-     * arms follow the country without a grade limit of their own, so a
+     * arms follow the land without a grade limit of their own, so a
      * steeper dune flank under one lays track up it: at 2, desert seed 3
      * puts an entry arm at 28% over a 4 m crest, where the same arm
      * reported nothing at all at 1.25. The hole is not the sand's — the
@@ -454,7 +454,7 @@ export const LAND_RULES = {
    *
    * THE BAND THIS COVERS IS THE POINT, and it is why the numbers are wider
    * than "a bump" sounds. The road's own rolling profile
-   * (`elevation.wavelength`) is hundreds of metres long and the country it
+   * (`elevation.wavelength`) is hundreds of metres long and the biome it
    * follows is longer still, so between those and a stone under the blade
    * there was NOTHING: no shape at the ten-to-thirty-metre scale, which is
    * exactly the scale a car reads as the road being uneven. A road with
@@ -567,7 +567,7 @@ export const LAND_RULES = {
   /** R31 — the RIDEABLE VERGE: how far the ground beside a road is held
    * under it, and how steeply it may climb away past that. A rally car
    * leaves the road constantly and has to be able to get back on, so the
-   * country next to the road is the one place the landscape does not get
+   * biome next to the road is the one place the landscape does not get
    * the last word. */
   verge: {
     /** Half-width of the bench, m, measured from the road's centerline:
@@ -590,12 +590,12 @@ export const LAND_RULES = {
     climb: 0.45,
     /** THE STEEPEST GROUND A ROAD MAY SHAPE SHORT OF ROCK, m per m. Every
      * slope the terrain BUILDS beside a road — the cone letting go of the
-     * country at the end of its reach, a branch's embankment running out to
+     * biome at the end of its reach, a branch's embankment running out to
      * the field, a stream's bank — is held under this, and anything a road
      * leaves standing steeper is a ROCK FACE and has to say so
      * (`terrain.cutAt`): bedrock paint, nothing rooted on it, exempt from
      * the analysis's climb check. That is the whole rule about nature and
-     * the car: the country never stops the car unless it is rock, and rock
+     * the car: the biome never stops the car unless it is rock, and rock
      * is a thing somebody asked for. Held under `collision.climbLimit` by
      * the lattice's own margin (a triangle across a cell diagonal reads a
      * field back at up to √2 times its grade), which `rules_test` pins;
@@ -609,7 +609,7 @@ export const LAND_RULES = {
      * corner on the verge to one down the face chords under the crest by
      * up to half a cell's fall — one to four metres on a tall fill — and
      * along the road that chord comes and goes once a cell, a step in the
-     * verge on every country that the analysis reports as a face
+     * verge on every biome that the analysis reports as a face
      * (`rollers.grade`) and the picture shows as the ribbon's edge standing
      * over a trench. So the side leaves the lip LEVEL and steepens evenly
      * over this run until it is falling at the fill's grade, and is straight
@@ -620,19 +620,19 @@ export const LAND_RULES = {
      * takes up inside the verge's own tolerance. A RUN and not a bend,
      * because a fill on a steep hillside stands at its hillside's grade
      * plus a little, and a crest rounded to a fixed bend held such a fill
-     * out over the falling country for a hundred metres — landing it on a
+     * out over the falling land for a hundred metres — landing it on a
      * face at `climbable` at the end of its reach. (`rules_test` holds the
      * run to the lattice.) */
     crest: 42,
     /** ...and where the cone LETS GO: how much of the END of its reach it
-     * blends back onto the country over, m. A cone is a min, and a min that
-     * simply stops being asked past its reach ends in a WALL — the country
+     * blends back onto the land over, m. A cone is a min, and a min that
+     * simply stops being asked past its reach ends in a WALL — the biome
      * standing however high it stands one query cell further out, ruled
      * dead straight along the lattice. Beside a mountain that was fifty
      * metres of vertical rock two hundred metres from any road, on ground
      * no rule had touched. So over the last `fade` metres the cone rises to
      * meet the ground it was cutting, by exactly the excess that ground
-     * stands over it and no more: where the country is a few metres over
+     * stands over it and no more: where the land is a few metres over
      * the cone the join is a shoulder a car drives over, and where a
      * mountain stands fifty metres over it the join is a face — declared as
      * rock, because it is steeper than `climbable`. Nothing is ever left as
@@ -646,7 +646,7 @@ export const LAND_RULES = {
      * by however much of a cut this piece of road is in. The face is a
      * cone like R31's and it starts at the same bench, so nothing here
      * touches the flat ground beside the road: it changes only how the
-     * country stands up once it is past it.
+     * land stands up once it is past it.
      *
      * `face` is the band the rock is held at, read off `knobs.steepness`.
      * The top of it is a shade under 60° — steep enough that the renderer
@@ -676,7 +676,7 @@ export const LAND_RULES = {
        * own grade, m.
        *
        * This is the gate that decides WHERE a cutting is, and it is the
-       * whole reason the road follows the country (`elevation.follow`)
+       * whole reason the road follows the land (`elevation.follow`)
        * rather than floating at a height of its own. A road runs down the
        * valleys, and down a valley it stands at or above the ground on its
        * own low embankment: nothing is cut, and what is beside it is soil.
@@ -687,7 +687,7 @@ export const LAND_RULES = {
        * `from` is a ditch's worth, below which there is no face; by `full`
        * the road is properly down in it. */
       depth: { from: 2.5, full: 10 },
-      /** How far the country has to stand ABOVE what the cut left before
+      /** How far the land has to stand ABOVE what the cut left before
        * the ground there reads as a FACE rather than as a bank, m: `over`
        * where it starts counting, `full` where it is all rock. Everything
        * that treats a cutting as a cutting reads this — nothing roots on
@@ -722,9 +722,9 @@ export const LAND_RULES = {
      * analysis measured a wet stage at 0.29 of water against a dry one's
      * 0.37, which is the dial working backwards.
      *
-     * It is also simply what lakeland roads do. In dry country a road can
+     * It is also simply what lakeland roads do. In dry biome a road can
      * afford to keep its distance from the one pond it passes; in a
-     * country that is half water there is nowhere to keep it, so the road
+     * biome that is half water there is nowhere to keep it, so the road
      * runs the shore — which is the whole character of the place. */
     routeSetback: { min: 1.3, max: 0.3 },
   },

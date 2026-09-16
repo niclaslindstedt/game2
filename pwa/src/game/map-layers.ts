@@ -34,7 +34,7 @@ import { ISLAND_MARGIN } from "./map-island.ts";
 
 export type MapLayerId = "bedrock" | "water" | "soil" | "flora" | "roads";
 
-/** The layers, in the order the country was made — which is also the order
+/** The layers, in the order the land was made — which is also the order
  * a generator bug is usually chased in: the rock decides where the water
  * goes, the water decides where the soil stays, the soil decides where the
  * forest grows, and the road is cut through whatever that left. */
@@ -169,10 +169,10 @@ export function buildMapLayers(track: Track, field: TerrainField, clip: THREE.Pl
   let sampled: Field | null = null;
 
   /** Walk the island once and write down what is under every lattice point.
-   * The geology is asked for the BARE country — the road shapes the surface
+   * The geology is asked for the BARE land — the road shapes the surface
    * and nothing under it — which is exactly what a question about the
    * generator is about. */
-  // R40 — the quilt this country is planted from, for the FOLIAGE layer.
+  // R40 — the quilt this biome is planted from, for the FOLIAGE layer.
   const quilt = biomeRules(track.knobs.biome);
   const sample = (): Field => {
     // The field builds its streams, spurs and guards lazily as the road is
@@ -414,7 +414,7 @@ export function buildMapLayers(track: Track, field: TerrainField, clip: THREE.Pl
       const half = track.width / 2;
       // The corridor is what the placement code asks about before it plants
       // anything (`roadDistanceAt`), so the bands ARE the rule: the road,
-      // its verge, the strip everything keeps clear of, and open country.
+      // its verge, the strip everything keeps clear of, and open land.
       const stops: Stop[] = [
         { at: half, color: 0xffd23e },
         { at: half + 6, color: 0xb4841c },

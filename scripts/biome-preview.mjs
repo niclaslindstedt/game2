@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE COUNTRY, PHOTOGRAPHED — one banner per biome for the campaign menu's
+// THE BIOME, PHOTOGRAPHED — one banner per biome for the campaign menu's
 // location rows, taken by the REAL GAME rather than drawn as a diagram.
 //
-// A location is a country, not a road: the taiga is six stages and the
+// A location is a biome, not a road: the taiga is six stages and the
 // desert is six more, so a banner that was a map of any one of them would
 // be advertising a stage the row is not about. What a row wants is the
 // place — the light on it, what grows there, what stands in it, what the
 // ground does — and the only honest source for that is the renderer that
 // draws it in the game.
 //
-// So the camera is put over the START LINE of the country's FIRST level,
+// So the camera is put over the START LINE of the biome's FIRST level,
 // lifted, and tilted down a bit: a helicopter shot looking out across the
 // landscape the ladder opens on. The first level rather than a chosen one
-// because it is the road that country introduces itself with — the first
+// because it is the road that biome introduces itself with — the first
 // thing a player will actually see of it.
 //
 // Everything about the frame comes off switches the game already has, so
@@ -36,7 +36,7 @@
 //
 //   npm run biomes
 //   npm run biomes -- --lift 200 --tilt -0.5   # try another shot
-//   npm run biomes -- --air 4000 --settle 45000  # more country, slower
+//   npm run biomes -- --air 4000 --settle 45000  # more biome, slower
 //   npm run biomes -- --out previews           # somewhere to compare, not ship
 //
 // Needs `npm i --no-save playwright-core` and a Chromium (CHROMIUM_PATH
@@ -78,15 +78,15 @@ const flag = (name, fallback) => {
  * IT WAS 110 AND THAT WAS STILL TOO HIGH. Every one of the three banners
  * came back as a white field with a smudge in it: at 110 m the nearest
  * ground is already 200 m out, which on the game's own fog is most of the
- * way to solid, so the countries were being advertised by their haze. A
- * country is sold by what GROWS in it — the spruce, the saguaro, the gravel
+ * way to solid, so the biomes were being advertised by their haze. A
+ * biome is sold by what GROWS in it — the spruce, the saguaro, the gravel
  * under the road — and none of that is legible unless the near third of the
  * frame is close enough to be sharp. */
 const LIFT = Number(flag("lift", 55));
 
 /** How far the camera tilts down from level, radians. Shallow enough that
  * THE HORIZON IS IN THE FRAME, which is what makes this a view out across a
- * country rather than a map of one — an aerial with no horizon in it reads
+ * biome rather than a map of one — an aerial with no horizon in it reads
  * as the map view with extra steps, whatever lens took it. Sky is the top
  * few percent; everything below is land going away from you. */
 const TILT = Number(flag("tilt", -0.16));
@@ -103,14 +103,14 @@ const TILT = Number(flag("tilt", -0.16));
  * The driving numbers are sized to what a driver could see through the fog,
  * and drawing kilometres of road and forest is the cost that fog exists to
  * avoid. A STILL taken once can pay it, and `?air=` buys all three things
- * that decide how much country is on screen at once: the ground BUILT around
+ * that decide how much land is on screen at once: the ground BUILT around
  * the car, the camera's far plane, and the fog — which is set to go solid
- * exactly at the drawn edge, so the country ends in haze rather than on a
+ * exactly at the drawn edge, so the biome ends in haze rather than on a
  * line. Two and a half kilometres is as far as the eye picks out anything at
  * this scale, and the tile count goes up with the square of it — which is
  * why this is the number that moved LAST. Lowering the camera is what makes
  * the near ground sharp; this is only what stops the far ground ending
- * inside the frame once the lens is looking further along the country
+ * inside the frame once the lens is looking further along the land
  * instead of down at it. */
 const AIR = Number(flag("air", 4200));
 
@@ -148,7 +148,7 @@ const H = Math.round(W / ASPECT);
  * vertical fov is solved for it (`?freefov=`), which is the whole reason a
  * ten-to-one strip is available at all. 132° is inside where the 4:1 shot
  * already sat, so the wide frame is no more distorted than the narrow one
- * was — it simply contains more country. */
+ * was — it simply contains more biome. */
 const ACROSS = Number(flag("across", 132));
 
 /** The vertical fov that gives `ACROSS` at this aspect, deg. */
@@ -199,7 +199,7 @@ const QUALITY = Number(flag("quality", 80));
 const outDir = join(root, flag("out", "pwa/public/previews"));
 
 /** The app chrome that is drawn for a human at the controls and is not part
- * of the country: god mode's copy button, and the pause chip `?hud=0`
+ * of the biome: god mode's copy button, and the pause chip `?hud=0`
  * deliberately leaves on screen (it is a phone's only way back out of a
  * run, so the HUD switch is right to keep it and this is right to hide it —
  * nobody is going to press it). */
@@ -208,7 +208,7 @@ const HIDE = ".debug-copy, .hud-actions, .hud-mini { display: none !important; }
 /** How long the world is given to build before the shutter, ms. The terrain
  * tiles and the wild scenery arrive over many frames, and under software
  * rasterization those frames are slow — a shutter that opens too early
- * photographs half-planted country. `?air=` makes this the long pole: a
+ * photographs half-planted biome. `?air=` makes this the long pole: a
  * 2.6 km disc of ground is a few hundred tiles, and every one of them has to
  * be raised before the picture is of anywhere. */
 const SETTLE_MS = Number(flag("settle", 30000));
@@ -265,12 +265,12 @@ function shotsModule(rows) {
 //
 // WHAT EACH BIOME BANNER IS A PICTURE OF. The banners themselves are JPEGs
 // under pwa/public/previews/, rendered by the real game from a camera over
-// the country's FIRST campaign stage — so what they show depends entirely on
+// the biome's FIRST campaign stage — so what they show depends entirely on
 // that level's seed, band, shape and conditions.
 //
 // Nothing at runtime reads this. It exists because a photograph cannot be
 // recomputed and compared the way a route can: without it, editing a
-// country's first stage leaves a banner of a road nobody drives, in weather
+// biome's first stage leaves a banner of a road nobody drives, in weather
 // the stage is no longer set in, and NOTHING anywhere would say so.
 // tests/stage_preview_test.ts holds this against campaign.ts.
 
@@ -300,7 +300,7 @@ page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
 const taken = [];
 
 for (const location of LOCATIONS) {
-  // The country's opening road — the one the ladder starts on.
+  // The biome's opening road — the one the ladder starts on.
   const level = location.levels[0];
   const shape = level.shape ?? "sprint";
   // The level's own dials and season, so the point the camera stands over
@@ -348,7 +348,7 @@ for (const location of LOCATIONS) {
 // The receipt. A banner is a JPEG, so nothing can recompute it and check —
 // the only way a stale one is ever noticed is if the file says what it is a
 // picture OF. `tests/stage_preview_test.ts` holds this against campaign.ts,
-// so a country whose first stage is re-seeded, re-banded or moved to another
+// so a biome whose first stage is re-seeded, re-banded or moved to another
 // hour fails the suite instead of quietly keeping last month's weather on
 // the menu.
 if (outDir === join(root, "pwa/public/previews")) {

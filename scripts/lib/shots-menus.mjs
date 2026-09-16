@@ -18,8 +18,8 @@ export async function tile(page, name) {
   await page.waitForTimeout(300);
 }
 
-/** The campaign's stage grid. CAMPAIGN opens the country list only while
- * there is more than one country to list (see `campaignEntry` in
+/** The campaign's stage grid. CAMPAIGN opens the biome list only while
+ * there is more than one biome to list (see `campaignEntry` in
  * main-menu.tsx), so the list step is taken only if it is actually there. */
 export async function stageGrid(page) {
   await tile(page, "campaign");
@@ -142,8 +142,8 @@ export async function menuShots(shot) {
   }
 
   // THE TIME TRIAL, both of its steps. Its gate is the one that is not the
-  // campaign's — a whole COUNTRY opens at once, the moment the campaign opens
-  // the country — so the two surfaces worth a picture are the country list
+  // campaign's — a whole BIOME opens at once, the moment the campaign opens
+  // the biome — so the two surfaces worth a picture are the biome list
   // (the taiga open on a save three stages in, the desert still behind the
   // table) and the grid behind it, where all six boxes are lit and only three
   // of them carry a time.

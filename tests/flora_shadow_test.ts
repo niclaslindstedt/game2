@@ -116,8 +116,8 @@ describe("the flora the shadow map is allowed to see", () => {
   it("never puts more than a handful of species in the pass", () => {
     // The other half of the cost bound: the instance cap decides how much
     // GEOMETRY is in the pass, this decides how many DRAW CALLS — so the top
-    // stop costs the same on a stage in any country, rather than whatever
-    // that country happens to plant.
+    // stop costs the same on a stage in any biome, rather than whatever
+    // that biome happens to plant.
     const pool = createFloraShadows();
     pool.setSources(Array.from({ length: 20 }, (_, i) => row(30, 3, 4 + i)));
     pool.setEnabled(true);

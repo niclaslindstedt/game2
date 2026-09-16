@@ -12,7 +12,7 @@
 //   one piece of marking this module still places for itself.
 //
 //   GRAVEL gets POSTS, and at an apex a row of anti-cut BLOCKS. They are
-//   DISCRETE — a run of objects with country between them, which is the
+//   DISCRETE — a run of objects with land between them, which is the
 //   whole visual difference from a painted band and the reason a gravel
 //   stage reads as a road with a rally on it rather than as a circuit.
 //
@@ -93,7 +93,7 @@ const SNOW_RED = new THREE.Color(0xd2302a);
 const SNOW_WHITE = new THREE.Color(0xf6f3ea);
 const REFLECTOR = new THREE.Color(0xfff4b8);
 
-/** What kind of post a country stands: a stake, or the alpine's snow pole. */
+/** What kind of post a land stands: a stake, or the alpine's snow pole. */
 export type PostStyle = "stake" | "snowpole";
 
 export function postStyleFor(biome: Track["knobs"]["biome"]): PostStyle {
@@ -396,7 +396,7 @@ export function buildKerbing(
   const group = new THREE.Group();
   const strip = buildStrip(track, samples, width);
   if (strip) group.add(strip);
-  // R40 — the country decides what a post looks like; the engine's list
+  // R40 — the biome decides what a post looks like; the engine's list
   // decides where it stands.
   const posts = field.plant(
     markers.filter((m) => m.kind === "post"),

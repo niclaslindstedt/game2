@@ -27,7 +27,7 @@ function clamp01(v: number): number {
 const WETNESS: Record<Weather, number> = { clear: 0, rain: 0.6, storm: 1 };
 
 /**
- * HOW WET THE STAGE IS, 0..1 — the weather read against the COUNTRY it is
+ * HOW WET THE STAGE IS, 0..1 — the weather read against the BIOME it is
  * over (R40) and the AIR it falls through. A storm in the taiga is a
  * downpour; the same storm in the desert is wind and sand and puts nothing
  * on the road at all. Everything that swaps a dry thing for a wet one (the

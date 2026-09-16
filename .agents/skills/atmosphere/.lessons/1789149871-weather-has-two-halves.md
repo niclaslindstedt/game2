@@ -12,7 +12,7 @@ gets, and they were asking different questions:
 - **what FALLS** — `fallsAsSnow` at the camera's own air, cross-faded in
   `environment.ts`, which correctly drew flakes under 0 °C; and
 - **what is WET** — `wetnessOf` (`weather.ts`), which read the weather
-  against the COUNTRY (`rainsIn`) and never the temperature at all.
+  against the BIOME (`rainsIn`) and never the temperature at all.
 
 So a frozen stage set to rain snowed on screen while the road bed played the
 rain sheet and patter over a wet surface twin, `wetGround` swapped the snow
@@ -22,7 +22,7 @@ own question and the stage was incoherent.
 
 `wetnessOf` now returns 0 under `fallsAsSnow(env.temperature)`. The general
 rule: **anything new that asks "what is this weather doing" must read the
-COLD as well as the row** — the country decides whether water falls here at
+COLD as well as the row** — the biome decides whether water falls here at
 all, and the temperature decides whether it is water. And check the FIELD
 while you are there: `tintCar` took a `snowing` share the player's car and
 the ghost were given and the rivals were not, which is the kind of gap a

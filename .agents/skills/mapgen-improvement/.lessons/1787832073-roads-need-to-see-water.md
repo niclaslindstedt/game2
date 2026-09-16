@@ -11,7 +11,7 @@ ran branches straight out over open water, and because a branch flattens a
 shelf under itself, the result was an embankment across a lake ending in
 mid-air. Visible from a kilometer up, and invisible in every test.
 
-The fix is structural: the bare country is its own module
+The fix is structural: the bare land is its own module
 (`engine/mapgen/land.ts`, `createLandField(seed, knobs)`), deterministic in
 the seed and the dials and depending on nothing else. The terrain field
 uses it, and so does anything that ROUTES — a branch now steers by the

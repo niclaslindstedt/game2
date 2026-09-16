@@ -24,7 +24,7 @@ const T = R.town;
 const SEEDS = Array.from({ length: 24 }, (_, i) => i * 37 + 1);
 
 /** The stages of the sweep, built once: every rule below reads the same
- * country, and compiling one is most of a test's time. */
+ * biome, and compiling one is most of a test's time. */
 const stages = new Map<number, Track>();
 function stage(seed: number): Track {
   let track = stages.get(seed);
@@ -159,7 +159,7 @@ describe("towns (R39)", () => {
         const near = nearest(street.samples, building.x, building.z);
         expect(near.sample.surface).toBe("asphalt");
         // The front wall stands past the verge by the front yard, never on
-        // the road and never out in the country.
+        // the road and never out in the land.
         const frontWall = near.d - building.plan.depth / 2;
         const lip = street.width / 2 + ROAD_CROSS.reach;
         expect(frontWall).toBeGreaterThanOrEqual(lip + T.lot.front.min - 0.5);

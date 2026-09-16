@@ -12,7 +12,7 @@ twenty-four seeds was twenty-two seconds; it is now under five, which is the
 whole point.
 
 The twenty-two-second one was a public road. Those are laid across the
-country before the stage is routed, and they were being drawn as ruled lines
+biome before the stage is routed, and they were being drawn as ruled lines
 between two points on the map's rim — the bend each one drew for itself was
 fed back into its own steering and had decayed to nothing three steps later,
 so half the seeds carried a road that ran arrow-straight for over two

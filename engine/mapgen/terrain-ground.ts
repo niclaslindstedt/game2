@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE GROUND ITSELF. Everything above this decides what the roads and the
-// people did to the country; this is where that becomes a HEIGHT — the bare
+// people did to the biome; this is where that becomes a HEIGHT — the bare
 // land plus the corridor's earthworks, held under R31's cone, cut down
 // through the rock where the road is bored or benched, carved through by
 // the streams, and finally sampled on the ground lattice the car actually
@@ -34,9 +34,9 @@ import {
   blanketDepth,
   permanentPack,
   CLIMATE,
-  icyCountry,
+  icyBiome,
   snowlineOf,
-  snowyCountry,
+  snowyBiome,
   temperatureAt,
 } from "../game/climate.ts";
 import type { Cone } from "./terrain-cone.ts";
@@ -73,7 +73,7 @@ export function createGround(
   };
 
   /** R18 — the ground the water has (`waterGroundAt`, where the rule is
-   * written down): the bare country held under the road's cut, with the
+   * written down): the bare land held under the road's cut, with the
    * streams' own carve left out of it. */
   const waterGround = (x: number, z: number): number => {
     const shaped = rawHeight(x, z);
@@ -93,7 +93,7 @@ export function createGround(
    * embankment: the corridor's underside less a ford's `BED_DEPTH` — which
    * is exactly the channel a ford has under its water — falling away past
    * the lip at the grade a fill's side falls at (R31's `climb`, read the
-   * other way round). On flat country that is below every channel and
+   * other way round). On flat land that is below every channel and
    * changes nothing; under a road on nineteen metres of fill it is the
    * fill's own slope, and a river at the toe of the fill has that slope
    * for its near bank instead of a bed cut into it. Not a fade over one
@@ -135,13 +135,13 @@ export function createGround(
   };
 
   /** R34 — how much the ground at a point is a FACE THE ROAD WAS CUT
-   * THROUGH, 0 (open country, or a bank battered back to something a car
+   * THROUGH, 0 (open land, or a bank battered back to something a car
    * could climb) to 1 (blasted rock standing over the verge).
    *
    * Two faces, and the larger of them is the answer. The CUTTING: how hard
    * this piece of road was cut — the cone's own grade, already decided per
    * sample by `cutClimb` off the surface, the cover and the dial — times
-   * how much country is actually standing on the cut here, because a
+   * how much land is actually standing on the cut here, because a
    * cutting is only a cutting where the land WANTED to be above the road,
    * and the same blasted tarmac running out across a flat has no face
    * beside it at all. And the JOIN (R31): where a cone lets go of a
@@ -310,7 +310,7 @@ export function createGround(
   // (new streams carved, the endless prune re-anchoring the corridor).
   let cornerCache = new Map<number, number>();
   let blanketCache = new Map<number, number>();
-  /** THE GROUND'S OWN CORNER — the bare country, with no snow in it. The
+  /** THE GROUND'S OWN CORNER — the bare land, with no snow in it. The
    * blanket is deliberately NOT baked in here: this lattice is 14 m between
    * corners, and a winter's coat has an EDGE (the bank at a ploughed road's
    * lip, `blanket.verge` — four metres) that falls between two of them and
@@ -344,7 +344,7 @@ export function createGround(
 
   // Each lattice cell splits into two triangles along the same diagonal the
   // renderer's tile indexing uses — (i+1,j) to (i,j+1) — so this is the
-  // exact ground surface, not an approximation of it. THE BARE COUNTRY:
+  // exact ground surface, not an approximation of it. THE BARE LAND:
   // what the snow is laid on, and what a green stage's lattice always was.
   const bareLatticeAt = (x: number, z: number): number => {
     const gx = x / GROUND_CELL;
@@ -363,9 +363,9 @@ export function createGround(
     );
   };
 
-  /** The winter's blanket over a point, m — zero everywhere the country is
+  /** The winter's blanket over a point, m — zero everywhere the biome is
    * not under snow, on the road and its verge, on the water, and in a
-   * country that has no winter.
+   * biome that has no winter.
    *
    * On `SNOW_CELL` rather than on the ground's own 14 m lattice, because
    * the blanket has an EDGE and the ground does not: the bank at a ploughed
@@ -392,7 +392,7 @@ export function createGround(
     );
   };
 
-  /** THE SURFACE THE WORLD SHOWS: the bare country with the winter's
+  /** THE SURFACE THE WORLD SHOWS: the bare land with the winter's
    * blanket lying on it. What the ground mesh, the mantle and everything
    * standing on the ground are drawn at — and the top of the snow the car
    * is sunk into, never the floor it rides on (`groundAt`). */
@@ -480,7 +480,7 @@ export function createGround(
     const ground = latticeAt(x, z);
     // R35 — the standing water here is whatever the POUR left at this
     // point, at that body's own level, not one table for the whole world.
-    // The level is asked of the bare country and the waterline is settled
+    // The level is asked of the bare land and the waterline is settled
     // against the drawn lattice, which is what keeps an embankment across
     // a lake dry on top and wet either side of it.
     // R48 — a body the cold has frozen solid is not water at all: it is
@@ -535,29 +535,29 @@ export function createGround(
   };
 
   // ── THE WINTER'S BLANKET (climate.ts) ────────────────────────────────
-  // Where the country is frozen the untouched ground lies under half a
+  // Where the biome is frozen the untouched ground lies under half a
   // metre and more of snow, and the ground the world SHOWS is the top of
-  // it: the analytic field below is the bare country plus the blanket, so
+  // it: the analytic field below is the bare land plus the blanket, so
   // every tile corner, every tree foot and every stone stands on the snow.
   // It is cleared wherever something has driven or bladed it — the stage's
   // own corridor out to its lip, an abandoned arm, a drive, a yard, a car
   // park's trails — and it ramps back to full depth over `blanket.verge`
   // metres, which is the bank a ploughed road stands between. It keeps off
   // the water and a stream's channel, and it is not laid at all in a
-  // country the climate leaves green, nor on the training ground, which
-  // was never a country. How deep it lies is the cold's at THIS height
+  // biome the climate leaves green, nor on the training ground, which
+  // was never a biome. How deep it lies is the cold's at THIS height
   // (`blanketDepth`), read off the bare ground so the roads and the nature
   // are drawn onto a temperature that already exists.
   const climate = track.climate;
   const zones = landOf(track.knobs).zones;
-  const snowy = track.arena === null && snowyCountry(climate, zones);
+  const snowy = track.arena === null && snowyBiome(climate, zones);
   const snowline = snowlineOf(climate, zones);
-  /** R48 — whether any body on this country CAN be frozen: its ground has
+  /** R48 — whether any body on this biome CAN be frozen: its ground has
    * to reach the height the air drops to `CLIMATE.ice` at. A fast no for
    * every warm stage, so the ice costs a summer nothing at all — and a
-   * loose yes, because it asks about the country's ceiling rather than
+   * loose yes, because it asks about the biome's ceiling rather than
    * about the lakes, which lie well under it. */
-  const freezes = track.arena === null && icyCountry(climate, zones);
+  const freezes = track.arena === null && icyBiome(climate, zones);
   /** R42/R47 — how much of the blanket survives a WALKED path at a point,
    * `pack.floor`..1: the snow pressed down where the crowd walks out to a
    * stand, standing at full depth everywhere they do not. A fast 1 on every
@@ -598,8 +598,8 @@ export function createGround(
     if (inStream(streams, x, z, 1)) return 0;
     // The deeper of what THIS WINTER laid and what NEVER MELTED: the cold's
     // own depth at this height, against the permanent field's above the
-    // country's own snowline. Two different sources, so the deeper wins
-    // rather than the two adding — a green country's cold snap is the
+    // biome's own snowline. Two different sources, so the deeper wins
+    // rather than the two adding — a green biome's cold snap is the
     // blanket it always was, and a snowfield is the metres it actually is.
     // `cover` is the WINTER's own fade — how much of this season's fall has
     // settled at a height near the freezing line — and it belongs to that
@@ -649,7 +649,7 @@ export function createGround(
    * solar farm's fence or a turbine's crane pad, negative inside. The
    * watercourses steer by it exactly as they steer by a road, because a
    * river through a field of panels is a field of panels standing in a
-   * river; the country's paddocks and fields stay where the water finds
+   * river; the biome's paddocks and fields stay where the water finds
    * them, which is where a real field is. */
   const energyClear = (x: number, z: number): number => {
     let best = Infinity;

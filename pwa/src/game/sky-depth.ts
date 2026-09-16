@@ -3,7 +3,7 @@
 //
 // Everything camera-locked — the dome (either one), the stars, the sun's
 // disc and halo, the ridge rings, the weather's ceiling — is a BACKDROP: it
-// stands at infinity, it is behind every solid thing in the country, and it
+// stands at infinity, it is behind every solid thing in the biome, and it
 // occludes nothing. There are two ways to draw that, and which one is
 // chosen is the single biggest number in a frame's fill cost.
 //
@@ -26,7 +26,7 @@
 //     the far plane in actual metres — the dome is 560 m out, the ridge
 //     rings 500 to 552 — and depth-testing it at its real distance is the
 //     bug this replaces: a mountain further off than the ring had the sun
-//     shining through it. At the far plane nothing in the country is ever
+//     shining through it. At the far plane nothing in the biome is ever
 //     behind it, so every solid occludes it and it occludes nothing.
 //   * NOTHING IN THE STACK WRITES DEPTH, so the pieces still paint over each
 //     other in `renderOrder`, exactly as they did when they were the first

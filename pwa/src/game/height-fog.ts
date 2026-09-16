@@ -151,7 +151,7 @@ float shadowCeiling( vec2 xz ) {
   vec2 v = texture2D( hfShadowMap, uv ).rg;
   return hfShadowRange.x + mix( v.x, v.y, hfShadowRange.z ) * hfShadowRange.y;
 }
-// 1 where a point is in the country's shadow, softened over a few metres
+// 1 where a point is in the biome's shadow, softened over a few metres
 // so the edge is a penumbra rather than a staircase of cells.
 float mountainShade( vec3 p ) {
   if ( hfShadowFrame.w <= 0.0 ) return 0.0;
@@ -228,7 +228,7 @@ const FOG_FRAGMENT = /* glsl */ `
 	#else
 		float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
 	#endif
-	// The ground in the country's shadow, and under a cloud: the beam's
+	// The ground in the biome's shadow, and under a cloud: the beam's
 	// share of its light is gone and the skylight is what is left.
 	float hfShade = max( mountainShade( vFogWorld ), cloudShade( vFogWorld ) );
 	gl_FragColor.rgb *= 1.0 - hfShade * hfShadowFrame.w;

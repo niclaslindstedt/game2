@@ -60,7 +60,7 @@
 //       its exit filled with a steep mound or a dense grove, so cutting
 //       across the grass costs more than the corner does.
 //   R15 Asphalt is not a SURFACE the stage puts on, it is a ROAD the stage
-//       borrows. The public roads are laid across the country before the
+//       borrows. The public roads are laid across the land before the
 //       route exists (R17), whole and end to end; a stage turns onto one,
 //       runs on it for a while, and turns off again. So a sealed length is
 //       always hundreds of metres long and never a chequerboard, and the
@@ -73,7 +73,7 @@
 //       that falls gently away to the landscape. No ditch — a trench beside
 //       a rally road is a trap the eye reads as a scar, not as drainage.
 //   R17 TARMAC IS LAID BEFORE THE STAGE IS. The public roads belong to the
-//       country, not to the rally: they are drawn across the seed first,
+//       biome, not to the rally: they are drawn across the seed first,
 //       whole, running off one edge of the map and out the other, and they
 //       are where the houses and the towns will stand. THEN the rally road
 //       is routed, and it may borrow one for a while — but it may never
@@ -87,7 +87,7 @@
 //       one: it arrives at an angle and its mouth FLARES, widening as it
 //       closes on the tarmac the way every car that has turned out of it
 //       has widened it, until its mat meets the main road's edge with no
-//       country left between them. The ground they share is one graded
+//       biome left between them. The ground they share is one graded
 //       platform, their two verges merge into one band across it, and the
 //       abandoned arm is taped shut and carries on to the edge of the map
 //       STILL SEALED — because it was always the whole road, and a tarmac
@@ -120,7 +120,7 @@
 //       Everything else — the vocabulary, R3 through R8, R10's
 //       self-distance (measured cyclically), the features — is the sprint's.
 //   R23 No two pieces of road share ground. The terrain lays its shelf under
-//       ONE road, so a second corridor over the same country is left hanging
+//       ONE road, so a second corridor over the same land is left hanging
 //       in the air with nothing under it and nothing to drive on. R10's
 //       distance is therefore a floor, not the rule: the rule is `roadClear`,
 //       measured centerline to centerline and sized from the road's own
@@ -136,7 +136,7 @@
 //       the point two roads meet at they ARE one road, and everywhere else
 //       — including further along the same two roads — they are not.
 //   R24 The START is a PLACE, not a line: the grid, the APRON of dirt behind
-//       it, and `roadClear` of country around both belong to the start. On a
+//       it, and `roadClear` of land around both belong to the start. On a
 //       sprint the route may not come back into it and no branch may cross
 //       it — a road floating over the start is the first thing a run ever
 //       sees. Kept in HEIGHT as well as on the map, by R23's own clause:
@@ -168,7 +168,7 @@
 //       OUTSIDE, so the outside is the side a marshal tapes off. They
 //       stand IN corners and never along a straight, and only where R42
 //       finds them somewhere to have parked — a corner with no such
-//       country behind it gets nobody.
+//       land behind it gets nobody.
 //   R28 A stage is SPLIT INTO CHECKPOINTS, roughly a quarter-minute of
 //       driving apart, and every one of them stands at the EXIT of a
 //       corner — the tighter the better. A checkpoint is both a split
@@ -192,11 +192,11 @@
 //       boards are collected in the order they stand in. The finish line
 //       does not end a run, and a circuit's start line does not book a lap,
 //       until every one of them is behind the car: a stage cut short across
-//       country is not a stage that was driven.
+//       biome is not a stage that was driven.
 //   R31 The road and the ground beside it are RIDEABLE. Within a BENCH of
 //       a road — the route's or an abandoned branch's — the landscape never
 //       stands above that road's own corridor, and past the bench it may
-//       only rise at a grade the car can climb. Whatever the country was
+//       only rise at a grade the car can climb. Whatever the biome was
 //       doing there is CUT where it would otherwise be a wall a car sliding
 //       off the road stops dead against, or a hillside the ground lattice
 //       drags up through the tarmac. The bench is a LATTICE CELL DIAGONAL
@@ -205,7 +205,7 @@
 //       triangle can cut up through one.
 //       And NOTHING A ROAD BUILDS IS STEEPER THAN A CAR CAN CLIMB unless it
 //       is rock, and says so. Every slope the terrain shapes — the cone
-//       letting go of the country at the end of its reach, a road's or a
+//       letting go of the biome at the end of its reach, a road's or a
 //       branch's embankment running out to the field, a stream's bank — is
 //       held under `verge.climbable`; where a mountain stands over the cone
 //       by more than a climbable slope can take up, the join is a FACE and
@@ -213,11 +213,11 @@
 //       can see and never a grass hillside it cannot get up. The analysis
 //       holds the whole drawn lattice to it (`ground.climb`).
 //       A FILL'S SIDE IS ONE SLOPE, NOT A SUM OF THEM. An embankment falls
-//       at the verge grade until it lands on the country, and is let go
+//       at the verge grade until it lands on the land, and is let go
 //       only at the end of the road's reach — never eased toward the
-//       country from the lip, because an ease has a grade of its own and
-//       stood it on top of the embankment's. Where the country itself
-//       falls away from under the road, the side falls at the country's
+//       biome from the lip, because an ease has a grade of its own and
+//       stood it on top of the embankment's. Where the land itself
+//       falls away from under the road, the side falls at the biome's
 //       own grade and what it takes to land within reach, which is what a
 //       fill on a hillside stands at. And the ground between two roads
 //       carries the TALLER fill whichever road is nearer: a fill handed
@@ -231,11 +231,11 @@
 //       the air with a vertical face down the side of it.
 //   R34 Where a road meets ground it cannot go round, it is CUT THROUGH it,
 //       and the face it is cut through is the face that ground would stand
-//       at. R31 says the country beside a road may only rise at a grade a
-//       car could climb, and taken alone that is a country with no rock in
+//       at. R31 says the land beside a road may only rise at a grade a
+//       car could climb, and taken alone that is a biome with no rock in
 //       it: every shoulder the road forces gets battered back into the same
 //       gentle ramp, and a stage laid across mountains reads as a stage laid
-//       across a lawn. So the grade R31 holds the country to is not one
+//       across a lawn. So the grade R31 holds the biome to is not one
 //       number, it is the ANGLE OF REPOSE OF WHAT IS THERE:
 //         · Deep till slumps. It is battered back to R31's own climb, and a
 //           car that runs wide onto it comes back down onto the road.
@@ -248,7 +248,7 @@
 //       its line and takes the shoulder out of the way. A gravel road is
 //       scraped in by a grader for the cost of the diesel, and a grader goes
 //       ROUND — so an unsealed stage gets the shallow cut and the sealed
-//       sections get the walls. `knobs.steepness` says how hard the country
+//       sections get the walls. `knobs.steepness` says how hard the land
 //       is on both counts.
 //       The BENCH is untouched either way: a cut face begins outside the
 //       flat ground R31 keeps beside every road, so a car running wide has
@@ -282,7 +282,7 @@
 //       edge — which at stage speed is a jump, and is the reason a road
 //       crossing is a place a driver remembers. The step is the ROAD's, not
 //       a feature laid on the route: the whole crossing is one level
-//       platform standing `crossing.stand` above the country, and the ramps
+//       platform standing `crossing.stand` above the biome, and the ramps
 //       either side of it are how the rally gets up there and back down.
 //       R20 is not bent by that, and the geometry is what keeps it: what
 //       R20 forbids is a LIP on sealed road, and a crossing's sealed part is
@@ -290,7 +290,7 @@
 //       both ramps are gravel, and so is the far edge the car leaves. So the
 //       one piece of this that throws a car is on the rally's own surface,
 //       where every other jump on a stage is.
-//   R37 The country is LIVED IN. Every so often — far between, never two in
+//   R37 The biome is LIVED IN. Every so often — far between, never two in
 //       sight of each other — a HOMESTEAD stands off the stage: a house on
 //       its own graded yard, a car or two outside it, and a dirt drive that
 //       comes down to the rally road and meets it SQUARE, the way a track
@@ -308,7 +308,7 @@
 //       which is the one shape of forest a stage has that somebody put
 //       there on purpose. Nothing about a homestead may cost the route
 //       anything: it goes where a straight, dry, gently graded piece of
-//       country beside the road allows one, and where none does, there is
+//       biome beside the road allows one, and where none does, there is
 //       no homestead. It never stands on another road (R17's tarmac or a
 //       branch), never in the water (R35), never beside a ford or a bridge
 //       (R18's channel has to be seen past the road's edge), never on the
@@ -345,12 +345,12 @@
 //       THE GROUND UNDER THE WHOLE VILLAGE IS ONE GRADED BAND, level with
 //       the street's own verge, running from under the street's mat out
 //       past the back gardens for the length of the town and eased back
-//       onto the country past that — never a graded pad per lot, because
+//       onto the land past that — never a graded pad per lot, because
 //       the drawn ground is a lattice of corners fourteen metres apart
 //       (`lattice.ts`) and a pad ten metres across falls between them:
 //       flattened a lot at a time nothing reaches the surface anyone
 //       stands on, and four houses in five end up hanging over the
-//       country's own slope or buried in it. Where another road, a
+//       biome's own slope or buried in it. Where another road, a
 //       homestead or the water is in the way the band stops short and the
 //       ground goes back to being theirs — a ROAD takes its own corridor
 //       back whatever the band wanted, so a lot only ever stands where
@@ -362,18 +362,18 @@
 //       houses. A watercourse keeps off the band as it keeps off a road
 //       (R18). One town on a stage, because a town is a place and two of
 //       them in five kilometres is a suburb.
-//   R40 A STAGE IS BUILT IN A COUNTRY, and the country is a DIAL. The
+//   R40 A STAGE IS BUILT IN A BIOME, and the biome is a DIAL. The
 //       biome (`knobs.biome`, `biomes.ts`) says what the land is made of
 //       and how it stands, whether there is water in it, what grows on it
 //       and in what company, and what the sky over it can do — as rows the
-//       generator reads, never as a branch in it. The taiga is the country
+//       generator reads, never as a branch in it. The taiga is the biome
 //       every other rule was written against, and every multiplier in its
 //       row is 1. The desert has no water at all: no groundwater that
 //       surfaces, no basin that fills, no crossing on the route and no
 //       river traced through one; its hollows flatten into pans instead,
 //       its ranges are low, and the wind has piled its sand into dune
 //       fields THE ROAD ACTUALLY RIDES: a sand road is bladed rather than
-//       surveyed, so it follows the country at 0.3 of the taiga's lag and
+//       surveyed, so it follows the land at 0.3 of the taiga's lag and
 //       1.4 times its grade (`BiomeLand.lag`, `BiomeLand.grade`), which
 //       takes it from a quarter of the sand's rise to two thirds of it and
 //       halves the cut and fill it stands on. HOW HIGH THAT SAND
@@ -382,15 +382,15 @@
 //       deepest and nowhere else, and one that builds a BIGGER dune field
 //       rather than a taller one — the period grows with the height, and
 //       the ergs with the period, because sand cannot stand steeper than
-//       its own angle of repose. At 0 the country comes back with no dune
+//       its own angle of repose. At 0 the biome comes back with no dune
 //       row at all. A biome never switches a rule off — a desert stage
 //       still obeys every one above — it moves what the rules draw from,
 //       exactly as the other dials do.
 //   R41 THE RAILWAY IS LAID BEFORE THE STAGE IS, like the tarmac (R17), and
-//       the rally goes OVER it on a ramp. A country that carries one
+//       the rally goes OVER it on a ramp. A biome that carries one
 //       (`biomes.ts`, `rail.chance` of its seeds) has a single track laid
 //       across the map edge to edge on nothing but the seed and the bare
-//       country, at a railway's radii, held off every road; the route plans
+//       biome, at a railway's radii, held off every road; the route plans
 //       round it exactly as it plans round tarmac (R23), may never borrow
 //       or join it, and may cross it once, SQUARE, by R36's own solve. The
 //       crossing is a JUMP the organisers built: the gravel climbs
@@ -415,7 +415,7 @@
 //       by a gravel LANE off a road that is NOT the rally road: an
 //       abandoned arm past its barrier (R17, R36), a public road the route
 //       never met, the lane out of an earlier car park, or — where the
-//       pocket of country the corner sits in carries none of those — out
+//       pocket of land the corner sits in carries none of those — out
 //       to the edge of the map the way a branch goes, which is where the
 //       tarmac it would have joined runs too. From the pad a TRAIL is
 //       trodden through the grass to the back of each stand the car park
@@ -425,17 +425,17 @@
 //       park, and from the car park out to a road. Nothing about it costs
 //       the route anything — the pad, the lane and the trails keep off the
 //       route's corridor, every other road, the water, the guards' mounds
-//       and the buildings. AND A STAND THE COUNTRY LEAVES NO ROOM TO SERVE
+//       and the buildings. AND A STAND THE LAND LEAVES NO ROOM TO SERVE
 //       IS NOT A STAND: it is taken off the stage, because a crowd that
 //       could not have got to a corner does not stand at it. The pad is a
 //       pad the terrain flattens, the lane is a road it shelves, and the
 //       cars are as solid as they look.
-//   R43 THE COUNTRY MAKES POWER. A stage in a modern country
+//   R43 THE BIOME MAKES POWER. A stage in a modern biome
 //       (`BiomeRules.energy`) runs past the two things a hillside has on it
 //       now: WIND FARMS and SOLAR FARMS. A wind farm is a string of three
 //       to seven turbines, each two hundred metres to the blade tip, on the
 //       highest dry ground a band off the road — the first tower where a
-//       lateral probe from the stage finds the country rising, the rest
+//       lateral probe from the stage finds the land rising, the rest
 //       along a string that follows the road's bearing and walks each tower
 //       onto the highest ground near its slot; every foot stands over the
 //       road it is seen from, off every road's corridor by more than a
@@ -447,10 +447,10 @@
 //       inverter cabin as solid as they look. Both keep off the water,
 //       every road, every town and homestead, and each other, and neither
 //       costs the route anything. `roads.energy` measures every one.
-//   R45 THE POWER GOES SOMEWHERE ELSE. The country that makes power
+//   R45 THE POWER GOES SOMEWHERE ELSE. The biome that makes power
 //       (`BiomeRules.energy`) carries the GRID that takes it away: one
 //       400 kV transmission line, laid rim to rim across the map from
-//       nothing but the seed and the bare country, on a little over half
+//       nothing but the seed and the bare land, on a little over half
 //       the seeds and never two. It is not a thing beside the road — it
 //       is a thing the road passes under, and the moment worth having is
 //       the crossing.
@@ -480,7 +480,7 @@
 //       ridge-to-ridge crossing span, sagging thirty metres, which is the
 //       one that looks like something. A window that refuses even
 //       stretched refuses the whole line, and another entry on the rim is
-//       tried: a grid with a hole in it is worse than a country with no
+//       tried: a grid with a hole in it is worse than a biome with no
 //       grid.
 //
 //       Every foot stands off the route, every other road, every town,
@@ -499,7 +499,7 @@
 //       drawn from R3's hard bucket, each one is taken from the tight end
 //       of its own severity's radius band and swept further round it, the
 //       lips are drawn from the steep end of R6's ramp band, the road is
-//       narrower than R21's dial alone would have made it, and the country
+//       narrower than R21's dial alone would have made it, and the biome
 //       either side stands its relief higher, so a car that slides off the
 //       outside of a corner has somewhere to fall. It never draws anything
 //       the vocabulary does not already contain: a hard turn on a savage
@@ -507,7 +507,7 @@
 //       AT REST — the middle of the dial — every one of those is exactly
 //       the number the rule states, so the stage a seed has always built
 //       is the stage it still builds.
-//   R47 A MOUNTAIN ROAD SOLVES THE MOUNTAIN. In a country with a MASSIF
+//   R47 A MOUNTAIN ROAD SOLVES THE MOUNTAIN. In a biome with a MASSIF
 //       (`BiomeLand.massif`, the alpine) the geography comes first — a
 //       ridge system hundreds of metres high, concave flanks, flat valley
 //       floors with the lakes cut into them, a treeline, a rock line and
@@ -515,36 +515,36 @@
 //       never the other way round. Four things make that true. The stage
 //       STARTS HIGH (`startHigh`): the origin is sited on the highest
 //       shoulder the grid will stand on, so a stage runs down off the
-//       mountain. The search READS THE COUNTRY when it draws a corner
+//       mountain. The search READS THE BIOME when it draws a corner
 //       (`steer`): it walks both directions and keeps the one whose end
 //       the road can follow the land to, weighed toward the lower ground —
 //       which is what lays a road along a contour, and what turns it back
 //       on itself in a HAIRPIN where the flank is too steep to take
 //       straight, so a sequence of switchbacks down a face is what the
 //       vocabulary builds there without a rule that says "switchback". The
-//       road may follow the country steeper (`grade`), because a pass has
+//       road may follow the land steeper (`grade`), because a pass has
 //       further to climb than a forest road. And a cut deeper than a road
 //       would be blasted is BORED: a straight whose line runs more than
-//       `tunnel.depth` under the country for `tunnel.minLength` or more
+//       `tunnel.depth` under the land for `tunnel.minLength` or more
 //       becomes a TUNNEL — the road holds its grade through the shoulder,
-//       the country stands over it untouched, its walls are as solid as
+//       the land stands over it untouched, its walls are as solid as
 //       they look, and the two portals are cut into the face at either
-//       end. Only in a country that bores (`tunnels`); the taiga's deep
+//       end. Only in a biome that bores (`tunnels`); the taiga's deep
 //       cut is still refused, and the search draws another line. ABOVE THE
 //       SNOWLINE THE ROAD IS SNOW: whatever it was laid as, a sample
 //       standing higher than `zones.snow` is a packed snow road, a surface
 //       of its own to the physics (`TUNING.surfaces.snow`) and a bladed one
-//       to everything about the road's shape. None of it touches a country
+//       to everything about the road's shape. None of it touches a biome
 //       without a massif: every multiplier in the taiga's row is 1, its
 //       `steer` is 0 and it bores nothing, so every seed it ever built is
 //       the seed it still builds.
 //
-//   R49 WHICH WAY A STAGE RUNS THROUGH ITS COUNTRY is a DIAL —
+//   R49 WHICH WAY A STAGE RUNS THROUGH ITS BIOME is a DIAL —
 //       `knobs.tilt` — and it is decided by WHERE THE STAGE STARTS. The
 //       road follows the bare land through a lag (R34), so its height at
-//       any point is the country's; what the stage does over its whole
+//       any point is the biome's; what the stage does over its whole
 //       length is therefore almost entirely how high the ground under the
-//       start line stands against the country's own average. So the dial
+//       start line stands against the biome's own average. So the dial
 //       moves R35's siting walk and nothing else: above the middle the
 //       origin walks for the highest level shoulder it can find and the
 //       stage comes down off it, below the middle for the lowest ground it
@@ -554,16 +554,16 @@
 //       the high ground NEARBY, a full one the best shoulder in the
 //       county. The middle asks for nothing and is R35's plain spiral, so
 //       every seed built without a tilt is the seed it always was; a
-//       country that already starts high (R47's alpine) is exactly its old
+//       biome that already starts high (R47's alpine) is exactly its old
 //       self at the middle and takes the dial as an offset either way. It
-//       can only trade inside the relief the country actually has, and it
+//       can only trade inside the relief the biome actually has, and it
 //       never touches the road's own grade — nothing it does can make a
 //       stage steeper than R34 already allows. It says nothing at all to a
 //       CIRCUIT (R22): a lap comes back to its own start line, so its net
-//       drop is zero however the country is sited under it.
+//       drop is zero however the biome is sited under it.
 
 export * from "./rules-book.ts";
-export * from "./rules-country.ts";
+export * from "./rules-biome.ts";
 export * from "./rules-knobs.ts";
 
 import type { Crossing, SegmentFeature, TurnSeverity } from "./rules-knobs.ts";

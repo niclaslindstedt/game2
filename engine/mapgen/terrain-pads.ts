@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// GROUND SOMEBODY LEVELLED. Most of the landscape is the country plus the
+// GROUND SOMEBODY LEVELLED. Most of the landscape is the biome plus the
 // road's own earthworks, but four things are FLAT because a person made
 // them flat: a homestead's yard (R37), every lot of a town and the band
 // the whole village stands on (R39), a crane pad under a turbine and a car
 // park's apron (R42, R43). Each is a disc or a rectangle graded to a
-// plane, eased back onto the country over a rim no steeper than a car can
+// plane, eased back onto the land over a rim no steeper than a car can
 // climb — and each is also a place the forest, the water and the props
 // keep off, which is the other half of what this answers.
 
@@ -28,7 +28,7 @@ export function createPadField(track: Track, cone: Cone) {
    * flattened to. A homestead's yard (its DRIVE goes into the branch index
    * above — it is a road, and gets a road's shelf) and every lot of a
    * town. Each carries its own `blend`: a yard out in a field is eased back
-   * onto the country over a long rim, a lot on a village street over a
+   * onto the land over a long rim, a lot on a village street over a
    * short one, because the next lot is a few metres away. Same ingest
    * cursor discipline as the branches. */
   const pads: {
@@ -51,8 +51,8 @@ export function createPadField(track: Track, cone: Cone) {
     atS: number;
   }[] = [];
   /** R31 — A RIM IS A SLOPE A CAR CAN CLIMB. A pad or a village's band is
-   * eased back onto the country over its `blend` at least, and over more
-   * wherever the country stands far enough over or under it that the
+   * eased back onto the land over its `blend` at least, and over more
+   * wherever the land stands far enough over or under it that the
    * blend would make a wall of the rim: a smoothstep's steepest point is
    * one and a half times its mean, so the run a drop needs is that over
    * `verge.climbable`. A yard on a flat keeps its eleven metres; a village
@@ -224,7 +224,7 @@ export function createPadField(track: Track, cone: Cone) {
   };
 
   /** R23 + R31 — how much of a point inside a village's band the band is
-   * still allowed to shape: all of it out in the country and on its own
+   * still allowed to shape: all of it out in the land and on its own
    * street, none of it inside any OTHER road's drawn corridor, handed back
    * over the same lattice cell the corridor hands over across.
    *
@@ -274,7 +274,7 @@ export function createPadField(track: Track, cone: Cone) {
     return best;
   };
   /** R37 — the CLEARINGS: a farm's paddock and its field. Not pads — the
-   * ground under them is the country's own, a meadow lies on a slope — but
+   * ground under them is the biome's own, a meadow lies on a slope — but
    * ground the forest and the scatter keep off, and (a ploughed field)
    * ground with a surface of its own. Read through `spurClearance` like
    * everything else that is not forest, so one function still answers

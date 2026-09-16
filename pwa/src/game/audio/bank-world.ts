@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE WORLD'S OWN SOUNDS — everything on a stage that is not the car.
 //
-// A rally stage is a road through somebody else's country, and the country
+// A rally stage is a road through somebody else's biome, and the biome
 // was making noise before the car arrived: birds in the spruce, cicadas on
 // a bajada, choughs round a col, an owl at dusk, cows behind a fence and
 // cowbells on an alm, a train on the line through the crossing. None of it
 // is a `GameEvent`; the engine has no idea
 // a raven exists. These are CUES the ambience scheduler (`ambience.ts`)
-// raises off the state — where the car is, what country it is in, what time
+// raises off the state — where the car is, what biome it is in, what time
 // it is — and they are all QUIET, because the one thing a world must never
 // do is compete with the drift.
 //
@@ -85,7 +85,7 @@ export const WORLD_BANK: SoundBank = {
 
   raven: {
     description:
-      "A raven going over — the one bird every country has. A driven " +
+      "A raven going over — the one bird every biome has. A driven " +
       "sawtooth croak low in the register with a hard vowel on it: a bandpass " +
       "around 900 Hz opening and shutting across a quarter of a second, " +
       "twice, the second one lower. Rough, dry, and a little too loud for " +

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R37 — the HOMESTEADS. A stage runs through country somebody lives in,
+// R37 — the HOMESTEADS. A stage runs through land somebody lives in,
 // and every so often the proof stands off the road: a house on its own
 // yard, a car or two outside it, a lane of trees down the drive that
 // comes to the rally road and meets it square. Far between — a stage is a
 // lonely place, and two houses in one view would be a village — but seen
-// now and then on every stage, so the country reads as lived in rather
+// now and then on every stage, so the biome reads as lived in rather
 // than as a forest a road was drawn on.
 //
 // The engine places them, not the renderer, for the reason every solid
@@ -20,7 +20,7 @@
 // not the far arm of a road the route turned off, and it is not shut
 // because the rally goes the other way but because it is somebody's yard.
 // So it lives in its own list on the track, not among the branches, and
-// the analysis that judges a branch by whether it gets out of the country
+// the analysis that judges a branch by whether it gets out of the land
 // never sees one.
 
 import { hash2, smooth } from "../lib/noise.ts";
@@ -86,23 +86,23 @@ export type Homestead = {
   block: RoadBlock | null;
   /** R37 — what makes this homestead a FARM: the barn, the paddock and
    * its stock, the field, the machinery. Null on a house that is only a
-   * house, and everywhere in a country that is not farmed. */
+   * house, and everywhere in a biome that is not farmed. */
   farm: Farm | null;
 };
 
-/** Everything the placer has to ask about the country. Functions rather
+/** Everything the placer has to ask about the biome. Functions rather
  * than the compiler's own state so the module can be driven from a test
  * with a flat rig as easily as from a compiled stage. */
 export type HomesteadContext = {
   seed: number;
   /** The stage's nominal full width, m. */
   width: number;
-  /** R40 — what a bladed road in this country is made of: the drive is one. */
+  /** R40 — what a bladed road in this biome is made of: the drive is one. */
   loose: Surface;
-  /** R40 — whether the country is FARMED: whether a homestead may be a
+  /** R40 — whether the biome is FARMED: whether a homestead may be a
    * farm at all. */
   farms: boolean;
-  /** R40 — what kind of house the country builds. */
+  /** R40 — what kind of house the biome builds. */
   houses: HouseStyle;
   /** The route's samples, in stage order. */
   samples: readonly HomesteadSample[];
@@ -208,11 +208,11 @@ export function placeHomesteads(ctx: HomesteadContext): Homestead[] {
     const rng = createRng((ctx.seed ^ 0x3b9a4f11 ^ Math.imul(slot, 2654435761)) >>> 0);
     const first: 1 | -1 = rng.chance(0.5) ? 1 : -1;
     const length = rng.range(H.drive.length.min, H.drive.length.max);
-    // R37 — a FARM or a house: rolled off the slot's own dice so a country
+    // R37 — a FARM or a house: rolled off the slot's own dice so a biome
     // that is not farmed draws the same houses in the same places.
     const farm = ctx.farms && hash2(slot, 1, gate) < H.farm.chance;
     // Both sides get a try, the dice's first, and then both again with the
-    // shortest drive there is: a house is where the country lets one stand,
+    // shortest drive there is: a house is where the biome lets one stand,
     // the far side of the road is as good a place as the near one, and a
     // yard that will not fit at the end of a long lane often fits at the
     // end of a short one.
@@ -259,7 +259,7 @@ function nearCrossing(samples: readonly HomesteadSample[], index: number): boole
 const YARD_AIM = 24;
 
 /** Drive the lane out from the road on one side and see whether a yard
- * fits at the end of it. Null where the country says no. */
+ * fits at the end of it. Null where the biome says no. */
 function tryHomestead(
   ctx: HomesteadContext,
   at: HomesteadSample,
@@ -305,7 +305,7 @@ function tryHomestead(
   // could go. Its heights are laid afterwards, once the yard at the end of
   // it is known: a drive is laid to ARRIVE on its yard's level, and that
   // level is settled where the drive reaches the yard's approach: settled
-  // at the end, the whole difference between the yard and the country
+  // at the end, the whole difference between the yard and the biome
   // lands in the rim's blend, at twice the grade of any road.
   const points: { x: number; z: number; heading: number; s: number }[] = [];
   for (let s = 0; s <= length; s += SPUR.step) {
@@ -339,7 +339,7 @@ function tryHomestead(
       probes.push({ x: px, z: pz, h: ctx.land.heightAt(px, pz) });
     }
   }
-  // The yard is graded to the country's own mean level across it, not to
+  // The yard is graded to the biome's own mean level across it, not to
   // whatever height the drive happens to arrive at — a pad cut into the
   // middle of the ground it sits on is half a metre of fill and half a
   // metre of cut, where a pad held at the lane's height is all one or the
@@ -350,10 +350,10 @@ function tryHomestead(
   // road of its own — it lies ON the road's cross-section, crown to
   // shoulder to verge, so the mouth is the stage's camber and not a flat
   // mat laid over it with a lip where the two disagree. Past that, R34: it
-  // follows the country at the route's own lag, inside a track's grade and
+  // follows the land at the route's own lag, inside a track's grade and
   // the crest rule (`followStep`), never outside the stage's verge cone
   // (R31) — and from the yard's approach in, it climbs onto the yard's
-  // level, which is settled there: the country's mean, moved no further
+  // level, which is settled there: the biome's mean, moved no further
   // toward the drive than the run to the rim can make up at most of a
   // road's grade.
   const samples: SpurSample[] = [];
@@ -524,7 +524,7 @@ export function homesteadSolids(
   h: Homestead,
   /** The ground as the terrain field shapes it, once the yard and the drive
    * are in it — where the solids' feet actually stand. The record's own
-   * heights are the bare country's, which the yard has since flattened. */
+   * heights are the bare land's, which the yard has since flattened. */
   groundAt: (x: number, z: number) => number = (_x, _z) => NaN,
 ): WildObstacle[] {
   const out: WildObstacle[] = [];

@@ -3,29 +3,30 @@
 // with things lying on top of it, and almost everything a stage looks like
 // follows from which layer is showing where.
 //
-// The layers, laid in the order the country was made:
+// The layers, laid in the order the land was made:
 //
 //   1. BEDROCK. The rock the whole map is cut from — broad swell, hills,
 //      mountain chains along their ridges, and the fault steps between
 //      them. Everything else is deposited on it or dissolved out of it.
-//      In a mountain country (R47, `BiomeLand.massif`) a MASSIF stands on
+//      In a mountain biome (R47, `BiomeLand.massif`) a MASSIF stands on
 //      all of that: a ridge system hundreds of metres high whose flanks
 //      are concave — a gentle foot, a steep last pitch — and whose valley
 //      floors are flattened to the level the ice left them at, so the
 //      lakes and the villages have somewhere to be.
 //
 //      Bedrock has a SMOOTHNESS, and it is the single number that decides
-//      what country the stage is in. Sweden and Norway are made of the same
-//      rock; what separates them is that the ice sat on one and ran off the
-//      other. A smooth country is planed: broad whaleback summits, filled
-//      valleys, and none of the fine grain left — the ice took it. A rough
-//      one stands its mountains higher and keeps its texture.
+//      what KIND of landscape the stage is in. Sweden and Norway are made
+//      of the same rock; what separates them is that the ice sat on one and
+//      ran off the other. A smooth landscape is planed: broad whaleback
+//      summits, filled valleys, and none of the fine grain left — the ice
+//      took it. A rough one stands its mountains higher and keeps its
+//      texture.
 //
 //      Whatever the smoothness, the rock is CURVES. The ground is drawn on
 //      a 14 m lattice, and a crease in the field is a fold on it that reads
 //      from a kilometre up; so a crest is a whaleback and a fault step is a
 //      worn slope unless somebody asked otherwise. The two sharp things the
-//      country can have — the alpine knife-edge along a crest, the fault
+//      biome can have — the alpine knife-edge along a crest, the fault
 //      step standing as a cliff — are opened by the `steepness` dial past
 //      its midpoint (`steep.crease`) and by nothing else, and `sharpAt`
 //      says where they are so the analysis can hold everything else to a
@@ -75,19 +76,19 @@ import {
  * level, so it is the floor under every other water level here, m. */
 export const LAKE_Y = -11;
 
-/** R40 — how far under the lake table a dry country's groundwater sits,
+/** R40 — how far under the lake table a dry biome's groundwater sits,
  * m. Deep enough that no hollow the relief can cut reaches it: the
  * desert's floor keeps the surface above the table by construction, and
  * this keeps the table out of every "is it wet" answer besides. */
 const ARID_TABLE = 40;
 
-/** R40 — the knee a dry country's pans are flattened over, m: how far
+/** R40 — the knee a dry biome's pans are flattened over, m: how far
  * above the floor the hillside starts easing onto it. */
 const PAN_KNEE = 8;
 
 /** R40 — the share of the dune mask under which there is no sand, and the
  * span it fades in over. Value noise sits mostly between 0.3 and 0.7, so
- * this puts full-height dunes over roughly a third of the country, fading
+ * this puts full-height dunes over roughly a third of the biome, fading
  * ones over another third, and pan and scrub over the rest. */
 const DUNE_FIELD_FROM = 0.3;
 const DUNE_FIELD_SPAN = 0.25;
@@ -125,7 +126,7 @@ const MASSIF_LEDGE = 0.97;
 /** R47 — the massif's two further octaves of ridge, as divisors of its
  * scale: the side ridges that run down off a main crest, and the gullies
  * between them, and what each is worth against the main crest's own fold.
- * `MASSIF_GULLY_SHARE` is read against the row's `spurs`, so a country
+ * `MASSIF_GULLY_SHARE` is read against the row's `spurs`, so a biome
  * with no spurs has no gullies either. */
 const MASSIF_SPUR = 2.6;
 const MASSIF_GULLY = 6.5;
@@ -175,15 +176,15 @@ const MASSIF_OCTAVE_GRADE = 1.5;
  * and the whole descent under it, not on the summit where every way down
  * is a wall and the first two kilometres are white.
  *
- * R47 — the SPREAD is the tuned country's and stays absolute: a start grid
- * has to be level enough to hold a field whatever the country around it is
+ * R47 — the SPREAD is the tuned biome's and stays absolute: a start grid
+ * has to be level enough to hold a field whatever the land around it is
  * doing. What the ALTITUDE dial moves is the two things it is COMPARED
  * against — the height on offer (`massif.altitude.siting`) and the snowline
  * the ceiling is measured from (`altitudeScale.bands`).
  *
  * ...and `SHOULDER_OVER_CREST` is the OTHER ceiling, as a share of the
  * mountain's own crest, taken whenever it stands higher than the snow one.
- * On the country the alpine's row describes the snow ceiling is the higher
+ * On the biome the alpine's row describes the snow ceiling is the higher
  * of the two and this changes nothing; on a mountain standing kilometres
  * over its own snowline, "beside the snow" IS the valley floor, and holding
  * the start to it put four seeds in six down at the bottom with the
@@ -235,7 +236,7 @@ export type GeologyField = {
    * bottom of, grow reeds out of and drive through; a LAKE is water that is
    * not. Everything that plants at a waterline reads this. */
   wetlandAt: (x: number, z: number) => Wetland;
-  /** How glacially planed this country is, 0 (alpine, sharp) to 1 (shield,
+  /** How glacially planed this biome is, 0 (alpine, sharp) to 1 (shield,
    * rounded) — drawn from the seed, so every stage is somewhere. */
   smoothness: number;
   /** How much of the ground here is a DELIBERATELY sharp feature, 0..1: an
@@ -249,35 +250,35 @@ export type GeologyField = {
 };
 
 /** Build the layers for a seed at its dial positions. Deterministic in
- * both and in nothing else: the same country every time. */
+ * both and in nothing else: the same biome every time. */
 export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   const rng = createRng((seed ^ 0x1b873593) >>> 0);
   const noiseSeed = rng.int(1, 1 << 30);
   const G = R.geology;
-  // R40 — the country the dials are read against: how flat the ice, or
+  // R40 — the biome the dials are read against: how flat the ice, or
   // the sun, has worn it, whether its hollows hold water, and whether the
   // wind has piled sand across it.
   const B = biomeRules(knobs.biome);
-  // R47 — the country AT THIS ALTITUDE, not the row it was written from:
+  // R47 — the biome AT THIS ALTITUDE, not the row it was written from:
   // the massif's height and the ground it stands on are the dial's.
   const L = landOf(knobs);
-  // How hard the country's own relief is turned up, and how much of it
+  // How hard the land's own relief is turned up, and how much of it
   // stands under water — the `elevation` and `water` dials reach the world
   // beside the road here, exactly as they reach the road itself. A dry
-  // country has no ponds to dial: its water knob still reaches the route
+  // biome has no ponds to dial: its water knob still reaches the route
   // (R35's setbacks) and nothing else.
   const relief = reliefOf(knobs) * L.relief;
   const ponds = B.water ? knobScale(knobs.water, R.wet.ponds) : 0;
-  // R34 — the one number that says which country this is, drawn from the
+  // R34 — the one number that says which biome this is, drawn from the
   // seed inside the band the `steepness` dial opens. The dial moves the
   // BAND and the seed picks the position in it, so a stage is still set
-  // somewhere: what the dial says is which countries a seed may land in,
-  // not which country this one is.
+  // somewhere: what the dial says is which biomes a seed may land in,
+  // not which biome this one is.
   const smoothness = rng.range(
     knobScale(knobs.steepness, { min: G.smoothness.min, max: G.steep.sharp.min }),
     knobScale(knobs.steepness, { min: G.smoothness.max, max: G.steep.sharp.max }),
   );
-  // ...and how SHARP that country may be. Everything the rock does is a
+  // ...and how SHARP that biome may be. Everything the rock does is a
   // curve, with two deliberate exceptions: the alpine crest — the fold of
   // the ridge noise, cubed, which is a knife-edge on the ground lattice —
   // and the escarpment drawn as a cliff rather than a worn step. Both are
@@ -289,7 +290,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   const sharpShare =
     clamp01((knobs.steepness - G.steep.crease) / (1 - G.steep.crease)) *
     clamp01((G.steep.sharp.max - smoothness) / (G.steep.sharp.max - G.steep.sharp.min));
-  // ...and how big the relief that country holds is. Sharp country stands
+  // ...and how big the relief that land holds is. Sharp land stands
   // its steps and its crests higher as well as steeper — the same fault the
   // ice would have worn into a hillside is a cliff where it did not.
   const rise = knobScale(knobs.steepness, G.steep.rise);
@@ -302,13 +303,13 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     L.mountains *
     (G.mountain.tall - G.mountain.planed * smoothness);
   const escRise = G.bedrock.escarpment.rise * rise;
-  // R47 — THE MASSIF, where the country has one: how high its crests
+  // R47 — THE MASSIF, where the biome has one: how high its crests
   // stand, off the same dial and the same seed the taiga's chains read,
   // and how much of the taiga's own swell and hills is left under it.
   const M = L.massif;
   const massifPeak = M ? M.height * relief * rise : 0;
   // R47 — the `peaks` dial: how far apart the crests stand and how much of
-  // the country between them is floor. One mountain in a plain at one
+  // the land between them is floor. One mountain in a plain at one
   // end, a range at the other.
   const altitude = altitudeScale(knobs);
   const massifScale = M ? M.scale * challengeMul(knobs.peaks, R.massif.peaks.scale) : 0;
@@ -317,22 +318,22 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     : 0;
   const swellAmp = G.bedrock.swell.amp * (M ? M.swell : 1);
   const hillsAmp = G.bedrock.hills.amp * (M ? M.hills : 1);
-  // The treeline is the country's (`BiomeLand.zones`): where the ice, or
+  // The treeline is the biome's (`BiomeLand.zones`): where the ice, or
   // the cold, leaves the ground bare.
   const treeline = L.zones.treeline;
   const escSpan =
     G.bedrock.escarpment.span.max -
     (G.bedrock.escarpment.span.max - G.bedrock.escarpment.span.min) * sharpShare;
 
-  /** R40 — THE DUNES, where the country has them: wind-blown sand lying on
+  /** R40 — THE DUNES, where the biome has them: wind-blown sand lying on
    * the rock as a ridged field. One bearing for the whole stage — one
    * prevailing wind piled all of it — and the ridges run ALONG it, several
    * times longer than they are wide, so a road crossing the wind meets
    * them as a washboard of brows and a road running with it rides a crest
    * for hundreds of metres. A slow mask says where the sand sea is at all;
-   * between its fields the country is bare pan.
+   * between its fields the biome is bare pan.
    *
-   * Drawn AFTER the taiga's own draws, and only in a country with dunes, so
+   * Drawn AFTER the taiga's own draws, and only in a biome with dunes, so
    * the rng sequence every existing seed was built on is untouched. */
   const D = L.dunes;
   const duneBearing = D ? rng.range(0, Math.PI * 2) : 0;
@@ -356,7 +357,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     return mask * D.amp * Math.pow(smooth(1 - Math.abs(2 * n - 1)), DUNE_CREST);
   };
 
-  /** R40 — THE PANS. A country with no water has hollows that never fill;
+  /** R40 — THE PANS. A biome with no water has hollows that never fill;
    * they silt up flat instead, and this flattens the rock into them. A
    * soft knee rather than a clamp, for the same reason the pits are
    * blended rather than clamped: a `Math.max` creases where the two
@@ -373,7 +374,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   };
 
   /** Everything both the rock and the water table are made of, evaluated
-   * once. `broad` is the country without its detail — the shape the water
+   * once. `broad` is the biome without its detail — the shape the water
    * table follows — and `face` is how steep the point is, read straight off
    * the shaping functions rather than measured with a gradient. */
   const layers = (
@@ -431,7 +432,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     // one ridge field (0 in a valley, 1 on a crest) and bent concave by a
     // power, so a flank is a quarter grade at its foot and near one under
     // the crest. The fold is a crease by construction, and it is meant to
-    // be: an arête is the sharp thing an alpine country has, and
+    // be: an arête is the sharp thing an alpine biome has, and
     // `massifCrest` says where it is so the analysis can hold the rest of
     // the flank to a curve. The flank's own grade is estimated off the
     // shaping function — the fold climbs from valley to crest over a
@@ -453,7 +454,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
       //
       // Summing three independent folds instead — which is what this was —
       // puts a crease every half-period of the FINEST octave across the
-      // whole country, valley floors included, each one carrying its full
+      // whole biome, valley floors included, each one carrying its full
       // share of the mountain's height. At the top of the ALTITUDE dial
       // that is a 600 m needle every 200 m, and it reads from a kilometre
       // up as a bed of nails rather than as a range. `ground.summits`
@@ -515,7 +516,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     }
 
     // The escarpments: a wandering fault line where the ground steps down.
-    // A cliff where the country is sharp, a hillside where the ice has been
+    // A cliff where the land is sharp, a hillside where the ice has been
     // over it. `esc * (1 - esc)` peaks exactly on the face of the step —
     // the smoothstep's own slope, without differencing anything.
     const escT =
@@ -524,8 +525,8 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     const esc = smooth(clamp01(escT));
 
     // The basins: the sea, and the ponds a wetter dial sinks into the
-    // country. They are cut into the ROCK — the ice gouged them — and they
-    // fill because their floors are under the lake table. A dry country
+    // biome. They are cut into the ROCK — the ice gouged them — and they
+    // fill because their floors are under the lake table. A dry biome
     // has none: nothing was ever gouged, because nothing was ever going to
     // fill it.
     const b = G.bedrock.basin;
@@ -566,7 +567,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     // to HOLD WATER, and a hill is not: a hollow on a broad rise still
     // gathers a mire in it, and the pond at the bottom of a sloping field
     // is the most ordinary water there is. Handing the pits the full face
-    // shuts them off over most of a hilly country, and what is left is the
+    // shuts them off over most of a hilly biome, and what is left is the
     // deep sea basins — a map whose every shoreline drops away too steeply
     // for a car to drive back out of.
     //
@@ -577,7 +578,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     const sheer = clamp01(Math.max(flank, step));
     const face = clamp01(Math.max(sheer, roll));
     // How much of the ground here is a DELIBERATELY sharp feature: a crest,
-    // or the escarpment's face, in a country the dial has opened. WHERE a
+    // or the escarpment's face, in a biome the dial has opened. WHERE a
     // feature is, not how hard it creases — a quarter of the dial's excess
     // is already a crease along every crest, so the word saturates there.
     // A crest counts from a quarter of the mask up, because a small
@@ -615,7 +616,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   ): { t: number; full: number; rim: number; sharp: number } => {
     const P = G.pits;
     const none = { t: 0, full: 0, rim: 0, sharp: 0 };
-    // R40 — no groundwater, no pit: a hollow in a dry country is a pan.
+    // R40 — no groundwater, no pit: a hollow in a dry biome is a pan.
     if (!B.water) return none;
     // Flat, and low. Above `lowland` metres over the lake table there is no
     // groundwater to fill anything. Gated on the ROCK rather than on the
@@ -674,12 +675,12 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   const soilOf = (x: number, z: number, rock: number, broad: number, face: number): number => {
     const S = G.soil;
     const patch = S.patch.min + (1 - S.patch.min) * valueNoise(x, z, S.patch.scale, noiseSeed + 37);
-    // Below the broad shape of the country is downhill of everywhere near
+    // Below the broad shape of the land is downhill of everywhere near
     // it, which is where everything washed off the tops ends up.
     const hollow = clamp01(0.5 + (broad - rock) / S.hollow);
     const bare = 1 - face;
     const alpine = 1 - clamp01((rock - treeline) / S.alpine.over);
-    // A glaciated country has MORE in its hollows and LESS on its highs:
+    // A glaciated biome has MORE in its hollows and LESS on its highs:
     // the ice is what moved it from one to the other.
     const carried = 1 + S.glacial * smoothness * (hollow - 0.5) * 2;
     return Math.max(0, S.max * patch * bare * bare * (0.35 + 0.65 * hollow) * alpine * carried);
@@ -725,7 +726,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     return { rock, soil, surface, broad, face: steep, sharp: Math.max(sharp, pit.sharp) };
   };
 
-  /** Everything above works in COUNTRY space — the seed's landscape, at
+  /** Everything above works in LAND space — the seed's landscape, at
    * the coordinates its own noise is written in. The stage is then sited
    * somewhere in it (below), and the public field reads through that
    * offset, so the world the game sees has its origin on ground a stage
@@ -734,7 +735,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     const { rock, soil, surface, broad, face } = finish(x, z);
     const W = G.groundwater;
     // Steep ground drains: the table drops away under a flank far faster
-    // than it does under a flat. In a dry country it is tens of metres
+    // than it does under a flat. In a dry biome it is tens of metres
     // down everywhere and never surfaces at all.
     const table = B.water
       ? Math.max(LAKE_Y, broad - (W.depth + W.drain * face))
@@ -742,11 +743,11 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     return { bedrock: rock, soil, surface, table };
   };
 
-  /** R35 — where in the country this stage stands.
+  /** R35 — where in the biome this stage stands.
    *
    * The stage's origin is not chosen by anything: the route search draws
    * outward from (0, 0), and the start apron is laid on it before any rule
-   * gets a say. So it is the COUNTRY that moves. The origin walks a spiral
+   * gets a say. So it is the BIOME that moves. The origin walks a spiral
    * until the whole footprint a start needs stands clear of the water, and
    * every query below is answered from there.
    *
@@ -760,10 +761,10 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   const site = ((): { x: number; z: number } => {
     const S = G.siting;
     // R47 — HOW FAR THE ORIGIN MAY WALK TO FIND ITS SITE, scaled with the
-    // spacing of the country's own features (`altitudeScale.ground`). The
+    // spacing of the biome's own features (`altitudeScale.ground`). The
     // walk's job is to be able to leave whatever it started in — a basin,
     // or on a mountain the valley between two ridges — and a fixed 2.6 km
-    // cannot do that in a country whose ridges stand six kilometres apart:
+    // cannot do that in a biome whose ridges stand six kilometres apart:
     // the high shoulder R35 is looking for is simply outside the spiral,
     // and four seeds in six started in the valley with the mountain they
     // were meant to come down beside them. The STEP is scaled with it, so
@@ -799,13 +800,13 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     // R47 — A MOUNTAIN STAGE STARTS HIGH. The whole spiral is walked and
     // the highest SHOULDER taken: the site with the most height, less a
     // penalty for every metre its footprint is from level, because a start
-    // on a crest with the country falling away under the grid is a start
+    // on a crest with the biome falling away under the grid is a start
     // the opening straight cannot be laid from (R34). The biggest value
-    // wins, so a country with no shoulder still gets its flattest high
+    // wins, so a biome with no shoulder still gets its flattest high
     // ground rather than failing.
-    // R49 — ...and the TILT dial asks for the same walk in a country that
+    // R49 — ...and the TILT dial asks for the same walk in a biome that
     // would not otherwise take it, or for its opposite. Zero is the plain
-    // spiral below, so a stage that asks for no tilt in a country that
+    // spiral below, so a stage that asks for no tilt in a biome that
     // does not start high is sited exactly where it always was.
     const bias = siteBiasOf(knobs);
     if (bias !== 0) {
@@ -815,7 +816,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
         L.zones.snow === null ? Infinity : L.zones.snow + SHOULDER_OVER_SNOW * altitude.bands;
       // R47 — the crest ceiling is the ground's OWN summit, not the row's
       // amplitude. `L.massif.height` is what the massif contributes before
-      // the country's relief and the steepness dial's rise multiply it, and
+      // the biome's relief and the steepness dial's rise multiply it, and
       // the ground tops out `summit` higher again — so reading it as "the
       // crest" set the ceiling a third of the way down the mountain, and
       // since height counts AGAINST a site past the ceiling, the search was
@@ -829,7 +830,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
       // flank's, so the penalty carries the difference between them.
       // R47 — ...and what a metre of it COSTS, against the height it is
       // being traded for. It climbs faster than the mountain does
-      // (`massif.altitude.siting`): the taller the country, the more
+      // (`massif.altitude.siting`): the taller the biome, the more
       // height there is to tempt the site up onto a face, and a start on a
       // face is a stage the search then has to lay down off one.
       const penalty = SHOULDER_PENALTY * Math.pow(altitude.height, R.massif.altitude.siting);
@@ -872,7 +873,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     if (bestClear >= 0) return best;
     // A spiral of whole steps: rings of increasing radius, each walked in
     // the same fixed order, so the first site that passes is a property of
-    // the country alone.
+    // the biome alone.
     for (let radius = siteStep; radius <= siteFar; radius += siteStep) {
       const points = Math.max(6, Math.round((2 * Math.PI * radius) / siteStep));
       for (let a = 0; a < points; a++) {

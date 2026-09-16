@@ -1,11 +1,11 @@
 ---
-title: A blend of fixed length from a level onto the country is a wall wherever the drop is big — size every rim, bank and fade to the drop it takes up
+title: A blend of fixed length from a level onto the land is a wall wherever the drop is big — size every rim, bank and fade to the drop it takes up
 date: 2026-09-05
 scope: engine/mapgen/terrain.ts, engine/mapgen/rules.ts
 concepts: [terrain, r31, verge, lattice, measurement, water, towns, homesteads]
 ---
 
-Six passes in `terrain.ts` eased something level back onto the country over
+Six passes in `terrain.ts` eased something level back onto the land over
 a FIXED length: the verge cone's lift-off (60 m, steepening to `cut.face.max`
 whatever stood over it), a branch's shelf (30 m), a stream's bank (9 m), a
 yard's and a village's rim (11 m / 20 m), and the corner guard's mound
@@ -24,8 +24,8 @@ the toe. A mound's cosine peaks at `rise · π / 2`, so `rise` is 0.39.
 
 Two things the drop-sizing does NOT fix, and where the check
 (`ground.climb`, on the drawn lattice, exempting `cutAt`, `sharpAt` and
-the country's own scoured flanks) still reports: a road's fill standing
-over country that itself falls faster than `verge.climb` — nothing gentler
+the biome's own scoured flanks) still reports: a road's fill standing
+over biome that itself falls faster than `verge.climb` — nothing gentler
 exists to come down to, so the flank exemption covers it — and the cone
 letting go of a mountain, which becomes a declared rock face (`cutAt`'s
 `join`) rather than a gentler slope, because 60 m of fade cannot take up

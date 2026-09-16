@@ -1,5 +1,5 @@
 ---
-title: The heights that separate meadow, rock, forest and snow are the COUNTRY's, not constants — a biome with a massif needs them on its row, read by geology, paint, planting and the map
+title: The heights that separate meadow, rock, forest and snow are the BIOME's, not constants — a biome with a massif needs them on its row, read by geology, paint, planting and the map
 date: 2026-09-05
 scope: engine/mapgen/biomes.ts, engine/mapgen/geology.ts, pwa/src/game/terrain.ts, pwa/src/game/planting.ts, scripts/lib/stage-render.mjs
 concepts: [biome, zones, treeline, snow, alpine, terrain, planting, renderer-seam]
@@ -8,8 +8,8 @@ concepts: [biome, zones, treeline, snow, alpine, terrain, planting, renderer-sea
 The taiga's 26 m rock line (`ROCK_LINE` in the app's terrain paint), the
 26 m `HIGHLAND_Y` in `planting.ts`, the 46 m soil line in the geology
 (`soil.alpine.from`) and the preview renderer's own copy of the rock line
-were four restatements of one fact about ONE country: how high its hills
-get. A country whose crests stand 500 m over its floor paints entirely as
+were four restatements of one fact about ONE biome: how high its hills
+get. A biome whose crests stand 500 m over its floor paints entirely as
 rock under them and plants its whole forest as highland scrub.
 
 They are now one row: `BiomeLand.zones = { treeline, rock: { from, to },

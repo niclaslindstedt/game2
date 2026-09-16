@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // WHAT CLOUDS ARE OVER THE STAGE — the genera, at the heights the cloud
-// chart puts them, dressed onto one run's sky by its weather, its country,
+// chart puts them, dressed onto one run's sky by its weather, its biome,
 // its season and its seed. Everything here is a DECISION about the sky:
 // what the layers are, how much they cover, how big their cells are, how
 // hard their edges, which way they streak, and how fast they ride the wind.
 // What they LOOK like is sky-shader.ts's half (the same layers drawn on the
 // dome), and clouds.ts's for the simple sky.
 //
-// The heights are WORLD altitudes, metres over the sea, because the country
+// The heights are WORLD altitudes, metres over the sea, because the biome
 // is not flat: an alpine pass at six hundred metres looks UP at a cumulus
 // whose base is at fifteen hundred and DOWN onto a stratus sea filling the
 // valley at three, and a driver on the taiga's sea-level gravel sees the
@@ -110,11 +110,11 @@ export type SkyDressing = {
  * fourth slot is headroom for a chart that grows one. */
 export const MAX_LAYERS = 4;
 
-/** Where a stage's cumulus base sits over each country, m over the sea. The
+/** Where a stage's cumulus base sits over each biome, m over the sea. The
  * base of a cumulus is the condensation level, and it stands higher over
  * dry ground — a desert's puffs are two kilometres up on a summer day, a
  * forest's barely one. The alpine's are given the mountain's own height
- * to build over: the country's roads run to nine hundred metres. */
+ * to build over: the land's roads run to nine hundred metres. */
 const CUMULUS_BASE: Record<BiomeId, [number, number]> = {
   taiga: [1000, 1500],
   desert: [1900, 2600],
@@ -128,7 +128,7 @@ const CUMULUS_BASE: Record<BiomeId, [number, number]> = {
  * not make cloud, and a game whose sky always has something in it reads as
  * a sky that is drawn rather than one that happened.
  *
- * By country, because that is what decides how much water the air is
+ * By biome, because that is what decides how much water the air is
  * carrying: the desert's is empty most days, the forest's hardly ever. */
 const CLOUDLESS: Record<BiomeId, number> = {
   taiga: 0.12,
@@ -181,13 +181,13 @@ export function skySeed(env: Pick<RaceEnv, "gustPhase" | "windDir">): number {
  * DRESS THE SKY for one run. `cover` is how heavy the weather is (0..1,
  * `coverOf`), and only the wet skies read it.
  *
- * The clear sky is the country's and the season's: a summer forest builds
+ * The clear sky is the biome's and the season's: a summer forest builds
  * cumulus all afternoon, a winter one sits under a flat stratocumulus
  * sheet; a desert has a few cumulus a long way up and cirrus more often
  * than not; the Alps build cumulus over the peaks and comb altocumulus
  * into lenticular streaks in the wind. Some days it makes NOTHING at all,
  * most often over the desert (`CLOUDLESS`), and the stage is driven under
- * bare blue. Rain is a deck (nimbostratus in a wet country, blown sand in a
+ * bare blue. Rain is a deck (nimbostratus in a wet biome, blown sand in a
  * dry one) with scud under it; a storm is the same deck lower and blacker
  * with the scud tearing.
  */
@@ -263,7 +263,7 @@ export function dressSky(
   if (biome === "taiga") {
     if (season === "winter") {
       // A flat grey stratocumulus sheet with holes in it — the northern
-      // winter sky — over a country that is white anyway.
+      // winter sky — over a biome that is white anyway.
       layers.push(sheet("stratocumulus", 700 + roll() * 300, between(roll, 0.3, 0.75), roll, 0));
     } else {
       layers.push(

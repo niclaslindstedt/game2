@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R45 — THE GRID: the transmission line laid rim to rim across the country,
+// R45 — THE GRID: the transmission line laid rim to rim across the land,
 // and the towers spotted along it.
 //
 // What these assertions hold up is the half of the feature that is a
 // SURVEY rather than a drawing — and every one of them is a rule this
 // session watched break at least once:
 //
-//   THE COUNTRY DECIDES WHETHER THERE IS ONE. A biome that makes no power
+//   THE BIOME DECIDES WHETHER THERE IS ONE. A biome that makes no power
 //   carries no grid, and a synthetic rig carries nothing at all.
 //
 //   THE TOWERS ARE THE LINE. Every span is inside the band the tension was
@@ -14,10 +14,10 @@
 //   that carries a real turn is an ANGLE tower.
 //
 //   THERE IS AIR UNDER IT. Measured against the ground the CAR drives, not
-//   against the country the survey read — the gap between those two is
+//   against the biome the survey read — the gap between those two is
 //   where every clearance defect on this feature has come from.
 //
-//   IT CROSSES. Both ends outside the country a player can see; a line that
+//   IT CROSSES. Both ends outside the land a player can see; a line that
 //   stops in a field is worse than no line.
 //
 //   IT IS THE SAME LINE EVERY TIME. A stage is a pure function of its seed,
@@ -48,9 +48,9 @@ function stage(seed: number): Track {
   return built;
 }
 
-/** Seeds whose country carries a line, found by SWEEPING — never a pinned
+/** Seeds whose biome carries a line, found by SWEEPING — never a pinned
  * seed. Any change to the rules re-rolls the search, so "seed 3 has a power
- * line on it" is a fact about the country rather than about the thing under
+ * line on it" is a fact about the biome rather than about the thing under
  * test, and a suite that names one fails on every generator change with a
  * message about the wrong subject. Cached as SEEDS, not as tracks: callers
  * mutate what they are handed. */
@@ -65,7 +65,7 @@ function wiredSeeds(want = 4): number[] {
 }
 
 describe("R45 — the grid", () => {
-  it("is carried by a country that makes power, and by no other", () => {
+  it("is carried by a biome that makes power, and by no other", () => {
     let taiga = 0;
     for (let seed = 1; seed <= 24; seed++) {
       if (stage(seed).powerLines.length > 0) taiga++;
@@ -166,7 +166,7 @@ describe("R45 — the grid", () => {
     }
   });
 
-  it("crosses the whole country and ends outside it", () => {
+  it("crosses the whole biome and ends outside it", () => {
     for (const seed of wiredSeeds()) {
       const track = stage(seed);
       const line = track.powerLines[0];

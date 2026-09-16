@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // R37 — THE FARMS. Some of the homesteads are not a house with a car
-// outside: they are the places the country is farmed from, and a farm is a
+// outside: they are the places the land is farmed from, and a farm is a
 // different thing to drive past. The BARN is the biggest building on any
 // stage — longer, wider and taller than the house beside it, red boards
 // over a stone byre, a hayloft door up a ramp in the gable — and round it
@@ -85,7 +85,7 @@ export type Farm = {
   gear: FarmGear[];
 };
 
-/** Everything the farm placer has to ask about the country and the yard it
+/** Everything the farm placer has to ask about the biome and the yard it
  * is being laid on. */
 export type FarmSite = {
   rng: Rng;
@@ -97,7 +97,7 @@ export type FarmSite = {
   heading: number;
   /** How deep the house is, m — the paddock behind it keeps off its back wall. */
   houseDepth: number;
-  /** R40 — the country's building vocabulary: the barn is drawn in it. */
+  /** R40 — the biome's building vocabulary: the barn is drawn in it. */
   houses: HouseStyle;
   land: LandField;
   /** The homestead placer's own test: may a piece of farm stand here? */
@@ -159,7 +159,7 @@ function siteRect(
   if (where === "pastBarn") {
     const out = F.barn.setIn * yard.radius + barnDepth + gap + depth / 2;
     // Its width runs AWAY from the road: the near end level with the
-    // yard's own back half, the rest out into the country behind, so a
+    // yard's own back half, the rest out into the land behind, so a
     // long field never reaches back into the stage's corridor.
     const along = width / 2 - yard.radius * 0.4;
     return {
@@ -236,7 +236,7 @@ function fence(
 }
 
 /** R37 — lay out the farm on a yard. Null where not even the barn fits;
- * otherwise a farm with whatever else the country allowed — a paddock
+ * otherwise a farm with whatever else the biome allowed — a paddock
  * or a field can each be refused on their own. */
 export function placeFarm(site: FarmSite): Farm | null {
   const { rng, yard, forward, right } = site;

@@ -394,7 +394,7 @@ type HudProps = {
   /** HEADS UP's own sheet — one race, no board. Null outside that mode, and
    * never set at the same time as `campaign`. */
   race: FinishRace | null;
-  /** The location whose table stands between this run and the next country,
+  /** The location whose table stands between this run and the next biome,
    * or null when nothing does. */
   locked: string | null;
   /** Save the run as a run tape FILE from the results card. Null unless the

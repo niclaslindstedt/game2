@@ -15,7 +15,7 @@ the point's exact analytic grade is the wrong number for a lattice.
 `fadeGrade` now uses the fade's peak — `1.5 · E / F` — so the whole band
 with more than ~15 m of excess is rock, which is what the band IS.
 
-The same trap the other way: the check must exempt the country's own
+The same trap the other way: the check must exempt the biome's own
 scoured flanks (bare soil, bare land steeper than `verge.climb`), or a
 fill standing on a mountainside is reported for the mountainside's slope.
 Read that off `farHeightAt`, never the shaped field, or the exemption

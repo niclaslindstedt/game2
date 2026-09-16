@@ -8,7 +8,7 @@ concepts: [sky, parity, rendering]
 `cloud-field.ts`'s `dressSky` is the chart; `sky-shader.ts` draws it as sheets
 on the dome and `clouds.ts` stands in for it with a ring of instanced puffs on
 the LOW sky lever. Only the first of the two ever read the dressing — the ring
-sized itself off `Preset.cloudShare`, a per-COUNTRY constant, behind a
+sized itself off `Preset.cloudShare`, a per-BIOME constant, behind a
 `Math.max(1, …)` floor. So any change to what the chart may roll reaches half
 the players: a stage the chart put nothing over came out bare on MEDIUM/HIGH
 and with one lone puff parked over it on LOW.

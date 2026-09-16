@@ -313,7 +313,7 @@ const GRAIN = {
   pace: 30,
   paceMax: 1.5,
   /** What each surface does to it. Asphalt is the smooth one and open
-   * country is the rough one; a ford's bed is somewhere between. The spread
+   * biome is the rough one; a ford's bed is somewhere between. The spread
    * is what makes leaving the road READ, so the rough end has to stay a
    * clear step above gravel without becoming a picture nobody can drive
    * from — the moment a surface is unreadable the grain has stopped

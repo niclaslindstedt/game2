@@ -8,7 +8,7 @@ and autumn, skeins on passage — long vees of geese and straight trailing
 lines of white whooper swans, high over the stage and heading north or
 south depending on which end of the year it is. In summer the same birds
 are still there, lower and in smaller loose groups, on their way to the
-next lake rather than to another country.
+next lake rather than to another biome.
 
 They arrive rather than appear: each crossing is pitched over a point a few
 hundred metres ahead and flies in from a kilometre back, and the wingbeat

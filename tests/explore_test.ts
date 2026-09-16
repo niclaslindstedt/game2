@@ -98,7 +98,7 @@ describe("top speed", () => {
     expect(tops.coupe / tops.classic).toBeGreaterThan(1.15);
   });
 
-  /** The same run across open country: flat out on the flat, until it stops
+  /** The same run across open land: flat out on the flat, until it stops
    * gaining. Returns the top it reached (km/h) and how long it took to see
    * 100 km/h (s) — the wild's two numbers, which move opposite ways. */
   function wildRun(carId: string): { top: number; to100: number } {
@@ -181,7 +181,7 @@ describe("exploring", () => {
     // and the terrain owns the ground. Without that, the nearest sample at
     // the end of the stage stays nearest forever and the car reverses away
     // down an invisible flat ribbon, held at the start's elevation over
-    // whatever the country is doing — floating over a valley, buried in a
+    // whatever the biome is doing — floating over a valley, buried in a
     // hillside, and driving straight through both.
     const state = createGame({ seed: 2, skipCountdown: true });
     const grid = state.track.samples[0];
@@ -668,7 +668,7 @@ describe("the terrain field", () => {
           // R17 — nor where the route is running ON a public road. The same
           // rule as the branch exemption above, for the third road this
           // test can meet: a borrow is the rally BORROWING a highway that
-          // was laid on the bare country before the route existed, so the
+          // was laid on the bare land before the route existed, so the
           // ground at its lip is that highway's shoulder and this
           // corridor's cone has no business cutting it. Neither exemption
           // above reaches it — `roadDistanceAt` is the route's own field
@@ -749,7 +749,7 @@ describe("the terrain field", () => {
     it("leaves almost nothing beside the road the car cannot climb back over", () => {
       // And what that BUYS, measured on the lattice the car actually rides.
       // Not zero: R18 cuts a stream its banks, a second road's own drawn
-      // corridor can stand proud of the country beside it, and a triangle
+      // corridor can stand proud of the land beside it, and a triangle
       // spanning a cell diagonal reads a Lipschitz field back steeper than
       // it is. Before R31 it was four to six percent of the ground beside
       // the road — walls a car sliding off it stopped dead against.
@@ -781,7 +781,7 @@ describe("the terrain field", () => {
               const pz = s.z + right.z * lat;
               const here = terrain.groundAt(px, pz);
               // The face is measured LEAVING the road: what a car sliding
-              // off it drives into. A drop is the country's business — a
+              // off it drives into. A drop is the biome's business — a
               // rise it cannot get over is not. R34's blasted rock is the
               // exception, and only where the field says it is rock.
               if (terrain.cutAt(px, pz) > 0) {

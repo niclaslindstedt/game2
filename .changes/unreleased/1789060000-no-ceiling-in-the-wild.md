@@ -3,7 +3,7 @@ type: Changed
 title: No speed limit off the road
 ---
 
-Open country used to stop the car dead at about 150 km/h, whichever car it
+Open biome used to stop the car dead at about 150 km/h, whichever car it
 was. That ceiling is gone: the wild now charges for itself on the way UP —
 a driven wheel digs into unconsolidated ground instead of driving, so a
 field is half again as long to 100 km/h as the road is — and charges

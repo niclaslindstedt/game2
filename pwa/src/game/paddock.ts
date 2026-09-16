@@ -216,7 +216,7 @@ export function buildField(
 }
 
 /** The meadow: the paddock's own grass, planted through the flora so it
- * sways with the rest of the country, thin enough that the animals read
+ * sways with the rest of the biome, thin enough that the animals read
  * and thick enough that the ground does not read as a lawn. */
 export function buildMeadow(
   track: Track,
@@ -237,7 +237,7 @@ export function buildMeadow(
     const z = rect.z + right.z * u + fwd.z * v;
     const y = heightAt(x, z);
     // R47 — a grazed paddock is under the snow with the rest of the
-    // country, and the fence around it is what says a paddock is there.
+    // biome, and the fence around it is what says a paddock is there.
     if (underSnow(track.knobs, track.climate, y)) continue;
     placements.push({
       id: rng.chance(0.85) ? "tallGrass" : "heathShrub",

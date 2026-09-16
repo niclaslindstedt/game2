@@ -18,7 +18,7 @@ regenerates two different things:
 So a modified `biome-*.jpg` proves nothing on its own. Check it before
 committing: run `npm run biomes` twice and compare `md5sum`. If the bytes
 move on an unchanged tree, `git checkout --` the images rather than
-committing a re-encode that reads as "the generator changed the countries".
+committing a re-encode that reads as "the generator changed the biomes".
 
 The banners are shot over each location's FIRST stage (`taiga-1` seed 38,
 `desert-1` seed 16 — both sprints today), so a change scoped to another

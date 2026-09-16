@@ -3,12 +3,12 @@
 //
 // WHAT EACH BIOME BANNER IS A PICTURE OF. The banners themselves are JPEGs
 // under pwa/public/previews/, rendered by the real game from a camera over
-// the country's FIRST campaign stage — so what they show depends entirely on
+// the biome's FIRST campaign stage — so what they show depends entirely on
 // that level's seed, band, shape and conditions.
 //
 // Nothing at runtime reads this. It exists because a photograph cannot be
 // recomputed and compared the way a route can: without it, editing a
-// country's first stage leaves a banner of a road nobody drives, in weather
+// biome's first stage leaves a banner of a road nobody drives, in weather
 // the stage is no longer set in, and NOTHING anywhere would say so.
 // tests/stage_preview_test.ts holds this against campaign.ts.
 

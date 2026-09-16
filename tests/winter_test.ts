@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE WINTER, and the cold under every season (engine/game/climate.ts): the
-// temperature as a field over the country, the snow it brings down onto the
+// temperature as a field over the land, the snow it brings down onto the
 // road and lays beside it, what that snow is like to drive on, and what
 // falls out of a wet sky under it.
 
@@ -21,7 +21,7 @@ import {
   defaultTemperature,
   fallsAsSnow,
   frostLine,
-  icyCountry,
+  icyBiome,
   isLoose,
   rainsIn,
   resolveClimate,
@@ -41,7 +41,7 @@ import {
 
 import { stageTerrain, stageTrack } from "./support/stages.ts";
 
-/** A country's dials at their defaults — what `resolveClimate` and the zone
+/** A biome's dials at their defaults — what `resolveClimate` and the zone
  * readers now take, since R47's ALTITUDE moves both the bands and the rate
  * the air cools at. */
 const dials = (biome: BiomeId) => resolveKnobs({ biome });
@@ -53,9 +53,9 @@ const OLD_ICE = 0.58;
 const WINTER = { season: "winter" as const };
 
 /** A winter cold enough to whiten the taiga and NOT cold enough to freeze
- * its water (R48): the ice line stands clear over the country's own
+ * its water (R48): the ice line stands clear over the land's own
  * ceiling, so every body on it is still open and the route is the summer's.
- * Derived from the country rather than named, because the claim the tests
+ * Derived from the land rather than named, because the claim the tests
  * below make — "the same road, made of snow" — is only true on this side of
  * `CLIMATE.ice`, and a hard-coded degree would quietly stop meaning it.
  * The ice itself is `tests/ice_test.ts`. */
@@ -82,7 +82,7 @@ function beside(track: Track, out: number): { x: number; z: number; i: number } 
 }
 
 describe("the climate", () => {
-  it("has a winter, and every season has its own temperature in every country", () => {
+  it("has a winter, and every season has its own temperature in every biome", () => {
     expect(SEASONS).toContain("winter");
     for (const biome of Object.keys(BIOMES)) {
       for (const season of SEASONS) {
@@ -94,10 +94,10 @@ describe("the climate", () => {
     expect(defaultTemperature("desert", "winter")).toBeGreaterThan(CLIMATE.freeze);
   });
 
-  it("resolves what was chosen, and fills the rest in from the country's year", () => {
-    // R47 — it takes the whole set of DIALS rather than a country's name,
+  it("resolves what was chosen, and fills the rest in from the biome's year", () => {
+    // R47 — it takes the whole set of DIALS rather than a biome's name,
     // because the lapse rate it resolves is the ALTITUDE dial's as much as
-    // the biome's: a country stood up a mountain cools over its own bands.
+    // the biome's: a land stood up a mountain cools over its own bands.
     expect(resolveClimate(undefined, dials("taiga"))).toEqual({
       season: "summer",
       temperature: 18,
@@ -121,14 +121,14 @@ describe("the climate", () => {
     expect(temperatureAt(climate, 0)).toBe(6);
     expect(temperatureAt(climate, 300)).toBeLessThan(temperatureAt(climate, 100));
     expect(temperatureAt(climate, frostLine(climate))).toBeCloseTo(CLIMATE.freeze, 9);
-    // A frozen datum puts the line under the whole country.
+    // A frozen datum puts the line under the whole biome.
     expect(frostLine({ season: "winter", temperature: -8 })).toBeLessThan(0);
   });
 
-  it("brings the snowline down with the cold, and never lifts the country's own", () => {
+  it("brings the snowline down with the cold, and never lifts the biome's own", () => {
     const taiga = BIOMES.taiga.land.zones;
     const alpine = BIOMES.alpine.land.zones;
-    // A summer taiga's line stands over the whole country: no snow anywhere.
+    // A summer taiga's line stands over the whole biome: no snow anywhere.
     expect(snowlineOf(resolveClimate(undefined, dials("taiga")), taiga)).toBeGreaterThan(
       taiga.rock.to,
     );
@@ -189,13 +189,13 @@ describe("the climate", () => {
     expect(permanentPack(CLIMATE.blanket.pileAt)).toBe(CLIMATE.blanket.pile);
     expect(permanentPack(CLIMATE.blanket.pileAt * 5)).toBe(CLIMATE.blanket.pile);
     expect(permanentPack(CLIMATE.blanket.pileAt / 2)).toBeCloseTo(CLIMATE.blanket.pile / 2, 6);
-    // ...and it is the DEEPER of the two that a country wears, so the pile
+    // ...and it is the DEEPER of the two that a biome wears, so the pile
     // is worth having at all.
     expect(CLIMATE.blanket.pile).toBeGreaterThan(CLIMATE.blanket.deep);
   });
 
   /** The campaign's own alpine circuit (`campaign-locations.ts`, "First
-   * Light") — a country with a PERMANENT snowfield beside the road, which
+   * Light") — a biome with a PERMANENT snowfield beside the road, which
    * is the one thing the three cases below are about. */
   const white = (): Track =>
     stageTrack(
@@ -259,8 +259,8 @@ describe("the climate", () => {
     // is driving on, so it is neither hit nor drawn. The bar is what STANDS
     // OVER the drawn snow (`CLIMATE.blanket.bury`) rather than what the snow
     // happens to have covered: a stone with its last hand's breadth out of a
-    // drift is white on white at rally pace, and a country that stops a car
-    // on something it never showed is not a country anybody wants to drive.
+    // drift is white on white at rally pace, and a biome that stops a car
+    // on something it never showed is not a biome anybody wants to drive.
     // The one list the contact model and the renderer's planting both read
     // is where it goes.
     const track = white();
@@ -368,10 +368,10 @@ describe("a stage in winter", () => {
     const a = summer();
     const b = winter();
     expect(b.climate).toEqual({ ...MILD, lapse: CLIMATE.lapse });
-    // The claim below is a claim about a country with no ice on it: a cold
+    // The claim below is a claim about a biome with no ice on it: a cold
     // that freezes the lakes moves the ROUTE (R48), which is the whole
     // point of `tests/ice_test.ts` and the reason this fixture is mild.
-    expect(icyCountry(b.climate, BIOMES.taiga.land.zones)).toBe(false);
+    expect(icyBiome(b.climate, BIOMES.taiga.land.zones)).toBe(false);
     expect(defaultTemperature("taiga", "winter")).toBeLessThan(CLIMATE.ice);
     expect(b.samples.length).toBe(a.samples.length);
     let snow = 0;
@@ -413,9 +413,9 @@ describe("a stage in winter", () => {
     const drawn = terrain.latticeAt(x, z);
     const ridden = terrain.groundAt(x, z);
     expect(drawn - ridden).toBeCloseTo(depth * (1 - CLIMATE.blanket.ride), 6);
-    // ...and the bare country under both is the summer's.
+    // ...and the bare land under both is the summer's.
     expect(drawn - depth).toBeCloseTo(dry.latticeAt(x, z), 6);
-    // On the road there is no BLANKET — that is the country's, and the
+    // On the road there is no BLANKET — that is the biome's, and the
     // corridor is cleared of it. What the road carries is its own cover
     // (R47, `TrackSample.snow`): a fraction of the blanket, because it has
     // been bladed and driven, and standing over the summer's ribbon rather
@@ -426,7 +426,7 @@ describe("a stage in winter", () => {
     expect(s.snow).toBeLessThan(depth);
     const lying = packedDepth(s.snow, wearAt(0, s.width));
     expect(terrain.groundAt(s.x, s.z)).toBeCloseTo(dry.groundAt(s.x, s.z) + lying, 6);
-    // A summer country has none anywhere.
+    // A summer biome has none anywhere.
     expect(dry.blanketAt(x, z)).toBe(0);
   });
 

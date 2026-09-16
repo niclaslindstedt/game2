@@ -9,7 +9,7 @@
 // CENTRELINE — the posts at the ends of the timing line, the bales out past
 // them, the guns further out again — and by the time it reaches any of them
 // the mat has cambered away, the shoulder has stepped down and the verge has
-// leaned off toward the country (R16). Foot a piece on the sample's own
+// leaned off toward the biome (R16). Foot a piece on the sample's own
 // elevation and it hangs in the air over the hillside beside the road.
 
 import * as THREE from "three";
@@ -78,7 +78,7 @@ export const FOOTED = "gate foot";
  *
  * `ground` is the surface everything else in the world stands on, and it is
  * the honest answer: it carries the mat's camber, the shoulder's step, the
- * verge leaning away and R16's hand-over onto the country, none of which a
+ * verge leaning away and R16's hand-over onto the land, none of which a
  * sample's own elevation knows about. Without it — the item catalog, which
  * turns a gate on a bare ribbon with no landscape under it — the corridor's
  * cross-section is all there is to stand on, which is what the split boards

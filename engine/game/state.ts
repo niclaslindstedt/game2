@@ -503,7 +503,7 @@ export function sunHourAt(env: Pick<RaceEnv, "hour">, t: number): number {
   return h < 0 ? h + 24 : h;
 }
 /** Which season a stage is driven in. Winter is the one that reaches the
- * WHEELS: under it a frozen country is snow on the road and a blanket off
+ * WHEELS: under it a frozen biome is snow on the road and a blanket off
  * it (`climate.ts`), where the other three only change what the year has
  * done to the colours and the light. */
 export type Season = "spring" | "summer" | "autumn" | "winter";
@@ -511,7 +511,7 @@ export type Season = "spring" | "summer" | "autumn" | "winter";
 export type RaceEnv = {
   /** The hour the stage STARTS at, 0..24 local solar time — presentation
    * picks the sun's place in the sky from it (with the season and the
-   * country's latitude) and runs it on with the race clock (`sunHourAt`).
+   * biome's latitude) and runs it on with the race clock (`sunHourAt`).
    * The engine itself only cares about the weather, which sets the wind. */
   hour: number;
   weather: Weather;
@@ -528,7 +528,7 @@ export type RaceEnv = {
   windSpeed: number;
   /** Seeded phase offset for the gust oscillators, radians. */
   gustPhase: number;
-  /** Whether the wind in this country picks the ground up and carries it
+  /** Whether the wind in this biome picks the ground up and carries it
    * (`BiomeRules.blown`) — whether there are sandstorms here at all. */
   sand: boolean;
   /** HOW OFTEN THE SANDSTORMS COME, 0..1, read onto a period by
@@ -837,7 +837,7 @@ export type GameState = {
    * back down the stage with it. A different question from `progressIndex`,
    * and it has to be, because this is what every search for the road under
    * the car starts from. Using progress there made the hint a lie for any
-   * car that had doubled back or been off in the country, and a stale hint
+   * car that had doubled back or been off in the biome, and a stale hint
    * hands the car the height of road it is nowhere near. */
   nearIndex: number;
   /** Arc position along the stage, meters. */
@@ -884,7 +884,7 @@ export type GameState = {
   env: RaceEnv;
   /** THE SANDSTORM as it stands this step (`game/sandstorm.ts`): how much
    * sand is in the air, and how close the next wall is. Calm in every
-   * country but the desert, and in a desert nobody has dialled a storm
+   * biome but the desert, and in a desert nobody has dialled a storm
    * into. Updated every step beside the wind, because it is what the wind
    * is doing. */
   sand: SandState;

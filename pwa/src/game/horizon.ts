@@ -36,12 +36,12 @@ import { dayLight, deckToneAt, type Preset } from "./sky.ts";
  * hazy, it is darker. */
 type Ridge = { haze: number; tone: number };
 
-/** How tall the rings stand in each country, as a scale on the boreal
+/** How tall the rings stand in each biome, as a scale on the boreal
  * skyline they were cut for. */
 const RIDGE_HEIGHT: Record<BiomeId, number> = { taiga: 1, desert: 0.38, alpine: 1.7 };
 /** …and whether its peaks hold snow at all. The snowline is baked into
  * the profile at the height the rings were CUT at, so scaling them down
- * only lowers the white caps rather than losing them: a country with no
+ * only lowers the white caps rather than losing them: a biome with no
  * snow in it has to say so. */
 const RIDGE_SNOW: Record<BiomeId, boolean> = { taiga: true, desert: false, alpine: true };
 
@@ -52,8 +52,8 @@ export type Horizon = {
   /** Repaint the rings for the conditions. `taken` is how much of the chain
    * the AIR ITSELF has, 0..1 — see `paint`. */
   paint: (p: Preset, taken?: number) => void;
-  /** Which country's skyline this is — how tall, and whether snowed. */
-  setCountry: (biome: BiomeId) => void;
+  /** Which biome's skyline this is — how tall, and whether snowed. */
+  setBiome: (biome: BiomeId) => void;
   /** Turn the ring so its sea gap faces this world heading. */
   turnTo: (bearing: number) => void;
   /** How high the skyline stands on this bearing, radians, seen from an
@@ -74,21 +74,21 @@ export function createHorizon(): Horizon {
   const ridgeRock: number[] = [];
   /** …and whether it is under SNOW. A flag rather than a second shade
    * table: what snow looks like is not what rock looks like multiplied by
-   * anything (see `paint`), and a country with no snowline drops the flag
+   * anything (see `paint`), and a biome with no snowline drops the flag
    * (`snowy`) rather than needing a whole second profile. */
   const ridgeCap: number[] = [];
   const ridgeHaze: number[] = [];
   const ridgeTone: number[] = [];
   /** How high each vertex stands in the sky, as a TANGENT — its height over
    * the ring's own plane against the radius it stands at. A tangent rather
-   * than an angle because the country's scale is on the height alone
-   * (`setCountry`), so scaling it and taking the arc-tangent at paint time
+   * than an angle because the biome's scale is on the height alone
+   * (`setBiome`), so scaling it and taking the arc-tangent at paint time
    * is the same number the eye sees; an angle baked here would have to be
    * re-derived anyway. */
   const ridgeRise: number[] = [];
   const ridgePos: number[] = [];
   const ridgeIndex: number[] = [];
-  /** The farthest ring's summit height per column, m, before the country's
+  /** The farthest ring's summit height per column, m, before the biome's
    * scale — the skyline the sun has to clear. */
   const skyline: number[] = [];
   let skylineRadius = 1;
@@ -157,7 +157,7 @@ export function createHorizon(): Horizon {
   // ride the camera, so there is no parallax between them to lose. Four
   // rings, farthest first, because a chain needs something behind it before
   // the eye can tell how far away any of it is. The nearest is a treeline:
-  // a low serrated band of forest on the last rise before the country the
+  // a low serrated band of forest on the last rise before the biome the
   // stage is actually in.
   addRidge({ haze: 0.24, tone: 1 }, 552, 87, 118, 130);
   addRidge({ haze: 0.4, tone: 0.94 }, 536, 64, 99, 103);
@@ -178,7 +178,7 @@ export function createHorizon(): Horizon {
     vertexColors: true,
   });
   // BACKDROP, like every other thing in the sky group (sky-depth.ts): drawn
-  // after the world and depth-tested at the FAR PLANE, so the country is
+  // after the world and depth-tested at the FAR PLANE, so the biome is
   // always in front of its own horizon.
   //
   // The distance is the whole reason it cannot be depth-tested where it
@@ -188,7 +188,7 @@ export function createHorizon(): Horizon {
   // than it is, and the horizon comes out lying ACROSS the landscape
   // instead of behind it. It is worst where the rings are short and the
   // ground is high, which is the desert exactly (`RIDGE_HEIGHT` scales them
-  // to 0.38 and R40 stands the whole country on a floor 14 m over the water
+  // to 0.38 and R40 stands the whole biome on a floor 14 m over the water
   // table): there the chain cut through the dunes halfway out.
   drawAsBackdrop(mat);
   const mesh = new THREE.Mesh(geo, mat);
@@ -197,12 +197,12 @@ export function createHorizon(): Horizon {
   let snowy = true;
   let scale = 1;
   /** The conditions the rings are currently painted for, so a change of
-   * COUNTRY can repaint from them: the colours are read per vertex against
-   * a sky the country's own scale moves the vertices around in, and the two
+   * BIOME can repaint from them: the colours are read per vertex against
+   * a sky the biome's own scale moves the vertices around in, and the two
    * setters are called in whichever order the caller likes. */
   let last: Preset | null = null;
   /** …and how much of the chain the air had when it was, so a repaint the
-   * COUNTRY asks for (`setCountry`) does not quietly hand a white-out its
+   * BIOME asks for (`setBiome`) does not quietly hand a white-out its
    * clear-air skyline back. */
   let lastTaken = 0;
 
@@ -283,8 +283,8 @@ export function createHorizon(): Horizon {
     colors.needsUpdate = true;
   };
 
-  const setCountry = (biome: BiomeId): void => {
-    // R40 — the horizon is the country's. The rings were cut for a boreal
+  const setBiome = (biome: BiomeId): void => {
+    // R40 — the horizon is the biome's. The rings were cut for a boreal
     // skyline of ranges; a desert's horizon is low broken hills a long way
     // off, so the same rings stand at well under half their height there —
     // and take no snow, because a scaled-down range keeps every white cap
@@ -312,7 +312,7 @@ export function createHorizon(): Horizon {
   return {
     mesh,
     paint,
-    setCountry,
+    setBiome,
     turnTo,
     elevationAt,
     dispose: () => {

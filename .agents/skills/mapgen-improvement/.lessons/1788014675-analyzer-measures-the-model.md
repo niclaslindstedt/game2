@@ -16,7 +16,7 @@ thing that came out.
 - `water.float` probed `terrain.heightAt`, which contains the channel's own
   carve and the road's verge cone. Both are the analyzer's own subject matter
   cutting the ground away under the measurement. It has to probe
-  `geology.surfaceAt` — the bare country the course was traced against.
+  `geology.surfaceAt` — the bare land the course was traced against.
 - `rollers.cross` treated the ribbon/lattice seam at `half + ROAD_CROSS.reach`
   as mat, so every stage reported an error at exactly that offset. The severity
   has to key on the MAT (`|lateral| <= half`), not on the ribbon.

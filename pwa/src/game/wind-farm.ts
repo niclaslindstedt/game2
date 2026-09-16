@@ -285,7 +285,7 @@ export function createWindFarms(): WindFarms {
     let cz = 0;
     for (const t of farm.turbines) {
       // Footed on the ground as the terrain made it — the crane pad's level,
-      // which the record's own `y` was the bare country's guess at.
+      // which the record's own `y` was the bare land's guess at.
       const y = beside.heightAt(t.x, t.z);
       hubs.push(new THREE.Vector3(t.x, y + MACHINE.plinth.h + farm.hub, t.z));
       cx += t.x / n;

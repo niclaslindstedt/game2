@@ -19,7 +19,7 @@
 //
 // A stand is only worth placing at all where the crowd could have GOT
 // there: R42 walks in from a car park, the car park hangs off a public
-// road, and a corner with no such country behind it gets nobody. The
+// road, and a corner with no such land behind it gets nobody. The
 // refusal is the car park field's (it hands back the stands it could not
 // serve) and the removal is `drop`'s.
 //

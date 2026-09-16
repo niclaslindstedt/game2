@@ -11,7 +11,7 @@ instead of over your own car receding. The crew behind you, seen from the
 drone, the way the main menu stands over a stage somebody is driving.
 
 Press SPECTATE and you go down to them. The camera flies to the car in a
-second flat, in an arc that clears whatever country is in the way, and lands
+second flat, in an arc that clears whatever biome is in the way, and lands
 in the same chase view you raced under. Arrows either side of their name walk
 the field one car at a time, each one another flight; when the crew you are
 watching crosses the line it cuts to the next one down the road on its own. A

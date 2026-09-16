@@ -447,7 +447,7 @@ export function stepAirborne(
   // holding. Flat ground and the road's own smooth profile give the
   // centre back exactly, so an ordinary jump lands where it always did.
   const meets =
-    groundNow + (seatOn(car, groundNow, ctx.groundAt) - groundNow) * ctx.country + rollStand(car);
+    groundNow + (seatOn(car, groundNow, ctx.groundAt) - groundNow) * ctx.share + rollStand(car);
   if (car.y <= meets && (car.rolling || !onItsWheels(car.roll, 0))) {
     // Nothing for the tyres to do: it is a corner of the body arriving,
     // and the roll that put it there carries on from the contact.

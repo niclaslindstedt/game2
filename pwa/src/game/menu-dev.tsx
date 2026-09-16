@@ -11,12 +11,12 @@
 // idea aimed at time instead of space. The second is the debug log, which is
 // the other half of a screenshot: the picture says where, the log says what
 // led there. The third is UNLOCKS, which is the campaign's own ladder as a
-// row of switches — country by country, both ways.
+// row of switches — biome by biome, both ways.
 //
 // MAP VIEWER opens the stage READER (menu-map-viewer.tsx) on the stage list
 // every page that offers the shipped roads shares (menu-levels.tsx). It is
 // the only place the generator's layers are: Roam is a page for choosing a
-// road to drive, and a strip of layer buttons across the country helps
+// road to drive, and a strip of layer buttons across the land helps
 // nobody do that.
 //
 // BENCHMARK and its HISTORY are started from here and drawn in menu-bench.tsx
@@ -152,25 +152,25 @@ export function DebugLogPage({ onBack }: { onBack: () => void }) {
   );
 }
 
-/** One country's row on the UNLOCKS page: what it reads, and whether either
+/** One biome's row on the UNLOCKS page: what it reads, and whether either
  * press has anything left to do. Worked out here rather than in the markup
  * because it is a fact about the BOARD — see `unlockRows`. */
 type UnlockRow = {
   location: CampaignLocation;
   /** Stages of it the player is on points for. */
   cleared: number;
-  /** Whether the campaign will let the player into the country at all. */
+  /** Whether the campaign will let the player into the biome at all. */
   open: boolean;
-  /** Nothing for UNLOCK to do: this country and every one behind it is won. */
+  /** Nothing for UNLOCK to do: this biome and every one behind it is won. */
   won: boolean;
-  /** Nothing for LOCK to do: this country and every one in front of it has
+  /** Nothing for LOCK to do: this biome and every one in front of it has
    * never been driven. */
   shut: boolean;
 };
 
 /** THE LADDER AS A ROW OF SWITCHES. Both presses work on a PREFIX of the
- * countries (see `unlockLocation` / `lockLocation`), so both disabled states
- * are read over a RUN of them rather than over the country on the row: the
+ * biomes (see `unlockLocation` / `lockLocation`), so both disabled states
+ * are read over a RUN of them rather than over the biome on the row: the
  * unlock is spent once everything up to here is won, and the lock once
  * everything from here on is untouched. */
 function unlockRows(progress: CampaignProgress): UnlockRow[] {
@@ -190,15 +190,15 @@ function unlockRows(progress: CampaignProgress): UnlockRow[] {
 
 type UnlockProps = {
   progress: CampaignProgress;
-  /** Open the campaign up to this country, or the whole ladder for null. */
+  /** Open the campaign up to this biome, or the whole ladder for null. */
   onUnlock: (locationId: string | null) => void;
-  /** Shut this country and everything in front of it; null shuts the lot. */
+  /** Shut this biome and everything in front of it; null shuts the lot. */
   onLock: (locationId: string | null) => void;
   onBack: () => void;
 };
 
 /** UNLOCKS — the campaign's progress as something to set rather than earn.
- * Every country both ways, plus the two presses that take the whole ladder
+ * Every biome both ways, plus the two presses that take the whole ladder
  * at once, so a state that would cost four evenings of driving to reach is
  * one press away and a state that would cost clearing the browser's storage
  * is another. */
@@ -207,8 +207,8 @@ export function UnlockPage({ progress, onUnlock, onLock, onBack }: UnlockProps) 
   const total = LOCATIONS.reduce((n, l) => n + l.levels.length, 0);
   const cleared = rows.reduce((n, row) => n + row.cleared, 0);
   const allOpen = cleared >= total;
-  /** Nothing anywhere on the board: the first country's own LOCK is spent,
-   * and that one reads over every country there is. */
+  /** Nothing anywhere on the board: the first biome's own LOCK is spent,
+   * and that one reads over every biome there is. */
   const untouched = rows[0]?.shut ?? true;
   return (
     <div className="menu-card menu-card-wide">
@@ -229,7 +229,7 @@ export function UnlockPage({ progress, onUnlock, onLock, onBack }: UnlockProps) 
         <span className="menu-item-sub">
           {allOpen
             ? "Every stage is already open, in campaign and time trial"
-            : "Win every stage of every country — campaign and time trial both"}
+            : "Win every stage of every biome — campaign and time trial both"}
         </span>
       </button>
       <button
@@ -249,8 +249,8 @@ export function UnlockPage({ progress, onUnlock, onLock, onBack }: UnlockProps) 
           no hover, and a press whose reach is a surprise is a press nobody
           trusts twice. */}
       <div className="menu-sub">
-        A country at a time. UNLOCK wins it and every country before it; LOCK undrives it and every
-        country after — a campaign is a ladder, and it has no rung hanging in mid-air.
+        A biome at a time. UNLOCK wins it and every biome before it; LOCK undrives it and every
+        biome after — a campaign is a ladder, and it has no rung hanging in mid-air.
       </div>
       <div className="dev-locks">
         {rows.map((row) => (
@@ -266,7 +266,7 @@ export function UnlockPage({ progress, onUnlock, onLock, onBack }: UnlockProps) 
               className="menu-item menu-item-dev dev-lock-act"
               onClick={() => onUnlock(row.location.id)}
               disabled={row.won}
-              title={`Win every stage of ${row.location.name} and every country before it`}
+              title={`Win every stage of ${row.location.name} and every biome before it`}
             >
               UNLOCK
             </button>
@@ -275,7 +275,7 @@ export function UnlockPage({ progress, onUnlock, onLock, onBack }: UnlockProps) 
               className="menu-item menu-item-dev dev-lock-act"
               onClick={() => onLock(row.location.id)}
               disabled={row.shut}
-              title={`Put ${row.location.name} and every country after it back to never driven`}
+              title={`Put ${row.location.name} and every biome after it back to never driven`}
             >
               LOCK
             </button>
@@ -329,7 +329,7 @@ export function DeveloperPage({
       <button type="button" className="menu-item menu-item-dev" onClick={onUnlocks}>
         UNLOCKS
         <span className="menu-item-sub">
-          Set the campaign where you want it — every country open or shut on its own, or the whole
+          Set the campaign where you want it — every biome open or shut on its own, or the whole
           ladder at once. Best times are kept.
         </span>
       </button>

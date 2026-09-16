@@ -17,7 +17,7 @@ wrong until they learn about the new field. Three of them fail silently:
 
 | Where | What breaks if it is missed |
 | --- | --- |
-| `land.ts`'s memo key | a stage built from another stage's country |
+| `land.ts`'s memo key | a stage built from another stage's biome |
 | `pwa/src/game/app-actions.ts`'s `ensureTrack` key | the wrong compiled track is reused |
 | `pwa/src/game/split-records.ts`'s `splitStageId` | two different roads share one board |
 | `pwa/src/game/stage-spec.ts`'s `sameStage` | the run is not rebuilt when it should be |

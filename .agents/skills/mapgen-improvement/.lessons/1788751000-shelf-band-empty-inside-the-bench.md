@@ -26,5 +26,5 @@ Two wrong answers, both tried on the homestead drives:
 
 The right answer: lay the new road ON the stage's cross-section while it is
 inside the lip (`corridorOffset(sample, side * s, sample.width)`), follow
-the country from there, and only start clamping to the band once `s` is
+the biome from there, and only start clamping to the band once `s` is
 past the bench plus slack, where the band has a real width.

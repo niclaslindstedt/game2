@@ -10,13 +10,13 @@
 // Three scales, and the engine owns the placement of all three because the
 // trunks are solid (engine/mapgen/biomes.ts, read by props.ts):
 //
-//   REGION  what kind of country this is — dense forest, open taiga, a
+//   REGION  what kind of biome this is — dense forest, open taiga, a
 //           logging block, a bog, an old burn. It re-weights the groves
 //           and, here, leans the ground's whole colour toward its own soil.
 //   GROVE   which community owns this patch — the rows in `communities`.
 //   STAND   the clumping inside one community, which is placement only.
 //
-// This module is the TYPES and the registry. Each country is its own file
+// This module is the TYPES and the registry. Each biome is its own file
 // beside it (biome-taiga.ts, biome-desert.ts): what each one is made of is
 // a few hundred lines of rows, and two of them in one file is a file that
 // scrolls past the thing being edited. The geometry lives in the flora
@@ -115,7 +115,7 @@ export type Biome = {
    * A region with no row here paints the biome's plain palette. */
   regions: Record<string, RegionGround>;
   /** What grows within a few meters of the water table (overrides the
-   * community there). Never asked in a country with no water. */
+   * community there). Never asked in a biome with no water. */
   lakeshoreTrees: FloraMix;
   /** ...and what fringes the water itself, in the band between the
    * waterline and dry land: the reeds and sedges that stop a lake ending
@@ -137,7 +137,7 @@ export type Biome = {
    * of a boreal hillside; none of a desert's. */
   mossyStone: number;
   /** R40 — the colour of the LOOSE ROAD's own stone, hex: what a bladed
-   * road in this country is made of and what a wheel throws off it. The
+   * road in this biome is made of and what a wheel throws off it. The
    * shield's brown gravel, a desert's bleached sand, a mountain's grey
    * chippings. The road's grain texture and the dust are both built from
    * it. */
@@ -154,7 +154,7 @@ export function biomeFor(id: BiomeId | string | undefined): Biome {
   return id !== undefined && id in BIOMES ? BIOMES[id as BiomeId] : TAIGA;
 }
 
-/** Every grove the engine can quilt a country with must have a community
+/** Every grove the engine can quilt a biome with must have a community
  * here, or a stretch of a stage would fall back to whatever row happens to
  * be first and quietly grow the wrong wood. Same for the regions and their
  * ground. Checked once at import, for every biome: a mismatch is a typo,

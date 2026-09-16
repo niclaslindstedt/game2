@@ -10,7 +10,7 @@ term (`|bias| * height - penalty * spread`). It came out as an ON/OFF
 switch: every setting above the threshold picked the same shoulder, because
 the best site is the best site whatever its terms are multiplied by. Only
 where the competing penalty term is non-zero does the weight change
-anything, and on flat country that penalty was zero nearly everywhere.
+anything, and on flat land that penalty was zero nearly everywhere.
 
 The fix is to bound what the search LOOKS AT — here the walk's reach
 (`siteFar * |bias|`) — which is also what a gentle setting should mean: the

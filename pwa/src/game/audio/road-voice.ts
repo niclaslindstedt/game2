@@ -180,7 +180,7 @@ export const SURFACES: Record<string, SurfaceVoice> = {
     body: { level: 0.02, hz: 560, climb: 0.22 },
     tear: { level: 0.01, hz: 1150, climb: 0.18 },
   },
-  // DEEP SNOW — the open country under a winter's blanket (climate.ts),
+  // DEEP SNOW — the open land under a winter's blanket (climate.ts),
   // which the car PLOUGHS. The loudest thing about it is the mass of snow
   // being shoved aside by the sump and the sills: a heavy, muffled rush
   // with the bottom of the wild's roar and none of its rattle, sitting

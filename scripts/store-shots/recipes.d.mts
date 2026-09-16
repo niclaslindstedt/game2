@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Types for recipes.mjs, so tests/store_listing_test.ts can hold the real
 // recipe rows to the rules the store set obeys — every frame heads-up, one
-// claim per frame, all three countries in the set — rather than restating
+// claim per frame, all three biomes in the set — rather than restating
 // them in a fixture that cannot go out of date because it is not the truth.
 //
 // The module stays .mjs rather than becoming .ts for the reason

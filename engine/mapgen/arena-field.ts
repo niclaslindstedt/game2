@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE TRAINING GROUND, LAID OVER THE COUNTRY.
+// THE TRAINING GROUND, LAID OVER THE LAND.
 //
 // `arena.ts` says what shape the training ground is. This puts it on the
 // map: it takes the field the seed built — hills, water, forest, the lot —
 // and hands back one that answers the arena's own numbers inside the pad,
-// the country's outside the berm, and a blend of the two across the bank
+// the biome's outside the berm, and a blend of the two across the bank
 // between them. Nothing downstream learns that it happened. The physics
 // asks a height field for a height, the renderer asks the same field for
 // the same height, and both get an arena.
@@ -24,35 +24,35 @@ export function arenaTerrain(base: TerrainField, plan: ArenaPlan): TerrainField 
   const arenaGround = arenaGroundAt(plan);
   const weightAt = plan.weightAt;
 
-  /** The arena's shape and the country's, mixed by how much of the ground
+  /** The arena's shape and the land's, mixed by how much of the ground
    * the arena still has an opinion about. Used for the analytic field and
    * the ridden lattice alike — they differ only in which pair is mixed. */
-  const mix = (x: number, z: number, arena: number, country: number): number => {
+  const mix = (x: number, z: number, arena: number, land: number): number => {
     const w = weightAt(x, z);
     if (w >= 1) return arena;
-    if (w <= 0) return country;
-    return arena * w + country * (1 - w);
+    if (w <= 0) return land;
+    return arena * w + land * (1 - w);
   };
 
   const heightAt = (x: number, z: number): number =>
     mix(x, z, plan.heightAt(x, z), base.heightAt(x, z));
 
   // The RIDDEN surface: the arena's own lattice where the arena is, the
-  // country's where it is not. Both sides are the surface their own half of
+  // land's where it is not. Both sides are the surface their own half of
   // the world is drawn on, so the car rides exactly what it can see whether
   // it is on the pad, on the berm, or out in the trees past it.
   const groundAt = (x: number, z: number): number =>
     mix(x, z, arenaGround(x, z), base.groundAt(x, z));
 
   // Nothing is drawn OVER the arena the way a road ribbon is drawn over the
-  // country's tiles, so the tiles and the ridden ground are the same
+  // biome's tiles, so the tiles and the ridden ground are the same
   // surface here — which is what `latticeAt` is asked for.
   const latticeAt = (x: number, z: number): number =>
     mix(x, z, arenaGround(x, z), base.latticeAt(x, z));
 
   /** Is this point ON the training ground — the graded pad itself, as
-   * against the berm around it or the country past that? The pad is where
-   * the arena's own answers are the only ones: no country water under it,
+   * against the berm around it or the biome past that? The pad is where
+   * the arena's own answers are the only ones: no biome water under it,
    * no forest planted on it, and a surface that came out of the layout
    * rather than off a spur. */
   const onPad = (x: number, z: number): boolean => plan.surfaceAt(x, z) !== null;
@@ -60,15 +60,15 @@ export function arenaTerrain(base: TerrainField, plan: ArenaPlan): TerrainField 
   const spurSurfaceAt = (x: number, z: number): Surface | null =>
     plan.surfaceAt(x, z) ?? base.spurSurfaceAt(x, z);
 
-  // A training ground is graded, drained and dry. Suppressing the country's
+  // A training ground is graded, drained and dry. Suppressing the biome's
   // water here is not a nicety: the pour reads the DRAWN lattice, and a pad
   // dropped into a shallow seed's basin would otherwise come up flooded.
   const waterAt = (x: number, z: number): number | null =>
     onPad(x, z) ? null : base.waterAt(x, z);
 
-  // The arena's furniture, and the country's props with everything standing
+  // The arena's furniture, and the biome's props with everything standing
   // on the pad taken out of them — the prop field planted its forest from
-  // the country's own ground, which is a metre of hillside the pad has
+  // the biome's own ground, which is a metre of hillside the pad has
   // since replaced with tarmac.
   let furniture = plan.solids;
   const obstaclesNear = (x: number, z: number, r: number): WildObstacle[] => {

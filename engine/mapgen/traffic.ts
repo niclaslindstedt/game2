@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // R44 — THE TRAFFIC ROUTES. The rally closes the road it borrows, but the
-// country does not stop for it: the public roads it abandons at every
+// biome does not stop for it: the public roads it abandons at every
 // junction (R17, R36) and the lanes into the car parks (R42) still carry
 // whoever has somewhere to be. This module says WHERE they are going.
 //
@@ -24,7 +24,7 @@ import type { Spur, SpurLine } from "./spurs.ts";
 import type { Town } from "./towns.ts";
 
 /** Somewhere a journey starts or ends — or a place on the road that is
- * neither. `shore` and `stage` are the ends of an arm the country stopped
+ * neither. `shore` and `stage` are the ends of an arm the biome stopped
  * (the water, the rally's own road): a road that goes there is still a
  * road, but nobody sets out for it. `join` is where a lane turns off. */
 export type TrafficPlace = "map" | "block" | "town" | "park" | "shore" | "stage" | "join";
@@ -79,7 +79,7 @@ export type TrafficPlan = {
 /** The posted limits, km/h: an open public road, the street through a
  * village, the graded lane into a car park. What the signs say; the fleet
  * divides by 3.6. */
-export const TRAFFIC_LIMITS = { country: 70, town: 50, lane: 30 } as const;
+export const TRAFFIC_LIMITS = { biome: 70, town: 50, lane: 30 } as const;
 
 const KMH = 1 / 3.6;
 
@@ -187,9 +187,8 @@ function armLine(spur: Spur, towns: readonly Town[]): Line | null {
     z: p.z,
     y: p.elevation,
     limit:
-      (zones.some(([a, b]) => p.s >= a && p.s <= b)
-        ? TRAFFIC_LIMITS.town
-        : TRAFFIC_LIMITS.country) * KMH,
+      (zones.some(([a, b]) => p.s >= a && p.s <= b) ? TRAFFIC_LIMITS.town : TRAFFIC_LIMITS.biome) *
+      KMH,
   }));
   // What is behind the tape: a town the route runs through within reach
   // of the junction, or just the closed road.
@@ -222,7 +221,7 @@ function armLine(spur: Spur, towns: readonly Town[]): Line | null {
 }
 
 /** R17 — a public road the route never met, as a road of the network: rim
- * to rim, at the country limit, with nothing shut on it. */
+ * to rim, at the biome limit, with nothing shut on it. */
 function publicLine(road: SpurLine): Line | null {
   if (road.samples.length < 8) return null;
   const name = `road@${Math.round(road.atS)}`;
@@ -231,7 +230,7 @@ function publicLine(road: SpurLine): Line | null {
       x: p.x,
       z: p.z,
       y: p.elevation,
-      limit: TRAFFIC_LIMITS.country * KMH,
+      limit: TRAFFIC_LIMITS.biome * KMH,
     })),
     width: road.width,
     atS: road.atS,

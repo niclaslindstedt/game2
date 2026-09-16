@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // WHAT CLOUDS ARE OVER A STAGE — the genera at the heights the chart puts
-// them, dressed by the weather, the country, the season and the seed; and
+// them, dressed by the weather, the biome, the season and the seed; and
 // the noise they are drawn from, which lives twice (GLSL for the dome, TS
 // for the light) and has to agree with itself.
 
@@ -305,10 +305,10 @@ describe("dressing the sky", () => {
     for (const biome of ["taiga", "desert", "alpine"] as const) {
       expect(bare(biome), `bare skies over the ${biome}`).toBeGreaterThan(0);
     }
-    // The dry country's air is the emptiest, and the forest's the least.
+    // The dry biome's air is the emptiest, and the forest's the least.
     expect(bare("desert")).toBeGreaterThan(bare("alpine"));
     expect(bare("alpine")).toBeGreaterThan(bare("taiga"));
-    // …and a sky under weather always has its deck, however dry the country.
+    // …and a sky under weather always has its deck, however dry the biome.
     for (const biome of ["taiga", "desert", "alpine"] as const) {
       for (let seed = 0; seed < 40; seed++) {
         const env = conditions({ weather: "rain", gustPhase: seed * 0.31, windDir: seed * 0.07 });

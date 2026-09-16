@@ -31,7 +31,7 @@ const STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 900, feature: "none
 /** A car on the straight with road BEHIND it as well as ahead. Reversing
  * from the start line runs out of stage in thirty meters — past the apron
  * the terrain owns the ground (R24), and these scenarios are about the
- * pedal, not about what the country does to a car backing off the map. */
+ * pedal, not about what the biome does to a car backing off the map. */
 function game(carId = "compact"): GameState {
   const state = createGame({
     seed: 0,

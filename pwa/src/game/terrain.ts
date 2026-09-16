@@ -68,7 +68,7 @@ const CAR_FAR = 560;
  *
  * THE GROUND IS THE LIMIT ON HOW FAR A PICTURE CAN SEE, and it is the one
  * nothing else can buy round: opening the fog and the far plane only reveals
- * that the country stops, because past this radius no tile has been built —
+ * that the biome stops, because past this radius no tile has been built —
  * what fills the gap is the camera-locked ridge backdrop, which reads as a
  * pale haze where the land should be.
  *
@@ -85,7 +85,7 @@ let carFar = CAR_FAR;
  * The radius alone does nothing without this. Ground is streamed a few tiles
  * a frame, and the budget the world passes is scaled by how far the CAR has
  * travelled — which under god mode is nowhere, so the rate is zero and the
- * country never grows past the handful raised when the stage was built. A
+ * biome never grows past the handful raised when the stage was built. A
  * run wants that; it is what keeps a stage from stopping the music while it
  * builds. A preview holds still on purpose and can afford the wait. */
 let eager = 0;
@@ -106,7 +106,7 @@ function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
 }
 
-/** R16 — how far the road's dust reaches into the country beside it, how
+/** R16 — how far the road's dust reaches into the land beside it, how
  * much of the shoulder's colour the ground takes at the lip, and how far
  * the noise field is allowed to push the boundary either way (0 is a band
  * of fixed width, which is the ruled line the whole hand-over exists to
@@ -151,7 +151,7 @@ export type Terrain = {
   paintSeed: number;
   /** The ground's own COLOUR at a point, into `out` — the same paint the
    * tiles carry. The road's outer band fades into it, so the corridor ends
-   * in the country rather than at a line ruled against it. */
+   * in the biome rather than at a line ruled against it. */
   paintAt: (x: number, z: number, out: THREE.Color) => void;
   /** The ground's colour for a surface with a height and slope of ITS OWN
    * — the lid drawn back over a bore, which stands where the lattice does
@@ -175,7 +175,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // triangles drawn here, so smoothing them away would take them out of the
   // driving too, not merely out of the picture. Where a tile reaches the
   // arena it is cut four times finer (`ARENA_CELL`), which nests inside the
-  // country's own lattice so the two meet without a crack.
+  // biome's own lattice so the two meet without a crack.
   const arena = track.arena;
   // The analytic field, and the one place in the app that may read it: the
   // tile CORNERS are where the mesh and the field agree by construction, so
@@ -218,17 +218,17 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // 14 m vertices, where per-vertex speckle can't reach. UVs are world
   // meters / 16, so the grain runs continuous across tile seams.
   const groundTex = detailTexture();
-  // R40 — a country whose loose ground is SAND wears the wind on it: the
+  // R40 — a biome whose loose ground is SAND wears the wind on it: the
   // ripple field and the sheen that are what an eye identifies sand by
   // (`sand-ripple.ts`). Grafted onto the ground's own material rather than
   // given one of its own, so the tiles stay a single draw and the paint,
   // the detail grain and the height fog are all still the ones every other
-  // country uses. Nothing at all on ground the wind never sorted.
+  // biome uses. Nothing at all on ground the wind never sorted.
   //
-  // R47 — ...and on a WHITE country it is a surface made of snow, shaded by
+  // R47 — ...and on a WHITE biome it is a surface made of snow, shaded by
   // the same rules as the coat over it (`snow-shader.ts`). The coat is a fine
   // sheet that follows the car and stops a hundred metres out; these tiles
-  // carry the same country to 640 m, and on plain Lambert with a white of
+  // carry the same biome to 640 m, and on plain Lambert with a white of
   // their own they are a different snow, which puts the coat's square rim
   // across every hillside as a line. Grafted only where there is snow to
   // shade: a green stage pays not one instruction for it.
@@ -268,24 +268,24 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   const soil = new THREE.Color(palette.soil);
   const shore = new THREE.Color(palette.shore);
   const bed = new THREE.Color(palette.bed);
-  // The snow is not the palette's: it is the one ground every country
-  // paints the same, and it goes over whatever the country was doing under
+  // The snow is not the palette's: it is the one ground every biome
+  // paints the same, and it goes over whatever the land was doing under
   // it. Its tone is `snowAlbedo`'s (`snow-shader.ts`) rather than a copy
   // here — the coat that lies over these tiles a hundred metres out is
   // painted from the same field, which is what lets its rim disappear.
   const snowTone = new THREE.Color();
-  // R40 — the country's own rules: which regions quilt it, what its
+  // R40 — the biome's own rules: which regions quilt it, what its
   // unsealed road is made of, and the heights its zones stand at.
   const rules = biomeRules(track.knobs.biome);
   // ...under the stage's own climate: a winter brings the snowline down
   // the whole flank, and the paint goes white wherever the wheels find
   // snow (climate.ts).
   const zones = zonesUnder(track.climate, landOf(track.knobs).zones);
-  // A WET SEASON on a country with no water table (climate.ts, `rainsIn`
+  // A WET SEASON on a biome with no water table (climate.ts, `rainsIn`
   // where the row itself is dry): the rain stands in every flat as
   // puddles (puddles.ts), because there is nowhere for it to go.
   const puddled = rainsIn(rules.id, track.climate.season) && !rules.rain;
-  // R16 — what the road leaves on the country beside it. The road's own
+  // R16 — what the road leaves on the land beside it. The road's own
   // shoulder colour rather than a brown of its own: the wash has to arrive
   // at exactly the tone the ribbon's outer band is already dissolving into,
   // or the two hand-overs disagree and there are two boundaries instead of
@@ -302,7 +302,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   const c = new THREE.Color();
 
   /** Each sub-region's ground, resolved once against the engine's region
-   * order for this country, so a vertex costs an array index rather than a
+   * order for this biome, so a vertex costs an array index rather than a
    * record lookup and a Color allocation. A region the biome has no row
    * for paints the plain palette — the zeroed row below. */
   const PLAIN: RegionGround = { soil: palette.base, soilMix: 0, moss: 0, dry: 0, bare: 0 };
@@ -395,7 +395,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   ): number => {
     let cover = 0;
     const speck = 0.88 + hash2(Math.round(x * 2), Math.round(z * 2), noiseSeed + 29) * 0.24;
-    // THE TRAINING GROUND is not country. Its pad was graded and then
+    // THE TRAINING GROUND is not biome. Its pad was graded and then
     // either sealed or bladed, so it takes the ROAD's own palette — the
     // same two colours a stage's tarmac and gravel are drawn in, so a
     // surface change on the arena reads as the surface change it is.
@@ -464,7 +464,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     // grass with a road's worth of dust on it, thrown there by every car
     // that has been past and never washed off. Without it the transition
     // has a LAST STEP in it — the ribbon dissolves honestly across its own
-    // band and then, at the corridor's lip, the country goes back to full
+    // band and then, at the corridor's lip, the biome goes back to full
     // meadow green in one vertex. That step is the line still visible in a
     // screenshot after the geometry seam is gone, and no amount of scatter
     // hides it, because it is a change of hue and the scatter is texture.
@@ -495,7 +495,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     if (zones.snow !== null && y >= level + 0.6) {
       const lie = snowLie(y, normalY, zones);
       if (lie > 0) {
-        // Past 1 the windows have shut for good: a country whose line the
+        // Past 1 the windows have shut for good: a biome whose line the
         // climate has brought down under it (a winter) is white all over,
         // not white with the ragged margin of a snowline that is nowhere
         // near it.
@@ -580,7 +580,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
 
   /** Does this tile reach the training ground? Measured against the arena's
    * whole reach — the pad, its bank, and the band the bank is letting the
-   * country back over — because the boundary of the fine region has to sit
+   * biome back over — because the boundary of the fine region has to sit
    * where the arena is asserting nothing, or the coarse tile beside it
    * would draw a different surface from the fine one. */
   const tileIsFine = (originX: number, originZ: number): boolean => {
@@ -594,7 +594,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     const originX = tx * TILE;
     const originZ = tz * TILE;
     // On the arena, the SAMPLED surface is the ridden lattice rather than
-    // the analytic field: sampling the country's own lattice four times
+    // the analytic field: sampling the biome's own lattice four times
     // finer reproduces it exactly (a nested grid re-interpolates a
     // piecewise-linear surface into itself), while sampling the analytic
     // field would draw a curve the physics is not standing on.
@@ -627,7 +627,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     // snow surface by (`snow-shader.ts`). The paint already knows: it is the
     // same number it laid the white on with, so the shading and the colour
     // can never disagree about where the snowfield is. Built only on a white
-    // country — nothing else has a material that reads it.
+    // biome — nothing else has a material that reads it.
     const snowCover = snowy ? new Float32Array(verts * verts) : null;
     const indices: number[] = [];
     for (let j = 0; j < verts; j++) {
@@ -760,7 +760,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
           // The crossing, wherever one corner is under and the next is not.
           // `-Infinity` on a corner with no water near it still gives the
           // right SIDE, and the interpolation is clamped to the edge, so a
-          // shore against dry country lands on the corner rather than
+          // shore against dry biome lands on the corner rather than
           // somewhere off in the next field.
           if (d0 > 0 !== d1 > 0) {
             const span = d0 - d1;

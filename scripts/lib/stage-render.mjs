@@ -10,7 +10,7 @@
 //
 // The frame fits the ROAD, then whatever nature fills the rest of the
 // picture comes along: a short stage is close in, a seven-minute one is
-// high above the country it crosses.
+// high above the biome it crosses.
 
 import { createCanvas } from "./png.mjs";
 
@@ -53,15 +53,15 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     junctionMainEdge,
     biomeRules,
   } = engine;
-  // R40 — the heights the ground is painted against are the country's
+  // R40 — the heights the ground is painted against are the biome's
   // (`BiomeLand.zones`), the same rows the game's terrain reads: the meadow
   // goes to rock over `rock`, and over `snow` the rock goes white.
   const ZONES = biomeRules?.(track.knobs?.biome).land.zones ?? TAIGA_ZONES;
   const canvas = createCanvas(width, height, GROUND.grass);
 
-  // ── Frame: the road, then as much country as the picture has room for ──
+  // ── Frame: the road, then as much biome as the picture has room for ──
   const b = track.bounds;
-  // Country around the road, m. A SHARE of what is being framed rather than
+  // Biome around the road, m. A SHARE of what is being framed rather than
   // a fixed sixty: at a whole stage's scale sixty metres is a margin, and
   // at a junction's it is three times the thing being looked at — so every
   // close-up came out at the same hundred and sixty metres across whatever
@@ -194,7 +194,7 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         const lie = 1 - Math.min(1, Math.max(0, (0.84 - normalY) / 0.24));
         color = mix(color, GROUND.snow, Math.min(1, Math.max(0, (h - line) / 30)) * lie);
       }
-      // R17 — the junction's own apron, spread over whatever the country
+      // R17 — the junction's own apron, spread over whatever the biome
       // was doing here.
       const apron = apronAt(worldX(x), worldZ(y));
       if (apron > 0) {

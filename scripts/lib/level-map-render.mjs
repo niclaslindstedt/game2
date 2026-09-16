@@ -120,7 +120,7 @@ export function renderLevelMap({
     }
   }
   // The ramp is the ROAD's climb, with a quarter of it to spare each way:
-  // the country around a stage runs from lake beds to summits the road
+  // the land around a stage runs from lake beds to summits the road
   // never visits, and a ramp stretched over those flattens the forty
   // metres the driver actually feels into one shade. Ground beyond the
   // ramp clamps to its ends.

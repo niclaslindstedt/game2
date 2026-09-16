@@ -259,7 +259,7 @@ const SEASONAL: SeasonalColor[] = [
 
   // THE DESERT. Its year is the opposite shape: spring is the loud one —
   // a wet winter puts a yellow hillside of brittlebush, white saguaro
-  // crowns and red ocotillo tips on a country that is grey-green the rest
+  // crowns and red ocotillo tips on a biome that is grey-green the rest
   // of the time — and autumn is a small drying and reddening. Every cactus
   // body, every bark and the dead wood hold still, as the conifers do.
   { summer: SAGUARO_TIP, spring: 0xf4efdc, autumn: 0xc23a2e, winter: 0x6b8e5e },
@@ -283,7 +283,7 @@ const SEASONAL: SeasonalColor[] = [
   { summer: BUNCH_TIP, spring: 0xcfcf7e, autumn: 0xe8d08c, winter: 0xc8cf7c },
 
   // THE ALPINE. The larch's gold is the taiga row's, shared. What is this
-  // country's own is the ALP: in June it is flowers over fresh green, in
+  // biome's own is the ALP: in June it is flowers over fresh green, in
   // October it is cured straw and the flowers are seed heads — the blue
   // and the yellow go to straw, the white to a dry grey — while the
   // alpenrose, which flowers early summer, goes back to its own leaf. The

@@ -333,7 +333,7 @@ describe("driving through the marker posts", () => {
 });
 
 // R16 — THE SPILL at the road's edge: the loose stone that makes a gravel
-// road run out into the country instead of ending at a line. It is drawn
+// road run out into the land instead of ending at a line. It is drawn
 // app-side with no engine state, exactly as the cones are and for the same
 // reason — every piece of it is a few centimetres tall and the car drives
 // straight over it — so this is where it gets tested.
@@ -486,7 +486,7 @@ describe("the stone spilled at the road's edge (R16)", () => {
 
   it("grows grass back the other way, over a LOOSE road's own edge", () => {
     // The other half of R16's hand-over: the stones run out into the
-    // country and the country grows back in. A verge that stopped dead at
+    // biome and the biome grows back in. A verge that stopped dead at
     // the road's edge would draw the boundary the stones just erased.
     const grown = tufts();
     expect(grown.length).toBeGreaterThan(50);
@@ -501,14 +501,14 @@ describe("the stone spilled at the road's edge (R16)", () => {
     // so the window under test is sealed road rather than whatever mix the
     // seed happened to pave.
     // R17 — and the seed is SEARCHED for rather than named: the tarmac is a
-    // public road laid on the bare country before the rally is routed over
+    // public road laid on the bare land before the rally is routed over
     // it, so which seeds have any is the land's decision and not the dial's.
     //
     // ASPHALT OR A DECK, named rather than written as "not gravel". A road
     // has six surfaces (`Surface`, compile.ts) and the loose ones are three
     // of them, so "not gravel" also collects sand, snow, ice — and WATER,
     // which is a ford. A ford is not a poured mat with an edge: it is a wet
-    // crossing the country grows right up to and leans over, so a tuft
+    // crossing the biome grows right up to and leans over, so a tuft
     // standing on it is correct and this assertion is not about it. The
     // search used to land on a seed with real tarmac first and the bug was
     // invisible; a rules change re-rolled the routes, seed 1 offered four

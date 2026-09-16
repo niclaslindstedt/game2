@@ -5,28 +5,28 @@
 // Spread into `STAGE_RULES` by `rules-book.ts`.
 
 export const FEATURE_RULES = {
-  /** R47 — THE TUNNEL. A straight whose line runs under the country by
-   * more than `depth` for at least `minLength` of its run, in a country
+  /** R47 — THE TUNNEL. A straight whose line runs under the land by
+   * more than `depth` for at least `minLength` of its run, in a biome
    * that bores (`BiomeLand.tunnels`), goes THROUGH rather than being
-   * refused as too deep a cut — where the country stands `cover` over
+   * refused as too deep a cut — where the land stands `cover` over
    * the line somewhere along the run, which is what makes it a mountain
    * to bore and not a shoulder to blast. The bore spans exactly the run that is
    * under by `depth`, less nothing: the portal at each end is where the
-   * line meets the face. `portal` is how far past the mouth the country
+   * line meets the face. `portal` is how far past the mouth the biome
    * is still cut back to the road (R31's cone) so the face stands a few
    * metres out from the drawn portal rather than through it; `maxLength`
    * stops a straight boring the whole width of a ridge — a stage is a
    * road over a mountain, not a railway under one — and a straight that
    * would have to is refused like any other. `level` is the grade the road
    * eases to inside: a bore is driven near level because that is what a
-   * bore is, and a road that kept following the country up through the
+   * bore is, and a road that kept following the land up through the
    * rock would come out of the far portal higher than the ridge.
    * `clearance` is the bore's height over the crown, m, and `wall` how far
    * outside the road's edge the wall stands — the renderer builds the
    * lining to these and the physics stands a wall there. */
   tunnel: {
     depth: 16,
-    /** The least the country must stand over the line SOMEWHERE along the
+    /** The least the biome must stand over the line SOMEWHERE along the
      * bore, m — the mountain it is bored through. `depth` is where a
      * cutting becomes a portal; this is what makes the run between the
      * portals worth boring rather than blasting open: a shoulder eleven
@@ -51,7 +51,7 @@ export const FEATURE_RULES = {
      * The search finds a bore's portals on its own coarser profile, and
      * the compiled road through the shoulder can stand a few metres over
      * it; at the far mouth that left samples flagged as tunnel under three
-     * metres of country, where the vault alone is six and a half. Under
+     * metres of land, where the vault alone is six and a half. Under
      * the clearance plus the lining's own rise, a sample is open road in
      * a cutting — the brow it was under was thinner than the lining. */
     brow: 7,
@@ -126,7 +126,7 @@ export const FEATURE_RULES = {
     /** R12 — A FORD LIES IN ITS VALLEY. The water is laid at the bare
      * land's own level at the crossing (never above the road's line), and
      * the road dips DOWN to it from wherever its line was running — which
-     * on a stage that rolls over the country is metres up. So the apron is
+     * on a stage that rolls over the land is metres up. So the apron is
      * not a fixed length: it is as long as the drop needs to stay a ramp,
      * `apron` at the least, and the search only lets a straight carry a
      * ford whose aprons fit inside it (`crossingSits` sets the plan's own
@@ -143,7 +143,7 @@ export const FEATURE_RULES = {
      *
      * Before the water was laid against the land it was laid against the
      * ROAD — the roll's lowest point, `bedDepth` under the line — so a ford
-     * on an embankment anchored its river (R18) that far over the country
+     * on an embankment anchored its river (R18) that far over the land
      * the water was meant to lie in, and the reach floated above both its
      * banks; and a ford on a hillside, held at the downhill mouth's level,
      * gave the uphill apron the whole window's fall to lose in thirty
@@ -170,7 +170,7 @@ export const FEATURE_RULES = {
      * road the crossing occupies along the stage, m. */
     culvert: { fordDrop: 2.2, cover: 1.6, bore: 0.9, stream: 5, span: 8 },
     /** ...and how far either side of the road the land is read for that
-     * valley, m. A stream crosses a road at the bottom of the country
+     * valley, m. A stream crosses a road at the bottom of the biome
      * ACROSS the road as well as along it: read at the centerline alone,
      * a crossing drawn over a low ridge laid its water on the crest, a
      * metre or more over the banks the analyzer measures it against
@@ -213,7 +213,7 @@ export const FEATURE_RULES = {
      * channel (R12/R13). This is about the lake it should have gone
      * around. */
     routeClear: 20,
-    /** ...and how that setback RELAXES when a country will not yield a
+    /** ...and how that setback RELAXES when a biome will not yield a
      * stage at the full standard. An archipelago is a real place and a
      * seed is not allowed to simply fail, so the attempts walk down this
      * ladder: most of them at the full setback, then a few progressively
@@ -226,7 +226,7 @@ export const FEATURE_RULES = {
     routeClearLadder: [1, 0.5, 0.25, 0],
     /** R35 — the least the road's SURFACE may stand over a lake in view
      * of it, m, wherever the route runs (`keepsDry`). Under the freeboard
-     * the road follows the country up to (`elevation.follow.freeboard`),
+     * the road follows the land up to (`elevation.follow.freeboard`),
      * because that is a target the follower lags toward and this is a
      * floor the line is refused under: enough for the tile sink and a
      * ford's wading lip, so no ground tile beside the road is under the
@@ -240,7 +240,7 @@ export const FEATURE_RULES = {
    * It is the one place a stage is allowed inside R35's setback, and it is
    * allowed because the reason for the setback has gone: a frozen body is
    * a floor, and it is the flattest, widest, most obviously drivable
-   * ground in the country. Real winter rallies use them for exactly that
+   * ground in the biome. Real winter rallies use them for exactly that
    * reason, and so does this one — the ice is not a hazard the route
    * dodges, it is a section the route is pleased to find. */
   ice: {
@@ -275,7 +275,7 @@ export const FEATURE_RULES = {
      * a floor under the route in `keepsDry`, and the difference between a
      * bank running out onto a lake and a viaduct over one.
      *
-     * It is needed because the road follows the country through a 140 m
+     * It is needed because the road follows the land through a 140 m
      * lag (`elevation.follow.lag`) and a lake is a couple of hundred
      * metres across: a line arriving at a shore still up on a hillside
      * crosses the whole body before the follower has brought it down.
@@ -286,7 +286,7 @@ export const FEATURE_RULES = {
      * rest being the short bank at either end, which is what an approach
      * to a real ice crossing is. Tighter and the feature evaporates: at
      * 1.5 m the sweep produced 300 m of ice road in twelve stages,
-     * because the country almost never offers a flat run at a shore. */
+     * because the biome almost never offers a flat run at a shore. */
     lift: 4,
     /** ...and the band inside which the road actually IS the sheet, m —
      * what the compiler calls a sample `ice` in. Separate from the lift
@@ -460,7 +460,7 @@ export const FEATURE_RULES = {
      * crowd walks in from a car park and stands at the corners worth the
      * walk — the hairpins and the tight thirds, not every kink R26 bothers
      * to mark. Tighter than the marking bar on purpose: a stand is only
-     * placed at all where the country will carry a car park within a walk
+     * placed at all where the biome will carry a car park within a walk
      * of it (R42), and spending that search on a fourth-gear bend is what
      * put spectators down every straightish sweep of the stage. */
     minAngle: 1.3,
@@ -527,7 +527,7 @@ export const FEATURE_RULES = {
     run: { min: 350, max: 800 },
     gap: { min: 260, max: 6000 },
     floor: 0.03,
-    /** R47 — in a mountain country the route is not routed onto tarmac,
+    /** R47 — in a mountain biome the route is not routed onto tarmac,
      * it IS the tarmac: a pass road, sealed from the valley up to a
      * height and gravel above it, where the money ran out. The dial moves
      * the height: at its floor the line stands at the ROCK LINE (the

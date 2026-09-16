@@ -4,7 +4,7 @@ title: Rain and snow read at three ranges
 ---
 
 Both sheets are built out of a near shell and a far one now, so what falls
-carries out of the bubble round the car and into the country: long bright
+carries out of the bubble round the car and into the land: long bright
 streaks or crystals at the glass, thinner hatching and fine specks over the
 middle distance, and each one dissolving at the rim of its own reach instead
 of blinking out at a fixed radius. Past that it is the AIR — a squall now

@@ -8,7 +8,7 @@ concepts: seeds, measurement, test-conventions
 Any change to how the route meets the public roads redraws every stage
 downstream of it, so a suite that names a seed to get a PROPERTY — "seed 7 has
 asphalt on it", "seed 7 has a ford" — fails with `seed 7 has no asphalt`, which
-is a fact about the country rather than about the thing under test.
+is a fact about the biome rather than about the thing under test.
 `tests/dirt_test.ts` did exactly that and cost three failures on a change that
 had nothing to do with dirt.
 

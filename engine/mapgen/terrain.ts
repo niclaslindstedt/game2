@@ -67,7 +67,7 @@ export type TerrainField = {
    * its outermost vertices exactly where the ground beside them is; the
    * analysis reads it to measure whatever is left at the seam. */
   latticeAt: (x: number, z: number) => number;
-  /** The BARE country under the snow, m — the drawn surface with the
+  /** The BARE land under the snow, m — the drawn surface with the
    * winter's blanket taken off it. The ground tiles are built from this and
    * the snow is laid over them as a mantle of its own (`snow-mantle.ts`),
    * because a coat with a four-metre bank at its edge cannot exist on a
@@ -75,10 +75,10 @@ export type TerrainField = {
    * on every green stage. */
   bareLatticeAt: (x: number, z: number) => number;
   /** The landscape far from any road (mountains and sea included) — what
-   * tooling can preview, and the country a road's earthworks are measured
+   * tooling can preview, and the biome a road's earthworks are measured
    * against. */
   farHeightAt: (x: number, z: number) => number;
-  /** R18 — THE GROUND THE WATER HAS: the bare country held down under
+  /** R18 — THE GROUND THE WATER HAS: the bare land held down under
    * whatever the road CUT out of it. Stated once, here, because a
    * watercourse is TRACED against it and then JUDGED against it, and two
    * copies of that rule is a river in the air the day one of them moves.
@@ -107,13 +107,13 @@ export type TerrainField = {
   lidAt: (x: number, z: number) => number;
   /** R32 — what the ground is MADE of: the rock, the soil on it and the
    * groundwater in it. The road shapes the SURFACE and nothing under it,
-   * so this is the bare country's own layering wherever it is asked —
+   * so this is the bare land's own layering wherever it is asked —
    * which is what everything that plants, paints or judges wants. */
   geology: GeologyField;
   /** Water surface height over this point — lake/sea table or a stream's
    * local level — or null on dry ground. */
   waterAt: (x: number, z: number) => number | null;
-  /** R35 — the standing water poured onto the bare country: levels,
+  /** R35 — the standing water poured onto the bare land: levels,
    * depths, bodies, and where the nearest of them is.
    *
    * Where `waterAt` answers "is this point under water", this answers "and
@@ -128,7 +128,7 @@ export type TerrainField = {
    * (beyond ~240 m). What placement code asks before planting near road. */
   roadDistanceAt: (x: number, z: number) => number;
   /** R34 — how much the ground here is a FACE THE ROAD WAS CUT THROUGH, 0
-   * (open country, or a bank a car could climb) to 1 (blasted rock over the
+   * (open land, or a bank a car could climb) to 1 (blasted rock over the
    * verge). Nothing roots on a cutting, so the prop field reads it off the
    * soil; the analysis reads it to count how much of a stage runs through
    * rock rather than over it. */
@@ -144,7 +144,7 @@ export type TerrainField = {
    * cone in reach, the route's and the branches', with the floors a road's
    * own shelf and a pad put on it. Where `heightAt` meets it the ground IS
    * the cut, and a fold there is a cutting's edge; where it does not the
-   * ground is the country's own. The analysis reads it to tell the two
+   * ground is the biome's own. The analysis reads it to tell the two
    * apart; nothing in the game asks. */
   coneAt: (x: number, z: number) => number;
   /** The surface of any road OTHER than the stage at a point: the mat of
@@ -152,14 +152,14 @@ export type TerrainField = {
    * own surface comes from the track samples — this is what tells the
    * physics that a car exploring a spur is on tarmac, not in a field. */
   spurSurfaceAt: (x: number, z: number) => Surface | null;
-  /** Whether this country carries a winter's blanket ANYWHERE its ground
-   * stands (`snowyCountry`, climate.ts) — what everything that would
+  /** Whether this biome carries a winter's blanket ANYWHERE its ground
+   * stands (`snowyBiome`, climate.ts) — what everything that would
    * otherwise have to probe the field to find out asks instead. False on
    * every green stage and on the training ground, and a cheap no for the
    * whole snow model there. */
   snowy: boolean;
   /** THE WINTER'S BLANKET at a point, m (climate.ts): how deep the snow
-   * the open country lies under is here — zero on and beside a road, on
+   * the open land lies under is here — zero on and beside a road, on
    * the water, and everywhere the climate leaves the ground bare. The
    * lattice and everything drawn on it stand on TOP of it (`heightAt`
    * carries it); the car rides `CLIMATE.blanket.ride` of the way down
@@ -256,7 +256,7 @@ export type TerrainField = {
  * so two genuine fields off one track answer identically and may share the
  * work — while a test that spreads its own `waterAt` over a field
  * (`{ ...state.terrain, waterAt: () => null }`) must not be handed the real
- * country's answers. A spread makes a NEW object, which is not in here, so
+ * biome's answers. A spread makes a NEW object, which is not in here, so
  * the distinction survives exactly the thing that would defeat a flag or a
  * property on the field itself. */
 const BUILT = new WeakSet<TerrainField>();
@@ -389,7 +389,7 @@ export function createTerrain(track: Track): TerrainField {
     },
     inAnyStream: (x, z, margin) => inStream(streams, x, z, margin),
     // R34 — the cover, MINUS whatever the road blasted off. The geology's
-    // own soil is the bare country's, and the bare country never heard of
+    // own soil is the bare land's, and the bare land never heard of
     // the cutting: read it raw and a spruce wood grows down a rock face,
     // which is the same mistake R32's rooting rule exists to stop one
     // layer further down.
@@ -540,7 +540,7 @@ export function createTerrain(track: Track): TerrainField {
       // and its base is a clearing so nothing grows between the legs and
       // no car park is graded round them. No PAD: a real tower stands on
       // the hillside it was cut to fit, and flattening a disc under every
-      // one would put a step in the country every three hundred metres.
+      // one would put a step in the biome every three hundred metres.
       // `atS: 0` because a line is not decided from the stage arc at all,
       // and only an endless stage prunes by it — which carries no grid.
       for (; powerLineCount < track.powerLines.length; powerLineCount++) {
@@ -554,7 +554,7 @@ export function createTerrain(track: Track): TerrainField {
       // one river through them (R18) — born on the high ground, gathering
       // as it runs, ending in the lowest water it can find.
       //
-      // The river reads `waterGround` — the bare country held under the
+      // The river reads `waterGround` — the bare land held under the
       // road's cut, and the one field a course is both traced and judged
       // against (`waterGroundAt` states why). Read the bare land alone,
       // as this did, and a cutting is invisible to the water: seed 19 ran
@@ -571,7 +571,7 @@ export function createTerrain(track: Track): TerrainField {
         collectAnchors(track, streamScan, land.surfaceAt),
         waterGround,
         // R35 — the water the courses are looking for is the water the
-        // pour put on the bare country, at its own levels. Asked of the
+        // pour put on the bare land, at its own levels. Asked of the
         // BARE land and not the shaped terrain: a river ends in a lake,
         // and whether a lake is there is not a thing the road decides.
         //
@@ -582,7 +582,7 @@ export function createTerrain(track: Track): TerrainField {
         // body it was running into and go looking for the coast.
         { levelAt: land.water.shoreLevelAt, nearestAt: land.water.nearestAt },
         waterClear,
-        // The country the stage occupies: a mouth that gets clear of it has
+        // The biome the stage occupies: a mouth that gets clear of it has
         // left the map, which is one of the two ways a river is allowed to
         // end. Without it every course that would have run off the frame
         // pools instead, and the map fills with tarns nothing feeds.
@@ -626,7 +626,7 @@ export function createTerrain(track: Track): TerrainField {
       // planned from the stands, and its pad, its road and its cars go
       // into the field the moment it is placed so the next one keeps off.
       // ...and the stands it could not serve go with it: a corner with no
-      // country behind it for a car park, or none a lane could reach a road
+      // land behind it for a car park, or none a lane could reach a road
       // from, is a corner nobody could have walked to (R42).
       const refused = carParks.extend(committedS, stands.stands, {
         loose: biome.loose,
@@ -742,7 +742,7 @@ export function createTerrain(track: Track): TerrainField {
   BUILT.add(field);
   // The training ground is the one place in this game that was not
   // generated: where a track carries one, it owns the ground inside its own
-  // berm and the country the seed built keeps everything outside it. Done
+  // berm and the biome the seed built keeps everything outside it. Done
   // HERE, on the way out of the only constructor there is, so the engine,
   // the renderer, the tests and the tooling all get the same field off the
   // same track without any of them being told to ask for it.

@@ -103,7 +103,7 @@ export function createSampleIndex(track: Track, deps: SampleIndexDeps) {
      * into the bore (zero on every other sample) and the mouth it stands
      * before. Its cone is a disc, and a disc a bench wide reaches twenty
      * metres into the mountain the road has gone under; past the mouth it
-     * says nothing, and the country stands. */
+     * says nothing, and the land stands. */
     gx: number[];
     gz: number[];
     mx: number[];
@@ -154,20 +154,20 @@ export function createSampleIndex(track: Track, deps: SampleIndexDeps) {
   let firstIndexed = 0;
   let indexed = 0;
 
-  /** R34 — the grade the country beside one piece of road is allowed to
+  /** R34 — the grade the land beside one piece of road is allowed to
    * stand at, m per m past the bench.
    *
    * Four things decide it, and all four are the rule in one line each:
    * whether the road is CUT IN here at all, what it is cut through (rock
    * stands, till slumps), what the road is worth (a blasted tarmac cutting
-   * or a scraped gravel one), and how hard the country is
+   * or a scraped gravel one), and how hard the land is
    * (`knobs.steepness`). Multiplied rather than taken as a max, because a
    * cutting needs all four: a sealed road running down a valley on its own
    * embankment gets the same soft bank a farm track does, and so does a
    * sealed road cut deep into a hillside of till.
    *
    * The FIRST of them is the one that decides where cuttings are, and it
-   * only means anything because the road follows the country
+   * only means anything because the road follows the land
    * (`elevation.follow`): most of a stage runs along the low ground at or
    * over natural grade, and the answer there is R31's own climb with soil
    * beside it. A road at a height of its own invention is arbitrarily cut
@@ -336,7 +336,7 @@ export function createSampleIndex(track: Track, deps: SampleIndexDeps) {
      * rise toward is known. */
     ceiling: number;
     /** ...and the same cone over the road this point is BESIDE alone. A cone
-     * may cut the country between two arms of a stage; it may not cut the
+     * may cut the land between two arms of a stage; it may not cut the
      * ground out from under one of them, and this is the floor that says so
      * — see `rawHeight`. */
     own: number;
@@ -348,11 +348,11 @@ export function createSampleIndex(track: Track, deps: SampleIndexDeps) {
     /** THE OTHER ARMS: of every sample of a different stretch of the stage
      * — more than `ARM_WINDOW` samples of arc from the nearest — the one
      * whose FILL stands highest here (`other`, run out from its shelf at
-     * the verge grade) and the one whose CUT holds the country lowest
+     * the verge grade) and the one whose CUT holds the land lowest
      * (`deep`, its bench climbing back at the same grade), each with its
      * distance, or -1 where the corridor's blend reach holds only the one
      * arm. `shapeAt` carries that fill and that cut across the line where
-     * this arm becomes nearer: the country between two arms at two heights
+     * this arm becomes nearer: the land between two arms at two heights
      * belongs to the higher one's embankment until that has come down to
      * the ground, and to the lower one's bench until that has climbed
      * back, not to whichever happens to be closer. Picked by what they
@@ -463,9 +463,9 @@ export function createSampleIndex(track: Track, deps: SampleIndexDeps) {
     // apron's own length from the end sample, and whether the 7x7 block
     // holds that sample is a matter of where it sits in its cell. So a
     // point the block holds no road for is asked of the aprons before it
-    // is called open country — without which the run-out past every
+    // is called open land — without which the run-out past every
     // finish ended in a wall somewhere between 144 and 192 m out, the
-    // country standing up the whole of what the fill still had to let go.
+    // biome standing up the whole of what the fill still had to let go.
     if (best < 0) {
       if (!nearerApron(x, z, CORRIDOR_RANGE)) return null;
       return { d: apron.d, index: apron.index, lateral: apron.lateral };
@@ -658,7 +658,7 @@ export function createSampleIndex(track: Track, deps: SampleIndexDeps) {
     // faded from its own exact plane over the step past its strip so
     // nothing steps where a strip stops covering. Another arm's sample is
     // read as it stands, as before: road coordinates mean nothing across
-    // the country between two arms.
+    // the land between two arms.
     //
     // Only computed where a distant cone is actually cutting below the
     // nearest road's own plane, which is rare: everywhere else the answer is

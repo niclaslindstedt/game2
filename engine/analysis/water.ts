@@ -46,7 +46,7 @@ function toNearestAnchor(river: River, x: number, z: number): number {
   return best;
 }
 
-/** True where a point has left the country the stage occupies — the one
+/** True where a point has left the land the stage occupies — the one
  * honest way for a river to end without arriving anywhere. */
 function offMap(track: Track, x: number, z: number, margin: number): boolean {
   const b = track.bounds;
@@ -193,7 +193,7 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
       // BOTH banks, which is water laid along the top of a ridge.
       //
       // Measured on THE GROUND THE WATER HAS (R18's `waterGroundAt`): the
-      // country with the road's cuttings taken out of it and the channel's
+      // biome with the road's cuttings taken out of it and the channel's
       // own carve left out, which is neither the finished terrain (there
       // every river floats over the hole it dug) nor the bare land. The bare land was the reading here, on the grounds that the
       // verge cone cuts the bank away wherever a road and a course run
@@ -258,7 +258,7 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
     // a shoulder is as much an end as the sea. Asked of the pour's shore,
     // the way the tracer asks it, rather than of the sea's table alone —
     // measured against the table, every course that ended in a tarn was
-    // reported as stopping in open country.
+    // reported as stopping in open land.
     const inStandingWater =
       mouthGround < LAKE_Y + 1 || terrain.water.shoreLevelAt(mouth.x, mouth.z) !== null;
     const escaped = offMap(track, mouth.x, mouth.z, W.mouth);
@@ -271,7 +271,7 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
       findings.push({
         code: "water.mouth",
         severity: "error",
-        message: `a watercourse claims to end in ${river.endsAt} and stops in open country ${(
+        message: `a watercourse claims to end in ${river.endsAt} and stops in open land ${(
           mouthGround - LAKE_Y
         ).toFixed(0)} m above the lake table`,
         at: { x: mouth.x, z: mouth.z },

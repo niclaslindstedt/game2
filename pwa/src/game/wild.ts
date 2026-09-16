@@ -141,7 +141,7 @@ export type Wild = {
   sync: (carX: number, carZ: number) => void;
   /** Draw only the cells a camera is pointed at. The wild is pooled into
    * one mesh per variant, so this is the only frustum culling it gets —
-   * and it needs some: half the country a car stands in is behind it. A
+   * and it needs some: half the biome a car stands in is behind it. A
    * cell wanted by ANY of the frame's views is kept, which is how the
    * rear-view mirror gets to see the half the forward camera does not. */
   cull: (frustums: readonly THREE.Frustum[]) => void;
@@ -311,7 +311,7 @@ export function buildWild(
       if (!soft) continue;
       placements.push({ id: pickFlora(soft, roll), x, y, z, scale, spin });
     }
-    // Ground cover out in the country. Thinner per square metre than the
+    // Ground cover out in the land. Thinner per square metre than the
     // road bands — nobody is doing 140 km/h past it — but not absent: a
     // wood with nothing on its floor reads as trees standing on a lawn
     // from any distance at all.

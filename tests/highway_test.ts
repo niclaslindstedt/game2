@@ -4,7 +4,7 @@
 // The whole point of laying the sealed roads first is that "a tarmac road
 // goes somewhere" stops being a hope a later check reports on and becomes a
 // property of the construction. These are the assertions that make that
-// true: a road crosses the country, leaves it at both ends, and stays out
+// true: a road crosses the land, leaves it at both ends, and stays out
 // of the water while anybody can see it.
 
 import { describe, expect, it } from "vitest";
@@ -34,7 +34,7 @@ function lay(seed: number, asphalt = 0.4, length: "short" | "medium" = "short") 
 }
 
 describe("the tarmac network (R17)", () => {
-  it("is the same country every time it is laid", () => {
+  it("is the same biome every time it is laid", () => {
     for (const seed of SEEDS.slice(0, 4)) {
       const a = lay(seed).roads;
       const b = lay(seed).roads;
@@ -56,7 +56,7 @@ describe("the tarmac network (R17)", () => {
     }
   });
 
-  it("crosses the country and leaves it at BOTH ends", () => {
+  it("crosses the land and leaves it at BOTH ends", () => {
     for (const seed of SEEDS) {
       const { roads, bound } = lay(seed);
       for (const road of roads) {
@@ -66,7 +66,7 @@ describe("the tarmac network (R17)", () => {
         // end, which is the only kind that leads somewhere.
         expect(Math.hypot(first.x, first.z)).toBeGreaterThan(bound);
         expect(Math.hypot(last.x, last.z)).toBeGreaterThan(bound);
-        // ...and it went THROUGH the country rather than clipping a corner
+        // ...and it went THROUGH the biome rather than clipping a corner
         // of it: a road laid round the rim is scenery, not a road the stage
         // could ever meet.
         expect(road.points.some((p) => Math.hypot(p.x, p.z) <= bound)).toBe(true);
@@ -100,7 +100,7 @@ describe("the tarmac network (R17)", () => {
           // The radius it turned through over one step. Bounded by the
           // radius it is allowed while skirting water, which is the tightest
           // a public road ever bends — anything under that is a corner, and
-          // a corner in the middle of open country is the tell that a line
+          // a corner in the middle of open land is the tell that a line
           // was drawn rather than a road laid.
           const radius = Math.abs(turn) > 1e-9 ? HIGHWAY.step / Math.abs(turn) : Infinity;
           expect(radius).toBeGreaterThan(HIGHWAY.avoidRadius * 0.9);

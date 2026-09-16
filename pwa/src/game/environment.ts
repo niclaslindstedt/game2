@@ -32,7 +32,7 @@
 //   LAYERED  the dome as a shader (sky-shader.ts): the cloud chart's
 //            sheets at their real altitudes (cloud-field.ts), the sun
 //            dimming as one crosses it, the mist in the valleys
-//            (mist.ts, height-fog.ts) and the country's own shadow marched
+//            (mist.ts, height-fog.ts) and the biome's own shadow marched
 //            off the heightfield (mountain-shadow.ts). FULL is the same at
 //            more octaves, with the clouds' shadows on the ground.
 //
@@ -148,7 +148,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   dome.renderOrder = SKY_ORDER - 3;
   // THE EYE'S OWN SKY. Everything at infinity — the domes, the stars, the
   // sun and its halo — is centred on the camera in all three axes, where
-  // the ridges and the clouds stand on the country's ground plane (the
+  // the ridges and the clouds stand on the land's ground plane (the
   // group at the camera's x and z only). Centred at ground height, the sky
   // moves with the camera's HEIGHT: from a road four hundred metres up a
   // massif the dome's horizon band is that far below the eye and the sun
@@ -192,7 +192,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   // BACKDROP, all of it: the stars, the Milky Way, the sun and its halo ride
   // the stack sky-depth.ts owns — last in the opaque pass, depth-tested at
   // the far plane — so a mountain occludes the sun however far off it
-  // stands, and none of them is shaded on a pixel the country already
+  // stands, and none of them is shaded on a pixel the biome already
   // covers. They stay OUT of the transparent pass: marked `transparent`
   // they would be depth-tested at their own distance instead, which is
   // `DOME_RADIUS` and a bit, under 500 m — and a ridge further off than
@@ -240,7 +240,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   scene.add(snow.points);
   let flakes = 0;
   // ...and the desert's own weather, which is neither: a wall of the
-  // country in the air, and the country streaming past the glass once it
+  // biome in the air, and the biome streaming past the glass once it
   // arrives (`engine/game/sandstorm.ts` runs it; this draws it). In the
   // world rather than on the camera group for the rain's reason — the
   // grains are metres from the lens and are drawn at the velocity the
@@ -263,13 +263,13 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   const hemi = new THREE.HemisphereLight(0xffffff, 0xb0a894, 0.95);
   /** R47 — THE BOUNCE OFF THE SNOW. The hemisphere's lower half is the
    * light coming back UP off the ground, and what the ground is decides how
-   * much of it there is: bare country returns about a fifth of what falls
+   * much of it there is: bare land returns about a fifth of what falls
    * on it, snow returns most of it. That is the whole reason a snowfield
    * looks bright under a sun too low to light anything else, why its
    * shadows are soft, and why they are BLUE — what fills them is skylight
    * bounced off white.
    *
-   * Without it a winter is a beige country: the paint is white, the low
+   * Without it a winter is a beige biome: the paint is white, the low
    * sun is warm and weak, and nothing lifts the shadow side of anything.
    * `lift` is how much the hemisphere gains where the ground is fully
    * white, and `tone` the colour it returns — the snow's own, cooled,
@@ -335,7 +335,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   let rangeScale = 1;
   /** Set while a view drives the fog in meters instead of by preset. */
   let absolute: { near: number; far: number } | null = null;
-  /** The country's shadow, marched off the heightfield — for a sky that
+  /** The biome's shadow, marched off the heightfield — for a sky that
    * draws it, over a stage that has one. The map holds it at TWO moments
    * of the sun and the frame reads between them, so these are the hour the
    * near half was marched for and how much of the clock the pair covers
@@ -363,7 +363,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     background.set(preset.zenith);
     // A SNOWFALL IS A COLOUR TOO, and it is the flakes' own: what a driver
     // sees a hundred metres into heavy snow is not a paler version of the
-    // country, it is the snow IN THE AIR. So the distance takes the tone
+    // biome, it is the snow IN THE AIR. So the distance takes the tone
     // the sheet is already drawn in (`snowTone`) rather than an authored
     // white — which is what keeps a midnight blizzard a dark blue haze
     // instead of a white wall lit by nothing. Rain gets none of this: the
@@ -447,9 +447,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   };
 
   /** R47 — how white the ground under this sky is, 0..1: the cover at the
-   * country's own FLOOR (climate.ts), so the bounce only arrives once even
+   * biome's own FLOOR (climate.ts), so the bounce only arrives once even
    * the low ground has gone over rather than when a summit has. Read off
-   * the country's own zone row, which is right whatever the altitude dial
+   * the biome's own zone row, which is right whatever the altitude dial
    * did to it — in a winter the climate's frost line is the lower of the
    * two and decides this on its own. */
   const whiteGround = (): number => {
@@ -529,7 +529,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
    * repaint's cadence. Half of what the frame does with the sun is a steep
    * function of its elevation — the ridge cutting the beam, how much of
    * the sun a cloud sea at its own altitude still sees (`litAt`, a ramp
-   * six tenths of a degree wide), where the country's shadow falls — and
+   * six tenths of a degree wide), where the biome's shadow falls — and
    * the sun climbs ten degrees a MINUTE of racing through a spring
    * sunrise. Fed a sun that arrives four times a second, every one of
    * those walks up in steps a tenth of itself high: the valley mist stops
@@ -600,11 +600,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     relit();
   };
 
-  const apply = (next: RaceEnv, country: BiomeId = "taiga"): void => {
+  const apply = (next: RaceEnv, nextBiome: BiomeId = "taiga"): void => {
     env = next;
-    biome = country;
+    biome = nextBiome;
     meanWind = env.windSpeed;
-    horizon.setCountry(biome);
+    horizon.setBiome(biome);
     // The sea gap in the horizon faces wherever this run's sun meets it —
     // the sunset for a stage started after noon, the sunrise for one
     // started before — so the low sun the run is driven into has a horizon
@@ -677,7 +677,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     return out.copy(sunDir(sun.elevation, sun.azimuth));
   };
 
-  /** THE COUNTRY'S SHADOW: re-sample the heights when the camera has
+  /** THE BIOME'S SHADOW: re-sample the heights when the camera has
    * walked far enough, march a fresh pair when the sun has crossed the one
    * being read, and hand the fog the map's frame and how far through that
    * pair the sun now stands.

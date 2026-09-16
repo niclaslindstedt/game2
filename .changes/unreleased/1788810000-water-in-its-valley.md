@@ -1,6 +1,6 @@
 ---
 type: Fixed
-title: Water lies in its valley — fords dip to the river, streams run under the road in culverts, and the taiga's roads sit on the country
+title: Water lies in its valley — fords dip to the river, streams run under the road in culverts, and the taiga's roads sit on the land
 ---
 
 A river crossing the road used to leave its water on the mat a metre above
@@ -18,7 +18,7 @@ The taiga's stages are built to the desert's standard now. The generator
 plans each road in height as well as on the map, so a road no longer meets
 its own earlier arm across a hillside it would have to cut a cliff through,
 a jump lands on a road that is there to land on, a bridge's deck and the
-water under it agree, and the road's outer band grades down to the country
+water under it agree, and the road's outer band grades down to the biome
 instead of stepping off it. On the twelve seeds the analyzer scores, the
 taiga went from a hundred and six errors to three and the desert from nine
 to three.

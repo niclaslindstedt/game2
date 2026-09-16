@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R42 — THE COUNTRY MAP the car parks are planned on: a coarse lattice of
+// R42 — THE GROUND MAP the car parks are planned on: a coarse lattice of
 // cells over the stage's box, each one asked whether a road may be driven
 // through it and whether a person may walk across it, and the two searches
 // that read it — where the crowd could walk to from a stand, and which way
@@ -7,7 +7,7 @@
 //
 // Coarse on purpose. A cell is a place a road or a path may pass THROUGH,
 // and the walk that lays either one (carparks.ts) reads the real ground
-// under every step; the map only has to say which pockets of the country
+// under every step; the map only has to say which pockets of the biome
 // connect to which. Cells answer lazily and are remembered, so a search
 // pays for the cells it visits and nothing else.
 
@@ -36,7 +36,7 @@ const SEARCH_CAP = 6000;
  *
  * A kilometre, which is a long way for a car park's lane and is meant to
  * be: the rim is always within a few hundred metres of a pad and the
- * country's one public road is typically several hundred to a couple of
+ * biome's one public road is typically several hundred to a couple of
  * thousand away, so anything smaller never changes an answer. At this it
  * changes most of them, and what it buys is a lane a player can drive from
  * the tarmac to the cars instead of one that vanishes into the fog. */
@@ -46,7 +46,7 @@ export type Box = { minX: number; maxX: number; minZ: number; maxZ: number };
 
 /** What the map asks the world. The same three questions the placer asks,
  * handed in so a test can drive the map off a flat rig. */
-export type CountryProbe = {
+export type GroundProbe = {
   routeDistance: (x: number, z: number) => number;
   builtClearance: (x: number, z: number) => number;
   blocked: (x: number, z: number) => boolean;
@@ -55,7 +55,7 @@ export type CountryProbe = {
   corridor: number;
 };
 
-export type CountryMap = {
+export type GroundMap = {
   cols: number;
   rows: number;
   bounds: Box;
@@ -72,24 +72,24 @@ export type CountryMap = {
   out: (cell: number) => boolean;
 };
 
-/** The map over `bounds` — the country the stage occupies, which is what a
+/** The map over `bounds` — the land the stage occupies, which is what a
  * road LEAVES (`out`) and what the rim of the search is measured from.
  *
  * `reach` is how far past that box the LATTICE goes, and the two are not the
  * same number. The default is just enough to hold the escape; a caller with
  * a public road standing off the stage passes more, because a lane can only
- * run to a road the lattice actually covers and the country's one road can
+ * run to a road the lattice actually covers and the biome's one road can
  * lie the better part of a kilometre outside the box the rally folds into.
  * Growing the escape box instead would make every lane that runs off the map
  * run that much further before it had left.
  *
  * Rebuilt for every car park, because the built things a road keeps off
  * change as each one is committed. */
-export function createCountryMap(
+export function createGroundMap(
   bounds: Box,
-  probe: CountryProbe,
+  probe: GroundProbe,
   reach: number = EDGE + CELL,
-): CountryMap {
+): GroundMap {
   const keepOut = roadClearance(P.road.width);
   const pad = Math.max(EDGE + CELL, reach);
   const minX = bounds.minX - pad;
@@ -150,7 +150,7 @@ export function createCountryMap(
 }
 
 /** The eight neighbours of a cell, with the step's length in cells. */
-function neighbours(map: CountryMap, cell: number): { cell: number; cost: number }[] {
+function neighbours(map: GroundMap, cell: number): { cell: number; cost: number }[] {
   const i = cell % map.cols;
   const j = Math.floor(cell / map.cols);
   const out: { cell: number; cost: number }[] = [];
@@ -171,7 +171,7 @@ function neighbours(map: CountryMap, cell: number): { cell: number; cost: number
  * cell each was reached from. What a pad is looked for with, and what a
  * trail is threaded along. */
 export function walkFrom(
-  map: CountryMap,
+  map: GroundMap,
   from: number,
   reach: number,
 ): { dist: Float64Array; via: Int32Array } {
@@ -204,20 +204,20 @@ export function walkFrom(
 
 /** A* over the drivable cells from `from` to a road already there that the
  * new one may run into (`join`), or failing that off the map. The cells of
- * the way, `from` first, or null where the country is a pocket the stage
+ * the way, `from` first, or null where the land is a pocket the stage
  * has closed.
  *
  * A JOIN IS PREFERRED, and `RIM_PENALTY` is how the preference is expressed:
  * a lane exists because cars drove up it, and a lane onto a road is a lane
  * they plainly drove up. The rim is the honest second answer rather than a
- * failure — a rally route folded into its own box partitions the country it
+ * failure — a rally route folded into its own box partitions the biome it
  * occupies, and on most seeds the pocket a corner sits in has no road in it
  * at all, so a search that insisted on tarmac left two thirds of the stages
  * measured with no crowd anywhere on them. Charging the rim a few hundred
  * metres in the heuristic makes the search spend a detour to reach a road
  * and take the rim only when there is none to reach. */
 export function wayOut(
-  map: CountryMap,
+  map: GroundMap,
   from: number,
   join: { at: (cell: number) => boolean; distance: (x: number, z: number) => number },
 ): number[] | null {

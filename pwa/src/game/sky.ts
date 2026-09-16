@@ -7,7 +7,7 @@
 // Four layers, applied in that order and in that order for a reason:
 //
 //   THE SUN      astronomy (daylight.ts) — how high it stands this hour,
-//                this season, over this country, and which way it is going.
+//                this season, over this biome, and which way it is going.
 //   THE LADDER   the authored art direction, keyed on that elevation: a rung
 //                for the dark, for civil twilight, for the sun on the
 //                horizon, for the golden hour, for the morning and for the
@@ -183,10 +183,10 @@ export type Preset = {
   cloudShade: number;
   cloudOpacity: number;
   /** How much of the fair-weather cumulus ring this sky carries, 0..1 — a
-   * COUNT, not a fade. A country with little weather in it gets fewer
+   * COUNT, not a fade. A biome with little weather in it gets fewer
    * clouds rather than see-through ones, because a thin cumulus reads as a
    * rendering fault and a half-empty sky reads as a dry one. Ignored while
-   * a deck is up: a lid is a lid in any country. */
+   * a deck is up: a lid is a lid in any biome. */
   cloudShare: number;
   /** How much light the car is running (`LampStage`) — the stage's answer,
    * because what a driver reaches for the switch about is the sky. */
@@ -236,10 +236,10 @@ const MOON_TAKES_OVER = { from: -3, to: -9 };
 const KEY_FLOOR = 2 * DEG;
 
 /** How little daylight a deck can leave on the road before the lamps come on
- * at all, whatever the country's own cover threshold says — a share of a
+ * at all, whatever the biome's own cover threshold says — a share of a
  * clear noon (`dayLight`). `WeatherLook.lampsAt` is art direction, written
- * per country and per weather in units of how THICK the lid is, and thick is
- * not the same question as dark: a squall that never reaches its country's
+ * per biome and per weather in units of how THICK the lid is, and thick is
+ * not the same question as dark: a squall that never reaches its biome's
  * cover figure can still put less light on the stage than a rain deck that
  * does. This is the floor under it, so what settles whether a car is running
  * lights is always how much light there is. */
@@ -368,7 +368,7 @@ export const NOON: Preset = {
   thunder: 0,
 };
 
-function countried(p: Preset, biome: BiomeId): Preset {
+function biomeCast(p: Preset, biome: BiomeId): Preset {
   const cast = CASTS[biome];
   if (!cast) return p;
   p.horizon = mixHex(p.horizon, cast.horizon[0], cast.horizon[1]);
@@ -424,7 +424,7 @@ function weathered(
   biome: BiomeId,
   wet: boolean,
 ): Preset {
-  const p = countried(clearSky(sun), biome);
+  const p = biomeCast(clearSky(sun), biome);
   if (weather === "clear") return p;
   // How lit the deck is from above, 0..1 — what its own brightness is
   // scaled by, so a ceiling over a sun that has set is dark rather than a
@@ -523,7 +523,7 @@ function weathered(
 // elevation this preset was built for (daylight.ts). What is left to the
 // season here is the colour of the air and of the ground under it: pollen
 // haze in May, the straw-and-bilberry bounce in September, and the cold
-// clear air of a winter that reaches every country.
+// clear air of a winter that reaches every biome.
 
 function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number): Preset {
   if (season === "summer") return p;
@@ -534,7 +534,7 @@ function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number
    * and what the season keeps after dark is how CLEAR the air is
    * (`fogFar`), which is true at any hour. */
   const cast = (c: number, to: number, t: number): number => mixHex(c, to, t * day);
-  // WINTER is the one cast every country shares, because it is not a
+  // WINTER is the one cast every biome shares, because it is not a
   // colour of the ground so much as of the AIR: cold air holds almost no
   // water, so a clear winter sky is the deepest blue of the year and the
   // view runs furthest — and under it the ground is white wherever the
@@ -595,7 +595,7 @@ function seasoned(p: Preset, season: Season, biome: BiomeId, temperature: number
   return p;
 }
 
-/** The whole sky at `hour` on one run's conditions, over one country
+/** The whole sky at `hour` on one run's conditions, over one biome
  * (R40). The hour is the SUN's clock rather than the stage's start: the
  * environment reads it off the race clock every frame (`sunHourAt`). */
 export function skyAt(env: RaceEnv, biome: BiomeId, hour: number): Preset {
@@ -729,7 +729,7 @@ export function sunHardness(p: Preset): number {
 }
 
 /** The beam's share of the light on the ground, 0..1 — what is missing from
- * the shadow, which is what makes it dark. What the country's shadow and a
+ * the shadow, which is what makes it dark. What the biome's shadow and a
  * cloud's take off the ground (height-fog.ts) is the same share. */
 export function beamShareOf(p: Preset): number {
   return beamShare(p);

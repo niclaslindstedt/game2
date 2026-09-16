@@ -12,7 +12,7 @@ obvious remedy fails for a structural reason worth knowing before you try
 it:
 
 - **Raising `highwayCount` is not available.** The route may not cross
-  tarmac, so a second line laid BEFORE the search partitions the country it
+  tarmac, so a second line laid BEFORE the search partitions the biome it
   has left; `highway.ts` names the seed that then generates at no sub-seed
   at all.
 - **Laying extra lines AFTER the route does not work either.** A road has
@@ -22,7 +22,7 @@ it:
   seeds — measured, then deleted.
 - **The pocket is real, not a search cap.** Raising `SEARCH_CAP` from 6000
   to 40000 changed nothing on any seed. The route's own corridor plus R23
-  cuts the box into pockets, and the country's one public road is in one of
+  cuts the box into pockets, and the biome's one public road is in one of
   them.
 
 So the honest shape is: PREFER a road and pay a detour for it (`RIM_PENALTY`

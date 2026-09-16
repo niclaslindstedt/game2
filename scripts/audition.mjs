@@ -15,7 +15,7 @@
 //              camera. The engine, the tyres, the wind, the drift and the
 //              weather are functions of those numbers and there is no other
 //              honest way to hear them than to move them.
-//   THE WORLD  the country: which one, what hour, and how near the crowd, a
+//   THE WORLD  the biome: which one, what hour, and how near the crowd, a
 //              paddock and a train are — the ambience under sliders.
 //   THE BANKS  every discrete sound in the game, one button each, with the
 //              description it was written against printed beside it.
@@ -329,7 +329,7 @@ const page = `<!doctype html>
 
   <h2>The world</h2>
   <p class="sub">
-    The country the road runs through: birds in the spruce, cicadas on the flats, an owl at dusk,
+    The biome the road runs through: birds in the spruce, cicadas on the flats, an owl at dusk,
     the crowd at the line, a paddock, a train. All of it thins with speed — at the top of fourth
     the wind is the only thing outside the car anyone can hear.
   </p>
@@ -579,7 +579,7 @@ for (const [id, label, initial] of [
 ]) {
   sliderRow(worldSliders, world, id, label, initial);
 }
-switchRow(worldSliders, "Country", ["taiga", "desert", "alpine"], "taiga", (b) => (world.biome = b));
+switchRow(worldSliders, "Biome", ["taiga", "desert", "alpine"], "taiga", (b) => (world.biome = b));
 switchRow(worldSliders, "Light", ["dawn", "day", "dusk", "night"], "day", (t) => (world.daylight = t));
 switchRow(worldSliders, "Paddock", ["none", "cows", "sheep"], "none", (s) => (world.stock = s));
 switchRow(worldSliders, "Train", ["none", "on the line", "at the crossing"], "none", (t) => (world.train = t));

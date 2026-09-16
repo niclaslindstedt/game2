@@ -7,7 +7,7 @@
 // own height, and that is nearly right: it is the car the shot is built
 // around, and the car is what the terrain is doing something to. What is
 // wrong with it is everything the road does to the CAR that is not the shape
-// of the country — the wheel tracks, the crown, the step off the mat — and
+// of the biome — the wheel tracks, the crown, the step off the mat — and
 // everything the terrain reading does under the LENS that the car never sees
 // — a lattice kink, a shoreline, the hill the camera is trailing into.
 //
@@ -43,7 +43,7 @@ export const CHASE_CLEARANCE = 1.3;
 /** How that floor is allowed to MOVE, which matters far more than where it
  * is. The ground under a trailing camera is not a smooth reading: the
  * terrain's lattice kinks at every cell edge, a shoreline swaps the ground
- * for the water's surface, and the far country can step outright where two
+ * for the water's surface, and the far biome can step outright where two
  * fields meet. Taken as a bare `groundAt` under a single point, each of
  * those arrives in the picture in ONE FRAME — a cut, not a movement — and
  * the steeper the ground, the bigger it is. That is the shake on a cliff
@@ -150,7 +150,7 @@ export const SLACK = {
 /** ...AND WHAT GETS PAST THE PLAY ARRIVES AS A MOVEMENT, NOT A CUT. The
  * slack separates by size, so anything bigger than it — a kerb dropped off
  * at a slant, a lattice crease, the step off a shelf, the whole rolling
- * ground of the country off the road — comes through at full amplitude in
+ * ground of the biome off the road — comes through at full amplitude in
  * the frame it happens. The car should do that; a camera that does it too
  * is the car standing still in the frame while the whole world jumps, the
  * read of a camera welded to the roof.

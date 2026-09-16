@@ -206,7 +206,7 @@ export function warmStandings(rows: readonly StandingsRow[], yourCarId: string):
 }
 
 export type StandingsModalProps = StandingsSheetProps & {
-  /** The board's name — the country whose table this is. */
+  /** The board's name — the biome whose table this is. */
   title: string;
   /** One line under it: how far into the location it has been driven. */
   sub: string;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // R43 — THE ENERGY: the wind farms on the high ground and the solar farms
-// on the flat. These hold that a modern country has them and a desert has
+// on the flat. These hold that a modern biome has them and a desert has
 // none, that a wind farm is a string of huge machines standing OVER the
 // road it is seen from and off every road by more than a rotor, that a
 // solar farm is a fenced rectangle of tables on level ground facing the

@@ -7,7 +7,7 @@
 //
 //   Grass between the two roads. Two ribbons laid over the same corner do
 //   not meet — they overlap for a while and then peel apart, leaving a
-//   wedge of country tapering to a knife point between them, or a stranded
+//   wedge of land tapering to a knife point between them, or a stranded
 //   island of it in the middle of the paving. A real junction has neither:
 //   the mouth is one piece of ground, and what is not road is field, with
 //   nothing in between.
@@ -196,8 +196,8 @@ export function analyzeJunctions(track: Track, terrain: TerrainField): MetricRep
     const half = junction.width / 2;
 
     // ── Does the ground between the two roads make sense? ───────────────
-    // The mouth, plus room around it for the open country to be recognized
-    // as open country: a box that stops at the paving would report the
+    // The mouth, plus room around it for the open land to be recognized
+    // as open land: a box that stops at the paving would report the
     // field beside the junction as one more sliver of grass.
     const reach = junction.reach + junction.width + J.margin;
     const cell = J.cell;
@@ -225,7 +225,7 @@ export function analyzeJunctions(track: Track, terrain: TerrainField): MetricRep
     const depth = bareDepth(road, side, side);
     const patches = barePatches(road, depth, side, side, originX, originZ, cell);
     // The mouth itself — past it the two roads have genuinely parted and
-    // the country between them is country, which is not this check's
+    // the land between them is biome, which is not this check's
     // business.
     const mouthReach = junction.reach + junction.width;
     for (const patch of patches) {

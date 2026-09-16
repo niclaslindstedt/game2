@@ -76,14 +76,14 @@ export type CreateGameOptions = {
    * CLIMATE (climate.ts) — they reach the road, so a run handed a compiled
    * `track` takes them from it and one that compiles its own hands them to
    * the compiler. Defaults: noon, clear, the track's own climate (summer,
-   * at the country's temperature). */
+   * at the biome's temperature). */
   env?: {
     hour?: number;
     weather?: Weather;
     season?: Season;
     temperature?: number | null;
     /** How often the sandstorms come, 0..1 (`game/sandstorm.ts`) — read
-     * only in a country whose wind lifts the ground. */
+     * only in a biome whose wind lifts the ground. */
     sandstorms?: number;
   };
   /** The generator's dials (rules.ts) for the stage this run compiles.
@@ -137,7 +137,7 @@ export type CreateGameOptions = {
 /** HOW OFTEN THE SANDSTORMS COME when nobody has said: a shade under
  * halfway, which at `sand.period`'s band is a front every six minutes or
  * so — about an even chance that any one stage meets one. A desert run
- * ought to be able to bring back the weather its country is famous for,
+ * ought to be able to bring back the weather its biome is famous for,
  * and it ought not to be a certainty: a wall of sand that turns up every
  * single time is scenery, and the whole of this feature is that it is an
  * EVENT. */
@@ -270,7 +270,7 @@ export function createGame(options: CreateGameOptions): GameState {
     seed: options.seed,
     // R47 — the snow this run works down as it drives (`snowpack.ts`).
     // White is the terrain's own answer plus the road's: a stage can run
-    // over a snowline without its country lying under a blanket, and the
+    // over a snowline without its biome lying under a blanket, and the
     // road it does that on still ruts.
     snow: options.snow ?? createSnowpack(terrain.snowy || track.samples.some((s) => s.snow > 0)),
     traffic: createTraffic(track, terrain.carParks, options.seed, options.traffic ?? true),
@@ -304,7 +304,7 @@ export function createGame(options: CreateGameOptions): GameState {
     drowning: null,
     overturned: null,
     // What the car is stood on before its first step: the road it starts
-    // on, whatever this country blades its roads out of (R40).
+    // on, whatever this biome blades its roads out of (R40).
     surface: track.samples[0]?.surface ?? "gravel",
     env,
     wind,

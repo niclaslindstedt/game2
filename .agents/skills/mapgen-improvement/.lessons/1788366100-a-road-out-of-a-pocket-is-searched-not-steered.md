@@ -8,18 +8,18 @@ concepts: [search, spurs, road-network, r23, placement, performance]
 `buildSpur` steers a branch off a junction with a 130 m look-ahead and cuts
 it wherever it comes inside R23's clearance. That is right at a junction —
 the branch leaves ALONG the main road, away from the stage — and wrong for
-a road that starts in the country: a medium stage is 4-5 km of road folded
-into a 2 km box, so most of the country beside it is a pocket between two
+a road that starts in the biome: a medium stage is 4-5 km of road folded
+into a 2 km box, so most of the land beside it is a pocket between two
 arms, and a lane driven out of one runs into the far arm a few hundred
 metres on. On a 24-seed sweep 9 in 10 lanes built that way were cut
 (`road:stage` at 200-600 m), and the builds were three quarters of the
 terrain's whole sync time.
 
-What works: read the country as a lattice of cells (`carpark-map.ts`, 24
+What works: read the biome as a lattice of cells (`carpark-map.ts`, 24
 m) that lazily answer "may a road pass through here" (R23's clearance
 from the route and every built road, dry ground) and "may a person walk
 here", then A* from the pad to the map's edge — or to a road already
-going there, which is one road across the country instead of two side by
+going there, which is one road across the land instead of two side by
 side — and lay the road along the cells found, pulled straight where the
 cells between two waypoints are all passable, at a road's radius. A pocket
 answers "no way out" in a few hundred cells instead of a thousand-step

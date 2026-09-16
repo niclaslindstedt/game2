@@ -71,12 +71,12 @@ import {
  * finish somewhere else (the search below); a circuit closes back onto its
  * own start line so the stage can be raced over laps (circuit.ts).
  *
- * R48 — `climate` is the cold the country is under, and it is the ONE
+ * R48 — `climate` is the cold the land is under, and it is the ONE
  * thing besides the seed and the dials that can move a line. A stage in a
  * summer is the stage it has always been; below `CLIMATE.ice` the lakes
  * are frozen solid, and a frozen lake is ground the route may cross —
  * so a winter seed and a summer seed are two different roads through the
- * same country, which is the point of driving it in winter. */
+ * same biome, which is the point of driving it in winter. */
 export function generateStage(
   seed: number,
   length: FiniteStageLength = "medium",
@@ -86,7 +86,7 @@ export function generateStage(
 ): SegmentPlan[] {
   const dials = resolveKnobs(knobs);
   if (shape === "circuit") return generateCircuit(seed, length, dials, climate);
-  // R35 — the country, and the water standing on it, BEFORE the first
+  // R35 — the biome, and the water standing on it, BEFORE the first
   // segment is drawn. Built once from the stage's own seed rather than per
   // attempt: the landscape is not what a retry is retrying, and the pour
   // it caches is what makes asking "is this line in a lake" cheap enough
@@ -107,7 +107,7 @@ export function generateStage(
   for (let attempt = 0; attempt < 40; attempt++) {
     // The setback the water is given, relaxing as the attempts run out:
     // most of them at the full standard, the last of them at none. A
-    // country that is mostly lake still has to produce a stage.
+    // biome that is mostly lake still has to produce a stage.
     const rung = Math.floor((attempt * ladder.length) / 40);
     const clearance =
       R.water.routeClear * ladder[rung] * knobScale(dials.water, R.wet.routeSetback);
@@ -126,7 +126,7 @@ export function generateStage(
   throw new Error(`stage generation failed for seed ${seed} (${length})`);
 }
 
-/** R17 — the TARMAC a seed's country carries, laid before the rally is
+/** R17 — the TARMAC a seed's biome carries, laid before the rally is
  * routed across it and rebuilt identically wherever it is asked for.
  *
  * It is a pure function of the seed, the dials and the length's box, which
@@ -173,11 +173,11 @@ function tryGenerateStage(
    * the height the search judges is the road's own surface (R34). */
   const groundAt = (x: number, z: number, roll: number): number => buildableAt(land, x, z, roll);
   const profile: Profile = { y: groundAt(0, 0, rolling(0)), slope: 0, rollS: 0 };
-  /** R47 — the country's own say in the line: how steep its roads run,
+  /** R47 — the biome's own say in the line: how steep its roads run,
    * how hard the search reads the land when it picks which way a corner
    * turns, and whether a deep cut is bored through. */
   const grade = followGradeOf(knobs);
-  const country = landOf(knobs);
+  const biome = landOf(knobs);
   const {
     start,
     probe,
@@ -205,7 +205,7 @@ function tryGenerateStage(
     network,
     routeClear,
     fillScale,
-    country,
+    biome,
     lastLipEnd: () => sLastLipEnd,
   });
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
@@ -450,13 +450,13 @@ function tryGenerateStage(
     const { points, end, walked } = probe(cursor, opening);
     // R34 — the opening is the one segment no search chose, so it is also
     // the one nothing was checking. It is laid from the origin whatever the
-    // country there does, and where that country falls away it left the
+    // biome there does, and where that land falls away it left the
     // grid on the tallest fill on the map — the worst wall beside a road on
     // a twelve-seed sweep was on a start straight, not on a stage. Siting
     // (R35) puts the origin on dry ground but says nothing about what the
     // next two hundred metres do, so the same rule the rest of the route
     // keeps has to bind here too. There is no redrawing it: the attempt is
-    // rejected and the sub-seed loop tries another country.
+    // rejected and the sub-seed loop tries another biome.
     if (!points.every(sitsOnTheLand) || !points.every(clearOfTarmac)) return null;
     commit(opening, points, end, walked);
   }
@@ -476,7 +476,7 @@ function tryGenerateStage(
   // long, is the same attempt (none of them had needed more than this),
   // and the hopeless ones cost half — seed 7 long from 13 s to 9.
   // R47 — and a mountain attempt is given up on sooner (`massif.iterations`).
-  const maxIterations = country.massif !== null ? R.massif.iterations : 1000 + spec.band.max / 2;
+  const maxIterations = biome.massif !== null ? R.massif.iterations : 1000 + spec.band.max / 2;
   let iterations = 0;
 
   // R15/R17 — HOW MUCH OF THE STAGE IS TARMAC, and the state that decides
@@ -523,7 +523,7 @@ function tryGenerateStage(
     // road, sealed by height in the compiler, and a join onto a public road
     // contouring a flank at another height was refused on the cut cap
     // ninety-nine times in a hundred anyway.
-    if (country.massif !== null) return false;
+    if (biome.massif !== null) return false;
     if (!needed && sealed >= wantSealed) return false;
     if (total - lookedAt < R.paving.borrow.look) return false;
     if (total - leftTarmacAt < R.paving.gap.min) return false;
@@ -561,7 +561,7 @@ function tryGenerateStage(
         plans[plans.length - 1].kind === "straight",
       );
       // R17 — ONE BORROW PER ROAD. A rally that meets the same public road
-      // twice has gone round in a circle, and the country pays for it
+      // twice has gone round in a circle, and the biome pays for it
       // twice over: the stretch of tarmac between the two crossings is a
       // single piece of road with an abandoned arm reaching into it from
       // each end, so it is built and drawn twice, two carriageways a couple
@@ -596,12 +596,12 @@ function tryGenerateStage(
    *
    * Without that gate the seek radius is the gate, and 420 m of it covers
    * most of a map that has a road across it: every stage would cross every
-   * road it came near, which is a country of level crossings rather than a
-   * country with roads in it.
+   * road it came near, which is a biome of level crossings rather than a
+   * biome with roads in it.
    *
    * Probed at several distances rather than one, because a route almost
    * never points exactly at anything — it wanders, and where it is going is
-   * a stretch of country rather than a point. Asked once, at the far side of
+   * a stretch of land rather than a point. Asked once, at the far side of
    * one crossing, it fired only on seeds whose aim happened to be perfect:
    * two of twenty-four. */
   const tryCrossing = (needed: boolean, kind: HighwayKind = "road"): boolean => {
@@ -611,7 +611,7 @@ function tryGenerateStage(
     // A road can be met once and once only (see `used` below), so the two
     // ways past one are in competition for it — and they are not worth the
     // same. A borrow is what the dial SPENDS: it is the only way a metre of
-    // route comes out sealed, and on a country carrying one public road it
+    // route comes out sealed, and on a biome carrying one public road it
     // is the only tarmac the stage will ever have. A crossing is four
     // seconds of jump. Taking the road for the jump while the dial is still
     // owed is spending the whole allowance on the cheaper thing, and it
@@ -619,7 +619,7 @@ function tryGenerateStage(
     // R15's own floor, which is the dial quietly not working.
     //
     // So while the dial is owed, a crossing waits for the borrow to have had
-    // its chance at this piece of country: `lookedAt` is where a borrow
+    // its chance at this piece of land: `lookedAt` is where a borrow
     // solve was last tried and did not close, and inside one look's worth of
     // road that is an answer about the road in the way rather than a guess.
     // `needed` is the search boxed in against the tarmac, where the
@@ -755,9 +755,9 @@ function tryGenerateStage(
       if (total + plan.length > spec.band.max - R.closingStraight) continue;
 
       let probed = probe(cursor, plan);
-      // R47 — THE SEARCH READS THE COUNTRY. A corner drawn blind on a
+      // R47 — THE SEARCH READS THE BIOME. A corner drawn blind on a
       // mountain flank turns uphill into the rock or downhill into the
-      // air as often as it turns along the contour; on a country that
+      // air as often as it turns along the contour; on a biome that
       // asks for it (`steer`), the mirrored corner is walked too and the
       // one that fits the land better is kept — which is what lays a road
       // along a hillside, and what turns it back on itself in a hairpin
@@ -767,11 +767,11 @@ function tryGenerateStage(
       // the drawn one; and nothing about what is LEGAL moves — the corner
       // kept is validated below like any other.
       if (
-        country.steer > 0 &&
+        biome.steer > 0 &&
         plan.kind === "turn" &&
         plan.dir !== undefined &&
         forcedDir === 0 &&
-        rng.chance(country.steer)
+        rng.chance(biome.steer)
       ) {
         const mirror: SegmentPlan = { ...plan, dir: plan.dir === 1 ? -1 : 1 };
         const angle = plan.length / (plan.radius ?? 1);
@@ -790,7 +790,7 @@ function tryGenerateStage(
         }
       }
       // R47 — A DEEP CUT IS BORED. A plain straight whose line runs under
-      // the country by more than a cutting is worth, in a country that
+      // the biome by more than a cutting is worth, in a biome that
       // bores, is walked again with a bore from its first deep point: the
       // road holds its line near level through the shoulder and comes out
       // where the land drops back to it. A bore that fits — inside the
@@ -798,7 +798,7 @@ function tryGenerateStage(
       // enough to be a tunnel and not a gap in a cutting — makes the
       // straight a TUNNEL; one that does not leaves the first walk to be
       // refused by the cut cap, exactly as it would be anywhere else.
-      if (country.tunnels && plan.kind === "straight" && plan.feature === "none") {
+      if (biome.tunnels && plan.kind === "straight" && plan.feature === "none") {
         const dug = boreFor(cursor, probed.points, offLand);
         const T = R.tunnel;
         // ...within the stage's budget of bore, and a run of open road past
@@ -832,7 +832,7 @@ function tryGenerateStage(
               featureEnd: to,
             };
             const walked = probe(cursor, asTunnel, { ...bore });
-            // ...and only through a MOUNTAIN: the country has to stand
+            // ...and only through a MOUNTAIN: the biome has to stand
             // `cover` over the line somewhere between the portals, or the
             // run is a shoulder a cutting takes, and the first walk stands.
             let deepest = 0;

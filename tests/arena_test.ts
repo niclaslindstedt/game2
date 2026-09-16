@@ -162,7 +162,7 @@ describe("the ground the training ground is made of", () => {
     expect(surface(0, 40)).toBe("gravel");
     expect(surface(-104, 0)).toBe("gravel");
     expect(surface(0, 104)).toBe("gravel");
-    // Past the rim the arena has no surface at all and the country does.
+    // Past the rim the arena has no surface at all and the biome does.
     expect(surface(0, -ARENA_PAD - 10)).toBeNull();
     expect(surface(ARENA_PAD + 30, 0)).toBeNull();
   });
@@ -188,7 +188,7 @@ describe("the ground the training ground is made of", () => {
     expect(height(0, 104)).toBeLessThan(0.5);
   });
 
-  it("rings itself with a bank that rises and then lets the country back", () => {
+  it("rings itself with a bank that rises and then lets the biome back", () => {
     const height = (u: number, v: number): number => {
       const p = at(u, v);
       return plan.heightAt(p.x, p.z);

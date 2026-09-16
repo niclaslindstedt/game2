@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The minimap, drawn: a square of country seen from above with the car in
+// The minimap, drawn: a square of land seen from above with the car in
 // the middle of it, the run's progress read off the FRAME ITSELF — the
 // border is the gauge, filling clockwise from the top as the run goes on —
 // and the field's plates over the lot. Tapping it opens the in-race menu.
 //
 // The two halves it draws are owned elsewhere: minimap-scene.ts cuts the
-// country into paths, minimap-view.ts places everything that moves. This
+// biome into paths, minimap-view.ts places everything that moves. This
 // file is the DOM and the glyphs.
 //
 // The schematic travels: it is cut around an anchor and translated to the
@@ -144,7 +144,7 @@ function pinTextY(car: MinimapCar): number {
   return (car.flip ? 1 : -1) * (PIN_TIP + PIN_H / 2);
 }
 
-/** The country's pose: scaled about the middle of the box for the speedo's
+/** The biome's pose: scaled about the middle of the box for the speedo's
  * zoom, then slid to where the car has got since the paths were cut. The
  * origin is written into the list rather than left to `transform-origin`,
  * so the two halves compose the same way whatever the element's box is. */
@@ -161,7 +161,7 @@ function place(x: number, y: number, angle = 0): string {
 
 export function Minimap({ map, onOpen }: { map: HudMinimap; onOpen: () => void }) {
   const { scene } = map;
-  // The one frame a re-cut lands on is the one frame the country must NOT be
+  // The one frame a re-cut lands on is the one frame the biome must NOT be
   // tweened onto: the offset, the zoom and the paths all change together and
   // compose back to the same picture, so the transform has to arrive with
   // them. Every other frame is a few view units of drift and is tweened.
@@ -171,7 +171,7 @@ export function Minimap({ map, onOpen }: { map: HudMinimap; onOpen: () => void }
   return (
     <button type="button" className="hud-minimap" onClick={onOpen} aria-label="Race menu">
       <svg className="hud-minimap-face" viewBox={`0 0 ${VIEW} ${VIEW}`} aria-hidden="true">
-        {/* The country, cut around its anchor and slid to where the car now
+        {/* The biome, cut around its anchor and slid to where the car now
             stands. Painted bottom up: the ground, then the water on it, then
             everything built over both. */}
         <g
@@ -201,7 +201,7 @@ export function Minimap({ map, onOpen }: { map: HudMinimap; onOpen: () => void }
             style={{ transform: place(end.x, end.y) }}
           />
         ))}
-        {/* R28 — the board still owed, over the country and under everything
+        {/* R28 — the board still owed, over the land and under everything
             that MOVES. It is a place rather than a car, so a plate closing
             on you must never be the thing it hides. */}
         {map.next !== null && (

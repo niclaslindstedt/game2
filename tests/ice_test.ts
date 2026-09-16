@@ -17,7 +17,7 @@ import {
   TUNING,
   createGame,
   createLandField,
-  icyCountry,
+  icyBiome,
   resolveClimate,
   resolveKnobs,
   simulateStage,
@@ -37,14 +37,14 @@ import { stageTerrain, stageTrack } from "./support/stages.ts";
 const HARD = { season: "winter" as const, temperature: -25 };
 const WET = { biome: "taiga" as const, water: 0.8 };
 
-/** Cold enough that every body in the taiga is over: the country's ceiling
+/** Cold enough that every body in the taiga is over: the biome's ceiling
  * stands 52 m over the datum, so a datum at -20 puts the whole of it — and
  * every lake in it — a long way under `CLIMATE.ice`. */
 const DEEP = { season: "winter" as const, temperature: -20 };
 const KNOBS = { biome: "taiga" as const };
 
 /** The seeds the crossings are looked for over. A wide sweep on purpose:
- * whether a given country HAS a lake the route wants is the country's
+ * whether a given biome HAS a lake the route wants is the biome's
  * business, and a list holding one qualifying seed is a pinned seed wearing
  * a search's clothes. */
 const SEEDS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -93,15 +93,15 @@ describe("the freeze", () => {
     expect(waterFrozen(climate, 300)).toBe(true);
   });
 
-  it("leaves every summer country's water open", () => {
+  it("leaves every summer biome's water open", () => {
     for (const id of Object.keys(BIOMES) as (keyof typeof BIOMES)[]) {
       const climate = resolveClimate({ season: "summer" }, resolveKnobs({ biome: id }));
-      expect(icyCountry(climate, BIOMES[id].land.zones)).toBe(false);
+      expect(icyBiome(climate, BIOMES[id].land.zones)).toBe(false);
     }
   });
 });
 
-describe("the land under a frozen country", () => {
+describe("the land under a frozen biome", () => {
   const knobs = resolveKnobs(KNOBS);
 
   it("hands the route a floor where the summer handed it a lake", () => {
@@ -148,9 +148,9 @@ describe("the land under a frozen country", () => {
 
 describe("a stage over frozen water", () => {
   it("crosses lakes a summer would have gone round", () => {
-    // A handful of the sweep, not all of it: whether a country has a lake
+    // A handful of the sweep, not all of it: whether a biome has a lake
     // where the route wants one, low enough at its shore to go on at
-    // (`STAGE_RULES.ice.lift`), is the country's business. What is being
+    // (`STAGE_RULES.ice.lift`), is the biome's business. What is being
     // asserted is that the crossings happen at all and that the cold is
     // what makes them.
     const icy = icyStages();
@@ -318,7 +318,7 @@ describe("R48 — the moving water", () => {
 
 /** Every stage in the sweep whose river the cold actually closed, with the
  * reaches it closed — searched rather than pinned, because whether a seed
- * has a slow reach is the country's business (see SEEDS above). */
+ * has a slow reach is the biome's business (see SEEDS above). */
 function frozenReaches(): { track: Track; frozen: number; open: number }[] {
   const out: { track: Track; frozen: number; open: number }[] = [];
   for (const seed of SEEDS) {

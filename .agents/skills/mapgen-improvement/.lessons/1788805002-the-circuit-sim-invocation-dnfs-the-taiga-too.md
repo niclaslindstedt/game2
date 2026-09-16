@@ -1,5 +1,5 @@
 ---
-title: Do not judge a new country's circuits off `npm run sim -- --shape circuit --car compact` — it DNFs the taiga's own campaign circuit on main
+title: Do not judge a new biome's circuits off `npm run sim -- --shape circuit --car compact` — it DNFs the taiga's own campaign circuit on main
 date: 2026-09-02
 scope: scripts/simulate-run.mjs, engine/mapgen/circuit.ts
 concepts: [circuit, seeds, measurement, simulation, campaign]

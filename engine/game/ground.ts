@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // WHERE THE CAR STANDS. The wheels follow the ground; this module says which
 // ground, how, and what the body is told about it. One rule for the road and
-// the country alike — the height is read where the car has just moved TO,
+// the biome alike — the height is read where the car has just moved TO,
 // never carried forward from where it was — so the seam between the two is a
 // place the car drives over rather than a step it is dropped down. Three
 // things the ground can do to the car come out of here: it can fall away
@@ -26,12 +26,12 @@ import type { Underfoot } from "../mapgen/index.ts";
 const T = TUNING;
 
 /** The ground a step is settled against: a height reader over world
- * position, how much of what the car is standing on is open COUNTRY rather
+ * position, how much of what the car is standing on is open BIOME rather
  * than road — the distinction is only the SEAT, see `readSeat` — and the
  * height it stood at under the car's middle as the step began, which is
  * what the wheels' vertical speed is measured from.
  *
- * `groundAt` is ONE surface across the whole world, road and country alike
+ * `groundAt` is ONE surface across the whole world, road and biome alike
  * (step.ts builds it): the seam at the verge is a place the car drives over
  * and never a step between two readers, because a step in the ground is a
  * height difference divided by `dt`, and at 120 Hz that is tens of m/s of
@@ -39,9 +39,9 @@ const T = TUNING;
  * a road. */
 export type GroundUnder = {
   groundAt: (x: number, z: number) => number;
-  /** 0 where the car stands on the road's own ribbon, 1 out in the country,
+  /** 0 where the car stands on the road's own ribbon, 1 out in the land,
    * ramped across the verge between them. */
-  country: number;
+  share: number;
   /** Ground elevation under the car before this step's move. */
   groundY: number;
   /** R47 — HOW MUCH RISE IS ONLY SNOW, m: the depth of it standing under
@@ -114,7 +114,7 @@ export type GroundContext = GroundUnder & {
   /** Current wind velocity, world space m/s. */
   windX: number;
   windZ: number;
-  /** How much SAND is in the air, 0..1 (`sandstorm.ts`). 0 in every country
+  /** How much SAND is in the air, 0..1 (`sandstorm.ts`). 0 in every biome
    * but the desert and in every desert run with no front over it — which
    * is what keeps the storm's own terms out of every stage that has never
    * seen one. */
@@ -248,17 +248,17 @@ export function plant(car: CarState, ground: (x: number, z: number) => number): 
 
 /** Read where the car stands now (see `Seat`).
  *
- * The corner lift comes in with the COUNTRY (`GroundUnder.country`) rather
+ * The corner lift comes in with the BIOME (`GroundUnder.share`) rather
  * than switching on at the verge line. On the mat there is none: a road is
  * built smooth across the body's length, and a car seated on its own crown
- * would ride a hand's width high on every stage. Out in the country it is
+ * would ride a hand's width high on every stage. Out in the biome it is
  * whole. Switched at the line instead, the lift arrived all at once — up to
  * a third of a metre of body, in one step, upward, on a car driving off a
  * road — which is the ONE thing a car leaving a road must never do. */
 export function readSeat(car: CarState, under: GroundUnder): Seat {
   const centre = under.groundAt(car.x, car.z);
   const { seat, foot } = corners(car, centre, under.groundAt, climbNow(car));
-  return { centre, seat: centre + (seat - centre) * under.country, foot };
+  return { centre, seat: centre + (seat - centre) * under.share, foot };
 }
 
 /** The vertical speed the WHEELS moved at over this step, m/s: what the

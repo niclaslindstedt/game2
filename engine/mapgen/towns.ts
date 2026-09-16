@@ -82,17 +82,17 @@ export type TownStreet = {
 
 /** R39 — THE GROUND THE VILLAGE STANDS ON: the street's own shelf, held
  * level out past the back of the deepest lot on each side for the whole
- * length of the town, and eased back onto the country past that.
+ * length of the town, and eased back onto the land past that.
  *
  * ONE band for the whole town, rather than the pad a lot is drawn on. The
  * drawn ground's corners are `GROUND_CELL` apart and a lot's pad is about
  * that across, so graded a disc at a time the flattening falls BETWEEN the
  * corners: it never reaches the surface anyone stands on, and every house
- * on the street ends up on the country's own slope instead of on its plot —
+ * on the street ends up on the land's own slope instead of on its plot —
  * half of them hanging in the air over it and half of them buried in it. A
  * band tens of metres wide and hundreds long is carried by the same corners
  * exactly, which is also what the place looks like: a village street is
- * level from the kerb to the back gardens, and the country starts again
+ * level from the kerb to the back gardens, and the land starts again
  * behind them. */
 export type TownPlatform = {
   /** The street's centreline through the town, at `platform.step` metres,
@@ -132,7 +132,7 @@ export type TownPlatform = {
    * the ribbon (R16) — and the tiles no longer sag away from the verge as
    * a ditch, which along a village street is a kerb instead. */
   lip: number;
-  /** How far past the band's rim the country is eased back onto it, m. */
+  /** How far past the band's rim the biome is eased back onto it, m. */
   blend: number;
 };
 
@@ -164,14 +164,14 @@ export type StreetSample = RoadShape & {
   jump?: boolean;
 };
 
-/** Everything the placer has to ask about the country. Functions rather
+/** Everything the placer has to ask about the biome. Functions rather
  * than the compiler's own state, so the module can be driven from a test
  * with a flat rig as easily as from a compiled stage. */
 export type TownContext = {
   seed: number;
   /** The stage's nominal full width, m. */
   width: number;
-  /** R40 — what kind of house the country builds. */
+  /** R40 — what kind of house the biome builds. */
   houses: HouseStyle;
   /** The route's samples, in stage order. */
   samples: readonly HomesteadSample[];
@@ -482,7 +482,7 @@ function tryTown(ctx: TownContext, street: Street, rng: Rng): Town | null {
   const toS = open[open.length - 1].s;
   if (toS - fromS < T.street.min) return null;
   // How many the street will actually hold is only known once it has been
-  // walked — the country refuses lots a street's length cannot predict —
+  // walked — the biome refuses lots a street's length cannot predict —
   // and the shops have to stand in the middle of what gets built rather
   // than of what was hoped for. So the street is walked TWICE: once with
   // houses on its own dice to count what fits, then for real, with the
@@ -500,7 +500,7 @@ function tryTown(ctx: TownContext, street: Street, rng: Rng): Town | null {
   // ...and again when the shops did not land in the middle. The real walk
   // stands a block of flats and two villas where the dry one stood houses,
   // and meets refusals the dry one did not: it falls short of `n`, so a
-  // shop placed by its share of `n` comes due late, and a lot the country
+  // shop placed by its share of `n` comes due late, and a lot the biome
   // refuses moves the shop further along still, until the post office
   // stands second from the end of the village. Walked again for what
   // fitted, on fresh dice, it is usually back in the middle; a street that
@@ -527,7 +527,7 @@ function tryTown(ctx: TownContext, street: Street, rng: Rng): Town | null {
     if (again.length >= T.size.min) lots = again;
   }
   if (lots.length < T.size.min) return null;
-  // ...and on BOTH sides of it. A street whose one side the country
+  // ...and on BOTH sides of it. A street whose one side the biome
   // refused every lot on — a hillside, a shore, the route's own corridor
   // running close behind it — is a row of houses looking across the road
   // at a field: a lane, not a village (R39). The walk lets a side stall
@@ -561,7 +561,7 @@ function lotReach(lot: Lot): number {
  * lattice cell further still, over the whole frontage and a lattice cell
  * past either end of it. Both margins are the lattice's, because what the
  * band exists to beat is the lattice: a corner inside the rim carries a
- * level part-way back to the country, and the ground under a back wall is
+ * level part-way back to the biome, and the ground under a back wall is
  * interpolated from corners a cell away. */
 function platformFor(ctx: TownContext, street: Street, lots: Lot[]): TownPlatform {
   const P = T.platform;
@@ -784,7 +784,7 @@ function shopKind(kind: BuildingKind): boolean {
   return kind !== "house" && kind !== "villa";
 }
 
-/** Stand one building on one side of the street, or find the country will
+/** Stand one building on one side of the street, or find the biome will
  * not take it. */
 function tryLot(
   ctx: TownContext,
@@ -852,7 +852,7 @@ function tryLot(
   // furthest back. Every ROAD has to be clear of it, because the terrain
   // gives a road back the ground inside its own corridor whatever the band
   // wanted (R23), and a band that narrows behind a house leaves the ground
-  // under its back wall interpolated from corners out in the country —
+  // under its back wall interpolated from corners out in the land —
   // which is the flying house, arrived at by another route. Only the roads:
   // the band stops at the water and at a yard too, but nothing gives THOSE
   // the ground back, so the level still reaches the wall.
@@ -880,7 +880,7 @@ function tryLot(
     if (!clear(p.x, p.z)) return null;
     const out = Math.abs((p.x - at.x) * right.x + (p.z - at.z) * right.z);
     if (out <= bench) continue;
-    // Past the bench the country has its say. The cone (R31) is the most
+    // Past the bench the biome has its say. The cone (R31) is the most
     // the ground can stand above the pad there — a bank behind the house,
     // which may be a bank and not a cliff — and the bare land is the least
     // it can fall to, which may be a slope and not a drop.

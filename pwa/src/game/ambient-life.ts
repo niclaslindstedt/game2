@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Ambient life: the world keeps moving whether or not the car does, and
-// what moves depends on the country (R40).
+// what moves depends on the land (R40).
 //
 //   TAIGA   Bird flocks wheel over the stage on flapping swept wings, and
 //           far above them airliners cross the wilderness leaving contrails
@@ -77,7 +77,7 @@ const PUFF_POOL = 16000;
  * frames it, since the pool is never culled. */
 const PARKED = -3000;
 
-/** What one country's sky and ground carry. */
+/** What one biome's sky and ground carry. */
 type Life = {
   /** Birds per flock, and the wingspan as a multiple of the sparrow-sized
    * default. */
@@ -95,13 +95,13 @@ type Life = {
   radius: number;
   /** Turns per second round the circle. */
   turn: number;
-  /** How many solitary birds of prey hang over this country at once, and
+  /** How many solitary birds of prey hang over this biome at once, and
    * how far above the flocks they hold — raptor.ts flies them, and adds its
-   * own spread on top. Both countries have them: hot open sky is where a
+   * own spread on top. Both biomes have them: hot open sky is where a
    * soaring bird belongs, and a forest has its buzzards. */
   raptors: number;
   raptorsOver: number;
-  /** How many SKEINS of big birds cross this country's sky at once — geese
+  /** How many SKEINS of big birds cross this biome's sky at once — geese
    * and swans on their way somewhere else. The desert has none: what flies
    * over sand is what lives there. skein.ts decides what is in one and
    * which way it is pointed, off the season. */
@@ -174,10 +174,10 @@ export type AmbientLife = {
    * left the ground, so they burn orange over a valley that has gone grey
    * and go grey themselves only after. */
   setSky: (tint: THREE.Color, ceiling: number, high: THREE.Color) => void;
-  /** Which country's life this is and which season it is living — what
+  /** Which biome's life this is and which season it is living — what
    * flies, which way the skeins are pointed, and whether anything crawls.
    * Idempotent, and cheap to call on every re-light. */
-  setCountry: (biome: BiomeId, season: Season) => void;
+  setBiome: (biome: BiomeId, season: Season) => void;
   /** The CAMERA rather than a point, because the birds of prey are pitched
    * ahead of where it is LOOKING, so the player drives up to them.
    *
@@ -346,7 +346,7 @@ export function createAmbientLife(): AmbientLife {
     birds: Bird[];
   };
   const flocks: Flock[] = [];
-  /** Every bird ever made, so a country with fewer per flock hides the
+  /** Every bird ever made, so a biome with fewer per flock hides the
    * rest rather than rebuilding them. */
   const most = Math.max(...Object.values(LIFE).map((l) => l.birds));
   for (let f = 0; f < FLOCKS; f++) {
@@ -369,7 +369,7 @@ export function createAmbientLife(): AmbientLife {
     });
   }
 
-  /** Put the flocks the way this country flies them. */
+  /** Put the flocks the way this biome flies them. */
   const flockAs = (): void => {
     flocks.forEach((flock, f) => {
       flock.center.y = life.height + f * 14;
@@ -385,17 +385,17 @@ export function createAmbientLife(): AmbientLife {
 
   // ── The birds of prey ────────────────────────────────────────────────────
   //
-  // Built for the country that flies the most of them and hidden down to the
-  // count this one wants, exactly as the flocks are: a change of country is
+  // Built for the biome that flies the most of them and hidden down to the
+  // count this one wants, exactly as the flocks are: a change of biome is
   // a re-light, never a rebuild.
   const raptors = createRaptors(Math.max(...Object.values(LIFE).map((l) => l.raptors)));
   group.add(raptors.group);
-  const raptorsAs = (): void => raptors.setCountry(life.raptors, life.height + life.raptorsOver);
+  const raptorsAs = (): void => raptors.setFlock(life.raptors, life.height + life.raptorsOver);
   raptorsAs();
 
   // ── The skeins ───────────────────────────────────────────────────────────
   //
-  // Built for the country that flies the most and hidden down to this one's
+  // Built for the biome that flies the most and hidden down to this one's
   // count, like everything else here; unlike everything else here, it also
   // reads the SEASON, because a crossing in spring and the same crossing in
   // autumn are the same birds pointed opposite ways.
@@ -494,10 +494,10 @@ export function createAmbientLife(): AmbientLife {
   for (const cross of traffic.open()) enter(cross);
 
   /** The cloud base the last re-light reported, m — kept so a change of
-   * country can re-decide the sky without waiting for the next one. */
+   * biome can re-decide the sky without waiting for the next one. */
   let ceilingNow = Infinity;
 
-  /** Whether the high traffic is drawn at all: only over a country that
+  /** Whether the high traffic is drawn at all: only over a biome that
    * has any, and only when there is no deck between it and the car. Every
    * lane runs above the lowest cloud base the weather can build, so the
    * ceiling test is the whole of the second rule. */
@@ -559,8 +559,8 @@ export function createAmbientLife(): AmbientLife {
     showSky();
   };
 
-  const setCountry = (next: BiomeId, nextSeason: Season): void => {
-    // The season is checked first and on its own: a country that has not
+  const setBiome = (next: BiomeId, nextSeason: Season): void => {
+    // The season is checked first and on its own: a biome that has not
     // changed can still have changed season (Roam picks one over a compiled
     // stage), and the skeins are the one thing here that reads it.
     season = nextSeason;
@@ -764,5 +764,5 @@ export function createAmbientLife(): AmbientLife {
     lizards.dispose();
   };
 
-  return { group, setSky, setCountry, update, dispose };
+  return { group, setSky, setBiome, update, dispose };
 }

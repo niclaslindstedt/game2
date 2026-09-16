@@ -9,7 +9,7 @@ The drawn ground is a lattice of corners `GROUND_CELL` (14 m) apart, and both
 the picture and the physics are the triangles between them (`groundAt`). So a
 graded pad about that size — R39's village lots were ~10 m discs — does nothing
 at all: the flattening falls BETWEEN the corners, never reaches the surface, and
-the thing standing on the pad stands on the country's own slope instead. Four
+the thing standing on the pad stands on the land's own slope instead. Four
 town buildings in five were over half a metre off the ground under them (worst
 7.5 m) while every other number about them read clean.
 

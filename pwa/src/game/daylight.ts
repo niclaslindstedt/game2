@@ -5,7 +5,7 @@
 // sun's place in the sky, and every one of them is already a fact about the
 // stage: the HOUR (`RaceEnv.hour`, run on with the race clock — one minute
 // of racing is one hour of sun), the SEASON (the sun's declination) and the
-// COUNTRY (its latitude, R40). Nothing here is art-directed; the art
+// BIOME (its latitude, R40). Nothing here is art-directed; the art
 // direction is sky.ts's, keyed on what comes out of here.
 //
 // The consequences are the point, and they are all real:
@@ -34,7 +34,7 @@ export type Daylight = "dawn" | "day" | "dusk" | "night";
 
 /** Where the sun stands at noon, as a WORLD HEADING (radians, the engine's
  * convention: 0 down +z, growing toward +x) — the south, at the latitudes
- * every country here is at. It is the one bearing anything in the world
+ * every biome here is at. It is the one bearing anything in the world
  * can be stated against, and the compass the migrating birds fly by
  * (skein.ts). Fixed for every stage so that stages, which bend, always
  * cross the light somewhere. */
@@ -282,7 +282,7 @@ export function horizonCrossing(hour: number, season: Season, biome: BiomeId): n
 }
 
 /** The hour the four words a stage used to be set by mean, in THIS season
- * over THIS country — what a stored setting, a `?tod=` link or a campaign
+ * over THIS biome — what a stored setting, a `?tod=` link or a campaign
  * level authored as a word is read as. A word names a kind of light, so
  * it is turned into the hour that light happens at: dawn is the sun eight
  * degrees up and climbing, dusk five degrees up and going, night is solar

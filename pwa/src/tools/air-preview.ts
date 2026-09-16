@@ -22,7 +22,7 @@
 //            landed back on it. The frame must barely change size, the tilt
 //            must go up and then over, and the landing must settle.
 //   the drop — thrown sideways off the shoulder at the one place on this
-//            stage where the country falls a long way away from the road.
+//            stage where the land falls a long way away from the road.
 //            The camera must GO WITH the car. A shot that stays up at the
 //            lip is the failure this row is here to catch, and it reads as
 //            the car shrinking down the row.
@@ -41,7 +41,7 @@ declare global {
 
 /** The car and the stage length both situations are driven with. The seed
  * is the one the other camera sheets drive; what changes between the two
- * runs is the COUNTRY, which is a dial (R40/R47). */
+ * runs is the BIOME, which is a dial (R40/R47). */
 const STAGE = { seed: 38, length: "short", carId: "compact" } as const;
 
 /** THE TWO SITUATIONS.
@@ -64,7 +64,7 @@ const STAGE = { seed: 38, length: "short", carId: "compact" } as const;
  *            within a metre of the height it left: a designed lip. The frame
  *            must barely change size, the tilt must go up and then over, and
  *            the landing must settle.
- *   the drop — THE ALPINE ROW, and the reason the country is a dial here.
+ *   the drop — THE ALPINE ROW, and the reason the biome is a dial here.
  *            `altitude` at the top of its travel is not a bigger hill, it is
  *            six thousand metres of rock with the road blasted along one
  *            ledge of it and the green a mile below (R47) — which is the one

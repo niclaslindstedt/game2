@@ -11,7 +11,7 @@ export const SETTLEMENT_RULES = {
     /** The stage is walked in SLOTS this far apart, and every slot rolls
      * for a homestead against `spacing.mean` — so the mean distance between
      * two is the mean, and the actual distance is whatever the dice and the
-     * country made it. `spacing.min` is the least the dice may do: two
+     * biome made it. `spacing.min` is the least the dice may do: two
      * houses in one view is a village, and a village is a different
      * feature. */
     slot: 40,
@@ -46,7 +46,7 @@ export const SETTLEMENT_RULES = {
       clear: 26,
     },
     /** The YARD: the graded gravel the house stands on, as a disc — its
-     * radius, how far past its rim the country is eased back onto it, and
+     * radius, how far past its rim the biome is eased back onto it, and
      * how much the bare ground may differ from the yard's level anywhere on
      * it before the pad would be a cliff or a pit. */
     yard: { radius: { min: 10.5, max: 13.5 }, blend: 11, level: 4.2 },
@@ -71,10 +71,10 @@ export const SETTLEMENT_RULES = {
     apart: 150,
 
     /** R37 — THE FARMS: which homesteads are one, and what a farm has.
-     * Only in a country that is farmed (`BiomeRules.farms`). */
+     * Only in a biome that is farmed (`BiomeRules.farms`). */
     farm: {
       /** How many homesteads roll a farm. Half: a stage sees two or three
-       * houses, and one of them being a farm is a country that is worked. */
+       * houses, and one of them being a farm is a biome that is worked. */
       chance: 0.5,
       /** A farm's yard is bigger than a house's, because the barn stands
        * on it: its corners have to be on the pad, and a barn is long. */
@@ -121,7 +121,7 @@ export const SETTLEMENT_RULES = {
   },
 
   /** R43 — THE ENERGY: the wind farms on the high ground and the solar
-   * farms on the flat. Only in a country modern enough to have built them
+   * farms on the flat. Only in a biome modern enough to have built them
    * (`BiomeRules.energy`). Meters unless noted. */
   energy: {
     /** THE WIND FARMS: a string of turbines along a rise off the stage,
@@ -172,7 +172,7 @@ export const SETTLEMENT_RULES = {
       hub: { min: 105, max: 125 },
       rotor: { min: 120, max: 140 },
       /** The crane pad each tower stands on: a disc of graded gravel, how
-       * far past its rim the country is eased back onto it, and how far
+       * far past its rim the biome is eased back onto it, and how far
        * out of level the bare ground may be across it. */
       pad: { radius: 16, blend: 14, level: 7 },
       /** How far apart two farms' towers have to be on the map. */
@@ -236,9 +236,9 @@ export const SETTLEMENT_RULES = {
 
   /** R45 — THE GRID: the transmission line that takes the power away,
    * laid rim to rim across the map before the rally. Meters unless noted.
-   * Only in a country that makes power (`BiomeRules.energy`) — the same
+   * Only in a biome that makes power (`BiomeRules.energy`) — the same
    * flag the wind and the solar farms read, because a grid and the things
-   * that feed it are one fact about a country.
+   * that feed it are one fact about a biome.
    *
    * The numbers are a 400 kV line's, which is what the portal tower in
    * Scandinavia carries: three conductors on one crossarm in bundles of
@@ -248,7 +248,7 @@ export const SETTLEMENT_RULES = {
    * number picked to look right — it is what a line of this class is,
    * and the placer that reads them is the surveyor's own method. */
   powerline: {
-    /** How often a seed's country carries one at all. A line is a
+    /** How often a seed's biome carries one at all. A line is a
      * LANDMARK: seen once on a stage it is a place, seen on every stage it
      * is wallpaper, and at a little under half the seeds a driver meets one
      * often enough to know it and rarely enough to look up. Never two —
@@ -256,7 +256,7 @@ export const SETTLEMENT_RULES = {
      * grids is a substation, which is a different thing entirely. */
     chance: 0.45,
     /** How many entry points on the rim a line may be tried from before
-     * the country is judged not to carry one. Far fewer than a road's: a
+     * the biome is judged not to carry one. Far fewer than a road's: a
      * refused line costs a whole walk of towers, and one that will not fit
      * at ten entries is on a seed that is mostly lake. */
     tries: 10,
@@ -316,7 +316,7 @@ export const SETTLEMENT_RULES = {
       /** How many ANGLE POINTS the survey fixes between the two rims, and
        * how far off the straight one may be pushed, as a share of the
        * map's own reach. A line aimed at one point comes out dead straight
-       * on every seed, because nothing in a bare country is a reason to
+       * on every seed, because nothing in a bare land is a reason to
        * turn — what turns a real line is land nobody would sell and places
        * somebody wanted it to pass, and neither of those is on this map.
        * The dice stand in for the surveyor; `most` still decides what the
@@ -352,7 +352,7 @@ export const SETTLEMENT_RULES = {
      * crossarm is, and how high the peaks stand over it. Inside the 15-55
      * m band real towers are built in, at the height a 400 kV portal is.
      * Drawn once per LINE: a grid is one make of tower the whole way
-     * across a country. */
+     * across a landscape. */
     tower: {
       height: { min: 28, max: 36 },
       base: 17,
@@ -417,7 +417,7 @@ export const SETTLEMENT_RULES = {
     armChance: 0.8,
     /** THE STREET: how long a piece of sealed road has to be before a town
      * fits on it, m, and how far along an abandoned arm the town may reach
-     * — past which the arm is out in the country and out of the fog. The
+     * — past which the arm is out in the land and out of the fog. The
      * tightest bend (as a radius, m) a lot may stand beside: a village
      * street sweeps, and a house on the outside of a corner is a wall a car
      * arrives at. */
@@ -426,7 +426,7 @@ export const SETTLEMENT_RULES = {
      * (the front yard — a shop gets the deep end, for the cars outside
      * it), the gap between two buildings along the street, how far past
      * the building's footprint its graded pad reaches, how far past the
-     * pad's rim the country is eased back onto it, and how much the bare
+     * pad's rim the biome is eased back onto it, and how much the bare
      * ground may differ from the pad's level across it before the lot
      * would be a cut or a fill nobody would build on. */
     lot: {
@@ -455,7 +455,7 @@ export const SETTLEMENT_RULES = {
      * whole frontage. `step` is how often the band's spine samples the
      * street, `margin` how much ground it keeps past a lattice cell's
      * worth beyond the last back wall, and `blend` how far past its rim
-     * the country is eased back onto it. The lattice cell is the reason
+     * the biome is eased back onto it. The lattice cell is the reason
      * the band exists at all — a lot's own pad is narrower than one, so
      * grading a disc per lot never reaches the drawn ground (`lattice.ts`)
      * — which is why `margin` is a margin ON a cell rather than a width of
@@ -510,17 +510,17 @@ export const SETTLEMENT_RULES = {
      * this the car park drives a lane of its own out to one of them. */
     reach: 420,
     /** R17 + R42 — how many extra public roads are DRAWN FOR across the
-     * country once the route is compiled (`layExtraRoads`), before the ones
+     * biome once the route is compiled (`layExtraRoads`), before the ones
      * the land and R23 refuse are thrown away.
      *
      * The search's own tarmac is one road across a medium map, and it
      * cannot be two: the route may not cross a public road, so a second
-     * line laid before the search partitions the country it has left and
+     * line laid before the search partitions the biome it has left and
      * some seeds then generate at no sub-seed at all (`highwayCount` names
      * the one that proved it). Drawn AFTERWARDS the same lines cost the
      * search nothing — a candidate that runs into the route is thrown away
      * instead of routed around — and what they buy is the difference
-     * between a country with a road network and a country with one road:
+     * between a biome with a road network and a biome with one road:
      * with a single line, two thirds of the corners on a stage sit in a
      * pocket no lane could reach a road from, and R42 puts no crowd at a
      * corner nobody could have driven to. */
@@ -533,7 +533,7 @@ export const SETTLEMENT_RULES = {
      * the course, and the crowd walks the rest — and the walk in is most of
      * what being at a rally is. A pad sixty metres off the road, which is
      * what an unconstrained search finds every time (it is looking for the
-     * NEAREST place the country will take), reads as a lay-by beside the
+     * NEAREST place the biome will take), reads as a lay-by beside the
      * stage and puts twenty cars inside the distance a car leaving the road
      * covers.
      *
@@ -541,12 +541,12 @@ export const SETTLEMENT_RULES = {
      * stream or a mound rather than run straight. */
     standOff: 200,
     /** THE PAD: the graded gravel the cars stand on, as a disc — how far
-     * past the bay layout its rim reaches, how far past the rim the country
+     * past the bay layout its rim reaches, how far past the rim the biome
      * is eased back onto it, the steepest plane it may be graded to (m per
      * m: a field the cars are parked across, not a table cut into a hill),
      * how much the ground may differ from that plane across it (the plane
      * itself never stands over R31's cone — the terrain's own), the bare
-     * country it keeps between its rim and the route's corridor, and how
+     * biome it keeps between its rim and the route's corridor, and how
      * far apart two pads have to be. */
     pad: { margin: 2.5, blend: 12, maxGrade: 0.09, level: 6, clear: 8, apart: 100 },
     /** R42 — HOW MANY PEOPLE ARRIVE IN ONE CAR. A rally crowd comes in
@@ -576,7 +576,7 @@ export const SETTLEMENT_RULES = {
       depth: 5.4,
       aisle: 6.5,
     },
-    /** THE ROAD in: a lane's width of the country's loose surface, leaving
+    /** THE ROAD in: a lane's width of the biome's loose surface, leaving
      * a public road SQUARE and running straight to the middle of the pad,
      * `approach` metres away — or, where there is no public road to leave,
      * leaving the pad and driven out to the edge of the map the way an

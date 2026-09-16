@@ -5,7 +5,7 @@ scope: pwa/src/game/flora-desert.ts, pwa/src/game/flora-build.ts
 concepts: [flora, desert, cactus, silhouette, review]
 ---
 
-SKILL.md carries the two structural rules this country lives on (a cactus
+SKILL.md carries the two structural rules this biome lives on (a cactus
 body is `ribbed`, a wash tree is an open scatter on several stems). Two
 smaller ones it does not:
 
@@ -22,7 +22,7 @@ bloom. Authored at a birch's saturation it reads as foliage whatever shape it
 is, and at night under a headlight it glows. The distance between cactus
 grey-green and tree leaf green is most of what says "desert" at speed, so
 every green in the desert half of the paint box is pulled toward grey on
-purpose — and the one SATURATED colour in the country is the spring's.
+purpose — and the one SATURATED colour in the biome is the spring's.
 
 **And a bloom belongs on the part that flowers.** Putting palo verde's April
 yellow on the single `PALO_VERDE` colour turned the trunk yellow too, because

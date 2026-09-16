@@ -162,7 +162,7 @@ for (const device of devices) {
     // the whole set was shot or one frame was re-shot.
     //
     // Taking it from the filter is what a `for…of shots.entries()` gives you,
-    // and it silently corrupts the directory: `--shot drift,air,country`
+    // and it silently corrupts the directory: `--shot drift,air,biome`
     // numbered its three frames 01–03, so `air` landed as `02-air.png` beside
     // the full run's `04-air.png` and the set ended up holding two copies of
     // two frames under four numbers. A `--shot` run deliberately leaves the

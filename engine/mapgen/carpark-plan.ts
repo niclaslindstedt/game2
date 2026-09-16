@@ -3,7 +3,7 @@
 // in the crowd drove up, the cars standing on it, and the trails walked
 // off it to the stands — plus the arithmetic that turns a stand's crowd
 // into a number of cars and a number of cars into a rectangle of bays.
-// None of it needs the country: it is the shape of the thing, and
+// None of it needs the biome: it is the shape of the thing, and
 // `carparks.ts` is where one is put.
 
 import { type ParkedCar } from "./buildings.ts";
@@ -46,7 +46,7 @@ export function padHeight(pad: CarParkPad, x: number, z: number): number {
  * (R17), `road` a public road the route never met (`publicroad.ts`), `park`
  * the lane out of an earlier car park — which reaches one of those itself —
  * and `map` the edge of the world, which is the honest answer where the
- * pocket of country the corner sits in carries no road at all. The search
+ * pocket of land the corner sits in carries no road at all. The search
  * prefers the first three and pays a detour for them (`RIM_PENALTY`). */
 export type CarParkAccess = "arm" | "road" | "park" | "map";
 
@@ -79,7 +79,7 @@ export type CarPark = {
 /** Everything the placer has to ask about the world. Functions rather than
  * the terrain's own state, so the module can be driven from a test. */
 export type CarParkContext = {
-  /** R40 — what a bladed road in this country is made of. */
+  /** R40 — what a bladed road in this biome is made of. */
   loose: Surface;
   land: LandField;
   /** Distance from a point to the nearest piece of ROUTE, its start and
@@ -110,7 +110,7 @@ export type CarParkContext = {
 export type CarParkField = {
   carParks: CarPark[];
   /** Serve every stand whose road is settled up to `upToS`, and hand back
-   * the ones the country refused — a stand with nowhere within a walk of it
+   * the ones the biome refused — a stand with nowhere within a walk of it
    * to park, or no way to drive to that place. Nobody is standing at those
    * (R42), so the caller drops them. */
   extend: (upToS: number, stands: readonly Stand[], ctx: CarParkContext) => Stand[];
@@ -125,7 +125,7 @@ export type CarParkField = {
 export const ROAD_MAX = SPUR.length.max;
 
 /** How far outside the stage's own box a lane will go looking for a road to
- * join, m. The country map's lattice is grown to cover whichever roads
+ * join, m. The ground map's lattice is grown to cover whichever roads
  * stand inside it; past this the road is somewhere the crowd drove FROM,
  * not somewhere a marshal ran a lane out to. */
 export const LANE_REACH = 1000;
@@ -137,7 +137,7 @@ export const LANE_REACH = 1000;
  * the road and dropping onto it. */
 export const JOIN_EASE = 48;
 /** How far the road that leaves a pad runs ON the pad's own plane before it
- * is allowed to bend away toward the country, m past the rim — so the
+ * is allowed to bend away toward the biome, m past the rim — so the
  * lane leaves the car park at the car park's own grade and the pad's
  * blend (`easeOntoPad`) has nothing to make up. */
 export const PLANE_RUN = 8;
@@ -151,7 +151,7 @@ export const JOIN_STRIDE = 6;
  * It is the R23 exemption for the road the lane is running INTO — inside it
  * the lane may come near that road, and near nothing else — so it has to be
  * long enough to cover the whole approach. A lane aiming at a public road
- * across open country runs at a shallow angle for the last few hundred
+ * across open land runs at a shallow angle for the last few hundred
  * metres, and at a window of 120 m every one of the six approaches on seed 5
  * was refused for standing too close to the very road it was about to join. */
 export const JOIN_WINDOW = 400;
@@ -228,7 +228,7 @@ export type Access = { line: SpurLine; sample: SpurSample; kind: CarParkAccess; 
 /** How big a cell the stand-off field is drawn on, m. */
 export const NEAR_CELL = 64;
 
-/** How far round a place an endless stage's country map reaches, m — a
+/** How far round a place an endless stage's ground map reaches, m — a
  * streamed stage has no box, so a road that gets this far from the stand
  * has left the neighbourhood, past the fog. */
 export const STREAMED_BOX = 460;

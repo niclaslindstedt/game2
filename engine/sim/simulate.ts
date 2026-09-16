@@ -43,7 +43,7 @@ export type SimOptions = {
   season?: Season;
   temperature?: number | null;
   /** How often the SANDSTORMS come, 0..1 (`game/sandstorm.ts`) — read only
-   * in a country whose wind lifts the ground. Defaults to the game's own,
+   * in a biome whose wind lifts the ground. Defaults to the game's own,
    * so a desert sweep measures the weather a desert run actually gets;
    * pass 0 to measure the road without it. */
   sandstorms?: number;

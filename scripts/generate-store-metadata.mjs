@@ -155,7 +155,7 @@ if (!phone) {
       "you do; the field is left out of the upload.",
   );
 } else if (!phone.startsWith("+")) {
-  fail(`ASC_REVIEW_PHONE (${phone}) has no country code — Apple requires the + prefix`);
+  fail(`ASC_REVIEW_PHONE (${phone}) has no biome code — Apple requires the + prefix`);
 }
 
 const info = {};

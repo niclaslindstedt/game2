@@ -222,7 +222,7 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   const ramps = rampMask(track);
   const mountain = biomeRules(track.knobs.biome).land.massif !== null;
   /** R47 — WHETHER THE STEP BETWEEN TWO CONTACTS IS THE MOUNTAIN'S rather
-   * than the road's: the BARE country takes the same step, and takes it
+   * than the road's: the BARE land takes the same step, and takes it
    * steeper than any road may shape ground (`verge.climbable`).
    *
    * R31's promise is that the verge is rideable, and the verge is ground a
@@ -233,7 +233,7 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
    * is the one thing R31 has always allowed to stop the car: rock.
    *
    * The comparison is what keeps the check honest. A step the corridor
-   * MADE stands over a country that did not take it, and is still
+   * MADE stands over land that did not take it, and is still
    * reported — on a flank exactly as anywhere else. */
   const onTheFlank = (a: Contact, b: Contact, run: number): boolean => {
     if (!mountain) return false;
@@ -583,7 +583,7 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
           }
         }
         if (Math.abs(grade) <= ANALYSIS.rollers.edge.grade) continue;
-        // R47 — in a mountain country the DROP off the outer edge is the
+        // R47 — in a mountain biome the DROP off the outer edge is the
         // mountain, and it is the point: a cliff road's edge falls away as
         // far as the flank does, and nothing keeps a car on it but the
         // driver. A wall beside the mat is still a wall.
@@ -868,9 +868,9 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
     },
     {
       // R16 — and the seam itself: no STEP where the road hands over,
-      // however steeply the country beside it happens to fall.
+      // however steeply the land beside it happens to fall.
       id: "seam",
-      label: "the road hands over to the country without a step in the seam",
+      label: "the road hands over to the land without a step in the seam",
       score: rate(seams, Math.max(1, edgesChecked), ANALYSIS.rollers.tolerated),
       weight: 1.5,
       value: worstSeam,

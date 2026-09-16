@@ -7,7 +7,7 @@ concepts: [water, rivers, measurement, analysis, terrain, verge]
 
 The river was traced against `farHeightAt` (the bare land) and
 `analyzeWater`'s `water.float` measured its banks on `geology.surfaceAt` —
-the same country. So every course passed, on every seed, while the game drew
+the same biome. So every course passed, on every seed, while the game drew
 a sheet of water five metres up beside a cutting. The ground a player SEES is
 the bare land held under whatever the road cut out of it: R31's cone reaches
 a hundred metres and takes up to eight off a hillside, and against that the

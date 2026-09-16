@@ -270,9 +270,9 @@ describe("the benchmark's second axis", () => {
 // against numbers copied out of it.
 describe("the benchmark's hour", () => {
   /** The stage it is driven on, and therefore the season and — off the
-   * COUNTRY the stage belongs to (R40) — the latitude the sun is placed
+   * BIOME the stage belongs to (R40) — the latitude the sun is placed
    * with. Read off the campaign rather than restated, so moving the
-   * benchmark to another country moves this with it. */
+   * benchmark to another biome moves this with it. */
   const found = findLevel(BENCHMARK.levelId);
 
   /** The sun `t` seconds of RACING into the run. One minute of racing is an

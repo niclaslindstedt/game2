@@ -55,7 +55,7 @@ belongs to `mapgen-improvement`.
 **Six facets, each a set of BANDS.** `flow` (what the road asks of the hands),
 `pace` (how fast, and how much the speed moves), `relief` (up and down, and
 what that does to a corner), `features` (the set pieces and how many KINDS),
-`scenery` (the country around it), `risk` (what a mistake costs). A band has a
+`scenery` (the land around it), `risk` (what a mistake costs). A band has a
 floor as well as a ceiling — that is the whole difference from `analyze` —
 because a road with no corners scores as badly as a road that is nothing but
 corners.
@@ -81,7 +81,7 @@ The scoreboard is only as honest as its bands, and the fastest route to a
 hundred out of a hundred is to measure things that were never going to fail.
 
 ```
-   1. make rate COUNT=120 ARGS=--stats     across a country, a length, a shape
+   1. make rate COUNT=120 ARGS=--stats     across a landscape, a length, a shape
    2. read the `in` column                 the share of the sweep inside the band
    3. move the band, or the measurement    — the decision below
    4. re-sweep and read it again
@@ -109,7 +109,7 @@ with the number. Two real examples from building this tool:
   It became an effective COUNT of kinds.
 - `risk.exposure` came back zero across the whole game. Also the measurement:
   R31 grades a cone of ground beside every road, so read at the shoulder the
-  trait was measuring the rule rather than the country.
+  trait was measuring the rule rather than the biome.
 
 **A number borrowed from outside this project does not move to make the tool
 discriminate better.** `scales.ts` lists which ones those are and where each
@@ -130,7 +130,7 @@ score well for the same reasons and are the same road six times.
    2. read the LADDER traits               climb, spread, step, apart, identity,
                                            conditions, cars, formats, quality
    3. find the weak rung                   the note names it by level name
-   4. search for a replacement             make rate COUNT=200 BIOME=<country> LENGTH=<band>
+   4. search for a replacement             make rate COUNT=200 BIOME=<biome> LENGTH=<band>
    5. shortlist on CHARACTER               ARGS="--pick 6", or by hand from the axes
    6. CONFIRM the candidate in the game     see below — this step is not optional
    7. edit pwa/src/game/campaign-locations.ts
@@ -184,7 +184,7 @@ shortlist to a brief instead, and read the score as a pass mark:
 - every rung asks MORE than the one under it, by enough to feel (about 0.035)
   and not so much it is a wall (`ladder.step`'s ceiling)
 - `spread` in the MIDDLE of its band, not on its floor
-- no seed twice in a country, and no two rungs under the same sky
+- no seed twice in a biome, and no two rungs under the same sky
 - as few `make analyze` errors as the slot allows
 
 **That last one is not a tiebreak, and it is the one the rating cannot see.**
@@ -208,7 +208,7 @@ Loop B, on every level being moved:
 - Its blurb is a claim about the road ("one ford", "forty-three calls"), and
   its location's header comment quotes its distance, time and pace. Both are
   now claims about a road that no longer exists.
-- `make previews` — the box and, for a country's first level, the banner.
+- `make previews` — the box and, for a biome's first level, the banner.
 - Everything that PINS A LEVEL ID, below.
 
 **Move levels one at a time, for a reason.** Bumping all eighteen in one
@@ -222,12 +222,12 @@ stands on.
 
 - `make previews` — the campaign's stage boxes and biome banners are generator
   OUTPUT. A re-seeded level leaves a picture of a stage that no longer exists.
-  A country's FIRST level owns its banner, and a banner is a LOOK test the
+  A biome's FIRST level owns its banner, and a banner is a LOOK test the
   rating cannot make: open the JPEG.
 - `npm run sim` for the new stage, and the ladder's times in `campaign.ts`'s
   own header comment if they are quoted there.
 - `tests/campaign_test.ts` if the ladder's shape changed — and note that a
-  country's own invariants live there (the alps start beside the snow and
+  biome's own invariants live there (the alps start beside the snow and
   their sprints come DOWN; the desert has sand and no water), so they are a
   filter on the candidate pool, not a check at the end.
 - **Everything else that PINS A LEVEL ID.** A re-seeded level silently
@@ -261,7 +261,7 @@ Read the DISTRIBUTION, not the mean score. What matters:
 - **A score that went up with no trait moving** is impossible; if you see it,
   the bands moved in the same commit and the comparison is void.
 
-Use the same seed count both times, and the same country, length and shape:
+Use the same seed count both times, and the same biome, length and shape:
 this is a paired comparison and the generator is deterministic, so anything
 else is noise you introduced.
 

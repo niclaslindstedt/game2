@@ -89,7 +89,7 @@ for (const dial of NUMERIC_KNOBS) {
 }
 if (flag("biome") !== undefined) knobs.biome = flag("biome");
 // A campaign stage is built on its location's own dials — the rule book's
-// defaults in that location's COUNTRY (R40).
+// defaults in that location's BIOME (R40).
 const dials = resolveKnobs(level ? campaignKnobs(level) : knobs);
 const size = Number(flag("size") ?? 1200);
 const span = Number(flag("span") ?? 240);

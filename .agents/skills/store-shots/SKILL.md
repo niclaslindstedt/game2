@@ -1,13 +1,13 @@
 ---
 name: store-shots
-description: "Use when regenerating the App Store / Mac App Store / Play Store / Steam screenshot set, changing what it stages, or writing the listing copy that ships beside it — after an art pass, a HUD change, new cars or countries, a rebalance that changes what a race looks like, or a rewrite of the marketing captions. Drives the real game to staged moments at Apple's and Valve's exact rasters, captions them in the game's own type, and holds the result to a bar before it reaches a store listing."
+description: "Use when regenerating the App Store / Mac App Store / Play Store / Steam screenshot set, changing what it stages, or writing the listing copy that ships beside it — after an art pass, a HUD change, new cars or biomes, a rebalance that changes what a race looks like, or a rewrite of the marketing captions. Drives the real game to staged moments at Apple's and Valve's exact rasters, captions them in the game's own type, and holds the result to a bar before it reaches a store listing."
 ---
 
 # Store screenshots and the listing
 
 The store set is **marketing**, not documentation. It is regenerated whenever the
 game stops looking like these frames — new car bodies, a redrawn HUD, a new
-country, a generator change that alters what a stage looks like.
+biome, a generator change that alters what a stage looks like.
 
 The listing beside it is the same job in words:
 [`native/store/listing.mts`](../../../native/store/listing.mts) is the one
@@ -71,7 +71,7 @@ legible. Two frames of a car on gravel from behind is one claim made twice.
 | `pack` | the field is in the way | driven from the grid to taiga-1's first two calls, still nose to tail |
 | `drift` | the drift IS the game | placed before the stage's tightest corner, then driven sideways |
 | `air` | the jumps are real | placed before Bajada's J1, shuttered off the wheels leaving the ground |
-| `country` | the roads are generated | the helicopter over Switchbacks' hairpins, `drawdistance=far` |
+| `biome`   | the roads are generated | the helicopter over Switchbacks' hairpins, `drawdistance=far` |
 | `weather` | the sky is not wallpaper | Summit to Valley's own storm, at dusk, on wet tarmac |
 
 **The seventh, if Apple's ten slots are ever wanted, is `cockpit`** — the
@@ -241,7 +241,7 @@ wrong. Check, in order:
 
 Re-shoot **every** raster (`make store-shots` with no `--only`), confirm the
 count and `0 failed`, and then **look at the set as a set**. Six frames should
-not be six green forests: the three countries are the reason this game does not
+not be six green forests: the three biomes are the reason this game does not
 look like one screenshot, and the set should say so — green, gold, white.
 
 Then `make store-preflight` and read what is still outstanding.

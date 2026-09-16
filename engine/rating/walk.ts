@@ -296,7 +296,7 @@ function findCorners(track: Track, end: number, speed: number[], grade: number[]
  * become "of the kinds you have, are they evenly split", which every dull
  * stage in the sweep also passed. Normalized against the buckets POSSIBLE
  * it marks a taiga stage down for having no sand in it, which is a fact
- * about the country and not about the stage.
+ * about the biome and not about the stage.
  *
  * The effective count is neither: it is a number of things, in units
  * anybody can argue with, and the band beside it is stated in the same

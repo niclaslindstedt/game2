@@ -6,7 +6,7 @@ concepts: [placement, towns, search, determinism]
 ---
 
 A town's shops belong in the MIDDLE of the town, and the town's size is only
-known once the street has been walked: the country refuses lots a street's
+known once the street has been walked: the biome refuses lots a street's
 length cannot predict, and refusals move the cursor on. Every shortcut
 failed on the sweep — assigning kinds by index against the target count put
 a shop at the last lot when the street came up short; assigning them by

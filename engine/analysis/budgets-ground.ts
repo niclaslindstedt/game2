@@ -6,25 +6,25 @@
 
 export const GROUND_BUDGETS = {
   /** The GROUND the stage is laid across — the layers, and whether the
-   * shares of them read as a country. */
+   * shares of them read as a biome. */
   ground: {
-    /** R40 — what a COUNTRY has to come out like, per biome: the shares
+    /** R40 — what a BIOME has to come out like, per biome: the shares
      * that say "this is a taiga" are not the shares that say "this is a
      * desert", and a check that held both to one band would fail the one
      * it was not written for on every seed. */
-    country: {
+    biome: {
       taiga: {
-        /** Share of the analyzed country standing under water. Some water
+        /** Share of the analyzed biome standing under water. Some water
          * is what makes a landscape; a map that is mostly lake is a
          * seascape with a road drawn on it. */
         water: { min: 0.01, max: 0.34 },
         /** Share carrying closed forest. */
         forest: { min: 0.12, max: 0.78 },
         /** Relief: the spread between the 5th and 95th percentile of
-         * ground height across the country, m. Flat is boring, and a wall
+         * ground height across the land, m. Flat is boring, and a wall
          * of mountain either side of the road is a corridor. */
         relief: { min: 18, max: 260 },
-        /** Whether the country is expected to hold shallow water as well
+        /** Whether the biome is expected to hold shallow water as well
          * as deep — the swamp band below is only asked where it is. */
         swamps: true,
         /** The slope past which soil has no business lying, m per m — the
@@ -34,7 +34,7 @@ export const GROUND_BUDGETS = {
          * and thin moss rather than soil. This is the number that separates
          * a glaciated Swedish landscape from a Norwegian one. */
         rock: { min: 0.02, max: 0.55 },
-        /** Share of the country steep enough that a car could not climb it. */
+        /** Share of the biome steep enough that a car could not climb it. */
         cliff: { max: 0.3 },
       },
       desert: {
@@ -44,7 +44,7 @@ export const GROUND_BUDGETS = {
          * and it is nowhere near closed: the band is a ceiling, not a
          * floor. */
         forest: { min: 0, max: 0.2 },
-        /** Worn low, but still country: the dunes alone are a seven-metre
+        /** Worn low, but still biome: the dunes alone are a seven-metre
          * spread, and the ranges behind them are what stops it reading as
          * a table. */
         relief: { min: 10, max: 200 },
@@ -58,7 +58,7 @@ export const GROUND_BUDGETS = {
       },
       alpine: {
         /** Tarns on the shoulders and a lake in the valley — never a
-         * seascape: the country is mostly mountain. */
+         * seascape: the biome is mostly mountain. */
         water: { min: 0.003, max: 0.2 },
         /** A mountain forest below a treeline: closed on the flanks under
          * it, nothing above it, so the share runs lower than the taiga's
@@ -80,7 +80,7 @@ export const GROUND_BUDGETS = {
          *
          * R47 — this is also the check that says a massif is a MOUNTAIN
          * and not a wall, which is what it was too loose to do. At 0.65 it
-         * accepted a country where two thirds of the ground stood steeper
+         * accepted a biome where two thirds of the ground stood steeper
          * than 1:1 — and that is exactly what the ALTITUDE dial built
          * before the relief was capped, because it grew the crest 13-fold
          * while growing the ground under it 2.2-fold. MEASURED over seeds
@@ -99,7 +99,7 @@ export const GROUND_BUDGETS = {
     /** SOIL PLAUSIBILITY: soil is till and washed sediment, so it collects
      * in hollows and is scoured off steep ground. Deep soil standing on a
      * cliff is the layering not being obeyed. The slope past which ground
-     * counts as steep is the country's (`country.soilSteep`); `deep` is the
+     * counts as steep is the biome's (`biome.soilSteep`); `deep` is the
      * soil depth that has no business being there, m. */
     soil: { deep: 1.4, share: 0.06 },
     /** Soil depth under which the ground counts as BARE ROCK, m — moss,
@@ -113,7 +113,7 @@ export const GROUND_BUDGETS = {
     rootReach: 3,
     /** R32 — the SWAMPS: standing water shallower than `deep` metres, which
      * is water you can see the bottom of, grow reeds out of and drive
-     * through. `share` is how much of the country should be that rather
+     * through. `share` is how much of the biome should be that rather
      * than open lake — a band, because a landscape with no shallow water
      * has no reed beds and no mires in it, and one that is all shallow
      * water is a marsh with no horizon. It sits low: a swamp is a feature
@@ -136,16 +136,16 @@ export const GROUND_BUDGETS = {
      * it is measured.
      *
      * The companion question — is the mountain a mountain or a WALL — is
-     * `country.cliff` above, which already had the right shape and only
+     * `biome.cliff` above, which already had the right shape and only
      * needed its ceiling brought down to where it could answer.
      *
      * `near` — how close to the summit counts as summit, as a share of the
-     * country's own spread. A twentieth: on a 1,000 m massif that is the
+     * biome's own spread. A twentieth: on a 1,000 m massif that is the
      * top 50 m, which is a summit ridge and not a shoulder. */
     summit: {
       near: 0.05,
       /** Share of the box standing that close to the top, MEASURED over
-       * alpine seeds 1,3,4,7,11,17 on a 96-cell grid. The tuned country
+       * alpine seeds 1,3,4,7,11,17 on a 96-cell grid. The tuned biome
        * reads 0.1-0.6% and the dialled one 0.2-0.8%, so the band is
        * generous either way and still fails a tableland by a mile: before
        * the summit ledge was cut back to the top of the climb, the flat
@@ -153,18 +153,18 @@ export const GROUND_BUDGETS = {
        * and NOTHING in this metric reported it — the mesa scored 97.5.
        * Held against the shape deliberately: a wide ledge measures 0.600
        * here and scores zero. The floor is the opposite failure — a
-       * country with no ground near its own summit is a spike. */
+       * biome with no ground near its own summit is a spike. */
       share: { min: 0.0004, max: 0.06 },
     },
 
-    /** THE CORRIDOR — the country the road actually runs THROUGH, as
-     * against `relief`, which is the country the stage is set in.
+    /** THE CORRIDOR — the biome the road actually runs THROUGH, as
+     * against `relief`, which is the biome the stage is set in.
      *
      * They are not the same measurement and the difference is the whole
      * point of having both. Every other check in this metric reads the bare
      * geology, and the bare geology can be a mountain range while the
      * ground a driver sees out of the window is a lawn: R31 cuts the
-     * country back to a cone beside every road, so a stage can score full
+     * biome back to a cone beside every road, so a stage can score full
      * marks for relief and still be a ribbon laid across a table with the
      * hills all pushed over the horizon. This one is measured on the
      * terrain field — the ground that is drawn and driven — and it is the
@@ -184,11 +184,11 @@ export const GROUND_BUDGETS = {
      * beside them.
      *
      * ONE-SIDED, and that is the measurement talking. A cutting is where a
-     * road could not go round, and a road that follows the country
+     * road could not go round, and a road that follows the land
      * (`elevation.follow`) mostly can: on seed 3 at the default dials 0.9%
      * of flanks come out as rock, at full steepness 5.6%, and only with the
      * stage fully sealed does it reach a quarter. All three of those are
-     * right — a soft country genuinely has no cuttings in it, and a floor
+     * right — a soft biome genuinely has no cuttings in it, and a floor
      * under this would be a check demanding rock that nature did not put
      * there. What is NOT right is a stage that is all cutting, so the
      * ceiling is where the points are.
@@ -207,9 +207,9 @@ export const GROUND_BUDGETS = {
      * does not is a seed where that broke. */
     cut: { share: { min: 0, max: 0.45 }, slack: 0.15, face: 0.35, walled: 260, walledShare: 0.05 },
 
-    /** R32 — THE COUNTRY IS CURVES. The ground is drawn on a 14 m lattice,
+    /** R32 — THE BIOME IS CURVES. The ground is drawn on a 14 m lattice,
      * and every triangle edge on it is a FOLD the player sees; this holds
-     * the country to folds a curve makes, and a sharp edge to somewhere it
+     * the biome to folds a curve makes, and a sharp edge to somewhere it
      * was asked for.
      *
      * Three kinds of ground, told apart before anything is scored. BUILT
@@ -218,19 +218,19 @@ export const GROUND_BUDGETS = {
      * edge, and this does not score one. SHARP ground is what R32 says is
      * deliberately sharp (`geology.sharpAt`): an alpine crest opened by the
      * steepness dial, an escarpment standing as a cliff. Everything else
-     * is the COUNTRY, and the country is held to `fold`.
+     * is the BIOME, and the biome is held to `fold`.
      *
      * `fold` is the dihedral angle across a lattice edge, degrees, past
      * which a fold is a crease rather than a curve: a hill with a radius
      * of curvature of 80 m turns 10° per cell, so 20° is a radius under
      * 40 m — three cells — which is what a knife-edge crest or a fault
      * step drawn without its worn slope looks like on this lattice, and
-     * what nothing rounded does. `share` is how much of the country may
+     * what nothing rounded does. `share` is how much of the biome may
      * fold past it before the check has lost all its points.
      *
      * MEASURED over seeds 1-8 at the default dials: with the crests drawn
      * as whalebacks and the crease left to the dial, between 0.01% and
-     * 0.2% of the country's edges fold past 20°, against 0.3-1.1% with the
+     * 0.2% of the biome's edges fold past 20°, against 0.3-1.1% with the
      * old crests — and the worst of those was a 100° knife-edge a hundred
      * metres long. `share.tolerated` sits over that healthy population and
      * `share.fail` is where the check has nothing left.
@@ -243,7 +243,7 @@ export const GROUND_BUDGETS = {
      * column before the mountain it was cutting stopped — and it is an
      * error, because no rule stands ground vertical. `wall.fail` is how
      * many such triangles empty the check. `explicit` is the `sharpAt`
-     * past which a fold is that feature's rather than the country's —
+     * past which a fold is that feature's rather than the biome's —
      * low, because `sharpAt` carries the feature's own weight, and a small
      * mountain's crest creases as deliberately as a big one's. */
     crease: {
@@ -263,7 +263,7 @@ export const GROUND_BUDGETS = {
      *
      * A share and not a count, because a bigger map has more of
      * everything; and a small tolerance rather than zero, because the
-     * bare country keeps a few of its own — a hill's scoured flank, a
+     * bare land keeps a few of its own — a hill's scoured flank, a
      * tarn's rim just under the sharp bar, a lattice diagonal reading a
      * curve back steeper than it is. MEASURED over seeds 1-24 at the
      * default dials with the cone letting go, the branch shelves running
@@ -358,7 +358,7 @@ export const GROUND_BUDGETS = {
    * world is fake" fastest; cost carries real weight because a beautiful
    * stage nobody can load is not a stage. */
   /** R45 — THE GRID. The line is PLANNED against the survey (the bare
-   * country, and the route's samples where a road stands over it) and
+   * biome, and the route's samples where a road stands over it) and
    * MEASURED here against what got built, so every slack below is the gap
    * between those two allowed to be a blemish rather than a defect. */
   wires: {
@@ -370,7 +370,7 @@ export const GROUND_BUDGETS = {
     wayleaveStep: 14,
     wayleaveProbe: 3,
     /** How near a road a point has to be before the span over it owes the
-     * road's clearance rather than the country's, m — the widest corridor
+     * road's clearance rather than the biome's, m — the widest corridor
      * plus its verge, with room for the road to have wandered (R33). */
     roadReach: 24,
     /** How much nearer a road than R45 allows a tower may stand before it

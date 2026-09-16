@@ -7,15 +7,15 @@ concepts: [analysis, measurement, budgets, checks, review]
 
 Fixing the alpine's "field of needles" I wrote `ground.summits` — distinct
 local maxima per km² — and it did not separate the cases at all: the broken
-country measured 6.06/3.41/1.81 and the fixed one 3.82/2.62/1.77. A ridged
+biome measured 6.06/3.41/1.81 and the fixed one 3.82/2.62/1.77. A ridged
 fold makes crest LINES, not points, so counting local maxima was measuring the
 wrong object. A roughness ratio was no better (the ranges overlapped across
 seeds). Shipping either would have been a proxy nobody believes, optimised
 against later.
 
 The instrument that did separate them was already there: `ground.cliff` read
-0.123-0.513 on the broken country and 0.014-0.125 on the fixed one. Its alpine
-ceiling was 0.65 — wide enough to accept two thirds of the country standing
+0.123-0.513 on the broken biome and 0.014-0.125 on the fixed one. Its alpine
+ceiling was 0.65 — wide enough to accept two thirds of the biome standing
 steeper than 1:1, which is exactly the defect. **A budget wide enough to
 accept the bug is the commonest reason a whole class of defect goes
 unreported**, and the alpine scored 97.5 as a mesa because of it.

@@ -216,7 +216,7 @@ describe("the rollers", () => {
   // generator; only a sabotaged stage proves the instrument.
   it("sees a barrier standing in the road, solid or not", () => {
     // R17 — the seed is SEARCHED for rather than named: a stage has a
-    // branch only where its country carries a public road for the route to
+    // branch only where its biome carries a public road for the route to
     // leave, and which seeds those are is the land's decision.
     let track = compileStage(26, "medium", { asphalt: 0.4 });
     for (const seed of [26, 41, 46, 3, 1, 2, 5, 8, 13, 21]) {
@@ -257,7 +257,7 @@ describe("the rollers", () => {
       expect(edge, `seed ${seed}`).toBeDefined();
       expect(edge?.budget).toBe(ANALYSIS.rollers.edge.grade);
       // A road whose edges are all walls scores zero; one that runs out into
-      // the country scores near one. Neither end is asserted exactly — the
+      // the biome scores near one. Neither end is asserted exactly — the
       // stage a seed happens to build is not this test's business — but a
       // check that never leaves the floor is measuring nothing.
       expect(edge?.score, `seed ${seed}`).toBeGreaterThan(0.9);
@@ -269,7 +269,7 @@ describe("the rollers", () => {
   // away, this one asks whether it does it in one piece. A stage may
   // legitimately do the first (a road along a hillside) and may never do the
   // second, so the assertion here is absolute where the edge's is a band.
-  it("finds no step in the seam where the road hands over to the country", () => {
+  it("finds no step in the seam where the road hands over to the land", () => {
     for (const seed of SEEDS) {
       const r = report(seed);
       const seam = r.metrics.find((m) => m.id === "rollers")?.checks.find((c) => c.id === "seam");
@@ -314,7 +314,7 @@ describe("the ground's water (R32)", () => {
       const ground = report(seed, { water: 0.6 }).metrics.find((m) => m.id === "ground");
       const swampShare = (ground?.stats.swampShare ?? 0) as number;
       const lakeShare = (ground?.stats.lakeShare ?? 0) as number;
-      // A country with lakes and no shallow water has no reed beds in it.
+      // A biome with lakes and no shallow water has no reed beds in it.
       expect(swampShare, `seed ${seed}`).toBeGreaterThan(0);
       expect(lakeShare, `seed ${seed}`).toBeGreaterThan(0);
       // ...and a swamp is shallow BY DEFINITION, which is the whole basis
@@ -325,7 +325,7 @@ describe("the ground's water (R32)", () => {
     }
   });
 
-  it("does not drown the country at the top of the water dial", () => {
+  it("does not drown the biome at the top of the water dial", () => {
     // The dial has to stay a dial. A position that turns the map into a sea
     // with a causeway across it is not a wet stage, and no dial position
     // should be able to reach one.
@@ -462,7 +462,7 @@ describe("the road's own travel (R34)", () => {
       const perKm = drive?.stats.travelPerKm ?? 0;
       // The simplest honest statement of "this road is not a table", and
       // the one number that moves when the road is laid closer along the
-      // country it crosses (`elevation.follow.lag`).
+      // biome it crosses (`elevation.follow.lag`).
       expect(perKm, `seed ${seed}`).toBeGreaterThan(0);
       expect(perKm, `seed ${seed}`).toBeLessThan(ANALYSIS.drive.rolling.max);
     }
@@ -470,7 +470,7 @@ describe("the road's own travel (R34)", () => {
 
   it("reads the road rather than its jumps", () => {
     // A lip is a metre of climb inside twenty, and a stage with three of
-    // them would otherwise read as rolling country for having ramps on it.
+    // them would otherwise read as rolling biome for having ramps on it.
     // So the measurement has to be blind to them, and the way to prove that
     // is a stage that HAS them: the travel it reports stays inside the band
     // a jumpless one does.
@@ -551,8 +551,8 @@ describe("the jumps", () => {
   });
 });
 
-describe("the country is curves (R32)", () => {
-  it("folds the country like a curve and stands no wall, at the default dials", () => {
+describe("the biome is curves (R32)", () => {
+  it("folds the biome like a curve and stands no wall, at the default dials", () => {
     // Every fold on the drawn lattice past the road's bench, on ground no
     // road shaped and no rule made sharp, inside the tolerated share — and
     // not one triangle standing steeper than rock is ever held at. The
@@ -568,7 +568,7 @@ describe("the country is curves (R32)", () => {
   it("stands nothing the car cannot climb short of rock, at the default dials (R31)", () => {
     // The drawn lattice, every triangle past the road's bench steeper than
     // the physics' own climb limit, less the declared rock faces, the
-    // rock's deliberate edges and the country's own scoured flanks. What
+    // rock's deliberate edges and the biome's own scoured flanks. What
     // this catches is any pass that shapes the ground beside a road and
     // forgets the car has to get back up it: a cone letting go of a
     // hillside, a branch's fill, a stream's bank, a village's rim, a

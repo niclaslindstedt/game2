@@ -361,9 +361,9 @@ export function createClouds(): Clouds {
   const apply = (p: Preset, dressing: SkyDressing): void => {
     const d = p.deck;
     scudding = d !== null;
-    // A country's share thins the FAIR-WEATHER ring only. Under a deck the
+    // A biome's share thins the FAIR-WEATHER ring only. Under a deck the
     // same clusters are the scud torn along beneath it, and a lid is a lid
-    // in any country — a dry thunderstorm is not a half-empty one.
+    // in any biome — a dry thunderstorm is not a half-empty one.
     //
     // …and a day the chart put NOTHING over the stage flies none of them.
     // The ring is this sky's whole answer to what is up there, so a stage

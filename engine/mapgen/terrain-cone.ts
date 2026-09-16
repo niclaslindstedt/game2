@@ -4,12 +4,12 @@
 // always be able to do is come back, so the landscape does not get the
 // last word next to a road: the ground is CUT to a cone opening upward off
 // the road's own underside, flat inside the bench and climbing no faster
-// than the wheels can take outside it, and let go again once the country
+// than the wheels can take outside it, and let go again once the biome
 // has been reached.
 //
 // Everything about the SHAPE of that — the per-side bench grade (R34), the
 // jump lips the corridor has to reach past, the fill's run-out and the
-// cut's, the fade that hands the last of it back to the country, and the
+// cut's, the fade that hands the last of it back to the biome, and the
 // ceiling any one road sample imposes — is settled here, once per stage,
 // before anything asks the field for a height. `terrain.ts` puts the
 // answers to work; `terrain-index.ts` carries the cone into the nearest-
@@ -46,11 +46,11 @@ export function createCone(track: Track) {
   const sideSeed = rng.int(1, 1 << 30);
 
   // The bare landscape the road was laid across (land.ts) — the same
-  // country the branch builder steered by, so nothing here can disagree
+  // biome the branch builder steered by, so nothing here can disagree
   // with where the water is.
   const land = createLandField(track.seed, track.knobs, track.climate);
   const farField = land.heightAt;
-  // R40 — the country: its quilt, its loose surface, what its woods shed.
+  // R40 — the biome: its quilt, its loose surface, what its woods shed.
   const biome = biomeRules(track.knobs.biome);
 
   // Per-side embankment grade along the stage, m per m of distance from the
@@ -69,7 +69,7 @@ export function createCone(track: Track) {
   //
   // A THROUGH-CUT, rock standing up both sides at once, is still built: it
   // is what `tilt` is for, and it happens where the hillside is levelling
-  // off and the country either side of the road is high anyway. It comes
+  // off and the land either side of the road is high anyway. It comes
   // out short, which is exactly what a through-cut is — you pass through
   // one, you do not drive down it.
   //
@@ -139,13 +139,13 @@ export function createCone(track: Track) {
    * corridor a branch has and a cell of slack, because a shelf still
    * standing where the index stops finding the branch ends at a cell
    * boundary instead of where it means to. As long as it can be, so a
-   * fill's run-out has landed on the country long before it is let go. */
+   * fill's run-out has landed on the land long before it is let go. */
   const SPUR_BLEND = SPUR_INDEX_REACH - R.roadWidth.max / 2 - ROAD_CROSS.reach - GROUND_CELL / 2;
-  /** Where a fill's side has LANDED on the country by, m off the route's
+  /** Where a fill's side has LANDED on the land by, m off the route's
    * centerline: the road's reach, so nothing is left for `letGo` to bring
    * down. */
   const LAND_BY = CORRIDOR_RANGE;
-  /** The country under the route's centerline at each sample, m — read
+  /** The land under the route's centerline at each sample, m — read
    * once per sample and kept, because a fill's side is sized off it under
    * every height beside the road (`fillGrade`). Grown as the samples are
    * (endless), so a plain array rather than a typed one. */
@@ -160,9 +160,9 @@ export function createCone(track: Track) {
     return g;
   };
   /** THE GRADE A FILL'S SIDE FALLS AT, m per m, for the sample at `index`
-   * seen from `d` metres off where the country stands at `far`: the verge
+   * seen from `d` metres off where the land stands at `far`: the verge
    * grade (R31 the other way round — a car could drive back up it), and
-   * steeper only where the country itself falls away from under the road
+   * steeper only where the land itself falls away from under the road
    * so fast that a side at the verge grade would never land on it.
    *
    * An embankment's side has to MEET the ground: seed 10's road stood
@@ -170,10 +170,10 @@ export function createCone(track: Track) {
    * and a side falling at the verge's 0.45 ran parallel to that hillside
    * for as far as the road could be found, then dropped the whole twenty
    * metres at the seam where it could not — the analysis's 55° wall. So
-   * the side is sized to land by `LAND_BY`: the country's own fall from the
+   * the side is sized to land by `LAND_BY`: the biome's own fall from the
    * road to here (`hill`, read off the ground under the centerline and the
    * ground at this point) plus what it takes to close the fill's height
-   * over that run. On level country that is the verge grade for any fill
+   * over that run. On level biome that is the verge grade for any fill
    * under forty metres; on a hillside it is the hillside's grade and a
    * little, which is what a fill laid on a hillside stands at. */
   const fillGrade = (index: number, d: number, lip: number, far: number): number => {
@@ -209,15 +209,15 @@ export function createCone(track: Track) {
   const spurEdge = (spur: SpurLine): number => spur.width / 2 + ROAD_CROSS.reach;
   /** THE END OF A ROAD'S REACH, where the road stops being found and its
    * earthworks stop with it: whatever still stands over or under the
-   * country there is brought back onto it at `verge.climbable`, the
-   * steepest a road may build. `room` is how far off the country the
+   * biome there is brought back onto it at `verge.climbable`, the
+   * steepest a road may build. `room` is how far off the land the
    * earthworks may still stand this far short of the reach — nothing at
    * the reach itself, so there is no seam to find — and inside it the
    * run-out is the run-out, untouched.
    *
-   * A fill lands on the country at its own grade and a cut climbs back onto
+   * A fill lands on the land at its own grade and a cut climbs back onto
    * it at its own: the line is the run-out, and it needs no easing. Eased
-   * toward the country from the lip, as every run-out here once was, the
+   * toward the biome from the lip, as every run-out here once was, the
    * easing ADDED its grade to the line's: a smoothstep over a hundred and
    * ten metres releases up to one and a half per cent of the height it is
    * still holding per metre, which on a thirty-metre fill is another 0.4 on
@@ -235,7 +235,7 @@ export function createCone(track: Track) {
   // ── R31: the rideable verge ───────────────────────────────────────────
   // A rally car spends half a stage off the road, and the one thing it must
   // always be able to do is come back. So the landscape does not get the
-  // last word next to a road: whatever the country was doing there, the
+  // last word next to a road: whatever the land was doing there, the
   // ground is CUT to a cone opening upward off the road's own underside.
   // Inside the BENCH the cone is flat, which is what pins the ground
   // lattice under the tarmac; outside it the ground may climb, but only at
@@ -271,7 +271,7 @@ export function createCone(track: Track) {
   /** R31 — where a cone LETS GO: how much of the ground it was cutting it
    * has given back at distance `d`, 0 at the start of the last `verge.fade`
    * metres of its reach and 1 at the reach. A cone is a min, and a min that
-   * is simply not asked past its reach ends in a WALL — the country
+   * is simply not asked past its reach ends in a WALL — the biome
    * standing however high it stands one query cell further out, ruled
    * dead straight along the lattice. Beside a mountain that was fifty
    * metres of vertical rock, two hundred metres from any road, on ground
@@ -343,7 +343,7 @@ export function createCone(track: Track) {
     fadeClimb[n] = climb;
     fadeCount = n + 1;
   };
-  /** What `shapeAt` answered last: the country as the roads shaped it, the
+  /** What `shapeAt` answered last: the biome as the roads shaped it, the
    * ceiling R31 holds it under, and what the cone was doing where it binds
    * — the grade the road it is beside was cut at (R34), and the grade a
    * cone letting go stands the ground at (`fadeGrade`, zero where none
@@ -351,7 +351,7 @@ export function createCone(track: Track) {
    * per query rather than one allocated, because this is under every
    * height the field answers. */
   const shape = { raised: 0, ceiling: 0, cone: Infinity, ownClimb: 0, fadeGrade: 0 };
-  /** How much of a point is a ROAD's ground rather than the country's: 1
+  /** How much of a point is a ROAD's ground rather than the biome's: 1
    * inside a corridor, spent one ground cell past its lip. That reach is
    * the same argument R31's bench is built on — a lattice triangle spans a
    * cell, so a corner within a cell of the corridor is one a triangle can
@@ -391,7 +391,7 @@ export function createCone(track: Track) {
    * height as a flat ceiling instead would cut a metre of trench along the
    * high side of every banked corner. A bridge DECK stands over a ravine on
    * purpose and pins nothing. */
-  // R47 — a bored sample cuts nothing: the country stands over it.
+  // R47 — a bored sample cuts nothing: the land stands over it.
   const ceilingOf = (shape: RibbonSample): number =>
     shape.deck != null || shape.tunnel
       ? Infinity

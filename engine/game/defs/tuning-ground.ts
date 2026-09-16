@@ -34,7 +34,7 @@ export const GROUND_TUNING = {
      * gift is that it is soft: a car that comes down on it or goes over
      * on it is taken by the snow before the shell is.
      *
-     * A SNOWFIELD is the open country under a winter's blanket: not a road
+     * A SNOWFIELD is the open land under a winter's blanket: not a road
      * at all but half a metre and more of snow the car PLOUGHS (the depth
      * and the sink are `CLIMATE.blanket`). It drags at the whole car three
      * times what gravel does, swallows the throttle the way turf does and
@@ -119,7 +119,7 @@ export const GROUND_TUNING = {
       ice: 1.45,
     },
     /** Throttle effectiveness per surface. `nature` is level with graded
-     * stone, and deliberately: what the open country costs is `natureDig`
+     * stone, and deliberately: what the open land costs is `natureDig`
      * below, which is charged on the way UP to speed and released once the
      * car is there. A cut taken here instead would still be charged at the
      * top of every gear, where the box has almost nothing to spare. */
@@ -144,7 +144,7 @@ export const GROUND_TUNING = {
      * a rollover on a sealed road is the one that strips the car — and a
      * GRADED road gives little: a rally road is compacted stone under a
      * loose skin, and a sill scrapes the skin off and meets the base. The
-     * open country and the desert are where a corner sinks in. */
+     * open land and the desert are where a corner sinks in. */
     give: {
       gravel: 0.06,
       sand: 0.35,
@@ -173,7 +173,7 @@ export const GROUND_TUNING = {
       snowfield: 0.2,
       ice: 0.01,
     },
-    /** WHAT THE OPEN COUNTRY TAKES OUT OF THE PULL FROM A STANDSTILL, 0..1
+    /** WHAT THE OPEN BIOME TAKES OUT OF THE PULL FROM A STANDSTILL, 0..1
      * — and it takes it out of the ACCELERATION, never out of the top end.
      * Unconsolidated ground is something a driven wheel DIGS rather than
      * drives: there is torque to spare down there and no road speed under
@@ -181,7 +181,7 @@ export const GROUND_TUNING = {
      * plume of dirt. Faded out entirely by `natureDigSpeed`, where the car
      * is skimming the ground rather than trenching it.
      *
-     * This is the WHOLE of what the open country costs, and the reason it
+     * This is the WHOLE of what the open land costs, and the reason it
      * is shaped as a fade rather than as a flat cut is the gearbox:
      * `gearAccel` is authored to clear drag by a hair at `gearbox.upAt` of
      * each gear's top (cars.ts), so a penalty still being charged up there
@@ -397,7 +397,7 @@ export const GROUND_TUNING = {
      * stormy end would live in the last tenth of the thumb's travel).
      *
      * `calm` is a quarter of an hour — twice a long stage, so the bottom of
-     * the travel is a country where a storm is a thing that MIGHT happen
+     * the travel is a biome where a storm is a thing that MIGHT happen
      * to this run. `often` is under two minutes, which against a front's
      * own length (`approach` + `front` + `core` + `tail`, near three) is a
      * run that is in sand more than it is out of it. The dial at exactly 0
