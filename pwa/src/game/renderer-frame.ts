@@ -776,9 +776,27 @@ export function createFrame(parts: RenderScene, fx: ReturnType<typeof createEven
    *
    * It compiles what is IN the scene, so it belongs after the world, the car
    * and the field are built and after `setConditions` has put the stage's own
-   * light on them — which is where `race-loader.ts` calls it. */
+   * light on them — which is why it is the last step of the load plan in
+   * `app-play.ts`'s `beginLoad`, after the field's cars are in the scene. */
   const warm = (): void => {
     if (!live.game) return;
+    const game = live.game;
+    // EVERY LIGHT COUNT THE RUN CAN REACH, not only the one it starts in.
+    // three.js keys its program cache on how many lights are visible
+    // (`numSpotLights` goes into the cache key and is substituted into the
+    // shader source), and the sky throws the car's light switch on its own
+    // clock — a stage driven through a sunrise, or into a storm heavy enough
+    // to turn the lamps on at noon, puts the beams in or takes them out
+    // MID-CORNER. Warmed only here, that is the whole scene relinking in one
+    // frame, which is the same half-second stall the rest of this function
+    // exists to spend behind the loading card.
+    //
+    // A count already warm is skipped, so most stages pay for one extra pass
+    // and none for more than two.
+    environment.warmLamps(() => {
+      renderer.compile(scene, chase.camera);
+      render(game, 0);
+    });
     // Programs first: this walks the scene and links one for every material
     // in it, which is the half `compile` is for.
     renderer.compile(scene, chase.camera);

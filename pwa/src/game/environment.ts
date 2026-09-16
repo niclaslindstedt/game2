@@ -961,6 +961,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       playThunder = play;
     },
     setGrime: lamps.setGrime,
+    warmLamps: lamps.warmStages,
     setLampsBroken: lamps.setBroken,
     setLampPlan: lamps.setPlan,
     setLighting,

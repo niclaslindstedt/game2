@@ -135,9 +135,23 @@ export type CarLamps = {
    * (`Preset.lamps`). A hidden spotlight leaves the shader as well as the
    * picture (three.js compiles the lit materials against however many lights
    * are visible), so a stage in daylight costs no beams at all, whatever the
-   * row says. The two LIT stops cost the same: dipped is the same beams with
-   * a dipped lamp's optics on them, not fewer of them. */
+   * row says.
+   *
+   * THAT SAVING IS WHY THE SWITCH HAS TO BE WARMED. Moving it moves the
+   * count, and three.js keys its program cache on that number — so the first
+   * sunrise driven through would relink every lit material in the scene
+   * mid-corner. `warmStages` pays for that behind the loading card instead;
+   * nothing else in the game moves a light in or out of a frame. */
   setStage: (stage: LampStage) => boolean;
+  /** Stand the beams at every DISTINCT COUNT the switch can reach other than
+   * the one they are at, calling `draw` on each so the caller can compile
+   * and paint a throwaway frame against it, then put them back.
+   *
+   * By count rather than by stop: what a program is keyed on is how many
+   * spotlights are visible, and on most LIGHTING rows main and dipped throw
+   * the same number of them (they differ in OPTICS, not in count) — only the
+   * top row lights driving lamps that dipping puts out. */
+  warmStages: (draw: () => void) => void;
   /** How far off the nearest car this one could put its beams on, m —
    * `Infinity` for an empty road. Main beam is for a road with nobody on it:
    * inside this car's own reach the driver dips, because past the end of the
@@ -206,6 +220,11 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
   // the whole daylight signal.
   const brakelights = Array.from({ length: TAIL_POOL }, () => beam(0xff1b0c));
 
+  /** Every stop the switch has, for the warm-up walk. */
+  const LAMP_STOPS: readonly LampStage[] = ["off", "dipped", "main"];
+  /** Whether the switch is being held at a stop for the warm-up. */
+  let pinned = false;
+
   let beams = LAMP_BEAMS.full;
   /** What the CONDITIONS ask for (`Preset.lamps`, the sky's say) and what
    * the car is actually running under it — never brighter, and a stop lower
@@ -229,10 +248,22 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
    * the car actually carries. */
   const thrown = (cap: number, plan: readonly LampSource[]): number => Math.min(cap, plan.length);
 
+  /** How many spotlights the car currently stands in the scene — counted off
+   * the pools rather than recomputed from the plans, so it cannot drift from
+   * what `applyLamps` actually did and therefore from what three.js keys its
+   * program cache on. */
+  const litBeams = (): number =>
+    [...headlights, ...taillights, ...brakelights].filter((light) => light.visible).length;
+
   /** Re-settle the stop and re-dress the beams if it moved. Reports whether
    * it did, because a car that has just dipped is a car whose LENSES and
    * whose blooms have changed too, and only the renderer can push those. */
   const restage = (): boolean => {
+    // Held while the warm-up walks the stops: the throwaway frame it draws at
+    // each one is a WHOLE frame, relight and all, so an unpinned switch would
+    // settle straight back to what the sky is asking for and the warm-up
+    // would compile the same light count three times.
+    if (pinned) return false;
     const next = dipFor(ceiling, company, beamReach(headPlan), stage);
     if (next === stage) return false;
     stage = next;
@@ -347,6 +378,34 @@ export function createCarLamps(scene: THREE.Scene): CarLamps {
     setStage: (next) => {
       ceiling = next;
       return restage();
+    },
+    warmStages: (draw) => {
+      const was = stage;
+      pinned = true;
+      // The count the scene already stands at is warm by definition — it is
+      // the one the caller's own frame is about to be drawn against.
+      const warmed = new Set([litBeams()]);
+      try {
+        for (const next of LAMP_STOPS) {
+          stage = next;
+          applyLamps();
+          const count = litBeams();
+          if (warmed.has(count)) continue;
+          warmed.add(count);
+          draw();
+        }
+      } finally {
+        // A throw out of the caller's frame — a context lost under the
+        // loading card — must not leave the switch held: pinned lamps are
+        // lamps that never come on again for the whole run.
+        pinned = false;
+        stage = was;
+        // The sky may have asked for a different stop while the walk had the
+        // switch held (every frame drawn in there relights). Settle it rather
+        // than only re-dressing, so the stop the run starts on is the one the
+        // sun actually wants.
+        if (!restage()) applyLamps();
+      }
     },
     setCompany: (metres) => {
       company = metres;
