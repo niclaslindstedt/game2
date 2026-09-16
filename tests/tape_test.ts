@@ -30,6 +30,7 @@ const STAGE: TapeStage = {
   laps: 1,
   knobs: {
     biome: "taiga",
+    version: DEFAULT_KNOBS.version,
     peaks: 0.5,
     altitude: DEFAULT_KNOBS.altitude,
     dunes: DEFAULT_KNOBS.dunes,

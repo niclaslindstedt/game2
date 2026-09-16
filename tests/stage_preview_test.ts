@@ -26,8 +26,22 @@ import { ROUTE_STROKE, biomeShot, routeShape } from "../pwa/src/game/stage-previ
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** What to run when this file fails, since the fix is never an edit here. */
-const REGENERATE = "run `make previews`";
+/** What to run when this file fails, since the fix is never an edit here.
+ *
+ * With a level naming the generator that built it (`mapgen/versions.ts`),
+ * a stale route is TWO different failures wearing one message, and they
+ * have opposite fixes:
+ *
+ *   * the LEVEL moved — a new seed, band, season, or a deliberate move onto
+ *     a newer generator version. Regenerate; the picture was meant to
+ *     change.
+ *   * the RULES moved under a level that did not. The route is collateral:
+ *     seed 30 is no longer the road that was rated, timed and blurbed.
+ *     Regenerating hides it. Add a version in `engine/mapgen/versions.ts`
+ *     and keep the old behaviour on the old row, or move the levels onto
+ *     the new version as a curation (`level-rating`, Loop B) — and then
+ *     regenerate. */
+const REGENERATE = "run `make previews` — but read this file's header first";
 /** The banners need a build and a Chromium, so they are worth naming apart. */
 const REBANNER = "run `make build && make biomes`";
 
@@ -63,6 +77,11 @@ describe("stage routes", () => {
           // R48 — the season is part of the road, not the dressing: below
           // freezing the route may cross a lake that is water in summer.
           season: level.season,
+          // ...and WHICH GENERATOR built it. This is the cheap half of the
+          // staleness check and it covers all eighteen: a level MOVED to a
+          // newer generator is a new road under an old picture, and the
+          // recompile below only looks at three of them.
+          version: level.version,
         });
       }
     }
@@ -97,6 +116,12 @@ describe("stage routes", () => {
     // EVERY route, so checking two catches it as surely as checking twelve
     // and does not put ten seconds of `compileStage` (seed 5 at xlong) on
     // the suite's path.
+    //
+    // THIS IS THE CASE THAT NOTICES A GENERATOR CHANGE REACHING THE
+    // CAMPAIGN, and it is the enforcement behind the version scheme: the
+    // pin in `campaign-locations.ts` is a label until something compiles
+    // the road and compares the bytes. When this goes red, the question is
+    // which of the two failures in REGENERATE's note it is.
     //
     // Compared as the ENCODED BYTES, through the very function the tool
     // writes them with. An earlier version of this case compared only the

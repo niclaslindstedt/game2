@@ -44,6 +44,7 @@ import {
   type BiomeId,
   type Difficulty,
   type FiniteStageLength,
+  type GeneratorVersion,
   type StageKnobs,
   type StageLength,
   type StageShape,
@@ -58,6 +59,18 @@ export type CampaignLevel = {
   name: string;
   seed: number;
   length: FiniteStageLength;
+  /** WHICH GENERATOR built this road (`mapgen/versions.ts`). Required, and
+   * required on every level rather than on the location, because it is the
+   * one thing about a campaign stage that a change somewhere else can take
+   * away: the rules ARE the stage, so a level that does not name the rules
+   * it was curated under is a level that silently becomes another road.
+   *
+   * Moving one is a CURATION, not an edit — the road changes, so the rating,
+   * the sim times, the route in the menu, the banner behind the country and
+   * the blurb on the box all have to be made true again. `level-rating`'s
+   * Loop B is that job. Bumping all eighteen in one commit because the
+   * suite went red is the exact thing this field exists to prevent. */
+  version: GeneratorVersion;
   /** R22 — sprint (a stage from a start to a finish) or circuit (a closed
    * lap, raced over `laps`). Defaults to sprint. */
   shape?: StageShape;
@@ -124,6 +137,7 @@ export function levelForRoad(
       if (level.seed !== seed || level.length !== length) continue;
       if ((level.shape ?? "sprint") !== shape) continue;
       const built = levelKnobs(location.biome, level);
+      if (knobs.version !== built.version) continue;
       if (!NUMERIC_KNOBS.every((key) => knobs[key] === built[key])) continue;
       return level;
     }
@@ -150,10 +164,12 @@ export function campaignKnobs(level: CampaignLevel): StageKnobs {
 }
 
 /** ...with the country handed in, for the callers that already know which
- * one it is. The biome goes on LAST: a location is a country (R40), and a
- * level cannot be built somewhere else. */
+ * one it is. The biome and the generator's version go on LAST: a location
+ * is a country (R40) and a level cannot be built somewhere else, and the
+ * version is the level's own field rather than one of the dials it may
+ * write — `knobs: { version }` is not a thing a level gets to say. */
 function levelKnobs(biome: BiomeId, level: CampaignLevel): StageKnobs {
-  return resolveKnobs({ ...DEFAULT_KNOBS, ...level.knobs, biome });
+  return resolveKnobs({ ...DEFAULT_KNOBS, ...level.knobs, biome, version: level.version });
 }
 
 /** THE RUNG ORDER, and it is the same in all three countries: a sprint, a

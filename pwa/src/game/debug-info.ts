@@ -117,6 +117,7 @@ function stageBox(ctx: DebugContext, state: GameState): DebugBox {
   // guessing which `w` is the water and which is the width.
   const dials = [
     ctx.stage.knobs.biome,
+    `gen v${ctx.stage.knobs.version}`,
     ...NUMERIC_KNOBS.map((key) => `${key} ${ctx.stage.knobs[key].toFixed(2)}`),
   ].join(" · ");
   return {
@@ -282,6 +283,11 @@ export function stageParams(stage: DebugStage): URLSearchParams {
   });
   for (const key of NUMERIC_KNOBS) params.set(key, stage.knobs[key].toFixed(3));
   params.set("biome", stage.knobs.biome);
+  // ...and WHICH GENERATOR built it. Written on every line rather than only
+  // where it is not the current one: a repro is a link somebody follows on
+  // another tree, and a line that leaves it out rebuilds whatever that tree
+  // generates today, which is the one thing a repro must not do.
+  params.set("genversion", String(stage.knobs.version));
   params.set("season", stage.season);
   if (stage.temperature != null) params.set("temp", String(stage.temperature));
   // Only where somebody is actually out there: a stage driven alone is the

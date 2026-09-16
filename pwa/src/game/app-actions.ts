@@ -295,7 +295,8 @@ export function useRunActions(store: RunStore) {
     const apron = apronForGrid(spec.cars ?? 1);
     const key = spec.arena
       ? `arena/${spec.seed}`
-      : `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/${NUMERIC_KNOBS.map((knob) => spec.knobs[knob]).join(",")}` +
+      : `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/v${spec.knobs.version}` +
+        `/${NUMERIC_KNOBS.map((knob) => spec.knobs[knob]).join(",")}` +
         // The climate is part of the ROAD (climate.ts): the same seed in
         // winter is the same route made of snow, and that is a different
         // compiled track.

@@ -13,7 +13,7 @@
 // menu's own row. That separation is the whole design — a place to learn a
 // car in stops being one the moment it starts keeping score.
 
-import { ARENA_SEED, DEFAULT_HOUR } from "@engine";
+import { ARENA_SEED, CURRENT_GENERATOR_VERSION, DEFAULT_HOUR } from "@engine";
 
 import type { CampaignLevel, CampaignLocation } from "./campaign.ts";
 
@@ -28,6 +28,13 @@ export const TRAINING_LEVEL: CampaignLevel = {
   // A ribbon a hundred metres long, and the level is what stands at the end
   // of it. The band is the shortest there is because nothing reads it here.
   length: "short",
+  // ALWAYS THE CURRENT GENERATOR, and the one level in the game that should
+  // be: the arena is hand-built rather than generated (`mapgen/arena.ts`),
+  // so there is no curated road for an old version to preserve — a training
+  // ground is meant to be whatever the game is today. Pinning it would
+  // also keep a legacy row alive forever, which is what the pruning rule in
+  // `tests/generator_version_test.ts` exists to stop.
+  version: CURRENT_GENERATOR_VERSION,
   // Fixed conditions, on purpose: a car is judged against the last car you
   // drove here, and a low sun or a wet surface would make that judgement
   // about the weather instead.

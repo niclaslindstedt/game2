@@ -104,6 +104,10 @@ export function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a.shape === b.shape &&
     a.laps === b.laps &&
     a.knobs.biome === b.knobs.biome &&
+    // WHICH GENERATOR built it. A campaign level pins one (`versions.ts`),
+    // so the same seed at two versions is two different roads and the run
+    // has to be rebuilt between them.
+    a.knobs.version === b.knobs.version &&
     NUMERIC_KNOBS.every((key) => a.knobs[key] === b.knobs[key]) &&
     a.carId === b.carId &&
     a.gearbox === b.gearbox &&

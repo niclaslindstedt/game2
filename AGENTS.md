@@ -74,6 +74,7 @@ Rules that apply to every task, before any subject skill has a say. They are res
 
 - **Lint, typecheck and format ONCE, at the gate — not after every edit.** `make fmt` and `make lint` are the commit's gate (the `commit` skill owns the split). Re-running them between one edit and the next re-checks code nobody touched and tells you nothing; batch the whole coherent change, then check it. Mid-loop, if a specific answer is genuinely needed, check only the files you touched (`npx eslint <paths>`, `npx tsc --noEmit -p pwa/tsconfig.json`) — never a whole-repo pass, and never `prettier`, whose every finding `make fmt` fixes at the end for free.
 - **TEST WHAT YOU WROTE; THE PR TESTS THE REST.** Run the suites that cover the change and the ones it plausibly reaches, by file, and push — a red PR is a normal state and a follow-up commit costs nothing, where ten minutes of local suite before every push costs ten minutes every time. Two things to be honest about: a change to `TUNING`, `car.ts`, `sim/` or the generator reaches tests three directories away (a drift retune has gone red in `tape_test`, `water_test` and `analysis_test` at once), so name the topics generously for those; and a red PR is work NOW, not something to leave sitting.
+- **A GENERATOR CHANGE THAT MOVES WHAT A SEED BUILDS OWES A VERSION.** The campaign's eighteen roads were curated; the rules are what makes them those roads, so a rules change re-rolls the ladder under its own levels unless something stops it. Add a row to `engine/mapgen/versions.ts`, keep the old behaviour on the old row as a trait read through `generatorTraits(knobs.version)`, and move the levels onto the new version DELIBERATELY, one at a time, as `level-rating`'s curation (re-rate, re-time, `make previews`, re-blurb) — never by regenerating the previews to make a red suite green. **And delete a version no campaign level names any more**, row and trait branches together: backward compatibility is owed to the committed roads and to nothing else, and `tests/generator_version_test.ts` refuses both halves. Full contract: `docs/track-generator.md`.
 - **THIS REPOSITORY IS PUBLIC — no personal details go in it.** Team ids, account names, tokens, keys, device ids, e-mail addresses, absolute paths under a home directory: none of them are committed, not even the ones that are identifiers rather than secrets, and not as a "default" a contributor can override. Everything of that kind is read from the ENVIRONMENT — a gitignored `.env` beside the tree that needs it (with the committed `.env.example` documenting where the value comes from and what shape it is), and GitHub repository **secrets** for credentials or **variables** for identifiers on CI. Code that needs such a value reads it, checks it early, and fails with a message naming the file to put it in; it never invents one. The published app's own identifiers (`APP_NAME`, the bundle id) are the deliberate exception — they are the product's public name, and they live in `pwa/src/identity.ts`.
 - **Every work session ends by committing its work with the `commit` skill.** Once the requested change and its gates are complete, load and follow that skill to make a conventional commit; when working in a worktree, follow its required sync step afterward.
 
@@ -123,6 +124,7 @@ By area first. Each row's skill owns the file-by-file map inside that area — g
 | Rolling, tripping, going over          | `engine/game/roll.ts`                  | `crash`              |
 | Hitting things, damage, the wreck      | `engine/game/collision.ts`             | `collision`          |
 | The stage generator and its ground     | `engine/mapgen/`                       | `mapgen-improvement` |
+| WHICH generator a road is built by     | `engine/mapgen/versions.ts`            | `mapgen-improvement` |
 | How a stage is scored for DEFECTS      | `engine/analysis/`                     | `mapgen-improvement` |
 | Whether a stage is a good RALLY stage  | `engine/rating/`                       | `level-rating`       |
 | Which stages become campaign levels    | `pwa/src/game/campaign.ts`             | `level-rating`       |
@@ -167,6 +169,7 @@ And the pieces that belong to no skill in particular:
 
 Each of these is the one place an answer is written down. Anything that needs it ASKS; a second copy is a bug the day one of them moves.
 
+- **WHICH GENERATOR BUILT A ROAD** — `engine/mapgen/versions.ts`. `CURRENT_GENERATOR_VERSION` is the rules in this tree and is what everything but a campaign level gets; a level names its own and keeps it. Never write the number down a second time — the eighteen literals in `campaign-locations.ts` are eighteen separate decisions, not one constant spelled out.
 - **What a car CAN do** — `engine/game/limits.ts`, read by `car.ts` AND `sim/bot.ts`. Never restate a ceiling.
 - **What the speedo reads** — `travelSpeed` in `engine/game/state.ts`: speed through space, vertical included. `snapshot.ts` and `car-instruments.ts` both read it and neither restates it.
 - **Whether the car has fully come back** — `CarState.planted` (four wheels, level), written at `car.ts`'s `air.leanFree` branch and read by the roll camera.
@@ -191,7 +194,7 @@ Each of these is the one place an answer is written down. Anything that needs it
 | When this changes                     | Update this                                                    |
 | ------------------------------------- | -------------------------------------------------------------- |
 | Handling model / tuning               | `docs/driving.md`                                              |
-| Generator rules (`mapgen/rules.ts`)   | `docs/track-generator.md` (verbatim), then `make previews`     |
+| Generator rules (`mapgen/rules.ts`)   | `docs/track-generator.md` (verbatim), then `make previews` — and, where the change moves what a seed BUILDS, `engine/mapgen/versions.ts` first (see below) |
 | A campaign level (`campaign.ts`)      | `make previews` — the boxes and banners are generator output; re-audit with `make rate CAMPAIGN=1` and re-time with `npm run sim` |
 | Bot, sim harness, rival skill model   | `docs/simulation.md`                                           |
 | The sound bank, the beds, or a score  | `docs/audio.md`                                                |

@@ -7,9 +7,14 @@
 //
 // It is the leaf of the rule book: the chapters under `rules-*.ts` and the
 // dial readings in `rules-country.ts` all import it, and it imports nothing
-// but the countries.
+// but the countries and the generator's own versions.
 
 import { isBiomeId, type BiomeId } from "./biomes.ts";
+import {
+  CURRENT_GENERATOR_VERSION,
+  isGeneratorVersion,
+  type GeneratorVersion,
+} from "./versions.ts";
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -27,10 +32,17 @@ export type SegmentFeature = "none" | "jump" | "water" | "crest" | "tunnel";
  * the road in a pipe (R12). */
 export type Crossing = "ford" | "timber" | "concrete" | "culvert";
 
-/** The generator's DIALS — four numbers, each 0..1, that a player (or the
- * tooling) turns to ask for a different kind of stage. They never break a
- * rule: they move the ranges the rules draw from, and 0.5 on every dial is
- * the stage this generator built before they existed. */
+/** WHAT A SEED IS BUILT WITH — everything besides the seed, the length band
+ * and the shape that decides which road comes out, and therefore the one
+ * object `mapgen/` passes everywhere.
+ *
+ * Most of it is DIALS: numbers, each 0..1, that a player (or the tooling)
+ * turns to ask for a different kind of stage. They never break a rule — they
+ * move the ranges the rules draw from, and 0.5 on every dial is the stage
+ * this generator built before they existed. The two that are not dials are
+ * the COUNTRY, which is a name rather than a position, and the VERSION,
+ * which is not the player's at all; both are at the bottom of the list and
+ * both are outside `NUMERIC_KNOBS`. */
 export type StageKnobs = {
   /** How hilly: the rolling road profile's amplitude and the landscape's
    * relief around it. 0 is a plain, 1 is mountain country. */
@@ -149,12 +161,27 @@ export type StageKnobs = {
    * which set of ranges — the taiga's lakes and spruce, or the desert's
    * dunes and saguaros — the other five are read against. */
   biome: BiomeId;
+  /** WHICH GENERATOR builds it (`versions.ts`) — not a dial at all, and
+   * the reason this type is really "everything besides the seed, the band
+   * and the shape that decides which road comes out".
+   *
+   * It rides here because the dials are the one object that already
+   * reaches every corner of `mapgen/`: the search, the compiler, the
+   * geology, the land field and the terrain are all handed them, so a
+   * rule that has to build the old way can ask without a parameter being
+   * threaded through nine modules to reach it.
+   *
+   * `CURRENT_GENERATOR_VERSION` everywhere except a campaign level, which
+   * names the version its road was curated under and keeps it until
+   * somebody moves it on purpose. */
+  version: GeneratorVersion;
 };
 
 /** The numeric dials — everything in `StageKnobs` that is a position on a
- * band rather than the name of a country. What the menus put a row of
- * stops under and the URL readers parse as a number. */
-export type NumericKnob = Exclude<keyof StageKnobs, "biome">;
+ * band rather than the name of a country or the version that built it.
+ * What the menus put a row of stops under and the URL readers parse as a
+ * number. */
+export type NumericKnob = Exclude<keyof StageKnobs, "biome" | "version">;
 
 export const NUMERIC_KNOBS: readonly NumericKnob[] = [
   "elevation",
@@ -212,6 +239,9 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // what is below it is a beach — a quarter of the dial for the country a
   // rally is actually laid across.
   dunes: 0.22,
+  // The rules as they stand in this tree. A campaign level overrides it
+  // with the version its road was curated under; nothing else does.
+  version: CURRENT_GENERATOR_VERSION,
 };
 
 export function clamp01(v: number): number {
@@ -238,6 +268,11 @@ export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
     peaks: clamp01(knobs?.peaks ?? DEFAULT_KNOBS.peaks),
     altitude: clamp01(knobs?.altitude ?? DEFAULT_KNOBS.altitude),
     dunes: clamp01(knobs?.dunes ?? DEFAULT_KNOBS.dunes),
+    // A version this build no longer carries — a link from a tree where the
+    // row was still alive, a save from before it was pruned — builds on the
+    // CURRENT rules. That is a different road from the one it asked for, and
+    // deliberately so: the rules that made the old one are gone.
+    version: isGeneratorVersion(knobs?.version) ? knobs.version : CURRENT_GENERATOR_VERSION,
   };
 }
 

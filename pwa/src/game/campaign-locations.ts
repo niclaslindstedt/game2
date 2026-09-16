@@ -4,6 +4,13 @@
 // not authored — so a location is a short table of them with the banner
 // and the name the menu shows. Curating one is the `level-rating` skill's
 // loop, and the numbers here are its output.
+//
+// EVERY LEVEL NAMES THE GENERATOR THAT BUILT IT (`mapgen/versions.ts`), and
+// it is written out eighteen times rather than shared from a constant on
+// purpose: a shared one is a single edit that re-rolls the whole campaign,
+// which is the implicit move this field exists to make impossible. A level
+// moves to a newer generator one at a time, as a curation — see the field's
+// own note in `campaign.ts`.
 
 import type { CampaignLocation } from "./campaign.ts";
 
@@ -51,6 +58,7 @@ const TAIGA: CampaignLocation = {
       name: "Broad Ford",
       seed: 30,
       length: "short",
+      version: 1,
       hour: 13,
       weather: "clear",
       season: "summer",
@@ -63,6 +71,7 @@ const TAIGA: CampaignLocation = {
       name: "Morning Loop",
       seed: 11,
       length: "medium",
+      version: 1,
       shape: "circuit",
       hour: 7,
       weather: "clear",
@@ -78,6 +87,7 @@ const TAIGA: CampaignLocation = {
       name: "Turbine Road",
       seed: 48,
       length: "medium",
+      version: 1,
       hour: 15,
       weather: "rain",
       season: "spring",
@@ -90,6 +100,7 @@ const TAIGA: CampaignLocation = {
       name: "Village Loop",
       seed: 46,
       length: "long",
+      version: 1,
       shape: "circuit",
       hour: 19,
       weather: "storm",
@@ -101,6 +112,7 @@ const TAIGA: CampaignLocation = {
       name: "Hunter's Line",
       seed: 45,
       length: "long",
+      version: 1,
       hour: 22,
       weather: "rain",
       season: "autumn",
@@ -111,6 +123,7 @@ const TAIGA: CampaignLocation = {
       name: "The Long Dark",
       seed: 1,
       length: "xlong",
+      version: 1,
       hour: 23,
       weather: "storm",
       season: "autumn",
@@ -144,6 +157,7 @@ const DESERT: CampaignLocation = {
       name: "Bajada",
       seed: 33,
       length: "short",
+      version: 1,
       hour: 12,
       weather: "clear",
       season: "summer",
@@ -154,6 +168,7 @@ const DESERT: CampaignLocation = {
       name: "Blacktop Ring",
       seed: 43,
       length: "medium",
+      version: 1,
       shape: "circuit",
       hour: 22,
       weather: "clear",
@@ -165,6 +180,7 @@ const DESERT: CampaignLocation = {
       name: "Arroyo",
       seed: 16,
       length: "medium",
+      version: 1,
       hour: 17.5,
       weather: "clear",
       season: "spring",
@@ -175,6 +191,7 @@ const DESERT: CampaignLocation = {
       name: "Cold Dawn",
       seed: 4,
       length: "long",
+      version: 1,
       shape: "circuit",
       hour: 4,
       weather: "clear",
@@ -186,6 +203,7 @@ const DESERT: CampaignLocation = {
       name: "Haboob",
       seed: 11,
       length: "long",
+      version: 1,
       hour: 18,
       weather: "storm",
       season: "autumn",
@@ -196,6 +214,7 @@ const DESERT: CampaignLocation = {
       name: "Dune Sea",
       seed: 23,
       length: "xlong",
+      version: 1,
       hour: 23,
       weather: "storm",
       season: "summer",
@@ -231,6 +250,7 @@ const ALPINE: CampaignLocation = {
       name: "The Col",
       seed: 17,
       length: "short",
+      version: 1,
       knobs: ALPINE_KNOBS,
       hour: 12,
       weather: "clear",
@@ -242,6 +262,7 @@ const ALPINE: CampaignLocation = {
       name: "First Light",
       seed: 30,
       length: "medium",
+      version: 1,
       shape: "circuit",
       knobs: ALPINE_KNOBS,
       hour: 4,
@@ -254,6 +275,7 @@ const ALPINE: CampaignLocation = {
       name: "Switchbacks",
       seed: 27,
       length: "medium",
+      version: 1,
       knobs: ALPINE_KNOBS,
       hour: 23,
       weather: "rain",
@@ -265,6 +287,7 @@ const ALPINE: CampaignLocation = {
       name: "Ridge Ring",
       seed: 41,
       length: "long",
+      version: 1,
       shape: "circuit",
       knobs: ALPINE_KNOBS,
       hour: 17.5,
@@ -277,6 +300,7 @@ const ALPINE: CampaignLocation = {
       name: "Cloud Line",
       seed: 3,
       length: "long",
+      version: 1,
       knobs: ALPINE_KNOBS,
       hour: 21,
       weather: "storm",
@@ -288,6 +312,7 @@ const ALPINE: CampaignLocation = {
       name: "Summit to Valley",
       seed: 38,
       length: "xlong",
+      version: 1,
       knobs: ALPINE_KNOBS,
       hour: 23,
       weather: "storm",

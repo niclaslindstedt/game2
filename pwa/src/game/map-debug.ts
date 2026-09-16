@@ -56,6 +56,7 @@ function stageBox(stage: DebugStage, track: Track, build: string): DebugBox {
   // read off a screenshot must not depend on guessing which is which.
   const dials = [
     stage.knobs.biome,
+    `gen v${stage.knobs.version}`,
     ...NUMERIC_KNOBS.map((key) => `${key} ${stage.knobs[key].toFixed(2)}`),
   ].join(" · ");
   return {
