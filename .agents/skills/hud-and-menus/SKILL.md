@@ -108,7 +108,14 @@ make glyphs                                                 # the menu's marks
 make health                                                 # the condition schematic
 ```
 
-Then run `ui-review`'s audit at the reference viewports (desktop landscape and
-phone portrait, and rotation is its own case). A HUD change is not finished
-until it has been LOOKED at on a phone-shaped viewport — the failure mode here
-is always overlap, clipping or a control under a thumb that already has a job.
+Then run `ui-review`'s audit at the reference viewports — desktop landscape
+and PHONE LANDSCAPE. A HUD change is not finished until it has been LOOKED at
+on a phone-shaped viewport: the failure mode here is always overlap, clipping
+or a control under a thumb that already has a job.
+
+**Photographing a phone in portrait gets the rotate cover, not the HUD.**
+`orientation.ts` bars the upright layout (`PORTRAIT_ALLOWED = false`), so a
+portrait shot of a run comes back as TURN YOUR DEVICE however the surface
+under it is laid out. The whole `@media (orientation: portrait)` HUD is still
+in `styles.css` behind that switch, so portrait CSS is still worth getting
+right — it just cannot be judged by a screenshot until the switch goes back.
