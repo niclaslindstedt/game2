@@ -9,9 +9,16 @@
 //                here once it has been FINISHED, because a time is something
 //                you chase on a road you have already driven to the end.
 //                Then the same car card.
+//   Heads up   → the campaign's stage and field with the championship off.
 //   Roam       → any seed at all, previewed as the map itself (menu-roam).
+//   Training   → the hand-built training ground (training.ts).
 //   Options    → the dozen knobs, and the keyboard's and the controller's
 //                bindings behind two of them (menu-options).
+//
+// NOT EVERY BUILD OFFERS ALL OF THEM. Roam and the training ground ride
+// feature flags (`features.ts`), and the front door draws the entries this
+// build actually ships — the pages behind them are untouched, so a flag
+// coming back on is a build rather than an excavation.
 //
 // Picking a stage does not start it: both grids hand off to the pre-race
 // card, which is where the car and the gearbox are chosen and where START
@@ -20,11 +27,11 @@
 //
 // The pages are a plain tagged union rather than a router: there is no URL
 // to keep in step, and the whole menu is one component tree over one canvas.
+// This file is the ROUTER and the campaign's own pages; every other page is
+// a module beside it (menu-root.tsx is the front door itself).
 
 import { useEffect, useRef, useState } from "react";
 
-import { APP_NAME, REPO_URL } from "../identity.ts";
-import { MarkTracks } from "./mark-tracks.tsx";
 import { ordinal } from "../lib/util.ts";
 import {
   LOCATIONS,
@@ -48,17 +55,18 @@ import {
   type CampaignLocation,
   type CampaignProgress,
 } from "./campaign.ts";
-import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
+import { Glyph } from "./menu-glyphs.tsx";
 import { LevelGrid, LocationList } from "./menu-levels.tsx";
 import { StandingsModal, warmStandings, type StandingsRow } from "./results-table.tsx";
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
 import { ReplaysPage } from "./menu-replays.tsx";
 import type { ReplayMeta } from "./replay.ts";
-import { TRAINING_ID, TRAINING_LEVEL, TRAINING_LOCATION, isTraining } from "./training.ts";
+import { TRAINING_LEVEL, TRAINING_LOCATION, isTraining } from "./training.ts";
 import { DebugLogPage, DeveloperPage, UnlockPage } from "./menu-dev.tsx";
 import { BenchmarkHistoryPage } from "./menu-bench.tsx";
 import { HeadsUpPage } from "./menu-headsup.tsx";
+import { RootPage, campaignEntry } from "./menu-root.tsx";
 import { DifficultyPicker, MenuHead, gridSize, type PlayMode, type RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsSub } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
@@ -150,129 +158,6 @@ export type MainMenuProps = {
    * hands over the listing; App reads the tape off the store. */
   onWatchReplay: (meta: ReplayMeta) => void;
 };
-
-/** The build, bottom right, linking to the exact commit it was cut from.
- * A build with no commit behind it (a working tree, `git` unavailable) says
- * so and links nowhere — a dead link is worse than an honest label. */
-function VersionStamp() {
-  const label = `v${__APP_VERSION__}`;
-  const sha = __COMMIT_SHA__;
-  if (!sha || sha === "dev") {
-    return <span className="menu-version menu-version-dev">{label} · dev</span>;
-  }
-  return (
-    <a
-      className="menu-version"
-      href={`${REPO_URL}/commit/${sha}`}
-      target="_blank"
-      rel="noreferrer noopener"
-      title="Open this build's commit on GitHub"
-    >
-      {label} · {sha}
-    </a>
-  );
-}
-
-/** Where the CAMPAIGN tile lands. A page listing ONE biome is a press
- * that asks nothing — so while there is only one, the tile opens it and the
- * list is skipped. The rule is read off the catalog rather than hardcoded:
- * the day a second biome ships, the list comes back on its own, and
- * `parentOf` reads the same rule so BACK never lands on the skipped page. */
-function campaignEntry(): MenuPage {
-  return LOCATIONS.length === 1
-    ? { page: "location", locationId: LOCATIONS[0].id }
-    : { page: "campaign" };
-}
-
-/** The front door's own way ON: the tile a player who pressed START at the
- * studio card meant to press. CAMPAIGN is the game — the other five are
- * ways of driving stages the campaign opens, or of setting the game up to
- * be driven. */
-const ROOT_NEXT = "campaign";
-
-/** THE FRONT DOOR, as marks. A row carrying a sentence saying what its mode
- * is, is a menu explaining itself: a card of explanations fills a phone, and
- * none of them survives the second visit. A glyph and a name is the whole
- * entry — what CAMPAIGN is, is learned by pressing it once.
- *
- * `data-menu` is the stable hook the capture harness presses; the label is
- * free to change without a probe changing with it. */
-const ROOT_ITEMS: {
-  key: string;
-  glyph: GlyphName;
-  label: string;
-  page: MenuPage;
-  quiet?: boolean;
-}[] = [
-  { key: "campaign", glyph: "trophy", label: "CAMPAIGN", page: campaignEntry() },
-  { key: "timetrial", glyph: "stopwatch", label: "TIME TRIAL", page: { page: "timetrial" } },
-  { key: "headsup", glyph: "headsup", label: "HEADS UP", page: { page: "headsup" } },
-  { key: "roam", glyph: "roam", label: "ROAM", page: { page: "roam" } },
-  {
-    key: "training",
-    glyph: "cone",
-    label: "TRAINING",
-    page: { page: "car", levelId: TRAINING_ID, mode: "training" },
-  },
-  { key: "replays", glyph: "replay", label: "REPLAYS", page: { page: "replays" }, quiet: true },
-  { key: "gallery", glyph: "camera", label: "GALLERY", page: { page: "gallery" }, quiet: true },
-  {
-    key: "options",
-    glyph: "sliders",
-    label: "OPTIONS",
-    page: { page: "options" },
-    quiet: true,
-  },
-];
-
-function RootPage({
-  developer,
-  onNavigate,
-}: {
-  developer: boolean;
-  onNavigate: (page: MenuPage) => void;
-}) {
-  return (
-    <div className="menu-card menu-card-root">
-      <div className="menu-brand">
-        {/* The mark rides with the NAME, not with the name and its billing:
-            paired with the whole block it sits visibly low, because the
-            tagline under it drags the centre it is aligned to down a line. */}
-        <div className="menu-brand-line">
-          <MarkTracks lay="once" className="menu-brand-mark" />
-          <span className="menu-brand-name">{APP_NAME.toUpperCase()}</span>
-        </div>
-        <span className="menu-brand-tag">arcade rally drifting</span>
-      </div>
-      <div className="menu-tiles">
-        {ROOT_ITEMS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={`menu-tile ${item.quiet ? "menu-tile-quiet" : ""}`}
-            data-menu={item.key}
-            data-nav-next={item.key === ROOT_NEXT ? "" : undefined}
-            onClick={() => onNavigate(item.page)}
-          >
-            <Glyph name={item.glyph} />
-            <span className="menu-tile-name">{item.label}</span>
-          </button>
-        ))}
-        {developer && (
-          <button
-            type="button"
-            className="menu-tile menu-tile-dev"
-            data-menu="developer"
-            onClick={() => onNavigate({ page: "developer" })}
-          >
-            <Glyph name="terminal" />
-            <span className="menu-tile-name">DEVELOPER</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function CampaignPage({
   progress,
@@ -797,7 +682,11 @@ export function MainMenu(props: MainMenuProps) {
       <div className="menu-scrim" aria-hidden="true" />
       <div className="menu-body">
         {page.page === "root" && (
-          <RootPage developer={props.settings.developer} onNavigate={navigate} />
+          <RootPage
+            developer={props.settings.developer}
+            progress={props.progress}
+            onNavigate={navigate}
+          />
         )}
         {page.page === "campaign" && (
           <CampaignPage progress={props.progress} onNavigate={navigate} />
@@ -938,11 +827,11 @@ export function MainMenu(props: MainMenuProps) {
             onSub={(sub) => navigate(sub ? { page: "options", sub } : { page: "options" })}
             settings={props.settings}
             onSettings={props.onSettings}
+            backLabel="MENU"
             onBack={() => navigate({ page: "root" })}
           />
         )}
       </div>
-      {page.page === "root" && <VersionStamp />}
     </div>
   );
 }

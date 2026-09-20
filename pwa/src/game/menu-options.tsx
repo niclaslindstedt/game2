@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// OPTIONS — one page of knobs, reached from the front door only.
+// OPTIONS — one page of knobs, reached from the front door and from the
+// pause card.
 //
 //   PICTURE   — how sharp, how much, how far, how lit and what the air over
 //               it is made of, as five rows.
@@ -18,12 +19,22 @@
 // Every row is the same knob (menu-knobs.tsx) and nothing else: no sentence
 // under it, no caption bar, no OK button — a row whose name and three stops
 // do not say what it does is a row that needs a better name. Every change
-// applies the moment it is made. The page is not offered over a held run:
-// the pause card carries the handful of knobs a player stops mid-stage for
-// (menu.tsx), and everything else waits for the menu.
+// applies the moment it is made.
+//
+// IT IS THE SAME PAGE OVER A HELD RUN. The pause card used to carry a strip
+// of its own — a camera, the HUD, two faders — which is the settings page
+// written twice, and the second copy was always the one missing the row a
+// player had actually stopped for. So the card carries an OPTIONS row and
+// this page comes up over the stage (`.menu-held`), with `backLabel` naming
+// the card it goes back to. Every row applies to the run standing behind it
+// the moment it is moved, which is what made the strip worth having.
+//
+// Each group's rows and their glyph say what it is about: what the machine
+// draws, what the driver sees, what is heard, what is read, what is pressed.
 
 import { useEffect, useRef, useState } from "react";
 
+import { feature } from "../features.ts";
 import { askShellFullscreen, onShellFullscreen } from "../shell-host.ts";
 import { desktopPicture, renderHeightOf, renderHeightStops } from "./desktop-video.ts";
 import { captureAxis, captureSource, type PadFrame } from "./gamepad.ts";
@@ -75,6 +86,9 @@ type OptionsProps = {
   onSub: (sub: OptionsSub | null) => void;
   settings: Settings;
   onSettings: (settings: Settings) => void;
+  /** What BACK goes back TO — "MENU" off the front door, "PAUSED" over a
+   * held run. The page is the same either way; only the word is not. */
+  backLabel: string;
   onBack: () => void;
 };
 
@@ -156,7 +170,7 @@ function summarise(frames: PadFrame[]): { connected: boolean; standard: boolean;
 }
 
 /** THE PAGE. */
-export function OptionsPage({ sub, onSub, settings, onSettings, onBack }: OptionsProps) {
+export function OptionsPage({ sub, onSub, settings, onSettings, backLabel, onBack }: OptionsProps) {
   if (sub === "keyboard") {
     return <KeyboardPage settings={settings} onSettings={onSettings} onBack={() => onSub(null)} />;
   }
@@ -165,15 +179,24 @@ export function OptionsPage({ sub, onSub, settings, onSettings, onBack }: Option
       <ControllerPage settings={settings} onSettings={onSettings} onBack={() => onSub(null)} />
     );
   }
-  return <MainPage settings={settings} onSettings={onSettings} onSub={onSub} onBack={onBack} />;
+  return (
+    <MainPage
+      settings={settings}
+      onSettings={onSettings}
+      onSub={onSub}
+      backLabel={backLabel}
+      onBack={onBack}
+    />
+  );
 }
 
 function MainPage({
   settings,
   onSettings,
   onSub,
+  backLabel,
   onBack,
-}: Shared & { onSub: (sub: OptionsSub) => void; onBack: () => void }) {
+}: Shared & { onSub: (sub: OptionsSub) => void; backLabel: string; onBack: () => void }) {
   // Probed once per mount: a device does not grow a keyboard while the
   // options page is open, and re-probing on every render would churn.
   const [device] = useState(deviceControls);
@@ -187,10 +210,14 @@ function MainPage({
   const [desktop] = useState(desktopPicture);
   const windowPixels = useWindowPixels();
   const fullscreen = useShellFullscreen();
+  // ...and whether this build ships a soundtrack at all (`features.ts`),
+  // which decides both whether there is a second fader and what the first
+  // one is called.
+  const music = feature("music");
   const set = (patch: Partial<Settings>): void => onSettings({ ...settings, ...patch });
   return (
     <div className="menu-card menu-card-options">
-      <MenuHead back={onBack} backLabel="MENU" title="OPTIONS" />
+      <MenuHead back={onBack} backLabel={backLabel} title="OPTIONS" />
       {/* Two columns on anything wide enough, packed by ROW COUNT rather
           than by subject order — seven on the left, eight on the right once
           the controller's rows are there — so a laptop holds the whole page
@@ -205,7 +232,7 @@ function MainPage({
               the ordinary case, not the exotic one, and a phone that is
               bound by how many things it can submit gets nothing at all
               from a thinner forest and a great deal from a flat sky. */}
-          <KnobGroup title="PICTURE">
+          <KnobGroup title="PICTURE" glyph="monitor">
             {desktop ? (
               // THE SAME ROW, ASKED IN PIXELS. The desktop app owns its
               // window, so it can answer the question a browser tab cannot:
@@ -276,7 +303,7 @@ function MainPage({
               />
             )}
           </KnobGroup>
-          <KnobGroup title="DRIVING">
+          <KnobGroup title="DRIVING" glyph="eye">
             <StepRow
               label="CAMERA"
               stops={PLAY_CAMERAS}
@@ -299,19 +326,26 @@ function MainPage({
           </KnobGroup>
         </div>
         <div className="knob-col">
-          <KnobGroup title="SOUND">
+          <KnobGroup title="SOUND" glyph="speaker">
+            {/* THE EFFECTS ARE CALLED SOUND WHERE THEY ARE THE ONLY SOUND.
+                The name of a fader is only ever relative to what is beside
+                it: "EFFECTS" is a useful word next to "MUSIC" and a piece of
+                jargon on its own, where a player looking for the volume
+                finds a row that sounds like it is about explosions. */}
             <FadeRow
-              label="EFFECTS"
+              label={music ? "EFFECTS" : "SOUND"}
               value={settings.audio.sfx}
               onChange={(sfx) => set({ audio: { ...settings.audio, sfx } })}
             />
-            <FadeRow
-              label="MUSIC"
-              value={settings.audio.music}
-              onChange={(music) => set({ audio: { ...settings.audio, music } })}
-            />
+            {music && (
+              <FadeRow
+                label="MUSIC"
+                value={settings.audio.music}
+                onChange={(level) => set({ audio: { ...settings.audio, music: level } })}
+              />
+            )}
           </KnobGroup>
-          <KnobGroup title="HUD">
+          <KnobGroup title="HUD" glyph="gauge">
             <StepRow
               label="HUD"
               stops={ON_OFF}
@@ -331,7 +365,7 @@ function MainPage({
               onPick={(id) => set({ hud: { ...settings.hud, fps: id === "on" } })}
             />
           </KnobGroup>
-          <KnobGroup title="CONTROLS">
+          <KnobGroup title="CONTROLS" glyph="gamepad">
             {device.touch && (
               <StepRow
                 label="STEER WITH"

@@ -11,7 +11,16 @@
 //
 // WHICH score a stage gets is `music-pick.ts`; this only plays the one it
 // is told.
+//
+// THE WHOLE MODULE IS BEHIND A FLAG (`features.ts`). The scores are not
+// finished, so a build that does not ship them asks for nothing: every
+// entry point below returns before it claims an arrangement, which means
+// no `import()` is ever issued and not one note of the data is fetched.
+// The flag is asked at each door rather than once at the top, so the module
+// stays a plain module — nothing here is decided at import time, and a
+// build with the flag on behaves exactly as it always did.
 
+import { feature } from "../../features.ts";
 import { createTrackPlayer, type Track, type TrackPlayer } from "../../lib/tracker.ts";
 
 import { music } from "./bus.ts";
@@ -44,6 +53,7 @@ function ensurePlayer(): TrackPlayer {
 /** Loop `id`'s theme. A no-op when it is already the current one, so this can
  * hang off every menu gesture as the audio unlock without ever restarting. */
 export function playMusic(id: TrackId): void {
+  if (!feature("music")) return;
   if (current === id) return;
   current = id;
   const ready = cache.get(id);
@@ -97,6 +107,7 @@ const COAST_LOOKAHEAD_S = 3;
  * go away, and a theme that is going to survive that has to have been written
  * down before they did. */
 export function coastMusic(on: boolean): void {
+  if (!feature("music")) return;
   ensurePlayer().lookahead(on ? COAST_LOOKAHEAD_S : 0);
 }
 
@@ -141,6 +152,7 @@ const ARRIVAL_OPTS = { capture: true, passive: true } as const;
  *     to honour is not the last one we listen to.
  */
 export function armMenuMusic(): () => void {
+  if (!feature("music")) return () => {};
   playMusic("menu");
   music.autostart();
   if (typeof document === "undefined" || music.now() !== null) return () => {};

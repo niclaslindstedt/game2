@@ -454,9 +454,9 @@ export async function airShots(shot) {
     { tod: "night" },
   );
 
-  // The same card on a phone held sideways — the one shape where its knobs
-  // pair up two abreast, and the one where it would otherwise be taller than
-  // the screen.
+  // The same card on a phone held sideways — the shape with barely any height
+  // to hang five rows and a strip of figures in, and the one where the card
+  // would otherwise be taller than the screen.
   await capture("shot-pause-landscape", { width: 844, height: 390 }, async (page) => {
     await page.keyboard.down("ArrowUp");
     await racing(page);
@@ -465,6 +465,22 @@ export async function airShots(shot) {
     await page.click(".hud-minimap");
     await page.waitForSelector(".hud-pause");
     await page.waitForTimeout(400);
+  });
+
+  // ...and the SETTINGS over the held stage, which the card's OPTIONS row
+  // opens (menu-options.tsx). It is the same page the front door opens and
+  // the acceptance test is that it BEHAVES like one over a run: the road is
+  // still on screen behind it, the card is not confined to the pause card's
+  // box, and BACK says PAUSED rather than MENU.
+  await capture("shot-pause-options", { width: 1280, height: 720 }, async (page) => {
+    await page.keyboard.down("ArrowUp");
+    await racing(page);
+    await page.waitForTimeout(6000);
+    await page.keyboard.up("ArrowUp");
+    await page.click(".hud-minimap");
+    await page.locator(".hud-pause-act", { hasText: "OPTIONS" }).click();
+    await page.waitForSelector(".menu-held .menu-card-options");
+    await page.waitForTimeout(500);
   });
 
   // ...and the same card opened during the ESTABLISHING SHOT, which is the one

@@ -160,6 +160,7 @@ And the pieces that belong to no skill in particular:
 | A RUN RECORDED, and WATCHED AGAIN                 | `pwa/src/game/replay.ts` (DOM-free: the world a tape is rebuilt in, and the listing) + `replay-store.ts` (the roll, IndexedDB) + `menu-replays.tsx` + `hud-replay.tsx`; the tape itself is `engine/sim/tape.ts` under `pwa/src/game/run-tape.ts`, and every real run arms one |
 | The APP MARK, wherever the app draws one          | `pwa/src/game/app-mark.ts` (the two tracks as data) → `mark-tracks.tsx` (laid, once or over and over); `tests/app_mark_test.ts` holds it |
 | App identity (name, palette, URLs)                | `pwa/src/identity.ts` — the single source                                                                                                      |
+| WHETHER A BUILD SHIPS A FEATURE AT ALL            | `pwa/src/features.ts` — the rule per flag, read off the deploy slot and the shell; `docs/configuration.md` has the table and `tests/features_test.ts` holds it |
 | How much GPU a phone or tablet has                | `pwa/src/game/device-gpu.ts` — published Geekbench scores, family fallbacks for a device it has never heard of, and bands; read by nothing yet |
 | A Node script needing an app module               | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table                                     |
 | New CLI tooling                                   | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                                          |
@@ -169,6 +170,7 @@ And the pieces that belong to no skill in particular:
 
 Each of these is the one place an answer is written down. Anything that needs it ASKS; a second copy is a bug the day one of them moves.
 
+- **WHETHER A BUILD SHIPS A FEATURE** — `pwa/src/features.ts`, and the surfaces that offer the feature ask it (`feature("roam")`). A flag is not a setting and not a URL: it is the deploy slot the build was cut for and the shell showing the page, and nothing else may restate one of its rules or invent a second door onto a flagged feature. What is BEHIND a flag stays whole, so switching one back on is a build rather than an excavation.
 - **WHICH GENERATOR BUILT A ROAD** — `engine/mapgen/versions.ts`. `CURRENT_GENERATOR_VERSION` is the rules in this tree and is what everything but a campaign level gets; a level names its own and keeps it. Never write the number down a second time — the eighteen literals in `campaign-locations.ts` are eighteen separate decisions, not one constant spelled out.
 - **What a car CAN do** — `engine/game/limits.ts`, read by `car.ts` AND `sim/bot.ts`. Never restate a ceiling.
 - **What the speedo reads** — `travelSpeed` in `engine/game/state.ts`: speed through space, vertical included. `snapshot.ts` and `car-instruments.ts` both read it and neither restates it.
@@ -207,6 +209,7 @@ Each of these is the one place an answer is written down. Anything that needs it
 | The listing's WORDS, for any of the three stores | `native/store/copy.mts` — GITIGNORED, one source for all; the `store-listing` skill is the craft |
 | The Mac App Store build, its icon or its menu | `tauri/store/MAC_APP_STORE.md`, then `make mac-appstore` |
 | An age rating, a category, a Steam tag | `native/store/listing.mts` — the rules half, committed; then `make store-metadata` |
+| A feature flag, or the rule for one    | `docs/configuration.md`'s flag table, then `tests/features_test.ts` |
 | A spec chapter, or a verdict under one | `docs/spec-conformance.md` — `sync-game-spec` re-dates it      |
 
 The campaign menu's routes and biome banners are generator OUTPUT, so every rule change re-rolls them: a re-seeded, re-banded or re-lit level otherwise leaves a picture of a stage that no longer exists. Editing the first level of a location, or adding a location, re-shoots that biome's banner.

@@ -3614,43 +3614,6 @@ body {
   color: var(--hud-good);
 }
 
-.hud-menu-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.hud-menu-label {
-  font-size: clamp(0.6rem, 2vmin, 0.8rem);
-  letter-spacing: 0.14em;
-  opacity: 0.85;
-}
-
-.hud-menu-opts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.hud-opt {
-  font: inherit;
-  font-size: clamp(0.65rem, 2.2vmin, 0.9rem);
-  color: var(--hud-ink);
-  background: rgb(255 255 255 / 12%);
-  border: 2px solid rgb(255 255 255 / 45%);
-  border-radius: 0.5rem;
-  padding: 0.35rem 0.7rem;
-  cursor: pointer;
-  text-shadow: none;
-}
-
-.hud-opt-active {
-  background: var(--hud-good);
-  border-color: var(--hud-ink);
-  color: var(--hud-shadow);
-  font-weight: 800;
-}
-
 .hud-start {
   font: inherit;
   font-size: clamp(1.1rem, 4.5vmin, 1.8rem);
@@ -3669,44 +3632,68 @@ body {
   transform: translateY(1px);
 }
 
-/* RESUME is the primary press (it wears the START button's chrome); the two
-   ways on sit under it, the width of the card so a thumb cannot miss. Wide
-   enough for a knob row — a name, a value and two arrows — between them. */
+/* RESUME is the primary press (it wears the START button's chrome); the
+   ways on sit under it, the width of the card so a thumb cannot miss. Every
+   one of them is a mark, a name, and — where the press costs something the
+   name does not say — the cost out at the end of the row. */
 .hud-pause {
   align-items: stretch;
   text-align: center;
   width: min(26rem, 94vw);
-}
-
-/* The knobs on the pause card (menu-knobs.tsx): the same rows the options
-   page is made of, a shade shorter, and left-aligned inside a card whose
-   buttons are centred. */
-.hud-pause-knobs {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  text-align: left;
-}
-
-.hud-pause-knobs .knob {
-  min-height: 2.3rem;
-}
-
-/* Narrower values than the options page's: the card is a column with its
-   own padding, and EFFECTS has to keep its name beside its fader. */
-.hud-pause-knobs .knob-value {
-  width: 7rem;
-}
-
-.hud-pause-knobs .knob-fade {
-  width: 9rem;
+  gap: 0.55rem;
 }
 
 .hud-pause-sub {
   font-size: clamp(0.65rem, 2.2vmin, 0.9rem);
   letter-spacing: 0.1em;
   opacity: 0.85;
-  margin-top: -0.4rem;
+  margin-top: -0.5rem;
+}
+
+/* WHERE THE RUN STANDS, between the heading and the presses. Ruled off top
+   and bottom: it is the one block on the card that is READ rather than
+   pressed, and the rules are what stop a thumb aiming at it. */
+.hud-pause-stats {
+  display: flex;
+  justify-content: space-around;
+  gap: 0.5rem;
+  padding: 0.55rem 0.2rem;
+  border-top: 2px solid rgb(255 255 255 / 18%);
+  border-bottom: 2px solid rgb(255 255 255 / 18%);
+}
+
+.hud-pause-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.hud-pause-stat b {
+  font-size: clamp(0.95rem, 3.4vmin, 1.25rem);
+  line-height: 1;
+  font-weight: 800;
+}
+
+.hud-pause-stat i {
+  font-style: normal;
+  font-size: clamp(0.5rem, 1.8vmin, 0.65rem);
+  letter-spacing: 0.16em;
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+/* Each press is a ROW, not a centred word: a mark on the left the eye finds
+   before it reads anything, the name beside it, and whatever the press
+   costs pushed out to the far end. RESUME wears the START chrome and the
+   same skeleton, so the four rows line up as one column of marks. */
+.hud-pause-resume,
+.hud-pause-act {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
 }
 
 .hud-pause-act {
@@ -3727,23 +3714,31 @@ body {
   color: var(--hud-shadow);
 }
 
-/* WHAT A PRESS COSTS, under the words that name it. The pause card's other
-   two acts say their own cost — RESTART STAGE and MAIN MENU are what they
-   sound like — and WATCH REPLAY does not: it sounds like something done
-   BESIDE a run, and it ends one (menu.tsx). So the row carries a second
-   line, quieter than the first because it is the caveat and not the offer,
-   and the button becomes a column to hold it. */
-.hud-pause-act:has(.hud-pause-cost) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
+/* The mark leads the row at the size of the words beside it — a hair
+   larger, because a stroked drawing reads lighter than a bold letter at the
+   same height. */
+.hud-pause-mark {
+  flex: none;
+  width: 1.3em;
+  height: 1.3em;
 }
 
+.hud-pause-name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* WHAT A PRESS COSTS, at the end of the row that offers it. The card's
+   other presses say their own cost — RESTART STAGE and MAIN MENU are what
+   they sound like — and WATCH REPLAY does not: it sounds like something
+   done BESIDE a run, and it ends one (menu-pause.tsx). Quieter than the
+   name, because it is the caveat and not the offer. */
 .hud-pause-cost {
+  flex: none;
   font-size: 0.62em;
   letter-spacing: 0.14em;
   opacity: 0.7;
+  text-align: right;
 }
 
 /* ASKED, and waiting on the second press. The row goes to the same amber
@@ -3855,51 +3850,47 @@ body {
   }
 }
 
-/* The front door is a BLOCK, not a full-width card: six tiles two abreast
-   want to be square-ish and close together, and a card stretched to the
-   width of a laptop turns them into six letterboxes. */
+/* THE FRONT DOOR IS ONE HERO AND A BLOCK, and the card is sized to hold
+   both side by side: a masthead across the top, CAMPAIGN filling the left
+   of the body, the other ways on stacked beside it, and a foot carrying the
+   presses nobody came to the front door for.
+
+   Wide rather than the column it used to be, because the six equal tiles it
+   used to draw were six equal decisions — and they are not. The hero says
+   which one the game is, and the size is most of how it says it. */
 .menu-card-root {
-  width: min(24rem, 100%);
+  width: min(46rem, 100%);
   background: rgb(18 48 105 / 62%);
-  gap: 0.9rem;
+  gap: clamp(0.6rem, 2vmin, 1rem);
 }
 
+/* THE MASTHEAD: the mark, the name beside it, the billing after. Ranged
+   LEFT, not centred — it is the card's heading, and a heading centred over
+   an asymmetric body reads as a second, competing axis. */
 .menu-brand {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.15rem;
-}
-
-/* THE MARK, THEN THE NAME, on one line and centred on each other. The billing
-   sits under the PAIR rather than inside it, which is what keeps the mark
-   level with the wordmark instead of a half-line below it. */
-.menu-brand-line {
-  display: flex;
   flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(0.5rem, 2vmin, 0.9rem);
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 clamp(0.5rem, 2vmin, 0.9rem);
 }
 
 /* The marks, laid once as the menu arrives and left standing beside the name.
-   `flex: none` so the wordmark's own wrapping never squeezes them. */
+   `flex: none` so the wordmark's own wrapping never squeezes them, and the
+   glyph is pulled onto the wordmark's own line rather than its baseline. */
 .menu-brand-mark {
   flex: none;
-  width: clamp(2.4rem, 9vmin, 3.2rem);
+  align-self: center;
+  width: clamp(2rem, 7vmin, 2.8rem);
 }
 
 .menu-brand-name {
-  /* Sized to FIT, which it did not do before: the root card is 24rem wide and
-     "SCANDINAVIAN" is one word that cannot be wrapped, so at the old 2.4rem
-     ceiling the wordmark ran about a centimetre past the card on a desktop
-     landscape window — centred, so it overhung both edges evenly and read as
-     a bleed rather than as a bug. With the mark beside it that slack is gone
-     and it has to be honest. */
-  font-size: clamp(1.5rem, 6.4vmin, 1.9rem);
+  /* Sized to FIT. "SCANDINAVIAN" is one word that cannot be wrapped, so the
+     ceiling is what the narrowest card this heading is drawn in can hold —
+     a phone held upright, where the mark and the billing share its line. */
+  font-size: clamp(1.4rem, 5.6vmin, 1.9rem);
   letter-spacing: 0.04em;
-  line-height: 0.94;
-  text-align: center;
+  line-height: 1;
   text-wrap: balance;
   color: var(--hud-good);
   text-shadow:
@@ -3908,10 +3899,14 @@ body {
 }
 
 .menu-brand-tag {
-  font-size: clamp(0.6rem, 2.2vmin, 0.85rem);
-  letter-spacing: 0.28em;
+  /* Its own line under the pair, always — a billing that sits beside the
+     wordmark on a wide card and drops under it on a narrow one is a
+     masthead that is a different shape on every screen. */
+  flex-basis: 100%;
+  font-size: clamp(0.55rem, 2vmin, 0.8rem);
+  letter-spacing: 0.24em;
   text-transform: uppercase;
-  opacity: 0.8;
+  opacity: 0.7;
   font-weight: 600;
 }
 
@@ -3930,13 +3925,88 @@ body {
    sentence explaining the mode, and a card of explanations fills a phone —
    with nothing on it that survives the second visit.
 
-   Two columns is the shape the front door is designed AT: three rows of two
-   on a portrait phone, and the same block on a laptop rather than a column
-   stretched to the card's width. */
+   THE BODY IS TWO COLUMNS: the hero, and the block of everything else. The
+   hero takes rather more than half because it is the game and the others are
+   ways of driving it; `1fr` either side would say they were equals. */
+.menu-front {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: clamp(0.4rem, 1.6vmin, 0.7rem);
+  align-items: stretch;
+}
+
+/* Held upright there is no room for two columns of anything: the hero takes
+   the width and the tiles go under it, still two abreast. */
+@media (orientation: portrait) {
+  .menu-front {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* CAMPAIGN. It wears the chrome every START in the game wears — the arcade
+   yellow with the navy ink on it — because it is the same press: the one
+   this screen exists to be pressed. Everything else on the card is an
+   outline. */
+.menu-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 8.5rem;
+  font: inherit;
+  font-size: clamp(1rem, 3.6vmin, 1.5rem);
+  letter-spacing: 0.1em;
+  text-align: center;
+  color: var(--hud-shadow);
+  background: var(--hud-good);
+  border: 3px solid rgb(255 255 255 / 55%);
+  border-radius: 0.8rem;
+  padding: clamp(0.7rem, 2.6vmin, 1.4rem) 0.6rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.menu-hero .menu-glyph {
+  width: 2.6em;
+  height: 2.6em;
+}
+
+.menu-hero:hover,
+.menu-hero:focus-visible {
+  background: #ffe07a;
+  border-color: var(--hud-ink);
+}
+
+.menu-hero:active {
+  transform: translateY(1px);
+}
+
+/* HOW FAR THROUGH THE LADDER THE PLAYER IS — the one fact worth reading
+   before pressing anything on this card, and the only line of prose the
+   front door has left. Quieter than the name above it: it is the answer to a
+   question, not the press. */
+.menu-hero-line {
+  font-size: 0.6em;
+  letter-spacing: 0.16em;
+  opacity: 0.75;
+  line-height: 1;
+}
+
+/* The block beside the hero: two abreast, and as tall as the hero is. */
 .menu-tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: clamp(0.4rem, 1.6vmin, 0.7rem);
+  align-content: stretch;
+}
+
+/* ...and ONE abreast where a build ships only two of them (features.ts).
+   Two columns of two is a block whose proportions match the hero beside it;
+   two columns of ONE is a pair of narrow towers, which is the same two
+   presses drawn as something a player has to read twice. */
+.menu-tiles[data-few] {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .menu-tile {
@@ -3945,7 +4015,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  min-height: 4.6rem;
+  min-height: 4rem;
   font: inherit;
   font-size: clamp(0.85rem, 3.2vmin, 1.15rem);
   letter-spacing: 0.08em;
@@ -3963,10 +4033,6 @@ body {
   width: 2.1em;
   height: 2.1em;
   color: var(--hud-good);
-}
-
-.menu-tile-quiet .menu-glyph {
-  color: rgb(255 255 255 / 60%);
 }
 
 .menu-tile:hover,
@@ -3988,18 +4054,80 @@ body {
   line-height: 1;
 }
 
-/* An odd count (the developer tile is out) would leave a hole; the last one
-   takes the whole row instead of sitting beside it. */
+/* An odd count (a build with one of the flagged modes out — features.ts)
+   would leave a hole; the last one takes the whole row instead of sitting
+   beside it. */
 .menu-tiles > .menu-tile:last-child:nth-child(odd) {
   grid-column: 1 / -1;
   flex-direction: row;
-  min-height: 0;
   gap: 0.5rem;
 }
 
 .menu-tiles > .menu-tile:last-child:nth-child(odd) .menu-glyph {
-  width: 1.25em;
-  height: 1.25em;
+  width: 1.5em;
+  height: 1.5em;
+}
+
+/* ── The foot ────────────────────────────────────────────────────────────
+   What is NOT a way onto a road: the pictures and the runs already taken,
+   the knobs, the developer's door — and the build the whole thing is. They
+   share one line at the bottom of the card, at the size of a press nobody
+   came to the front door for. */
+.menu-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-top: 0.15rem;
+  border-top: 2px solid rgb(255 255 255 / 14%);
+}
+
+.menu-quiet {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.menu-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  font-size: clamp(0.6rem, 2.2vmin, 0.8rem);
+  letter-spacing: 0.1em;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 8%);
+  border: 2px solid rgb(255 255 255 / 28%);
+  border-radius: 0.55rem;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  text-shadow: none;
+  opacity: 0.85;
+}
+
+.menu-chip .menu-glyph {
+  width: 1.15em;
+  height: 1.15em;
+  opacity: 0.8;
+}
+
+.menu-chip:hover,
+.menu-chip:focus-visible {
+  opacity: 1;
+  background: rgb(255 210 62 / 20%);
+  border-color: var(--hud-good);
+}
+
+.menu-chip:active {
+  transform: translateY(1px);
+}
+
+/* THE DEVELOPER'S DOOR, which is not part of the game: a dashed edge says
+   so at a glance, the way a dashed line always has — this is not shipped
+   furniture, it is a thing somebody let out deliberately (see DEV_TAPS). */
+.menu-chip-dev {
+  border-style: dashed;
 }
 
 /* A one-line entry with its mark: a page that hangs off another page rather
@@ -5077,10 +5205,13 @@ body {
 
 /* ── The version stamp ───────────────────────────────────────────────── */
 
+/* The build label. It rides in the FOOT of the front door's card, at the far
+   end of the row of quiet chips — a label about the software, beside the
+   presses that are about the software, rather than floating loose on the
+   backdrop where it read as a watermark over the game. */
 .menu-version {
-  position: absolute;
-  right: max(0.7rem, env(safe-area-inset-right));
-  bottom: max(0.6rem, env(safe-area-inset-bottom));
+  margin-left: auto;
+  align-self: center;
   font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
   font-style: normal;
   font-weight: 600;
@@ -6870,8 +7001,8 @@ a.menu-version:focus-visible {
   }
 
   .hud-pause {
-    width: min(36rem, 94vw);
-    gap: 0.45rem;
+    width: min(28rem, 94vw);
+    gap: 0.35rem;
     padding: 0.5rem 1rem;
   }
 
@@ -6888,22 +7019,10 @@ a.menu-version:focus-visible {
     padding: 0.35rem 1rem;
   }
 
-  .hud-pause-knobs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.2rem 0.5rem;
-  }
-
-  .hud-pause-knobs .knob {
-    min-height: 2.1rem;
-  }
-
-  .hud-pause-knobs .knob-value {
-    width: 6rem;
-  }
-
-  .hud-pause-knobs .knob-fade {
-    width: 6.5rem;
+  /* The strip of figures is the block with the most air in it, so it gives
+     it up first — the four presses under it keep their targets. */
+  .hud-pause-stats {
+    padding: 0.3rem 0.2rem;
   }
 }
 
