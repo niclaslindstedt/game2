@@ -33,6 +33,14 @@ export const GLYPH_NAMES = [
   "sliders",
   "standings",
   "terminal",
+  "play",
+  "restart",
+  "exit",
+  "monitor",
+  "eye",
+  "gauge",
+  "speaker",
+  "gamepad",
   "lock",
   "sprint",
   "circuit",
@@ -184,6 +192,72 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
     <>
       <rect x="2.8" y="4.5" width="18.4" height="15" rx="2.4" />
       <path d="M7 9.5l3 2.5-3 2.5M12.5 14.5H17" />
+    </>
+  ),
+  // THE PAUSE CARD'S FOUR PRESSES, as marks. A held run is the one card in
+  // the game a player reads at a glance and under pressure, so every row on
+  // it leads with a drawing that says which press it is before the word
+  // under the thumb is read.
+  //
+  // The play triangle: carry on. Solid rather than stroked — it is the one
+  // press on that card the eye must land on first, and a filled mark reads
+  // ahead of four outlined ones.
+  play: <path d="M8 5.2 19 12 8 18.8Z" fill="currentColor" stroke="none" />,
+  // An arrow all the way round: this stage again, from the line.
+  restart: (
+    <>
+      <path d="M20 12a8 8 0 1 1-2.6-5.9" />
+      <path d="M20.4 3.8v4.6h-4.6" />
+    </>
+  ),
+  // A door with an arrow leaving it: out of the run, back to the menu.
+  exit: (
+    <>
+      <path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14" />
+      <path d="M10.5 12h9.5M16.6 8.6 20 12l-3.4 3.4" />
+    </>
+  ),
+  // A screen on a stand: the PICTURE, which is the one group of settings
+  // about the machine rather than about the game.
+  monitor: (
+    <>
+      <rect x="2.6" y="4.5" width="18.8" height="12.4" rx="2.2" />
+      <path d="M9 20.4h6M12 16.9v3.5" />
+    </>
+  ),
+  // An eye: what the driver SEES — the camera, and the seat it is taken
+  // from.
+  eye: (
+    <>
+      <path d="M2.4 12S6 5.8 12 5.8 21.6 12 21.6 12 18 18.2 12 18.2 2.4 12 2.4 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  // A dial with its needle: the instrument panel, which is what the HUD is.
+  // The same arc the app's own mark is drawn on, for the same reason.
+  gauge: (
+    <>
+      <path d="M3.4 17.6a9.6 9.6 0 1 1 17.2 0" />
+      <path d="M12 17.2 16.2 9.6" />
+      <circle cx="12" cy="17.6" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  // A speaker with one wave: everything heard.
+  speaker: (
+    <>
+      <path d="M11.4 4.6 6.6 8.8H3.2v6.4h3.4l4.8 4.2V4.6Z" />
+      <path d="M15.2 9.2a4 4 0 0 1 0 5.6" />
+      <path d="M18 6.4a8 8 0 0 1 0 11.2" />
+    </>
+  ),
+  // A pad seen from above: the controls, and the one group of settings whose
+  // rows are about hardware.
+  gamepad: (
+    <>
+      <path d="M8.4 7.4h7.2a5.6 5.6 0 0 1 5.4 7l-.8 3a2.6 2.6 0 0 1-4.6 1l-1.7-2.2H10.1L8.4 18.4a2.6 2.6 0 0 1-4.6-1l-.8-3a5.6 5.6 0 0 1 5.4-7Z" />
+      <path d="M6.6 12.4h2.8M8 11v2.8" />
+      <circle cx="15.8" cy="12.4" r="1" fill="currentColor" stroke="none" />
+      <circle cx="18.2" cy="10.6" r="1" fill="currentColor" stroke="none" />
     </>
   ),
   // The padlock: a stage that is not open yet, and nothing else.

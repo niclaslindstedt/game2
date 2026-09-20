@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The in-race pause card, and the option vocabulary every menu surface
-// shares: the stage-length bands, the times of day, the weathers, and the
-// segmented `OptionRow` they are all picked with.
+// THE OPTION VOCABULARY every menu surface shares: the stage-length bands,
+// the times of day, the weathers, the difficulty cards, the grid sizes, and
+// the segmented `OptionRow` they are all picked with — plus the two shapes
+// a page is built out of, `MenuHead` and `ToggleRow`.
 //
-// PauseMenu is the one you reach mid-stage, by tapping the minimap: the run
-// holds where it stands, and it carries the three ways on — resume, run this
-// stage again, or leave for the main menu — and between them the handful of
-// knobs a player actually stops mid-stage for: the camera they cannot see
-// out of, the HUD, the mirror, the two volumes. Everything else is the
-// options page, off the front door. It lives here rather than in the top
-// bar because the bar is a strip over the road, and every button on it is a
-// button in the way of the driving.
+// The in-race pause card was here too and is now menu-pause.tsx: it is a
+// PAGE, and everything else in this file is what pages are made of.
 
 import {
   altitudeOf,
@@ -43,13 +38,11 @@ import {
 } from "@engine";
 
 import type { ComponentChildren } from "preact";
-import { useState } from "react";
 
 import { playToggle, playUi } from "./audio/ui.ts";
 import { manualGain } from "./car-stats.ts";
 import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
-import { FadeRow, StepRow, type Stop } from "./menu-knobs.tsx";
-import { PLAY_CAMERAS, type DevSettings, type Settings } from "./settings.ts";
+import type { Stop } from "./menu-knobs.tsx";
 
 /** How a stage was entered — the campaign is what records a clear, a time
  * trial is a lap you drive for the clock alone, and a heads-up race is the
@@ -784,185 +777,5 @@ export function ToggleRow({
         <span className="opt-switch-knob" />
       </span>
     </button>
-  );
-}
-
-type PauseProps = {
-  seed: number;
-  carName: string;
-  /** The developer tools, offered here as well as in the menu: the moment
-   * you want to fly to something is the moment you are looking at it, and
-   * that moment is behind the pause card, not four screens away. Null when
-   * the developer menu has never been let out. */
-  dev: DevSettings | null;
-  onDev: (dev: DevSettings) => void;
-  onResume: () => void;
-  onRestart: () => void;
-  onMainMenu: () => void;
-  /** WATCH THE RUN SO FAR — put the drive up to this moment straight back on
-   * the road (app-play.ts). It ENDS the run, which is why it asks; null when
-   * there is nothing behind the press — no recording armed, or the thing
-   * being watched is already one. */
-  onWatchReplay: (() => void) | null;
-  /** The player's options, for the knobs on the card. Every change applies
-   * to the run standing behind the scrim the moment it is made. */
-  settings: Settings;
-  onSettings: (settings: Settings) => void;
-};
-
-const ON_OFF: Stop<"off" | "on">[] = [
-  { id: "off", label: "OFF" },
-  { id: "on", label: "ON" },
-];
-
-/** The in-race menu, opened by tapping the minimap. The backdrop resumes:
- * a menu you opened by mis-aiming for the map must cost one tap to leave. */
-export function PauseMenu({
-  seed,
-  carName,
-  dev,
-  onDev,
-  onResume,
-  onRestart,
-  onMainMenu,
-  onWatchReplay,
-  settings,
-  onSettings,
-}: PauseProps) {
-  const set = (patch: Partial<Settings>): void => onSettings({ ...settings, ...patch });
-  /** Whether WATCH REPLAY has been pressed once and is now asking.
-   *
-   * THE ONE PRESS ON THIS CARD THAT ASKS, and it asks because it is the only
-   * one whose cost is not written on it. RESTART STAGE and MAIN MENU say
-   * exactly what they do and a player pressing either has decided to stop
-   * driving; WATCH REPLAY sounds like something you do BESIDE a run, and it
-   * is not — a replay is a run, the app stands one stage at a time, and
-   * taking the tape means giving the drive up. So the row says so and takes
-   * the second press, rather than a card of its own: a dialog over a dialog
-   * is a modal to dismiss for a player who only mis-aimed for the minimap,
-   * and the ask is one line of the row they are already looking at.
-   *
-   * Nothing has to disarm it: every way out of this card unmounts it —
-   * resuming, restarting, leaving, and the press itself — so a question
-   * nobody answered is gone by the time the card is opened again. */
-  const [asking, setAsking] = useState(false);
-  return (
-    <div className="hud-menu-wrap pointer-events-auto" onPointerDown={onResume} role="presentation">
-      <div className="hud-menu hud-pause" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="hud-menu-title">PAUSED</div>
-        <div className="hud-pause-sub">
-          STAGE {seed} — {carName}
-        </div>
-        {/* RESUME is both the way OUT of this card and where a controller's
-            cursor belongs: it is the press a card opened by mis-aiming for
-            the minimap needs, and two of the three rows under it throw the
-            stage away. Without the focus mark the cursor skips it — a way
-            back is normally a chevron nobody came for — and lands on the
-            first row that is not it. */}
-        <button
-          type="button"
-          className="hud-start"
-          data-nav-back
-          data-nav-focus
-          onClick={() => {
-            playUi("back");
-            onResume();
-          }}
-        >
-          RESUME
-        </button>
-        {/* THE KNOBS, between RESUME and the two presses that throw the
-            stage away. The camera you cannot see out of, the HUD in the
-            way of a picture, the score you want quieter are settings you
-            want changed HERE, with the stage still standing — and they
-            are all this card offers, so it stays a card. Standing between
-            RESUME and RESTART is also what keeps a thumb aiming for the
-            first from landing on the second. */}
-        <div className="hud-pause-knobs">
-          <StepRow
-            label="CAMERA"
-            stops={PLAY_CAMERAS}
-            value={settings.camera}
-            onPick={(camera) => set({ camera })}
-          />
-          <StepRow
-            label="HUD"
-            stops={ON_OFF}
-            value={settings.hud.on ? "on" : "off"}
-            onPick={(id) => set({ hud: { ...settings.hud, on: id === "on" } })}
-          />
-          <StepRow
-            label="REAR VIEW"
-            stops={ON_OFF}
-            value={settings.hud.mirror ? "on" : "off"}
-            onPick={(id) => set({ hud: { ...settings.hud, mirror: id === "on" } })}
-          />
-          <FadeRow
-            label="EFFECTS"
-            value={settings.audio.sfx}
-            onChange={(sfx) => set({ audio: { ...settings.audio, sfx } })}
-          />
-          <FadeRow
-            label="MUSIC"
-            value={settings.audio.music}
-            onChange={(music) => set({ audio: { ...settings.audio, music } })}
-          />
-        </div>
-        {/* WATCH REPLAY stands FIRST of the three, above the two presses
-            that end the run without showing the player anything. All three
-            end it; this is the only one that hands something back for it,
-            and a player who has stopped mid-stage to look at what just
-            happened is reaching for exactly this. */}
-        {onWatchReplay && (
-          <button
-            type="button"
-            className={`hud-pause-act ${asking ? "hud-pause-asking" : ""}`}
-            onClick={() => {
-              playUi("select");
-              if (!asking) {
-                setAsking(true);
-                return;
-              }
-              setAsking(false);
-              onWatchReplay();
-            }}
-          >
-            WATCH REPLAY
-            <span className="hud-pause-cost">
-              {asking ? "PRESS AGAIN — THIS ENDS THE RUN" : "ENDS THE RUN"}
-            </span>
-          </button>
-        )}
-        <button type="button" className="hud-pause-act" onClick={onRestart}>
-          RESTART STAGE
-        </button>
-        <button
-          type="button"
-          className="hud-pause-act"
-          onClick={() => {
-            playUi("select");
-            onMainMenu();
-          }}
-        >
-          MAIN MENU
-        </button>
-        {dev && (
-          <div className="hud-pause-dev">
-            <ToggleRow
-              label="GOD MODE"
-              hint="Fly the camera off the car"
-              on={dev.god}
-              onToggle={() => onDev({ ...dev, god: !dev.god })}
-            />
-            <ToggleRow
-              label="DEBUG OVERLAY"
-              hint="Where you are, and the line that gets anyone back here"
-              on={dev.debug}
-              onToggle={() => onDev({ ...dev, debug: !dev.debug })}
-            />
-          </div>
-        )}
-      </div>
-    </div>
   );
 }

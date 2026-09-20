@@ -19,7 +19,7 @@
 // camera's pose (?gx= ?gy= ?gz= ?gyaw= ?gpitch=) — the repro line the debug
 // overlay prints is exactly that set, so a screenshot reproduces as a URL.
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { carById, status } from "@engine";
 
 import { onShellCommand } from "./shell-host.ts";
@@ -39,7 +39,9 @@ import { ReplayBar } from "./game/hud-replay.tsx";
 import { glassSlot } from "./game/hud-mirror.tsx";
 import { replayStageName } from "./game/menu-replays.tsx";
 import { recordScore, rememberInitials } from "./game/scores.ts";
-import { PauseMenu, gridSize } from "./game/menu.tsx";
+import { gridSize } from "./game/menu.tsx";
+import { PauseMenu } from "./game/menu-pause.tsx";
+import { OptionsPage, type OptionsSub } from "./game/menu-options.tsx";
 import { MainMenu } from "./game/main-menu.tsx";
 import { OrientationGate } from "./game/orientation-gate.tsx";
 import { mustPause } from "./game/orientation.ts";
@@ -162,6 +164,47 @@ export function App() {
     readDebugRef,
   } = actions;
 
+  /** THE SETTINGS, OVER A HELD STAGE — the page the pause card's OPTIONS row
+   * opens, and which sub-page of it is up. Null while the pause card itself
+   * is showing.
+   *
+   * App's own state rather than the menu's page union: that union is where
+   * the MENU is, and this is a card over a run the menu is not in. The two
+   * are drawn on the same layer (`.menu-held`) and out of the same
+   * component, which is the whole point — one settings page, two doors. */
+  const [heldOptions, setHeldOptions] = useState<{ sub: OptionsSub | null } | null>(null);
+
+  // A card over a held run cannot outlive the hold. Every way out of pause —
+  // the key, the backdrop, RESUME, a restart, the way to the main menu —
+  // clears `paused`, so closing the page is stated once here rather than on
+  // each of them.
+  useEffect(() => {
+    if (!paused) setHeldOptions(null);
+  }, [paused]);
+
+  /** PAUSE STEPS BACK OUT OF THE HELD PAGE rather than resuming from inside
+   * it. The key is the way out of any card in this game, and over a run it
+   * is also the way out of the hold — so without this, a player who opened
+   * the settings and pressed it again would be put back on the road mid-
+   * corner instead of back on the card they came from.
+   *
+   * CAPTURE PHASE, and the propagation stops here: the input manager listens
+   * for the same key on the same window in the bubble phase (input.ts), and
+   * it is the half that would do the resuming. The rebind rows inside the
+   * page capture first and stop it there while a row is armed, so escaping a
+   * binding still only cancels the binding. */
+  useEffect(() => {
+    if (!heldOptions) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (!optionsRef.current.keys.pause.includes(e.code)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setHeldOptions(heldOptions.sub ? { sub: null } : null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [heldOptions, optionsRef]);
+
   // The menu's backdrop follows the page, the seed and the demo's roll.
   useEffect(() => {
     if (menu) showBackdropRef.current(menu);
@@ -265,15 +308,21 @@ export function App() {
             if (inMenu) setMenu({ page: "gallery" });
             return;
           case "settings":
-            // Mid-run the settings live on the PAUSE CARD, which is where the
-            // player reaches them without a menu bar too — so the row does
-            // what the player would: it stops the car first.
+            // The SAME page either way (menu-options.tsx) — mid-run it comes
+            // up over the held stage, which means the row does what the
+            // player would: it stops the car first.
             if (inMenu) setMenu({ page: "options" });
-            else setPaused(true);
+            else {
+              setPaused(true);
+              setHeldOptions({ sub: null });
+            }
             return;
           case "controls":
             if (inMenu) setMenu({ page: "options", sub: "keyboard" });
-            else setPaused(true);
+            else {
+              setPaused(true);
+              setHeldOptions({ sub: "keyboard" });
+            }
             return;
         }
       }),
@@ -736,19 +785,38 @@ export function App() {
           onLeave={() => leaveBenchmark()}
         />
       )}
-      {paused && !menu && !bench && (
+      {paused && !menu && !bench && !heldOptions && (
         <PauseMenu
           seed={stageRef.current?.seed ?? seed}
           carName={carById(race.carId).name}
+          face={snap}
           dev={options.developer ? options.dev : null}
           onDev={(dev) => applyOptions({ ...options, dev })}
           onResume={() => setPaused(false)}
+          onOptions={() => setHeldOptions({ sub: null })}
           onRestart={() => actionsRef.current.restart()}
           onMainMenu={goMainMenu}
           onWatchReplay={onWatchSoFar}
-          settings={options}
-          onSettings={applyOptions}
         />
+      )}
+      {/* THE SETTINGS OVER THE STAGE, opened from the card above. The same
+          page the front door opens and the same card chrome round it — only
+          the layer is different, because the run behind it is still on
+          screen (`.menu-held`). */}
+      {paused && !menu && !bench && heldOptions && (
+        <div className="menu menu-held pointer-events-auto">
+          <div className="menu-scrim" aria-hidden="true" />
+          <div className="menu-body">
+            <OptionsPage
+              sub={heldOptions.sub}
+              onSub={(sub) => setHeldOptions({ sub })}
+              settings={options}
+              onSettings={applyOptions}
+              backLabel="PAUSED"
+              onBack={() => setHeldOptions(null)}
+            />
+          </div>
+        </div>
       )}
       {menu && (
         <MainMenu

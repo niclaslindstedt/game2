@@ -14,6 +14,32 @@ Every dependency resolves from the public npm registry, so `npm install` needs n
 | `VITE_PWA_IGNORE_PATHS`            | Comma-separated absolute paths the built service worker must NOT claim. Only the root slot sets it (`/preview/,/branch/`) so nested slots own their own pages. |
 | `GITHUB_SHA` / `GITHUB_RUN_NUMBER` | Provided by CI; baked into the build label the HUD corner and the new-build card show.                                                                         |
 
+## Feature flags
+
+`pwa/src/features.ts` is the one place a feature the game is not finished
+offering is switched off, and the one place the rule for it is written. A flag
+is not a setting: the player is never asked, nothing is stored, and no URL can
+turn one on. It is decided by where the build is running — the deploy slot it
+was built for (the dev server and `/preview/` and `/branch/` are builds nobody
+arrived at expecting a finished game; `/` is the one they did) and the host
+showing the page (a browser, the desktop app, or the store app, via
+`shell-host.ts`).
+
+| Flag       | What it is                                           | Where it ships                              |
+| ---------- | ---------------------------------------------------- | ------------------------------------------- |
+| `music`    | The tracker scores, and the MUSIC fader beside them. | Preview builds only.                        |
+| `training` | The training ground (`pwa/src/game/training.ts`).    | Preview builds only.                        |
+| `roam`     | Any seed at all, chosen off the map.                 | Preview builds, and the desktop app always. |
+
+With `music` off the SOUND group carries one fader, named SOUND rather than
+EFFECTS, and `audio/music.ts` returns before it claims an arrangement — so
+none of the score chunks is ever fetched. With `training` or `roam` off the
+front door simply does not draw the entry; everything behind it is untouched,
+so a flag coming back on is a build rather than an excavation.
+
+`tests/features_test.ts` holds every rule to a written-out table of the six
+places a build can be. Nothing else in the tree may restate a rule.
+
 ## The desktop app's launch environment
 
 The desktop app (`tauri/`, see [platforms.md](platforms.md)) reads three variables at LAUNCH, all optional and all for debugging a build rather than configuring the game:

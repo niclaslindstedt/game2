@@ -481,13 +481,28 @@ ANYWHERE unlocks it.
 
 ## Options
 
-OPTIONS ▸ SOUND has two faders, effects and music, and the pause card carries
-the same two. Each runs 0–100% in twentieths, reads its own number beside it,
-and reads OFF at the bottom. They scale two views of one underlying synth, so
-there is only ever one audio context to unlock and one limiter for everything
-to sum into; a layer reads the fader every frame, so a fader moved mid-stage is
-heard at once. The engine, the tyres, the wind, the slide and the world are all
-EFFECTS — turning them off leaves a stage with nothing but its score.
+OPTIONS ▸ SOUND has two faders, effects and music. Each runs 0–100% in
+twentieths, reads its own number beside it, and reads OFF at the bottom. They
+scale two views of one underlying synth, so there is only ever one audio
+context to unlock and one limiter for everything to sum into; a layer reads the
+fader every frame, so a fader moved mid-stage is heard at once. The engine, the
+tyres, the wind, the slide and the world are all EFFECTS — turning them off
+leaves a stage with nothing but its score.
+
+**THE MUSIC IS BEHIND A FEATURE FLAG** (`pwa/src/features.ts`, and
+[configuration.md](configuration.md) for where a flag ships). The scores are
+not finished, so only a preview build plays them. With the flag off
+`music.ts` returns before it claims an arrangement — no score chunk is ever
+fetched — and the SOUND group carries ONE fader, named SOUND rather than
+EFFECTS: the name of a fader is only ever relative to what is beside it, and
+"EFFECTS" on its own is jargon where the row is simply the volume. Everything
+else in this document is written as the flag being ON, which is what the game
+is being built towards.
+
+The pause card carries no faders at all. It carries an OPTIONS row, which
+opens this page over the held stage (`menu-options.tsx`) — a settings strip
+written a second time was always the one missing the row a player had actually
+stopped for.
 
 ## Judging any of it
 
