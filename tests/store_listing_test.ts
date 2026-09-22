@@ -211,12 +211,19 @@ describe("the review notes are true of the build", () => {
   });
 
   it("does not promise a feature by naming a bundle id the app does not use", () => {
-    const bundleId = /const BUNDLE_ID = "([^"]+)"/.exec(read("native", "app.config.js"))?.[1];
-    expect(bundleId).toBeTruthy();
-    // On the PUBLISHER's domain, because the entity holding the store
-    // agreements owns the permanent identifier — and unchangeable once a
-    // record has shipped under it.
-    expect(bundleId).toMatch(/^se\.agilator\./);
+    const config = read("native", "app.config.js");
+    // The listing's identifier is a deployment's coordinate, so it arrives as
+    // APP_BUNDLE_ID rather than being committed. What IS committed is the
+    // development fallback, and it must be one that can never reach a store:
+    // `dev.local.*` is not on the publisher's domain and no record can ship
+    // under it.
+    const devId = /const DEV_BUNDLE_ID = "([^"]+)"/.exec(config)?.[1];
+    expect(devId).toBeTruthy();
+    expect(devId).toMatch(/^dev\.local\./);
+    expect(config).toContain("process.env.APP_BUNDLE_ID");
+    // And a production build must refuse to run on the fallback, or the guard
+    // is decoration.
+    expect(config).toContain('EAS_BUILD_PROFILE === "production"');
     expect(PUBLISHER).toBeTruthy();
   });
 });

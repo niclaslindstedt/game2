@@ -52,8 +52,9 @@ Steamworks app and depot ids.
 
 **Apple.** [App Store Connect](https://appstoreconnect.apple.com) → Apps → **+**.
 
-- **Bundle ID** must be the one `app.config.js` already declares:
-  `se.agilator.scandinavianflick`. It is on the publisher's domain rather than
+- **Bundle ID** comes from `APP_BUNDLE_ID`, a repository secret and an EAS
+  environment variable that `app.config.js` reads (unset, a build runs under
+  `dev.local.scandinavianflick`). It is on the publisher's domain rather than
   the author's because Agilator AB holds the store agreements, and it is
   **unchangeable** once a record ships under it.
 - **SKU** is yours and never shown; the slug is fine.
