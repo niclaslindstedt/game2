@@ -283,8 +283,19 @@ if (macListed) {
 // argument a reviewer can disprove faster than they can read it.
 // ---------------------------------------------------------------------------
 const appConfig = readFileSync(at("native", "app.config.js"), "utf8");
-const bundleId = /const BUNDLE_ID = "([^"]+)"/.exec(appConfig)?.[1];
-if (!bundleId) fail("could not read BUNDLE_ID from native/app.config.js");
+// The identifier is a build variable now (APP_BUNDLE_ID, with a committed
+// development fallback), so read it the way the config resolves it rather than
+// looking for a literal that is deliberately no longer there. A metadata run
+// without the variable set describes the development build, which is exactly
+// what it is — and the preflight is what refuses to submit one.
+const devBundleId = /const DEV_BUNDLE_ID = "([^"]+)"/.exec(appConfig)?.[1];
+const bundleId = process.env.APP_BUNDLE_ID?.trim() || devBundleId;
+if (!bundleId) {
+  fail(
+    "could not read the bundle id — native/app.config.js has no DEV_BUNDLE_ID " +
+      "and APP_BUNDLE_ID is unset",
+  );
+}
 
 // THE CLAIM: "the entire game ships inside the binary … there is no
 // streaming". `src/config.ts` treats any `extra.gameUrl` as "stream the remote
