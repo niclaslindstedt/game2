@@ -2,7 +2,7 @@
 # so builds — which consume paid EAS build minutes and store credentials — only
 # run when a human asks. Requires an EXPO_TOKEN repo secret (an Expo access
 # token from https://expo.dev/settings/access-tokens) and, until the project
-# id is pinned in native/app.config.js, an EAS_PROJECT_ID repo variable; store
+# id is pinned in native/app.config.js, an EAS_PROJECT_ID repo secret; store
 # submission also needs the App Store Connect / Play credentials configured on
 # the EAS project.
 name: native
@@ -63,9 +63,9 @@ jobs:
       - name: EAS build
         working-directory: native
         env:
-          APP_DISPLAY_NAME: ${{ vars.APP_DISPLAY_NAME }}
-          APP_BUNDLE_ID: ${{ vars.APP_BUNDLE_ID }}
-          EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+          APP_DISPLAY_NAME: ${{ secrets.APP_DISPLAY_NAME }}
+          APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+          EAS_PROJECT_ID: ${{ secrets.EAS_PROJECT_ID }}
         run: |
           eas build \
             --non-interactive \

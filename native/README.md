@@ -231,7 +231,7 @@ npm run bundle && eas build --profile production --platform all --auto-submit
 
 The CI workflow needs an `EXPO_TOKEN` repository secret (create one at
 <https://expo.dev/settings/access-tokens>) and, until the project id is pinned
-in `app.config.js`, an `EAS_PROJECT_ID` repository variable. Store
+in `app.config.js`, an `EAS_PROJECT_ID` repository secret. Store
 **submission** additionally needs App Store Connect / Google Play credentials
 configured on the EAS project (`eas credentials`) and a `submit` profile in
 `eas.json` naming the app record — a one-time interactive setup once the store
