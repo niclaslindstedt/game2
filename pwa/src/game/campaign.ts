@@ -450,7 +450,10 @@ export function recordFinish(
  * player are known. */
 export function recordResult(levelId: string, rows: readonly ClassRow[]): CampaignProgress {
   const progress = loadProgress();
-  return saveProgress({ ...progress, points: withScores(progress.points, levelId, scoreStage(rows)) });
+  return saveProgress({
+    ...progress,
+    points: withScores(progress.points, levelId, scoreStage(rows)),
+  });
 }
 
 /** What a stage paid, by crew — the results card's PTS column, read back out
@@ -490,7 +493,11 @@ function openLevels(
   const all = locations.flatMap((l) => l.levels.map((v) => v.id));
   const points = { ...progress.points };
   for (const id of all) points[id] = { ...(points[id] ?? {}), [PLAYER_ID]: POINTS[0] };
-  return saveProgress({ ...progress, finished: [...new Set([...progress.finished, ...all])], points });
+  return saveProgress({
+    ...progress,
+    finished: [...new Set([...progress.finished, ...all])],
+    points,
+  });
 }
 
 /** Every stage of these locations back to never having been driven. The
@@ -504,7 +511,11 @@ function shutLevels(
   const gone = new Set(locations.flatMap((l) => l.levels.map((v) => v.id)));
   const points = { ...progress.points };
   for (const id of gone) delete points[id];
-  return saveProgress({ ...progress, finished: progress.finished.filter((id) => !gone.has(id)), points });
+  return saveProgress({
+    ...progress,
+    finished: progress.finished.filter((id) => !gone.has(id)),
+    points,
+  });
 }
 
 /** Mark every stage in every location won, which is what opens all of them in
