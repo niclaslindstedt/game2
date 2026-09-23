@@ -59,9 +59,12 @@ Steamworks app and depot ids.
   **unchangeable** once a record ships under it.
 - **SKU** is yours and never shown; the slug is fine.
 - Creating the record assigns the numeric **Apple ID** (the `id##########` in the
-  App Store URL). Paste it into `eas.json` → `submit.production.ios.ascAppId`,
-  and the ten-character team id from the developer portal's Membership page into
-  `appleTeamId`. Both are public identifiers and both are committed.
+  App Store URL). Add it to `eas.json` → `submit.production.ios` as
+  `ascAppId`, and the ten-character team id from the developer portal's
+  Membership page as `appleTeamId`. Both are public identifiers and both are
+  committed. Until then the two keys are **absent**, not empty: EAS rejects an
+  `eas.json` with an empty value or a `$comment` key, and every `eas` command
+  fails on it — `eas init` included.
 
 **Play.** [Play Console](https://play.google.com/console) → Create app. Same
 package name. Play wants the Data safety form and a content rating before a
