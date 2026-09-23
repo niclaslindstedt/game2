@@ -21,6 +21,7 @@
 // hand-edited, so nothing read back out of one is trusted for what it claims.
 
 import { NUMERIC_KNOBS, type StageKnobs } from "@engine";
+import { markCloudDirty } from "./cloud-dirty.ts";
 
 const KEY_PREFIX = "scandi-flick-splits:";
 
@@ -75,6 +76,18 @@ export function loadSplitRecords(stageId: string): SplitRecords {
   }
 }
 
+/** Write a stage's whole book back. `postSplitRecord` is the one-segment
+ * door; this is for the cloud merge, which arrives holding a book built from
+ * two devices' drives. */
+export function saveSplitRecords(stageId: string, records: SplitRecords): void {
+  try {
+    localStorage.setItem(KEY_PREFIX + stageId, JSON.stringify(records));
+    markCloudDirty();
+  } catch {
+    /* storage unavailable — the run's own records still stand this session */
+  }
+}
+
 /** Offer a segment to the book. Returns whether it went in — which is what
  * the HUD flashes — and writes the whole stage's records back when it does.
  *
@@ -96,6 +109,7 @@ export function postSplitRecord(
   records[index] = seconds;
   try {
     localStorage.setItem(KEY_PREFIX + stageId, JSON.stringify(records));
+    markCloudDirty();
   } catch {
     /* storage unavailable or full — the record still stands for this run */
   }

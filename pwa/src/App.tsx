@@ -20,6 +20,7 @@
 // overlay prints is exactly that set, so a screenshot reproduces as a URL.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useCloudSync } from "./game/use-cloud-sync.ts";
 import { carById, status } from "@engine";
 
 import { onShellCommand } from "./shell-host.ts";
@@ -172,6 +173,7 @@ export function App() {
    * the MENU is, and this is a card over a run the menu is not in. The two
    * are drawn on the same layer (`.menu-held`) and out of the same
    * component, which is the whole point — one settings page, two doors. */
+  useCloudSync();
   const [heldOptions, setHeldOptions] = useState<{ sub: OptionsSub | null } | null>(null);
 
   // A card over a held run cannot outlive the hold. Every way out of pause —

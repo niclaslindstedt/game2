@@ -31,6 +31,7 @@
 // one release and the next, so a row is trusted for nothing it claims.
 
 import type { Difficulty, GearboxMode } from "@engine";
+import { markCloudDirty } from "./cloud-dirty.ts";
 import { CARS, DIFFICULTY_IDS } from "@engine";
 
 /** Rows on a stage's board. Ten is the arcade's number and it is the right
@@ -113,6 +114,7 @@ export function lastInitials(): string {
 export function rememberInitials(who: string): void {
   try {
     localStorage.setItem(INITIALS_KEY, normalizeInitials(who));
+    markCloudDirty();
   } catch {
     /* storage unavailable — the name still stands on this board */
   }
@@ -173,6 +175,21 @@ export function placeOn(board: readonly ScoreEntry[], time: number): number {
 
 /** Put an entry on a stage's board and return the board it makes. Sorting
  * and the ten-row cut happen here, so no caller has to know either. */
+/** Write a whole board back, sorted and cut to length. `recordScore` is the
+ * one-row door; this is for a caller that already holds the board it wants —
+ * the cloud merge (`cloud-save.ts`), which arrives with rows this device
+ * never drove. */
+export function saveBoard(levelId: string, rows: readonly ScoreEntry[]): ScoreEntry[] {
+  const next = sortBoard([...rows]).slice(0, BOARD_SIZE);
+  try {
+    localStorage.setItem(BOARD_KEY + levelId, JSON.stringify(next));
+    markCloudDirty();
+  } catch {
+    /* storage unavailable or full — the board stands for this session */
+  }
+  return next;
+}
+
 export function recordScore(levelId: string, entry: ScoreEntry): ScoreEntry[] {
   const next = sortBoard([
     ...loadBoard(levelId),

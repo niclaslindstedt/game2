@@ -36,6 +36,8 @@
 // them on tenths buys a figure nobody reads on a lifetime reading and costs
 // the counter a decade of its range.
 
+import { markCloudDirty } from "./cloud-dirty.ts";
+
 /** The step the TRIP reads in, metres. A tenth of a kilometre, which is
  * what the tenth marks on a real drum are. */
 export const TRIP_TICK_M = 100;
@@ -131,6 +133,7 @@ export function loadOdometer(carId: string): number {
 export function saveOdometer(carId: string, metres: number): void {
   try {
     localStorage.setItem(KEY_PREFIX + carId, Math.round(metres).toString());
+    markCloudDirty();
   } catch {
     /* storage unavailable or full — the counter still reads for this tab */
   }

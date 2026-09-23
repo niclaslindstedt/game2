@@ -61,6 +61,30 @@ export const RUMBLE_BRIDGE = `(function () {
   true;
 })();`;
 
+/** Listens for the page's cloud asks and posts each one to the shell. The
+ * event's name and the ask's shape are `SHELL_CLOUD` in
+ * `pwa/src/shell-host.ts`, and the message is read by `parseCloudAsk` in
+ * `src/cloud-save.ts` — change one, change all three. The answer comes back
+ * the other way, through `injectJavaScript`. */
+export const CLOUD_BRIDGE = `(function () {
+  try {
+    window.addEventListener("sf-shell-cloud", function (event) {
+      var ask = event.detail || {};
+      var post = window.ReactNativeWebView;
+      if (!post) return;
+      post.postMessage(
+        JSON.stringify({
+          sh: "cloud",
+          action: ask.action,
+          requestId: ask.requestId,
+          data: ask.data,
+        }),
+      );
+    });
+  } catch (e) {}
+  true;
+})();`;
+
 /** Runs via `injectedJavaScript` — after the document exists — to append a
  * small stylesheet that suppresses the iOS long-press callout and text
  * selection (except in inputs, so the score board's initials still take a

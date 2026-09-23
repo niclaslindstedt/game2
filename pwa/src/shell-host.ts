@@ -151,3 +151,55 @@ export function onShellFullscreen(told: (on: boolean) => void): () => void {
   target.addEventListener(SHELL_FULLSCREEN_STATE, listen);
   return () => target.removeEventListener?.(SHELL_FULLSCREEN_STATE, listen);
 }
+
+/** THE PLATFORM'S CLOUD, ASKED AND ANSWERED — the fifth thing the page may
+ * know about a shell, and the only one with a round trip in it.
+ *
+ * A browser has no platform cloud; a store app runs on a device that is
+ * already signed into one. So the page ASKS (is there a cloud? read it; write
+ * this) and the shell answers on a second event, matching a `requestId` the
+ * page made up. Everything about WHAT is saved and how two devices reconcile
+ * lives in `game/cloud-save.ts` — this is transport, and it stays that way so
+ * a second platform is a new shell and no change here.
+ *
+ * `changed` is the one message the shell sends unasked: another device wrote
+ * the store, so the page should pull and merge. */
+export const SHELL_CLOUD = "sf-shell-cloud";
+export const SHELL_CLOUD_EVENT = "sf-shell-cloud-event";
+
+/** What the page may ask the shell to do with the cloud. */
+export type ShellCloudAsk =
+  | { action: "status"; requestId: string }
+  | { action: "load"; requestId: string }
+  | { action: "save"; requestId: string; data: string };
+
+/** What a shell answers. `ok` false is a cloud that refused — signed out, or
+ * over quota — which the page shows rather than retrying forever. */
+export type ShellCloudReply =
+  | { event: "status"; requestId: string; ok: boolean; available: boolean }
+  | { event: "load"; requestId: string; ok: boolean; data: string | null }
+  | { event: "save"; requestId: string; ok: boolean; reason?: string }
+  | { event: "changed" };
+
+/** Ask the shell to do one thing with the cloud. A no-op in a browser, where
+ * the answer would never come — callers time out rather than hang. */
+export function askShellCloud(ask: ShellCloudAsk): void {
+  const target = globalThis as { dispatchEvent?: (event: Event) => boolean };
+  if (typeof CustomEvent !== "function" || typeof target.dispatchEvent !== "function") return;
+  target.dispatchEvent(new CustomEvent(SHELL_CLOUD, { detail: ask }));
+}
+
+/** Hear every cloud answer, until the hand-back is called. */
+export function onShellCloud(told: (reply: ShellCloudReply) => void): () => void {
+  const target = globalThis as {
+    addEventListener?: (type: string, listener: (event: Event) => void) => void;
+    removeEventListener?: (type: string, listener: (event: Event) => void) => void;
+  };
+  if (typeof target.addEventListener !== "function") return () => {};
+  const listen = (event: Event): void => {
+    const detail = (event as CustomEvent<Partial<ShellCloudReply>>).detail;
+    if (detail && typeof detail.event === "string") told(detail as ShellCloudReply);
+  };
+  target.addEventListener(SHELL_CLOUD_EVENT, listen);
+  return () => target.removeEventListener?.(SHELL_CLOUD_EVENT, listen);
+}

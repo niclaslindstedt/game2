@@ -84,6 +84,17 @@ if (process.env.EAS_BUILD_PROFILE === "production") {
 // credentials configured on the Expo project.
 const APPLE_TEAM_ID = process.env.APPLE_TEAM_ID;
 
+const CLOUD_SAVE = process.env.EXPO_PUBLIC_CLOUD_SAVE !== "off";
+
+// iCloud key-value storage is namespaced <TeamID>.<container>; the team prefix
+// is filled in at build time. The container is the app's own identifier, which
+// is a build variable — so a development build saves into a development
+// container and a store build into the store's, and neither can read the
+// other's rows by accident.
+const CLOUD_ENTITLEMENTS = {
+  "com.apple.developer.ubiquity-kvstore-identifier": `$(TeamIdentifierPrefix)${BUNDLE_ID}`,
+};
+
 module.exports = () => ({
   expo: {
     name: DISPLAY_NAME ?? APP_NAME,
@@ -107,6 +118,13 @@ module.exports = () => ({
     ios: {
       supportsTablet: true,
       bundleIdentifier: BUNDLE_ID,
+      // CLOUD SAVE (src/cloud-save.ts) needs the iCloud capability with
+      // key-value storage on the App ID, and an entitlement the App ID does
+      // not carry FAILS code signing — which would break a quick local build
+      // on a bare Apple ID that has neither. So it can be dropped with
+      // EXPO_PUBLIC_CLOUD_SAVE=off (the shell then reports cloud save
+      // unavailable and the game stays device-local).
+      ...(CLOUD_SAVE ? { entitlements: CLOUD_ENTITLEMENTS } : {}),
       requireFullScreen: true,
       infoPlist: {
         // Synthesized audio only — no recording — but the WebView's WebAudio

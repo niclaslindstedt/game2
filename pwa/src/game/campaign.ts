@@ -35,6 +35,8 @@
 // can be unavailable (private mode); a run simply does not persist rather than
 // failing.
 
+import { markCloudDirty } from "./cloud-dirty.ts";
+
 import {
   DEFAULT_KNOBS,
   NUMERIC_KNOBS,
@@ -361,9 +363,13 @@ export function loadProgress(): CampaignProgress {
   }
 }
 
-function save(progress: CampaignProgress): CampaignProgress {
+/** Write a whole record back. Every mutator here goes through it, and so
+ * does the cloud merge (`cloud-save.ts`), which is the one caller that
+ * arrives holding a record it did not build from this device's own. */
+export function saveProgress(progress: CampaignProgress): CampaignProgress {
   try {
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    markCloudDirty();
     // The old season has just been written into the record above; leaving it
     // behind would be a second board nobody reads.
     localStorage.removeItem(LEGACY_SEASON_KEY);
@@ -429,7 +435,7 @@ export function recordFinish(
       places[id][standing.difficulty] = standing.place;
     }
   }
-  return save({
+  return saveProgress({
     finished: withId(progress.finished, id),
     points: standing
       ? withScores(progress.points, id, { [PLAYER_ID]: pointsFor(standing.place) })
@@ -444,7 +450,7 @@ export function recordFinish(
  * player are known. */
 export function recordResult(levelId: string, rows: readonly ClassRow[]): CampaignProgress {
   const progress = loadProgress();
-  return save({ ...progress, points: withScores(progress.points, levelId, scoreStage(rows)) });
+  return saveProgress({ ...progress, points: withScores(progress.points, levelId, scoreStage(rows)) });
 }
 
 /** What a stage paid, by crew — the results card's PTS column, read back out
@@ -484,7 +490,7 @@ function openLevels(
   const all = locations.flatMap((l) => l.levels.map((v) => v.id));
   const points = { ...progress.points };
   for (const id of all) points[id] = { ...(points[id] ?? {}), [PLAYER_ID]: POINTS[0] };
-  return save({ ...progress, finished: [...new Set([...progress.finished, ...all])], points });
+  return saveProgress({ ...progress, finished: [...new Set([...progress.finished, ...all])], points });
 }
 
 /** Every stage of these locations back to never having been driven. The
@@ -498,7 +504,7 @@ function shutLevels(
   const gone = new Set(locations.flatMap((l) => l.levels.map((v) => v.id)));
   const points = { ...progress.points };
   for (const id of gone) delete points[id];
-  return save({ ...progress, finished: progress.finished.filter((id) => !gone.has(id)), points });
+  return saveProgress({ ...progress, finished: progress.finished.filter((id) => !gone.has(id)), points });
 }
 
 /** Mark every stage in every location won, which is what opens all of them in
@@ -536,7 +542,7 @@ export function resetPoints(locationId: string): CampaignProgress {
   const progress = loadProgress();
   const points = { ...progress.points };
   for (const level of locationById(locationId).levels) delete points[level.id];
-  return save({ ...progress, points });
+  return saveProgress({ ...progress, points });
 }
 
 /** A level opens in the CAMPAIGN once the one before it has been cleared;
