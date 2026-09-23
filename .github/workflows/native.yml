@@ -63,6 +63,8 @@ jobs:
       - name: EAS build
         working-directory: native
         env:
+          APP_DISPLAY_NAME: ${{ vars.APP_DISPLAY_NAME }}
+          APP_BUNDLE_ID: ${{ vars.APP_BUNDLE_ID }}
           EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
         run: |
           eas build \

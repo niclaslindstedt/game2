@@ -52,7 +52,7 @@ Steamworks app and depot ids.
 
 **Apple.** [App Store Connect](https://appstoreconnect.apple.com) → Apps → **+**.
 
-- **Bundle ID** comes from `APP_BUNDLE_ID`, a repository secret and an EAS
+- **Bundle ID** comes from `APP_BUNDLE_ID`, a repository variable and an EAS
   environment variable that `app.config.js` reads (unset, a build runs under
   `dev.local.scandinavianflick`). It is on the publisher's domain rather than
   the author's because Agilator AB holds the store agreements, and it is
