@@ -274,12 +274,22 @@ jobs:
 
       - name: Package
         shell: bash
-        run: npm run tauri:package
+        env:
+          # THE DEPLOYMENT'S IDENTITY — the same secrets, under the same names,
+          # the phone build reads. The identifier is also where the installed
+          # app keeps its progress, so `--require-identity` refuses to
+          # package a release under the development one.
+          APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+          APP_DISPLAY_NAME: ${{ secrets.APP_DISPLAY_NAME }}
+        run: npm run tauri:package -- --require-identity
 
       - name: Package (macOS, Intel)
         if: matrix.target == 'macos'
         shell: bash
-        run: npm run tauri:package -- --target x86_64-apple-darwin --skip-web --keep
+        env:
+          APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+          APP_DISPLAY_NAME: ${{ secrets.APP_DISPLAY_NAME }}
+        run: npm run tauri:package -- --target x86_64-apple-darwin --skip-web --keep --require-identity
 
       # Whatever this platform's packager produced — a job that listed
       # filenames would silently upload nothing the day a target changed

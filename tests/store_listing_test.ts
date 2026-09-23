@@ -331,9 +331,11 @@ describe("the Mac App Store listing", () => {
         identifier: string;
       }
     ).identifier;
-    const phoneId = /const BUNDLE_ID = "([^"]+)"/.exec(read("native", "app.config.js"))?.[1];
+    // Both builds read APP_BUNDLE_ID, so the two ids can only differ in their
+    // committed development fallbacks — which must therefore agree.
+    const phoneDevId = /const DEV_BUNDLE_ID = "([^"]+)"/.exec(read("native", "app.config.js"))?.[1];
     expect(typeof RULES.mac.universalPurchase).toBe("boolean");
-    if (RULES.mac.universalPurchase) expect(macId).toBe(phoneId);
+    expect(macId).toBe(phoneDevId);
   });
 
   it("stages every frame with the field on the road", () => {

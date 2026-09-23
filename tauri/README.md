@@ -180,6 +180,18 @@ is never a release's) patched in, and collects the downloads into `release/`
 as `scanflick-<version>-<os>-<arch>.<ext>`: a `.deb` and an `.AppImage` on
 Linux, a `.dmg` on macOS, an NSIS `-setup.exe` on Windows.
 
+**The identity comes from the deployment.** `tauri.conf.json` commits the
+phone build's development identifier (`dev.local.scandinavianflick`); what a download or a
+store build installs as arrives at packaging time, as the phone app's does —
+`APP_BUNDLE_ID` becomes the `identifier`, and the optional `APP_DISPLAY_NAME`
+the `productName`, merged in the same `--config` patch as the version. With
+both builds reading `APP_BUNDLE_ID`, the Mac app and the phone app are one id,
+which is what Apple's universal purchase needs. `release.yml` passes
+`--require-identity`, so a release refuses to package under the development
+id. **The identifier is also where the webview keeps the player's progress**,
+so it is fixed per deployment: changing it after a download has shipped
+strands every installed copy's saves.
+
 **macOS is never signed with nothing** — Apple Silicon refuses to execute
 unsigned arm64 code at all, so the default is an ad-hoc signature and
 `APPLE_SIGNING_IDENTITY` is what a release sets instead. An ad-hoc build is

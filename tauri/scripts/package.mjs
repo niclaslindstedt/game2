@@ -23,6 +23,7 @@
 //   node scripts/package.mjs --target <triple>   # cross/explicit target
 //   node scripts/package.mjs --skip-web          # reuse an existing webroot
 //   node scripts/package.mjs --keep              # add to release/, don't clear it
+//   node scripts/package.mjs --require-identity  # a release: refuse the dev identity
 //
 // `--keep` is what lets one macOS runner produce BOTH slices: the second
 // pass cross-compiles `--target x86_64-apple-darwin` and would otherwise
@@ -44,9 +45,8 @@ const NPM_COMMAND = WINDOWS ? "npm.cmd" : "npm";
  * keeps its own number and nothing updates it, so a download named after it
  * would claim a version no release ever had. */
 const { version } = JSON.parse(readFileSync(join(REPO_DIR, "package.json"), "utf8"));
-const { productName, mainBinaryName } = JSON.parse(
-  readFileSync(join(APP_DIR, "src-tauri", "tauri.conf.json"), "utf8"),
-);
+const tauriConf = JSON.parse(readFileSync(join(APP_DIR, "src-tauri", "tauri.conf.json"), "utf8"));
+const { mainBinaryName } = tauriConf;
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -55,6 +55,28 @@ const option = (name) => {
   return at >= 0 ? args[at + 1] : undefined;
 };
 const target = option("target");
+
+// THE DEPLOYMENT'S IDENTITY — the same two variables, under the same names, the
+// phone build reads (native/app.config.js) and every app in the fleet uses.
+// `tauri.conf.json` commits the phone's development identifier; a store or
+// download build merges the real one over it, so the desktop and the phone app
+// carry ONE id — which is also what Apple's universal purchase needs. The
+// identifier is where each desktop webview keeps its storage, so an installed
+// copy's progress belongs to the identifier it shipped under: fixed per
+// deployment, never derived. The display name is optional, as it is for the
+// phone app: the game keeps one name everywhere, so it falls back to the
+// committed `productName`.
+const bundleId = process.env.APP_BUNDLE_ID?.trim() ?? "";
+const displayName = process.env.APP_DISPLAY_NAME?.trim() ?? "";
+if (flag("require-identity") && !bundleId) {
+  fail(
+    "APP_BUNDLE_ID is not set. A release package needs the deployment's " +
+      "identifier rather than the development one — set it as a repository " +
+      "secret. See tauri/README.md.",
+  );
+}
+/** What the bundle is called — and the prefix the bundler gives its files. */
+const productName = displayName || tauriConf.productName;
 
 /** The word the download carries for this machine's platform. */
 const OS = { win32: "windows", darwin: "macos" }[process.platform] ?? "linux";
@@ -77,6 +99,8 @@ run(NPM_COMMAND, ["run", "icons"], APP_DIR);
  */
 const patch = {
   version,
+  ...(bundleId ? { identifier: bundleId } : {}),
+  ...(displayName ? { productName: displayName } : {}),
   bundle: {
     copyright: `Copyright © ${new Date().getFullYear()} Niclas Lindstedt`,
     macOS: {
@@ -95,7 +119,10 @@ const patch = {
 const tauriArgs = ["tauri", "build", "--config", JSON.stringify(patch)];
 if (target) tauriArgs.push("--target", target);
 
-console.log(`• packaging the Tauri shell — ${OS}, version ${version}`);
+console.log(
+  `• packaging ${productName} (${bundleId || "development identifier"}) — ` +
+    `${OS}, version ${version}`,
+);
 run(WINDOWS ? "npx.cmd" : "npx", tauriArgs, APP_DIR);
 
 // ---------------------------------------------------------------------------

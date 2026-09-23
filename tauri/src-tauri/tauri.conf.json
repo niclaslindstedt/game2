@@ -3,7 +3,7 @@
   "productName": "Scandinavian Flick",
   "mainBinaryName": "scanflick",
   "version": "0.1.0",
-  "identifier": "se.agilator.scanflick",
+  "identifier": "dev.local.scandinavianflick",
   "build": {
     "frontendDist": "./placeholder"
   },

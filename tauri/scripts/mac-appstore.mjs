@@ -62,7 +62,9 @@ if (!team) {
 }
 
 const config = JSON.parse(readFileSync(CONFIG, "utf8"));
-const identifier = config.identifier;
+// The deployment's identifier, as the packager resolves it: APP_BUNDLE_ID,
+// else the committed development one — which no store record will accept.
+const identifier = process.env.APP_BUNDLE_ID?.trim() || config.identifier;
 
 // THE SANDBOX, AND NOTHING BUT THE SANDBOX.
 //

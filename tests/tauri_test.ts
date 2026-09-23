@@ -77,7 +77,16 @@ describe("the desktop app's names", () => {
   it("name the executable, the user-data folder and the Cargo binary alike", () => {
     expect(rustConst(rustConfig, "APP_DIR_NAME")).toBe(config.mainBinaryName);
     expect(appManifest).toContain(`name = "${config.mainBinaryName}"`);
-    expect(config.identifier.endsWith(`.${config.mainBinaryName}`)).toBe(true);
+  });
+
+  // The identifier is a deployment fact (APP_BUNDLE_ID, merged in by
+  // tauri/scripts/package.mjs); what is committed is the PHONE build's
+  // development fallback, so the two builds are one id in development too.
+  it("commit the phone build's development identifier", () => {
+    const phoneDevId = /const DEV_BUNDLE_ID = "([^"]+)"/.exec(
+      readFileSync(path.join(ROOT, "native", "app.config.js"), "utf8"),
+    )?.[1];
+    expect(config.identifier).toBe(phoneDevId);
   });
 
   it("tell the page about the shell through the one global shell-host.ts reads", () => {

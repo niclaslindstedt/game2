@@ -250,32 +250,41 @@ if (/^[A-Z0-9]{10}$/i.test(String(iosSubmit.appleTeamId ?? ""))) {
   );
 }
 
-// THE BUNDLE ID IS DEFINED ONCE AND REPEATED ONCE. app.config.js owns it; the
-// fastlane Appfile restates it and cannot import a JavaScript module, so a
-// drift would upload this listing onto a different app. Checked rather than
-// derived, for exactly that reason.
+// THE BUNDLE ID IS A DEPLOYMENT FACT, NOT A COMMITTED ONE. The phone build
+// (native/app.config.js) and the desktop package (tauri/scripts/package.mjs,
+// over tauri.conf.json) both read APP_BUNDLE_ID and fall back to one
+// development id; a fastlane Appfile, where there is one, must read it too. A
+// drift means a build signed under an id no store record holds, so it is
+// checked here rather than derived — none of these files can import the others.
 const appConfig = readFileSync(at("native", "app.config.js"), "utf8");
-const configBundle = /const BUNDLE_ID = "([^"]+)"/.exec(appConfig)?.[1];
+const desktopPackager = readFileSync(at("tauri", "scripts", "package.mjs"), "utf8");
+const desktopConf = JSON.parse(readFileSync(at("tauri", "src-tauri", "tauri.conf.json"), "utf8"));
 const appfilePath = at("native", "fastlane", "Appfile");
-if (!configBundle) {
-  fail("could not read BUNDLE_ID from native/app.config.js");
-} else if (!existsSync(appfilePath)) {
-  warn(
-    `no ${rel(appfilePath)} — fastlane cannot upload without one`,
-    `it names the same bundle id app.config.js does (${configBundle}) plus the ` +
-      "Apple account. See native/store/README.md.",
-    "apple",
+const appfile = existsSync(appfilePath) ? readFileSync(appfilePath, "utf8") : null;
+const devId = /DEV_BUNDLE_ID = "([^"]+)"/.exec(appConfig)?.[1];
+const drift = [];
+if (desktopConf.identifier !== devId) {
+  drift.push(`tauri.conf.json falls back to ${desktopConf.identifier}`);
+}
+if (!appConfig.includes("process.env.APP_BUNDLE_ID")) {
+  drift.push("app.config.js does not read APP_BUNDLE_ID");
+}
+if (!desktopPackager.includes("APP_BUNDLE_ID")) {
+  drift.push("tauri/scripts/package.mjs does not read APP_BUNDLE_ID");
+}
+if (appfile !== null && !appfile.includes('ENV["APP_BUNDLE_ID"]')) {
+  drift.push("fastlane/Appfile does not read APP_BUNDLE_ID");
+}
+if (devId && drift.length === 0) {
+  ok(
+    `bundle id from APP_BUNDLE_ID everywhere, development fallback ${devId} ` +
+      "(app.config.js = tauri.conf.json)",
   );
 } else {
-  const appfileBundle = /app_identifier\("([^"]+)"\)/.exec(readFileSync(appfilePath, "utf8"))?.[1];
-  if (appfileBundle === configBundle) ok(`bundle id ${configBundle}, agreed by fastlane`);
-  else {
-    fail(
-      `bundle id drift: app.config.js says ${configBundle}, the Appfile says ${appfileBundle}`,
-      "the Appfile is Ruby and cannot import app.config.js, so the two are kept in " +
-        "step by hand. app.config.js is the source of truth.",
-    );
-  }
+  fail(
+    `bundle id drift: ${drift.join("; ") || "no development id in app.config.js"}`,
+    "app.config.js is the source of truth — fix the others to match.",
+  );
 }
 
 // ---------------------------------------------------------------------------

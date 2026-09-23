@@ -414,7 +414,9 @@ if (extraEntitlements.length) {
 // Apple's universal purchase needs the Mac app and the iPhone app to carry the
 // same bundle id, and it cannot be turned on after either has shipped. So the
 // disagreement is reported every single run until somebody decides.
-const macBundleId = tauriConfig.identifier;
+// Resolved the way tauri/scripts/package.mjs resolves it, so with APP_BUNDLE_ID
+// set the Mac app and the phone app are one id by construction.
+const macBundleId = process.env.APP_BUNDLE_ID?.trim() || tauriConfig.identifier;
 if (macRules.universalPurchase) {
   if (macBundleId !== bundleId) {
     fail(
@@ -427,8 +429,8 @@ if (macRules.universalPurchase) {
   warn(
     `the Mac app (${macBundleId}) and the iPhone app (${bundleId}) are different ` +
       "products, so a player buys the game twice. Universal purchase would make it " +
-      "one, and it can only be turned on while NEITHER has shipped — set " +
-      "tauri.conf.json's identifier to the phone's and flip mac.universalPurchase.",
+      "one, and it can only be turned on while NEITHER has shipped — both builds " +
+      "read APP_BUNDLE_ID, so this is a drifted fallback in tauri.conf.json.",
   );
 }
 

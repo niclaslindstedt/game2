@@ -180,11 +180,20 @@ jobs:
       - name: Package
         if: inputs.platform == 'all' || inputs.platform == matrix.target
         shell: bash
+        env:
+          # THE DEPLOYMENT'S IDENTITY — the same secrets, under the same names,
+          # the phone build reads. The identifier is also where the installed
+          # app keeps its progress.
+          APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+          APP_DISPLAY_NAME: ${{ secrets.APP_DISPLAY_NAME }}
         run: npm run tauri:package
 
       - name: Package (macOS, Intel)
         if: matrix.target == 'macos' && (inputs.platform == 'all' || inputs.platform == 'macos')
         shell: bash
+        env:
+          APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+          APP_DISPLAY_NAME: ${{ secrets.APP_DISPLAY_NAME }}
         run: npm run tauri:package -- --target x86_64-apple-darwin --skip-web --keep
 
       - uses: actions/upload-artifact@v7

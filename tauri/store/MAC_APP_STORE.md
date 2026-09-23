@@ -44,12 +44,12 @@ Apple's **universal purchase** sells the Mac app and the iPhone app as one
 thing — buy it on a phone, it is on the Mac. It needs both apps to carry the
 **same bundle id**, and it can only be turned on while **neither has shipped**.
 
-Today they differ (`se.agilator.scanflick` here, `se.agilator.scandinavianflick`
-in `native/app.config.js`), so `make store-metadata` warns on every run until
-somebody decides. To take it: set this tree's `identifier` to the phone's and
-flip `mac.universalPurchase` in `listing.mts`. Note that the identifier is also
-what the WebView keys its storage to, so changing it after a desktop build has
-been in anyone's hands orphans their settings and scores.
+Both builds now take the id from `APP_BUNDLE_ID` (the desktop package merges
+it over `tauri.conf.json`, which commits the phone's development id), so they
+are one id by construction and universal purchase is available; the choice
+left is `mac.universalPurchase` in `listing.mts`. The identifier is also what
+the WebView keys its storage to, so changing it after a desktop build has been
+in anyone's hands orphans their settings and scores.
 
 ## The icon
 

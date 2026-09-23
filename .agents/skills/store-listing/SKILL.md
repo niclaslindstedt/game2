@@ -245,9 +245,10 @@ defend**, so add nothing the game does not genuinely need.
 
 Apple's **universal purchase** sells the Mac app and the iPhone app as one
 thing, and it needs both to carry the **same bundle id**. It can only be turned
-on while **neither has shipped**. The two currently differ, so `make
-store-metadata` warns on every run until somebody decides — do not silence that
-warning, it is a clock. `mac.universalPurchase` in `listing.mts` is the switch,
+on while **neither has shipped**. Both builds read `APP_BUNDLE_ID`, so they
+carry one id and the option is open — it closes the day either ships. `make
+store-metadata` fails if the switch is on and the ids ever drift apart.
+`mac.universalPurchase` in `listing.mts` is the switch,
 and `tauri/store/MAC_APP_STORE.md` has the cost of flipping it late (the bundle
 id is what the WebView keys the player's saves to).
 
