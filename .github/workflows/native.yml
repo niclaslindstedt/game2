@@ -54,8 +54,8 @@ jobs:
         working-directory: native
         run: npm ci
 
-      # vite build + zip. The .easignore keeps the generated zip in the upload
-      # despite .gitignore.
+      # vite build + zip. The root .easignore keeps the generated zip in the
+      # upload despite .gitignore.
       - name: Bundle the website into the app
         working-directory: native
         run: npm run bundle

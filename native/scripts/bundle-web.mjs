@@ -14,8 +14,8 @@
 //   node scripts/bundle-web.mjs --skip-build   # re-zip an existing dist/
 //
 // The zip is a build artifact (gitignored). Generate it before `eas build`
-// (the native workflow and the `bundle` npm script do this for you); a
-// `.easignore` keeps it in the EAS upload despite the .gitignore entry.
+// (the native workflow and the `bundle` npm script do this for you); the
+// root `.easignore` keeps it in the EAS upload despite the .gitignore entry.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
