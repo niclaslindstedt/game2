@@ -108,7 +108,14 @@ module.exports = () => ({
     // packaged app never reaches the cover the page would otherwise show.
     orientation: "landscape",
     icon: "./assets/icon.png",
-    scheme: "scandinavianflick",
+    // The URL scheme is the bundle id — reverse-DNS, as RFC 8252 §7.1 asks of
+    // a private-use scheme — so it is as unique as the app itself and never a
+    // word another app could also claim. It follows APP_BUNDLE_ID, so it is
+    // not committed either: `se.agilator.<slug>` in a store build,
+    // `dev.local.<slug>` in a checkout. Nothing in the game opens a link into
+    // the app today; the scheme is registered so that anything that one day
+    // does (an OAuth redirect, `<bundle id>://oauth`) has a name ready.
+    scheme: BUNDLE_ID,
     userInterfaceStyle: "light",
     backgroundColor: BRAND_BG,
     // Ship the packed website (assets/webroot.zip) inside the app so the game
