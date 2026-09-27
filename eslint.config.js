@@ -27,7 +27,7 @@ export default [
   },
   js.configs.recommended,
   {
-    // Node tooling scripts (icon generation, SEO checks, sim CLI, release
+    // Node tooling scripts (icon generation, sim CLI, release
     // plumbing, the desktop shell's bundling and packaging). These run under
     // Node, so expose its globals rather than the browser's.
     files: ["scripts/**/*.mjs", ".agents/skills/**/*.mjs", "tauri/scripts/**/*.mjs"],

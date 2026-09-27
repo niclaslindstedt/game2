@@ -97,7 +97,7 @@ The app has no runtime dependency beyond Preact and three.js; the runtime is Pre
 
 ## `tests/` and `scripts/`
 
-Root-level vitest suites cover the generator's R-rules, the drift and jump moment by moment, the gearboxes, and full bot simulations (see [simulation.md](simulation.md)). `scripts/` holds Node tooling: the sim CLI, track previews, the audio audition page, headless screenshots, the icon/OG generator (pure-Node PNG encoder in `scripts/lib/png.mjs` — no native image deps), the SEO checker, and the release plumbing (`scripts/release/`, changeset fragments → CHANGELOG).
+Root-level vitest suites cover the generator's R-rules, the drift and jump moment by moment, the gearboxes, and full bot simulations (see [simulation.md](simulation.md)). `scripts/` holds Node tooling: the sim CLI, track previews, the audio audition page, headless screenshots, the icon/OG generator (pure-Node PNG encoder in `scripts/lib/png.mjs` — no native image deps), and the release plumbing (`scripts/release/`, changeset fragments → CHANGELOG).
 
 Several of those tools are the same shape and worth knowing as one: a
 harness PAGE under `pwa/src/tools/` with its own HTML entry at the `pwa/`

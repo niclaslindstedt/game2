@@ -124,4 +124,4 @@ Each slot's manifest gets a distinct `id`/`scope`/`start_url` and install name, 
 
 ## Identity
 
-Name, copy, palette, and URLs live in `pwa/src/identity.ts` and nowhere else; `pwa/index.html` (SEO head), `pwa/public/` (robots/sitemap/llms/CNAME), and the icon generator all follow it. Changing identity means touching those in the same change — AGENTS.md's parity table is the checklist.
+Name, copy, palette, and URLs live in `pwa/src/identity.ts` and nowhere else; `pwa/index.html` (the head: title, description, Open Graph), `pwa/public/` (robots/CNAME), and the icon generator all follow it. The site is not meant to be found through search: every page carries `noindex`, `robots.txt` allows crawling so a crawler can read it, and there is no sitemap — no SEO and no size budgets, by owner decision. Changing identity means touching those in the same change — AGENTS.md's parity table is the checklist.

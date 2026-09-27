@@ -30,11 +30,11 @@ type AppPwaOptions = {
   ignorePaths?: string[];
 };
 
-// Public assets we never want in the precache: the SEO files are for
-// crawlers, not the game shell. CNAME is GitHub Pages config — the deploy
+// Public assets we never want in the precache: robots.txt is for crawlers and
+// og.png for link unfurlers, not the game shell. CNAME is GitHub Pages config — the deploy
 // workflow strips it from every non-root slot, so a precached `${base}CNAME`
 // would 404 the install fetch on `/preview/` and `/branch/`.
-const PUBLIC_SKIP = new Set(["robots.txt", "sitemap.xml", "llms.txt", "og.png", "CNAME"]);
+const PUBLIC_SKIP = new Set(["robots.txt", "og.png", "CNAME"]);
 
 /** Per-deploy-slot install name so a parked preview installs as its own tile. */
 function channelName(base: string): { name: string; short_name: string } {

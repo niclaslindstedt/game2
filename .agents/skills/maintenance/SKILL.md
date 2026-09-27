@@ -23,10 +23,10 @@ The registry is the single source of truth for which sync skills exist in this r
 | --- | --- | --- | --- |
 | `update-docs` | `docs/*.md` vs. engine/app/tooling source of truth | §11.1 | 1 |
 | `update-readme` | `README.md` vs. current commands, cars, controls, URLs | §3 | 2 |
-| `update-website` | SEO surfaces + identity-derived shell vs. `identity.ts`/docs | §11.2–§11.3 | 3 |
+| `update-website` | identity-derived shell and head copy vs. `identity.ts`/docs | §11.2–§11.3 | 3 |
 | `update-prompts` | `prompts/` templates vs. their sources of truth (dormant) | §13.2 | 4 |
 
-Run order matters: `update-docs` runs before `update-readme` because the README links into docs pages and summarizes their content — a README synced against stale docs re-imports the staleness. `update-website` runs after both because the site's SEO copy describes what the README and docs claim; `update-prompts` runs last (currently dormant — no prompts shipped yet, so it usually just refreshes its baseline).
+Run order matters: `update-docs` runs before `update-readme` because the README links into docs pages and summarizes their content — a README synced against stale docs re-imports the staleness. `update-website` runs after both because the site's head copy describes what the README and docs claim; `update-prompts` runs last (currently dormant — no prompts shipped yet, so it usually just refreshes its baseline).
 
 After the registry, finish a full sweep with the `sync-game-spec` skill — it walks `OSS_GAME_SPEC.md` chapter by chapter, catches the residual conformance violations the per-artifact skills did not touch, and re-dates every row of `docs/spec-conformance.md`.
 

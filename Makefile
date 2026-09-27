@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
+.PHONY: build test lint fmt fmt-check release clean install icons sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
 
 build:
 	npm run build
@@ -105,9 +105,6 @@ store-shots:
 # `ARGS="--shot drift --around 0.4 --span 0.6"`. See the `store-shots` skill.
 store-sweep:
 	node scripts/store-shot-sweep.mjs $(ARGS)
-
-check-seo:
-	npm run build && npm run check:seo
 
 # Headless balance sweep: bots drive generated stages through the real
 # engine and print the pace / drift / air / respawn / damage table.

@@ -37,7 +37,7 @@ rolled half of it, before any push that adds, moves or removes an import.
 And note what `tsc` alone still cannot tell you even when you run both: a
 MISSING EXPORT is a type error, but a bundler-only failure (a cycle, a
 resolution quirk) is not. `make build` is a separate gate from `make lint`,
-and `check-seo` runs it — so a change to the module graph owes a build too.
+and CI runs it — so a change to the module graph owes a build too.
 
 The structural fix, both times, was the same: a value two layers need is its
 own DOM-free module, not an export bolted onto whichever file declared it

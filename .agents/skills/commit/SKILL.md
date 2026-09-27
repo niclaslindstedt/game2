@@ -77,7 +77,7 @@ clone cannot run. The split is by COST, not by importance:
 | `make fmt`, then `make fmt-check` | `make test` — the WHOLE suite, sharded |
 | `npx eslint <the files you changed>` — 2 s, against 24 s for the repo | `make lint` over everything |
 | `npx tsc --noEmit` — whole-program on purpose (see below), and 3 s | `make build` |
-| the tests that cover the change, by file (`npx vitest run tests/<topic>_test.ts`) | `make check-seo` |
+| the tests that cover the change, by file (`npx vitest run tests/<topic>_test.ts`) |  |
 | `make actionlint` / `make shellcheck` — only if a workflow, hook, or `.sh` was touched |  |
 | the changeset call: a fragment under `.changes/unreleased/`, or the `no-changelog` label |  |
 | `make sim` — if handling or generator moved; the PR owes its table |  |

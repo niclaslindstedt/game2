@@ -36,7 +36,7 @@ because the game half leans on the baseline half:
 | §7.2 | `AGENTS.md` carries the four game sections: role map, content pipeline, the rules that bite, craft index |
 | §8.5 | Every PR settles a fragment or the `no-changelog` label; `tests/changeset_test.ts` holds the vocabulary |
 | §9.1 | One documented command per capability — content, assets, sim, playtest, bench |
-| §11 | `docs/` coverage, the page-is-the-product rules, SEO and PWA surfaces (`update-docs` / `update-website`) |
+| §11 | `docs/` coverage, the page-is-the-product rules, PWA surfaces (no SEO: the site carries `noindex`, by owner decision) (`update-docs` / `update-website`) |
 | §12 | Every tool reachable by one command, `--help`, non-zero on an unknown flag, prints its inputs and outputs |
 | §13.1 | Examples are runnable and CI-exercised, not restatements of the README |
 | §13.2 | `prompts/` versioning format (overlap with `update-prompts`) |
@@ -50,7 +50,7 @@ because the game half leans on the baseline half:
 | Chapter | Checks |
 | --- | --- |
 | §23 | Core framework-free and headless; one entry surface (`engine/index.ts`); dependency direction; sequel test |
-| §23.9 | The startup-path budget is named and gated (`scripts/check-seo.mjs`), and the gate is not raised to pass |
+| §23.9 | Deliberately not met: there are no size budgets, by owner decision — do not reintroduce one |
 | §24 | Catalogs authored as data, schema-validated, generated output gitignored, drift guards, one ordered pipeline |
 | §25 | Seeded run-owned randomness, fixed step, deterministic iteration, no presentation draw, replay/digest guard |
 | §26–§27 | The scripting seam and the mod surface, where they exist |

@@ -46,6 +46,8 @@ const version = process.env.GITHUB_SHA ? buildLabel : `${buildLabel}+${new Date(
 
 export default defineConfig({
   base,
+  // No size budgets, by owner decision; this only keeps Vite's own warning quiet.
+  build: { chunkSizeWarningLimit: 100_000 },
   resolve: {
     alias: {
       "@engine": here("../engine/index.ts"),

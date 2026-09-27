@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The app's identity — name, copy, colors, URLs — in one module. Imported by
 // the browser app AND by the build plumbing (pwa-plugin.ts, the icon
-// generator, check-seo), so a rename or a palette change happens here once.
+// generator), so a rename or a palette change happens here once.
 // Keep this file free of browser- and Node-only imports.
 
 export const APP_NAME = "Scandinavian Flick";
