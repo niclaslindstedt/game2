@@ -4,7 +4,12 @@
 // is what makes the app self-contained: the game runs entirely on-device,
 // offline, and updates only when a new build ships.
 //
-// The website build is the ordinary `vite build` with the default base `/`,
+// VITE_SHELL_BUILD=on marks it a store build: it carries no link back to the
+// source and never names the web edition's host (D17 — see pwa/vite.config.ts),
+// and the copy is REFUSED if it still names the owner's account
+// (scripts/lib/no-source-link.mjs).
+//
+// The website build is otherwise the ordinary `vite build` with the default base `/`,
 // which is exactly what a single-origin shell wants — the service worker it
 // emits is still in the bundle, and the page leaves it unregistered on its own
 // once it sees the shell's global (`pwa/src/shell-host.ts`).
@@ -22,6 +27,8 @@ import { cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { refuseSourceLinks } from "../../scripts/lib/no-source-link.mjs";
+
 const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_DIR = resolve(APP_DIR, "..");
 const DIST_DIR = join(REPO_DIR, "pwa", "dist");
@@ -32,9 +39,9 @@ const skipBuild = process.argv.includes("--skip-build");
 
 if (!skipBuild) {
   console.log("• building website (npm run build --workspace pwa)…");
-  // Run from the repo root so the workspace + engine alias resolve. A plain
-  // `vite build`: the deploy base is the default `/`, and nothing about the
-  // shell is decided at build time.
+  // Run from the repo root so the workspace + engine alias resolve. The
+  // deploy base is the default `/`; the one thing decided at build time is
+  // that this is a store build (VITE_SHELL_BUILD).
   try {
     execFileSync(WINDOWS ? "npm.cmd" : "npm", ["run", "build", "--workspace", "pwa"], {
       cwd: REPO_DIR,
@@ -42,6 +49,7 @@ if (!skipBuild) {
       // Windows command shims are batch files, which Node cannot execute
       // directly (EINVAL); cmd.exe must interpret them.
       shell: WINDOWS,
+      env: { ...process.env, VITE_SHELL_BUILD: "on" },
     });
   } catch {
     // The build's own output is already on the terminal; a stack trace out
@@ -64,6 +72,8 @@ if (!existsSync(join(DIST_DIR, "index.html"))) {
   console.error(`✗ ${DIST_DIR} has no index.html — that is not a site build.`);
   process.exit(1);
 }
+
+refuseSourceLinks(DIST_DIR, "the desktop bundle");
 
 // Replace wholesale rather than merge: a stale chunk left behind from a
 // previous build is the exact failure mode that shows up as a blank window

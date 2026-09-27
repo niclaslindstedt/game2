@@ -27,12 +27,22 @@ import type { MenuPage } from "./main-menu.tsx";
 
 /** The build, bottom right, linking to the exact commit it was cut from.
  * A build with no commit behind it (a working tree, `git` unavailable) says
- * so and links nowhere — a dead link is worse than an honest label. */
+ * so and links nowhere — a dead link is worse than an honest label. A store
+ * build (`__SHELL_BUILD__`) prints the stamp and links nowhere either: no
+ * phone or desktop app links back to the source (D17), and with this branch
+ * folded away the repository URL is not in its bundle at all. */
 export function VersionStamp() {
   const label = `v${__APP_VERSION__}`;
   const sha = __COMMIT_SHA__;
   if (!sha || sha === "dev") {
     return <span className="menu-version menu-version-dev">{label} · dev</span>;
+  }
+  if (__SHELL_BUILD__) {
+    return (
+      <span className="menu-version">
+        {label} · {sha}
+      </span>
+    );
   }
   return (
     <a

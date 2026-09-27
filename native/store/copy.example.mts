@@ -48,7 +48,7 @@ read on a phone.`,
   releaseNotes: "RELEASE NOTES — what changed, for the version this ships beside.",
 
   // Required, must be http(s), and deliberately not the source repository.
-  supportUrl: "https://example.invalid/support/",
+  supportUrl: "https://apps.agilator.se/scandinavian-flick/support/",
 };
 
 /** The App Store product page, one entry per locale. */
@@ -92,7 +92,7 @@ describes, written for somebody at a desk: a window, a keyboard or a pad, and a
 screen worth the view.`,
     keywords: ["mac", "keyword", "budget", "is", "joined"],
     releaseNotes: "MAC RELEASE NOTES — what changed, for the version this ships beside.",
-    supportUrl: "https://example.invalid/support/",
+    supportUrl: "https://apps.agilator.se/scandinavian-flick/support/",
   },
 };
 

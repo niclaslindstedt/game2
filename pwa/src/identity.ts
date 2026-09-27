@@ -21,9 +21,17 @@ export const APP_DESCRIPTION =
   "A drift-first arcade rally game that runs in your browser. Low-poly 3D stages " +
   "generated fresh every day — hairpins, jumps, fords — playable on your phone " +
   "or desktop, offline once loaded. No account, no download.";
+/** The web edition. Only the website names it: no phone or desktop build,
+ * and nothing a store shows, may carry this host (D17) — they use `HOME_URL`. */
 export const SITE_URL = "https://game2.niclaslindstedt.se";
-/** Where the source lives — the main menu's version stamp links a build's
- * commit here, so the running app can always say exactly what it is. */
+/** The game's page on the publisher's own site, with its privacy policy at
+ * `/privacy/` and support at `/support/` beneath it. What the store listings
+ * and the desktop app's Help menu point at, so neither a store build nor a
+ * listing ever links to the web edition or the source. */
+export const HOME_URL = "https://apps.agilator.se/scandinavian-flick";
+/** Where the source lives — the website's main menu links a build's commit
+ * here. A store build (`__SHELL_BUILD__`) prints the stamp as plain text, so
+ * the constant is tree-shaken out of the phone and desktop bundles. */
 export const REPO_URL = "https://github.com/niclaslindstedt/game2";
 
 /** The arcade palette: a sunlit blue sky over saturated green and gravel. */

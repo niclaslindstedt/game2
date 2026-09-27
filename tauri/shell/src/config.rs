@@ -31,19 +31,22 @@ pub const APP_SCHEME: &str = "game";
 /// changing this word later orphans every save on the machine.
 pub const APP_HOST: &str = "localhost";
 
-/// The website this game is published at — `SITE_URL` in
-/// `pwa/src/identity.ts`, which `tests/tauri_test.ts` holds it to.
+/// The game's page on the publisher's site — `HOME_URL` in
+/// `pwa/src/identity.ts`, which `tests/tauri_test.ts` holds it to. Its privacy
+/// policy and support page sit beneath it, the same pages the store listings
+/// name. Deliberately NOT the web edition: no desktop build may name that host
+/// or the source (D17).
 ///
 /// The window never goes there: it serves the copy bundled inside the app. It
 /// is here because the HELP menu has to send a stuck player somewhere, and
 /// every one of its rows opens in the player's own browser
 /// (`menu::Target::Link`).
-pub const SITE_URL: &str = "https://game2.niclaslindstedt.se";
+pub const HOME_URL: &str = "https://apps.agilator.se/scandinavian-flick";
 
 /// One page of the website, as an absolute URL. `path` is rooted (`"/"`,
 /// `"/privacy/"`), so the domain is spelled once.
 pub fn site_link(path: &str) -> String {
-    format!("{}{path}", SITE_URL.trim_end_matches('/'))
+    format!("{}{path}", HOME_URL.trim_end_matches('/'))
 }
 
 /// THE MENU BAR SPEAKING TO THE PAGE — the event a menu row's word arrives on.

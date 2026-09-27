@@ -23,6 +23,13 @@ const ignorePaths = (process.env.VITE_PWA_IGNORE_PATHS ?? "")
   .map((p) => p.trim())
   .filter(Boolean);
 
+// Is this build going INSIDE a store shell — the phone app or the desktop app
+// — rather than onto the web? Both shells' `bundle-web.mjs` pass it, on every
+// profile. A shell build carries no link back to the source and never names
+// the web edition's host (D17): the version stamp prints as text instead of
+// linking the commit, and `appPwa` strips the pages' web-only spans.
+const shellBuild = process.env.VITE_SHELL_BUILD === "on";
+
 // Build identity for the HUD's build label and the update toast.
 const commit =
   process.env.GITHUB_SHA?.slice(0, 7) ??
@@ -57,6 +64,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(appVersion),
     __BUILD_LABEL__: JSON.stringify(buildLabel),
     __COMMIT_SHA__: JSON.stringify(commit),
+    __SHELL_BUILD__: JSON.stringify(shellBuild),
   },
   // `appPwa` only applies on build, so dev keeps registering no worker (the
   // app passes `enabled: !import.meta.env.DEV` to `usePwaUpdate`).
@@ -64,5 +72,5 @@ export default defineConfig({
   // The runtime is Preact: `@preact/preset-vite` compiles JSX against
   // `preact/jsx-runtime` and aliases `react` / `react-dom` onto
   // `preact/compat`, so the pre-built framework chunks resolve to Preact.
-  plugins: [preact(), tailwindcss(), appPwa({ base, version, ignorePaths })],
+  plugins: [preact(), tailwindcss(), appPwa({ base, version, ignorePaths, shell: shellBuild })],
 });

@@ -28,7 +28,7 @@ import { describe, expect, it } from "vitest";
 import { RULES } from "../native/store/listing.mts";
 import * as skeleton from "../native/store/copy.example.mts";
 import { DEVICES, SHOTS, SHOT_DEFAULTS, assertRasters } from "../scripts/store-shots/recipes.mjs";
-import { APP_TITLE, PUBLISHER, SITE_URL } from "../pwa/src/identity.ts";
+import { APP_TITLE, HOME_URL, PUBLISHER } from "../pwa/src/identity.ts";
 
 const root = join(import.meta.dirname, "..");
 const read = (...parts: string[]) => readFileSync(join(root, ...parts), "utf8");
@@ -207,7 +207,7 @@ describe("the review notes are true of the build", () => {
   });
 
   itAuthored("names that page in the notes", () => {
-    expect(NOTES).toContain(`${SITE_URL}/privacy/`);
+    expect(NOTES).toContain(`${HOME_URL}/privacy/`);
   });
 
   it("does not promise a feature by naming a bundle id the app does not use", () => {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-import { statSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
 
 import type { HtmlTagDescriptor, Plugin, ResolvedConfig } from "vite";
@@ -28,7 +28,26 @@ type AppPwaOptions = {
   /** Absolute path prefixes this worker must disown (sibling deploy slots
    * nested under this base, e.g. `/preview/` under `/`). */
   ignorePaths?: string[];
+  /** A store build (`VITE_SHELL_BUILD=on`): strip what only the website may
+   * carry — see `stripWebOnly`. */
+  shell?: boolean;
 };
+
+// WHAT ONLY THE WEBSITE MAY CARRY. No phone or desktop build may link back to
+// the source or name the web edition's host (D17, strictly): so every such
+// line in `index.html` and in the static pages under `public/` sits between
+// `<!-- web-only -->` and `<!-- /web-only -->`, and a shell build drops the
+// span. The website keeps it all. `CNAME` is GitHub Pages' own file and names
+// the host, so a shell build drops it too. The bundle scripts then refuse any
+// bundle that still names the owner's account, so a line added outside the
+// markers fails the build rather than shipping.
+const WEB_ONLY = /[ \t]*<!--\s*web-only\b[\s\S]*?-->[\s\S]*?<!--\s*\/web-only\s*-->[ \t]*\n?/g;
+const WEB_ONLY_FILES = new Set(["CNAME"]);
+
+/** `html` with every web-only span removed. */
+export function stripWebOnly(html: string): string {
+  return html.replace(WEB_ONLY, "");
+}
 
 // Public assets we never want in the precache: robots.txt is for crawlers and
 // og.png for link unfurlers, not the game shell. CNAME is GitHub Pages config — the deploy
@@ -193,7 +212,7 @@ self.addEventListener("fetch", (event) => {
 `;
 }
 
-export function appPwa({ base, version, ignorePaths = [] }: AppPwaOptions): Plugin {
+export function appPwa({ base, version, ignorePaths = [], shell = false }: AppPwaOptions): Plugin {
   const cacheId = cacheIdForBase(base);
   let config: ResolvedConfig;
 
@@ -210,9 +229,10 @@ export function appPwa({ base, version, ignorePaths = [] }: AppPwaOptions): Plug
 
     // Wire the manifest, theme color, and apple-touch metadata into the
     // shell. Done here (not in index.html) so the hrefs stay base-correct
-    // from one source of truth regardless of the configured `base`.
-    transformIndexHtml(): HtmlTagDescriptor[] {
-      return [
+    // from one source of truth regardless of the configured `base`. A shell
+    // build also loses the page's web-only spans (`stripWebOnly`).
+    transformIndexHtml(html: string): { html: string; tags: HtmlTagDescriptor[] } {
+      const tags: HtmlTagDescriptor[] = [
         {
           tag: "link",
           attrs: { rel: "manifest", href: `${base}manifest.webmanifest` },
@@ -258,6 +278,24 @@ export function appPwa({ base, version, ignorePaths = [] }: AppPwaOptions): Plug
           injectTo: "head",
         },
       ];
+      return { html: shell ? stripWebOnly(html) : html, tags };
+    },
+
+    // A shell build rewrites the static pages `public/` copied in as-is, and
+    // drops the files only the website serves.
+    writeBundle(options) {
+      if (!shell) return;
+      const outDir = options.dir ?? config.build.outDir;
+      for (const file of listFiles(outDir)) {
+        const rel = relative(outDir, file).split(sep).join(posix.sep);
+        if (WEB_ONLY_FILES.has(rel)) {
+          rmSync(file);
+        } else if (rel.endsWith(".html")) {
+          const html = readFileSync(file, "utf8");
+          const stripped = stripWebOnly(html);
+          if (stripped !== html) writeFileSync(file, stripped);
+        }
+      }
     },
 
     // After the bundle is built, collect every emitted asset plus the public
@@ -283,7 +321,13 @@ export function appPwa({ base, version, ignorePaths = [] }: AppPwaOptions): Plug
         for (const file of listFiles(publicDir)) {
           const rel = relative(publicDir, file).split(sep).join(posix.sep);
           if (PUBLIC_SKIP.has(rel) || rel.endsWith(".map")) continue;
-          add(`${base}${rel}`, statSync(file).size);
+          // A shell build ships the page `writeBundle` will strip, so the
+          // precache has to count that page's bytes rather than the source's.
+          const bytes =
+            shell && rel.endsWith(".html")
+              ? Buffer.byteLength(stripWebOnly(readFileSync(file, "utf8")))
+              : statSync(file).size;
+          add(`${base}${rel}`, bytes);
         }
       }
 

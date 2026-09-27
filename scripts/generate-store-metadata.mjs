@@ -138,9 +138,11 @@ function checkLength(field, value, limit) {
 // Compose. Brand-shaped values come from identity.ts, never from the listing,
 // so there is exactly one place a rename has to happen.
 // ---------------------------------------------------------------------------
-const site = identity.SITE_URL.replace(/\/$/, "");
-const MARKETING_URL = `${site}/`;
-const PRIVACY_URL = `${site}/privacy/`;
+// The game's page on the publisher's site, NOT the web edition: a store never
+// links to the web edition or the source (D17).
+const home = identity.HOME_URL.replace(/\/$/, "");
+const MARKETING_URL = `${home}/`;
+const PRIVACY_URL = `${home}/privacy/`;
 const copyright = `${new Date().getFullYear()} ${identity.PUBLISHER}`;
 
 // The review phone is resolved out of band — see scripts/lib/store-env.mjs.
@@ -316,16 +318,11 @@ if (/gameUrl\s*:/.test(withoutComments)) {
 }
 
 // THE CLAIM: a privacy policy lives at the composed URL. Apple requires the
-// field, and it must resolve at review time — so the page has to exist in the
-// site's own tree, not merely be promised here.
-const privacyPage = at("pwa", "public", "privacy", "index.html");
-try {
-  readFileSync(privacyPage, "utf8");
-} catch {
-  fail(
-    `${PRIVACY_URL} has no page behind it — ${rel(privacyPage)} does not exist. ` +
-      "Apple requires the privacy URL to resolve, and the review notes name it.",
-  );
+// field, and it must resolve at review time. The page is apps.agilator.se's,
+// generated there from this game's row, so all that is checkable here is that
+// the URL is that site's.
+if (!PRIVACY_URL.startsWith("https://apps.agilator.se/")) {
+  fail(`${PRIVACY_URL} is not a page on apps.agilator.se — HOME_URL in identity.ts`);
 }
 
 // THE CLAIM: nothing is sold. There is no purchase surface in this game, and
@@ -458,6 +455,21 @@ for (const claim of steam.notYetShipped ?? []) {
 }
 if (!steam.genres?.length) fail("steam.genres is empty — the store page needs at least one");
 if (!steam.tags?.length) fail("steam.tags is empty");
+
+// THE RULE (D17): no store copy links back to the source or the web edition.
+// Every word a storefront receives is checked, authored or composed.
+const storeWords = JSON.stringify({
+  info,
+  review,
+  macInfo,
+  macNotes,
+  steam,
+});
+for (const forbidden of ["niclaslindstedt", "github.com"]) {
+  if (storeWords.toLowerCase().includes(forbidden)) {
+    fail(`the store copy contains "${forbidden}" — no listing may name the source (D17)`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Emit.
