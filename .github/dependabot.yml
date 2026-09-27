@@ -1,17 +1,18 @@
-# Dependency hygiene (OSS_GAME_SPEC §14): one entry per ecosystem the repo
-# actually uses. npm covers the root workspace and the pwa workspace (npm
-# workspaces resolve through the root lockfile); github-actions covers every
-# `uses:` in .github/workflows/.
+# Lockfile-only. The version ranges in package.json move together across
+# the apps, by hand, and a new major is tried in one app first; this keeps
+# each lockfile on the newest release inside those ranges. Security updates
+# come on their own, from the repository's settings. GitHub Actions are
+# pinned to major tags, so their only updates are majors, which move by hand
+# too.
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /
+    directories: ["/", "/native", "/tauri"]
     schedule:
       interval: weekly
+    versioning-strategy: lockfile-only
     groups:
-      minor-and-patch:
-        update-types: ["minor", "patch"]
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
+      lockfiles:
+        patterns: ["*"]
+    labels: ["dependencies", "no-changelog"]
+    open-pull-requests-limit: 5
