@@ -8,11 +8,14 @@
   review opens the app at all. A page behind the game's own JavaScript would be
   a page a crawler, a rating board and a Play Console form all fail to read.
 
-  IT SAYS ONE THING, AND IT IS TRUE OF THE BUILD: nothing leaves the device.
-  Keep it that way — if the game ever gains an account, a leaderboard server,
-  an analytics call or an advertising SDK, this page and the App Store review
-  notes (native/store/listing.mts) both become false in the same commit, and
-  `make store-metadata` cross-checks the pair.
+  IT SAYS ONE THING, AND IT IS TRUE OF THE BUILD: nothing reaches a server of
+  ours. The one thing that leaves a device is the phone app's cloud save — the
+  player's own progress, in their own iCloud, which is Apple acting for them —
+  and this page says exactly what travels (pwa/src/game/cloud-save.ts is the
+  list). Keep it that way — if the game ever gains an account, a leaderboard
+  server, an analytics call or an advertising SDK, this page and the App Store
+  review notes (native/store/listing.mts) both become false in the same commit;
+  `make store-metadata` and tests/store_listing_test.ts cross-check them.
 
   The colours are `PALETTE` from pwa/src/identity.ts, restated because a
   static page cannot import a TypeScript module. There is no third copy: this
@@ -25,7 +28,7 @@
     <title>Privacy Policy — Scandinavian Flick</title>
     <meta
       name="description"
-      content="Scandinavian Flick collects no data. Everything the game remembers stays on your own device."
+      content="Scandinavian Flick collects no data. What the game remembers stays on your device, and in the phone app your progress can follow you through your own iCloud."
     />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="/favicon.ico" />
@@ -107,7 +110,7 @@
         analytics, no advertising, and no server of ours anywhere that knows you played.
       </p>
       <p class="updated">
-        Applies to the web game, the desktop app, and the mobile app. Last updated 2026-09-08.
+        Applies to the web game, the desktop app, and the mobile app. Last updated 2026-09-28.
       </p>
 
       <h2>What the game stores</h2>
@@ -122,20 +125,33 @@
         <li>Photographs you take with the in-game camera.</li>
       </ul>
       <p>
-        None of it is transmitted. Clearing the site data in your browser, or deleting the app,
-        deletes all of it, and there is no copy elsewhere to restore it from.
+        On the web and on the desktop none of it is transmitted: clearing the site data in your
+        browser, or deleting the app, deletes all of it, and there is no copy elsewhere to restore
+        it from.
+      </p>
+
+      <h2>iCloud, in the mobile app</h2>
+      <p>
+        If you are signed in to iCloud, the iPhone and iPad app also keeps a copy of your stage
+        times and score boards, your split times, your campaign progress and each car's distance
+        driven in your own iCloud storage, so the game on your other devices picks up where you left
+        off. That copy lives in your Apple Account and is handled by Apple under Apple's privacy
+        policy; we have no access to it. Your settings, ghosts, photographs and performance
+        measurements are never copied — they stay on the device that made them. Turning iCloud off
+        for the app in your device's settings stops the copying.
       </p>
 
       <h2>What the game sends</h2>
       <p>
-        Nothing. The mobile and desktop apps ship the whole game inside the download and serve it
-        locally, so they run in airplane mode from the first launch and make no network request in
-        order to play. The web version loads the game's own files from its own address once, then
-        runs offline.
+        Nothing to us. The mobile and desktop apps ship the whole game inside the download and serve
+        it locally, so they run in airplane mode from the first launch and make no network request
+        in order to play; the mobile app's only traffic is the iCloud copy above, between your
+        device and your own Apple Account. The web version loads the game's own files from its own
+        address once, then runs offline.
       </p>
       <p>
-        The only connection you can cause is a link you press yourself — the source repository, or a
-        credit — which opens in your own browser and is then between you and that site.
+        The only other connection you can cause is a link you press yourself, which opens in your
+        own browser and is then between you and that site.
       </p>
 
       <h2>Children</h2>
@@ -161,7 +177,11 @@
       <footer>
         <p>
           Questions: <a href="mailto:niclas@agilator.se">niclas@agilator.se</a> ·
-          <a href="/support/">Support</a> · <a href="/">Play the game</a>
+          <a href="/support/">Support</a> · <a href="/">Play the game</a> · This policy is also
+          published at
+          <a href="https://apps.agilator.se/scandinavian-flick/privacy/"
+            >apps.agilator.se/scandinavian-flick/privacy/</a
+          >
         </p>
       </footer>
     </main>

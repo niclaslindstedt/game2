@@ -12,7 +12,8 @@
 //
 //   THE CLAIMS. The review notes make load-bearing statements about the build:
 //   that the whole game ships inside the binary, that nothing is sold, that
-//   nothing leaves the device, that a privacy page exists. Every one is
+//   nothing goes to a server of ours, that a privacy page exists and says
+//   where a save goes. Every one is
 //   checkable from the tree, and a note that has drifted from the build is an
 //   argument a reviewer can disprove faster than they can read it.
 //
@@ -204,6 +205,19 @@ describe("the review notes are true of the build", () => {
     // rather than an app route precisely so that neither has to run any
     // JavaScript to read it.
     expect(read("pwa", "public", "privacy", "index.html")).toMatch(/collects nothing/i);
+  });
+
+  it("says on that page where a save goes when the phone app syncs one", () => {
+    // The phone app asks for iCloud's key-value store (the cloud save), so a
+    // player's progress DOES leave the device — into their own iCloud. A
+    // privacy page that still said "nothing leaves the device" would be the
+    // one false sentence on it, and the App Privacy answer rests on it.
+    const syncs = read("native", "app.config.js").includes("ubiquity-kvstore-identifier");
+    const page = read("pwa", "public", "privacy", "index.html");
+    expect(syncs).toBe(true);
+    expect(page).toMatch(/iCloud/);
+    expect(page).not.toMatch(/nothing leaves the device/i);
+    expect(page).toContain("apps.agilator.se/scandinavian-flick/privacy/");
   });
 
   itAuthored("names that page in the notes", () => {
