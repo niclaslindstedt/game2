@@ -182,7 +182,7 @@ export function createRunTape(start: RunTapeStart): RunTapeRecorder {
 }
 
 /** Put the tape on the player's disk. Same anchor dance as a saved
- * screenshot (lib/share-image.ts): the link goes into the document because
+ * screenshot (the framework's `shots/share-image`): the link goes into the document because
  * Firefox ignores a click on a detached one, and the object URL is revoked
  * on a later task because revoking it in this one races the download that
  * has only just started. Returns whether it worked. */

@@ -3,13 +3,14 @@
 // shutter on the HUD's button row where there is no keyboard) actually
 // does, and the one place the frame, the roll and the gallery meet. What is
 // DECIDED about a picture — its size, its name, where the mark goes — is
-// next door in shot-plan.ts; this module is the canvas work.
+// the framework's (`shots/shot-plan`; the developer caption's layout is
+// shot-notes.ts); this module is the canvas work.
 //
 // WHAT IS IN THE PICTURE is the screen: the world, the car, the weather,
 // the mirror — everything the renderer drew — and the HUD over it, with the
 // app's mark stamped into the corner. The instruments are DOM rather than
 // pixels the renderer put down, so they are rasterized in on the way past
-// (shot-hud.ts); the picture is what the driver was LOOKING at, which
+// (the framework's `shots/shot-hud`); the picture is what the driver was LOOKING at, which
 // includes the clock they were chasing and the call they took the corner
 // on. A frame with none of that on it is still one press away and always
 // was: OPTIONS' HUD switch takes the instruments down for good, and holding
@@ -36,21 +37,22 @@
 // the HUD when it does.
 
 import { APP_NAME, APP_SHORT_NAME } from "../identity.ts";
-import { configureShotStore, putShot, type ShotMeta } from "../lib/shot-store.ts";
-import { drawHudLayer, type HudLayer } from "./shot-hud.ts";
 import {
-  NOTE_MIN,
+  configureShotStore,
+  putShot,
+  type ShotMeta,
+} from "@niclaslindstedt/oss-game-framework/shots/shot-store";
+import { drawHudLayer, type HudLayer } from "@niclaslindstedt/oss-game-framework/shots/shot-hud";
+import {
   STAMP_FONT_STACK,
-  notesFit,
-  notesLayout,
   shotFileName as planFileName,
   shotSize,
   stampFits,
   stampLayout,
   stampLift,
   type HudCover,
-  type NotesLayout,
-} from "./shot-plan.ts";
+} from "@niclaslindstedt/oss-game-framework/shots/shot-plan";
+import { NOTE_MIN, notesFit, notesLayout, type NotesLayout } from "./shot-notes.ts";
 // The app mark, read from the same SVG the icons are generated from
 // (pwa/public/icons/icon.svg) rather than restated here: the geometry has
 // two homes already, and a third drawn in Canvas2D would be a third thing
@@ -430,7 +432,7 @@ function drawNotes(
   ctx.restore();
 }
 
-/** Stamp the mark and the app's name into the corner shot-plan.ts chose.
+/** Stamp the mark and the app's name into the corner `stampLayout` chose.
  * A null mark draws the name alone, which is what a browser that would not
  * decode the icon gets rather than an unsigned picture. */
 function drawStamp(
