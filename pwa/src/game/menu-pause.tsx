@@ -19,7 +19,7 @@
 
 import { useState } from "react";
 
-import { formatTime } from "../lib/util.ts";
+import { formatTime } from "@niclaslindstedt/oss-game-framework/hud/format";
 import { playUi } from "./audio/ui.ts";
 import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
 import { ToggleRow } from "./menu.tsx";

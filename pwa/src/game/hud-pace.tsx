@@ -27,7 +27,7 @@
 import type { JumpSize, TurnSeverity } from "@engine";
 
 import { fillJump, fillSign, type JumpSign, type PacePoint, type PaceSign } from "./pace-shape.ts";
-import { clamp } from "../lib/util.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
  * (left means the road bends left through the windshield). */

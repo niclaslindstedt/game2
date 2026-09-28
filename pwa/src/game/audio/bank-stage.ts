@@ -9,7 +9,7 @@
 // beam being broken, the finish is the one moment in the run allowed to be
 // brass — and even that is cut short so the results land in quiet.
 
-import type { SoundBank } from "./types.ts";
+import type { SoundBank } from "@niclaslindstedt/oss-game-framework/audio/types";
 
 export const STAGE_BANK: SoundBank = {
   // ── The start of it ──────────────────────────────────────────────────────

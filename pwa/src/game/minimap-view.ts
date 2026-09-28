@@ -23,7 +23,7 @@
 
 import { finishIndex, onRoad, type GameState, type RivalField } from "@engine";
 
-import { legible } from "../lib/util.ts";
+import { legible } from "@niclaslindstedt/oss-game-framework/hud/format";
 import { liveryForCrew } from "./car-livery.ts";
 import {
   SPAN,

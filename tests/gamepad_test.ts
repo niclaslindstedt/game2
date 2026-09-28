@@ -35,7 +35,6 @@ import {
   readFlyPad,
   readPad,
 } from "../pwa/src/game/gamepad.ts";
-import { pickNeighbour, type NavRect } from "../pwa/src/game/menu-cursor.ts";
 import type { PadFrame, PadReader } from "../pwa/src/game/gamepad.ts";
 import { DEFAULT_PAD, clonePad, loadSettings, type PadSource } from "../pwa/src/game/settings.ts";
 
@@ -330,45 +329,6 @@ describe("walking a menu", () => {
     expect(reader.read([pad({ buttons: { 0: 1 } })], DT).pressed).toEqual(["confirm"]);
     expect(reader.read([pad({ buttons: { 0: 1 } })], DT).pressed).toEqual([]);
     expect(reader.read([pad({ buttons: { 1: 1 } })], DT).pressed).toEqual(["reset", "back"]);
-  });
-});
-
-/** A card, as the cursor sees it: a column of rows with a two-button row in
- * the middle, which is the shape of nearly every menu in this game. */
-const CARD: NavRect[] = [
-  { x: 20, y: 0, w: 200, h: 30 }, // 0 back
-  { x: 20, y: 40, w: 200, h: 30 }, // 1 a row
-  { x: 20, y: 80, w: 95, h: 30 }, // 2 left of a pair
-  { x: 125, y: 80, w: 95, h: 30 }, // 3 right of a pair
-  { x: 20, y: 120, w: 200, h: 30 }, // 4 the last row
-];
-
-describe("the menu cursor's geometry", () => {
-  it("walks a column one row at a time", () => {
-    expect(pickNeighbour(CARD, 0, "down")).toBe(1);
-    expect(pickNeighbour(CARD, 1, "up")).toBe(0);
-  });
-
-  it("prefers the row underneath to a nearer button off to one side", () => {
-    // From the left of the pair, DOWN is the row below — not the button
-    // beside it, which is closer by centre distance alone.
-    expect(pickNeighbour(CARD, 2, "down")).toBe(4);
-    expect(pickNeighbour(CARD, 2, "right")).toBe(3);
-    expect(pickNeighbour(CARD, 3, "left")).toBe(2);
-  });
-
-  it("wraps to the far end rather than stopping dead", () => {
-    // Off the bottom lands on the TOP row, not the one above it: a list that
-    // stops makes a player walk all the way back for the button under their
-    // thumb.
-    expect(pickNeighbour(CARD, 4, "down")).toBe(0);
-    expect(pickNeighbour(CARD, 0, "up")).toBe(4);
-  });
-
-  it("has nowhere to go on an empty card, and starts at the top on a fresh one", () => {
-    expect(pickNeighbour([], 0, "down")).toBeNull();
-    // A cursor that is nowhere yet lands on the first item.
-    expect(pickNeighbour(CARD, -1, "down")).toBe(0);
   });
 });
 

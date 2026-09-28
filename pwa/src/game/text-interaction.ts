@@ -50,7 +50,7 @@
 //
 // Nothing here touches the DOM. The listeners' target and the way a computed
 // style is read are both injected and typed structurally, the same way
-// thumb-guard.ts takes its window — so the root suite, which has no DOM lib,
+// the framework's thumb guard takes its window — so the root suite, which has no DOM lib,
 // can read the decision and hold it to the four promises above.
 
 /** The listeners a guard needs, and the one option that matters: a

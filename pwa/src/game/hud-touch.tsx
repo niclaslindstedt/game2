@@ -11,7 +11,7 @@
 //
 // - It must LET GO. A control that trusts only its own pointerup is one
 //   that eventually sticks, with the axis it wrote outliving the run.
-//   `thumb-guard.ts` is every way a grip has to be able to end, and no zone
+//   The framework's `input/thumb-guard` is every way a grip has to be able to end, and no zone
 //   may hold a finger without one.
 // - It must answer at POINTER rate. The wheel's rotation and the pedal's
 //   anchor are written onto refs and the DOM directly; nothing in here
@@ -25,8 +25,8 @@ import type { InputManager } from "./input.ts";
 import { createPedalGesture } from "./pedal-gesture.ts";
 import type { PedalDir, TouchSettings } from "./settings.ts";
 import type { ShiftWindow } from "./shift-window.ts";
-import { createThumbGuard } from "./thumb-guard.ts";
-import { clamp } from "../lib/util.ts";
+import { createThumbGuard } from "@niclaslindstedt/oss-game-framework/input/thumb-guard";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 
 /** Capture the pointer so a drag that leaves the zone keeps steering; a
  * pointer that cannot be captured (synthetic, already released) is fine —

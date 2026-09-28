@@ -42,7 +42,11 @@
 // one voice to the other over the glide, and drizzle genuinely lands between
 // a road and its wet twin.
 
-import type { LayerSpec, LayerTarget, NoiseColor } from "../../lib/voice.ts";
+import type {
+  LayerSpec,
+  LayerTarget,
+  NoiseColor,
+} from "@niclaslindstedt/oss-game-framework/audio/voice";
 
 /** Below this the wheels are turning too slowly to make a rolling sound at
  * all, m/s — a car being nudged around at walking pace is engine and nothing

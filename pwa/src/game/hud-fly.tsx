@@ -10,7 +10,7 @@
 // the device the game is installed on.
 //
 // The two rules hud-touch.tsx owns hold here word for word, and for the same
-// reasons: every zone must LET GO (`thumb-guard.ts`, armed five ways), and
+// reasons: every zone must LET GO (the framework's `input/thumb-guard`, armed five ways), and
 // every zone must answer at POINTER rate — nothing in here re-renders to
 // move, because the HUD around it repaints at ~12 Hz and a camera aimed at
 // 12 Hz is a camera nobody can aim.
@@ -25,7 +25,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { TOUCH_LOOK_RATE } from "./camera-free.ts";
 import { capturePointer, stillDown } from "./hud-touch.tsx";
 import type { InputManager } from "./input.ts";
-import { createThumbGuard } from "./thumb-guard.ts";
+import { createThumbGuard } from "@niclaslindstedt/oss-game-framework/input/thumb-guard";
 
 /** What the fly zones write into — the input manager's own surface, so a
  * zone never has to know what a camera is. */

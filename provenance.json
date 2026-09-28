@@ -71,7 +71,7 @@
       "path": "pwa/src/game/audio/",
       "source": "authored",
       "licence": "PolyForm-Noncommercial-1.0.0",
-      "note": "Every sound effect, bed and tracker score, as authored synthesis parameters; pwa/src/lib/synth.ts plays them. No audio file ships."
+      "note": "Every sound effect, bed and tracker score, as authored synthesis parameters; the shared framework's synth (@niclaslindstedt/oss-game-framework/audio/synth) plays them. No audio file ships."
     },
     {
       "path": "pwa/src/game/",

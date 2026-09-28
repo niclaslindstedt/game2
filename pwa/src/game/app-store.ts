@@ -11,8 +11,8 @@
 // (`app-actions.ts`) are made over it, and the frame loop
 // (`run-loop.ts`) is handed it.
 
-import { useMemo, useRef, useState } from "react";
-import { usePwaUpdate } from "../lib/pwa-update.ts";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { pwaUpdateWatch } from "@niclaslindstedt/oss-game-framework/pwa/pwa-update";
 import {
   type GameState,
   type GearboxMode,
@@ -48,7 +48,7 @@ import { type GhostRecorder, type GhostTape } from "./ghost.ts";
 import { hudShow, type PlayCamera, type Settings } from "./settings.ts";
 import type { RunAudio } from "./audio/index.ts";
 import { type Capture, type ShotNotes } from "./screenshots.ts";
-import { type HudLayer } from "./shot-hud.ts";
+import { type HudLayer } from "@niclaslindstedt/oss-game-framework/shots/shot-hud";
 import { splashSkipped } from "./splash.ts";
 
 connectOutput();
@@ -454,7 +454,7 @@ export function useRunStore() {
    * overlay's while it is up. Null on a player's own shot, which is the
    * frame and its instruments. `hud` is those instruments, serialized at
    * the press for the same reason the boxes are — both are DOM, and neither
-   * is in the drawing buffer the frame comes off (shot-hud.ts). `done` is
+   * is in the drawing buffer the frame comes off (the framework's `shots/shot-hud`). `done` is
    * how whoever asked finds out — the capture happens frames later, in the
    * loop, and it is the only place that ever holds the finished picture. */
   const shotRef = useRef<{
@@ -473,11 +473,15 @@ export function useRunStore() {
   // Off in dev, and off inside the desktop app: there the site is bundled
   // and served off local disk, so the bundle is the update and a worker
   // precaching it would only ever prompt about a build it already is.
-  const pwa = usePwaUpdate({
+  // The watch is the framework's external store; the first call fixes its
+  // configuration for the page, so a remount never re-registers.
+  const watch = pwaUpdateWatch({
     base: import.meta.env.BASE_URL,
     cacheId: cacheIdForBase(import.meta.env.BASE_URL),
     enabled: !import.meta.env.DEV && shellHost() === null,
   });
+  const pwaState = useSyncExternalStore(watch.subscribe, watch.getSnapshot);
+  const pwa = { ...pwaState, reload: watch.reload };
   const forcedUpdate = useMemo(() => updateNudgeForced(), []);
   /** Whether the rear-view glass has the road in it, this session. The HUD
    * option decides whether the game has a mirror at all; this is the press on

@@ -20,7 +20,7 @@
 
 import { CARS, fieldAt, type FieldPlan, type RunTape, type TapeHeader } from "@engine";
 
-import { formatTime, ordinal } from "../lib/util.ts";
+import { formatTime, ordinal } from "@niclaslindstedt/oss-game-framework/hud/format";
 import type { StageSpec } from "./stage-spec.ts";
 
 /** How many replays the roll keeps before the oldest falls off.

@@ -17,7 +17,8 @@
 // itself after a few seconds, so a mis-tap decays back to a corner mark
 // rather than sitting there loaded.
 //
-// The state it renders comes from `lib/pwa-update.ts`; only the look, the
+// The state it renders comes from the framework's `pwaUpdateWatch` (read in
+// app-store.ts); only the look, the
 // arming and the sound are ours.
 
 import { useEffect, useState } from "react";

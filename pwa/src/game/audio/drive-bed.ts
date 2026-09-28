@@ -29,7 +29,7 @@ import {
 import { daylightAt } from "../daylight.ts";
 import { squallOf, wetnessOf } from "../weather.ts";
 
-import type { Synth } from "../../lib/voice.ts";
+import type { Synth } from "@niclaslindstedt/oss-game-framework/audio/voice";
 
 import { createWorld, exposureOf, type World, type WorldVoice } from "./ambience.ts";
 import { WORLD_BANK } from "./bank-world.ts";
@@ -42,8 +42,8 @@ import {
   type EngineLayer,
 } from "./engine-voice.ts";
 import { listenerFor, type Listener } from "./listener.ts";
-import { playSound } from "./play.ts";
-import { createRack, type Rack } from "./rack.ts";
+import { playSound } from "@niclaslindstedt/oss-game-framework/audio/play";
+import { createRack, type Rack } from "@niclaslindstedt/oss-game-framework/audio/rack";
 import { ROAD_GLIDE, ROAD_LAYERS, roadTargets, type RoadLayer } from "./road-voice.ts";
 
 /**

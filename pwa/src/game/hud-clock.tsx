@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import { TUNING } from "@engine";
 
-import { formatTime } from "../lib/util.ts";
+import { formatTime } from "@niclaslindstedt/oss-game-framework/hud/format";
 import type { LiveRun } from "./snapshot.ts";
 
 /** Run a callback on every animation frame while the component is mounted.

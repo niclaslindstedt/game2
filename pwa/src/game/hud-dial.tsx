@@ -9,7 +9,7 @@
 
 import type { CSSProperties } from "react";
 
-import { clamp } from "../lib/util.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { TOTAL_DIGITS, TOTAL_TICK_M, TRIP_DIGITS, TRIP_TICK_M, odometerDrums } from "./odometer.ts";
 
 /** The dial is laid out like the arcade cluster it comes from: it reads

@@ -41,18 +41,27 @@ import {
   type Weather,
 } from "@engine";
 
-import { clamp } from "../lib/util.ts";
+import {
+  createTapeRecorder,
+  readTape,
+  snapAxis,
+  type TapeSchema,
+} from "@niclaslindstedt/oss-game-framework/racing/tape";
 
-/** Steering positions each side of centre. The wheel is snapped to this
- * grid at the one place it is produced, so the number the engine drives on
- * is the number the tape writes down and a replay is exact rather than
- * merely close. 1/127 of full lock is finer than a thumb or a key ramp can
- * resolve, and it makes a step of the tape one byte. */
-const STEER_STEPS = 127;
-
-/** Pedal positions. Keys and touch buttons only ever ask for 0 or 1, but a
- * pedal is an axis in `CarInput` and one day may be driven like one. */
-const PEDAL_STEPS = 255;
+/** The tape's layout: one byte per step per control, RLE'd and base64'd by
+ * the framework's control tape (`racing/tape`). The steering is a SIGNED
+ * axis — 127 positions each side of centre, finer than a thumb or a key ramp
+ * can resolve — and the pedals are LEVERS of 255, because a pedal is an axis
+ * in `CarInput` and one day may be driven like one. The four buttons share
+ * one byte of flags. The keys are the stored field names, so this IS the
+ * stored format. */
+type GhostStream = "steer" | "throttle" | "brake" | "flags";
+const SCHEMA: TapeSchema<GhostStream> = {
+  steer: "signed",
+  throttle: "lever",
+  brake: "lever",
+  flags: "flags",
+};
 
 /** Bump when the tape's layout changes, OR when what the engine DOES with a
  * tape changes: the same buttons under different physics put the car through
@@ -64,23 +73,17 @@ const GHOST_FORMAT = 5;
 
 const KEY_PREFIX = "scandi-flick-ghost:";
 
-/** Snap an axis onto a recorded grid. Centre is returned as a POSITIVE
- * zero: rounding a hair below it yields -0, which the tape has no way to
- * write down and which JavaScript then carries through the physics as a
- * sign the replay would not have. */
-function snap(v: number, steps: number): number {
-  const index = Math.round(v * steps);
-  return index === 0 ? 0 : index / steps;
-}
-
-/** Snap a steering request onto the recorded grid. */
+/** Snap a steering request onto the recorded grid. Centre is returned as a
+ * POSITIVE zero: rounding a hair below it yields -0, which the tape has no
+ * way to write down and which JavaScript then carries through the physics as
+ * a sign the replay would not have. */
 export function snapSteer(v: number): number {
-  return snap(clamp(v, -1, 1), STEER_STEPS);
+  return snapAxis(v, SCHEMA.steer);
 }
 
 /** Snap a pedal onto the recorded grid. */
 export function snapPedal(v: number): number {
-  return snap(clamp(v, 0, 1), PEDAL_STEPS);
+  return snapAxis(v, SCHEMA.brake);
 }
 
 /** Everything that decides WHICH stage a run happened on — the same list
@@ -141,58 +144,6 @@ const FLAG_SHIFT_UP = 4;
 const FLAG_SHIFT_DOWN = 8;
 const FLAG_RESET = 16;
 
-/** `String.fromCharCode` takes its bytes as arguments, and a whole stage's
- * worth of them at once overflows the call stack. */
-const BASE64_CHUNK = 0x8000;
-
-function toBase64(bytes: number[]): string {
-  let raw = "";
-  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
-    raw += String.fromCharCode(...bytes.slice(i, i + BASE64_CHUNK));
-  }
-  return btoa(raw);
-}
-
-function fromBase64(text: string): Uint8Array {
-  const raw = atob(text);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  return bytes;
-}
-
-/** Run-length encode a byte per step, then base64 it. A control held still
- * is what makes a tape small — a pedal buried down a straight is two bytes
- * per 255 steps, and even the wheel spends most of a stage on a value it
- * held last step. A run caps at 255 steps and simply continues in the next
- * pair, so the worst case is two bytes per step rather than a failure. */
-function encodeStream(values: number[]): string {
-  const out: number[] = [];
-  let i = 0;
-  while (i < values.length) {
-    const value = values[i];
-    let run = 1;
-    while (run < 255 && i + run < values.length && values[i + run] === value) run++;
-    out.push(run, value);
-    i += run;
-  }
-  return toBase64(out);
-}
-
-/** Decode `steps` bytes back out. A short or damaged tape leaves the tail
- * at zero rather than throwing: a ghost is a picture, and half a picture
- * beats a crash on the first frame of a run. */
-function decodeStream(text: string, steps: number): Uint8Array {
-  const out = new Uint8Array(steps);
-  const bytes = fromBase64(text);
-  let at = 0;
-  for (let i = 0; i + 1 < bytes.length && at < steps; i += 2) {
-    const run = Math.min(bytes[i], steps - at);
-    out.fill(bytes[i + 1], at, at + run);
-    at += run;
-  }
-  return out;
-}
-
 /** What was already decided about the run before its first step — the same
  * shape of header the run tape keeps, and for the same reason: a replay is
  * only the run again if it STARTS the way the run started. */
@@ -215,27 +166,25 @@ export type GhostRecorder = {
 };
 
 export function createGhostRecorder(start: GhostStart): GhostRecorder {
-  const steer: number[] = [];
-  const throttle: number[] = [];
-  const brake: number[] = [];
-  const flags: number[] = [];
+  const tape = createTapeRecorder<GhostStream>(SCHEMA);
   const skips: number[] = [];
   return {
     record: (input) => {
-      steer.push(Math.round(clamp(input.steer, -1, 1) * STEER_STEPS) + STEER_STEPS);
-      throttle.push(Math.round(clamp(input.throttle, 0, 1) * PEDAL_STEPS));
-      brake.push(Math.round(clamp(input.brake, 0, 1) * PEDAL_STEPS));
-      flags.push(
-        (input.handbrake ? FLAG_HANDBRAKE : 0) |
+      tape.record({
+        steer: input.steer,
+        throttle: input.throttle,
+        brake: input.brake,
+        flags:
+          (input.handbrake ? FLAG_HANDBRAKE : 0) |
           (input.shiftUp ? FLAG_SHIFT_UP : 0) |
           (input.shiftDown ? FLAG_SHIFT_DOWN : 0) |
           (input.reset ? FLAG_RESET : 0),
-      );
+      });
     },
     skipped: () => {
-      skips.push(steer.length);
+      skips.push(tape.steps());
     },
-    steps: () => steer.length,
+    steps: () => tape.steps(),
     seal: (stage, carId, time, splits) => ({
       format: GHOST_FORMAT,
       ...stage,
@@ -245,11 +194,7 @@ export function createGhostRecorder(start: GhostStart): GhostRecorder {
       splits: [...splits],
       skipCountdown: start.skipCountdown,
       skips: [...skips],
-      steps: steer.length,
-      steer: encodeStream(steer),
-      throttle: encodeStream(throttle),
-      brake: encodeStream(brake),
-      flags: encodeStream(flags),
+      ...tape.seal(),
     }),
   };
 }
@@ -267,22 +212,19 @@ export type GhostTape = {
 };
 
 export function readGhost(run: GhostRun): GhostTape {
-  const steps = run.steps;
-  const steer = decodeStream(run.steer, steps);
-  const throttle = decodeStream(run.throttle, steps);
-  const brake = decodeStream(run.brake, steps);
-  const flags = decodeStream(run.flags, steps);
+  const tape = readTape<GhostStream>(run, SCHEMA);
+  const controls: Record<GhostStream, number> = { steer: 0, throttle: 0, brake: 0, flags: 0 };
   const input: CarInput = { ...NEUTRAL_INPUT };
   const skips = new Set(run.skips);
   return {
-    steps,
+    steps: tape.steps,
     skipsAt: (step) => skips.has(step),
     at: (step) => {
-      if (step < 0 || step >= steps) return Object.assign(input, NEUTRAL_INPUT);
-      const bits = flags[step];
-      input.steer = (steer[step] - STEER_STEPS) / STEER_STEPS;
-      input.throttle = throttle[step] / PEDAL_STEPS;
-      input.brake = brake[step] / PEDAL_STEPS;
+      if (!tape.at(step, controls)) return Object.assign(input, NEUTRAL_INPUT);
+      const bits = controls.flags;
+      input.steer = controls.steer;
+      input.throttle = controls.throttle;
+      input.brake = controls.brake;
       input.handbrake = (bits & FLAG_HANDBRAKE) !== 0;
       input.shiftUp = (bits & FLAG_SHIFT_UP) !== 0;
       input.shiftDown = (bits & FLAG_SHIFT_DOWN) !== 0;

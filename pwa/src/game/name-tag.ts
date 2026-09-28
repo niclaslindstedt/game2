@@ -33,7 +33,7 @@
 import * as THREE from "three";
 
 import { PALETTE } from "../identity.ts";
-import { legible } from "../lib/util.ts";
+import { legible } from "@niclaslindstedt/oss-game-framework/hud/format";
 
 /** The layer tags are drawn on, and the reason they have one. The rear-view
  * mirror (mirror.ts) is a second pass over this same scene, reversed

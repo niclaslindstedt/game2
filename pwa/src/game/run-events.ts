@@ -37,7 +37,7 @@ import { readLive, takeSnapshot } from "./snapshot.ts";
 import { findLevel, loadProgress, recordFinish, recordResult } from "./campaign.ts";
 import { saveGhost } from "./ghost.ts";
 import { WATCHING_CAMERAS } from "./settings.ts";
-import { formatTime } from "../lib/util.ts";
+import { formatTime } from "@niclaslindstedt/oss-game-framework/hud/format";
 import { stopMusic } from "./audio/music.ts";
 import { runRumble } from "./haptics.ts";
 

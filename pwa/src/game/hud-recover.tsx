@@ -16,7 +16,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { createEdgeSwipe } from "./edge-swipe.ts";
 import { capturePointer, stillDown } from "./hud-touch.tsx";
-import { createThumbGuard } from "./thumb-guard.ts";
+import { createThumbGuard } from "@niclaslindstedt/oss-game-framework/input/thumb-guard";
 
 /** The mark: an arrow curling back on itself, which is what this does to a
  * run. The same shape the co-driver's way-home strip prints beside its

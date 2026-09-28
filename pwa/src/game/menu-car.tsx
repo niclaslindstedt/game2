@@ -26,8 +26,8 @@ import { useEffect, useRef, useState } from "react";
 import { carById, type CarSpec, type GearboxMode } from "@engine";
 
 import { playToggle } from "./audio/ui.ts";
-import { COUNT_SECONDS, countAt } from "../lib/count.ts";
-import { formatTime } from "../lib/util.ts";
+import { COUNT_SECONDS, countAt } from "@niclaslindstedt/oss-game-framework/hud/count";
+import { formatTime } from "@niclaslindstedt/oss-game-framework/hud/format";
 import { CarPicker } from "./car-picker.tsx";
 import { carBars, carFacts, type CarFact } from "./car-stats.ts";
 import { Caption } from "./menu-knobs.tsx";
@@ -98,7 +98,7 @@ function GearboxPick({
  * not the card: a rerender of the page walks the whole picker, and this one
  * runs sixty times in the half-second after every press.
  *
- * The maths is `lib/count.ts`; the clock is here, because the clock is the
+ * The maths is the framework's `hud/count`; the clock is here, because the clock is the
  * only part of it that needs a browser. */
 function Figure({ fact }: { fact: CarFact }) {
   // The value on screen, and the run currently carrying it somewhere. Refs,
