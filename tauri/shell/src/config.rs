@@ -35,7 +35,7 @@ pub const APP_HOST: &str = "localhost";
 /// `pwa/src/identity.ts`, which `tests/tauri_test.ts` holds it to. Its privacy
 /// policy and support page sit beneath it, the same pages the store listings
 /// name. Deliberately NOT the web edition: no desktop build may name that host
-/// or the source (D17).
+/// or the source.
 ///
 /// The window never goes there: it serves the copy bundled inside the app. It
 /// is here because the HELP menu has to send a stuck player somewhere, and

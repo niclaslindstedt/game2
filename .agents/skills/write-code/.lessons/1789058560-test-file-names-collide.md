@@ -5,7 +5,7 @@ scope: tests/
 concepts: [test-conventions, tooling, silent-failure]
 ---
 
-The suite convention (OSS_GAME_SPEC §20.2, one file per topic named for the
+The suite convention (one file per topic, named for the
 topic) means two sessions working on the same subject reach for the same
 filename. Writing a new suite with a heredoc — `cat > tests/<topic>_test.ts` —
 therefore has a real chance of silently DESTROYING an existing one, and the

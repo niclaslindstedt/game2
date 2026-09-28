@@ -56,7 +56,7 @@ privacy-policy URL and the copyright line are composed by the generator from
 listing the same way it reaches the manifest and the app's name.
 
 A TypeScript module rather than a YAML catalog, for the reason the rest of this
-repo's small fixed catalogs are (see [`docs/spec-conformance.md`](../../docs/spec-conformance.md)):
+repo's small fixed catalogs are (see [`docs/conformance.md`](../../docs/conformance.md)):
 the generator and `tests/store_listing_test.ts` read the same typed rows with no
 schema layer and no parser dependency, and the identity it composes against is
 itself a module.

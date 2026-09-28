@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE LAST GATE ON A STORE BUNDLE. No phone or desktop build may link back to
 // the source, or name the account the source and the web edition live under
-// (D17 — strictly). The site build strips every such line when
+// (strictly). The site build strips every such line when
 // `VITE_SHELL_BUILD=on` (pwa/vite.config.ts, `stripWebOnly` in
 // pwa/pwa-plugin.ts); this is what makes a line that slipped past that a
 // failed bundle rather than a shipped one.
@@ -45,7 +45,7 @@ export function findSourceLinks(dir) {
 export function refuseSourceLinks(dir, what) {
   const hits = findSourceLinks(dir);
   if (hits.length === 0) return;
-  console.error(`\n✗ ${what} links back to the source — a store build may not (D17):`);
+  console.error(`\n✗ ${what} links back to the source — a store build may not:`);
   for (const { file, needle } of hits) console.error(`    ${file}: "${needle}"`);
   console.error(
     "\n  Wrap the line in <!-- web-only --> … <!-- /web-only --> (HTML) or put it behind " +

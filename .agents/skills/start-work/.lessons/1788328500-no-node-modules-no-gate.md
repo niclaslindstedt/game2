@@ -19,7 +19,7 @@ to the gate, where the failures are misleading in different ways:
   `main` that a tidy session should sweep in; it is not, and committing it
   makes CI's `fmt-check` red for the next person.
 
-So, as part of §1: `ls node_modules/.bin/vitest` — and if it is missing, run
+So, as part of the preflight's first step: `ls node_modules/.bin/vitest` — and if it is missing, run
 `CLAUDE_PROJECT_DIR=$PWD bash .claude/hooks/session-start.sh` (it needs a
 GitHub token in the environment, which the web session has). Do it BEFORE the
 first `make fmt`, never after.

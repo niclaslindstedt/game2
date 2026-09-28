@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The central output module (§19.4): semantic helpers fan out to the host
+// The central output module: semantic helpers fan out to the host
 // sink, early lines are buffered and replayed when a sink attaches, and
 // debug lines stay silent until enabled.
 import { afterEach, describe, expect, it } from "vitest";

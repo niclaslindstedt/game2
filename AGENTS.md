@@ -4,7 +4,9 @@ This file is the canonical source of truth for AI coding agents working in this 
 
 **This file is the ROUTER, not the manual.** It says how work is done here, where things live at one level of detail, and which skill owns the rest. The procedures — every loop, every lab, every craft rule — live in `.agents/skills/`. Load the skill that owns the task's SUBJECT before starting; do not re-derive from this file what a skill already states.
 
-This repository conforms to [`OSS_GAME_SPEC.md`](OSS_GAME_SPEC.md) — the committed copy IS the spec, self-contained, with no upstream document to fetch and no validator to call; amending it is a reviewed PR like any other governing file, and the same PR propagates the new mandate into the tree. When in doubt about layout, naming, or workflow conventions, the spec is the tie-breaker. Where the repo knowingly falls short of it, [`docs/spec-conformance.md`](docs/spec-conformance.md) is the ledger — one row per chapter, with the verdict, the evidence and what closing the gap would take; the `sync-game-spec` skill walks it.
+Fleet guidelines: GAME_GUIDELINES 1.0.1
+
+Everything a session needs to work on the game is in this file and the skills it routes to. Where the repository knowingly falls short of the rules it is built to, [`docs/conformance.md`](docs/conformance.md) is the ledger — one row per rule, with the verdict, the evidence, what closing the gap would take, and the day it was last checked.
 
 ## Build and test commands
 
@@ -74,7 +76,7 @@ Rules that apply to every task, before any subject skill has a say. They are res
 - **Lint, typecheck and format ONCE, at the gate — not after every edit.** `make fmt` and `make lint` are the commit's gate (the `commit` skill owns the split). Re-running them between one edit and the next re-checks code nobody touched and tells you nothing; batch the whole coherent change, then check it. Mid-loop, if a specific answer is genuinely needed, check only the files you touched (`npx eslint <paths>`, `npx tsc --noEmit -p pwa/tsconfig.json`) — never a whole-repo pass, and never `prettier`, whose every finding `make fmt` fixes at the end for free.
 - **TEST WHAT YOU WROTE; THE PR TESTS THE REST.** Run the suites that cover the change and the ones it plausibly reaches, by file, and push — a red PR is a normal state and a follow-up commit costs nothing, where ten minutes of local suite before every push costs ten minutes every time. Two things to be honest about: a change to `TUNING`, `car.ts`, `sim/` or the generator reaches tests three directories away (a drift retune has gone red in `tape_test`, `water_test` and `analysis_test` at once), so name the topics generously for those; and a red PR is work NOW, not something to leave sitting.
 - **A GENERATOR CHANGE THAT MOVES WHAT A SEED BUILDS OWES A VERSION.** The campaign's eighteen roads were curated; the rules are what makes them those roads, so a rules change re-rolls the ladder under its own levels unless something stops it. Add a row to `engine/mapgen/versions.ts`, keep the old behaviour on the old row as a trait read through `generatorTraits(knobs.version)`, and move the levels onto the new version DELIBERATELY, one at a time, as `level-rating`'s curation (re-rate, re-time, `make previews`, re-blurb) — never by regenerating the previews to make a red suite green. **And delete a version no campaign level names any more**, row and trait branches together: backward compatibility is owed to the committed roads and to nothing else, and `tests/generator_version_test.ts` refuses both halves. Full contract: `docs/track-generator.md`.
-- **THIS REPOSITORY IS PUBLIC — no personal details go in it.** Team ids, account names, tokens, keys, device ids, e-mail addresses, absolute paths under a home directory: none of them are committed, not even the ones that are identifiers rather than secrets, and not as a "default" a contributor can override. Everything of that kind is read from the ENVIRONMENT — a gitignored `.env` beside the tree that needs it (with the committed `.env.example` documenting where the value comes from and what shape it is), and GitHub repository **secrets** for credentials or **variables** for identifiers on CI. Code that needs such a value reads it, checks it early, and fails with a message naming the file to put it in; it never invents one. The published app's own identifiers (`APP_NAME`, the bundle id) are the deliberate exception — they are the product's public name, and they live in `pwa/src/identity.ts`.
+- **THIS REPOSITORY IS PUBLIC — no personal details go in it.** Team ids, account names, tokens, keys, device ids, e-mail addresses, absolute paths under a home directory: none of them are committed, not even the ones that are identifiers rather than secrets, and not as a "default" a contributor can override. Everything of that kind is read from the ENVIRONMENT — a gitignored `.env` beside the tree that needs it (with the committed `.env.example` documenting where the value comes from and what shape it is), and GitHub repository **secrets** on CI — for identifiers as well as credentials. The repository has no Actions variables: a workflow reads `secrets.*`, mapped into `env:` where a condition needs to test it. Code that needs such a value reads it, checks it early, and fails with a message naming the file to put it in; it never invents one. The published app's own identifiers (`APP_NAME`, the bundle id) are the deliberate exception — they are the product's public name, and they live in `pwa/src/identity.ts`.
 - **Every work session ends by committing its work with the `commit` skill.** Once the requested change and its gates are complete, load and follow that skill to make a conventional commit; when working in a worktree, follow its required sync step afterward.
 
 ## Commit and PR conventions
@@ -99,7 +101,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path, the tw
 
 The spec (§23) names roles, not directories; this is the mapping, and the arrows are rules a review may refuse a change against. `engine/` is the **simulation core** (§23.1) with `engine/index.ts` as its one public entry surface; `pwa/` is the **presentation shell** (§23.2); `tauri/` and `native/` are **platform shells** (§23.3); `scripts/` is **tooling** (§23.6) and may import anything while nothing imports it. There is no session service — the game is single-player (§34 does not apply). The core imports nothing from a shell or a script; a shell imports the core, never another shell.
 
-**Content (§23.5) is the deliberate deviation**: this game's stages are GENERATED from a seed rather than authored, and its small fixed catalogs (`engine/game/defs/cars.ts`, `traffic.ts`, `tuning.ts`) are TypeScript consts rather than schema-validated data files. `docs/spec-conformance.md` carries the reasoning and what changing it would cost — do not start converting a catalog to data on the strength of §24 alone.
+**Content is the deliberate deviation**: this game's stages are GENERATED from a seed rather than authored, and its small fixed catalogs (`engine/game/defs/cars.ts`, `traffic.ts`, `tuning.ts`) are TypeScript consts rather than schema-validated data files. `docs/conformance.md` carries the reasoning and what changing it would cost — do not start converting a catalog to data without that conversation.
 
 What IS generated is generated, and **a generated artifact is never hand-edited**:
 
@@ -182,7 +184,7 @@ Each of these is the one place an answer is written down. Anything that needs it
 
 ## Test conventions
 
-- Tests live in the root `tests/` directory, one file per topic, named `<topic>_test.ts` (mandated by OSS_GAME_SPEC §20.2).
+- Tests live in the root `tests/` directory, one file per topic, named `<topic>_test.ts`. A helper the tests import (`tests/support/`) may take any name, as long as it holds no test.
 - Runner: vitest via `make test`; config in `vitest.config.ts` (alias `@engine` → `engine/index.ts`). No DOM, no browser — engine tests only.
 - Physics tests build synthetic tracks via `compileTrack(seed, segments)` and script inputs step by step; widen the injected track's `width` when a scenario slides far sideways. Simulation tests use `simulateStage` — deterministic, so digests compare exactly. The `test-scenario` skill owns staging an exact situation.
 - **A file that asserts a dozen rules over the same spread of seeds takes its stages from `tests/support/stages.ts`** (`stagePlans`, `stageTrack`, `stageTerrain`) rather than generating them per `it`. The generator is deterministic per seed, so the second build can only return the first one's answer, and building one is the most expensive thing the engine does — written literally, one rule suite was the same twenty-four stages built seven times and four minutes of CI's critical path. What comes back is SHARED and read-only; anything needing its own build (an endless stage it will `extend()`, a determinism check that has to see two independent builds) calls the engine directly.
@@ -209,7 +211,7 @@ Each of these is the one place an answer is written down. Anything that needs it
 | The Mac App Store build, its icon or its menu | `tauri/store/MAC_APP_STORE.md`, then `make mac-appstore` |
 | An age rating, a category, a Steam tag | `native/store/listing.mts` — the rules half, committed; then `make store-metadata` |
 | A feature flag, or the rule for one    | `docs/configuration.md`'s flag table, then `tests/features_test.ts` |
-| A spec chapter, or a verdict under one | `docs/spec-conformance.md` — `sync-game-spec` re-dates it      |
+| A gap against the fleet rules, found or closed | `docs/conformance.md` — add, re-date or delete its row         |
 
 The campaign menu's routes and biome banners are generator OUTPUT, so every rule change re-rolls them: a re-seeded, re-banded or re-lit level otherwise leaves a picture of a stage that no longer exists. Editing the first level of a location, or adding a location, re-shoots that biome's banner.
 
@@ -226,7 +228,7 @@ Places where one idea is deliberately written in two files that cannot import ea
 - The rear-view mirror's box is stated in `mirror.ts` and again in `.hud` in `styles.css`; a modal must be a SIBLING of `.menu-card`, never inside it (its `backdrop-filter` makes it the containing block for `position: fixed`). Both are `hud-and-menus`.
 - The menu's backdrop is the real game: `App.tsx` steps the engine on `botInput` under the drone camera while a menu page is up. A menu that stops driving is a bug, not a saving.
 - `make profile` counts a FRAME as an animation callback that drew something, not as a `gl.clear`. A frame is not one three.js `render()`: the driving frame issues two, the map view draws its pane over a cleared canvas, and the mirror fills its own target first. Anything that adds a pass must not go back to counting clears, or every per-frame number in the table halves and the fps doubles.
-- The deployed site IS the product (§11.2-as-webapp): there is no separate `website/` tree. The head copy (title, description, Open Graph) lives in `pwa/index.html` + `pwa/public/`; keep it in sync with `identity.ts`, and treat a stale deployed site after identity/feature changes as a bug.
+- The deployed site IS the product: there is no separate `website/` tree. The head copy (title, description, Open Graph) lives in `pwa/index.html` + `pwa/public/`; keep it in sync with `identity.ts`, and treat a stale deployed site after identity/feature changes as a bug.
 - There are no size budgets and no SEO tooling, by owner decision; every page the site ships carries `noindex`, and `robots.txt` allows crawling (so a crawler can read it) with no sitemap.
 
 ## Skills
@@ -267,7 +269,6 @@ Skills live in `.agents/skills/` (`.claude/skills` symlinks there) — each a `S
 **Maintenance** (each with a `.last-updated` baseline):
 
 - **`maintenance`** — the umbrella: dispatches every `update-*` skill in registry order after big merges or on a cadence.
-- **`update-docs`** / **`update-readme`** / **`update-website`** / **`update-prompts`** — re-sync `docs/*.md`, README.md, the identity shell, and `prompts/` against their sources of truth.
-- **`sync-game-spec`** — walk OSS_GAME_SPEC.md chapter by chapter against the repo, offline, and re-date `docs/spec-conformance.md`; the closing step of a full sweep.
+- **`update-docs`** / **`update-readme`** / **`update-website`** — re-sync `docs/*.md`, README.md and the identity shell against their sources of truth. A full sweep closes on `docs/conformance.md`: every row re-checked and re-dated.
 
 Run the specific skill when you know what drifted; run `maintenance` when you don't.

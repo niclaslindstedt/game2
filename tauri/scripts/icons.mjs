@@ -9,8 +9,8 @@
 // installs, decoded, resized and widened to 8-bit RGBA at the sizes Tauri's
 // bundler wants. Nothing here is a design decision — the art is
 // `pwa/public/icons/`, made by `make icons`, and a change to the mark happens
-// there and lands here on the next build (OSS_GAME_SPEC §11.2: this output is
-// generated and gitignored).
+// there and lands here on the next build (this output is generated and
+// gitignored).
 //
 // Pure Node, like the encoder it mirrors: a PNG decoder for the one shape of
 // file the icon generator writes (8-bit, non-interlaced, RGB or RGBA) is fifty

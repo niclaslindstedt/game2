@@ -29,7 +29,7 @@ import type { MenuPage } from "./main-menu.tsx";
  * A build with no commit behind it (a working tree, `git` unavailable) says
  * so and links nowhere — a dead link is worse than an honest label. A store
  * build (`__SHELL_BUILD__`) prints the stamp and links nowhere either: no
- * phone or desktop app links back to the source (D17), and with this branch
+ * phone or desktop app links back to the source, and with this branch
  * folded away the repository URL is not in its bundle at all. */
 export function VersionStamp() {
   const label = `v${__APP_VERSION__}`;

@@ -8,7 +8,7 @@
 // board it took, with the road between here and there to drive again (R28).
 //
 // It has its own module rather than living in hud.tsx because that file is
-// at the §20.5 line cap, and because the three doors belong together: the
+// at the 1000-line cap, and because the three doors belong together: the
 // glyph on the button and the mark the swipe fills are the same shape, and
 // a player who learns one has learned the other.
 

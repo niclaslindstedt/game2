@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// Wires the engine's central output module (§19.4) into the app's debug log,
+// Wires the engine's central output module into the app's debug log,
 // so an engine diagnostic lands in the same buffer the developer menu copies
 // out — the engine's account of a run sitting beside the app's, in order.
 // Dev builds also lift the line onto the console.

@@ -2,7 +2,7 @@
 // THE TACHOMETER — the one instrument on the HUD that is DRAWN rather than
 // printed, and the arithmetic that lays its scale out.
 //
-// It is a module of its own because hud.tsx sits at the §20.5 line cap and
+// It is a module of its own because hud.tsx sits at the 1000-line cap and
 // this is the piece of it with the clearest edge: a needle, a scale and the
 // trigonometry that puts one on the other. Nothing here reads the game —
 // the dial is handed a fraction of the limiter and draws it.

@@ -34,7 +34,7 @@ type AppPwaOptions = {
 };
 
 // WHAT ONLY THE WEBSITE MAY CARRY. No phone or desktop build may link back to
-// the source or name the web edition's host (D17, strictly): so every such
+// the source or name the web edition's host (strictly): so every such
 // line in `index.html` and in the static pages under `public/` sits between
 // `<!-- web-only -->` and `<!-- /web-only -->`, and a shell build drops the
 // span. The website keeps it all. `CNAME` is GitHub Pages' own file and names

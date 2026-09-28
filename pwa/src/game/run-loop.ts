@@ -122,8 +122,8 @@ export function startRun(store: RunStore, actions: RunActions): (() => void) | u
   input.setKeys(optionsRef.current.keys);
   input.setPad(optionsRef.current.pad);
   // The render stack — three.js and the whole world builder — loads as
-  // its own chunk, keeping the entry script inside the §11.3.9
-  // critical-path budget: the shell parses and paints at once, the world
+  // its own chunk, keeping the entry script small and off the critical
+  // path: the shell parses and paints at once, the world
   // follows a breath later (from the service-worker cache once installed).
   // The RUN's audio is not startup either, so it loads on its own chunk
   // beside the renderer. The frame loop and the event handler both go

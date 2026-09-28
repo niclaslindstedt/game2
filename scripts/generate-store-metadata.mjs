@@ -139,7 +139,7 @@ function checkLength(field, value, limit) {
 // so there is exactly one place a rename has to happen.
 // ---------------------------------------------------------------------------
 // The game's page on the publisher's site, NOT the web edition: a store never
-// links to the web edition or the source (D17).
+// links to the web edition or the source.
 const home = identity.HOME_URL.replace(/\/$/, "");
 const MARKETING_URL = `${home}/`;
 const PRIVACY_URL = `${home}/privacy/`;
@@ -456,7 +456,7 @@ for (const claim of steam.notYetShipped ?? []) {
 if (!steam.genres?.length) fail("steam.genres is empty — the store page needs at least one");
 if (!steam.tags?.length) fail("steam.tags is empty");
 
-// THE RULE (D17): no store copy links back to the source or the web edition.
+// THE RULE: no store copy links back to the source or the web edition.
 // Every word a storefront receives is checked, authored or composed.
 const storeWords = JSON.stringify({
   info,
@@ -467,7 +467,7 @@ const storeWords = JSON.stringify({
 });
 for (const forbidden of ["niclaslindstedt", "github.com"]) {
   if (storeWords.toLowerCase().includes(forbidden)) {
-    fail(`the store copy contains "${forbidden}" — no listing may name the source (D17)`);
+    fail(`the store copy contains "${forbidden}" — no listing may name the source`);
   }
 }
 

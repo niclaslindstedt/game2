@@ -179,14 +179,14 @@ Make targets are the definition of green CI enforces).
 
 ## File size
 
-- Non-test source files stay under **1000 physical lines** (§20.5 of
-  `OSS_GAME_SPEC.md`), and `tests/file_size_test.ts` holds the whole tree to
+- Non-test source files stay under **1000 physical lines**, and `tests/file_size_test.ts` holds the whole tree to
   it — a file pushed over the cap fails `make test` by name, so this is not a
   rule to discover in review. Past the cap, split by concern — sibling
   modules, extracted helpers — rather than relaxing it. A file that big is
   nearly always doing more than one thing.
-- The §20.5.1 escape (`game-spec:allow-large-file: <reason>` in the first 20
-  lines) exists and no file in this tree uses it. Splitting was possible every
+- The escape (`guidelines:allow-large-file: <reason>` in the first 20
+  lines) exists and no file in this tree uses it. A file that does carry it
+  is split the next time it is touched; the marker is a debt, not a licence. Splitting was possible every
   time; reach for the marker only for something GENERATED or vendored, and
   never for "this one is hard".
 - Splitting a file is also the moment to prune it: an oversized module usually
@@ -197,8 +197,8 @@ Make targets are the definition of green CI enforces).
 ## Tests
 
 - **Tests live in the root `tests/` directory, never inline in source.** One
-  file per topic, named `<topic>_test.ts` — the `_test` suffix is mandated by
-  OSS_GAME_SPEC §20.2. Runner: vitest via `make test`;
+  file per topic, named `<topic>_test.ts` — the `_test` suffix is the
+  convention the suite and `tests/file_size_test.ts` both read. Runner: vitest via `make test`;
   the include pattern (`tests/**/*_test.ts`) is in `vitest.config.ts`.
 - **No DOM, no browser, plain Node** — that is the actual line, not "engine
   only". A renderer module whose whole import graph is DOM-free is fair game

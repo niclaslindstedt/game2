@@ -5,7 +5,7 @@
 // offline, and updates only when a new build ships.
 //
 // VITE_SHELL_BUILD=on marks it a store build: it carries no link back to the
-// source and never names the web edition's host (D17 — see pwa/vite.config.ts),
+// source and never names the web edition's host (see pwa/vite.config.ts),
 // and the copy is REFUSED if it still names the owner's account
 // (scripts/lib/no-source-link.mjs).
 //

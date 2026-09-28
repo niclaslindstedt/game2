@@ -10,7 +10,7 @@
 // website source is changed for the app.
 //
 // VITE_SHELL_BUILD=on marks it a store build: it carries no link back to the
-// source and never names the web edition's host (D17 — see pwa/vite.config.ts).
+// source and never names the web edition's host (see pwa/vite.config.ts).
 // The script then REFUSES a dist/ that still names the owner's account
 // (scripts/lib/no-source-link.mjs), so a `--skip-build` over a plain website
 // build fails rather than zips.

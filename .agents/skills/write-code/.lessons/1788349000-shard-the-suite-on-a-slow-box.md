@@ -16,8 +16,9 @@ pass — those tests lose their share of the CPU and vitest kills them at the
 **A timeout is not a failing assertion.** Before treating one as a
 regression, check two things: that every failure line says "timed out", and
 that the same file times out on `origin/main` (a worktree —
-`git worktree add … origin/main`, then `ln -s /home/user/game2/node_modules
-node_modules` so vitest resolves — never a stash around a long run). Both
+`git worktree add … origin/main`, then a real `npm ci` inside it so vitest
+resolves — never a symlinked `node_modules`, which lets the worktree's run write
+into the checkout it borrowed from, and never a stash around a long run). Both
 were true here for a renderer-only change that no engine test imports.
 
 The fix is not a bigger `testTimeout` and not `--no-threads`: it is what CI

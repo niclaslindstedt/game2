@@ -9,5 +9,5 @@ declare const __BUILD_LABEL__: string;
  * the website's main menu links its version stamp to it on GitHub. */
 declare const __COMMIT_SHA__: string;
 /** A store shell's build (`VITE_SHELL_BUILD=on`) — the phone or desktop app,
- * which carries no link back to the source (D17). */
+ * which carries no link back to the source. */
 declare const __SHELL_BUILD__: boolean;

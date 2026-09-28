@@ -5,9 +5,10 @@ description: "Use when the deployed app's identity-derived content under pwa/ ma
 
 # Updating the Website
 
-**Governing spec sections:** §11.2 (the deployed site IS the product — this is
-a webapp-kind project with no separate `website/` tree), §11.3 (discoverability —
-**deliberately not met**, see below), §21.5 (this skill is mandated when the project publishes a website).
+**What it holds the site to:** the deployed site IS the product — this is a
+webapp-kind project with no separate `website/` tree — and it is **deliberately
+not discoverable** (see below). The project publishes a website, which is why
+this skill exists.
 
 The site is the game, deployed to GitHub Pages at the `siteUrl` in three slots
 (`/` latest release, `/preview/` main, `/branch/` parked feature branch) via
@@ -29,7 +30,7 @@ pages.
 | Icons, favicon, `og.png` | `pwa/public/icons/icon.svg` + the palette | `make icons` (`scripts/generate-icons.mjs`) — never hand-edit the PNGs |
 | `robots.txt`, `CNAME` | hand-authored in `pwa/public/` | you — `CNAME` tracks `SITE_URL`; `robots.txt` stays `Allow: /` with no `Sitemap:` line |
 | `privacy/`, `support/` pages | hand-authored in `pwa/public/` | you — reachable for the stores, and `noindex` like every page |
-| Head copy in `pwa/index.html` (title, description, Open Graph) | `identity.ts` strings + README's framing | you — §11.2's no-double-authoring rule: same claims, one voice |
+| Head copy in `pwa/index.html` (title, description, Open Graph) | `identity.ts` strings + README's framing | you — no double authoring: same claims, one voice |
 | Identity strings in app code | `pwa/src/identity.ts` | never re-hardcode a brand string |
 
 Two parity rules from `AGENTS.md` ride along: `pwa/public/icons/icon.svg` and

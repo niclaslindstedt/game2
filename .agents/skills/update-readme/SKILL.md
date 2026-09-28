@@ -5,9 +5,9 @@ description: "Use when README.md may be stale. Discovers commits since the last 
 
 # Updating the README
 
-**Governing spec sections:** §3 (`README.md` — required sections and content), §21.5 (this skill is mandated because `README.md` is a drift-prone artifact).
+**What it holds `README.md` to:** its required sections and their content — `README.md` is drift-prone, which is why this skill exists.
 
-`README.md` is the primary user-facing documentation for Scandinavian Flick. Per §3 of `OSS_GAME_SPEC.md` it must keep its twelve sections (What / Why / Prerequisites / Install / Quick start / Usage / Configuration / Examples / Troubleshooting / Documentation / Contributing / License) accurate. It goes stale whenever a command, a car, a control, a URL, or the install story changes without a matching edit.
+`README.md` is the primary user-facing documentation for Scandinavian Flick. It must keep its twelve sections (What / Why / Prerequisites / Install / Quick start / Usage / Configuration / Examples / Troubleshooting / Documentation / Contributing / License) accurate. It goes stale whenever a command, a car, a control, a URL, or the install story changes without a matching edit.
 
 ## Tracking mechanism
 
@@ -67,7 +67,7 @@ Extend this table every time you find a new source-of-truth file that feeds the 
 ## Verification
 
 1. Re-read every edited section against the corresponding source of truth.
-2. Confirm the twelve §3 sections are all present, in order.
+2. Confirm the twelve sections are all present, in order.
 3. Confirm `.last-updated` was rewritten with the new `HEAD`.
 
 ## Skill self-improvement

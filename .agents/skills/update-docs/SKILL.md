@@ -5,7 +5,7 @@ description: "Use when docs/ may be stale. Discovers commits since the last docs
 
 # Updating the docs
 
-**Governing spec sections:** §11.1 (`docs/` — real prose, no stubs, resolving cross-links), §21.5 (mandated because `docs/` is drift-prone).
+**What it holds `docs/` to:** real prose, no stubs, cross-links that resolve — `docs/` is drift-prone, which is why this skill exists.
 
 The `docs/` pages describe the engine, the generator's rules, the sim harness, and the deploy plumbing. Each has concrete source files it must agree with; this skill re-syncs them.
 

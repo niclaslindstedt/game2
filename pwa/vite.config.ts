@@ -26,7 +26,7 @@ const ignorePaths = (process.env.VITE_PWA_IGNORE_PATHS ?? "")
 // Is this build going INSIDE a store shell — the phone app or the desktop app
 // — rather than onto the web? Both shells' `bundle-web.mjs` pass it, on every
 // profile. A shell build carries no link back to the source and never names
-// the web edition's host (D17): the version stamp prints as text instead of
+// the web edition's host: the version stamp prints as text instead of
 // linking the commit, and `appPwa` strips the pages' web-only spans.
 const shellBuild = process.env.VITE_SHELL_BUILD === "on";
 

@@ -22,7 +22,7 @@ export const APP_DESCRIPTION =
   "generated fresh every day — hairpins, jumps, fords — playable on your phone " +
   "or desktop, offline once loaded. No account, no download.";
 /** The web edition. Only the website names it: no phone or desktop build,
- * and nothing a store shows, may carry this host (D17) — they use `HOME_URL`. */
+ * and nothing a store shows, may carry this host — they use `HOME_URL`. */
 export const SITE_URL = "https://game2.niclaslindstedt.se";
 /** The game's page on the publisher's own site, with its privacy policy at
  * `/privacy/` and support at `/support/` beneath it. What the store listings
