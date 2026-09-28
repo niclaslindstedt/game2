@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# The store listing's upload. fastlane does ONE job here — `deliver`, because
+# `eas metadata:push` cannot upload screenshots. EAS builds and submits the
+# binary (see ../RELEASING.md); nothing in this file touches a build.
+#
+#   make store-metadata                  # compile the listing into fastlane/metadata/
+#   make store-shots                     # capture the screenshots into store/screenshots/
+#   cd native && fastlane metadata       # upload text + screenshots, submit nothing
+#
+# Uploading is an outward action: it changes what App Store Connect holds, so
+# it is run by a person who meant to, and submitting for review is a separate,
+# explicit `submit:true`. Everything uploaded is GENERATED — the words from
+# store/listing.mts and the gitignored store/copy.mts by
+# scripts/generate-store-metadata.mjs, the frames by scripts/store-shots.mjs —
+# and nothing here is hand-edited.
+
+default_platform(:ios)
+
+# native/, whatever directory fastlane runs a lane from.
+NATIVE = File.expand_path("..", __dir__)
+
+# App Store Connect API key: a .p8 issued under Users and Access → Integrations,
+# preferred over an Apple ID because it carries no 2FA session to expire in the
+# middle of an upload. All values come from the environment (native/.env).
+def asc_api_key
+  return nil unless ENV["ASC_KEY_ID"] && ENV["ASC_ISSUER_ID"]
+
+  key_path = ENV["ASC_KEY_PATH"] && File.expand_path(ENV["ASC_KEY_PATH"], NATIVE)
+  app_store_connect_api_key(
+    key_id: ENV["ASC_KEY_ID"],
+    issuer_id: ENV["ASC_ISSUER_ID"],
+    key_filepath: key_path,
+    key_content: ENV["ASC_KEY_CONTENT"],
+    is_key_content_base64: ENV["ASC_KEY_CONTENT"] ? true : false,
+    in_house: false
+  )
+end
+
+platform :ios do
+  desc "Upload the store listing and screenshots. Pass submit:true to also submit for review."
+  lane :metadata do |options|
+    metadata_path = File.join(NATIVE, "fastlane", "metadata")
+    unless File.directory?(metadata_path)
+      UI.user_error!("fastlane/metadata is missing — run `make store-metadata` from the repo root first.")
+    end
+
+    # deliver wants <locale>/<frames>; the harness writes store/screenshots/<device>/.
+    # Staged fresh on every run, so a frame deleted there never lingers here.
+    screenshots_path = File.join(NATIVE, "fastlane", "screenshots")
+    FileUtils.rm_rf(screenshots_path)
+    frames = Dir.glob(File.join(NATIVE, "store", "screenshots", "*", "*.png")).sort
+    unless frames.empty?
+      FileUtils.mkdir_p(File.join(screenshots_path, "en-US"))
+      frames.each do |frame|
+        device = File.basename(File.dirname(frame))
+        FileUtils.cp(frame, File.join(screenshots_path, "en-US", "#{device}-#{File.basename(frame)}"))
+      end
+    end
+    UI.important("No screenshots captured — uploading text only (`make store-shots`).") if frames.empty?
+
+    deliver(
+      api_key: asc_api_key,
+      metadata_path: metadata_path,
+      screenshots_path: screenshots_path,
+      # Metadata only: EAS uploads the binary, and two tools with one job is one too many.
+      skip_binary_upload: true,
+      # Screenshots are replaced only when some are staged, so a text-only run
+      # can never wipe a live set.
+      skip_screenshots: frames.empty?,
+      overwrite_screenshots: true,
+      # Nothing interactive: a silent prompt is a hung run.
+      force: true,
+      run_precheck_before_submit: false,
+      submit_for_review: options[:submit] == true,
+      automatic_release: false
+    )
+  end
+end

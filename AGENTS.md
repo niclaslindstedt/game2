@@ -207,7 +207,7 @@ Each of these is the one place an answer is written down. Anything that needs it
 | The debug overlay's REPRO line        | `App.tsx`'s URL readers — writer and reader move together      |
 | App identity, domain, deploy slots    | `identity.ts`, README, `docs/configuration.md`, `pwa/public/*` |
 | Cars, controls, install flow          | README (What/Usage) + `docs/getting-started.md`                |
-| Shell/platform plans                  | `docs/platforms.md`, `tauri/README.md`, `native/README.md`     |
+| Shell/platform plans, or how a shell is released | `docs/platforms.md`, `tauri/README.md`, `native/README.md`, `tauri/RELEASING.md`, `native/RELEASING.md` |
 | The listing's WORDS, for any of the three stores | `native/store/copy.mts` — GITIGNORED, one source for all; the `store-listing` skill is the craft |
 | The Mac App Store build, its icon or its menu | `tauri/store/MAC_APP_STORE.md`, then `make mac-appstore` |
 | An age rating, a category, a Steam tag | `native/store/listing.mts` — the rules half, committed; then `make store-metadata` |

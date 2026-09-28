@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Which app fastlane is talking to. The bundle id is a build variable, never a
+# committed literal: the listing's identifier is a fact about a deployment, not
+# about the code. app.config.js reads the same APP_BUNDLE_ID with the same
+# development fallback, and `make store-preflight` and tests/identity_test.ts
+# fail if the two drift.
+app_identifier(ENV["APP_BUNDLE_ID"] || "dev.local.scandinavianflick")
+
+# The team is a personal detail, so it comes from the environment too
+# (native/.env, gitignored; see native/.env.example). Authentication is the
+# App Store Connect API key the Fastfile loads — never an Apple ID password.
+team_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]

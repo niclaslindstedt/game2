@@ -108,10 +108,14 @@ HTTP server on the device, so the app is fully playable in airplane mode from
 first launch. `make store-metadata` checks that claim against `app.config.js`
 rather than trusting it.
 
-**fastlane is not set up yet.** `native/fastlane/` needs an `Appfile` naming the
-same bundle id and the Apple account, plus a `metadata` lane. Until it is,
-`eas metadata:push` uploads the text and the screenshots go up by hand in App
-Store Connect. The preflight names this.
+**fastlane uploads the listing.** `native/fastlane/Appfile` reads the same
+`APP_BUNDLE_ID` as `app.config.js` (with the same development fallback), and
+the `metadata` lane in `native/fastlane/Fastfile` uploads what
+`make store-metadata` compiled and `make store-shots` captured, authenticated
+with the App Store Connect API key from `native/.env`:
+`cd native && fastlane metadata` (install fastlane with `brew install
+fastlane`). It uploads text and screenshots and submits nothing unless run
+with `submit:true`.
 
 ## 4. Build
 

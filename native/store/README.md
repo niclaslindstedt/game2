@@ -121,9 +121,9 @@ forty-minute upload. `ASC_KEY_ID`, `ASC_ISSUER_ID` and either `ASC_KEY_PATH` or
 `ASC_KEY_CONTENT` — see `.env.example`; `native/*.p8` and `native/.env` are
 gitignored.
 
-`native/fastlane/` (the `Appfile` and the lanes) does not exist yet — it is one
-of the things `make store-preflight` names, and [`../RELEASING.md`](../RELEASING.md)
-§3 says what goes in it.
+`native/fastlane/Appfile` reads the bundle id from `APP_BUNDLE_ID` and the
+`metadata` lane in `native/fastlane/Fastfile` uploads the compiled listing and
+the captured frames — [`../RELEASING.md`](../RELEASING.md) §3 says how to run it.
 
 ## The screenshots
 

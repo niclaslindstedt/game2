@@ -37,6 +37,8 @@ native/store/copy.mts
 native/store/store.config.json
 native/store/screenshots/
 native/fastlane/metadata/
+native/fastlane/screenshots/
+native/fastlane/report.xml
 tauri/store/steam-listing.md
 tauri/store/screenshots/
 tauri/store/mac.config.json
