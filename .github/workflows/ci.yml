@@ -101,6 +101,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: make lint
+      # Every dependency's licence against the allow-list, off the lockfiles.
+      - run: make check-licenses
 
   # The production build (`tsc --noEmit` across both projects, then vite).
   build:

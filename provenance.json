@@ -1,0 +1,83 @@
+{
+  "about": "Every asset Scandinavian Flick ships, where it comes from and under what licence. The game ships no audio file, no font file and no model or texture file: every sound is synthesized and every car, tree, building and road is geometry built by code at run time. Nothing here is third-party. A new kind of asset, or a new generator, changes this file in the same commit.",
+  "assets": [
+    {
+      "path": "pwa/public/icons/icon.svg",
+      "source": "authored",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "The app mark, drawn by hand. scripts/generate-icons.mjs and pwa/src/game/app-mark.ts restate its geometry and tests/app_mark_test.ts holds them to it."
+    },
+    {
+      "path": "pwa/public/icons/*.png",
+      "source": "generated",
+      "generator": "make icons (scripts/generate-icons.mjs)",
+      "licence": "PolyForm-Noncommercial-1.0.0"
+    },
+    {
+      "path": "pwa/public/favicon.ico",
+      "source": "generated",
+      "generator": "make icons (scripts/generate-icons.mjs)",
+      "licence": "PolyForm-Noncommercial-1.0.0"
+    },
+    {
+      "path": "pwa/public/og.png",
+      "source": "generated",
+      "generator": "make icons (scripts/generate-icons.mjs)",
+      "licence": "PolyForm-Noncommercial-1.0.0"
+    },
+    {
+      "path": "native/assets/*.png",
+      "source": "generated",
+      "generator": "make icons (scripts/generate-icons.mjs)",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "The phone app's icon, splash icon and favicon."
+    },
+    {
+      "path": "tauri/store/icon-layers/",
+      "source": "generated",
+      "generator": "make icons (scripts/generate-icons.mjs)",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "Build output, gitignored: the Mac App Store's layered icon."
+    },
+    {
+      "path": "tauri/src-tauri/icons/",
+      "source": "generated",
+      "generator": "tauri/scripts/icons.mjs (run by the desktop build)",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "Build output, gitignored: pwa/public/icons/ re-encoded to RGBA for the desktop app."
+    },
+    {
+      "path": "pwa/public/previews/*.jpg",
+      "source": "generated",
+      "generator": "make biomes (scripts/biome-preview.mjs), a render of the real game",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "The campaign menu's location banners."
+    },
+    {
+      "path": "native/store/screenshots/",
+      "source": "generated",
+      "generator": "make store-shots (scripts/store-shots.mjs), captures of the real build",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "Build output, gitignored: the App Store and Play screenshots."
+    },
+    {
+      "path": "tauri/store/screenshots/",
+      "source": "generated",
+      "generator": "make store-shots (scripts/store-shots.mjs), captures of the real build",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "Build output, gitignored: the Mac App Store and Steam screenshots."
+    },
+    {
+      "path": "pwa/src/game/audio/",
+      "source": "authored",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "Every sound effect, bed and tracker score, as authored synthesis parameters; pwa/src/lib/synth.ts plays them. No audio file ships."
+    },
+    {
+      "path": "pwa/src/game/",
+      "source": "authored",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "The world's models and materials — cars, flora, buildings, terrain, sky — built as geometry by this code at run time. No model or texture file ships."
+    }
+  ]
+}

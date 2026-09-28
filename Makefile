@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
+.PHONY: build test lint fmt fmt-check release clean install icons sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint check-licenses changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
 
 build:
 	npm run build
@@ -492,6 +492,11 @@ mac-appstore:
 # for an explicit target.
 desktop:
 	npm run tauri:package -- $(ARGS)
+
+# Every dependency's licence, read out of the three committed lockfiles and
+# held to the allow-list in the script. No install needed; CI's lint job runs it.
+check-licenses:
+	node scripts/check-licenses.mjs $(ARGS)
 
 shellcheck:
 	shellcheck scripts/*.sh .githooks/* .claude/hooks/*.sh
