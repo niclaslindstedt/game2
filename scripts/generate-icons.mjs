@@ -4,14 +4,14 @@
 // image from the same geometry as pwa/public/icons/icon.svg — a white car
 // at the head of the flick itself: two yellow tyre tracks swinging out one
 // way and whipping back the other, an S drawn on Swedish blue. Pure Node
-// (the shared lib/png.mjs encoder), so the pipeline needs no native image
+// (the framework's shared tooling/png encoder), so the pipeline needs no native image
 // dependencies. Rerun with `npm run icons` / `make icons` after changing the
 // mark, and keep icon.svg in lockstep.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { encodePng, encodeRgbaPng } from "./lib/png.mjs";
+import { encodePng, encodeRgbaPng } from "@niclaslindstedt/oss-game-framework/tooling/png";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const iconsDir = join(root, "pwa", "public", "icons");

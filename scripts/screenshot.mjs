@@ -21,7 +21,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-import { serveDir } from "./lib/serve-dist.mjs";
+import { serveDir } from "@niclaslindstedt/oss-game-framework/tooling/serve-dist";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "pwa", "dist");
@@ -31,7 +31,7 @@ mkdirSync(outDir, { recursive: true });
 // The built site on a real origin — an HTTP server rather than `file://`,
 // because the service worker, the manifest and `localStorage` all behave
 // differently or not at all off an opaque origin. Shared with the store
-// screenshot harness (`scripts/lib/serve-dist.mjs`), which needs the same
+// screenshot harness (the framework's `tooling/serve-dist`), which needs the same
 // thing for the same reason.
 const site = await serveDir(dist);
 const url = site.url;

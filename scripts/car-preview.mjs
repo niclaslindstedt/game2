@@ -41,7 +41,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
-import { aliasEngine } from "./lib/engine-alias.mjs";
+import { aliasEngine } from "@niclaslindstedt/oss-game-framework/tooling/alias";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 // The spec modules under pwa/src/game/ spell the engine `@engine`; plain

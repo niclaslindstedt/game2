@@ -5,7 +5,7 @@
 //
 // IT COMPOSITES IN A BROWSER PAGE, not with an image library, and that is a
 // decision rather than an omission. This repository has no native image
-// dependency and does not want one — `scripts/lib/png.mjs` is a zlib encoder
+// dependency and does not want one — the framework's `tooling/png` is a zlib encoder
 // for the icon pipeline, which is nowhere near enough to lay type — and the
 // browser is already open. Better: the band is then drawn with the GAME'S OWN
 // stylesheet values, in the game's own type stack, so a caption sits under a

@@ -1,5 +1,11 @@
 .PHONY: build test lint fmt fmt-check release clean install icons sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint check-licenses changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
 
+
+# The shared framework (@niclaslindstedt/oss-game-framework): the release
+# plumbing and the skill-lesson printer are its bins, run from here by path
+# so a target works whether or not npm linked them into node_modules/.bin.
+OGF := node_modules/@niclaslindstedt/oss-game-framework
+
 build:
 	npm run build
 
@@ -521,9 +527,9 @@ changelog:
 	@test -n "$(VERSION)" || { \
 		echo "usage: make changelog VERSION=X.Y.Z"; exit 2; \
 	}
-	node scripts/release/collate-changelog.mjs $(VERSION)
+	node $(OGF)/tooling/release/collate-changelog.mjs $(VERSION)
 
 # Print the semver bump (patch/minor/major) the release workflow will
 # auto-derive from the current .changes/unreleased/ fragments. Read-only.
 bump:
-	@node scripts/release/compute-bump.mjs
+	@node $(OGF)/tooling/release/compute-bump.mjs

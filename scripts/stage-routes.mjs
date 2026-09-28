@@ -32,7 +32,7 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { aliasEngine } from "./lib/engine-alias.mjs";
+import { aliasEngine } from "@niclaslindstedt/oss-game-framework/tooling/alias";
 import { routeOf } from "./lib/stage-route.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");

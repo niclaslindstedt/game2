@@ -44,7 +44,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-import { createCanvas } from "./lib/png.mjs";
+import { createCanvas } from "@niclaslindstedt/oss-game-framework/tooling/png";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const engine = await import(join(root, "engine/index.ts"));

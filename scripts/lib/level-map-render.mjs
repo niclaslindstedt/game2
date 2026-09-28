@@ -21,7 +21,7 @@
 // hundred metres, where a solid is drawn at its real size and the road at
 // its real width.
 
-import { createCanvas } from "./png.mjs";
+import { createCanvas } from "@niclaslindstedt/oss-game-framework/tooling/png";
 import { NEAR_EDGE, SEVERITY_WORD, indexAtS, solidGroup, solidsAlong } from "./stage-features.mjs";
 
 import {

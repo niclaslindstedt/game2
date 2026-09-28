@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 import { TUNING } from "../engine/index.ts";
-import { createCanvas } from "./lib/png.mjs";
+import { createCanvas } from "@niclaslindstedt/oss-game-framework/tooling/png";
 import { SCENARIOS, stageCrash } from "./lib/crash-stage.mjs";
 import { INK, drawFrames, drawPlan, drawProfile } from "./lib/crash-draw.mjs";
 
