@@ -23,7 +23,7 @@
 import * as THREE from "three";
 import { ROAD_CROSS, isLoose, wearAt, type Rng, type Track } from "@engine";
 
-import { valueNoise } from "../lib/noise.ts";
+import { valueNoise } from "@niclaslindstedt/oss-game-framework/core/noise";
 import { rightOf } from "./ribbon.ts";
 
 /** How far the dissolve at the road's edge wanders, and how big its patches

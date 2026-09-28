@@ -4,7 +4,7 @@
 // spatial hash in a fixed few cell probes rather than a walk down every
 // branch ever built.
 
-import { blockOffsets, cellKey } from "../lib/math.ts";
+import { blockOffsets, cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
 import type { SpurLine, SpurSample } from "./spurs.ts";
 
 /** Where the branches run, as a lookup: the terrain field asks it for the

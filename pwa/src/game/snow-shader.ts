@@ -56,7 +56,7 @@
 
 import * as THREE from "three";
 
-import { valueNoise } from "../lib/noise.ts";
+import { valueNoise } from "@niclaslindstedt/oss-game-framework/core/noise";
 import { SUN_DIR } from "./sun-dir.ts";
 
 /** R47 — HOW MUCH BRIGHTER THAN ITS OWN PAINT SNOW RENDERS. Every other

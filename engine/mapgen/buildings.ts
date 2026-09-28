@@ -13,7 +13,7 @@
 // does not — which is why the draws live here beside the type rather than
 // with either placer.
 
-import type { Rng } from "../lib/prng.ts";
+import type { Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { STAGE_RULES } from "./rules.ts";
 import {
   PARKED_HALF,

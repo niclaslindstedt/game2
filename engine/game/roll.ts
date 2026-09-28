@@ -32,7 +32,7 @@
 
 import { TUNING } from "./defs/tuning.ts";
 import type { CarSpec } from "./defs/cars.ts";
-import type { Rng } from "../lib/prng.ts";
+import type { Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import type { Underfoot } from "../mapgen/index.ts";
 import {
   type Ground,
@@ -58,7 +58,7 @@ import {
   turnedPoints,
   weightFromOrigin,
 } from "./roll-hull.ts";
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import {
   rollTilt,
   rotateFrame,

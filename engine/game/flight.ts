@@ -14,7 +14,7 @@
 //
 // Past that line the car belongs to `roll.ts`.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { aeroTrim, airDrag } from "./aero.ts";
 import { surfaceGripFor } from "./limits.ts";
 import type { CarSpec } from "./defs/cars.ts";

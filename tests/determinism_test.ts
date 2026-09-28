@@ -6,7 +6,7 @@
 // so a run needs nothing but its seed to be repeated. The reports are the
 // other half: the analysis and the rating time themselves, and a recorded
 // tape carries the date it was recorded. None of them reads the wall clock
-// directly — each takes a clock (`engine/lib/clock.ts`), so handing in a
+// directly — each takes a clock (the framework's `core/clock`), so handing in a
 // fixed one here makes the WHOLE report comparable, timings and stamps
 // included, rather than every field but the ones that happen to move.
 import { readdirSync, readFileSync } from "node:fs";
@@ -82,14 +82,13 @@ describe("determinism", () => {
     for (const facet of once.facets) expect(facet.ms, facet.id).toBe(0);
   });
 
-  it("reads the wall clock only through the clock seam and the output module", () => {
+  it("reads the wall clock nowhere — the clock seam and the output module are the framework's", () => {
     const engine = join(import.meta.dirname, "..", "engine");
     const files = readdirSync(engine, { recursive: true, encoding: "utf8" }).filter((f) =>
       f.endsWith(".ts"),
     );
     expect(files.length).toBeGreaterThan(50);
     for (const file of files) {
-      if (/(^|\/)(clock|output)\.ts$/.test(file)) continue;
       // The prose may name what it forbids; the code may not.
       const code = readFileSync(join(engine, file), "utf8")
         .split("\n")

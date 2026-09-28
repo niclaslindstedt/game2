@@ -32,7 +32,7 @@
 // out from under the ribbon and leaves the road standing on a bank of
 // nothing, with a sheet of water drawn through it.
 
-import { createRng } from "../lib/prng.ts";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import {
   acrossRoad,
   awayFromRoad,

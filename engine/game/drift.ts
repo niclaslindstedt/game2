@@ -11,7 +11,7 @@
 // handling model branches on; the model is in `car.ts`, and the knobs are
 // `TUNING.drift`.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { TUNING } from "./defs/tuning.ts";
 import type { CarState, RunStats } from "./state.ts";
 

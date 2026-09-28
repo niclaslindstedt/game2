@@ -10,7 +10,7 @@
 // grid re-anchors to the live road as the car moves on, so a fresh query
 // never shapes itself around road the world has already forgotten.
 
-import { blockOffsets, cellKey } from "../lib/math.ts";
+import { blockOffsets, cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
 import type { Track, TrackSample } from "./compile.ts";
 import { knobScale, STAGE_RULES as R } from "./rules.ts";
 import { clamp01 } from "./terrain-streams.ts";

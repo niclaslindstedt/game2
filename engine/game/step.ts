@@ -4,8 +4,8 @@
 // step emitted. The app's render loop and the headless simulator drive this
 // same function — there is no other way to advance a run.
 
-import { clamp } from "../lib/math.ts";
-import { createRng } from "../lib/prng.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { flatTrack, STAGE_RULES, trainSolidsNear, type Track } from "../mapgen/index.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
@@ -29,7 +29,7 @@ import {
 } from "./track.ts";
 import { rollTilt, updateSlip, type CarInput, type GameEvent, type GameState } from "./state.ts";
 import { stepTraffic } from "./traffic.ts";
-import { status } from "../output.ts";
+import { status } from "@niclaslindstedt/oss-game-framework/core/output";
 import { blowWind } from "./start.ts";
 import {
   drown,

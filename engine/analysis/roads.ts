@@ -49,7 +49,7 @@ import {
   type Finding,
   type MetricReport,
 } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 export function analyzeRoads(
   track: Track,

@@ -41,7 +41,7 @@ import type { Track } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, under, type Check, type Finding, type MetricReport } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 const P = STAGE_RULES.powerline;
 const W = ANALYSIS.wires;

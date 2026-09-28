@@ -17,7 +17,7 @@
 // (`BotProfile.latFraction` and friends are then honest fractions of a real
 // limit rather than of a number that only resembles one.)
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import type { Underfoot } from "../mapgen/index.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";

@@ -8,7 +8,7 @@
 // climb — and each is also a place the forest, the water and the props
 // keep off, which is the other half of what this answers.
 
-import { smooth } from "../lib/noise.ts";
+import { smooth } from "@niclaslindstedt/oss-game-framework/core/noise";
 import type { Track } from "./compile.ts";
 import { rectDistance, type FarmRect } from "./farms.ts";
 import type { Surface } from "./compile.ts";

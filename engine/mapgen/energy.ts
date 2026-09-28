@@ -23,8 +23,8 @@
 // — its rows face the sun's azimuth, whichever way the road runs — pushed
 // out from the road by exactly its own support in that direction.
 
-import { hash2 } from "../lib/noise.ts";
-import { createRng, type Rng } from "../lib/prng.ts";
+import { hash2 } from "@niclaslindstedt/oss-game-framework/core/noise";
+import { createRng, type Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { rectDistance, type FarmRect } from "./farms.ts";
 import type { HomesteadSample } from "./homesteads.ts";
 import type { LandField } from "./land.ts";

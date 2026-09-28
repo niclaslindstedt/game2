@@ -11,7 +11,7 @@
 // The vocabulary they draw from, and the index everything downstream reads
 // them through, are `spurs.ts` and `spur-index.ts`.
 
-import { createRng } from "../lib/prng.ts";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { LAKE_Y, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";

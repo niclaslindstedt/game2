@@ -21,7 +21,7 @@ import type { TerrainField } from "../mapgen/terrain.ts";
 import { RATING } from "./scales.ts";
 import type { Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 export function rateRisk(walk: Walk, terrain: TerrainField, clock: Clock = wallClock): Facet {
   const started = clock.now();

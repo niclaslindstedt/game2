@@ -36,7 +36,7 @@ import { STAGE_RULES } from "../mapgen/rules.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, under, type Check, type Finding, type MetricReport } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 /** How straight a run of road is, as the sharpest radius anywhere in it, m
  * — Infinity on a dead straight. Walked from `from` for `run` meters, or

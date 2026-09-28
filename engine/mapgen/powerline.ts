@@ -49,7 +49,7 @@
 // this module hands it; the terrain makes the legs solid and cuts the
 // wayleave through the forest under them.
 
-import { createRng, type Rng } from "../lib/prng.ts";
+import { createRng, type Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import type { LandField } from "./land.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 import { standSolid, WALL_BAY, WALL_STOREY, type WildObstacle } from "./solids.ts";

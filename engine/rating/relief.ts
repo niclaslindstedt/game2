@@ -19,7 +19,7 @@
 import { RATING } from "./scales.ts";
 import { segmentSpans, type Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 export function rateRelief(walk: Walk, clock: Clock = wallClock): Facet {
   const started = clock.now();

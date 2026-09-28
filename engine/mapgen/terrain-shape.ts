@@ -13,7 +13,7 @@
 // (`terrain-index.ts`) for which road is nearest; what it hands back is
 // what `terrain-ground.ts` turns into ground.
 
-import { smooth } from "../lib/noise.ts";
+import { smooth } from "@niclaslindstedt/oss-game-framework/core/noise";
 import type { Track } from "./compile.ts";
 import type { GuardField } from "./guards.ts";
 import { TILE_SINK } from "./lattice.ts";

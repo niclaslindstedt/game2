@@ -23,7 +23,7 @@
 // reads the ledger and never writes it, and this never reads back what
 // damage.ts derives.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { callDamage } from "./collision.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { CarState, GameEvent } from "./state.ts";

@@ -19,8 +19,8 @@
 // placement, three consumers — the hill the car climbs is the hill the
 // player sees.
 
-import { hash2 } from "../lib/noise.ts";
-import { cellKey } from "../lib/math.ts";
+import { hash2 } from "@niclaslindstedt/oss-game-framework/core/noise";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
 import type { Track } from "./compile.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
 

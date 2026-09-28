@@ -25,7 +25,7 @@
 // The handling model READS this and never writes the ledger; collision.ts
 // and cooling.ts write the ledger and never read this.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { glassCrack } from "./collision.ts";
 import { heatPower } from "./cooling.ts";
 import { TUNING } from "./defs/tuning.ts";

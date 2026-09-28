@@ -16,7 +16,7 @@ import type { Surface, Track } from "../mapgen/compile.ts";
 import { RATING } from "./scales.ts";
 import { effectiveKinds, segmentSpans, type Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 export function rateFeatures(walk: Walk, clock: Clock = wallClock): Facet {
   const started = clock.now();

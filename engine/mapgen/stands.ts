@@ -32,7 +32,7 @@
 // road-distance and blocked probes: a crowd standing in a lake is worse
 // than a corner with nobody at it.
 
-import { hash2 } from "../lib/noise.ts";
+import { hash2 } from "@niclaslindstedt/oss-game-framework/core/noise";
 import type { Track } from "./compile.ts";
 import { finishAt } from "./compile.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";

@@ -42,7 +42,7 @@ import { speedProfile } from "./speed.ts";
 import { analyzeWater } from "./water.ts";
 import { analyzeWires } from "./wires.ts";
 import { rank, type MetricReport, type StageReport } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 export { ANALYSIS } from "./budgets.ts";
 export type { Check, Finding, MetricReport, Severity, StageReport } from "./types.ts";

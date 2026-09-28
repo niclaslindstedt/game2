@@ -13,8 +13,8 @@
 
 import type { SegmentPlan, TurnSeverity } from "./rules.ts";
 import { STAGE_RULES as R } from "./rules.ts";
-import { createRng } from "../lib/prng.ts";
-import { hash2 } from "../lib/noise.ts";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
+import { hash2 } from "@niclaslindstedt/oss-game-framework/core/noise";
 import { NOISE_LATTICE, valueNoise1d as valueNoise } from "./rolling.ts";
 import { ROAD_CROSS } from "./road.ts";
 import { type Spur } from "./spurs.ts";
