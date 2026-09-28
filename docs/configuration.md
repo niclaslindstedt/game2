@@ -120,7 +120,7 @@ Each slot's manifest gets a distinct `id`/`scope`/`start_url` and install name, 
 
 ## Releases
 
-`release.yml` (manual dispatch, and the only entry point) derives the bump from `.changes/unreleased/` fragments, rewrites every version string via `scripts/update-versions.sh`, collates the CHANGELOG, commits `chore(release): vX.Y.Z`, tags, creates the GitHub Release, and chains into `pages.yml` so `/` serves the new tag immediately. Between the tag and the publish, a runner per platform packages the desktop downloads onto the release while it is still a draft — macOS builds both slices, cross-compiling the Intel one, so an Intel Mac is not left with an `aarch64` `.dmg` it cannot open. Preview locally with `make bump` and `make changelog VERSION=X.Y.Z`.
+A release starts only from `version-bump.yml` (manual dispatch): it checks the branch, the tree and the version the fragments add up to, prints what it is about to do, and calls `release.yml`, which derives the bump from `.changes/unreleased/` fragments, rewrites every version string via `scripts/update-versions.sh`, collates the CHANGELOG, commits `chore(release): vX.Y.Z`, tags, creates the GitHub Release, and chains into `pages.yml` so `/` serves the new tag immediately. Between the tag and the publish, a runner per platform packages the desktop downloads onto the release while it is still a draft — macOS builds both slices, cross-compiling the Intel one, so an Intel Mac is not left with an `aarch64` `.dmg` it cannot open. Preview locally with `make bump` and `make changelog VERSION=X.Y.Z`.
 
 ## Identity
 

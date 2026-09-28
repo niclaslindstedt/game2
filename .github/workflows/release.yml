@@ -1,6 +1,8 @@
 name: release
 
-# Manual-only. The maintainer dispatches this and the workflow derives
+# THE RELEASE, END TO END. Normally CALLED by version-bump.yml — the one
+# entry point a maintainer dispatches — and also dispatchable on its own as
+# the break-glass, with the same `bump` input. The workflow derives
 # the semver bump from the changeset fragments in .changes/unreleased/
 # (their front-matter carries the Added/Changed/Fixed/... type and an
 # optional `breaking: true` — see scripts/release/compute-bump.mjs),
@@ -37,6 +39,13 @@ on:
           - patch
           - minor
           - major
+  workflow_call:
+    inputs:
+      bump:
+        description: "Semver bump, resolved or 'auto' (see workflow_dispatch above)."
+        required: false
+        type: string
+        default: auto
 
 # Default to no permissions; every job declares its own least-privilege
 # `permissions:` block.
@@ -76,12 +85,14 @@ jobs:
       # form overrides that derivation.
       - name: Resolve bump
         id: resolve
+        env:
+          REQUESTED: ${{ inputs.bump }}
         run: |
-          if [ "${{ inputs.bump }}" = "auto" ] || [ -z "${{ inputs.bump }}" ]; then
+          if [ "$REQUESTED" = "auto" ] || [ -z "$REQUESTED" ]; then
             BUMP=$(node scripts/release/compute-bump.mjs)
             echo "Auto-derived bump from fragments: $BUMP"
           else
-            BUMP="${{ inputs.bump }}"
+            BUMP="$REQUESTED"
             echo "Using requested bump override: $BUMP"
           fi
           echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
@@ -92,18 +103,24 @@ jobs:
       # and engine/version.ts — via the script that owns them.
       - name: Bump version
         id: bump
+        env:
+          BUMP: ${{ steps.resolve.outputs.bump }}
         run: |
           LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n1)
           CURRENT="${LATEST_TAG#v}"
           CURRENT="${CURRENT:-0.0.0}"
           IFS=. read -r MAJOR MINOR PATCH <<<"$CURRENT"
-          case "${{ steps.resolve.outputs.bump }}" in
+          case "$BUMP" in
             major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
             minor) MINOR=$((MINOR+1)); PATCH=0 ;;
             patch) PATCH=$((PATCH+1)) ;;
-            *) echo "::error::unknown bump '${{ steps.resolve.outputs.bump }}'"; exit 1 ;;
+            *) echo "::error::unknown bump '$BUMP'"; exit 1 ;;
           esac
           VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "::error::tag v${VERSION} already exists — refusing to release over it"
+            exit 1
+          fi
           ./scripts/update-versions.sh "v${VERSION}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"

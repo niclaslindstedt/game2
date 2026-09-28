@@ -69,7 +69,7 @@ Every PR needs green CI (`tests`, `format`, `lint`, `build`, `simulate`, `shell-
 
 ## Governance
 
-This is a single-maintainer project: [@niclaslindstedt](https://github.com/niclaslindstedt) has merge rights, decides disputes, and cuts releases (via the `release` workflow, which derives the version from the changeset fragments). Sustained, quality contributions are the path to being added as a maintainer — asked, not applied for. Disagreements are argued in the PR or issue on technical merit; the maintainer has the final word. Should the project be abandoned, the license already permits noncommercial forks, and the maintainer will link a successor fork from the README if one emerges.
+This is a single-maintainer project: [@niclaslindstedt](https://github.com/niclaslindstedt) has merge rights, decides disputes, and cuts releases (via the `version-bump` workflow, which derives the version from the changeset fragments and hands off to `release`). Sustained, quality contributions are the path to being added as a maintainer — asked, not applied for. Disagreements are argued in the PR or issue on technical merit; the maintainer has the final word. Should the project be abandoned, the license already permits noncommercial forks, and the maintainer will link a successor fork from the README if one emerges.
 
 ## Communication
 
