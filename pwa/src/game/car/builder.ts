@@ -81,6 +81,8 @@ export class MeshBuilder {
   private col: number[] = [];
   private nrm: number[] = [];
   private shn: number[] = [];
+  /** 1 where a vertex belongs to a FORM face (`form` below), per vertex. */
+  private frm: number[] = [];
   private readonly ab = new THREE.Vector3();
   private readonly ac = new THREE.Vector3();
   private readonly n = new THREE.Vector3();
@@ -99,6 +101,25 @@ export class MeshBuilder {
    * which would otherwise have no shape at all. Set it before drawing — it
    * is read per face, so one builder can carry both. */
   baked = false;
+
+  /** Whether the faces drawn from now on are FORM — the pressed panels, the
+   * bars, the lids, the wheels — rather than DRESS: the livery laid on them,
+   * the lamps and grilles let into them, the hardware on them. A MODELLED
+   * car (`car-models.ts`) brings its own forms and keeps the code's dress,
+   * so this is the one line between the two; the code-built car draws both,
+   * exactly as it always has. Set it round a piece with `formed`. */
+  form = false;
+
+  /** Draw `fn` as FORM, and put the flag back as it was. */
+  formed(fn: () => void): void {
+    const was = this.form;
+    this.form = true;
+    try {
+      fn();
+    } finally {
+      this.form = was;
+    }
+  }
 
   // A parameter property would say this in one line and cost the repo's Node
   // tooling the file: `--experimental-strip-types` refuses to parse them.
@@ -129,6 +150,7 @@ export class MeshBuilder {
       if (this.alpha) this.col.push(alpha);
       this.nrm.push(this.n.x, this.n.y, this.n.z);
       this.shn.push(this.shine);
+      this.frm.push(this.form ? 1 : 0);
     }
   }
 
@@ -174,6 +196,7 @@ export class MeshBuilder {
       if (this.alpha) this.col.push(alphas[i]);
       this.nrm.push(this.n.x, this.n.y, this.n.z);
       this.shn.push(this.shine);
+      this.frm.push(this.form ? 1 : 0);
     }
   }
 
@@ -240,6 +263,7 @@ export class MeshBuilder {
       if (this.alpha) this.col.push(alpha);
       this.nrm.push(nrm.getX(i), nrm.getY(i), nrm.getZ(i));
       this.shn.push(shn ? shn.getX(i) : this.shine);
+      this.frm.push(this.form ? 1 : 0);
     }
     source.dispose();
   }
@@ -251,12 +275,44 @@ export class MeshBuilder {
     return this.pos.length === 0;
   }
 
-  geometry(): THREE.BufferGeometry {
+  /** Whether any DRESS has been drawn — what a modelled car still needs of
+   * this builder once its forms are the model's. */
+  get dressed(): boolean {
+    return this.frm.some((f) => f === 0);
+  }
+
+  /** Every face — or, with `dressOnly`, only the DRESS (see `form`), which
+   * is what a modelled car lays over its model's own forms. */
+  geometry(dressOnly = false): THREE.BufferGeometry {
+    if (dressOnly) return this.dressGeometry();
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
     geo.setAttribute("color", new THREE.Float32BufferAttribute(this.col, this.alpha ? 4 : 3));
     geo.setAttribute("normal", new THREE.Float32BufferAttribute(this.nrm, 3));
     geo.setAttribute("aShine", new THREE.Float32BufferAttribute(this.shn, 1));
+    return geo;
+  }
+
+  private dressGeometry(): THREE.BufferGeometry {
+    const cw = this.alpha ? 4 : 3;
+    const pos: number[] = [];
+    const col: number[] = [];
+    const nrm: number[] = [];
+    const shn: number[] = [];
+    for (let i = 0; i < this.frm.length; i++) {
+      if (this.frm[i]) continue;
+      for (let k = 0; k < 3; k++) {
+        pos.push(this.pos[i * 3 + k]);
+        nrm.push(this.nrm[i * 3 + k]);
+      }
+      for (let k = 0; k < cw; k++) col.push(this.col[i * cw + k]);
+      shn.push(this.shn[i]);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(col, cw));
+    geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+    geo.setAttribute("aShine", new THREE.Float32BufferAttribute(shn, 1));
     return geo;
   }
 }
@@ -695,4 +751,66 @@ export function plate(
   ];
   if (up) b.quad(c[0], c[1], c[2], c[3], color);
   else b.quad(c[3], c[2], c[1], c[0], color);
+}
+
+/** A face of a SMOOTH-shaded mesh (a modelled car's, `car-models.ts`) bent
+ * by the crumple: each of its three REST normals turned by the rotation that
+ * takes the face's rest plane onto its bent one. Where `writeFaceNormal`
+ * would flatten a rounded panel into facets on the first knock, this keeps
+ * the model's own shading on metal the fold has not moved, and lets the
+ * metal it has moved catch the light at its new angle. Flat faces (the
+ * code's dress laid over a model) have rest normals equal to their face's,
+ * so this hands them their new face normal exactly as `writeFaceNormal`. */
+export function turnFaceNormals(
+  rest: ArrayLike<number>,
+  bent: ArrayLike<number>,
+  restNrm: ArrayLike<number>,
+  out: Float32Array,
+  i: number,
+): void {
+  const face = (p: ArrayLike<number>): [number, number, number] => {
+    const ax = p[i * 3 + 3] - p[i * 3];
+    const ay = p[i * 3 + 4] - p[i * 3 + 1];
+    const az = p[i * 3 + 5] - p[i * 3 + 2];
+    const bx = p[i * 3 + 6] - p[i * 3];
+    const by = p[i * 3 + 7] - p[i * 3 + 1];
+    const bz = p[i * 3 + 8] - p[i * 3 + 2];
+    const nx = ay * bz - az * by;
+    const ny = az * bx - ax * bz;
+    const nz = ax * by - ay * bx;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    return [nx / len, ny / len, nz / len];
+  };
+  const [ux, uy, uz] = face(rest);
+  const [vx, vy, vz] = face(bent);
+  // Rodrigues, about u × v by the angle between them.
+  let kx = uy * vz - uz * vy;
+  let ky = uz * vx - ux * vz;
+  let kz = ux * vy - uy * vx;
+  const sin = Math.hypot(kx, ky, kz);
+  const cos = ux * vx + uy * vy + uz * vz;
+  for (let v = 0; v < 3; v++) {
+    const j = (i + v) * 3;
+    const nx = restNrm[j];
+    const ny = restNrm[j + 1];
+    const nz = restNrm[j + 2];
+    if (sin < 1e-9) {
+      out[j] = cos < 0 ? -nx : nx;
+      out[j + 1] = cos < 0 ? -ny : ny;
+      out[j + 2] = cos < 0 ? -nz : nz;
+      continue;
+    }
+    if (v === 0) {
+      kx /= sin;
+      ky /= sin;
+      kz /= sin;
+    }
+    const dot = kx * nx + ky * ny + kz * nz;
+    const cx = ky * nz - kz * ny;
+    const cy = kz * nx - kx * nz;
+    const cz = kx * ny - ky * nx;
+    out[j] = nx * cos + cx * sin + kx * dot * (1 - cos);
+    out[j + 1] = ny * cos + cy * sin + ky * dot * (1 - cos);
+    out[j + 2] = nz * cos + cz * sin + kz * dot * (1 - cos);
+  }
 }

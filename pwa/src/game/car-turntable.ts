@@ -15,6 +15,7 @@ import { studioLights } from "./car-surface.ts";
 import type { CarSpec } from "@engine";
 
 import { buildCarBody } from "./car-body.ts";
+import { carModel } from "./car-models.ts";
 import { bodySpecFor } from "./car-styles.ts";
 
 /** WHERE THE VIEWER STANDS, as a direction rather than a place: the eye is
@@ -123,7 +124,7 @@ export function createCarTurntable(canvas: HTMLCanvasElement): CarTurntable {
   const fitCar = (spec: CarSpec): void => {
     carId = spec.id;
     clearBody();
-    body = buildCarBody(bodySpecFor(spec));
+    body = buildCarBody(bodySpecFor(spec), { model: carModel(spec.id) });
     pivot.add(body.group);
     box.setFromObject(body.group);
     // The car TURNS, so what has to fit is the circle its plan sweeps out

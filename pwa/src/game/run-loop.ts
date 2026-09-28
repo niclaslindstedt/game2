@@ -138,7 +138,13 @@ export function startRun(store: RunStore, actions: RunActions): (() => void) | u
     audio.setView(playCameraRef.current);
     audioRef.current = audio;
   });
-  void import("./renderer.ts").then(({ createRenderer }) => {
+  // The modelled cars (`car-models.ts`) are fetched with it and in before a
+  // single car is built, so no car is drawn from the code while another is
+  // the model.
+  void Promise.all([
+    import("./renderer.ts"),
+    import("./car-models.ts").then(({ loadCarModels }) => loadCarModels()),
+  ]).then(([{ createRenderer }]) => {
     if (disposed) return;
     const renderer = createRenderer(canvas, optionsRef.current.video);
     rendererRef.current = renderer;

@@ -21,6 +21,8 @@
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
     "icons": "node scripts/generate-icons.mjs",
+    "blender": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/blender.mjs",
+    "models": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/models.mjs",
     "sim": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/simulate-run.mjs",
     "tape": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/run-tape.mjs",
     "track": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/track-preview.mjs",

@@ -29,6 +29,30 @@ const DIGITS: Record<string, number[]> = {
   "9": [0b111, 0b101, 0b111, 0b001, 0b111],
 };
 
+/** Where an arch extension runs, m, on the car's right: per axle, the
+ * lip's samples round the opening — z along the car, the arch's height
+ * there, and the rocker line the trim stands out from. Stated once for the
+ * drawn trim and a modelled one (`make blender`). */
+export function archTrimPlan(
+  spec: CarBodySpec,
+  axles: number[],
+): { z: number; y: number; x: number }[][] {
+  const arch = spec.arches;
+  if (!arch?.trim) return [];
+  const steps = 14;
+  const rocker = sideRatios(spec).rocker;
+  return axles.map((axle) =>
+    Array.from({ length: steps + 1 }, (_, i) => {
+      const z = axle - arch.radius + (2 * arch.radius * i) / steps;
+      return {
+        z,
+        y: archAt(spec, axles, z),
+        x: sampleProfile(spec.profile, z).half * rocker + flareAt(spec, axles, z) * 0.7,
+      };
+    }),
+  );
+}
+
 /** The plastic arch extension: a band that follows the opening's curve,
  * standing proud of the flank and skirting down over the tire. Only drawn
  * where the arch has actually lifted clear of the floor. */
@@ -37,19 +61,11 @@ function buildArchTrim(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void
   const trim = arch?.trim;
   if (!arch || !trim) return;
   const color = trim.color ?? spec.colors.trim ?? 0x14181f;
-  const steps = 14;
-  for (const axle of axles) {
-    for (let i = 0; i < steps; i++) {
-      const za = axle - arch.radius + (2 * arch.radius * i) / steps;
-      const zb = axle - arch.radius + (2 * arch.radius * (i + 1)) / steps;
-      const ya = archAt(spec, axles, za);
-      const yb = archAt(spec, axles, zb);
+  for (const run of archTrimPlan(spec, axles)) {
+    for (let i = 0; i < run.length - 1; i++) {
+      const { z: za, y: ya, x: xa } = run[i];
+      const { z: zb, y: yb, x: xb } = run[i + 1];
       if (ya <= spec.floorY + 0.02 || yb <= spec.floorY + 0.02) continue;
-      const rocker = sideRatios(spec).rocker;
-      const s = (z: number): number =>
-        sampleProfile(spec.profile, z).half * rocker + flareAt(spec, axles, z) * 0.7;
-      const xa = s(za);
-      const xb = s(zb);
       for (const side of [-1, 1]) {
         const p = (x: number, y: number, z: number): V3 => [side * x, y, z];
         // Underside of the lip, then its outer face — two bands are enough
@@ -78,6 +94,19 @@ function buildArchTrim(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void
   }
 }
 
+/** Where a door mirror's stalk leaves the body, m, on the car's right (the
+ * left is its x-mirror) — stated once for the drawn mirror here and for a
+ * MODELLED one (`make blender`), which has to hang where this one does. */
+export function mirrorMount(
+  spec: CarBodySpec,
+  axles: number[],
+): { x: number; y: number; z: number } {
+  const cowl = sampleProfile(spec.profile, spec.cabin.cowlZ);
+  const z = spec.cabin.cowlZ - 0.06;
+  const y = cowl.topY + 0.03;
+  return { x: flankX(spec, axles, z, y) + 0.02, y, z };
+}
+
 /** Door mirrors: a stalk off the cowl and a housing turned slightly out,
  * so the shape reads as a mirror rather than a lump of paint. Each is its
  * own breakable — a brushed tree takes them off first. */
@@ -87,17 +116,34 @@ function buildMirrors(
   part: (name: DamagePart) => MeshBuilder,
 ): void {
   if (spec.mirrors === false) return;
-  const cowl = sampleProfile(spec.profile, spec.cabin.cowlZ);
-  const z = spec.cabin.cowlZ - 0.06;
-  const y = cowl.topY + 0.03;
-  const x = flankX(spec, axles, z, y) + 0.02;
+  const color = {
+    stalk: spec.colors.trim ?? 0x14181f,
+    housing: spec.colors.paint,
+    glass: spec.colors.glass ?? 0x7e9fc7,
+  };
   for (const side of [-1, 1]) {
     const b = part(side > 0 ? "mirrorR" : "mirrorL");
-    b.box(side * (x + 0.03), y, z, 0.07, 0.025, 0.03, spec.colors.trim ?? 0x14181f);
-    b.box(side * (x + 0.09), y + 0.01, z - 0.01, 0.055, 0.075, 0.11, spec.colors.paint);
-    // The glass, facing back down the flank.
-    b.box(side * (x + 0.09), y + 0.01, z - 0.065, 0.05, 0.062, 0.01, spec.colors.glass ?? 0x7e9fc7);
+    for (const piece of mirrorPlan(spec, axles)) {
+      const [x, y, z] = piece.c;
+      b.box(side * x, y, z, piece.s[0], piece.s[1], piece.s[2], color[piece.role]);
+    }
   }
+}
+
+/** A door mirror's three pieces on the car's right, m — the stalk off the
+ * cowl, the housing turned out on it, and the glass facing back down the
+ * flank: centre and size of each, stated once for the drawn mirror and a
+ * modelled one (`make blender`). */
+export function mirrorPlan(
+  spec: CarBodySpec,
+  axles: number[],
+): { role: "stalk" | "housing" | "glass"; c: V3; s: V3 }[] {
+  const { x, y, z } = mirrorMount(spec, axles);
+  return [
+    { role: "stalk", c: [x + 0.03, y, z], s: [0.07, 0.025, 0.03] },
+    { role: "housing", c: [x + 0.09, y + 0.01, z - 0.01], s: [0.055, 0.075, 0.11] },
+    { role: "glass", c: [x + 0.09, y + 0.01, z - 0.065], s: [0.05, 0.062, 0.01] },
+  ];
 }
 
 function buildHandles(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void {
@@ -112,24 +158,41 @@ function buildHandles(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void 
   }
 }
 
+/** Where each axle's mud flaps hang, m, on the car's right: the centre of
+ * the flap across the car and along it, its top (buried in the arch) and
+ * its bottom, and how wide it is. Stated once for the drawn flaps and a
+ * modelled car's (`make blender`). */
+export function mudflapPlan(
+  spec: CarBodySpec,
+  axles: number[],
+): { x: number; z: number; top: number; bottom: number; width: number }[] {
+  const r = spec.arches?.radius ?? spec.wheelRadius;
+  return axles.map((axle) => {
+    const z = axle - r - 0.03;
+    return {
+      x: spec.trackHalf - 0.01,
+      z,
+      top: Math.max(spec.floorY + 0.1, archAt(spec, axles, z + 0.04) - 0.02),
+      bottom: 0.06,
+      width: spec.wheelWidth * 0.95,
+    };
+  });
+}
+
 /** Mud flaps hang off the arch's rear lip. Their top is buried in the
  * bodywork so they read as bolted on, not floating alongside it. */
 function buildMudflaps(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void {
   if (spec.mudflaps === false) return;
   const trim =
     typeof spec.mudflaps === "object" ? spec.mudflaps.color : (spec.colors.trim ?? 0x14181f);
-  const r = spec.arches?.radius ?? spec.wheelRadius;
-  const bottom = 0.06;
-  for (const axle of axles) {
-    const z = axle - r - 0.03;
-    const top = Math.max(spec.floorY + 0.1, archAt(spec, axles, z + 0.04) - 0.02);
+  for (const flap of mudflapPlan(spec, axles)) {
     for (const side of [-1, 1]) {
       b.box(
-        side * (spec.trackHalf - 0.01),
-        (top + bottom) / 2,
-        z,
-        spec.wheelWidth * 0.95,
-        top - bottom,
+        side * flap.x,
+        (flap.top + flap.bottom) / 2,
+        flap.z,
+        flap.width,
+        flap.top - flap.bottom,
         0.025,
         trim,
       );
@@ -371,20 +434,49 @@ function slab(
   b.quad(m(rb), m(fb), m(ft), m(rt), color); // left
 }
 
-function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder): void {
+/** One piece of a spoiler, m: a BOX (centre and size) or a SLAB — a flat
+ * plate between `x0` and `x1` across the car from a front (y, z) to a rear
+ * one. `post` marks the struts that carry a blade, drawn in the trim tone
+ * on a rally wing and in the blade's own everywhere else. */
+export type SpoilerPiece =
+  | { kind: "box"; c: V3; s: V3; post?: boolean }
+  | {
+      kind: "slab";
+      x0: number;
+      x1: number;
+      front: { y: number; z: number };
+      rear: { y: number; z: number };
+      thick: number;
+      post?: boolean;
+    };
+
+/** Every piece of a spec's spoiler — stated once for the drawn wing and a
+ * modelled one (`make blender`). */
+export function spoilerPieces(spec: CarBodySpec): SpoilerPiece[] {
   const sp = spec.spoiler;
-  if (!sp || sp.kind === "none") return;
+  if (!sp || sp.kind === "none") return [];
   const tail = spec.profile[spec.profile.length - 1];
-  const trim = spec.colors.trim ?? 0x14181f;
-  const blade = sp.color ?? spec.colors.paint;
-  const wing = part("spoiler");
   if (sp.kind === "wing") {
-    wing.box(-sp.span * 0.32, (sp.y + tail.topY) / 2, sp.z, 0.07, sp.y - tail.topY, 0.16, trim);
-    wing.box(sp.span * 0.32, (sp.y + tail.topY) / 2, sp.z, 0.07, sp.y - tail.topY, 0.16, trim);
-    wing.box(0, sp.y, sp.z, sp.span, 0.05, sp.chord, blade);
-    wing.box(-sp.span / 2, sp.y + 0.02, sp.z, 0.03, 0.12, sp.chord + 0.06, blade);
-    wing.box(sp.span / 2, sp.y + 0.02, sp.z, 0.03, 0.12, sp.chord + 0.06, blade);
-  } else if (sp.kind === "roof") {
+    const post = sp.y - tail.topY;
+    return [
+      {
+        kind: "box",
+        c: [-sp.span * 0.32, (sp.y + tail.topY) / 2, sp.z],
+        s: [0.07, post, 0.16],
+        post: true,
+      },
+      {
+        kind: "box",
+        c: [sp.span * 0.32, (sp.y + tail.topY) / 2, sp.z],
+        s: [0.07, post, 0.16],
+        post: true,
+      },
+      { kind: "box", c: [0, sp.y, sp.z], s: [sp.span, 0.05, sp.chord] },
+      { kind: "box", c: [-sp.span / 2, sp.y + 0.02, sp.z], s: [0.03, 0.12, sp.chord + 0.06] },
+      { kind: "box", c: [sp.span / 2, sp.y + 0.02, sp.z], s: [0.03, 0.12, sp.chord + 0.06] },
+    ];
+  }
+  if (sp.kind === "roof") {
     // A hatchback's roof blade grows OUT of the roof's trailing edge: its
     // leading edge overlaps the roof and it runs back over the tailgate.
     // A free-floating plank behind the roof reads as a mistake however
@@ -393,16 +485,18 @@ function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder
     const zFront = spec.cabin.roofRearZ + 0.03;
     const yFront = spec.cabin.roofY + 0.004;
     const zRear = sp.z - sp.chord / 2;
-    slab(
-      wing,
-      -sp.span / 2,
-      sp.span / 2,
-      { y: yFront, z: zFront },
-      { y: sp.y, z: zRear },
-      0.04,
-      blade,
-    );
-  } else if (sp.kind === "gate") {
+    return [
+      {
+        kind: "slab",
+        x0: -sp.span / 2,
+        x1: sp.span / 2,
+        front: { y: yFront, z: zFront },
+        rear: { y: sp.y, z: zRear },
+        thick: 0.04,
+      },
+    ];
+  }
+  if (sp.kind === "gate") {
     // The tailgate wing. The blade is a thick raked plate with its trailing
     // edge lifted; each post is a narrow slab standing on the deck AHEAD of
     // the blade and sweeping up and back to its underside — swept, because
@@ -413,15 +507,16 @@ function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder
     const half = sp.span / 2;
     const zFront = sp.z + sp.chord / 2;
     const zRear = sp.z - sp.chord / 2;
-    slab(
-      wing,
-      -half,
-      half,
-      { y: sp.y - 0.02, z: zFront },
-      { y: sp.y + 0.02, z: zRear },
-      thick,
-      blade,
-    );
+    const pieces: SpoilerPiece[] = [
+      {
+        kind: "slab",
+        x0: -half,
+        x1: half,
+        front: { y: sp.y - 0.02, z: zFront },
+        rear: { y: sp.y + 0.02, z: zRear },
+        thick,
+      },
+    ];
     const postX = half * (sp.post ?? 0.8);
     // The posts stand a little ahead of the blade's centre and sweep back
     // up to it — on the BACKLIGHT where the foot lands under that pane,
@@ -434,15 +529,15 @@ function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder
     const postW = 0.05;
     for (const side of [-1, 1]) {
       const x = side * postX;
-      slab(
-        wing,
-        x - postW / 2,
-        x + postW / 2,
-        { y: foot - 0.01, z: footZ + 0.04 },
-        { y: under, z: sp.z - sp.chord * 0.2 },
-        0.06,
-        blade,
-      );
+      pieces.push({
+        kind: "slab",
+        x0: x - postW / 2,
+        x1: x + postW / 2,
+        front: { y: foot - 0.01, z: footZ + 0.04 },
+        rear: { y: under, z: sp.z - sp.chord * 0.2 },
+        thick: 0.06,
+        post: true,
+      });
     }
     if (sp.lip) {
       // The second blade: a thin plate on the tailgate's own top edge,
@@ -453,24 +548,49 @@ function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder
       const lipRear = lip.z - lip.chord / 2;
       const yFront = sampleProfile(spec.profile, lipFront).topY + 0.012;
       const yRear = yFront + 0.012;
-      slab(
-        wing,
-        -lipHalf,
-        lipHalf,
-        { y: yFront, z: lipFront },
-        { y: yRear, z: lipRear },
-        0.028,
-        blade,
-      );
+      pieces.push({
+        kind: "slab",
+        x0: -lipHalf,
+        x1: lipHalf,
+        front: { y: yFront, z: lipFront },
+        rear: { y: yRear, z: lipRear },
+        thick: 0.028,
+      });
       const deck = sampleProfile(spec.profile, lipRear).topY;
-      wing.box(0, (yRear + deck) / 2, lipRear + 0.015, lipHalf * 1.96, yRear - deck, 0.03, blade);
+      pieces.push({
+        kind: "box",
+        c: [0, (yRear + deck) / 2, lipRear + 0.015],
+        s: [lipHalf * 1.96, yRear - deck, 0.03],
+      });
     }
-  } else {
-    // A ducktail is bolted to the deck, so it gets a skirt down to it —
-    // a bare bar floating above the boot reads as a mistake.
-    const deck = sampleProfile(spec.profile, sp.z).topY;
-    wing.box(0, sp.y, sp.z, sp.span, 0.055, 0.14, blade);
-    wing.box(0, (sp.y + deck) / 2, sp.z - 0.03, sp.span * 0.96, sp.y - deck, 0.07, blade);
+    return pieces;
+  }
+  // A ducktail is bolted to the deck, so it gets a skirt down to it —
+  // a bare bar floating above the boot reads as a mistake.
+  const deck = sampleProfile(spec.profile, sp.z).topY;
+  return [
+    { kind: "box", c: [0, sp.y, sp.z], s: [sp.span, 0.055, 0.14] },
+    { kind: "box", c: [0, (sp.y + deck) / 2, sp.z - 0.03], s: [sp.span * 0.96, sp.y - deck, 0.07] },
+  ];
+}
+
+function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder): void {
+  const pieces = spoilerPieces(spec);
+  if (pieces.length === 0) return;
+  const trim = spec.colors.trim ?? 0x14181f;
+  const blade =
+    spec.spoiler && spec.spoiler.kind !== "none"
+      ? (spec.spoiler.color ?? spec.colors.paint)
+      : spec.colors.paint;
+  const wing = part("spoiler");
+  const rally = spec.spoiler?.kind === "wing";
+  for (const piece of pieces) {
+    const color = piece.post && rally ? trim : blade;
+    if (piece.kind === "box") {
+      wing.box(piece.c[0], piece.c[1], piece.c[2], piece.s[0], piece.s[1], piece.s[2], color);
+    } else {
+      slab(wing, piece.x0, piece.x1, piece.front, piece.rear, piece.thick, color);
+    }
   }
 }
 
@@ -496,7 +616,9 @@ export type DoorSkin = {
   yTo: number;
 };
 
-const DOOR_PROUD = 0.003;
+/** How far a door skin stands proud of the flank, m — under a livery
+ * band's own lift, so a stripe across the door reads as painted on it. */
+export const DOOR_PROUD = 0.003;
 /** The sill the door skin stands on, m above the floor, and the gap it
  * leaves under the belt line. */
 const DOOR_SILL = 0.12;
@@ -548,13 +670,22 @@ export function buildTrim(
   axles: number[],
   part: (name: DamagePart) => MeshBuilder,
 ): void {
-  buildArchTrim(b, spec, axles);
-  buildDoors(spec, axles, part);
+  // FORM, all of it: a modelled car brings its own (`car-models.ts`).
+  const handed = new Set<MeshBuilder>();
+  const formed = (name: DamagePart): MeshBuilder => {
+    const builder = part(name);
+    builder.form = true;
+    handed.add(builder);
+    return builder;
+  };
+  b.formed(() => buildArchTrim(b, spec, axles));
+  buildDoors(spec, axles, formed);
   for (const band of spec.sideBands ?? []) sideBand(b, spec, axles, band, band.color);
   buildStripes(b, spec, part);
   buildRaceNumber(b, spec, axles);
   buildHandles(b, spec, axles);
-  buildMudflaps(b, spec, axles);
-  buildMirrors(spec, axles, part);
-  buildSpoiler(spec, part);
+  b.formed(() => buildMudflaps(b, spec, axles));
+  buildMirrors(spec, axles, formed);
+  buildSpoiler(spec, formed);
+  for (const builder of handed) builder.form = false;
 }

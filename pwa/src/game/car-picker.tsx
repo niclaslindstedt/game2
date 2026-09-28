@@ -71,7 +71,11 @@ export function CarPicker({
     const canvas = canvasRef.current;
     if (!canvas) return;
     let disposed = false;
-    void import("./car-turntable.ts").then(({ createCarTurntable }) => {
+    // The modelled cars are in before the first body goes on the stand.
+    void Promise.all([
+      import("./car-turntable.ts"),
+      import("./car-models.ts").then(({ loadCarModels }) => loadCarModels()),
+    ]).then(([{ createCarTurntable }]) => {
       if (disposed) return;
       standRef.current = createCarTurntable(canvas);
       standRef.current.setCar(carById(canvas.dataset.car ?? CARS[0].id));

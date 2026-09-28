@@ -44,6 +44,7 @@ This project is tuned by measuring and LOOKING, not guessing. Each lab below is 
 | Bot traffic or temper        | `heat`                                  | `bot-improvement`             |
 | Difficulty                   | `record`, `replay`                      | `bot-improvement`             |
 | A car's look                 | `cars`, `liveries`, `field`, `crew`     | `car-design`                  |
+| A car MODELLED in Blender, or the models in the game | `blender` (render, then `ARGS="--quality game"`), `cars ARGS="--asset …"` / `--models` (with `--wrecks` and `--rig`), then `models` and commit `pwa/models/`; `build` + `screenshots` against `VITE_MODEL_CARS=0` | `blender-assets`, `car-design` |
 | One prop or item             | `items`, `items-list`                   | `built-world`                 |
 | The sky, weather, aircraft   | `sky`, `traffic`                        | `atmosphere`                  |
 | The camera                   | `views`, `transit`, `rollcam`, `aircam` | `game-feel`                   |
@@ -95,7 +96,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 
 Beside them, OUTSIDE the npm workspace and outside the root suite's path, the two shells that wrap the built site — **`tauri/`** (the desktop app: two Rust crates, `shell/` every decision and `src-tauri/` every effect) and **`native/`** (the App Store / Play Store app: an Expo WebView over a bundled copy of the site). **Nothing in `engine/` may learn either exists, and the ONE line of `pwa/` that does is `pwa/src/shell-host.ts`.** A feature a shell needs is a feature the website needs first. The `platform-shells` skill owns both, along with `tauri/README.md` and `native/README.md`.
 
-**Hard rules:** the engine never imports three.js, Preact, or anything from `pwa/`; the renderer never mutates `GameState`; engine randomness only via the state's seeded RNG, and the wall clock only through `engine/lib/clock.ts` — code that times itself or stamps a record takes a `Clock` rather than calling `Date.now` (both are held by `tests/determinism_test.ts`); the dependency arrows below are held by `tests/imports_test.ts`; source files stay under 1000 lines (`tests/file_size_test.ts` holds the whole tree to it, marker and all). **The game ships no audio files** — every sound and every note is synthesized from authored parameters, and `pwa/src/lib/synth.ts` is the only module that touches WebAudio (everything that merely DESCRIBES a sound imports `lib/voice.ts`, which is DOM-free so the bank and the tests can read it).
+**Hard rules:** the engine never imports three.js, Preact, or anything from `pwa/`; the renderer never mutates `GameState`; engine randomness only via the state's seeded RNG, and the wall clock only through `engine/lib/clock.ts` — code that times itself or stamps a record takes a `Clock` rather than calling `Date.now` (both are held by `tests/determinism_test.ts`); the dependency arrows below are held by `tests/imports_test.ts`; source files stay under 1000 lines (`tests/file_size_test.ts` holds the whole tree to it, marker and all). **The CARS are MODELS** — glTFs made in Blender off the game's own numbers by `make models`, committed in `pwa/models/` with a stamp of their sources (`tests/models_test.ts` fails a model older than what it is made from), packed by every build (`pwa/models-plugin.ts`) and POURED INTO the code-built car part for part (`car-models.ts`): the model brings the forms, the code keeps the dress, the glass, the lamps and the cabin, and every damage system acts on the model's own meshes. The code-built car is one switch away, `VITE_MODEL_CARS=0`. **The game ships no audio files** — every sound and every note is synthesized from authored parameters, and `pwa/src/lib/synth.ts` is the only module that touches WebAudio (everything that merely DESCRIBES a sound imports `lib/voice.ts`, which is DOM-free so the bank and the tests can read it).
 
 ### The role map, and what is generated
 
@@ -111,6 +112,7 @@ What IS generated is generated, and **a generated artifact is never hand-edited*
 | Icons, favicon, `og.png`, `native/assets/`, the Mac icon layers | `make icons`           | `tests/app_mark_test.ts`      |
 | The campaign's stage boxes and biome banners             | `make previews`               | eyes; re-shot on a rule change |
 | Every lab picture under `previews/`                      | its lab target (labs table)   | gitignored                    |
+| `pwa/models/*.glb` + `sources.json` — the modelled cars, COMMITTED | `make models` (needs Blender) | `tests/models_test.ts` (the stamp against the sources, every car present, in budget, standing where the code car stands) |
 | `CHANGELOG.md`                                           | the release workflow          | `tests/changeset_test.ts`     |
 | `engine/version.ts` + the `package.json` versions        | `scripts/update-versions.sh`  | the release workflow          |
 
@@ -133,6 +135,8 @@ By area first. Each row's skill owns the file-by-file map inside that area — g
 | A whole new gameplay system            | engine first, then `pwa/`              | `engine-system`      |
 | How a car looks, inside and out        | `pwa/src/game/car-styles.ts`, `car/`   | `car-design`         |
 | A car remade after a real one          | photographs → `car-styles.ts`          | `car-creation`       |
+| A car MODELLED in Blender: the driver, the data it is handed, the builder, the rig | `scripts/blender.mjs`, `scripts/lib/car-model-data.mjs`, `scripts/blender/` (`lib.py`, `car.py`), `pwa/src/game/car-rig.ts` | `blender-assets` |
+| THE MODELS IN THE GAME: packed, loaded, dressed, poured into the code car; the switch | `pwa/models/`, `pwa/models-plugin.ts`, `scripts/models.mjs`, `pwa/src/game/car-models.ts`, `car-dress.ts`, `model-switch.ts`; the FORM/dress line is `MeshBuilder.form` | `blender-assets` |
 | The camera, anywhere                   | `pwa/src/game/camera*.ts`              | `game-feel`          |
 | The sky, light, weather, water look    | `pwa/src/game/sky.ts` and kin          | `atmosphere`         |
 | Biomes, flora, ground cover, terrain   | `pwa/src/game/flora*.ts`, `terrain.ts` | `nature`             |
@@ -207,6 +211,7 @@ Each of these is the one place an answer is written down. Anything that needs it
 | The debug overlay's REPRO line        | `App.tsx`'s URL readers — writer and reader move together      |
 | App identity, domain, deploy slots    | `identity.ts`, README, `docs/configuration.md`, `pwa/public/*` |
 | Cars, controls, install flow          | README (What/Usage) + `docs/getting-started.md`                |
+| A car builder, a plan it states, the dress, the rig | `make models` and commit `pwa/models/` (the stamp in `tests/models_test.ts` says when); `MODEL_SOURCES` in `pwa/models-plugin.ts` when a builder reads a new file |
 | Shell/platform plans, or how a shell is released | `docs/platforms.md`, `tauri/README.md`, `native/README.md`, `tauri/RELEASING.md`, `native/RELEASING.md` |
 | The listing's WORDS, for any of the three stores | `native/store/copy.mts` — GITIGNORED, one source for all; the `store-listing` skill is the craft |
 | The Mac App Store build, its icon or its menu | `tauri/store/MAC_APP_STORE.md`, then `make mac-appstore` |
@@ -263,6 +268,7 @@ Skills live in `.agents/skills/` (`.claude/skills` symlinks there) — each a `S
 - **`bot-improvement`** — the bot driver, the difficulty budgets, the rivals and the field.
 - **`simulate-run`** — measuring balance with `make sim`; owns reading the table.
 - **`platform-shells`** — the desktop app and the store app.
+- **`blender-assets`** — a car MODELLED in Blender off the game's own numbers: `make blender`, the builder and its shelf, the rig and its clips, the lab's asset, wreck and rig sheets — and the models IN THE GAME: committed by `make models`, packed by every build, poured into the code-built car with the code's dress over them, switched back with `VITE_MODEL_CARS=0` (`make ci-models MODELS=off` for CI).
 - **`store-shots`** — the App Store / Play Store / Steam SCREENSHOT set. Owns the one rule that set obeys (put the FIELD in the frame — a rally frame of one car on an empty road sells a screensaver) and the sweep loop that chooses each frame's moment.
 - **`store-listing`** — the WORDS a storefront shows a buyer, for both stores, plus the map of where every store file lives. **The knowledge is in the repository and the copy is not**: `native/store/copy.mts` is gitignored, because the game is paid on the App Store and open source here.
 - **`debug-game`** / **`test-scenario`** / **`debug-tools`** — deterministic repros; staging exact situations; and the in-game developer tools for when a problem arrives as a picture.

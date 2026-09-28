@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint check-licenses changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
+.PHONY: blender models ci-models build test lint fmt fmt-check release clean install icons sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint check-licenses changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
 
 build:
 	npm run build
@@ -259,6 +259,36 @@ rate:
 		$(if $(LENGTH),--length $(LENGTH),) $(if $(SHAPE),--shape $(SHAPE),) \
 		$(if $(BIOME),--biome $(BIOME),) $(if $(SEASON),--season $(SEASON),) \
 		$(if $(CAMPAIGN),--campaign,) $(ARGS)
+
+# THE BLENDER LAB: a car MODELLED in Blender off the game's own numbers (its
+# CarBodySpec, the shell's rings, every bolt-on's plan) — studio renders on a
+# gravel stage, the game-budget glTF with two LODs and the .blend files, in
+# previews/blender/. Nothing is committed; `make cars ARGS="--asset
+# previews/blender/compact-lod0.glb"` sets a model beside the code-built car.
+# Needs Blender (BLENDER= its executable). ID=classic (or all) picks the car;
+# ARGS="--quality game --views none", or "--quality render --views three".
+blender:
+	npm run blender -- $(if $(KIND),--kind $(KIND),) $(if $(ID),--id $(ID),) $(ARGS)
+
+# The models the game ships: every car at game quality (no stills), made by
+# Blender and published into the COMMITTED pwa/models/ with a stamp of their
+# sources — tests/models_test.ts fails when a model is older than what it is
+# made from. Needs Blender. A build draws them unless switched back
+# (VITE_MODEL_CARS=0).
+models:
+	npm run blender -- --id all --quality game --views none
+	node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/models.mjs
+
+# Switch the models on or off for every CI build — the repository SECRET the
+# workflows hand the build (needs gh, and the right to set it): `make
+# ci-models MODELS=off` builds the code-built cars on the next deploy with no
+# commit; MODELS=on (or deleting the secret) puts the models back.
+ci-models:
+	@case "$(MODELS)" in \
+	  off) gh secret set VITE_MODEL_CARS --body 0 ;; \
+	  on) gh secret set VITE_MODEL_CARS --body 1 ;; \
+	  *) echo "usage: make ci-models MODELS=on|off" >&2; exit 2 ;; \
+	esac
 
 # Render the car models to a labeled contact sheet (previews/cars.png):
 # the chase-cam gaming angle plus turntable views, for the car-design

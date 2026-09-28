@@ -46,13 +46,26 @@ const TIRE_FACETS = 26;
 const LIP_PROUD = 0.014;
 const DISH = 0.075;
 const TIRE = 0x181c22;
+/** The tread blocks' rubber, a step up from the carcass so the pattern
+ * reads turning. */
+const TREAD = 0x333a44;
+/** The rubber's two tones, for a modelled wheel's dress (`car-models.ts`). */
+export const TYRE_TONES = { carcass: TIRE, tread: TREAD } as const;
+/** The rim's own proportions a modelled wheel is turned on (`make
+ * blender`): the flange's lip, the dish's depth, the facets round it. */
+export const RIM_SHAPE = {
+  lip: LIP_PROUD,
+  dish: DISH,
+  facets: RIM_FACETS,
+  tyreFacets: TIRE_FACETS,
+} as const;
 
 /** Per-style rim geometry: how many spokes, how broad, how deep the dish,
  * whether the studs show, and whether the spokes CROSS. `steel` is a plain
  * rim under a big cap; `split` the wide four-spoke classic; `alloy` the
  * multi-spoke; `lattice` the woven mesh — `spokes` is then the count in
  * EACH of its two families. */
-const STYLES: Record<
+export const RIM_STYLES: Record<
   WheelStyle,
   { spokes: number; width: number; hub: number; dish: number; bolts: boolean; cross?: boolean }
 > = {
@@ -179,7 +192,7 @@ function rimFace(
   spokeWidth: number | undefined,
   rim: { outer: number; barrel: number },
 ): void {
-  const s = { ...STYLES[style], spokes, width: spokeWidth ?? STYLES[style].width };
+  const s = { ...RIM_STYLES[style], spokes, width: spokeWidth ?? RIM_STYLES[style].width };
   const barrel = shadeHex(hubColor, 0.6);
   const x = (d: number): number => sidewall + outward * d;
   const { outer: RIM_OUTER, barrel: RIM_BARREL } = rim;
@@ -269,7 +282,7 @@ export function buildWheel(spec: CarBodySpec, outboard: 1 | -1 = 1): THREE.Buffe
   const r = spec.wheelRadius;
   const hub = spec.colors.hub ?? 0xe6e3da;
   const style = spec.wheelStyle ?? "alloy";
-  const spokes = spec.wheelSpokes ?? STYLES[style].spokes;
+  const spokes = spec.wheelSpokes ?? RIM_STYLES[style].spokes;
 
   // The rim is built in unit radius and scaled to the tire after, so the
   // radii above stay readable as fractions. Only the RADIAL axes scale —
@@ -328,7 +341,7 @@ export function buildWheel(spec: CarBodySpec, outboard: 1 | -1 = 1): THREE.Buffe
             .translate(0, r - 0.0135, 0)
             .rotateX(angle)
             .translate(row ? rowX : -rowX, 0, 0),
-          0x333a44,
+          TREAD,
         ),
       );
     }

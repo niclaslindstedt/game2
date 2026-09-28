@@ -15,6 +15,17 @@ a low-poly body lit per face reads as panels, and the same body lit per
 averaged vertex reads as a bar of soap. Designing a car means editing a spec
 and LOOKING, never guessing from numbers.
 
+**What the game DRAWS is the car MODELLED off that spec** (`blender-assets`):
+`make models` builds each catalog car in Blender off these same builders'
+numbers and the game pours the model's FORMS into this car part for part,
+keeping this car's DRESS over them (`MeshBuilder.form` is the line). So a
+spec or builder change here is judged twice — on this car (`make cars`), and
+on the model once `make models` has remade it (`make cars ARGS=--models`,
+which `tests/models_test.ts` insists on the moment a model's source moves) —
+and anything new a builder draws goes on one side of the line on purpose:
+`formed(...)` round a new panel the model must carry, nothing round a new
+piece of dress it lays over it.
+
 **Before starting, read this skill's lessons** —
 `node scripts/skill-lessons.mjs car-design --list`, then what the task
 touches. Load `skill-reflection` at both ends, and `write-code` beside this
