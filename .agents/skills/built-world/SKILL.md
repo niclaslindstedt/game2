@@ -16,7 +16,7 @@ the collision is the same in a headless sim as on screen) and the RENDERER
 decides what it LOOKS like. A placer never builds geometry; a builder never
 picks a position.
 
-**Read this skill's lessons first** — `node scripts/skill-lessons.mjs
+**Read this skill's lessons first** — `npx ogf-skill-lessons
 built-world --list`, then the ones the task touches. Load **`skill-reflection`**
 at both ends and **`write-code`** beside this one for any code change. Load
 **`mapgen-improvement`** when the placement RULE is what is changing (it owns

@@ -1,7 +1,7 @@
 ---
 title: A voice that STEPS onto full scale clicks — and rings any resonant filter after it at its own cutoff
 date: 2026-08-28
-scope: pwa/src/lib/synth.ts, pwa/src/lib/voice.ts
+scope: pwa/src/game/audio/bus.ts
 concepts: [synth, envelope, clicks, filters, mixing]
 ---
 

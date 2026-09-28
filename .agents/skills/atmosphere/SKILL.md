@@ -11,7 +11,7 @@ elevation decides the palette, the weather decides the contrast, and the mist
 decides how far the land reads. A change here moves every screenshot in
 the game.
 
-**Read this skill's lessons first** — `node scripts/skill-lessons.mjs
+**Read this skill's lessons first** — `npx ogf-skill-lessons
 atmosphere --list`, then the ones the task touches. Load **`skill-reflection`**
 at both ends of the session and **`write-code`** beside this one for any code
 change. For the ground and what grows on it, `nature`; for dust, spray and

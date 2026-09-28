@@ -12,7 +12,7 @@ The answer is measured, never asserted. `npm run sim -- --sweep` is the
 instrument, and **any change to `cars.ts` owes it, before and after.**
 
 **Read this skill's lessons first** —
-`node scripts/skill-lessons.mjs car-tuning --list`.
+`npx ogf-skill-lessons car-tuning --list`.
 
 | Load beside this one | For |
 | --- | --- |

@@ -12,8 +12,8 @@ look like it. That pass has its own traps, and every one of them was paid
 for once.
 
 **Before starting, read this skill's lessons and `car-design`'s** —
-`node scripts/skill-lessons.mjs car-creation --list`, then
-`node scripts/skill-lessons.mjs car-design --list`. Load `skill-reflection`
+`npx ogf-skill-lessons car-creation --list`, then
+`npx ogf-skill-lessons car-design --list`. Load `skill-reflection`
 at both ends and `write-code` beside this on any code change.
 
 ---

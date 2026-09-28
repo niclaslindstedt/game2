@@ -12,7 +12,7 @@ and a `.tsx` component draws it. That split is why the root vitest suite can
 test a minimap, a shift window and an initials entry without a browser, and it
 is the first thing to preserve in any change here.
 
-**Read this skill's lessons first** — `node scripts/skill-lessons.mjs
+**Read this skill's lessons first** — `npx ogf-skill-lessons
 hud-and-menus --list`. Load **`skill-reflection`** at both ends, **`write-code`**
 beside this one, and **`ui-review`** for the fit-and-finish sweep at the
 reference viewports. For what a readout MEANS (a warning, a camera's framing,
@@ -39,10 +39,10 @@ a drift's drama) load `game-feel`; for the developer surfaces, `debug-tools`.
 | Surface | Where |
 | --- | --- |
 | Input mapping | `input.ts` (bindings in `settings.ts`) |
-| Touch: the wheel and the pedal zones | `hud-touch.tsx`; a zone's grip on a finger is `thumb-guard.ts`, what a drag MEANS is `pedal-gesture.ts` |
+| Touch: the wheel and the pedal zones | `hud-touch.tsx`; a zone's grip on a finger is the framework's `input/thumb-guard`, what a drag MEANS is `pedal-gesture.ts` |
 | Which gears a thumb flick may take, and why a key may not | `shift-window.ts` — DOM-free, and the shift light reads off it too |
 | A controller's sticks, triggers and buttons | `gamepad.ts` reads a POLLED pad (DOM-free); `input.ts` does the polling |
-| Walking a menu on a controller | `menu-nav.ts` (the cards, and `data-nav-back`) over `menu-cursor.ts` (where the cursor goes — DOM-free) |
+| Walking a menu on a controller | `menu-nav.ts` (the cards, and `data-nav-back`) over the framework's `input/menu-cursor` (where the cursor goes — DOM-free) |
 | Flying god mode on a pad or a phone | `readFlyPad` in `gamepad.ts` + `hud-fly.tsx`, merged in `input.ts`'s `flyMove` |
 | The press a THUMB ON THE GAS costs a button | `second-finger.ts` — the browser withholds a touch's click for any press that shared the glass; the relay fires those itself, so a button stays a `<button>` with an `onClick` |
 
@@ -66,13 +66,13 @@ a drift's drama) load `game-feel`; for the developer surfaces, `debug-tools`.
 | The campaign's stages offered elsewhere | `StagePicker` in `menu-levels.tsx` over `App.tsx`'s `loadRoamLevel`; `levelForRoad` says which is loaded |
 | High scores and initials | `scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`; what a PRESS does is `initials-entry.ts` (DOM-free: the wheel, the caret, what an empty slot wakes as) |
 | The time trial's ghost | `ghost.ts` — recording, replay, storage |
-| Taking a picture | `screenshots.ts` (the canvas work) + `shot-plan.ts` (size, name, where the mark and notes go — DOM-free) |
-| Getting the HUD into a picture | `shot-hud.ts` — serialize at the press, rasterize later — over `hudLayerSvg` / `stampLift` in `shot-plan.ts` |
-| The roll of pictures, and sending one on | `pwa/src/lib/shot-store.ts` over `shot-roll.ts`; the share/copy/save probes in `pwa/src/lib/share-image.ts` |
+| Taking a picture | `screenshots.ts` (the canvas work) over the framework's `shots/shot-plan` (size, name, where the mark goes — DOM-free); the developer caption's layout is `shot-notes.ts` |
+| Getting the HUD into a picture | the framework's `shots/shot-hud` — serialize at the press (`shot-press.ts`'s `readShotHud`, with this game's selectors), rasterize later — over `hudLayerSvg` / `stampLift` in `shots/shot-plan` |
+| The roll of pictures, and sending one on | the framework's `shots/shot-store` over `shots/shot-roll`; the share/copy/save probes in `shots/share-image`; the shutter's clipboard claim in `shot-press.ts` |
 | The gallery | `menu-gallery.tsx` |
 | The replays a player kept | `menu-replays.tsx` over `replay.ts` (the listing, DOM-free) and `replay-store.ts` (the roll, IndexedDB); a row is one press from `App.tsx`'s `startReplay` |
 | The studio card / boot cover | `splash.ts` (policy) + `splash-screen.tsx` |
-| A figure that COUNTS to its new value | `pwa/src/lib/count.ts` — the easing only; the caller owns the clock, which is what keeps it testable |
+| A figure that COUNTS to its new value | the framework's `@niclaslindstedt/oss-game-framework/hud/count` — the easing only; the caller owns the clock, which is what keeps it testable |
 
 Everything above is under `pwa/src/game/` unless a path says otherwise.
 

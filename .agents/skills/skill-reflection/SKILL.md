@@ -1,6 +1,6 @@
 ---
 name: skill-reflection
-description: "Use at BOTH ends of any session that loads another skill. At the START, to read that skill's accumulated lessons — filtered to the paths and concepts the task touches — before doing the work. At the END, before committing, to reflect on what the session actually learned: record new lessons, reword or delete the ones that went stale, merge the ones that now say the same thing twice, promote the ones that are true every single time into SKILL.md itself, fix instructions the session found to be WRONG, and check whether anything sitting in AGENTS.md belongs in a skill instead. Also the owner of the lesson-fragment format (title, date, scope, concepts), of the SIZE BARS that flag a skill carrying more lessons — or a longer one — than a session will actually read, and of `scripts/skill-lessons.mjs`."
+description: "Use at BOTH ends of any session that loads another skill. At the START, to read that skill's accumulated lessons — filtered to the paths and concepts the task touches — before doing the work. At the END, before committing, to reflect on what the session actually learned: record new lessons, reword or delete the ones that went stale, merge the ones that now say the same thing twice, promote the ones that are true every single time into SKILL.md itself, fix instructions the session found to be WRONG, and check whether anything sitting in AGENTS.md belongs in a skill instead. Also the owner of the lesson-fragment format (title, date, scope, concepts), of the SIZE BARS that flag a skill carrying more lessons — or a longer one — than a session will actually read, and of the framework's `ogf-skill-lessons` bin."
 ---
 
 # Skill reflection
@@ -32,17 +32,17 @@ passes.
 ## OPEN — read before you work
 
 ```sh
-node scripts/skill-lessons.mjs <skill> --list          # the index: file, title, scope, concepts
-node scripts/skill-lessons.mjs <skill>                 # the full text, oldest first
+npx ogf-skill-lessons <skill> --list          # the index: file, title, scope, concepts
+npx ogf-skill-lessons <skill>                 # the full text, oldest first
 ```
 
 On a big skill, do not read all of it. **Narrow by what the task actually
 touches:**
 
 ```sh
-node scripts/skill-lessons.mjs bot-improvement --scope=engine/sim
-node scripts/skill-lessons.mjs mapgen-improvement --concepts=jumps,fords
-node scripts/skill-lessons.mjs --scope=pwa/src/game        # across every skill
+npx ogf-skill-lessons bot-improvement --scope=engine/sim
+npx ogf-skill-lessons mapgen-improvement --concepts=jumps,fords
+npx ogf-skill-lessons --scope=pwa/src/game        # across every skill
 ```
 
 Three things about the filters, all load-bearing:
@@ -55,7 +55,7 @@ Three things about the filters, all load-bearing:
   `engine/sim/` answers `--scope=engine/sim/bot.ts` and `--scope=engine/`
   alike, so you never have to guess the exact granularity somebody used.
 - **`--concepts` is OR within the flag, AND against the other flags.** Read the
-  vocabulary with `node scripts/skill-lessons.mjs --vocab` when you don't know
+  vocabulary with `npx ogf-skill-lessons --vocab` when you don't know
   what tags exist.
 
 Reading the lessons is part of loading the skill. Do it before the first edit,
@@ -109,8 +109,8 @@ all. And a scope pointing at a path that no longer exists is the single best
 staleness signal there is: `--check` reports every one.
 
 **Concepts are what a future task would search for**, not a restatement of the
-title. Reuse an existing tag over inventing a synonym — `node
-scripts/skill-lessons.mjs --vocab` is the vocabulary, and two tags meaning one
+title. Reuse an existing tag over inventing a synonym — `npx
+ogf-skill-lessons --vocab` is the vocabulary, and two tags meaning one
 thing is itself a consolidation smell.
 
 ---
@@ -154,7 +154,7 @@ is wrong" next to a step 4 that is still wrong.
 
 A lesson obsoleted by a tooling or instruction change — the manual step became a
 command, the trap got a lint, the file it warned about is gone — is **deleted,
-not archived**. Git remembers. `node scripts/skill-lessons.mjs --check` names
+not archived**. Git remembers. `npx ogf-skill-lessons --check` names
 every lesson whose `scope` points at a vanished path; those are the obvious
 ones, but a lesson can rot without its paths moving, so read the ones your task
 touched with the session's fresh knowledge.
@@ -189,7 +189,7 @@ A lesson that applies in most-but-not-all runs stays a fragment, and gets a
 
 Everything a skill carries is read by every session that loads it, and a session
 that hits a wall of text skims it. So size is a correctness property, not a
-tidiness one, and `skill-lessons.mjs` measures them (in WORDS — markdown line
+tidiness one, and `ogf-skill-lessons` measures them (in WORDS — markdown line
 length says more about the author's wrapping than about the reading):
 
 | Bar | Limit | What being over it means |
@@ -203,9 +203,9 @@ Every mode of the tool reports them — the inventory, the printout's nudge, and
 `--check`:
 
 ```sh
-node scripts/skill-lessons.mjs                 # inventory, each skill's verdict
-node scripts/skill-lessons.mjs --check         # every fragment over the bar, by name
-node scripts/skill-lessons.mjs <skill> --list  # per-fragment word counts
+npx ogf-skill-lessons                 # inventory, each skill's verdict
+npx ogf-skill-lessons --check         # every fragment over the bar, by name
+npx ogf-skill-lessons <skill> --list  # per-fragment word counts
 ```
 
 **A bar is a prompt to consolidate, never a licence to truncate — and never a
@@ -267,14 +267,14 @@ trustworthy.
 
 ## The consolidation sweep
 
-Everything above is per-session and cheap. When `skill-lessons.mjs` nudges — any
+Everything above is per-session and cheap. When `ogf-skill-lessons` nudges — any
 of the four size bars above — run the same five questions across the skill's
 WHOLE lesson set rather than only the ones the session touched:
 
 ```sh
-node scripts/skill-lessons.mjs <skill> --list      # scan every title/scope/concept at once
-node scripts/skill-lessons.mjs --vocab             # find synonym tags to merge
-node scripts/skill-lessons.mjs --check             # find scopes pointing at vanished paths
+npx ogf-skill-lessons <skill> --list      # scan every title/scope/concept at once
+npx ogf-skill-lessons --vocab             # find synonym tags to merge
+npx ogf-skill-lessons --check             # find scopes pointing at vanished paths
 ```
 
 Make it **its own commit** — separate from any work in progress, so it is
@@ -293,7 +293,7 @@ correctly scoped, and not yet important enough to be an instruction.
 - [ ] CLOSE: stale lessons deleted, near-duplicates merged
 - [ ] CLOSE: anything true in 100% of runs promoted into `SKILL.md`, fragment deleted
 - [ ] CLOSE: every fragment written this session is under the 350-word bar
-- [ ] CLOSE: `node scripts/skill-lessons.mjs --check` clean **for what this
+- [ ] CLOSE: `npx ogf-skill-lessons --check` clean **for what this
       session wrote or touched** — a bar the rest of the repo is already over is
       a consolidation sweep's job, not this PR's
 - [ ] CLOSE: nothing was appended to `AGENTS.md` that a skill should own

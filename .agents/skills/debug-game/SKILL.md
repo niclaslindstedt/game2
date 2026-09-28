@@ -13,7 +13,7 @@ with a test. Prefer that route over clicking around in a browser. The stage
 seed shows in the HUD, so a bug report's seed is the repro's first ingredient.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs debug-game --list`, then the ones this task
+`npx ogf-skill-lessons debug-game --list`, then the ones this task
 touches (`--scope=…`, `--concepts=…`). Reading them here and reflecting on them
 before the commit is the **`skill-reflection`** skill's job — load it at both
 ends of the session.
@@ -25,7 +25,7 @@ ends of the session.
 | Deterministic repro | `createGame({ seed, carId, skipCountdown: true })` + fixed `step()` loops in a scratch vitest file — or a synthetic track via the `test-scenario` skill |
 | Bot repro | `simulateStage({ seed, carId })` (`engine/sim/simulate.ts`) — a whole botted run, headless, with the full event log and stats in the result |
 | Determinism check | The `digest` in `SimResult` — two runs of the same seed/car/profile must hash identically; a digest drift IS the bug report for nondeterminism |
-| Engine log | `engine/output.ts` — the semantic output module (`status/info/warn/error/debug`) with a pluggable sink; in the browser it feeds the framework log store via `pwa/src/output-bridge.ts` |
+| Engine log | the framework's `core/output`, re-exported by `@engine` — the semantic output module (`status/info/warn/error/debug`) with a pluggable sink; in the browser it feeds the framework log store via `pwa/src/output-bridge.ts` |
 | Stage geometry | `make track` / `npm run track -- --seeds N` — render the stage the seed builds and LOOK at where the bug happened |
 | The real renderer | `make screenshots` (the `playtest` skill), or `npm run dev` headed — for anything only pixels can show |
 
@@ -70,5 +70,5 @@ worth a fragment here is the diagnosed root-cause _class_ (a layer-classifying
 tell, a repro technique), never the one-off bug.
 
 ```sh
-node scripts/skill-lessons.mjs debug-game --list
+npx ogf-skill-lessons debug-game --list
 ```

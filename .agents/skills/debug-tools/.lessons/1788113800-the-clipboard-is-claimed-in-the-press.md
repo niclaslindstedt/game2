@@ -1,7 +1,7 @@
 ---
 title: A picture that does not exist yet still has to claim the clipboard INSIDE the press — hand ClipboardItem a promise
 date: 2026-08-30
-scope: pwa/src/lib/share-image.ts, pwa/src/App.tsx, pwa/src/game/screenshots.ts
+scope: pwa/src/game/shot-press.ts, pwa/src/App.tsx, pwa/src/game/screenshots.ts
 concepts: [screenshots, harness, ui, verification]
 ---
 

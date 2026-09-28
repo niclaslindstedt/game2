@@ -1,7 +1,7 @@
 ---
 title: A WebAudio exponential ramp may never touch zero — floor the envelope, do not trust the caller
 date: 2026-08-27
-scope: pwa/src/lib/synth.ts, pwa/src/lib/tracker.ts
+scope: pwa/src/game/audio/bus.ts, pwa/src/lib/tracker.ts
 concepts: [synth, envelope, webaudio, mute]
 ---
 

@@ -16,7 +16,7 @@ averaged vertex reads as a bar of soap. Designing a car means editing a spec
 and LOOKING, never guessing from numbers.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs car-design --list`, then what the task
+`npx ogf-skill-lessons car-design --list`, then what the task
 touches. Load `skill-reflection` at both ends, and `write-code` beside this
 skill for any code change.
 

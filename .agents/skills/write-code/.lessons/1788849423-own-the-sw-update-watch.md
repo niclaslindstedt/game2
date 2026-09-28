@@ -1,13 +1,15 @@
 ---
-title: The update watch is ours now — the first install must not prompt, and Preact's useSyncExternalStore takes TWO arguments
+title: The update watch — the first install must not prompt, and Preact's useSyncExternalStore takes TWO arguments
 date: 2026-09-08
-scope: pwa/src/lib/pwa-update.ts, pwa/src/main.tsx
+scope: pwa/src/game/app-store.ts, pwa/src/main.tsx
 concepts: [pwa, service-worker, preact, harness]
 ---
 
-`pwa/src/lib/pwa-update.ts` replaced `@niclaslindstedt/oss-framework/pwa`'s
-`usePwaUpdate`, which was the last thing the app took from the framework. Two
-traps came with owning it, and neither shows up in a typecheck or the suite.
+The update watch is the shared game framework's `pwaUpdateWatch`
+(`@niclaslindstedt/oss-game-framework/pwa/pwa-update`, an external store),
+read in `app-store.ts` through `useSyncExternalStore`. A fix to the watch
+itself goes into the framework. Two traps live in it, and neither shows up
+in a typecheck or the suite.
 
 **A `controllerchange` listener that reloads unconditionally reloads every
 first-time visitor.** The emitted worker calls `clients.claim()` on activate,

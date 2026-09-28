@@ -10,7 +10,7 @@ wrong. A conflicted working tree is the most fragile state a repo gets into, and
 every rule below exists because the fragile state was entered without one.
 
 **Read this skill's lessons first** —
-`node scripts/skill-lessons.mjs conflict --list`, then the ones this task
+`npx ogf-skill-lessons conflict --list`, then the ones this task
 touches. Reflecting them back at the end is the **`skill-reflection`** skill's
 job; load it at both ends of the session.
 

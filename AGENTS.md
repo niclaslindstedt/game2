@@ -89,13 +89,13 @@ Rules that apply to every task, before any subject skill has a say. They are res
 
 Three layers, one direction of dependency (details: [docs/architecture.md](docs/architecture.md)):
 
-- **`engine/`** — the whole game as a framework-free, renderer-free TypeScript module. Fixed 120 Hz `step(state, input)` (`TUNING.physicsHz`, with the bot's own decision rate beside it as `TUNING.botHz` — both knobs, both shipping at 120), deterministic per seed (no `Math.random` at runtime — everything draws from the seeded RNG in state). Contains the car model (`game/`), the stage rules engine (`mapgen/`), the bot driver + headless simulator (`sim/`), the generator's scoreboard (`analysis/` — dev-time only, never imported by the app), the output module (`output.ts`), the one clock (`lib/clock.ts`), and data-authored content (`game/defs/`).
-- **`pwa/`** — the browser shell: Preact app, three.js renderer (reads `GameState`, never steps physics), input, HUD, the audio surface (a WebAudio synth, the sound bank, the road bed and the tracker scores — nothing is a file), PWA plumbing (hand-rolled service worker via `pwa-plugin.ts` + the update watch in `lib/pwa-update.ts` behind the app's own `update-button.tsx`).
+- **`engine/`** — the whole game as a UI-framework-free, renderer-free TypeScript module. Fixed 120 Hz `step(state, input)` (`TUNING.physicsHz`, with the bot's own decision rate beside it as `TUNING.botHz` — both knobs, both shipping at 120), deterministic per seed (no `Math.random` at runtime — everything draws from the seeded RNG in state). Contains the car model (`game/`), the stage rules engine (`mapgen/`), the bot driver + headless simulator (`sim/`), the generator's scoreboard (`analysis/` — dev-time only, never imported by the app), and data-authored content (`game/defs/`). The seeded RNG, the math and noise pools, the one clock and the output module are the framework's `core/*` (below).
+- **`pwa/`** — the browser shell: Preact app, three.js renderer (reads `GameState`, never steps physics), input, HUD, the audio surface (a WebAudio synth, the sound bank, the road bed and the tracker scores — nothing is a file), PWA plumbing (hand-rolled service worker via `pwa-plugin.ts` + the framework's update watch, `pwaUpdateWatch`, read in `app-store.ts` behind the app's own `update-button.tsx`).
 - **`tests/` + `scripts/`** — root-level vitest suites over the engine, and Node tooling (sim CLI, track previews, screenshots, icons, release plumbing).
 
 Beside them, OUTSIDE the npm workspace and outside the root suite's path, the two shells that wrap the built site — **`tauri/`** (the desktop app: two Rust crates, `shell/` every decision and `src-tauri/` every effect) and **`native/`** (the App Store / Play Store app: an Expo WebView over a bundled copy of the site). **Nothing in `engine/` may learn either exists, and the ONE line of `pwa/` that does is `pwa/src/shell-host.ts`.** A feature a shell needs is a feature the website needs first. The `platform-shells` skill owns both, along with `tauri/README.md` and `native/README.md`.
 
-**Hard rules:** the engine never imports three.js, Preact, or anything from `pwa/`; the renderer never mutates `GameState`; engine randomness only via the state's seeded RNG, and the wall clock only through `engine/lib/clock.ts` — code that times itself or stamps a record takes a `Clock` rather than calling `Date.now` (both are held by `tests/determinism_test.ts`); the dependency arrows below are held by `tests/imports_test.ts`; source files stay under 1000 lines (`tests/file_size_test.ts` holds the whole tree to it, marker and all). **The game ships no audio files** — every sound and every note is synthesized from authored parameters, and `pwa/src/lib/synth.ts` is the only module that touches WebAudio (everything that merely DESCRIBES a sound imports `lib/voice.ts`, which is DOM-free so the bank and the tests can read it).
+**Hard rules:** the engine imports nothing but itself and the framework's `core/*` and `racing/*` subpaths — never three.js, Preact, anything from `pwa/`, or any other package; the renderer never mutates `GameState`; engine randomness only via the state's seeded RNG, and the wall clock only through the framework's `core/clock` — code that times itself or stamps a record takes a `Clock` rather than calling `Date.now` (both are held by `tests/determinism_test.ts`); the dependency arrows below are held by `tests/imports_test.ts`; source files stay under 1000 lines (`tests/file_size_test.ts` holds the whole tree to it, marker and all). **The game ships no audio files** — every sound and every note is synthesized from authored parameters, and the framework's `audio/synth` is the only module that touches WebAudio (everything that merely DESCRIBES a sound imports its `audio/voice`, which is DOM-free so the bank and the tests can read it); the game makes ONE synth, in its own room (`pwa/src/game/audio/bus.ts`, `room.ts`).
 
 ### The role map, and what is generated
 
@@ -113,6 +113,21 @@ What IS generated is generated, and **a generated artifact is never hand-edited*
 | Every lab picture under `previews/`                      | its lab target (labs table)   | gitignored                    |
 | `CHANGELOG.md`                                           | the release workflow          | `tests/changeset_test.ts`     |
 | `engine/version.ts` + the `package.json` versions        | `scripts/update-versions.sh`  | the release workflow          |
+
+## The framework
+
+The parts this game shares with its siblings (the jet-ski game and the snowmobile game) come from ONE package, [`@niclaslindstedt/oss-game-framework`](https://github.com/niclaslindstedt/oss-game-framework), a git dependency pinned to a release tag in the root `package.json`:
+
+- **`core/*`** — the seeded PRNG, the math pool (`clamp`, the bit-exact `hypot`), value noise, the clock seam (`wallClock`, `fixedClock`) and the output module. The determinism digests are cut under this code.
+- **`racing/tape`** — the control tape's byte format; `pwa/src/game/ghost.ts` keeps its ghosts on it (its stored bytes are the ones the ghost always wrote).
+- **`audio/*`** — the synth (the only WebAudio), its vocabulary, the one-shot player, the rack and the fader view. The game's room — its echo — is `pwa/src/game/audio/room.ts`.
+- **`shots/*`** — the screenshot roll and its IndexedDB store, the thumbnails, share/copy/save, the picture's size, name and stamp, the HUD rastered into it. The game keeps the developer caption (`shot-notes.ts`) and what the shutter takes at the press (`shot-press.ts`).
+- **`pwa/pwa-update`**, **`input/thumb-guard`**, **`input/menu-cursor`**, **`hud/format`**, **`hud/count`** — the update watch, the thumb zones' grip, the cursor's walk, the race clock and the rolling counter.
+- **`tooling/*`** — the labs' PNG encoder, static server and `@engine` alias; the release plumbing and the skill-lesson printer are its `ogf-*` bins (`npx ogf-compute-bump`, `ogf-check-changeset`, `ogf-collate-changelog`, `ogf-extract-section`, `ogf-skill-lessons`).
+
+**A bug in any of that is fixed in the framework, not here**: land the fix there, cut a release, and move this game's tag (`#vX.Y.Z`) and run `npm install`. Never copy a framework file back into this tree to patch it.
+
+**The engine line.** `engine/` may import the framework's `core/*` and `racing/*` file subpaths and nothing else from any package; `tests/imports_test.ts` holds that line and reads the framework files the engine reaches (shipped under `node_modules/@niclaslindstedt/oss-game-framework/src/`) to the engine's own hygiene — no global randomness, no clock outside `core/clock`, no console, no DOM. Tools that read audio SOURCE as text (`scripts/audition.mjs`) read that same `src/`.
 
 ## Where new code goes
 
@@ -163,8 +178,8 @@ And the pieces that belong to no skill in particular:
 | App identity (name, palette, URLs)                | `pwa/src/identity.ts` — the single source                                                                                                      |
 | WHETHER A BUILD SHIPS A FEATURE AT ALL            | `pwa/src/features.ts` — the rule per flag, read off the deploy slot and the shell; `docs/configuration.md` has the table and `tests/features_test.ts` holds it |
 | How much GPU a phone or tablet has                | `pwa/src/game/device-gpu.ts` — published Geekbench scores, family fallbacks for a device it has never heard of, and bands; read by nothing yet |
-| A Node script needing an app module               | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table                                     |
-| New CLI tooling                                   | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                                          |
+| A Node script needing an app module               | `aliasEngine` from `@niclaslindstedt/oss-game-framework/tooling/alias` before the `import()` — never a Vite build to read a table              |
+| New CLI tooling                                   | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/` and the framework's `tooling/*`)                                                          |
 | Engine tests                                      | `tests/<topic>_test.ts`                                                                                                                        |
 
 ### Stated once — never restate these
@@ -173,13 +188,13 @@ Each of these is the one place an answer is written down. Anything that needs it
 
 - **WHETHER A BUILD SHIPS A FEATURE** — `pwa/src/features.ts`, and the surfaces that offer the feature ask it (`feature("roam")`). A flag is not a setting and not a URL: it is the deploy slot the build was cut for and the shell showing the page, and nothing else may restate one of its rules or invent a second door onto a flagged feature. What is BEHIND a flag stays whole, so switching one back on is a build rather than an excavation.
 - **WHICH GENERATOR BUILT A ROAD** — `engine/mapgen/versions.ts`. `CURRENT_GENERATOR_VERSION` is the rules in this tree and is what everything but a campaign level gets; a level names its own and keeps it. Never write the number down a second time — the eighteen literals in `campaign-locations.ts` are eighteen separate decisions, not one constant spelled out.
-- **What time it is, to the engine** — `engine/lib/clock.ts`. The simulation never asks; what reports on itself (an analysis or rating pass's `ms`, a tape's `recorded` stamp) takes a `Clock`, defaulting to `wallClock`, and a test hands in `fixedClock()` to get the same report twice.
+- **What time it is, to the engine** — the framework's `core/clock`. The simulation never asks; what reports on itself (an analysis or rating pass's `ms`, a tape's `recorded` stamp) takes a `Clock`, defaulting to `wallClock`, and a test hands in `fixedClock()` to get the same report twice.
 - **What a car CAN do** — `engine/game/limits.ts`, read by `car.ts` AND `sim/bot.ts`. Never restate a ceiling.
 - **What the speedo reads** — `travelSpeed` in `engine/game/state.ts`: speed through space, vertical included. `snapshot.ts` and `car-instruments.ts` both read it and neither restates it.
 - **Whether the car has fully come back** — `CarState.planted` (four wheels, level), written at `car.ts`'s `air.leanFree` branch and read by the roll camera.
 - **What a split is measured against** — `lastCheckpoint` in `engine/game/track.ts`.
 - **Where the ear is** — `pwa/src/game/audio/listener.ts`, one row per camera; the beds and the router both read it.
-- **A figure that counts to its new value** — `pwa/src/lib/count.ts` is the easing ONLY; the caller owns the clock, which is what keeps it DOM-free and testable.
+- **A figure that counts to its new value** — the framework's `@niclaslindstedt/oss-game-framework/hud/count` is the easing ONLY; the caller owns the clock, which is what keeps it DOM-free and testable.
 - **The name over a car that is not the player's** — `pwa/src/game/name-tag.ts` takes a label, a colour and a point, and must never learn what a bot is.
 - **A car that only STANDS there** — `pwa/src/game/parked-car.ts`, a dozen boxes from one roll; never the catalog's builder, which is a thousand times the geometry.
 
@@ -213,6 +228,7 @@ Each of these is the one place an answer is written down. Anything that needs it
 | An age rating, a category, a Steam tag | `native/store/listing.mts` — the rules half, committed; then `make store-metadata` |
 | A feature flag, or the rule for one    | `docs/configuration.md`'s flag table, then `tests/features_test.ts` |
 | A gap against the fleet rules, found or closed | `docs/conformance.md` — add, re-date or delete its row         |
+| The framework's tag (`package.json`)  | `npm install`, then the whole suite and `npm run sim` before and after — a `breaking` entry in its `core/` or `racing/` moves digests or stored ghosts |
 
 The campaign menu's routes and biome banners are generator OUTPUT, so every rule change re-rolls them: a re-seeded, re-banded or re-lit level otherwise leaves a picture of a stage that no longer exists. Editing the first level of a location, or adding a location, re-shoots that biome's banner.
 
@@ -241,7 +257,7 @@ Skills live in `.agents/skills/` (`.claude/skills` symlinks there) — each a `S
 
 - **`start-work`** — the preflight: clean tree, sync with `origin/main`, the deliver-by-default contract.
 - **`write-code`** — how code is written here: comments and the comment-pruning pass, the edit loop, file caps, test conventions, aliases. Load beside the subject skill on any code change.
-- **`skill-reflection`** — read each loaded skill's lessons at the start (`node scripts/skill-lessons.mjs <skill>`), record/prune/promote at the end.
+- **`skill-reflection`** — read each loaded skill's lessons at the start (`npx ogf-skill-lessons <skill>`), record/prune/promote at the end.
 - **`changelog`** → **`commit`** — the fragment-or-label call, then gates, push, PR. **`conflict`** whenever a branch moves onto another.
 
 **Craft** (the subject owners):

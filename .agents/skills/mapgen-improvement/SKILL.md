@@ -13,7 +13,7 @@ is still shipping on the other several thousand.
 Which is why the centre of this skill is not the rules. It is the LOOP.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs mapgen-improvement --list`, then the ones this
+`npx ogf-skill-lessons mapgen-improvement --list`, then the ones this
 task touches (`--scope=…`, `--concepts=…`). Load **`skill-reflection`** at
 both ends of the session, and **`write-code`** beside this one.
 

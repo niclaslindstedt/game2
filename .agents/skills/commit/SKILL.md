@@ -15,7 +15,7 @@ appeared, a PR is reported un-mergeable, or you are told to rebase or catch a
 branch up with `main`.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs commit --list`, then the ones this task touches
+`npx ogf-skill-lessons commit --list`, then the ones this task touches
 (`--scope=…`, `--concepts=…`). Reading them here and reflecting on them before
 the commit is the **`skill-reflection`** skill's job — load it at both ends of
 the session.

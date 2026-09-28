@@ -1,7 +1,7 @@
 ---
 title: A menu interaction's cost cannot be read off `longtask` in this container — the backdrop is stepping the game at 1 fps, so measure the MECHANISM on a blank page
 date: 2026-09-08
-scope: pwa/src/game/menu-gallery.tsx, pwa/src/lib/shot-thumbs.ts
+scope: pwa/src/game/menu-gallery.tsx
 concepts: [menus, performance, harness, review, screenshots]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: The shutter's receipt hangs off `clipboard.write`, which does not always answer — and ALT used to take it down with the HUD
 date: 2026-09-08
-scope: pwa/src/App.tsx, pwa/src/lib/share-image.ts
+scope: pwa/src/App.tsx, pwa/src/game/shot-press.ts
 concepts: [screenshots, hud, harness, verification]
 ---
 
