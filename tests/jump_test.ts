@@ -4,8 +4,6 @@
 // depending on how straight you touch down. Synthetic one-jump stage.
 import { describe, expect, it } from "vitest";
 
-import { clamp } from "../engine/lib/math.ts";
-
 import {
   NEUTRAL_INPUT,
   TUNING,
@@ -27,6 +25,8 @@ import {
   ROAD_CROSS,
   STAGE_RULES,
 } from "@engine";
+
+const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v));
 
 const JUMP_STAGE: SegmentPlan[] = [
   {
