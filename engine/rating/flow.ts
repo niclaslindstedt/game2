@@ -33,9 +33,10 @@ import { ANALYSIS } from "../analysis/budgets.ts";
 import { RATING } from "./scales.ts";
 import { effectiveKinds, segmentSpans, type Corner, type Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
-export function rateFlow(walk: Walk): Facet {
-  const started = Date.now();
+export function rateFlow(walk: Walk, clock: Clock = wallClock): Facet {
+  const started = clock.now();
   const F = RATING.flow;
   const corners = walk.corners;
 
@@ -167,7 +168,7 @@ export function rateFlow(walk: Walk): Facet {
       sections: sections.count,
       sectionSeconds: Math.round(sections.mean),
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }
 

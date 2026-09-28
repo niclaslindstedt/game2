@@ -21,9 +21,10 @@ import type { TerrainField } from "../mapgen/terrain.ts";
 import { RATING } from "./scales.ts";
 import type { Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
-export function rateRisk(walk: Walk, terrain: TerrainField): Facet {
-  const started = Date.now();
+export function rateRisk(walk: Walk, terrain: TerrainField, clock: Clock = wallClock): Facet {
+  const started = clock.now();
   const K = RATING.risk;
   const samples = walk.track.samples;
 
@@ -141,7 +142,7 @@ export function rateRisk(walk: Walk, terrain: TerrainField): Facet {
       guarded,
       worstDrop: Math.round(worstDrop * 100) / 100,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }
 

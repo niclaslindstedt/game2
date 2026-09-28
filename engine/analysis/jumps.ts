@@ -41,6 +41,7 @@ import type { Track, TrackSample } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, under, type Check, type Finding, type MetricReport } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 const GRAVITY = 9.81;
 
@@ -122,8 +123,13 @@ function fly(track: Track, terrain: TerrainField, index: number, speed: number):
   };
 }
 
-export function analyzeJumps(track: Track, terrain: TerrainField, speeds: number[]): MetricReport {
-  const started = Date.now();
+export function analyzeJumps(
+  track: Track,
+  terrain: TerrainField,
+  speeds: number[],
+  clock: Clock = wallClock,
+): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const J = ANALYSIS.jumps;
   const half = track.width / 2;
@@ -358,6 +364,6 @@ export function analyzeJumps(track: Track, terrain: TerrainField, speeds: number
       landedOff,
       obstructed,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

@@ -675,4 +675,5 @@ export {
 
 // Deterministic utilities shared with tooling.
 export { createRng, type Rng } from "./lib/prng.ts";
+export { fixedClock, preciseClock, wallClock, type Clock } from "./lib/clock.ts";
 export { hash2, smooth, valueNoise } from "./lib/noise.ts";

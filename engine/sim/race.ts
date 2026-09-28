@@ -30,6 +30,7 @@ import type { GameEvent, RunStats } from "../game/state.ts";
 import { createGame, skipIntro, step } from "../game/step.ts";
 import { compileStage, STAGE_RULES, type FiniteStageLength, type Track } from "../mapgen/index.ts";
 import { engineVersion } from "../version.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 import { RALLY_BOT, botInput, type BotProfile } from "./bot.ts";
 import {
   advanceField,
@@ -100,6 +101,9 @@ export type RaceOptions = {
   maxTime?: number;
   /** Write the run down as it is driven. */
   record?: { source: "player" | "bot"; mode: string; levelId?: string };
+  /** What stamps a recorded tape's `recorded` date. The wall clock unless a
+   * caller needs the tape to come out the same twice. Never read by the run. */
+  clock?: Clock;
 };
 
 /** Everybody's head start, paid in full before the player's first step.
@@ -212,7 +216,7 @@ export function race(options: RaceOptions): RaceOutcome {
   const recorder = options.record
     ? createTapeRecorder({
         engine: engineVersion,
-        recorded: new Date().toISOString(),
+        recorded: new Date((options.clock ?? wallClock).now()).toISOString(),
         source: options.record.source,
         mode: options.record.mode,
         ...(options.record.levelId ? { levelId: options.record.levelId } : {}),

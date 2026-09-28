@@ -49,9 +49,14 @@ import {
   type Finding,
   type MetricReport,
 } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
-export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport {
-  const started = Date.now();
+export function analyzeRoads(
+  track: Track,
+  terrain: TerrainField,
+  clock: Clock = wallClock,
+): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const R = ANALYSIS.roads;
   const clear = roadClearance(track.width);
@@ -705,6 +710,6 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
       solarFarms: track.solarFarms.length,
       badPlants,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

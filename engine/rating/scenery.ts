@@ -43,6 +43,7 @@ import type { TerrainField } from "../mapgen/terrain.ts";
 import { RATING } from "./scales.ts";
 import { effectiveKinds, spread, type Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 /** How many trunks have to stand inside the near ring before the road
  * counts as closed in on that side. A handful of birches is a verge; this
@@ -92,8 +93,8 @@ function stageDistance(walk: Walk, x: number, z: number): number {
   return Math.sqrt(best);
 }
 
-export function rateScenery(walk: Walk, terrain: TerrainField): Facet {
-  const started = Date.now();
+export function rateScenery(walk: Walk, terrain: TerrainField, clock: Clock = wallClock): Facet {
+  const started = clock.now();
   const S = RATING.scenery;
   const track = walk.track;
   const samples = track.samples;
@@ -252,7 +253,7 @@ export function rateScenery(walk: Walk, terrain: TerrainField): Facet {
       sealedRoads: roads.total,
       roadsToNowhere: roads.nowhere,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }
 

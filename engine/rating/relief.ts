@@ -19,9 +19,10 @@
 import { RATING } from "./scales.ts";
 import { segmentSpans, type Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
-export function rateRelief(walk: Walk): Facet {
-  const started = Date.now();
+export function rateRelief(walk: Walk, clock: Clock = wallClock): Facet {
+  const started = clock.now();
   const R = RATING.relief;
   const samples = walk.track.samples;
 
@@ -133,7 +134,7 @@ export function rateRelief(walk: Walk): Facet {
       undulation: Math.round(undulation * 100) / 100,
       steepest: Math.round(steepest.grade * 1000) / 1000,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }
 

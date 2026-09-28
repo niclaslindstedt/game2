@@ -54,6 +54,7 @@ import {
   type Finding,
   type MetricReport,
 } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 /** The p-th percentile of a sample set, p in 0..1. */
 function percentile(sorted: number[], p: number): number {
@@ -354,8 +355,12 @@ function summitShare(grid: number[], near: number): number {
   return high / Math.max(1, grid.length);
 }
 
-export function analyzeGround(track: Track, terrain: TerrainField): MetricReport {
-  const started = Date.now();
+export function analyzeGround(
+  track: Track,
+  terrain: TerrainField,
+  clock: Clock = wallClock,
+): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const G = ANALYSIS.ground;
   // R40 — the biome the shares are judged against, and its quilt.
@@ -778,6 +783,6 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       steepShare,
       steepest: folds.steepest,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

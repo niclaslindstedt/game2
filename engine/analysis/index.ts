@@ -42,6 +42,7 @@ import { speedProfile } from "./speed.ts";
 import { analyzeWater } from "./water.ts";
 import { analyzeWires } from "./wires.ts";
 import { rank, type MetricReport, type StageReport } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 export { ANALYSIS } from "./budgets.ts";
 export type { Check, Finding, MetricReport, Severity, StageReport } from "./types.ts";
@@ -59,6 +60,9 @@ export type AnalyzeOptions = {
    * freeze and the route may cross them, so a winter stage is a different
    * road with different defects. Defaults to summer. */
   climate?: ClimateChoice;
+  /** What the report's `ms` (and each metric's) is timed by. The wall clock
+   * unless a caller needs the report to come out the same twice. */
+  clock?: Clock;
 };
 
 /** Analyze a track that has already been built, with a terrain field over
@@ -69,25 +73,26 @@ export function analyzeTrack(
   terrain: TerrainField,
   options: AnalyzeOptions = {},
 ): StageReport {
-  const started = Date.now();
+  const clock = options.clock ?? wallClock;
+  const started = clock.now();
   // Computed once and shared: half the checks are meaningless without a
   // speed, and two metrics computing their own would be two answers to the
   // same question.
   const speeds = speedProfile(track);
   const metrics: MetricReport[] = [
-    analyzeRollers(track, terrain),
-    analyzeWater(track, terrain),
-    analyzeRoads(track, terrain),
-    analyzeJunctions(track, terrain),
-    analyzeDrive(track, speeds),
-    analyzeJumps(track, terrain, speeds),
-    analyzeEnds(track, terrain),
-    analyzeGround(track, terrain),
-    analyzeLanes(track, terrain),
-    analyzeWires(track, terrain),
+    analyzeRollers(track, terrain, clock),
+    analyzeWater(track, terrain, clock),
+    analyzeRoads(track, terrain, clock),
+    analyzeJunctions(track, terrain, clock),
+    analyzeDrive(track, speeds, clock),
+    analyzeJumps(track, terrain, speeds, clock),
+    analyzeEnds(track, terrain, clock),
+    analyzeGround(track, terrain, clock),
+    analyzeLanes(track, terrain, clock),
+    analyzeWires(track, terrain, clock),
   ];
   if (options.perf !== false && options.length) {
-    metrics.push(analyzePerf(track, track.seed, options.length, options.knobs ?? {}));
+    metrics.push(analyzePerf(track, track.seed, options.length, options.knobs ?? {}, clock));
   }
 
   let sum = 0;
@@ -110,7 +115,7 @@ export function analyzeTrack(
     score: weight > 0 ? Math.round((sum / weight) * 1000) / 10 : 0,
     errors: ranked.filter((f) => f.severity === "error").length,
     warns: ranked.filter((f) => f.severity === "warn").length,
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }
 

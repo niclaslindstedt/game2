@@ -41,6 +41,7 @@ import type { Track } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, under, type Check, type Finding, type MetricReport } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 const P = STAGE_RULES.powerline;
 const W = ANALYSIS.wires;
@@ -48,8 +49,12 @@ const W = ANALYSIS.wires;
 /** R45 — measure every transmission line on a stage. A stage with no line
  * on it scores a clean sheet on every check: most of them have none, and a
  * biome without a grid is not a biome with a broken one. */
-export function analyzeWires(track: Track, terrain: TerrainField): MetricReport {
-  const started = Date.now();
+export function analyzeWires(
+  track: Track,
+  terrain: TerrainField,
+  clock: Clock = wallClock,
+): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const half = track.width / 2;
   const corridor = half + ROAD_CROSS.reach;
@@ -272,6 +277,6 @@ export function analyzeWires(track: Track, terrain: TerrainField): MetricReport 
       worstClearance: worstClearance === Infinity ? 0 : Math.round(worstClearance * 10) / 10,
       trunksUnder,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

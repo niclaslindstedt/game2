@@ -43,6 +43,7 @@ import { rateRisk } from "./risk.ts";
 import { stageCharacter, stageDemand, stageDifficulty } from "./character.ts";
 import { walkStage } from "./walk.ts";
 import { rankNotes, type Facet, type Note, type StageRating } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 export { RATING } from "./scales.ts";
 export { CHARACTER_AXES, characterDistance } from "./types.ts";
@@ -79,6 +80,9 @@ export type RateOptions = {
    * player never drives. Defaults to summer, which is what a bare seed in a
    * sweep is. */
   climate?: ClimateChoice;
+  /** What the rating's `ms` (and each facet's) is timed by. The wall clock
+   * unless a caller needs the rating to come out the same twice. */
+  clock?: Clock;
 };
 
 /** Rate a stage that has already been built, with a terrain field over it
@@ -89,15 +93,16 @@ export function rateTrack(
   terrain: TerrainField,
   options: RateOptions = {},
 ): StageRating {
-  const started = Date.now();
+  const clock = options.clock ?? wallClock;
+  const started = clock.now();
   const walk = walkStage(track);
   const facets: Facet[] = [
-    rateFlow(walk),
-    ratePace(walk),
-    rateRelief(walk),
-    rateFeatures(walk),
-    rateScenery(walk, terrain),
-    rateRisk(walk, terrain),
+    rateFlow(walk, clock),
+    ratePace(walk, clock),
+    rateRelief(walk, clock),
+    rateFeatures(walk, clock),
+    rateScenery(walk, terrain, clock),
+    rateRisk(walk, terrain, clock),
   ];
 
   let sum = 0;
@@ -125,7 +130,7 @@ export function rateTrack(
     demand: stageDemand(character),
     difficulty: Math.round(stageDifficulty(character) * 1000) / 1000,
     stats,
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }
 

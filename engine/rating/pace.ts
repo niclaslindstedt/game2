@@ -21,11 +21,12 @@
 import { RATING } from "./scales.ts";
 import { spread, type Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 const KMH = 3.6;
 
-export function ratePace(walk: Walk): Facet {
-  const started = Date.now();
+export function ratePace(walk: Walk, clock: Clock = wallClock): Facet {
+  const started = clock.now();
   const P = RATING.pace;
   const speeds: number[] = [];
   for (let i = 0; i <= walk.end; i++) speeds.push(walk.speed[i]);
@@ -118,7 +119,7 @@ export function ratePace(walk: Walk): Facet {
       brakings: brakings.count,
       hardestShedKmh: Math.round(brakings.hardest * KMH),
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }
 

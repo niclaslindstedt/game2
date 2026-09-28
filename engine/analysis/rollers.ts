@@ -38,6 +38,7 @@ import { STAGE_RULES } from "../mapgen/rules.ts";
 import { biomeRules } from "../mapgen/biomes.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, within, type Check, type Finding, type MetricReport } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 /** A piece of stage FURNITURE, as the rank sees it: a segment on the ground
  * with a thickness. A marker post is a segment of zero length; a barrier
@@ -212,8 +213,12 @@ function jumpMask(track: Track): boolean[] {
 }
 
 /** Roll the rank down the stage and score what it finds. */
-export function analyzeRollers(track: Track, terrain: TerrainField): MetricReport {
-  const started = Date.now();
+export function analyzeRollers(
+  track: Track,
+  terrain: TerrainField,
+  clock: Clock = wallClock,
+): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const half = track.width / 2;
   const lanes = laneOffsets(half);
@@ -962,6 +967,6 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       gravelVaries: cutSpread,
       bendOpening: opening,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

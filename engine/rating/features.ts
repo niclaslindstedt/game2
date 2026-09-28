@@ -16,9 +16,10 @@ import type { Surface, Track } from "../mapgen/compile.ts";
 import { RATING } from "./scales.ts";
 import { effectiveKinds, segmentSpans, type Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
-export function rateFeatures(walk: Walk): Facet {
-  const started = Date.now();
+export function rateFeatures(walk: Walk, clock: Clock = wallClock): Facet {
+  const started = clock.now();
   const F = RATING.features;
   const track = walk.track;
   const samples = track.samples;
@@ -147,7 +148,7 @@ export function rateFeatures(walk: Walk): Facet {
       typicalWidth: Math.round(typical * 10) / 10,
       kinds,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }
 

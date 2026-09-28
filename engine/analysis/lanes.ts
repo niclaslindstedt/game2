@@ -45,6 +45,7 @@ import type { Track } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, type Check, type Finding, type MetricReport } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 /** One road off the stage, with what it is called in a finding, and how
  * far past each end the walk runs. A road that ENDS on a pad or a yard is
@@ -120,8 +121,12 @@ function along(line: SpurLine, s: number): { x: number; z: number; heading: numb
   };
 }
 
-export function analyzeLanes(track: Track, terrain: TerrainField): MetricReport {
-  const started = Date.now();
+export function analyzeLanes(
+  track: Track,
+  terrain: TerrainField,
+  clock: Clock = wallClock,
+): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const L = ANALYSIS.lanes;
   const lanes = lanesOf(track, terrain);
@@ -318,6 +323,6 @@ export function analyzeLanes(track: Track, terrain: TerrainField): MetricReport 
       worstCrest,
       worstOff,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

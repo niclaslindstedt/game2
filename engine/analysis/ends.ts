@@ -36,6 +36,7 @@ import { STAGE_RULES } from "../mapgen/rules.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, under, type Check, type Finding, type MetricReport } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 /** How straight a run of road is, as the sharpest radius anywhere in it, m
  * — Infinity on a dead straight. Walked from `from` for `run` meters, or
@@ -67,8 +68,12 @@ function slotAt(track: Track, back: number, lateral: number): { x: number; z: nu
   return { x: s.x - fx * back + rx * lateral, z: s.z - fz * back + rz * lateral };
 }
 
-export function analyzeEnds(track: Track, terrain: TerrainField): MetricReport {
-  const started = Date.now();
+export function analyzeEnds(
+  track: Track,
+  terrain: TerrainField,
+  clock: Clock = wallClock,
+): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const E = ANALYSIS.ends;
   const checks: Check[] = [];
@@ -360,6 +365,6 @@ export function analyzeEnds(track: Track, terrain: TerrainField): MetricReport {
       launchRadius: Math.min(launchRadius, 9999),
       runOut: track.finishS === null ? 0 : track.length - track.finishS,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

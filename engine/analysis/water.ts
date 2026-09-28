@@ -33,6 +33,7 @@ import type { TerrainField } from "../mapgen/terrain.ts";
 import { LAKE_Y } from "../mapgen/land.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, type Check, type Finding, type MetricReport } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 /** How far a point on a course is from the nearest crossing it was
  * anchored on, m. Inside the crossing window the water is ON the road
@@ -53,8 +54,12 @@ function offMap(track: Track, x: number, z: number, margin: number): boolean {
   return x < b.minX - margin || x > b.maxX + margin || z < b.minZ - margin || z > b.maxZ + margin;
 }
 
-export function analyzeWater(track: Track, terrain: TerrainField): MetricReport {
-  const started = Date.now();
+export function analyzeWater(
+  track: Track,
+  terrain: TerrainField,
+  clock: Clock = wallClock,
+): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const rivers = terrain.rivers;
   const W = ANALYSIS.water;
@@ -431,6 +436,6 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
       sourceless,
       dryCrossings,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

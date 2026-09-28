@@ -46,6 +46,7 @@ import {
   type Finding,
   type MetricReport,
 } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
 /** A piece of road on the raster: where its centerline is and how wide the
  * mat is there. Both the route and the branches reduce to this, because the
@@ -176,8 +177,12 @@ function crossAngle(a: number, b: number): number {
   return d > Math.PI / 2 ? Math.PI - d : d;
 }
 
-export function analyzeJunctions(track: Track, terrain: TerrainField): MetricReport {
-  const started = Date.now();
+export function analyzeJunctions(
+  track: Track,
+  terrain: TerrainField,
+  clock: Clock = wallClock,
+): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const J = ANALYSIS.junctions;
 
@@ -500,6 +505,6 @@ export function analyzeJunctions(track: Track, terrain: TerrainField): MetricRep
       offAngle,
       brokenThrough,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

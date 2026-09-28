@@ -38,9 +38,10 @@ import {
   type Finding,
   type MetricReport,
 } from "./types.ts";
+import { wallClock, type Clock } from "../lib/clock.ts";
 
-export function analyzeDrive(track: Track, v: number[]): MetricReport {
-  const started = Date.now();
+export function analyzeDrive(track: Track, v: number[], clock: Clock = wallClock): MetricReport {
+  const started = clock.now();
   const findings: Finding[] = [];
   const D = ANALYSIS.drive;
   const samples = track.samples;
@@ -326,7 +327,7 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
       longestStraightM: straight.meters,
       straightsOverBudget: straight.over,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }
 

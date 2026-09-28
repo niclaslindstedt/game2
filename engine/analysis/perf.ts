@@ -30,16 +30,16 @@ import { createTerrain } from "../mapgen/terrain.ts";
 import type { FiniteStageLength, StageKnobs } from "../mapgen/rules.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, under, type Check, type Finding, type MetricReport } from "./types.ts";
+import { preciseClock, wallClock, type Clock } from "../lib/clock.ts";
 
 /** Microseconds per call, averaged over a batch. The clock is read once
  * either side of the whole batch rather than per call: at a few
  * microseconds a call, reading the clock around each one measures the
  * clock. */
-function perCall(calls: number, run: () => void): number {
-  const started = process.hrtime.bigint();
+function perCall(clock: Clock, calls: number, run: () => void): number {
+  const started = clock.now();
   run();
-  const ns = Number(process.hrtime.bigint() - started);
-  return ns / 1000 / Math.max(1, calls);
+  return ((clock.now() - started) * 1000) / Math.max(1, calls);
 }
 
 export function analyzePerf(
@@ -47,29 +47,34 @@ export function analyzePerf(
   seed: number,
   length: FiniteStageLength,
   knobs: Partial<StageKnobs>,
+  /** Times everything when given. Otherwise the build is timed by the wall
+   * clock and the query batches by the sub-millisecond one they need. */
+  given?: Clock,
 ): MetricReport {
-  const started = Date.now();
+  const clock = given ?? wallClock;
+  const fine = given ?? preciseClock;
+  const started = clock.now();
   const findings: Finding[] = [];
   const P = ANALYSIS.perf;
 
   // ── The build, cold. Timed on a fresh generation rather than on the
   // track that was handed in, because the track handed in was built once
   // already and the caches it warmed are not the ones a player gets.
-  const planStart = Date.now();
+  const planStart = clock.now();
   generateStage(seed, length, knobs);
-  const planMs = Date.now() - planStart;
+  const planMs = clock.now() - planStart;
 
-  const compileStart = Date.now();
+  const compileStart = clock.now();
   const built = compileStage(seed, length, knobs);
-  const compileMs = Date.now() - compileStart;
+  const compileMs = clock.now() - compileStart;
 
-  const terrainStart = Date.now();
+  const terrainStart = clock.now();
   const field = createTerrain(built);
   // Building the field is lazy — the streams, the guards and the props are
   // cut when the road is first synced — so the sync is part of the build
   // cost and timing the constructor alone measures nothing.
   field.sync(0);
-  const terrainMs = Date.now() - terrainStart;
+  const terrainMs = clock.now() - terrainStart;
   const buildMs = planMs + compileMs + terrainMs;
 
   // ── The queries, warm, along the road the car will actually drive. A
@@ -92,13 +97,13 @@ export function analyzePerf(
   for (const spot of spots) field.groundAt(spot.x, spot.z);
 
   let sink = 0;
-  const groundUs = perCall(n, () => {
+  const groundUs = perCall(fine, n, () => {
     for (const spot of spots) sink += field.groundAt(spot.x, spot.z);
   });
-  const waterUs = perCall(n, () => {
+  const waterUs = perCall(fine, n, () => {
     for (const spot of spots) sink += field.waterAt(spot.x, spot.z) ?? 0;
   });
-  const obstacleUs = perCall(n, () => {
+  const obstacleUs = perCall(fine, n, () => {
     for (const spot of spots) sink += field.obstaclesNear(spot.x, spot.z, 6).length;
   });
   // Keeps the batches from being optimized away without costing anything
@@ -188,6 +193,6 @@ export function analyzePerf(
       obstacleUs,
       samples: track.samples.length,
     },
-    ms: Date.now() - started,
+    ms: clock.now() - started,
   };
 }

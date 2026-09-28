@@ -245,6 +245,15 @@ Make targets are the definition of green CI enforces).
   (math, PRNG, angle helpers engine-side; general UI utilities app-side) goes
   in `engine/lib/` or `pwa/src/lib/` — never tangled into a game-specific
   module. Those pools are what a sequel keeps as-is.
+- **The engine never reads the wall clock; it is HANDED one.** Code in
+  `engine/` that times itself or stamps a record — an analysis or rating
+  pass's `ms`, a tape's `recorded` date — takes a `Clock` from
+  `engine/lib/clock.ts` (a trailing `clock: Clock = wallClock` parameter, or a
+  `clock` option on the entry point) and calls `clock.now()`; it never calls
+  `Date.now`, `performance.now` or `new Date()`. A test hands in
+  `fixedClock()` and compares the whole report. `tests/imports_test.ts` and
+  `tests/determinism_test.ts` fail by file name on a clock read anywhere else
+  but the seam and the output module.
 - **The engine's only public surface is `engine/index.ts`.** Export new
   types/constants the app or the tests need from there; the app and tests
   import `@engine`, nothing deeper.
