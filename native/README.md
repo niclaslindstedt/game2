@@ -118,6 +118,8 @@ npm run typecheck  # tsc --noEmit
 npm run doctor     # expo-doctor sanity check
 ```
 
+CI's `native` job runs the last two on every push (`.github/workflows/ci.yml`).
+
 The same commands are aliased from the repo root (`make native-ios`,
 `make native-bundle`, `npm run native:ios`, …) so you don't have to `cd` —
 see the root `AGENTS.md`.
