@@ -52,29 +52,18 @@ import {
   GeoBuilder,
   HEDGEHOG,
   HEDGEHOG_BLOOM,
-  IRONWOOD_BARK,
-  IRONWOOD_LEAF,
   JOSHUA_BARK,
   JOSHUA_DEAD,
   JOSHUA_LEAF,
-  MESQUITE_BARK,
-  MESQUITE_LEAF,
   OCOTILLO,
   OCOTILLO_TIP,
-  ORGAN_PIPE,
-  ORGAN_PIPE_DARK,
-  PALO_VERDE,
-  PALO_VERDE_LEAF,
   PEAR_FRUIT,
-  PINYON,
   PRICKLY_PEAR,
   SAGEBRUSH,
   SAGUARO,
   SAGUARO_DARK,
-  SAGUARO_RIB,
   SAGUARO_TIP,
   SALT_CRUST,
-  TRUNK_DARK,
   TUMBLEWEED,
   YUCCA,
   YUCCA_STALK,
@@ -84,7 +73,11 @@ import {
   swung,
   type PartColor,
   type Point,
+  PAINT_BOX,
+  replayParts,
 } from "./flora-build.ts";
+import { TREE_ROW } from "./flora-tree-rows.ts";
+import type { TreeRow } from "./flora-trees.ts";
 import type { VariantDef } from "./flora-species.ts";
 
 /** The golden angle: successive parts placed at multiples of it land
@@ -179,7 +172,7 @@ function saguaro(
   b: GeoBuilder,
   h: number,
   r: number,
-  arms: [number, number, number][],
+  arms: readonly (readonly [number, number, number])[],
   reach = 1,
 ): void {
   saguaroColumn(b, r, h);
@@ -377,77 +370,53 @@ function joshua(b: GeoBuilder, h: number, r: number, tiers: number): void {
 
 // ── The variant roster ─────────────────────────────────────────────────────
 
+/** Draw a tree off its row (`flora-trees.ts`) with this roster's recipes —
+ * or, for a row that is a list of the builder's calls, those calls. */
+function drawDesert(b: GeoBuilder, r: TreeRow): void {
+  switch (r.form) {
+    case "saguaro":
+      return saguaro(b, r.h, r.r, r.arms, r.reach);
+    case "column":
+      return saguaroColumn(b, r.r, r.h, r.lean);
+    case "joshua":
+      return joshua(b, r.h, r.r, r.tiers);
+    case "wash":
+      return washTree(b, PAINT_BOX[r.bark], PAINT_BOX[r.leaf], r.h, r.spread, {
+        stems: r.stems,
+        leaves: r.leaves,
+        leaf: r.size,
+        fork: r.fork,
+        flat: r.flat,
+        droop: r.droop,
+      });
+    case "parts":
+      return replayParts(b, r.parts);
+    default:
+      throw new Error(`the desert has no recipe for a ${r.form} (${r.id})`);
+  }
+}
+
+/** A tree variant, drawn off its row. */
+const tree = (id: string): VariantDef => {
+  const r = TREE_ROW[id];
+  return { build: (b) => drawDesert(b, r) };
+};
+
 export const DESERT_VARIANTS: Record<string, VariantDef> = {
   // ── The columnar cacti: SOLID trunks the engine places, and the only
   // things in this biome that break the horizon. A saguaro grows an arm
   // a century, so the young one is a post, the ordinary one has two, and
   // the old one is a candelabra.
-  saguaro: {
-    build: (b) =>
-      saguaro(
-        b,
-        7,
-        0.27,
-        [
-          [3.1, 0.4, 3.2],
-          [4.0, 3.7, 2.3],
-        ],
-        1.15,
-      ),
-  },
-  saguaroOld: {
-    build: (b) =>
-      saguaro(
-        b,
-        11,
-        0.33,
-        [
-          [3.6, 0.2, 5.8],
-          [4.8, 2.2, 4.4],
-          [5.4, 4.1, 3.6],
-          [6.9, 5.4, 2.4],
-        ],
-        1.45,
-      ),
-  },
-  saguaroYoung: { build: (b) => saguaroColumn(b, 0.21, 2.8, 0.03) },
+  saguaro: tree("saguaro"),
+  saguaroOld: tree("saguaroOld"),
+  saguaroYoung: tree("saguaroYoung"),
   /** What a saguaro leaves: the woody ribs standing in a loose ring, the
    * flesh gone from between them. Solid — it is a post of hardwood. */
-  deadSaguaro: {
-    build: (b) => {
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * Math.PI * 2;
-        const h = 3.2 + (i % 3) * 1.1;
-        b.cyl(SAGUARO_RIB, 0.03, 0.05, h, 0, {
-          x: Math.cos(a) * 0.22,
-          z: Math.sin(a) * 0.22,
-          tiltZ: 0.04 + (i % 2) * 0.05,
-          ry: a,
-        });
-      }
-      b.cyl(TRUNK_DARK, 0.26, 0.32, 0.5, 0, {}, 8);
-    },
-  },
+  deadSaguaro: tree("deadSaguaro"),
   /** An organ pipe: not one column but a dozen, all rising together out of
    * one root with no trunk under them. From the road it is a fan, where a
    * saguaro is a post — which is the only reason to carry both. Solid. */
-  organPipe: {
-    build: (b) => {
-      const n = 8;
-      for (let i = 0; i < n; i++) {
-        const a = i * PHI;
-        const d = 0.12 + (i % 4) * 0.13;
-        const lean = 0.1 + d * 0.75;
-        const h = 2.7 + (i % 5) * 0.4;
-        const r = 0.19 - (i % 3) * 0.015;
-        const x = Math.cos(a) * d;
-        const z = Math.sin(a) * d;
-        b.ribbed([ORGAN_PIPE_DARK, ORGAN_PIPE], r * 0.82, r, h, 0, { x, z, tiltZ: lean, ry: a }, 7);
-        const top = swung(-Math.sin(lean) * h, Math.cos(lean) * h, a);
-        b.blob(SAGUARO_TIP, r * 1.1, x + top.x, top.y - r * 0.3, z + top.z, { sy: 1 });
-      }
-    },
-  },
+  organPipe: tree("organPipe"),
   /** A barrel: a squat fluted drum under a dome, wearing a cage of yellow
    * spines and the red hooks that give it its name. Soft — it is knee-high
    * and the car goes over it. It leans, and it always leans the same way:
@@ -591,63 +560,23 @@ export const DESERT_VARIANTS: Record<string, VariantDef> = {
    * ones it has not dropped. Half of the plant is dead thatch, and it is
    * that two-tone knob on the end of every branch — never the leaves —
    * that says Joshua tree from four hundred metres. */
-  joshuaTree: { build: (b) => joshua(b, 3.1, 0.26, 2) },
-  joshuaYoung: { build: (b) => joshua(b, 1.5, 0.17, 1) },
+  joshuaTree: tree("joshuaTree"),
+  joshuaYoung: tree("joshuaYoung"),
   // ── The wash trees — solid, and the only shade in the biome.
   /** Mesquite: low, wide and gnarled, on four or five dark stems, its fine
    * foliage hanging almost to the ground. The densest of the three. */
-  mesquite: {
-    build: (b) =>
-      washTree(b, MESQUITE_BARK, MESQUITE_LEAF, 5.9, 5.6, {
-        stems: 4,
-        leaves: 6,
-        leaf: 0.44,
-        // Breaking up at a quarter of its height, which is what makes a
-        // mesquite a thicket you cannot see over rather than a shade tree
-        // you can walk under.
-        fork: 0.26,
-        flat: 0.72,
-        droop: 0.5,
-      }),
-  },
+  mesquite: tree("mesquite"),
   /** Palo verde — the green stick. Bark green from the ground to the
    * finest twig, because that is where the tree does its photosynthesis;
    * leaves so few and so small that the crown is a haze you can see the
    * sky through, and a yellow cloud for three weeks in April. */
-  paloVerde: {
-    build: (b) =>
-      washTree(b, PALO_VERDE, PALO_VERDE_LEAF, 6, 5, {
-        stems: 3,
-        leaves: 6,
-        leaf: 0.4,
-        fork: 0.44,
-        flat: 0.78,
-      }),
-  },
+  paloVerde: tree("paloVerde"),
   /** Ironwood: the biggest and the oldest thing that grows in a wash, on a
    * heavy grey trunk, carrying the greyest crown in the desert — and for a
    * fortnight in May, a lavender one. */
-  ironwood: {
-    build: (b) =>
-      washTree(b, IRONWOOD_BARK, IRONWOOD_LEAF, 8.2, 6, {
-        stems: 3,
-        leaves: 8,
-        leaf: 0.48,
-        fork: 0.36,
-        flat: 0.7,
-        droop: 0.3,
-      }),
-  },
+  ironwood: tree("ironwood"),
   /** A pinyon pine: the one conifer up here, squat and round-headed. */
-  pinyon: {
-    build: (b) => {
-      b.cyl(TRUNK_DARK, 0.14, 0.26, 1.8, 0);
-      b.blob(PINYON, 1.5, 0, 2.9, 0, { sy: 0.85 });
-      b.blob(PINYON, 1.1, 0.85, 2.4, 0.55);
-      b.blob(PINYON, 0.95, -0.75, 2.5, -0.65);
-      b.blob(PINYON, 0.75, 0, 3.9, 0);
-    },
-  },
+  pinyon: tree("pinyon"),
   // ── The scrub — all of it soft, and most of the biome.
   /** Creosote: a dozen thin whips and a scrap of olive foliage at the end
    * of each — an airy bush you can see straight through, which is what a

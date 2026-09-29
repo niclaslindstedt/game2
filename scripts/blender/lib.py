@@ -3,35 +3,52 @@
 # materials, the lofts and tubes and boxes a part is made of, the studio it is
 # photographed in (a gravel stage at the edge of a wood), and the export to
 # the game's budget with its LODs. One builder per KIND of asset (`car.py`,
-# …) imports it; `scripts/blender.mjs` is how any of them is run, and the
-# `blender-assets` skill owns the loop.
+# `tree.py`, …) imports it; `scripts/blender.mjs` is how any of them is run,
+# and the `blender-assets` skill owns the loop. The shelf is the sibling
+# snowmobile game's, carried over whole, with what a rally car needs beside
+# it (the rigid PARTS rig, `lathe`, `crease`, `subdivide`, a cylinder's open
+# ends, the gravel studio).
 #
 # Every builder states its asset in the frame the game's own data is in and
 # leaves nothing to turn: a car is modelled in its body frame (see
-# `car.py`), and the glTF export's own axis change lands it there.
+# `car.py`), a tree in its own metres (`tree.py`), and the glTF export's
+# own axis change lands each where the game reads it.
 #
-#   QUALITY=render   studio stills: subdivided twice, bevelled
+#   QUALITY=render   studio stills: subdivided twice, bevelled, holes cut
 #   QUALITY=game     the real-time budget: GAME is true, and every helper
 #                    spends fewer segments
 #   VIEWS=a,b        only these cameras (`none`: no stills at all — `make models`,
-#                    which only wants the glTFs)
+#                    and CI, which only wants the glTFs)
 #
-# THE RIG. An asset is exported as RIGID PARTS on a rig: every part rides one
-# bone (`rides`) and is its own named mesh (`part`), parented to that bone —
-# never skinned, never joined across parts, because the game takes each part
-# over as a mesh of its own (a car's bumper is what flies off it). A builder
-# registers each bone (`bone`) and the CLIPS (`clip`) that play the bones
-# over time, one glTF animation each.
+# THE RIG, two ways.
+#   RIGID PARTS (a car): every part rides one bone (`rides`) and is its own
+#     named mesh (`part`), parented to that bone — never skinned, never
+#     joined across parts, because the game takes each part over as a mesh
+#     of its own (a car's bumper is what flies off it). Calling `part()` at
+#     all puts the asset on this rig.
+#   SKINNED (anything that bends, the sibling's machines and riders): every
+#     part rides one bone, rigidly (every vertex weighted 1 to its part's
+#     bone) or across several (`weights`), the whole joined into ONE skinned
+#     mesh; a bone is a DRIVER the game sets, or a LINKAGE aimed at a target
+#     on another part, rigid or stretched, whose target is written into the
+#     glTF as the bone's extras (`aim`, `stretch`) so the game can re-lay it.
+# Either way a builder registers each bone (`bone`) and the CLIPS (`clip`)
+# that play the bones over time, one glTF animation each. A kind with no
+# rig at all (a tree) exports its own meshes and never calls `finish`.
 
 import bpy, bmesh, math, os
 from mathutils import Euler, Matrix, Quaternion, Vector
 
 GAME = os.environ.get("QUALITY") == "game"
 FPS = 30
-RIDES = "root"
+ROOT = "root"
+RIDES = ROOT
 PART = "body"
-BONES = {"root": dict(head=(0, 0, 0), tail=(0, -0.3, 0), parent=None, deform=True)}
+PARTS = False
+BONES = {ROOT: dict(head=(0, 0, 0), tail=(0, -0.3, 0), parent=None, deform=True)}
 CLIPS = []
+MORPHS = {}
+WEIGHTS = {}
 
 def rides(name):
     """Every object made from here on rides this bone."""
@@ -41,22 +58,45 @@ def rides(name):
 
 def part(name):
     """Every object made from here on is joined into the part of this name —
-    one mesh in the glTF, the unit the game takes over."""
-    global PART
+    one mesh in the glTF, the unit the game takes over. Puts the asset on the
+    RIGID PARTS rig."""
+    global PART, PARTS
     PART = name
+    PARTS = True
     return name
 
-def bone(name, head, tail, parent="root", extras=None):
+def bone(name, head, tail, parent=ROOT, aim=None, stretch=False, deform=True, extras=None, roll_to=None):
     """A bone of the rig, in the asset's frame. It turns about its own axis
-    (head → tail) in a clip, and lifts along the asset's up; `extras` are
-    written into the glTF on the bone's node."""
-    BONES[name] = dict(head=tuple(head), tail=tuple(tail), parent=parent, deform=True, extras=extras or {})
+    (head → tail) in a clip, and lifts along the asset's up. A LINKAGE (the
+    skinned rig's) names the bone it AIMS at (its tail laid on that bone's
+    head, which must be where the tail stands at rest), and whether it
+    STRETCHES to reach it or only turns. `extras` are written into the glTF
+    on the bone's node; `roll_to` turns the bone's +z toward a direction."""
+    BONES[name] = dict(head=tuple(head), tail=tuple(tail), parent=parent, aim=aim, stretch=stretch,
+                       deform=deform, extras=extras or {}, roll_to=roll_to)
     return name
+
+def marker(name, at, parent):
+    """A target a linkage aims at: a short bone riding `parent`, its head `at`."""
+    return bone(name, at, Vector(at) + Vector((0, 0, 0.03)), parent, deform=False)
 
 def clip(name, seconds, at):
     """A clip: `at(t)` gives, for every bone it moves, a `lift` (m, up the
-    asset's z) and a `turn` (rad, about the bone's own axis)."""
+    asset's z) and a `turn` (rad, about the bone's own axis) — or its whole
+    `matrix` in the armature's frame — and for a morphed object (`morph(...)`)
+    its weight, keyed as `{object: w}` under "morph"."""
     CLIPS.append((name, seconds, at))
+
+def weights(ob, fn):
+    """A part that BENDS: `fn(co)` gives each vertex's `{bone: weight}` —
+    where every other part rides its one bone wholly."""
+    WEIGHTS[ob.name] = fn
+    return ob
+
+def morph(ob, key, coords):
+    """A shape key `key` on `ob`, its vertices at `coords` — added after the
+    modifiers are baked in, which a key would forbid."""
+    MORPHS[ob.name] = (ob, key, coords)
 
 # ---------------------------------------------------------------- scene reset
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -64,7 +104,10 @@ scene = bpy.context.scene
 COL = scene.collection
 
 # ---------------------------------------------------------------- materials
-def mat(name, color, metal=0.0, rough=0.5, coat=0.0, emit=None, emit_str=0.0, glass=False, alpha=1.0):
+def mat(name, color, metal=0.0, rough=0.5, coat=0.0, emit=None, emit_str=0.0, glass=False, alpha=1.0,
+        sheen=0.0):
+    """A Principled material, made once per NAME: a builder that asks for a
+    role twice gets the one material, which is what the game dresses by."""
     m = bpy.data.materials.get(name)
     if m:
         return m
@@ -82,6 +125,8 @@ def mat(name, color, metal=0.0, rough=0.5, coat=0.0, emit=None, emit_str=0.0, gl
     s("Roughness", rough)
     s("Coat Weight", coat)
     s("Coat Roughness", 0.05)
+    if sheen:
+        s("Sheen Weight", sheen)
     if emit:
         s("Emission Color", (*emit, 1.0))
         s("Emission Strength", emit_str)
@@ -94,14 +139,17 @@ def mat(name, color, metal=0.0, rough=0.5, coat=0.0, emit=None, emit_str=0.0, gl
     return m
 
 # ---------------------------------------------------------------- helpers
-def interp(pts, t):
-    """Piecewise LINEAR through (t, value) knots — the game's own profile
-    sampling, so a modelled panel stands where the game's does."""
+def interp(pts, t, smooth=False):
+    """Through (t, value) knots: piecewise LINEAR (the game's own profile
+    sampling, so a modelled panel stands where the game's does), or with a
+    smoothstep between knots."""
     if t <= pts[0][0]:
         return pts[0][1]
     for (a, va), (b, vb) in zip(pts, pts[1:]):
         if t <= b:
             u = 0.0 if b == a else (t - a) / (b - a)
+            if smooth:
+                u = u * u * (3 - 2 * u)
             return va + (vb - va) * u
     return pts[-1][1]
 
@@ -122,6 +170,24 @@ def catmull(points, closed=False, n=8):
     if not closed:
         out.append(P[-1])
     return out
+
+def resample(poly, step, closed=True):
+    pts = poly + ([poly[0]] if closed else [])
+    lens = [0.0]
+    for a, b in zip(pts, pts[1:]):
+        lens.append(lens[-1] + (b - a).length)
+    total = lens[-1]
+    n = max(2, int(total / step))
+    out = []
+    j = 0
+    for i in range(n if closed else n + 1):
+        d = total * i / n
+        while j < len(lens) - 2 and lens[j + 1] < d:
+            j += 1
+        seg = lens[j + 1] - lens[j]
+        u = 0 if seg == 0 else (d - lens[j]) / seg
+        out.append(pts[j].lerp(pts[j + 1], u))
+    return out, total
 
 def link(ob):
     COL.objects.link(ob)
@@ -172,14 +238,19 @@ def loft(name, rings, mats, closed=True, cap=True, face_mat=None, smooth=True):
                     fm.append(face_mat(c))
     return mesh_obj(name, verts, faces, mats, fm or None, smooth)
 
-def superellipse(w, h, n, M):
+def superellipse(w, h, n, M, taper_top=0.0, taper_bot=0.0):
     """A rounded rectangle, `w` × `h` half-sizes, squareness `n` (2 an
-    ellipse, 6 nearly square), as M points round from +x."""
+    ellipse, 6 nearly square), as M points round from +x — its upper and
+    lower halves narrowed by `taper_top` / `taper_bot` (a cowl's section)."""
     ring = []
     for k in range(M):
         th = 2 * math.pi * k / M
         c, s = math.cos(th), math.sin(th)
-        ring.append((math.copysign(abs(c) ** (2 / n), c) * w, math.copysign(abs(s) ** (2 / n), s) * h))
+        x = math.copysign(abs(c) ** (2 / n), c)
+        v = math.copysign(abs(s) ** (2 / n), s)
+        if taper_top or taper_bot:
+            x *= 1 - taper_top * max(v, 0) ** 1.5 - taper_bot * max(-v, 0) ** 1.5
+        ring.append((x * w, v * h))
     return ring
 
 def tube(name, points, r, m, smooth_n=0, closed=False, res=4):
@@ -255,6 +326,16 @@ def ellipsoid(name, center, radii, m, rot=(0, 0, 0)):
         p.use_smooth = True
     return link(bpy.data.objects.new(name, me))
 
+def coil(name, a, b, r, wire, turns, m):
+    L, R = orient(a, b)
+    pts = []
+    N = int(turns * (8 if GAME else 24))
+    for i in range(N + 1):
+        t = i / N
+        th = 2 * math.pi * turns * t
+        pts.append(Matrix.Translation(Vector(a)) @ R @ Vector((r * math.cos(th), r * math.sin(th), L * t)))
+    return tube(name, pts, wire, m, res=0 if GAME else 3)
+
 def lathe(name, profile, seg, m_of=None, mats=(), axis_x=True, smooth=True):
     """A solid of revolution about the x axis (a wheel's axle): `profile` is
     (x, r) points in order, swept `seg` times round. `m_of(i)` picks the
@@ -293,6 +374,25 @@ def subdivide(ob, game=1, render=2):
     sub.levels = game if GAME else render
     sub.render_levels = sub.levels
     return sub
+
+_CUT = bpy.data.materials.new("cutter")
+cutters = bpy.data.collections.new("cutters")
+COL.children.link(cutters)
+cutters.hide_render = True
+cutters.hide_viewport = True
+
+def cutter_cyl(a, b, r):
+    ob = cyl("cut", a, b, r, _CUT, seg=20, smooth=False)
+    COL.objects.unlink(ob)
+    cutters.objects.link(ob)
+    return ob
+
+def boolean(ob, coll):
+    mod = ob.modifiers.new("holes", "BOOLEAN")
+    mod.operation = "DIFFERENCE"
+    mod.operand_type = "COLLECTION"
+    mod.collection = coll
+    mod.solver = "EXACT"
 
 # ---------------------------------------------------------------- the STUDIO and the EXPORT
 def _tri_count(objs):
@@ -347,12 +447,8 @@ def _gravel():
     p.inputs["Roughness"].default_value = 0.92
     return m
 
-def _studio(centre, size, floor=0.0):
-    """A gravel floor, a summer sky, a low sun and a fill, a wood standing
-    round the clearing, and five cameras round `centre`, at distances in
-    proportion to the asset's `size` (m)."""
-    bpy.ops.mesh.primitive_plane_add(size=80, location=(centre[0], centre[1], floor - 0.001))
-    bpy.context.active_object.data.materials.append(_gravel())
+def _sky():
+    """A summer sky: pale at the horizon, deep blue overhead."""
     world = bpy.data.worlds.new("sky")
     scene.world = world
     try:
@@ -372,6 +468,15 @@ def _studio(centre, size, floor=0.0):
     nt.links.new(ramp.outputs["Color"], bg.inputs[0])
     bg.inputs[1].default_value = 1.0
     del grad
+    return world
+
+def _studio(centre, size, floor=0.0):
+    """A gravel floor, a summer sky, a low sun and a fill, a wood standing
+    round the clearing, and five cameras round `centre`, at distances in
+    proportion to the asset's `size` (m)."""
+    bpy.ops.mesh.primitive_plane_add(size=80, location=(centre[0], centre[1], floor - 0.001))
+    bpy.context.active_object.data.materials.append(_gravel())
+    _sky()
     # The wood: dark cones on a ring round the clearing, far enough out to
     # read as the edge of a forest stage and never as props beside the car.
     pine = mat("pine", (0.04, 0.09, 0.05), rough=0.9)
@@ -438,10 +543,27 @@ def _cycles(samples):
     scene.view_settings.view_transform = "AgX"
     scene.view_settings.look = "AgX - Medium High Contrast"
 
+def _weigh(o):
+    """Every vertex of a part to its own bone, wholly: rigid skinning — or,
+    for a part that bends (`weights`), to the bones its function names."""
+    fn = WEIGHTS.get(o.name)
+    if not fn:
+        vg = o.vertex_groups.new(name=o["bone"])
+        vg.add(range(len(o.data.vertices)), 1.0, "REPLACE")
+        return
+    groups = {}
+    for v in o.data.vertices:
+        for b, w in fn(v.co).items():
+            if b not in groups:
+                groups[b] = o.vertex_groups.get(b) or o.vertex_groups.new(name=b)
+            groups[b].add([v.index], w, "REPLACE")
+
 def _rig(root):
-    """The armature from `BONES`, and every part parented to the bone it
-    rides — rigidly, at rest, so the glTF carries each part as a mesh node
-    under its bone's node."""
+    """The armature from `BONES`; on the PARTS rig every part parented to the
+    bone it rides — rigidly, at rest, so the glTF carries each part as a mesh
+    node under its bone's node — and on the SKINNED rig every mesh skinned to
+    it, every linkage constrained to its target and its target written into
+    its extras."""
     arm_data = bpy.data.armatures.new("rig")
     arm = bpy.data.objects.new("rig", arm_data)
     COL.objects.link(arm)
@@ -452,6 +574,8 @@ def _rig(root):
         eb = arm_data.edit_bones.new(n)
         eb.head, eb.tail = b["head"], b["tail"]
         eb.use_deform = b["deform"]
+        if b.get("roll_to") is not None:
+            eb.align_roll(Vector(b["roll_to"]))
     for n, b in BONES.items():
         if b["parent"]:
             arm_data.edit_bones[n].parent = arm_data.edit_bones[b["parent"]]
@@ -462,22 +586,40 @@ def _rig(root):
         for holder in (pb, arm_data.bones[n]):
             for k, v in b.get("extras", {}).items():
                 holder[k] = v
-    bpy.context.view_layer.update()
-    for o in list(root.children):
-        if o.type != "MESH" or o is arm:
-            continue
-        world = o.matrix_world.copy()
-        o.parent = arm
-        o.parent_type = "BONE"
-        o.parent_bone = o["bone"]
+        if b.get("aim"):
+            for holder in (pb, arm_data.bones[n]):
+                holder["aim"] = b["aim"]
+                holder["stretch"] = 1 if b["stretch"] else 0
+            c = pb.constraints.new("STRETCH_TO" if b["stretch"] else "DAMPED_TRACK")
+            c.target, c.subtarget = arm, b["aim"]
+            if b["stretch"]:
+                c.volume = "NO_VOLUME"
+                c.rest_length = (Vector(b["tail"]) - Vector(b["head"])).length
+    if PARTS:
         bpy.context.view_layer.update()
-        o.matrix_world = world
+        for o in list(root.children):
+            if o.type != "MESH" or o is arm:
+                continue
+            world = o.matrix_world.copy()
+            o.parent = arm
+            o.parent_type = "BONE"
+            o.parent_bone = o["bone"]
+            bpy.context.view_layer.update()
+            o.matrix_world = world
+        return arm
+    for o in list(root.children):
+        if o.type == "MESH":
+            o.parent = arm
+            m = o.modifiers.new("skin", "ARMATURE")
+            m.object = arm
+            o.modifiers.move(len(o.modifiers) - 1, 0)
     return arm
 
 def _clips(arm):
     """Every registered clip keyed on its bones a frame at a time and laid on
-    an NLA track of its name — one glTF animation each. The rest pose is
-    left live for the stills."""
+    an NLA track of its name — one glTF animation each; on the SKINNED rig
+    baked with the linkages following. The rest pose is left live for the
+    stills."""
     if not CLIPS:
         return
     bpy.context.preferences.edit.keyframe_new_interpolation_type = "LINEAR"
@@ -488,25 +630,52 @@ def _clips(arm):
         n = round(seconds * FPS)
         act = bpy.data.actions.new(name)
         arm.animation_data.action = act
+        keyed = {}
         for f in range(n + 1):
-            for b_name, d in at(f / FPS).items():
+            pose = at(f / FPS)
+            for m_name, w in pose.pop("morph", {}).items():
+                ob = MORPHS[m_name][0]
+                kb = ob.data.shape_keys.key_blocks[MORPHS[m_name][1]]
+                kd = ob.data.shape_keys
+                if m_name not in keyed:
+                    kd.animation_data_create()
+                    kd.animation_data.action = bpy.data.actions.new(f"{name}_{m_name}")
+                    keyed[m_name] = kd
+                kb.value = w
+                kb.keyframe_insert("value", frame=f)
+            for b_name, d in pose.items():
                 pb = arm.pose.bones[b_name]
-                rest = arm.data.bones[b_name].matrix_local.to_3x3()
-                pb.location = rest.inverted() @ Vector((0, 0, d.get("lift", 0.0)))
-                pb.rotation_quaternion = Quaternion((0, 1, 0), d.get("turn", 0.0))
+                if "matrix" in d:
+                    pb.matrix = d["matrix"]
+                else:
+                    rest = arm.data.bones[b_name].matrix_local.to_3x3()
+                    pb.location = rest.inverted() @ Vector((0, 0, d.get("lift", 0.0)))
+                    pb.rotation_quaternion = Quaternion((0, 1, 0), d.get("turn", 0.0))
                 pb.keyframe_insert("location", frame=f)
                 pb.keyframe_insert("rotation_quaternion", frame=f)
-        track = arm.animation_data.nla_tracks.new()
-        track.name = name
-        track.strips.new(name, 0, act)
-        track.mute = True       # or it plays under the next clip's keys
-        arm.animation_data.action = None
+        if not PARTS:
+            scene.frame_start, scene.frame_end = 0, n
+            _select_only([arm])
+            bpy.ops.object.mode_set(mode="POSE")
+            bpy.ops.nla.bake(frame_start=0, frame_end=n, only_selected=False, visual_keying=True,
+                             clear_constraints=False, use_current_action=True, bake_types={"POSE"})
+            bpy.ops.object.mode_set(mode="OBJECT")
+        for holder in [arm.animation_data] + [k.animation_data for k in keyed.values()]:
+            track = holder.nla_tracks.new()
+            track.name = name
+            track.strips.new(name, 0, holder.action)
+            track.mute = True       # or it plays under the next clip's keys
+            holder.action = None
         for pb in arm.pose.bones:
             pb.location, pb.rotation_quaternion = (0, 0, 0), (1, 0, 0, 0)
+        for ob, key, _ in MORPHS.values():
+            ob.data.shape_keys.key_blocks[key].value = 0.0
         names.append(f"{name} {seconds:g}s")
-    arm.animation_data.use_nla = False     # the stills are of the car at rest
-    for track in arm.animation_data.nla_tracks:
-        track.mute = False
+    for holder in [arm.animation_data] + [ob.data.shape_keys.animation_data for ob, _, _ in MORPHS.values()
+                                          if ob.data.shape_keys.animation_data]:
+        holder.use_nla = False     # the stills are of the asset at rest
+        for track in holder.nla_tracks:
+            track.mute = False
     scene.frame_set(0)
     print("CLIPS", ", ".join(names))
 
@@ -534,14 +703,36 @@ def _join_parts(root):
         bm.to_mesh(o.data)
         bm.free()
 
-def finish(name, out, samples, centre, size, lods=(("lod1", 0.4), ("lod2", 0.14)), extras=None, floor=0.0,
+def _join_skinned(root):
+    """Every modifier baked in, then ONE skinned mesh (a morphed part keeps
+    its own mesh: a key would stop the join's modifiers being applied)."""
+    _select_only([o for o in root.children if o.type == "MESH"])
+    bpy.ops.object.convert(target="MESH")
+    counts = {}
+    for o in root.children:
+        counts[o["bone"]] = counts.get(o["bone"], 0) + _tri_count([o])
+    print("BONES", len(BONES), {k: v for k, v in sorted(counts.items(), key=lambda kv: -kv[1])[:6]})
+    for o in root.children:
+        _weigh(o)
+    joined = [o for o in root.children if o.type == "MESH" and o.name not in MORPHS]
+    _select_only(joined)
+    bpy.ops.object.join()
+    o = bpy.context.view_layer.objects.active
+    o.name = o.data.name = "machine"
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0005)
+    bm.to_mesh(o.data)
+    bm.free()
+
+def finish(name, out, samples, centre, size, lods=(("lod1", 0.35), ("lod2", 0.1)), extras=None, floor=0.0,
            studio_only=()):
     """Everything after the modelling: curves to meshes, the parts under one
-    root (carrying `extras`), one mesh a part in the game quality, the rig
-    and its clips, the studio, the renders, and — in the game quality — LOD0
-    and the decimated LODs exported as glTF, every count printed (`BONES`,
-    `PARTS`, `CLIPS`, `TRIANGLES`). `studio_only` objects are photographed
-    and never exported."""
+    root (carrying `extras`), the rig and its clips, the studio, the renders,
+    and — in the game quality — one mesh a part (the PARTS rig) or the parts
+    joined into one skinned mesh, LOD0 and the decimated LODs exported as
+    glTF, every count printed (`PARTS`, `BONES`, `CLIPS`, `TRIANGLES`).
+    `studio_only` objects are photographed and never exported."""
     curves = [o for o in COL.objects if o.type == "CURVE"]
     if curves:
         _select_only(curves)
@@ -554,11 +745,24 @@ def finish(name, out, samples, centre, size, lods=(("lod1", 0.4), ("lod2", 0.14)
     for o in list(COL.objects):
         if o is not root and o.parent is None and o.name not in keep_out:
             o.parent = root
-    if GAME:
-        _join_parts(root)
-        counts = {o.name: _tri_count([o]) for o in root.children if o.type == "MESH"}
-        print("PARTS", len(counts), {k: v for k, v in sorted(counts.items(), key=lambda kv: -kv[1])})
-    print("BONES", len(BONES))
+    if PARTS:
+        if GAME:
+            _join_parts(root)
+            counts = {o.name: _tri_count([o]) for o in root.children if o.type == "MESH"}
+            print("PARTS", len(counts), {k: v for k, v in sorted(counts.items(), key=lambda kv: -kv[1])})
+        print("BONES", len(BONES))
+    elif GAME:
+        _join_skinned(root)
+    else:
+        for o in root.children:
+            if o.type == "MESH":
+                _weigh(o)
+    if not PARTS:
+        for ob, key, coords in MORPHS.values():
+            ob.shape_key_add(name="Basis")
+            k = ob.shape_key_add(name=key)
+            for v, co in zip(k.data, coords):
+                v.co = co
     arm = _rig(root)
     _clips(arm)
     cams = _studio(centre, size, floor)
@@ -581,19 +785,28 @@ def finish(name, out, samples, centre, size, lods=(("lod1", 0.4), ("lod2", 0.14)
 
     def export(path):
         _select_only([root] + list(root.children_recursive))
-        bpy.ops.export_scene.gltf(filepath=path, use_selection=True, export_apply=True, export_extras=True,
-                                  export_skins=False, export_animations=True,
-                                  export_animation_mode="NLA_TRACKS", export_def_bones=False)
+        if PARTS:
+            bpy.ops.export_scene.gltf(filepath=path, use_selection=True, export_apply=True, export_extras=True,
+                                      export_skins=False, export_animations=True,
+                                      export_animation_mode="NLA_TRACKS", export_def_bones=False)
+        else:
+            bpy.ops.export_scene.gltf(filepath=path, use_selection=True, export_apply=True, export_extras=True,
+                                      export_skins=True, export_morph=True, export_animations=True,
+                                      export_animation_mode="NLA_TRACKS", export_def_bones=False)
 
     export(os.path.join(out, f"{name}-lod0.glb"))
     # The lower LODs are a blind decimation: fine at range, torn up close.
     for lod, ratio in lods:
-        for o in parts:
+        # A morphed part is left whole: a key forbids the decimation's apply.
+        thinned = [o for o in parts if o.name not in MORPHS]
+        for o in thinned:
             d = o.modifiers.new("lod", "DECIMATE")
             d.ratio = ratio
             d.use_collapse_triangulate = True
+            if not PARTS:
+                o.modifiers.move(len(o.modifiers) - 1, 0)   # before the skin, which the export leaves live
         print("TRIANGLES", tag, lod, _tri_count(parts))
         export(os.path.join(out, f"{name}-{lod}.glb"))
         render([v for v in ("chase", "three") if not only or v in only], "-" + lod)
-        for o in parts:
+        for o in thinned:
             o.modifiers.remove(o.modifiers["lod"])

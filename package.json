@@ -37,6 +37,8 @@
     "verge": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/verge-lab.mjs",
     "cars": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/car-preview.mjs",
     "items": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/item-preview.mjs",
+    "model-registry": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/model-registry.mjs",
+    "trees": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/trees-preview.mjs",
     "sky": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/sky-preview.mjs",
     "traffic": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/traffic-preview.mjs",
     "glyphs": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/glyph-preview.mjs",
@@ -79,6 +81,7 @@
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
+    "meshoptimizer": "^1.3.0",
     "prettier": "^3.9.9",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"

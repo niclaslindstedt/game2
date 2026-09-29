@@ -138,12 +138,13 @@ export function startRun(store: RunStore, actions: RunActions): (() => void) | u
     audio.setView(playCameraRef.current);
     audioRef.current = audio;
   });
-  // The modelled cars (`car-models.ts`) are fetched with it and in before a
-  // single car is built, so no car is drawn from the code while another is
-  // the model.
+  // The modelled cars (`car-models.ts`) and trees (`tree-models.ts`) are
+  // fetched with it and in before a single car or wood is built, so nothing
+  // is drawn from the code while its neighbour is the model.
   void Promise.all([
     import("./renderer.ts"),
     import("./car-models.ts").then(({ loadCarModels }) => loadCarModels()),
+    import("./tree-models.ts").then(({ loadTreeModels }) => loadTreeModels()),
   ]).then(([{ createRenderer }]) => {
     if (disposed) return;
     const renderer = createRenderer(canvas, optionsRef.current.video);

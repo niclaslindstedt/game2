@@ -9,6 +9,17 @@
 import * as THREE from "three";
 import type { Season } from "@engine";
 
+import {
+  limbEnd,
+  onTrunk,
+  type PartOpts,
+  type Point,
+  type TreeColour,
+  type TreePaint,
+  type TracedPart,
+  type TreePart,
+} from "./flora-trees.ts";
+
 // ── The taiga paint box ────────────────────────────────────────────────────
 /** Bare trunk brown. Exported as a NUMBER too: the breakage effects colour
  * their splinters with it, and they have no business importing a shared
@@ -165,6 +176,66 @@ export const CAIRN_LICHEN = new THREE.Color(0xa3a87a); // the green-grey crust o
 export const SILVER_WOOD = new THREE.Color(0xbfbab0); // an arolla dead for a century: bleached silver
 export const SILVER_WOOD_DARK = new THREE.Color(0x8f8b82);
 
+// ── The paint box by NAME ─────────────────────────────────────────────────
+/** Every colour a tree is painted with, by the name its row gives it
+ * (`flora-trees.ts`): the rows are three-free, and a recipe drawn off a row
+ * turns each name back into the one colour object the season table keys. */
+export const PAINT_BOX: Readonly<Record<TreeColour, THREE.Color>> = {
+  TRUNK,
+  TRUNK_DARK,
+  PINE_BARK,
+  BIRCH_BARK,
+  BIRCH_BAND,
+  ASPEN_BARK,
+  DEAD_WOOD,
+  CUT_WOOD,
+  SPRUCE,
+  SPRUCE_DARK,
+  SPRUCE_LIGHT,
+  PINE_CROWN,
+  FIR,
+  FIR_DARK,
+  LARCH,
+  BIRCH_LEAF,
+  ASPEN_LEAF,
+  WILLOW,
+  WILLOW_PALE,
+  ROWAN_LEAF,
+  ROWAN_BERRY,
+  OAK_LEAF,
+  MAPLE_LEAF,
+  WILLOW_BARK,
+  ALDER_LEAF,
+  ALDER_BARK,
+  DROWNED,
+  AROLLA,
+  AROLLA_DARK,
+  AROLLA_BARK,
+  SILVER_WOOD,
+  SILVER_WOOD_DARK,
+  SAGUARO,
+  SAGUARO_DARK,
+  SAGUARO_TIP,
+  SAGUARO_RIB,
+  ORGAN_PIPE,
+  ORGAN_PIPE_DARK,
+  JOSHUA_LEAF,
+  JOSHUA_BARK,
+  JOSHUA_DEAD,
+  MESQUITE_LEAF,
+  MESQUITE_BARK,
+  PALO_VERDE,
+  PALO_VERDE_LEAF,
+  IRONWOOD_BARK,
+  IRONWOOD_LEAF,
+  PINYON,
+};
+
+/** A row's paint as the builder takes it: one colour, or a pair. */
+export function paintOf(c: TreePaint): PartColor {
+  return typeof c === "string" ? PAINT_BOX[c] : [PAINT_BOX[c[0]], PAINT_BOX[c[1]]];
+}
+
 // ── The seasons ────────────────────────────────────────────────────────────
 // What a boreal forest actually does over a year, and — just as important —
 // what it does NOT do. The conifers are evergreen: a spruce in September is
@@ -313,46 +384,42 @@ export function floraPalette(season: Season): FloraPalette {
   return map;
 }
 
+/** An id hashed to 32 bits (FNV-1a): what picks a variant's shape and a
+ * plant's shade. */
+export function hashId(key: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+}
+
+/** The seed a variant's `shape`-th build draws its rolls from — the world's
+ * (`flora.ts`) and the Blender driver's, which models shape 0. */
+export function shapeSeed(id: string, shape: number): number {
+  return (hashId(`${id}#${shape}`) ^ 0x7f4a7c15) >>> 0;
+}
+
+/** Where one plant stands on a stage: the variant, the foot, the size and
+ * the turn. */
+export type FloraPlacement = {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  scale: number;
+  /** Spin around up, radians. */
+  spin: number;
+};
+
 /** A single tint, or a bottom→top pair blended along the part's own height
  * — a pine's trunk going from grey at the foot to orange up in the light is
  * one cylinder, not two that have to be lined up. */
 export type PartColor = THREE.Color | [THREE.Color, THREE.Color];
 
-export type PartOpts = {
-  x?: number;
-  /** The part's LIFT, applied after its rotation: where its own origin — a
-   * cone's or cylinder's base, a blob's centre — ends up. A tilted part
-   * therefore hinges on the point it grows from, which is what keeps a
-   * bough on its trunk: swung about the model's foot instead, a limb ten
-   * metres up moves metres sideways for a few degrees of lean and hangs in
-   * the air beside the tree. */
-  y?: number;
-  z?: number;
-  /** Spin around the part's own base, radians. */
-  ry?: number;
-  /** Lean from the base, radians — how trunks crook and blades splay.
-   * Positive `tiltZ` leans the top toward −x. */
-  tiltX?: number;
-  tiltZ?: number;
-  sx?: number;
-  sy?: number;
-  sz?: number;
-};
-
-export type Point = { x: number; y: number; z: number };
-
-/** Where a point at (x, y, 0) lands once its part has been swung round the
- * model's up axis by `angle` — the builder's `ry`, applied by hand for the
- * parts whose ends other parts have to find. */
-export function swung(x: number, y: number, angle: number): Point {
-  return { x: x * Math.cos(angle), y, z: -x * Math.sin(angle) };
-}
-
-/** Where a trunk leaning `lean` radians (the builder's `tiltZ`) actually IS
- * at `at` metres up it: the hinge for anything that grows out of it. */
-export function onTrunk(lean: number, at: number): Point {
-  return { x: -Math.sin(lean) * at, y: Math.cos(lean) * at, z: 0 };
-}
+// A part's placement, the point a part grows from, and where a swung or a
+// leaning part's end lands are the trees' rows' (`flora-trees.ts`, three-
+// free, so the Blender driver reads the same arithmetic); re-exported here
+// for every recipe that builds with them.
+export { limbEnd, onTrunk, swung, type PartOpts, type Point } from "./flora-trees.ts";
 
 /** A LIMB: a cylinder leaning `tilt` radians off vertical toward +x, hinged
  * at `at` — a height on the model's own axis, or a point off it (where a
@@ -378,8 +445,7 @@ export function limb(
   geo.rotateY(angle);
   geo.translate(hinge.x, hinge.y, hinge.z);
   b.add(geo, color);
-  const end = swung(Math.sin(tilt) * len, Math.cos(tilt) * len, angle);
-  return { x: hinge.x + end.x, y: hinge.y + end.y, z: hinge.z + end.z };
+  return limbEnd(hinge, tilt, angle, len);
 }
 
 /** A FLUTED cylinder: a column whose cross-section alternates rib and
@@ -418,6 +484,7 @@ export function flutedGeo(
   }
   geo.computeVertexNormals();
   geo.translate(0, h / 2, 0);
+  geo.userData.ribs = ribs;
   return geo;
 }
 
@@ -442,8 +509,58 @@ export function ribLimb(
   geo.rotateY(angle);
   geo.translate(hinge.x, hinge.y, hinge.z);
   b.add(geo, color);
-  const end = swung(Math.sin(tilt) * len, Math.cos(tilt) * len, angle);
-  return { x: hinge.x + end.x, y: hinge.y + end.y, z: hinge.z + end.z };
+  return limbEnd(hinge, tilt, angle, len);
+}
+
+/** A branch broken back to a stub, hinged on the trunk: the box is turned
+ * about its own inner end first and carried out to where the trunk's axis
+ * actually is at that height (`onTrunk`), whatever the trunk's `lean`.
+ * `length` is signed — negative points the stub the other way round the
+ * trunk — and `swing` turns it round the trunk. */
+export function branchStub(
+  b: GeoBuilder,
+  color: THREE.Color,
+  length: number,
+  thick: number,
+  at: number,
+  angle: number,
+  lean = 0,
+  swing = 0,
+): void {
+  const geo = new THREE.BoxGeometry(Math.abs(length), thick, thick);
+  geo.translate(length / 2, 0, 0);
+  geo.rotateZ(angle);
+  geo.rotateY(swing);
+  const hinge = onTrunk(lean, at);
+  geo.translate(hinge.x, hinge.y, hinge.z);
+  b.add(geo, color);
+}
+
+/** A recipe that is a list of the builder's own calls (a row's `parts`),
+ * drawn in order. */
+export function replayParts(b: GeoBuilder, parts: readonly TreePart[]): void {
+  for (const p of parts) {
+    switch (p.op) {
+      case "cyl":
+        b.cyl(paintOf(p.c), p.rTop, p.rBot, p.h, p.y, p.o, p.seg);
+        break;
+      case "cone":
+        b.cone(paintOf(p.c), p.r, p.h, p.y, p.o, p.seg);
+        break;
+      case "blob":
+        b.blob(PAINT_BOX[p.c], p.r, p.x, p.y, p.z, p.o);
+        break;
+      case "limb":
+        limb(b, paintOf(p.c), p.rTop, p.rBot, p.len, p.at, p.tilt, p.angle, p.seg);
+        break;
+      case "stub":
+        branchStub(b, PAINT_BOX[p.c], p.length, p.thick, p.at, p.angle, p.lean, p.swing);
+        break;
+      case "ribbed":
+        b.ribbed(paintOf(p.c), p.rTop, p.rBot, p.h, p.y, p.o, p.ribs);
+        break;
+    }
+  }
 }
 
 /** Accumulates transformed primitives into one non-indexed vertex-colored
@@ -461,10 +578,13 @@ export class GeoBuilder {
   /** `palette` is the season's, applied as each part goes in: the species
    * recipes name the summer colour they mean and the year does the rest,
    * so nothing in the roster has to know what month it is. */
-  constructor(
-    private readonly rand: () => number,
-    private readonly palette: FloraPalette = new Map(),
-  ) {}
+  private readonly rand: () => number;
+  private readonly palette: FloraPalette;
+
+  constructor(rand: () => number, palette: FloraPalette = new Map()) {
+    this.rand = rand;
+    this.palette = palette;
+  }
 
   /** A seeded roll, 0–1, for a recipe that varies its SHAPE between builds
    * — which tier leans which way, where a bough grows. The same stream
@@ -483,7 +603,13 @@ export class GeoBuilder {
   /** Merge `geo` in (and dispose it). The part is scaled, then turned
    * about the model origin, then lifted by `o.x/y/z` — so a primitive
    * built standing on the origin pivots on its own base. */
+  /** THE SKELETON, when a list is handed in (the Blender driver's,
+   * `scripts/lib/tree-model-data.mjs`): every part added is written into it
+   * as well, by the name each colour has in `names`. Drawing is untouched. */
+  trace: { parts: TracedPart[]; names: ReadonlyMap<THREE.Color, string> } | null = null;
+
   add(geo: THREE.BufferGeometry, color: PartColor, o: PartOpts = {}): void {
+    if (this.trace) this.traced(geo, color, o);
     const tint = Array.isArray(color)
       ? ([this.inSeason(color[0]), this.inSeason(color[1])] as [THREE.Color, THREE.Color])
       : this.inSeason(color);
@@ -525,6 +651,86 @@ export class GeoBuilder {
     }
     src.dispose();
     geo.dispose();
+  }
+
+  /** Write one part into the skeleton: a tube's or a cone's base and top
+   * off its first two rings of vertices (three.js lays a cylinder top ring
+   * first), a clump off its bounds, a stub off its two end faces — each
+   * carried through the placement exactly as `add` carries the drawing. */
+  private traced(geo: THREE.BufferGeometry, color: PartColor, o: PartOpts): void {
+    const { parts, names } = this.trace as NonNullable<GeoBuilder["trace"]>;
+    const name = (c: THREE.Color): string => {
+      const n = names.get(c);
+      if (!n) throw new Error("a tree is painted with a colour the paint box does not name");
+      return n;
+    };
+    const paint = (
+      Array.isArray(color) ? [name(color[0]), name(color[1])] : name(color)
+    ) as TracedPart["paint"];
+    this.e.set(o.tiltX ?? 0, o.ry ?? 0, o.tiltZ ?? 0);
+    this.q.setFromEuler(this.e);
+    const m = new THREE.Matrix4().compose(
+      new THREE.Vector3(o.x ?? 0, o.y ?? 0, o.z ?? 0),
+      this.q,
+      new THREE.Vector3(o.sx ?? 1, o.sy ?? 1, o.sz ?? 1),
+    );
+    const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+    const at = (i: number): THREE.Vector3 =>
+      new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(m);
+    const mean = (from: number, n: number): THREE.Vector3 => {
+      const c = new THREE.Vector3();
+      for (let i = 0; i < n; i++) c.add(at(from + i));
+      return c.divideScalar(n);
+    };
+    const xyz = (v: THREE.Vector3): [number, number, number] => [v.x, v.y, v.z];
+    const type = geo.type;
+    if (type === "CylinderGeometry" || type === "ConeGeometry") {
+      const seg = (geo as THREE.CylinderGeometry).parameters.radialSegments;
+      const top = mean(0, seg);
+      const bottom = mean(seg + 1, seg);
+      const r1 = at(0).distanceTo(top);
+      const r0 = at(seg + 1).distanceTo(bottom);
+      const ribs = geo.userData.ribs as number | undefined;
+      parts.push({
+        shape: ribs ? "fluted" : type === "ConeGeometry" ? "cone" : "tube",
+        paint,
+        a: xyz(bottom),
+        b: xyz(top),
+        r0,
+        r1,
+        seg,
+        ...(ribs ? { ribs } : {}),
+      });
+    } else if (type === "BoxGeometry") {
+      // Six faces of four, +x first: the bar's two ends.
+      const end = mean(0, 4);
+      const other = mean(4, 4);
+      const thick = at(0).distanceTo(at(1));
+      parts.push({
+        shape: "stub",
+        paint,
+        a: xyz(other),
+        b: xyz(end),
+        r0: thick,
+        r1: thick,
+        seg: 4,
+      });
+    } else {
+      const box = new THREE.Box3();
+      for (let i = 0; i < pos.count; i++) box.expandByPoint(at(i));
+      const c = box.getCenter(new THREE.Vector3());
+      const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+      parts.push({
+        shape: type === "PlaneGeometry" ? "blade" : "clump",
+        paint,
+        a: xyz(c),
+        b: xyz(c),
+        r0: Math.max(half.x, half.z),
+        r1: half.y,
+        seg: 0,
+        radii: xyz(half),
+      });
+    }
   }
 
   /** A cone standing on its base at local y = `baseY`, and tilting ABOUT

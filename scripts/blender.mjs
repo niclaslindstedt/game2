@@ -11,7 +11,9 @@
 // (`bumperPlan`, `spoilerPieces`, `mirrorPlan`, …), the wheel's shape and
 // the numbers the game poses it by — as one JSON file, and a builder under
 // `scripts/blender/` models the asset from them in the car's own body
-// frame. Nothing it writes is committed: every output lands in the
+// frame — and for a tree, every variant's row and the skeleton the code's
+// own builder lays for it (`scripts/lib/tree-model-data.mjs`). Nothing it
+// writes is committed: every output lands in the
 // gitignored `previews/`. The `blender-assets` skill owns the loop, and
 // says how a new KIND is added: a row in `KINDS` and a builder beside
 // `car.py`.
@@ -20,6 +22,8 @@
 //   node scripts/blender.mjs --id classic --quality game
 //   node scripts/blender.mjs --id all --quality game --views none
 //   node scripts/blender.mjs --quality render --views three,rear3 --samples 24
+//   node scripts/blender.mjs --kind tree --id birch --quality render --views row --samples 16
+//   node scripts/blender.mjs --kind tree --id all --quality game --views none
 //
 // Blender is looked for at `BLENDER`, then the macOS app, then `blender` on
 // the PATH. It is run with `--python-use-system-env` and
@@ -29,7 +33,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
@@ -47,16 +51,27 @@ const KINDS = {
     builder: "car.py",
     fallback: "compact",
   },
+  // A KIND of tree: every variant's row (the numbers the code's recipe
+  // draws with) and its skeleton, laid by the code's own builder, and — for
+  // the stills alone — the summer colours it is painted in. The game dresses
+  // a model by its materials' names, so the glTF carries no colour.
+  tree: {
+    ids: async () => [...(await import("../pwa/src/game/flora-trees.ts")).TREE_KINDS],
+    data: async (id) => (await import("./lib/tree-model-data.mjs")).treeModelData(id),
+    builder: "tree.py",
+    fallback: "spruce",
+  },
 };
 
 const USAGE =
-  "usage: node scripts/blender.mjs [--kind car] [--id compact|all] [--quality render|game|both]\n" +
-  "                                [--views side,three,rear3,chase,detail|none] [--samples n] [--out dir]";
+  "usage: node scripts/blender.mjs [--kind car|tree] [--id compact|spruce|all] [--quality render|game|both]\n" +
+  "                                [--views side,three,rear3,chase,detail|row,far,close|none] [--samples n] [--out dir]";
 const FLAGS = {
-  kind: "the kind of asset (car)",
-  id: "which one (a car's catalog id), or all; the kind's default when left out",
+  kind: "the kind of asset (car, tree)",
+  id: "which one (a car's catalog id, a kind of tree), or all; the kind's default when left out",
   quality: "render (studio stills, subdivided twice), game (the budget and its LODs), or both",
-  views: "only these cameras (side,three,rear3,chase,detail), or none; every one when left out",
+  views:
+    "only these cameras (a car's side,three,rear3,chase,detail; a tree's row,far,close), or none; every one when left out",
   samples: "Cycles samples a still (default 24)",
   out: "where everything is written (default previews/blender)",
 };
@@ -106,7 +121,7 @@ if (unknown) {
   process.exit(2);
 }
 
-const outDir = join(root, args.out);
+const outDir = resolve(root, args.out);
 mkdirSync(outDir, { recursive: true });
 
 const blender =

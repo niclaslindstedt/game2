@@ -36,15 +36,16 @@ import {
   LARCH,
   MUGO,
   MUGO_STEM,
-  SILVER_WOOD,
-  SILVER_WOOD_DARK,
   TRUNK,
   TRUNK_DARK,
   limb,
   onTrunk,
   swung,
   type Point,
+  replayParts,
 } from "./flora-build.ts";
+import { TREE_ROW } from "./flora-tree-rows.ts";
+import type { TreeRow } from "./flora-trees.ts";
 import type { VariantDef } from "./flora-species.ts";
 
 // ── Shared silhouettes ─────────────────────────────────────────────────────
@@ -194,53 +195,45 @@ function flower(
 
 // ── The variant roster ─────────────────────────────────────────────────────
 
+/** Draw a tree off its row (`flora-trees.ts`) with this roster's recipes —
+ * or, for a row that is a list of the builder's calls, those calls. */
+function drawAlpine(b: GeoBuilder, r: TreeRow): void {
+  switch (r.form) {
+    case "arolla":
+      return arolla(b, r.h, r.spread, r.limbs, r.lean);
+    case "flagLarch":
+      return flagLarch(b, r.h, r.lean);
+    case "parts":
+      return replayParts(b, r.parts);
+    default:
+      throw new Error(`the alpine has no recipe for a ${r.form} (${r.id})`);
+  }
+}
+
+/** A tree variant, drawn off its row. */
+const tree = (id: string): VariantDef => {
+  const r = TREE_ROW[id];
+  return { build: (b) => drawAlpine(b, r) };
+};
+
 export const ALPINE_VARIANTS: Record<string, VariantDef> = {
   // The stone pines — SOLID trunks the engine places. Authored at the
   // height a mature one stands on a treeline (twelve to eighteen metres;
   // the engine's per-trunk scale spreads a stand round that).
-  arolla: { build: (b) => arolla(b, 14, 3.4, 5, 0.03) },
+  arolla: tree("arolla"),
   /** The old one: broader than it is tall wants to be, the boughs heavier
    * and the top gone to several heads. Four or five hundred years old. */
-  arollaOld: { build: (b) => arolla(b, 17, 4.6, 7, 0.05) },
+  arollaOld: tree("arollaOld"),
   /** A young cembra: a dense dark egg on a stub of trunk, which is what a
    * stone pine is for its first fifty years. */
-  arollaYoung: {
-    build: (b) => {
-      b.cyl(AROLLA_BARK, 0.09, 0.15, 2.2, 0, {}, 6);
-      b.blob(AROLLA_DARK, 1.2, 0, 2.4, 0, { sy: 1.1 });
-      b.blob(AROLLA, 1, 0.3, 3.6, 0.2, { sy: 1.2 });
-      b.blob(AROLLA, 0.75, -0.25, 4.7, -0.2, { sy: 1.3 });
-      b.blob(AROLLA, 0.4, 0, 5.6, 0, { sy: 1.4 });
-    },
-  },
+  arollaYoung: tree("arollaYoung"),
   /** What an arolla leaves when it dies standing: the wood is so resinous
    * it stands for a century after, bleached silver, twisted, the boughs
    * broken back to thick stubs. Solid — it is a post of hardwood. */
-  deadArolla: {
-    build: (b) => {
-      const LEAN = 0.07;
-      const R = 0.5;
-      b.cyl(SILVER_WOOD, R * 0.18, R, 9, 0, { tiltZ: LEAN }, 6);
-      // The bark's last plates still clinging to the foot.
-      b.cyl(AROLLA_BARK, R * 0.9, R * 1.04, 1.6, 0, { tiltZ: LEAN }, 6);
-      const stubs: [at: number, len: number, tilt: number, angle: number][] = [
-        [3.8, 2.2, 1.25, 0.5],
-        [5.2, 1.6, 0.95, 2.6],
-        [6.4, 1.9, 1.1, 4.3],
-        [7.6, 1.1, 0.7, 1.7],
-      ];
-      for (const [at, len, tilt, angle] of stubs) {
-        limb(b, SILVER_WOOD_DARK, R * 0.1, R * 0.28, len, onTrunk(LEAN, at), tilt, angle, 5);
-      }
-      // The top, splintered where the leader broke out.
-      const top = onTrunk(LEAN, 8.9);
-      b.cone(SILVER_WOOD_DARK, R * 0.16, 1.2, top.y, { x: top.x + R * 0.05, tiltZ: 0.2 }, 4);
-      b.cone(SILVER_WOOD, R * 0.1, 0.8, top.y, { x: top.x - R * 0.1, tiltZ: -0.3 }, 4);
-    },
-  },
+  deadArolla: tree("deadArolla"),
   /** The treeline larch, flagged downwind. Solid — the trunk is a trunk
    * however the crown grew. */
-  larchAlpine: { build: (b) => flagLarch(b, 12, 0.12) },
+  larchAlpine: tree("larchAlpine"),
 
   // The krummholz and the scrub — all of it SOFT: a mountain pine is two
   // metres of springy stems lying on the ground, and a rally car goes over

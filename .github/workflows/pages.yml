@@ -157,8 +157,9 @@ jobs:
           # worker scope; it must disown their navigations (pwa-plugin.ts
           # `ignorePaths`) so each channel's own worker serves its pages.
           VITE_PWA_IGNORE_PATHS: ${{ matrix.slot == 'root' && '/preview/,/branch/' || '' }}
-          # The modelled cars' switch (`make ci-models`): on unless set to 0.
+          # The modelled cars' and trees' switches (`make ci-models`): on unless set to 0.
           VITE_MODEL_CARS: ${{ secrets.VITE_MODEL_CARS }}
+          VITE_MODEL_TREES: ${{ secrets.VITE_MODEL_TREES }}
 
       - name: Upload the ${{ matrix.slot }} slot
         uses: actions/upload-artifact@v7

@@ -81,14 +81,17 @@ export default defineConfig(({ mode }) => ({
   // `preact/compat`, so the pre-built framework chunks resolve to Preact.
   //
   // `carModels` comes before `appPwa`, so the models it emits are in the
-  // bundle the worker's precache list is read off. The MODEL switch is on
-  // unless the environment or the root `.env` turns it back
-  // (`src/game/model-switch.ts`).
+  // bundle the worker's precache list is read off. The MODEL switches (the
+  // cars', the trees') are on unless the environment or the root `.env`
+  // turns one back (`src/game/model-switch.ts`).
   plugins: [
     preact(),
     tailwindcss(),
     carModels(
-      { cars: modelSwitch({ ...loadEnv(mode, envDir, "VITE_"), ...process.env }.VITE_MODEL_CARS) },
+      {
+        cars: modelSwitch({ ...loadEnv(mode, envDir, "VITE_"), ...process.env }.VITE_MODEL_CARS),
+        trees: modelSwitch({ ...loadEnv(mode, envDir, "VITE_"), ...process.env }.VITE_MODEL_TREES),
+      },
       here(".."),
     ),
     appPwa({ base, version, ignorePaths, shell: shellBuild }),
