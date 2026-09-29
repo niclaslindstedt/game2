@@ -17,6 +17,7 @@ make test         # vitest over the engine (SHARD=i/N slices it; CI runs ten)
 make lint         # eslint + typecheck, zero warnings
 make fmt          # prettier in place; fmt-check is what CI runs
 make hooks        # install pre-commit + commit-msg hooks
+make licences     # every dependency's licence against the fleet's allow-list (CI gate)
 make icons        # regenerate icons/favicon/og.png AND native/assets/ from the app mark
 ```
 
