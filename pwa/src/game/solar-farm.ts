@@ -17,13 +17,16 @@ import * as THREE from "three";
 import { createRng, solarTables, STAGE_RULES, type SolarFarm, type Track } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
 import { box } from "./house.ts";
+import { dressOf, propModel } from "./prop-models.ts";
 import type { GroundBeside } from "./road-mesh.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture } from "./textures.ts";
 
 const S = STAGE_RULES.energy.solar;
 
-const TINT = {
+/** Every colour a farm is built in, by ROLE — the names a model's faces
+ * carry (`prop-models.ts`). */
+export const SOLAR_TINT = {
   panel: new THREE.Color(0x101c34),
   panelEdge: new THREE.Color(0x1c2d4f),
   frame: new THREE.Color(0xb8bcc2),
@@ -34,6 +37,7 @@ const TINT = {
   cabinRoof: new THREE.Color(0x8a8e92),
   cabinDoor: new THREE.Color(0x3f444a),
 };
+const TINT = SOLAR_TINT;
 
 /** A table: how high its low edge and its high edge stand off the ground
  * (the tilt is the engine's), how thick the panel is, and the legs. */
@@ -112,7 +116,8 @@ export function buildSolarFarm(track: Track, farm: SolarFarm, beside: GroundBesi
   // The tables, instanced: each turned to its row and footed at its own
   // middle, so a field on a gentle slope steps down it table by table.
   const tables = solarTables(farm);
-  const mesh = new THREE.InstancedMesh(tableGeometry(rand), farmMaterial(), tables.length);
+  const table = propModel("energy", "solarTable", dressOf(SOLAR_TINT)) ?? tableGeometry(rand);
+  const mesh = new THREE.InstancedMesh(table, farmMaterial(), tables.length);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
@@ -163,12 +168,13 @@ export function buildSolarFarm(track: Track, farm: SolarFarm, beside: GroundBesi
       b.add(wire, TINT.wire);
     }
   }
+  group.add(new THREE.Mesh(b.build(), farmMaterial()));
+  // The cabin, a mesh of its own: it keeps its roof and its door.
   if (farm.cabin) {
-    const cabin = cabinGeometry(rand);
+    const cabin = propModel("energy", "solarCabin", dressOf(SOLAR_TINT)) ?? cabinGeometry(rand);
     cabin.rotateY(farm.cabin.heading);
     cabin.translate(farm.cabin.x, beside.heightAt(farm.cabin.x, farm.cabin.z), farm.cabin.z);
-    b.add(cabin, TINT.cabin);
+    group.add(new THREE.Mesh(cabin, farmMaterial()));
   }
-  group.add(new THREE.Mesh(b.build(), farmMaterial()));
   return group;
 }

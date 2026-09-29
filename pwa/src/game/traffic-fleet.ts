@@ -18,11 +18,14 @@
 import * as THREE from "three";
 import type { TrafficModel } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
+import { dressOf, propModel } from "./prop-models.ts";
 import { LIVERY_COUNT, liveryFor } from "./car-livery.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture } from "./textures.ts";
 
-const TINT = {
+/** Every colour a vehicle is built in but its paint, by ROLE — the names a
+ * model's faces carry (`prop-models.ts`). */
+export const TRAFFIC_TINT = {
   glass: new THREE.Color(0x232c36),
   tyre: new THREE.Color(0x1a1b1d),
   hub: new THREE.Color(0x9a9ea3),
@@ -44,6 +47,7 @@ const TINT = {
   camperStripe: new THREE.Color(0xb8722f),
   roof: new THREE.Color(0xdedcd6),
 };
+const TINT = TRAFFIC_TINT;
 
 /** The paints a body kind is sold in. Cars take the field's palette half
  * the time, like a yard car; working vehicles take fleet colours. */
@@ -80,16 +84,26 @@ export function trafficPaint(model: TrafficModel, roll: number): number {
   return Math.floor(r() * palette.length);
 }
 
-function paintColor(model: TrafficModel, paint: number): THREE.Color {
-  if (paint >= 100) return new THREE.Color(liveryFor(paint - 100).paint);
+/** One colour object a paint: the same instance every time it is asked
+ * for, which is what lets the driver name a vehicle's painted faces by
+ * the colour they were built in. */
+const paints = new Map<string, THREE.Color>();
+
+/** A vehicle's paint colour (`trafficPaint`'s index made colour). */
+export function trafficPaintColor(model: TrafficModel, paint: number): THREE.Color {
   const palette =
     model.body === "bus"
       ? BUS
       : ["hatch", "saloon", "estate", "suv", "pickup"].includes(model.body)
         ? PLAIN
         : WORK;
-  return new THREE.Color(palette[paint % palette.length]);
+  const hex = paint >= 100 ? liveryFor(paint - 100).paint : palette[paint % palette.length];
+  const key = String(hex);
+  let c = paints.get(key);
+  if (!c) paints.set(key, (c = new THREE.Color(hex)));
+  return c;
 }
+const paintColor = trafficPaintColor;
 
 function box(
   b: GeoBuilder,
@@ -481,11 +495,24 @@ export function trafficVehicleGeometry(
   return b.build();
 }
 
+/** A vehicle's geometry as the game draws it: its model, dressed in its
+ * paint and the fleet's tints, or the code's. */
+export function vehicleGeometry(
+  m: TrafficModel,
+  paint: number,
+  rand: () => number,
+): THREE.BufferGeometry {
+  return (
+    propModel("traffic", m.id, dressOf(TRAFFIC_TINT, trafficPaintColor(m, paint))) ??
+    trafficVehicleGeometry(m, paint, rand)
+  );
+}
+
 /** A vehicle as a mesh, wheels on local y = 0, nose along +z. */
 export function buildTrafficVehicle(
   m: TrafficModel,
   paint: number,
   rand: () => number,
 ): THREE.Mesh {
-  return new THREE.Mesh(trafficVehicleGeometry(m, paint, rand), fleetMaterial());
+  return new THREE.Mesh(vehicleGeometry(m, paint, rand), fleetMaterial());
 }

@@ -21,17 +21,31 @@
 //   ... item-preview.mjs --items boulder --turntable 8 --elev 12
 //     # eight seats round one stone, twelve degrees up: the rotate loop
 //   ... item-preview.mjs --season autumn --group flora
+//   ... item-preview.mjs --group flora --models --from previews/blender
+//     # the MODELLED plants a make blender run made, in the code's place
 //
 // The harness bundle is rebuilt only when a source it is built from has
 // changed, so the loop this tool exists for — edit a builder, look, edit
 // again — pays for the bundler once. `--rebuild` forces one anyway.
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 import { Buffer } from "node:buffer";
+
+import { FLORA_KINDS, floraModelFile } from "../pwa/src/game/flora-trees.ts";
+import { PROP_KIND_LIST, propModelFile } from "../pwa/src/game/prop-kinds.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const buildDir = join(root, "previews", ".item-preview");
@@ -53,6 +67,11 @@ if (turntable !== null && !(turntable > 0)) {
   throw new Error(`--turntable takes a count of seats, got ${flag("turntable")}`);
 }
 const season = flag("season") ?? "summer";
+// With --models the page draws the MODELLED things (the flora's models
+// today) in place of the code's: the committed ones, or a `make blender`
+// run's out of --from. They go beside the page, where the loaders fetch
+// them from.
+const models = has("models") ? (flag("from") ?? "pwa/models") : "";
 if (!["spring", "summer", "autumn"].includes(season)) {
   throw new Error(`--season is spring, summer or autumn; got ${season}`);
 }
@@ -74,6 +93,7 @@ const config = {
   car: flag("car") ?? "compact",
   cell: { w: Number(cellArg[0]), h: Number(cellArg[1] ?? cellArg[0]) },
   list: listing,
+  models: !!models,
 };
 
 /** What the bundle is built FROM, as one string: every source file's path,
@@ -127,12 +147,37 @@ if (!fresh) {
   writeFileSync(stampFile, stamp);
 }
 writeFileSync(join(buildDir, "items.json"), JSON.stringify(config));
+if (models) {
+  const into = join(buildDir, "models");
+  rmSync(into, { recursive: true, force: true });
+  // The committed models keep their folders (`trees/`, `flora/`); a lab
+  // run's sit in one, and each is filed where its loader asks.
+  const from = join(root, models);
+  const lab = !existsSync(join(from, "trees"));
+  for (const dir of lab ? [from] : ["trees", "flora", "props"].map((d) => join(from, d))) {
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir)) {
+      const kind = /^([a-z]+)\.glb$/.exec(f)?.[1];
+      if (!kind) continue;
+      const file = FLORA_KINDS.includes(kind)
+        ? floraModelFile(kind)
+        : PROP_KIND_LIST.includes(kind)
+          ? propModelFile(kind)
+          : null;
+      if (!file) continue;
+      const to = join(into, file);
+      mkdirSync(dirname(to), { recursive: true });
+      copyFileSync(join(dir, f), to);
+    }
+  }
+}
 
 const MIME = {
   ".html": "text/html",
   ".js": "text/javascript",
   ".css": "text/css",
   ".json": "application/json",
+  ".glb": "model/gltf-binary",
 };
 
 const server = createServer(async (req, res) => {

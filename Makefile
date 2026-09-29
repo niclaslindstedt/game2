@@ -275,33 +275,36 @@ rate:
 # previews/blender/compact-lod0.glb"` sets a model beside the code-built car,
 # `make trees ARGS="--models --from previews/blender --compare"` a tree's.
 # Needs Blender (BLENDER= its executable). ID=classic (or all) picks the car;
-# KIND=tree ID=spruce (or all) a kind of tree;
+# KIND=tree ID=spruce (or all) a kind of tree or plant (ID=grass); KIND=prop
+# ID=traffic (or all) a kind of prop;
 # ARGS="--quality game --views none", or "--quality render --views three".
 blender:
 	npm run blender -- $(if $(KIND),--kind $(KIND),) $(if $(ID),--id $(ID),) $(ARGS)
 
-# The models the game ships: every car and every kind of tree at game
-# quality (no stills), made by Blender and published into the COMMITTED
-# pwa/models/ with a stamp of their sources (the trees packed, and stamped
-# apart) — tests/models_test.ts fails when a model is older than what it is
-# made from. Needs Blender. SET=trees (or SET=cars) makes and publishes that
-# half alone. A build draws them unless switched back (VITE_MODEL_CARS=0,
-# VITE_MODEL_TREES=0).
+# The models the game ships: every car, every kind of tree and plant, and
+# every kind of prop at game quality (no stills), made by Blender and
+# published into the COMMITTED pwa/models/ with a stamp of their sources
+# (the flora and the props packed, each set stamped apart) —
+# tests/models_test.ts fails when a model is older than what it is made
+# from. Needs Blender. SET=trees (or SET=cars, SET=props) makes and
+# publishes that set alone. A build draws them unless switched back
+# (VITE_MODEL_CARS=0, VITE_MODEL_TREES=0, VITE_MODEL_PROPS=0).
 models:
-	$(if $(filter trees,$(SET)),,npm run blender -- --id all --quality game --views none)
-	$(if $(filter cars,$(SET)),,npm run blender -- --kind tree --id all --quality game --views none)
+	$(if $(SET),$(if $(filter cars,$(SET)),npm run blender -- --id all --quality game --views none,),npm run blender -- --id all --quality game --views none)
+	$(if $(SET),$(if $(filter trees,$(SET)),npm run blender -- --kind tree --id all --quality game --views none,),npm run blender -- --kind tree --id all --quality game --views none)
+	$(if $(SET),$(if $(filter props,$(SET)),npm run blender -- --kind prop --id all --quality game --views none,),npm run blender -- --kind prop --id all --quality game --views none)
 	node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/models.mjs \
 		$(if $(SET),--set $(SET),)
 
 # Switch the models on or off for every CI build — the repository SECRETS the
 # workflows hand the build (needs gh, and the right to set them): `make
-# ci-models MODELS=off` builds the code-built cars and trees on the next
-# deploy with no commit; MODELS=on (or deleting the secrets) puts the models
-# back.
+# ci-models MODELS=off` builds the code-built cars, flora and props on the
+# next deploy with no commit; MODELS=on (or deleting the secrets) puts the
+# models back.
 ci-models:
 	@case "$(MODELS)" in \
-	  off) gh secret set VITE_MODEL_CARS --body 0 && gh secret set VITE_MODEL_TREES --body 0 ;; \
-	  on) gh secret set VITE_MODEL_CARS --body 1 && gh secret set VITE_MODEL_TREES --body 1 ;; \
+	  off) gh secret set VITE_MODEL_CARS --body 0 && gh secret set VITE_MODEL_TREES --body 0 && gh secret set VITE_MODEL_PROPS --body 0 ;; \
+	  on) gh secret set VITE_MODEL_CARS --body 1 && gh secret set VITE_MODEL_TREES --body 1 && gh secret set VITE_MODEL_PROPS --body 1 ;; \
 	  *) echo "usage: make ci-models MODELS=on|off" >&2; exit 2 ;; \
 	esac
 

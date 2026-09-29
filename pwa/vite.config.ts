@@ -82,8 +82,8 @@ export default defineConfig(({ mode }) => ({
   //
   // `carModels` comes before `appPwa`, so the models it emits are in the
   // bundle the worker's precache list is read off. The MODEL switches (the
-  // cars', the trees') are on unless the environment or the root `.env`
-  // turns one back (`src/game/model-switch.ts`).
+  // cars', the trees' and plants', the props') are on unless the
+  // environment or the root `.env` turns one back (`src/game/model-switch.ts`).
   plugins: [
     preact(),
     tailwindcss(),
@@ -91,6 +91,7 @@ export default defineConfig(({ mode }) => ({
       {
         cars: modelSwitch({ ...loadEnv(mode, envDir, "VITE_"), ...process.env }.VITE_MODEL_CARS),
         trees: modelSwitch({ ...loadEnv(mode, envDir, "VITE_"), ...process.env }.VITE_MODEL_TREES),
+        props: modelSwitch({ ...loadEnv(mode, envDir, "VITE_"), ...process.env }.VITE_MODEL_PROPS),
       },
       here(".."),
     ),

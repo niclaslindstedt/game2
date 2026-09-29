@@ -28,6 +28,8 @@ import { findChromium } from "@niclaslindstedt/oss-game-framework/tooling/chromi
 import { parseArgs } from "@niclaslindstedt/oss-game-framework/tooling/cli";
 import { serveDir } from "@niclaslindstedt/oss-game-framework/tooling/serve-dist";
 
+import { FLORA_KINDS, floraModelFile } from "../pwa/src/game/flora-trees.ts";
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const buildDir = join(root, "previews", ".trees-preview");
 const outDir = join(root, "previews");
@@ -81,10 +83,20 @@ if (!args["skip-build"] || !existsSync(join(buildDir, "trees-preview.html"))) {
 // The models go beside the page, where the harness fetches them from.
 const models = args.models ? args.from : "";
 if (models) {
-  const into = join(buildDir, "models", "trees");
-  mkdirSync(into, { recursive: true });
-  for (const f of readdirSync(join(root, models))) {
-    if (/^[a-z]+\.glb$/.test(f)) copyFileSync(join(root, models, f), join(into, f));
+  // The committed models sit in two folders (`pwa/models/trees/`,
+  // `pwa/models/flora/`), a lab run's all in one: each kind's file goes
+  // where the page asks for it (`floraModelFile`).
+  const dirs =
+    args.from === "pwa/models/trees" ? ["pwa/models/trees", "pwa/models/flora"] : [models];
+  for (const dir of dirs) {
+    if (!existsSync(join(root, dir))) continue;
+    for (const f of readdirSync(join(root, dir))) {
+      const kind = /^([a-z]+)\.glb$/.exec(f)?.[1];
+      if (!kind || !FLORA_KINDS.includes(kind)) continue;
+      const to = join(buildDir, "models", floraModelFile(kind));
+      mkdirSync(dirname(to), { recursive: true });
+      copyFileSync(join(root, dir, f), to);
+    }
   }
 }
 

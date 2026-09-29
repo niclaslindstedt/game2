@@ -177,9 +177,10 @@ export const SILVER_WOOD = new THREE.Color(0xbfbab0); // an arolla dead for a ce
 export const SILVER_WOOD_DARK = new THREE.Color(0x8f8b82);
 
 // ── The paint box by NAME ─────────────────────────────────────────────────
-/** Every colour a tree is painted with, by the name its row gives it
- * (`flora-trees.ts`): the rows are three-free, and a recipe drawn off a row
- * turns each name back into the one colour object the season table keys. */
+/** Every colour the flora is painted with, by the name `flora-trees.ts`
+ * gives it: the rows are three-free, and a recipe drawn off a row turns
+ * each name back into the one colour object the season table keys — and a
+ * skeleton traced for Blender names its every part's paint by it. */
 export const PAINT_BOX: Readonly<Record<TreeColour, THREE.Color>> = {
   TRUNK,
   TRUNK_DARK,
@@ -229,6 +230,70 @@ export const PAINT_BOX: Readonly<Record<TreeColour, THREE.Color>> = {
   IRONWOOD_BARK,
   IRONWOOD_LEAF,
   PINYON,
+  JUNIPER,
+  MOSS,
+  GRASS_BASE,
+  GRASS_TIP,
+  FERN,
+  FERN_TIP,
+  HEATH,
+  HEATH_BLOOM,
+  GROUND_MOSS,
+  BERRY_LEAF,
+  BERRY,
+  SEDGE,
+  SEDGE_TIP,
+  COTTON,
+  REED,
+  REED_TIP,
+  DRIFTWOOD,
+  BOG_SHRUB,
+  LILY_PAD,
+  LILY_BLOOM,
+  BULRUSH_HEAD,
+  SPHAGNUM,
+  SPHAGNUM_RUST,
+  BARREL,
+  BARREL_SPINE,
+  BARREL_HOOK,
+  PRICKLY_PEAR,
+  PEAR_FRUIT,
+  HEDGEHOG,
+  HEDGEHOG_BLOOM,
+  CHOLLA,
+  CHOLLA_DARK,
+  CHOLLA_FRUIT,
+  OCOTILLO,
+  OCOTILLO_TIP,
+  CREOSOTE,
+  CREOSOTE_STEM,
+  BURSAGE,
+  BRITTLEBUSH,
+  SAGEBRUSH,
+  AGAVE,
+  AGAVE_TIP,
+  AGAVE_STALK,
+  AGAVE_BLOOM,
+  YUCCA,
+  YUCCA_STALK,
+  DEAD_BRUSH,
+  TUMBLEWEED,
+  BUNCH_BASE,
+  BUNCH_TIP,
+  SALT_CRUST,
+  BONE,
+  MUGO,
+  MUGO_STEM,
+  ALPENROSE_LEAF,
+  ALPENROSE_BLOOM,
+  GENTIAN,
+  ARNICA,
+  FLOWER_WHITE,
+  ALP_GRASS_BASE,
+  ALP_GRASS_TIP,
+  CAIRN_STONE,
+  CAIRN_DARK,
+  CAIRN_LICHEN,
 };
 
 /** A row's paint as the builder takes it: one colour, or a pair. */
@@ -563,6 +628,116 @@ export function replayParts(b: GeoBuilder, parts: readonly TreePart[]): void {
   }
 }
 
+/** THE FRAME A RECIPE GAVE A PRIMITIVE: the affine matrix that carries
+ * three's own pristine copy of `geo` (made again from the parameters it
+ * remembers) onto `geo`'s vertices as the recipe left them — every
+ * `rotateZ`, `scale` and `translate` it applied in place, recovered by
+ * least squares over all the vertices (a rigid or scaled placement fits
+ * exactly; a plane's missing axis falls to zero). A geometry with no
+ * parameters (a raw buffer) is its own pristine copy. `size` is what the
+ * primitive was made from, in its own frame: a box's three sides, a
+ * plane's two, a sphere's or a disc's radius. */
+export function pristineFrame(geo: THREE.BufferGeometry): { m: THREE.Matrix4; size: number[] } {
+  const p = (geo as THREE.BufferGeometry & { parameters?: Record<string, number> }).parameters;
+  let fresh: THREE.BufferGeometry | null = null;
+  let size: number[] = [];
+  switch (geo.type) {
+    case "BoxGeometry":
+      size = [p!.width, p!.height, p!.depth];
+      fresh = new THREE.BoxGeometry(p!.width, p!.height, p!.depth);
+      break;
+    case "PlaneGeometry":
+      size = [p!.width, p!.height];
+      fresh = new THREE.PlaneGeometry(p!.width, p!.height, p!.widthSegments, p!.heightSegments);
+      break;
+    case "CylinderGeometry":
+    case "ConeGeometry":
+      size = [p!.radiusTop ?? 0, p!.radiusBottom ?? p!.radius, p!.height];
+      fresh = new THREE.CylinderGeometry(
+        p!.radiusTop ?? 0,
+        p!.radiusBottom ?? p!.radius,
+        p!.height,
+        p!.radialSegments,
+        p!.heightSegments,
+        !!p!.openEnded,
+      );
+      break;
+    case "IcosahedronGeometry":
+    case "DodecahedronGeometry":
+    case "SphereGeometry":
+      size = [p!.radius];
+      fresh =
+        geo.type === "SphereGeometry"
+          ? new THREE.SphereGeometry(p!.radius, p!.widthSegments, p!.heightSegments)
+          : geo.type === "IcosahedronGeometry"
+            ? new THREE.IcosahedronGeometry(p!.radius, p!.detail)
+            : new THREE.DodecahedronGeometry(p!.radius, p!.detail);
+      break;
+    case "CircleGeometry":
+      size = [p!.radius];
+      fresh = new THREE.CircleGeometry(p!.radius, p!.segments);
+      break;
+    default:
+      return { m: new THREE.Matrix4(), size };
+  }
+  const a = geo.getAttribute("position") as THREE.BufferAttribute;
+  const b = fresh.getAttribute("position") as THREE.BufferAttribute;
+  fresh.dispose();
+  if (b.count !== a.count) return { m: new THREE.Matrix4(), size };
+  // Normal equations over homogeneous source points, one right-hand side a
+  // target coordinate, with a whisper of ridge so a flat source (a plane)
+  // still solves.
+  const n = 4;
+  const ata = new Float64Array(n * n);
+  const atb = new Float64Array(n * 3);
+  for (let i = 0; i < a.count; i++) {
+    const s = [b.getX(i), b.getY(i), b.getZ(i), 1];
+    const t = [a.getX(i), a.getY(i), a.getZ(i)];
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) ata[r * n + c] += s[r] * s[c];
+      for (let c = 0; c < 3; c++) atb[r * 3 + c] += s[r] * t[c];
+    }
+  }
+  for (let r = 0; r < n; r++) ata[r * n + r] += 1e-9;
+  // Gauss-Jordan on the augmented [ata | atb].
+  const w = n + 3;
+  const aug = new Float64Array(n * w);
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) aug[r * w + c] = ata[r * n + c];
+    for (let c = 0; c < 3; c++) aug[r * w + n + c] = atb[r * 3 + c];
+  }
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    for (let r = col + 1; r < n; r++) {
+      if (Math.abs(aug[r * w + col]) > Math.abs(aug[pivot * w + col])) pivot = r;
+    }
+    if (pivot !== col) {
+      for (let c = 0; c < w; c++) {
+        const t = aug[col * w + c];
+        aug[col * w + c] = aug[pivot * w + c];
+        aug[pivot * w + c] = t;
+      }
+    }
+    const d = aug[col * w + col] || 1e-12;
+    for (let c = 0; c < w; c++) aug[col * w + c] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = aug[r * w + col];
+      if (f === 0) continue;
+      for (let c = 0; c < w; c++) aug[r * w + c] -= f * aug[col * w + c];
+    }
+  }
+  // Row r of the solution is source term r's weight in each target
+  // coordinate: the matrix's column r.
+  const m = new THREE.Matrix4();
+  const e = m.elements;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < 3; c++) e[r * 4 + c] = aug[r * w + n + c];
+    e[r * 4 + 3] = r === 3 ? 1 : 0;
+  }
+  return { m, size };
+}
+
 /** Accumulates transformed primitives into one non-indexed vertex-colored
  * geometry. Every part gets a per-facet brightness jitter so big single
  * color fields still read as foliage, not plastic. */
@@ -584,6 +759,7 @@ export class GeoBuilder {
   constructor(rand: () => number, palette: FloraPalette = new Map()) {
     this.rand = rand;
     this.palette = palette;
+    GeoBuilder.onMake?.(this);
   }
 
   /** A seeded roll, 0–1, for a recipe that varies its SHAPE between builds
@@ -607,6 +783,13 @@ export class GeoBuilder {
    * `scripts/lib/tree-model-data.mjs`): every part added is written into it
    * as well, by the name each colour has in `names`. Drawing is untouched. */
   trace: { parts: TracedPart[]; names: ReadonlyMap<THREE.Color, string> } | null = null;
+
+  /** THE DRIVER'S HOOK on every builder made: a prop's factory makes its
+   * own builder (`trafficVehicleGeometry`, `buildTrainCar`, …), so the
+   * Blender driver (`scripts/lib/prop-model-data.mjs`) has nowhere to hand
+   * one a trace but here — set for the one call, cleared after. Null in
+   * the game, always. */
+  static onMake: ((b: GeoBuilder) => void) | null = null;
 
   add(geo: THREE.BufferGeometry, color: PartColor, o: PartOpts = {}): void {
     if (this.trace) this.traced(geo, color, o);
@@ -656,14 +839,16 @@ export class GeoBuilder {
   /** Write one part into the skeleton: a tube's or a cone's base and top
    * off its first two rings of vertices (three.js lays a cylinder top ring
    * first), a clump off its bounds, a stub off its two end faces — each
-   * carried through the placement exactly as `add` carries the drawing. */
+   * carried through the placement exactly as `add` carries the drawing —
+   * and, for every part, the primitive it was drawn with and the ONE
+   * matrix that stands three's own pristine copy of it where the part is
+   * (`pristineMatrix`), so a builder can read a box's axes or a blade's
+   * lean rather than its bounds. */
   private traced(geo: THREE.BufferGeometry, color: PartColor, o: PartOpts): void {
     const { parts, names } = this.trace as NonNullable<GeoBuilder["trace"]>;
-    const name = (c: THREE.Color): string => {
-      const n = names.get(c);
-      if (!n) throw new Error("a tree is painted with a colour the paint box does not name");
-      return n;
-    };
+    // A colour the driver did not name (a prop's one-off tint) is named
+    // by its own value; the game dresses such a face in exactly that.
+    const name = (c: THREE.Color): string => names.get(c) ?? `#${c.getHexString()}`;
     const paint = (
       Array.isArray(color) ? [name(color[0]), name(color[1])] : name(color)
     ) as TracedPart["paint"];
@@ -684,6 +869,8 @@ export class GeoBuilder {
     };
     const xyz = (v: THREE.Vector3): [number, number, number] => [v.x, v.y, v.z];
     const type = geo.type;
+    const frame = pristineFrame(geo);
+    const whole = { type, m: m.clone().multiply(frame.m).toArray(), size: frame.size };
     if (type === "CylinderGeometry" || type === "ConeGeometry") {
       const seg = (geo as THREE.CylinderGeometry).parameters.radialSegments;
       const top = mean(0, seg);
@@ -700,6 +887,7 @@ export class GeoBuilder {
         r1,
         seg,
         ...(ribs ? { ribs } : {}),
+        ...whole,
       });
     } else if (type === "BoxGeometry") {
       // Six faces of four, +x first: the bar's two ends.
@@ -714,6 +902,7 @@ export class GeoBuilder {
         r0: thick,
         r1: thick,
         seg: 4,
+        ...whole,
       });
     } else {
       const box = new THREE.Box3();
@@ -729,6 +918,7 @@ export class GeoBuilder {
         r1: half.y,
         seg: 0,
         radii: xyz(half),
+        ...whole,
       });
     }
   }

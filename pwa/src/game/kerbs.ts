@@ -42,6 +42,7 @@ import {
 import { shareOne } from "../lib/shared-gpu.ts";
 import { snowCap } from "./snow-cap.ts";
 import { GeoBuilder } from "./flora-build.ts";
+import { dressOf, propModel } from "./prop-models.ts";
 import type { Ribbon } from "./ribbon.ts";
 import { rightOf } from "./ribbon.ts";
 import { drivingThrough, outOfBody, stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
@@ -89,9 +90,34 @@ const postGeometry = shareOne(
  * verge is under a metre of snow, banded red and white, with a reflector
  * on top. Twice a stake's height, because that is what it is for. */
 const SNOW_POLE = { height: 2.2, radius: 0.045, bands: 5, reflector: 0.11 };
-const SNOW_RED = new THREE.Color(0xd2302a);
-const SNOW_WHITE = new THREE.Color(0xf6f3ea);
-const REFLECTOR = new THREE.Color(0xfff4b8);
+
+/** Every colour a marker is built in, by ROLE — the names a model's faces
+ * carry (`prop-models.ts`): a stake's and a block's warning orange and
+ * white, a snow pole's red, white and reflector. */
+export const MARKER_TINT = {
+  warn: new THREE.Color(ORANGE),
+  white: new THREE.Color(WHITE),
+  snowRed: new THREE.Color(0xd2302a),
+  snowWhite: new THREE.Color(0xf6f3ea),
+  reflector: new THREE.Color(0xfff4b8),
+};
+const SNOW_RED = MARKER_TINT.snowRed;
+const SNOW_WHITE = MARKER_TINT.snowWhite;
+const REFLECTOR = MARKER_TINT.reflector;
+
+/** A marker as the code builds it, painted in its roles (the stake orange
+ * with a white top, the block white with orange ends: the model's builder
+ * paints the faces; the code's own draws them by material). */
+export function markerGeometry(id: "stake" | "snowpole" | "block"): THREE.BufferGeometry {
+  if (id === "snowpole") return snowPoleGeometry();
+  const b = new GeoBuilder(() => 0.5);
+  const geo =
+    id === "stake"
+      ? new THREE.BoxGeometry(POST.width, POST.height, POST.width)
+      : new THREE.BoxGeometry(BLOCK.width, BLOCK.height, BLOCK.depth);
+  b.add(geo, id === "stake" ? MARKER_TINT.warn : MARKER_TINT.white);
+  return b.build();
+}
 
 /** What kind of post a land stands: a stake, or the alpine's snow pole. */
 export type PostStyle = "stake" | "snowpole";
@@ -129,7 +155,7 @@ const snowPoleGeometry = shareOne((): THREE.BufferGeometry => {
   );
   return b.build();
 });
-const poleMaterial = shareOne(() => new THREE.MeshLambertMaterial({ vertexColors: true }));
+const poleMaterial = shareOne(() => snowCap(new THREE.MeshLambertMaterial({ vertexColors: true })));
 const blockGeometry = shareOne(
   () => new THREE.BoxGeometry(BLOCK.width, BLOCK.height, BLOCK.depth) as THREE.BufferGeometry,
 );
@@ -164,32 +190,47 @@ export function markerShape(
   height: number;
   rest: number;
 } {
+  // A marker's model, in its own paint; the code's shape and materials
+  // where there is none.
+  const model = (id: "stake" | "snowpole" | "block"): THREE.BufferGeometry | null =>
+    modelledMarker(id);
   if (kind === "post") {
-    return style === "snowpole"
-      ? {
-          geometry: snowPoleGeometry(),
-          materials: poleMaterial(),
-          lift: SNOW_POLE.height / 2,
-          height: SNOW_POLE.height,
-          rest: SNOW_POLE.radius,
-        }
-      : {
-          geometry: postGeometry(),
-          materials: postMaterials(),
-          lift: POST.height / 2,
-          height: POST.height,
-          rest: POST.width / 2,
-        };
+    if (style === "snowpole") {
+      return {
+        geometry: model("snowpole") ?? snowPoleGeometry(),
+        materials: poleMaterial(),
+        lift: SNOW_POLE.height / 2,
+        height: SNOW_POLE.height,
+        rest: SNOW_POLE.radius,
+      };
+    }
+    const stake = model("stake");
+    return {
+      geometry: stake ?? postGeometry(),
+      materials: stake ? poleMaterial() : postMaterials(),
+      lift: POST.height / 2,
+      height: POST.height,
+      rest: POST.width / 2,
+    };
   }
   // The slab is BEDDED IN: only `proud` of its thickness stands above the
   // verge, so its centre sits below the ground it is laid in.
+  const block = model("block");
   return {
-    geometry: blockGeometry(),
-    materials: blockMaterials(),
+    geometry: block ?? blockGeometry(),
+    materials: block ? poleMaterial() : blockMaterials(),
     lift: BLOCK.proud - BLOCK.height / 2,
     height: BLOCK.proud,
     rest: BLOCK.height / 2,
   };
+}
+
+/** A marker's model, made once for the whole world as the code's shapes
+ * are (`shareOne`), so a chunk dropped never frees it. */
+const modelled = new Map<string, THREE.BufferGeometry | null>();
+function modelledMarker(id: "stake" | "snowpole" | "block"): THREE.BufferGeometry | null {
+  if (!modelled.has(id)) modelled.set(id, propModel("roadside", id, dressOf(MARKER_TINT)));
+  return modelled.get(id) ?? null;
 }
 
 /** Stand a batch of markers of one kind up as a single instanced mesh, at

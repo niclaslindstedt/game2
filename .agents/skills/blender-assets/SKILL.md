@@ -1,13 +1,13 @@
 ---
 name: blender-assets
-description: "Use when a game asset is to be MODELLED IN BLENDER off the game's own data — the cars and every tree today; the crew or any other drawn thing when its kind is added — for studio renders, a real-time glTF with LODs, or to find out how good an authored version of something the game builds in code could look. Owns `make blender` (`scripts/blender.mjs`, the registry of KINDS, and the data each is handed: `scripts/lib/car-model-data.mjs`, `scripts/lib/tree-model-data.mjs`), the Blender shelf (`scripts/blender/lib.py`: the helpers, the gravel-stage studio, the two rigs, the game-budget export) and each kind's builder (`scripts/blender/car.py`, `tree.py`), the RIG and its clips (`pwa/src/game/car-rig.ts`), the lab sheets that set a model beside the code's own (`make cars ARGS=\"--asset …\"`, `--models`, `--wrecks`, `--rig`; `make trees ARGS=\"--models --compare\"`), and THE MODELS IN THE GAME: `make models` (`SET=cars|trees`), the committed `pwa/models/`, `pwa/models-plugin.ts` (`MODEL_SOURCES`, `TREE_SOURCES`), `car-models.ts` (loaded, dressed, POURED INTO the code-built car part for part), `car-dress.ts`, the FORM/dress line in `MeshBuilder.form`, `tree-models.ts` (a variant's model dressed in the season's paint in place of its code shape), the tree rows (`flora-trees.ts`, `flora-tree-rows.ts`), the meshopt packer `scripts/lib/glb-pack.mjs`, the `VITE_MODEL_CARS` / `VITE_MODEL_TREES` switches and `make ci-models`. Not the code's own builders and specs (`car-design`, `car-creation`, `nature`) — though they are what every model is built off and held against."
+description: "Use when a game asset is to be MODELLED IN BLENDER off the game's own data — the cars, every tree and plant, and every fixed-shape prop (the traffic, the train, a farm's gear and stock, a turbine's machine, a stone, a spectator, a marker) today; the crew or any other drawn thing when its kind is added — for studio renders, a real-time glTF with LODs, or to find out how good an authored version of something the game builds in code could look. Owns `make blender` (`scripts/blender.mjs`, the registry of KINDS, and the data each is handed: `scripts/lib/car-model-data.mjs`, `scripts/lib/tree-model-data.mjs`), the Blender shelf (`scripts/blender/lib.py`: the helpers, the gravel-stage studio, the two rigs, the game-budget export) and each kind's builder (`scripts/blender/car.py`, `tree.py`), the RIG and its clips (`pwa/src/game/car-rig.ts`), the lab sheets that set a model beside the code's own (`make cars ARGS=\"--asset …\"`, `--models`, `--wrecks`, `--rig`; `make trees ARGS=\"--models --compare\"`), and THE MODELS IN THE GAME: `make models` (`SET=cars|trees|props`), the committed `pwa/models/`, `pwa/models-plugin.ts` (`MODEL_SOURCES`, `TREE_SOURCES`, `PROP_SOURCES`), `car-models.ts` (loaded, dressed, POURED INTO the code-built car part for part), `car-dress.ts`, the FORM/dress line in `MeshBuilder.form`, `tree-models.ts` (a variant's model dressed in the season's paint in place of its code shape), the tree rows and plant kinds (`flora-trees.ts`, `flora-tree-rows.ts`), `prop-models.ts` (a prop dressed by role in its code geometry's place, off `scripts/blender/prop.py` and `scripts/lib/prop-model-data.mjs`), the meshopt packer `scripts/lib/glb-pack.mjs`, the `VITE_MODEL_CARS` / `VITE_MODEL_TREES` / `VITE_MODEL_PROPS` switches and `make ci-models`. Not the code's own builders and specs (`car-design`, `car-creation`, `nature`) — though they are what every model is built off and held against."
 ---
 
 # Blender assets
 
-The game draws its **cars and its trees from the models made here** —
-committed in `pwa/models/` by `make models` — and builds everything else
-(and, one switch away, the cars and the trees too) in code. A model is the
+The game draws its **cars, its flora and its props from the models made
+here** — committed in `pwa/models/` by `make models` — and builds
+everything else (and, one switch away, all of those too) in code. A model is the
 same thing MODELLED: the same numbers, a real surface (a creased
 subdivision cage where the code lofts flat facets, turned tyres and rims; a
 whorl of drooping boughs where the code stacks a cone, a lumpy clump of
@@ -16,8 +16,11 @@ and what would it cost?" is answered with a render, a triangle count and a
 picture in the game's own lab rather than a guess. The shelf, the tree
 builder and the packer came across from the sibling snowmobile game, which
 models its sleds, its rider and its forest the same way; what is this
-game's own is the car POURED INTO the code car, and every tree modelled
-over the skeleton the code's recipe lays.
+game's own is the car POURED INTO the code car, every plant modelled over
+the skeleton the code's recipe lays, and every fixed-shape PROP — the
+traffic, the train, a farm's gear and stock, a turbine's machine, a stone,
+a spectator, a marker — modelled over the skeleton its own factory lays
+and dressed by ROLE in its code geometry's place (`kinds.md` § "The props").
 
 Four rules, and every step below serves one of them:
 
@@ -58,20 +61,26 @@ damage model reads, `nature` for a tree, and `skill-reflection` at both ends.
 | --- | --- |
 | `scripts/blender.mjs` | THE DRIVER (`make blender`): `KINDS` (a kind's ids, its data, its builder, its default: `car`, `tree`), finds Blender, runs each QUALITY, echoes what matters (`PARTS`, `BONES`, `CLIPS`, `TRIANGLES`, `NOTE`, what was saved, any traceback) and fails on a Python error |
 | `scripts/lib/car-model-data.mjs` | WHAT A CAR IS HANDED: the code's own stations (plus more off `stationAt`, never inside a shut line), the deck's openings as the code snaps them, the greenhouse quads, every plan, the wheel, the rig, and — for the stills alone — every role's colour in linear light |
-| `scripts/lib/tree-model-data.mjs` | WHAT A KIND OF TREE IS HANDED: every variant's row and its skeleton (shape 0's rolls, the build the world draws first), its bounds, and — for the stills — every colour it wears in the summer, in linear light |
+| `scripts/lib/tree-model-data.mjs` | WHAT A KIND OF TREE — OR PLANT — IS HANDED: every variant's row (a tree's) and its skeleton (shape 0's rolls, the build the world draws first; every part with its whole frame, `TracedPart.m`), its bounds, and — for the stills — every colour it wears in the summer, in linear light |
+| `scripts/lib/prop-model-data.mjs` | WHAT A KIND OF PROP IS HANDED: every id's skeleton, laid by its own factory under `GeoBuilder.onMake` (the trace hung on every builder the factory makes), painted in ROLES (a key of the module's tint table, `paint`, or a colour's own value), its bounds and code triangles, and — for the stills — every role's colour |
 | `scripts/blender/lib.py` | THE SHELF (the sibling's, whole, with the car's needs beside it): the scene, `mat` (one material per NAME), the geometry (`loft`, `superellipse`, `tube`, `cyl` — open ends too — `box`, `ellipsoid`, `coil`, `lathe`, `crease`, `subdivide`, `catmull`, `resample`, boolean cutters), THE RIG two ways (`rides`, `bone`, `clip`; RIGID PARTS — `part` — for a car, SKINNED — `weights`, `marker`, `morph`, linkages — for a figure that bends), the gravel stage at the edge of a wood, `_sky`, the Cycles stills, and `finish()` — LOD0 and the decimated LODs |
 | `scripts/blender/car.py` | THE CAR BUILDER: the shell, the greenhouse, the tailgate, arch trim, flaps, air dam and valance, bumpers, lids, doors, mirrors, spoiler, the wheels and the rig — every dimension off the data |
-| `scripts/blender/tree.py` | THE TREE BUILDER (`KIND=tree`, `ID=<kind>` or `all`): a kind's variants off their rows and skeletons, each a full tree and a far sketch, one glTF a kind; no rig (§ "The trees") |
-| `pwa/src/game/flora-trees.ts`, `flora-tree-rows.ts`, `flora-tree-rows-dry.ts` | THE TREES AS DATA (three-free): the twenty KINDS, what each paint colour IS on a tree (`TREE_PAINT_ROLE`), the forms, and every tree variant's row — read by the code's recipes (`flora-species.ts`, `flora-alpine.ts`, `flora-desert.ts`) and by the driver |
+| `scripts/blender/tree.py` | THE TREE BUILDER (`KIND=tree`, `ID=<kind>` or `all`): a kind's variants off their rows and skeletons, each a full tree and a far sketch, one glTF a kind; no rig (`kinds.md` § "The trees") — and the plant kinds through it, their parts handed to `plant.py` |
+| `scripts/blender/plant.py` | THE UNDERGROWTH'S PARTS (`kinds.md` § "The plants"): arched blades, fern fronds, moss cushions, lily pads, petals, cattail heads, stone lumps, tumbleweed tangles, prickly-pear pads, spines, cut stumps and lying logs — drawn with `tree.py`'s mesh and helpers, read off the running script |
+| `scripts/blender/prop.py` | THE PROP BUILDER (`KIND=prop`, `ID=<kind>` or `all`): its own mesh (faces wound by their normals), the FORMS (`bevel_box`, `smooth_cyl`, `wheel`, `ellipsoid`, `rounded_loft`, `lump`), the generic pass every kind starts from, and each kind's craft (`car_shell`, `livestock`, `crowd`, `roadside`, `energy`); one glTF a kind, each id a mesh (`kinds.md` § "The props") |
+| `pwa/src/game/flora-trees.ts`, `flora-tree-rows.ts`, `flora-tree-rows-dry.ts` | THE FLORA AS DATA (three-free): the twenty tree KINDS and the seven plant kinds (`PLANT_KINDS`, `FLORA_KINDS`, `floraModelFile`), what every paint colour IS (`TREE_PAINT_ROLE`: the trees' roles and the undergrowth's — blade, moss, head, spine, stone, bone), the forms, and every tree variant's row — read by the code's recipes (`flora-species.ts`, `flora-alpine.ts`, `flora-desert.ts`) and by the driver |
+| `pwa/src/game/prop-kinds.ts`, `prop-models.ts` | THE PROPS AS DATA and IN THE GAME: the kinds and their files (read by the build without the engine); the ids each carries (`PROP_KINDS`), `PROP_MODELS` (the switch), `loadPropModels`, `piecesOf`, `dressOf`, `propModel(kind, id, dress)` — a fresh geometry in the code's own frame and attributes, the caller's to keep and dispose |
 | `pwa/src/game/car-rig.ts` | THE CAR RIG'S CONTRACT: `WHEEL_BONES`, `STEER_BONES`, `CAR_CLIPS` (steer lock to lock at `WHEEL_STEER_LOCK`, travel full bump to full droop at `TUNING.suspension`, one revolution) and `clipMoments` |
 | `pwa/src/game/car-dress.ts` | THE CAR'S ROLES: `CAR_ROLES` (every material name a model may carry) and `dressOf(role, spec)`, `shineOf` |
 | `pwa/src/game/car-models.ts` | THE CARS IN THE GAME: `MODELS.cars` (the switch), `loadCarModels`, `carModel(id)`, `modelOf`, `dressPart` |
 | `pwa/src/game/car-body.ts` | where a car model is POURED: `options.model` → `modelled(names, builder)` |
-| `pwa/src/game/tree-models.ts` | THE TREES IN THE GAME: `TREE_MODELS` (the switch), `loadTreeModels`, `piecesOf`, `paintColours`, `treeModel(id, season, sketch)` — a variant's model dressed in the season's paint, in the code shape's frame; read by `flora.ts`'s `shapeFor` |
-| `pwa/models-plugin.ts`, `scripts/models.mjs`, `scripts/lib/glb-pack.mjs` | packing (every build, before `appPwa`; a missing model FAILS the build naming `make models`) and publishing (`MODEL_SOURCES`, `TREE_SOURCES`, `sourcesHash`, `sources.json`; every tree through the meshopt packer) |
+| `pwa/src/game/tree-models.ts` | THE FLORA IN THE GAME: `TREE_MODELS` (the switch), `loadTreeModels`, `piecesOf`, `paintColours`, `floraKindOf`, `treeModel(id, season, sketch)` — a variant's model (a tree's or any plant's) dressed in the season's paint, in the code shape's frame; read by `flora.ts`'s `shapeFor` |
+| the seam in each prop's module | where a model stands in for the code's geometry: `traffic-fleet.ts`'s `vehicleGeometry` (the game's and the lab's), `train.ts`'s `buildTrainCar`, `farm-gear.ts`'s `buildFarmGear` / `buildBale`, `livestock.ts`'s bodies, `wind-farm.ts`'s nacelle and rotor (the rotor scaled from `MODEL_ROTOR`), `solar-farm.ts`'s table and cabin, `wild.ts`'s `stoneGeometry`, `crowd.ts`'s `partGeometry`, `kerbs.ts`'s `markerShape`, `cones.ts`'s field — each with its tint table exported by ROLE (`TRAFFIC_TINT`, `TRAIN_PAINT`, `FARM_TINT`, `STOCK_TINT`, `WIND_TINT`, `SOLAR_TINT`, `MARKER_TINT`, `CONE_TINT`) |
+| `pwa/models-plugin.ts`, `scripts/models.mjs`, `scripts/lib/glb-pack.mjs` | packing (every build, before `appPwa`; a missing model FAILS the build naming `make models`) and publishing (`MODEL_SOURCES`, `TREE_SOURCES`, `PROP_SOURCES`, `sourcesHash`, `sources.json`; every plant and prop through the meshopt packer; `SET=cars|trees|props`) |
 | `pwa/src/tools/car-preview.ts` + `scripts/car-preview.mjs` | THE CAR SHEETS: `--asset a.glb,b.glb`, `--models`, with `--wrecks` and `--rig` |
-| `pwa/src/tools/trees-preview.ts` + `scripts/trees-preview.mjs` | THE TREE SHEET (`make trees`): every kind a row, every variant a column, from a car's seat through the flora's material; `--models` (with `--from`), `--compare` (the code's row over the model's, triangles under each), `--sketch`, `--season`, `--kinds` |
-| `previews/blender/` | everything made: `<id>.json`, `<id>-render-<view>.png`, a car's `<id>-lod{0,1,2}.glb` and `<id>-{render,game}.blend`, a tree kind's `<kind>.glb` and `<kind>-{render,game}-{row,far,close}.png` |
+| `pwa/src/tools/trees-preview.ts` + `scripts/trees-preview.mjs` | THE TREE SHEET (`make trees`): every kind (tree or plant) a row, every variant a column, from a car's seat through the flora's material; `--models` (with `--from`), `--compare` (the code's row over the model's, triangles under each), `--sketch`, `--season`, `--kinds` |
+| `pwa/src/tools/item-preview.ts` + `scripts/item-preview.mjs` | THE TURNTABLE (`make items`) with `--models` (with `--from`): every plant and prop on its own fitted turntable, the models in the code's place — the verdict on anything under a metre, which the tree sheet's seat cannot frame |
+| `previews/blender/` | everything made: `<id>.json`, `<id>-render-<view>.png`, a car's `<id>-lod{0,1,2}.glb` and `<id>-{render,game}.blend`, a tree or plant kind's `<kind>.glb` and `<kind>-{render,game}-{row,far,close}.png`, a prop kind's `<kind>.glb` and `<kind>-{render,game}-{row,close}.png` |
 
 ## The loop
 
@@ -98,10 +107,13 @@ damage model reads, `nature` for a tree, and `skill-reflection` at both ends.
    3/4,rear' --cell 640x440"` (then `--wrecks classic --asset … --scene
    flank,rolled,wreck` and `--rig`); `make trees ARGS="--models --from
    previews/blender --compare --kinds …"` — the code's row over the model's,
-   the triangles under each. A band buried in a car's flank, a lamp floating
-   off the cap, a crown that reads as a plate, a canopy darker than the wood
-   beside it is read here and nowhere else.
-6. **Publish**: `make models` (`SET=trees` or `SET=cars` for one half),
+   the triangles under each; a plant or a prop on the turntable instead,
+   `make items ARGS="--group flora --models --from previews/blender"` or
+   `--items traffic-hatch,cows,cone --models`, shot once more without
+   `--models` for the code's own beside it. A band buried in a car's flank,
+   a lamp floating off the cap, a crown that reads as a plate, a canopy
+   darker than the wood beside it is read here and nowhere else.
+6. **Publish**: `make models` (`SET=trees`, `SET=cars` or `SET=props` for one set),
    commit `pwa/models/` with the change, then `make build` and `make
    screenshots` against a `VITE_MODEL_CARS=0` / `VITE_MODEL_TREES=0` build,
    and `make profile`.
@@ -218,7 +230,7 @@ triangles, the grid 424 → 424 and 446k → 476k, heads-up 607 → 608 draws an
 614k → 911k triangles, with its geometry 38 → 85 MB (every car's forms are
 its own buffers, because every car is bent on its own). Rivals at range on
 LOD1 is open work, as is a hand-built LOD2 (a blind decimation tears up
-close). The trees' budget is § "The trees".
+close). The trees' budget is `kinds.md` § "The trees".
 
 ## The rig and the clips
 
@@ -249,103 +261,15 @@ joined mesh takes its DATA name from the active part — name both; a shape key
 forbids the join's modifiers being applied, so a morphed part keeps its own
 mesh.
 
-## The trees
+## The trees, the plants and the props
 
-`KIND=tree`, `ID=<kind>` (or `all`): ONE glTF a kind, every variant twice —
-`<id>` (the tree the road's band draws) and `<id>_far`, a HAND-BUILT sketch
-the WILD draws (the land past the road's own 150 m, `buildFloraField`) — a
-decimation shreds a crown of separate pieces. Twenty kinds carry every flora
-variant that is a TREE:
-
-| Kind | Variants (the flora ids) |
-| --- | --- |
-| spruce | `spruceTall`, `spruceOld`, `spruceDark`, `spruceLean`, `spruceSnapped`, `spruceYoung`, `spruceSquat`, `spruceGiant`, `spruceSapling` |
-| fir | `firSlim`, `firDense`, `firOld` |
-| larch | `larch`, `larchOld`, `larchAlpine` (the treeline's flagged one) |
-| pine | `pineTall`, `pineCrooked`, `pineOld`, `pineTwin`, `pineGiant`, `pineYoung`, `pineSapling`, `bogPine` |
-| stonepine | `arolla`, `arollaOld`, `arollaYoung` |
-| birch, aspen | `birch`, `birchPair`, `birchYoung`, `birchOld`, `birchLean`; `aspen`, `aspenTall` |
-| oak, maple, rowan, alder, willow | one each, and `willowYoung` |
-| snag | `deadSnag`, `deadGiant`, `leaningSnag`, `brokenTrunk`, `drownedTrunk`, `deadArolla` |
-| saguaro, organpipe, joshua | `saguaro`, `saguaroOld`, `saguaroYoung`, `deadSaguaro`; `organPipe`; `joshuaTree`, `joshuaYoung` |
-| mesquite, paloverde, ironwood, pinyon | one each |
-
-What stays the code's, because it is not a tree: every shrub (the juniper
-and the willow shrub of a taiga, the alpenrose, the desert's scrub), the
-krummholz mat of mountain pine (two metres of springy stems a car goes
-OVER), the small cacti and the ocotillo's canes, the ground cover, and the
-stumps, logs, log piles and driftwood (props whose drawn size is held to a
-collision circle).
-
-- **Rows, then the skeleton.** A kind's numbers are its rows
-  (`flora-tree-rows.ts`: a spruce's height, width, tiers, bare share, shade
-  pair, lean and raggedness; a recipe that is a list of the builder's calls
-  as `parts`), which the code's recipe draws with. `tree-model-data.mjs` then
-  builds each variant through the code's own `GeoBuilder` with a `trace`
-  handed in, and every part the recipe lays comes out as a SKELETON part —
-  a tube or a cone from its base to its top (off its first two rings of
-  vertices), a clump with its radii, a fluted column with its ribs, a stub —
-  in the paint it wears. `tree.py` models each part where the code has it,
-  which is what keeps a model's silhouette the code's and its girth the one
-  the breakage effects cut their splinters to.
-- **What each part becomes** (by the paint's ROLE, `TREE_PAINT_ROLE`): a trunk
-  out of the ground flares into its roots, darker at the foot, its pair
-  blended up it — a conifer's carried on up through the crown; a limb bows a
-  little; a needle CONE is a whorl of blunt-tipped, drooping, ridged boughs
-  (the sibling's) over a dark CORE through the whole stack (a wood reads solid
-  between the boughs), the fir's flatter, the larch's thinner and sparser; a
-  needle or leaf BLOB is a lumpy CLUMP (a shell pushed out in a few lobes,
-  flatter underneath, darker inside and under) with leaves standing off it
-  to break its edge — hanging on a birch and a willow, fewer on a wash
-  tree's small ones; a berry blob is a cluster; a birch's dark BANDS are
-  black marks lying on the white bark, broken and uneven; a fluted column is
-  ribs and grooves with a ribbed dome on its tip; a Joshua tree's hanging
-  cone is a shag of dead leaves and its rosette cones are daggers; a
-  splinter cone is a jagged spike; a stub is a broken bar with splinters.
-- **No colour in the file.** A face's material is NAMED for its paint — a
-  colour of the paint box (`SPRUCE_DARK`) or a pair (`TRUNK_DARK>PINE_BARK`);
-  a vertex's `tone` is a SHADE and a BLEND. `treeModel` dresses it per
-  season through `floraPalette`, as the code's builder paints its own, and
-  lays the speckle map across it by position (the code's parts each take it
-  once; `GRAIN`). The winter's load is the MATERIAL's (`snow-cap.ts`), so a
-  model carries no snow: its VOLUME normals (out of the crown and up) are
-  what the load lies on.
-- **Volume normals, and never down.** A leaf's, a bough's and a twig's both
-  faces lean out and up — a downward underside turned a crown black from
-  under it.
-- **Shade up.** A crown built too dark reads as a hole in a wood of code
-  trees: the shells and boughs start at 0.62 and the undersides at 0.5 —
-  the code's per-facet jitter is 0.9–1.1 on colours authored bright.
-- **A tuft is a mass.** A pine's or a stone pine's blob modelled as the
-  sibling's flat needle cushion read as a stack of dark plates from the
-  road; as a clump it reads as the crown the code's icosahedron meant.
-- **Winding.** Blender is z up, so a ring by `(cos a, sin a)` in x, y runs
-  anticlockwise from above; judge a face's side in the game's lab, which
-  culls the back where Cycles does not.
-- **Budget** (game quality): full 109–1,796 triangles (spruce 234–1,005, fir
-  902–1,089, larch 776–883, pine 110–1,062, stone pine 222–1,630, birch
-  448–1,218, aspen 512–552, oak 586, maple 559, rowan 366, alder 568, willow
-  316–452, snag 109–426, saguaro 168–1,128, organ pipe 896, Joshua 542–874,
-  mesquite 1,796, palo verde 1,347, ironwood 1,710, pinyon 255) against the
-  code's 40–1,170; sketches 21–444 (a crowded crown's sketch keeps its
-  biggest clumps and every other one of the rest). `tree.py` shares a
-  conifer's boughs out of 30 rather than growing past them. THE WOOD IS
-  THE COST: the road's band plants hundreds of trees in view, so a model
-  a few times the code's is most of a frame's new triangles — measure it
-  (`make profile`) before a budget moves up.
-- **Packed.** `make models` runs each kind through `scripts/lib/glb-pack.mjs`
-  (reordered; positions to 4 mm on the node's scale, normals and tone to 8
-  bits; one meshopt view a stream): 6–120 KiB a kind, ~0.58 MB the forest.
-  The packer's dependency is `meshoptimizer`, a devDependency; three's own
-  `MeshoptDecoder` reads it.
-- **Judged** on `make trees ARGS="--models --from previews/blender --compare
-  --kinds …"` (the code's row over the model's), then `make build` and a
-  forest seen from the road against a `VITE_MODEL_TREES=0` build, on a
-  forest biome and a dry one, and `make profile`.
-- **Stamped apart** (`TREE_SOURCES`, `sources.json`'s `trees`; `make models
-  SET=trees`) — the rows, the recipe files and the builder under them are all
-  sources, since the skeleton is read off them; `blender.mjs` and `lib.py`
-  are in both lists.
+Each kind's own craft — what a tree's row and skeleton become (a whorl of
+boughs, a clump of leaves, a birch's marks), what the undergrowth's parts
+become by their paint's role (a blade, a cushion, a petal, a spike, a log),
+how a prop's skeleton is caught off its factory and dressed by role in the
+game, and each kind's budget and stamp — is [`kinds.md`](kinds.md) beside
+this file. Read its section for the kind at hand before modelling in it;
+this file keeps the loop, the frame, the car and the models in the game.
 
 ## Blender, headless
 
@@ -373,9 +297,14 @@ collision circle).
 ## Adding a kind (the crew, …)
 
 1. **The data**: a row in `KINDS` (`ids()`, `data(id)` off the game's own
-   modules through `aliasEngine`). The car and the tree are the worked
-   examples — a plan handed over, and a skeleton traced off the code's own
-   builder.
+   modules through `aliasEngine`). The car, the tree and the prop are the
+   worked examples — a plan handed over, a skeleton traced off the code's
+   own builder, and a skeleton caught off a factory that makes its own
+   builder (`GeoBuilder.onMake`). A fixed-shape thing drawn by a module
+   that builds with `GeoBuilder` is most often a new PROP KIND rather than
+   a new kind of asset: a row in `PROP_KINDS`, a case in
+   `prop-model-data.mjs` and `prop.py`, its tint table exported by role,
+   and the seam in its module.
 2. **The builder**, `scripts/blender/<kind>.py`: `from lib import *`, its
    frame in its header, `part()` / `rides()` / `bone()` / `clip()` (or no
    rig, as a tree), then `finish(...)` or its own export. A helper two kinds

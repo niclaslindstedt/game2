@@ -24,6 +24,8 @@
 import * as THREE from "three";
 import { hash2, standHeads, type Stand } from "@engine";
 
+import { propModel } from "./prop-models.ts";
+
 /** A body, part by part, in meters. A person is built from the ground up:
  * two legs, a torso, a head, and two arms hung off the shoulders. */
 const BODY = {
@@ -122,6 +124,30 @@ function box(w: number, h: number, d: number): THREE.BufferGeometry {
   return geo;
 }
 
+/** One part of the figure as the code builds it, centred on its own
+ * middle: the box a model of it is made over. */
+export function figurePart(part: "leg" | "torso" | "head" | "arm"): THREE.BufferGeometry {
+  const { legs: L, torso: T, arm: A } = BODY;
+  switch (part) {
+    case "leg":
+      return box(L.width, L.height, L.depth);
+    case "torso":
+      return box(T.width, T.height, T.depth);
+    case "head":
+      return box(BODY.head.size, BODY.head.size, BODY.head.size);
+    case "arm":
+      return box(A.width, A.height, A.depth);
+  }
+}
+
+const WHITE = new THREE.Color(0xffffff);
+
+/** A part of the figure: its model, shaded in white for the instance's
+ * own colour to tint, or the code's box. */
+function partGeometry(part: "leg" | "torso" | "head" | "arm"): THREE.BufferGeometry {
+  return propModel("crowd", part, () => WHITE) ?? figurePart(part);
+}
+
 /** Lay the people out inside a stand's rectangle: rows behind rows, jittered
  * off the lattice so it reads as a crowd rather than a formation. */
 function peopleOf(stand: Stand, index: number, ground: (x: number, z: number) => number): Figure[] {
@@ -202,25 +228,17 @@ export function buildCrowd(
   const headY = L.height + T.height + BODY.head.size / 2;
   const shoulderY = L.height + T.height - A.height / 2;
   const parts: Part[] = [
+    { geo: partGeometry("leg"), at: new THREE.Vector3(-L.apart, legY, 0), kind: "body" },
+    { geo: partGeometry("leg"), at: new THREE.Vector3(L.apart, legY, 0), kind: "body" },
+    { geo: partGeometry("torso"), at: new THREE.Vector3(0, torsoY, 0), kind: "body" },
+    { geo: partGeometry("head"), at: new THREE.Vector3(0, headY, 0), kind: "body" },
     {
-      geo: box(L.width, L.height, L.depth),
-      at: new THREE.Vector3(-L.apart, legY, 0),
-      kind: "body",
-    },
-    { geo: box(L.width, L.height, L.depth), at: new THREE.Vector3(L.apart, legY, 0), kind: "body" },
-    { geo: box(T.width, T.height, T.depth), at: new THREE.Vector3(0, torsoY, 0), kind: "body" },
-    {
-      geo: box(BODY.head.size, BODY.head.size, BODY.head.size),
-      at: new THREE.Vector3(0, headY, 0),
-      kind: "body",
-    },
-    {
-      geo: box(A.width, A.height, A.depth),
+      geo: partGeometry("arm"),
       at: new THREE.Vector3(-(T.width / 2 + A.width / 2), shoulderY, 0),
       kind: "armL",
     },
     {
-      geo: box(A.width, A.height, A.depth),
+      geo: partGeometry("arm"),
       at: new THREE.Vector3(T.width / 2 + A.width / 2, shoulderY, 0),
       kind: "armR",
     },

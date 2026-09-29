@@ -33,13 +33,16 @@ import {
   type WindFarm,
 } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
+import { dressOf, propModel } from "./prop-models.ts";
 import type { GroundBeside } from "./road-mesh.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture, gravelTexture } from "./textures.ts";
 
 const W = STAGE_RULES.energy.wind;
 
-const TINT = {
+/** Every colour a machine is built in, by ROLE — the names a model's
+ * faces carry (`prop-models.ts`). */
+export const WIND_TINT = {
   towerFoot: new THREE.Color(0xc4c8cc),
   tower: new THREE.Color(0xe8eaec),
   plinth: new THREE.Color(0x8e9194),
@@ -50,6 +53,12 @@ const TINT = {
   blade: new THREE.Color(0xf0f1f2),
   bladeTip: new THREE.Color(0xd8322a),
 };
+const TINT = WIND_TINT;
+
+/** The rotor diameter the MODEL is made at, m (the middle of the rules'
+ * band): a farm's rotor is the model scaled to its own diameter, blades,
+ * hub and nose alike. */
+export const MODEL_ROTOR = 130;
 
 /** The machine's proportions that are not the engine's to decide, m. */
 const MACHINE = {
@@ -113,7 +122,7 @@ function towerGeometry(hub: number, rand: () => number): THREE.BufferGeometry {
 
 /** The nacelle, in its own frame: the hub axis along z at y = 0, the
  * rotor end toward -z, the tower under its middle. */
-function nacelleGeometry(rand: () => number): THREE.BufferGeometry {
+export function nacelleGeometry(rand: () => number): THREE.BufferGeometry {
   const b = new GeoBuilder(rand);
   const { w, h, len, ahead } = MACHINE.nacelle;
   const body = new THREE.BoxGeometry(w, h, len);
@@ -129,7 +138,7 @@ function nacelleGeometry(rand: () => number): THREE.BufferGeometry {
 
 /** The rotor, in its own frame: the hub centre at the origin, the blades in
  * the XY plane spinning about z, the nose cone pointing down -z. */
-function rotorGeometry(rotor: number, rand: () => number): THREE.BufferGeometry {
+export function rotorGeometry(rotor: number, rand: () => number): THREE.BufferGeometry {
   const b = new GeoBuilder(rand);
   const nose = new THREE.ConeGeometry(MACHINE.hub.r, MACHINE.hub.nose, 12);
   nose.rotateX(-Math.PI / 2);
@@ -304,8 +313,13 @@ export function createWindFarms(): WindFarms {
     const padMesh = new THREE.Mesh(mergePlain(padParts), padMaterial());
     geometries.push(padMesh.geometry);
     built.add(padMesh);
-    const nacelleGeo = nacelleGeometry(rand);
-    const rotorGeo = rotorGeometry(farm.rotor, rand);
+    const nacelleGeo = propModel("energy", "nacelle", dressOf(WIND_TINT)) ?? nacelleGeometry(rand);
+    const rotorGeo =
+      propModel("energy", "rotor", dressOf(WIND_TINT))?.scale(
+        farm.rotor / MODEL_ROTOR,
+        farm.rotor / MODEL_ROTOR,
+        farm.rotor / MODEL_ROTOR,
+      ) ?? rotorGeometry(farm.rotor, rand);
     const beaconGeo = new THREE.SphereGeometry(MACHINE.beacon.r, 8, 6);
     geometries.push(nacelleGeo, rotorGeo, beaconGeo);
     const nacelles = new THREE.InstancedMesh(nacelleGeo, machineMaterial(), n);

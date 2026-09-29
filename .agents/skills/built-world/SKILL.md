@@ -44,6 +44,19 @@ the same landscape, and **`collision`** for what hitting one of these costs.
 | Where an abandoned branch is shut, and with what | `placeBlock` in `mapgen/spurs.ts` | `blockade.ts` |
 | A split board on the stage | `STAGE_RULES.checkpoint` + the placement in `mapgen/compile.ts` (R28) | `split-board.ts` — a pair of flags at the line, planted in the cone field so a clipped one goes over |
 
+**What is MODELLED here** (the `blender-assets` skill, `kinds.md` § "The
+props"): the traffic's vehicles, the train's cars, a farm's gear, its bales
+and its livestock, the turbines' nacelles and rotors, the solar tables and
+cabins, the road's markers and cones — each a Blender model over the
+skeleton its factory lays, dressed by ROLE through the module's own tint
+table (`TRAFFIC_TINT`, `FARM_TINT`, …) in the code geometry's place, the
+code's factory still the switch's other side. A change to one of those
+factories, its tints or its boxes owes `make models SET=props`, a look on
+the turntable (`make items ARGS="--models"`) beside the code's own, and
+the committed `pwa/models/props/`. A house, a pylon, a gate, a fence and
+the crowd's placement stay the code's — built to their own place on the
+stage — and a change there owes nothing to the models.
+
 ## The two patterns everything here follows
 
 - **A thing seen from far outside its chunk gets its own manager.** The road

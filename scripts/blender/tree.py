@@ -666,13 +666,19 @@ def marks(t, band, hosts, rng):
         for k in range(steps):
             t.f((lo[k], lo[k + 1], hi[k + 1], hi[k]), band["paint"])
 
+# The undergrowth's own handlers, drawn with this file's mesh and helpers.
+import plant
+
+# What a clump of bloom becomes: a ring of petals, or a cluster of fruit.
+PETALS = {"GENTIAN", "ARNICA", "FLOWER_WHITE", "LILY_BLOOM", "ALPENROSE_BLOOM", "HEDGEHOG_BLOOM", "AGAVE_BLOOM"}
+
 # ---------------------------------------------------------------- a VARIANT, whole
 def build(v, far):
     rng = random.Random(f"{KIND}/{v['id']}/{far}")
     t = Tree()
     parts = parts_of(v)
     tubes = [p for p in parts if p["shape"] == "tube"]
-    stems = [p for p in tubes if on_ground(p) and p["role"] in ("bark", "wood")]
+    stems = [p for p in tubes if on_ground(p) and p["role"] in ("bark", "wood") and not plant.lying(p)]
     cones = [p for p in parts if p["shape"] == "cone"]
     tiers = [p for p in cones if p["role"] == "needle"]
     conifer = v["form"] in ("spruce", "snapped") or (tiers and len(tiers) >= 2)
@@ -709,14 +715,25 @@ def build(v, far):
             if role == "mark":
                 if not far:
                     marks(t, p, stems, rng)
+            elif role == "flesh":
+                # A prickly pear's cylinder is a pad; a cholla's joint a stem.
+                if p["type"] == "CylinderGeometry" and p["r0"] > 0.02 and (p["B"] - p["A"]).length < p["r0"] * 0.8:
+                    plant.pad(t, p, far, rng)
+                else:
+                    limb(t, p, far, rng)
+            elif role in ("bark", "wood") and plant.lying(p):
+                plant.log(t, p, far, rng)
+            elif any(p is s for s in stems) and p["r0"] > 0.2 and (p["B"] - p["A"]).length < 1.6:
+                plant.stump(t, p, far, rng)
             elif any(p is s for s in stems):
                 stretched = conifer and v["form"] == "spruce" and p is stems[0] and top is not None
                 # A stem standing inside a wider one (the bark still on a
-                # snag's foot) leaves the flaring to the outer.
+                # snag's foot) leaves the flaring to the outer; a whip of a
+                # stem (a shrub's, a cane's) has no roots to flare into.
                 inner = any(q is not p and q["r0"] > p["r0"] and (q["A"].xy - p["A"].xy).length < 0.15
                             for q in stems)
                 trunk(t, p, far, rng, top=top if stretched else None, top_r=0.03 if stretched else None,
-                      flared=not inner)
+                      flared=not inner and p["r0"] >= 0.06)
             else:
                 limb(t, p, far, rng)
         elif shape == "stub":
@@ -724,7 +741,7 @@ def build(v, far):
         elif shape == "fluted":
             fluted(t, p, far, rng)
         elif shape == "cone":
-            if role == "needle":
+            if role == "needle" or role == "leaf":
                 if far:
                     skirt(t, p, rng, len(t.faces))
                 else:
@@ -732,12 +749,29 @@ def build(v, far):
             elif role == "thatch":
                 thatch(t, p, far, rng)
             elif role == "dagger":
-                # The sketch keeps one dagger in three, fatter.
-                if not far or rng.random() < 0.34:
+                first = p["paint"] if isinstance(p["paint"], str) else p["paint"][0]
+                # The sketch keeps one dagger in three, fatter; an agave's
+                # blade is broad and folded, a yucca's a spike.
+                if first == "AGAVE":
+                    if not far or rng.random() < 0.5:
+                        plant.agave_leaf(t, p, far, rng)
+                elif not far or rng.random() < 0.34:
                     dagger(t, p, far, rng)
+            elif role == "spine":
+                if not far or rng.random() < 0.34:
+                    plant.spike(t, p, far, rng)
+            elif role in ("bone", "bark", "flesh"):
+                plant.taper(t, p, far, rng)
             else:
                 splinter(t, p, far, rng)
+        elif shape == "blade":
+            first = p["paint"] if isinstance(p["paint"], str) else p["paint"][0]
+            if first in ("FERN", "FERN_TIP"):
+                plant.frond(t, p, far, rng)
+            else:
+                plant.blade(t, p, far, rng)
         elif shape == "clump":
+            first = p["paint"] if isinstance(p["paint"], str) else p["paint"][0]
             if role == "needle":
                 # A tuft of needles is a mass as a clump of leaves is — a
                 # cushion alone read as a plate from the road.
@@ -747,6 +781,26 @@ def build(v, far):
             elif role == "flesh":
                 ribs = max((q.get("ribs") or 0 for q in parts if q["shape"] == "fluted"), default=12)
                 dome(t, p, far, rng, ribs or 12)
+            elif role == "moss":
+                if first == "LILY_PAD":
+                    plant.lilypad(t, p, far, rng)
+                else:
+                    plant.cushion(t, p, far, rng)
+            elif role == "head":
+                if first in PETALS:
+                    plant.flower(t, p, far, rng)
+                elif first == "BULRUSH_HEAD":
+                    plant.sausage(t, p, far, rng)
+                elif first == "COTTON":
+                    plant.cushion(t, p, far, rng, soft=True)
+                else:
+                    berries(t, p, far, rng)
+            elif role == "stone":
+                plant.lump(t, p, far, rng)
+            elif role == "bone":
+                plant.cushion(t, p, far, rng, soft=True, shade=0.95)
+            elif role == "wood":
+                plant.tangle(t, p, far, rng)
             else:
                 wash = v["form"] == "wash"
                 weep = 0.6 if v["kind"] in ("birch", "willow") else 0.0
@@ -824,12 +878,14 @@ if views:
         cam = bpy.data.objects.new(view, cd)
         COL.objects.link(cam)
         if view == "close":
-            # The first variant from a car's seat, fourteen metres off.
+            # The first variant from a car's seat: fourteen metres off a
+            # tree, as near as frames a plant.
             first = spans[0][1]
             scene.render.resolution_x, scene.render.resolution_y = 900, 1200
             cd.lens = 24
-            cam.location = (first, -14, 1.3)
-            cam.rotation_euler = (math.radians(90 + 14), 0, 0)
+            off = max(2.5, min(14.0, tall * 1.4 + 1.0))
+            cam.location = (first, -off, min(1.3, 0.35 + tall * 0.45))
+            cam.rotation_euler = (math.radians(90 + 14 * min(1.0, off / 14)), 0, 0)
         else:
             aspect = max(1.6, width / max(1.0, tall * 1.12))
             scene.render.resolution_x = min(2400, round(420 * aspect))

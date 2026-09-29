@@ -28,6 +28,7 @@ import {
   understoryAround,
 } from "./planting.ts";
 import { underSnow } from "./ground-rules.ts";
+import { hasPropModel, propModel } from "./prop-models.ts";
 import { snowCap } from "./snow-cap.ts";
 import { LAKE_Y, type Terrain } from "./terrain.ts";
 
@@ -57,9 +58,14 @@ const MOSS_COLOR = 0x86a84e;
  * cap alone is not enough — it is a few pixels of a stone seen from a car,
  * and what has to read is the whole UPPER HALF being green. */
 export function stoneGeometry(rock: number, mossy: boolean): THREE.BufferGeometry {
-  const geo = new THREE.DodecahedronGeometry(1);
+  // The stone's model is a unit lump as the code's is, its faces shaded;
+  // bare, that shade is all its colour attribute carries (the material's
+  // colour is the bedrock's), and the moss is laid over the shade.
+  const model = propModel("stone", "stone", () => WHITE);
+  const geo = model ?? new THREE.DodecahedronGeometry(1);
   if (!mossy) return geo;
   const normal = geo.getAttribute("normal");
+  const shade = model?.getAttribute("color");
   const base = new THREE.Color(rock);
   const moss = new THREE.Color(MOSS_COLOR);
   const c = new THREE.Color();
@@ -67,10 +73,19 @@ export function stoneGeometry(rock: number, mossy: boolean): THREE.BufferGeometr
   for (let i = 0; i < normal.count; i++) {
     const up = normal.getY(i);
     c.copy(base).lerp(moss, Math.min(1, Math.max(0, (up - 0.1) * 1.6)));
+    if (shade) c.multiplyScalar(shade.getX(i));
     colors.push(c.r, c.g, c.b);
   }
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   return geo;
+}
+
+const WHITE = new THREE.Color(0xffffff);
+
+/** Whether the stone is drawn off its model — a shaded lump — rather than
+ * the code's dodecahedron: its bare material then reads the shade. */
+export function stoneModelled(): boolean {
+  return hasPropModel("stone", "stone");
 }
 
 /** Whether this stone is one of the mossy ones — from where it lies, so it
@@ -189,7 +204,10 @@ export function buildWild(
   // (snow-cap.ts): a cap on the top of a boulder and on the shelves of an
   // outcrop, nothing on their sheer sides.
   const stoneMat = snowCap(
-    new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) }),
+    new THREE.MeshLambertMaterial({
+      color: new THREE.Color(biome.ground.bedrock),
+      vertexColors: stoneModelled(),
+    }),
   );
   const mossGeo = stoneGeometry(biome.ground.bedrock, true);
   const mossMat = snowCap(new THREE.MeshLambertMaterial({ vertexColors: true }));
