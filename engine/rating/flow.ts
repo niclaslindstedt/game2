@@ -33,7 +33,7 @@ import { ANALYSIS } from "../analysis/budgets.ts";
 import { RATING } from "./scales.ts";
 import { effectiveKinds, segmentSpans, type Corner, type Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 export function rateFlow(walk: Walk, clock: Clock = wallClock): Facet {
   const started = clock.now();

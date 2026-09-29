@@ -38,7 +38,7 @@ import { STAGE_RULES } from "../mapgen/rules.ts";
 import { biomeRules } from "../mapgen/biomes.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, within, type Check, type Finding, type MetricReport } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 /** A piece of stage FURNITURE, as the rank sees it: a segment on the ground
  * with a thickness. A marker post is a segment of zero length; a barrier

@@ -43,7 +43,7 @@ import type { TerrainField } from "../mapgen/terrain.ts";
 import { RATING } from "./scales.ts";
 import { effectiveKinds, spread, type Walk } from "./walk.ts";
 import { facetScore, trait, traitNotes, type Facet, type Note, type Trait } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 /** How many trunks have to stand inside the near ring before the road
  * counts as closed in on that side. A handful of birches is a verge; this

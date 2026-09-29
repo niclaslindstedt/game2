@@ -9,7 +9,7 @@
 // under it. A roll the search could not see was six metres of surprise at
 // every crossing.
 
-import { createRng } from "../lib/prng.ts";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { biomeRules } from "./biomes.ts";
 import { STAGE_RULES as R, reliefOf, type StageKnobs } from "./rules.ts";
 

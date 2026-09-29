@@ -23,7 +23,7 @@ import {
 
 import { buildMinimap } from "./minimap-view.ts";
 import { nightNow } from "./daylight.ts";
-import { clamp } from "../lib/util.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { carHealth } from "./car-health.ts";
 import { tachometer } from "./car-instruments.ts";
 import { cornerSign, jumpSign, type JumpSign, type PaceSign } from "./pace-shape.ts";

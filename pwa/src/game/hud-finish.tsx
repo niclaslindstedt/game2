@@ -29,7 +29,7 @@ import { useInitials } from "./hud-initials.tsx";
 import { ResultsSheet, type SheetRow } from "./results-sheet.tsx";
 import { ScoreSheet } from "./score-board.tsx";
 import { BOARD_SIZE, DEFAULT_INITIALS, type ScoreEntry } from "./scores.ts";
-import { formatTime, ordinal } from "../lib/util.ts";
+import { formatTime, ordinal } from "@niclaslindstedt/oss-game-framework/hud/format";
 import type { RetireReason } from "@engine";
 
 /** WHAT BROKE, and what that means — the two halves of a retirement, kept

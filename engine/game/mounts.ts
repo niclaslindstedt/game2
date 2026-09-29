@@ -21,7 +21,7 @@
 // how hard the arrival pulled, and what that spends of each mount's life —
 // and collision.ts is the one place that writes the ledger.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { TUNING } from "./defs/tuning.ts";
 
 const M = TUNING.collision.mounts;

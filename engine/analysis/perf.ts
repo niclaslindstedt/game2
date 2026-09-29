@@ -30,7 +30,11 @@ import { createTerrain } from "../mapgen/terrain.ts";
 import type { FiniteStageLength, StageKnobs } from "../mapgen/rules.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, under, type Check, type Finding, type MetricReport } from "./types.ts";
-import { preciseClock, wallClock, type Clock } from "../lib/clock.ts";
+import {
+  preciseClock,
+  wallClock,
+  type Clock,
+} from "@niclaslindstedt/oss-game-framework/core/clock";
 
 /** Microseconds per call, averaged over a batch. The clock is read once
  * either side of the whole batch rather than per call: at a few

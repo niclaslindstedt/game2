@@ -12,7 +12,7 @@
 // picture comes along: a short stage is close in, a seven-minute one is
 // high above the biome it crosses.
 
-import { createCanvas } from "./png.mjs";
+import { createCanvas } from "@niclaslindstedt/oss-game-framework/tooling/png";
 
 import {
   HOUSE_PAINT,

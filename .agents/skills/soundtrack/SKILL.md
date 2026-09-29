@@ -18,7 +18,7 @@ that matter are structural and live in the relationship between bar 3 and bar
 on hearing it with the voices SEPARATED.
 
 **Read this skill's lessons first** —
-`node scripts/skill-lessons.mjs soundtrack --list`. Reflecting them back before
+`npx ogf-skill-lessons soundtrack --list`. Reflecting them back before
 the commit is the **`skill-reflection`** skill's job. Load **`write-code`** too.
 
 **A sound effect is NOT a small piece of music.** It is judged in a second, in
@@ -32,7 +32,7 @@ only the instrument they are played on.
 | --- | --- |
 | `pwa/src/game/audio/scores/<id>.ts` | **THE SCORE.** Its instruments, its patterns, its order, and the DECISIONS behind it in the header comment. This is where the work happens. |
 | `pwa/src/lib/tracker.ts` | The sequencer: flattens patterns through the order and books each note on the synth with a lookahead. Also `bars()`, `noteFrequency()`, `trackSeconds()`. |
-| `pwa/src/lib/voice.ts` / `synth.ts` | The instrument every note is played on, shared with the sound effects. |
+| The framework's `audio/voice` / `audio/synth` | The instrument every note is played on, shared with the sound effects (made once, in the game's room — `audio/bus.ts`, `room.ts`). |
 | `pwa/src/game/audio/scores/kit.ts` | **THE KIT.** The figures (a chord held, a gallop, brass on the offbeats, an arpeggio) and the patches (a kick, a snare, a hat under 7 kHz, a pad that holds) every score is built from. A score file is its DECISIONS and its tunes; the plumbing lives here. |
 | `pwa/src/game/audio/music-pick.ts` | **WHICH score a stage gets** — from its biome, its sky and the shape of its road. DOM-free; the tests read it.   |
 | `pwa/src/game/audio/music.ts` | The single player — play/stop/pause, which track is current, the per-track dynamic import, and `armMenuMusic`. |
@@ -201,5 +201,5 @@ learned, fix anything here that turned out WRONG, delete what went stale, and
 promote anything true in every run into this file.
 
 ```sh
-node scripts/skill-lessons.mjs soundtrack --list
+npx ogf-skill-lessons soundtrack --list
 ```

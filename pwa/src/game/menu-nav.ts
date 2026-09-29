@@ -18,12 +18,16 @@
 // one button down: every surface names its own most likely press, and START
 // takes it without the cursor having to be walked there first.
 //
-// Where the cursor GOES is menu-cursor.ts next door — a pure function over
+// Where the cursor GOES is the framework's `input/menu-cursor` — a pure function over
 // rectangles, DOM-free so the tests can read it. This file is the half that
 // has to ask a browser what is on screen.
 
 import { playUi } from "./audio/ui.ts";
-import { pickNeighbour, type NavDir, type NavRect } from "./menu-cursor.ts";
+import {
+  pickNeighbour,
+  type NavDir,
+  type NavRect,
+} from "@niclaslindstedt/oss-game-framework/input/menu-cursor";
 
 /** The menu surfaces, MOST MODAL FIRST. The first one on screen owns the
  * cursor — the results sheet sits over the finish card, the initials card

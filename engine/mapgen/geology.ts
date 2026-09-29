@@ -57,8 +57,8 @@
 // were already evaluated (a smoothstep's own `t(1-t)` peaks exactly on its
 // face), which is a derivative for free.
 
-import { smooth, valueNoise } from "../lib/noise.ts";
-import { createRng } from "../lib/prng.ts";
+import { smooth, valueNoise } from "@niclaslindstedt/oss-game-framework/core/noise";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { biomeRules } from "./biomes.ts";
 import {
   STAGE_RULES as R,

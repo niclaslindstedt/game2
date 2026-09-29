@@ -1,7 +1,7 @@
 ---
 title: "Crackle on Bluetooth" has four causes, and none of them is a level — settle which before touching a volume
 date: 2026-08-28
-scope: pwa/src/game/audio/, pwa/src/lib/synth.ts
+scope: pwa/src/game/audio/
 concepts: [beds, mixing, review, jitter, webaudio, bluetooth, aliasing]
 ---
 

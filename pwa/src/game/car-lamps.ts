@@ -32,7 +32,7 @@ import { BRAKE_DUST } from "./dust-light.ts";
 import { LAMP_BEAMS, type VideoSettings } from "./settings.ts";
 import { beamReach, dipFor, dippedOf, headShareAt, mainOf } from "./car-beams.ts";
 import type { LampStage } from "./daylight.ts";
-import { clamp } from "../lib/util.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 
 /** How much of each end's light a fully caked lens costs, 0..1. The tail
  * lamp loses more of what little it has: the front is a deep reflector

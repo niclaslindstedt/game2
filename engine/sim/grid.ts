@@ -61,7 +61,7 @@
 // assistance a mass start has.
 
 import { TUNING } from "../game/defs/tuning.ts";
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { STAGE_RULES } from "../mapgen/rules.ts";
 import { FIELD_SIZE, enter, entryList, type RivalEntry } from "./rivals.ts";
 import { type Difficulty } from "./skill.ts";

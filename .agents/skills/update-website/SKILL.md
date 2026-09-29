@@ -102,5 +102,5 @@ commit.
 1. **Expand the mapping table** if a new source file started feeding the
    website (operating data — edit it in place).
 2. **Record quirks** as lesson fragments — load the **`skill-reflection`**
-   skill (`node scripts/skill-lessons.mjs update-website --list`).
+   skill (`npx ogf-skill-lessons update-website --list`).
 3. **Commit the skill edit** alongside the website update.

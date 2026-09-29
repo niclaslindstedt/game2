@@ -26,7 +26,7 @@ import {
   type Track,
 } from "@engine";
 
-import { valueNoise } from "../lib/noise.ts";
+import { valueNoise } from "@niclaslindstedt/oss-game-framework/core/noise";
 import { ROAD_PAINT } from "./road-paint.ts";
 // The dissolve field is the SPILL's — one field, so the paint's boundary and
 // the scattered stones agree instead of reading as two effects.

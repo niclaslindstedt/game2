@@ -13,7 +13,7 @@ Load the `skill-reflection` skill at the beginning and end of the session. Read
 this skill's accumulated lessons with:
 
 ```sh
-node scripts/skill-lessons.mjs start-work
+npx ogf-skill-lessons start-work
 ```
 
 ## 1. Inspect the repository

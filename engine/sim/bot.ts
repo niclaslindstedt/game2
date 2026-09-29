@@ -11,7 +11,7 @@
 // is the sort of crew it is — leans on them on the way past. See THE OTHER
 // CARS at the bottom of the file.
 
-import { angleDiff, clamp } from "../lib/math.ts";
+import { angleDiff, clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { damageEffects } from "../game/damage.ts";
 import { latCeiling, slideFloor, surfaceGripFor, wheelSlide } from "../game/limits.ts";
 import { TUNING } from "../game/defs/tuning.ts";

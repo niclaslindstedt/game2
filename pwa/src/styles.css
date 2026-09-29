@@ -5585,7 +5585,7 @@ a.menu-version:focus-visible {
 }
 
 /* The bar TRAVELS to its new length, over the same 420ms and the same cubic
-   ease-out the figures count over (`lib/count.ts`): press MANUAL and the
+   ease-out the figures count over (the framework's `hud/count`): press MANUAL and the
    whole sheet moves as one thing, instead of two numbers rolling while four
    bars jump. */
 .garage-bar-fill {

@@ -41,7 +41,7 @@
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarDamage, GameEvent, GamePhase, GameState } from "../game/state.ts";
 import { blowWind } from "../game/step.ts";
-import { angleDiff, clamp, lerp } from "../lib/math.ts";
+import { angleDiff, clamp, lerp } from "@niclaslindstedt/oss-game-framework/core/math";
 
 /** Steps between two samples. Four at 120 Hz is thirty a second: a car
  * passing at 30 m/s moves a metre between samples, and a straight line

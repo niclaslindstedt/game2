@@ -43,7 +43,7 @@ import { rateRisk } from "./risk.ts";
 import { stageCharacter, stageDemand, stageDifficulty } from "./character.ts";
 import { walkStage } from "./walk.ts";
 import { rankNotes, type Facet, type Note, type StageRating } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 export { RATING } from "./scales.ts";
 export { CHARACTER_AXES, characterDistance } from "./types.ts";

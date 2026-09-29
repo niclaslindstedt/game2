@@ -26,7 +26,7 @@ import {
   type Track,
 } from "@engine";
 
-import { hash2, valueNoise } from "../lib/noise.ts";
+import { hash2, valueNoise } from "@niclaslindstedt/oss-game-framework/core/noise";
 import type { Biome, RegionGround } from "./biome.ts";
 // The rock line, the snowline and the slope rule are stated once, DOM-free,
 // so the dust and the tests read the same rule the tiles are painted with.

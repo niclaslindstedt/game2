@@ -10,7 +10,7 @@
 //
 // `car.ts` owns the step that calls this; the numbers are in `defs/`.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { driveBiteOf, surfaceGripFor } from "./limits.ts";
 import type { DamageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";

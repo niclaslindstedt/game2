@@ -49,7 +49,7 @@ import process from "node:process";
 
 import { NEUTRAL_INPUT, TUNING, createGame, locate, skipIntro, step } from "../engine/index.ts";
 
-import { createCanvas } from "./lib/png.mjs";
+import { createCanvas } from "@niclaslindstedt/oss-game-framework/tooling/png";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = join(root, "previews");

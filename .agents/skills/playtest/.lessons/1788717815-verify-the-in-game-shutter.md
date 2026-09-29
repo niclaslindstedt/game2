@@ -1,7 +1,7 @@
 ---
 title: Verifying the in-game shutter means waiting for the ROLL to grow — the encode is seconds, and reading IndexedDB early hands you the previous picture
 date: 2026-09-06
-scope: pwa/src/game/screenshots.ts, pwa/src/game/shot-hud.ts, scripts/
+scope: pwa/src/game/screenshots.ts, pwa/src/game/shot-press.ts, scripts/
 concepts: [screenshots, harness, measurement, verification, indexeddb]
 ---
 

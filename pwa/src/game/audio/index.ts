@@ -24,7 +24,7 @@ import { RUN_BANK } from "./bank.ts";
 import { sfx } from "./bus.ts";
 import { createDriveBed, type DriveBed } from "./drive-bed.ts";
 import { listenerFor, type Listener } from "./listener.ts";
-import { playSound } from "./play.ts";
+import { playSound } from "@niclaslindstedt/oss-game-framework/audio/play";
 import { heardFrom, soundForEvent, soundForThunder } from "./route.ts";
 
 export { setAudioVolumes, unlockAudio } from "./bus.ts";

@@ -13,8 +13,8 @@
 // field and the draws underneath them are search.ts's, shared with the
 // stage searches next door.
 
-import { angleDiff } from "../lib/math.ts";
-import { createRng } from "../lib/prng.ts";
+import { angleDiff } from "@niclaslindstedt/oss-game-framework/core/math";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { STAGE_RULES as R, type SegmentPlan, type StageKnobs } from "./rules.ts";
 import { challengeMul, knobScale, resolveKnobs, roadWidthOf } from "./rules.ts";
 import type { Climate } from "../game/climate.ts";

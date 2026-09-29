@@ -14,7 +14,7 @@
 // how much of all this it takes: heavier spins less, folds deeper. Numbers
 // live in defs/tuning.ts.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { KERB_MARKER, type KerbMarker, type WildObstacle } from "../mapgen/index.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";

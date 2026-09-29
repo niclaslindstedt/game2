@@ -18,7 +18,7 @@ export {
   recentLogs,
   type OutputLevel,
   type OutputSink,
-} from "./output.ts";
+} from "@niclaslindstedt/oss-game-framework/core/output";
 
 // The simulation.
 export {
@@ -674,6 +674,11 @@ export {
 } from "./rating/index.ts";
 
 // Deterministic utilities shared with tooling.
-export { createRng, type Rng } from "./lib/prng.ts";
-export { fixedClock, preciseClock, wallClock, type Clock } from "./lib/clock.ts";
-export { hash2, smooth, valueNoise } from "./lib/noise.ts";
+export { createRng, type Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
+export {
+  fixedClock,
+  preciseClock,
+  wallClock,
+  type Clock,
+} from "@niclaslindstedt/oss-game-framework/core/clock";
+export { hash2, smooth, valueNoise } from "@niclaslindstedt/oss-game-framework/core/noise";

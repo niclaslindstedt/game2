@@ -23,7 +23,7 @@ import { MenuHead } from "./menu.tsx";
 import { REPLAY_LIMIT, replayLine, replayTitle, type ReplayMeta } from "./replay.ts";
 import { deleteReplay, loadReplays, replays, replaysRead } from "./replay-store.ts";
 import { TRAINING_LEVEL, isTraining } from "./training.ts";
-import { formatDay } from "../lib/util.ts";
+import { formatDay } from "@niclaslindstedt/oss-game-framework/hud/format";
 
 /** THE STAGE A REPLAY WAS DRIVEN ON, named. The campaign's catalog for a
  * ladder stage, the training ground for the arena, and null for a road that

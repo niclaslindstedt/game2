@@ -30,7 +30,7 @@ import type { GameEvent, RunStats } from "../game/state.ts";
 import { createGame, skipIntro, step } from "../game/step.ts";
 import { compileStage, STAGE_RULES, type FiniteStageLength, type Track } from "../mapgen/index.ts";
 import { engineVersion } from "../version.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 import { RALLY_BOT, botInput, type BotProfile } from "./bot.ts";
 import {
   advanceField,

@@ -38,12 +38,16 @@ import type { BiomeId, BiomeRules, Season } from "@engine";
 
 import type { Daylight } from "../daylight.ts";
 
-import type { LayerSpec, LayerTarget, Synth } from "../../lib/voice.ts";
+import type {
+  LayerSpec,
+  LayerTarget,
+  Synth,
+} from "@niclaslindstedt/oss-game-framework/audio/voice";
 
 import { WORLD_BANK } from "./bank-world.ts";
-import { playSound } from "./play.ts";
-import { createRack, type Rack } from "./rack.ts";
-import type { PlayShape } from "./types.ts";
+import { playSound } from "@niclaslindstedt/oss-game-framework/audio/play";
+import { createRack, type Rack } from "@niclaslindstedt/oss-game-framework/audio/rack";
+import type { PlayShape } from "@niclaslindstedt/oss-game-framework/audio/types";
 
 /** What the biome is doing around the car this instant. */
 export type WorldVoice = {

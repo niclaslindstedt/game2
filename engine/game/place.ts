@@ -22,7 +22,7 @@
 // frame reproduces from its seed.
 
 import { finishAt, finishIndex, type Track } from "../mapgen/index.ts";
-import { warn } from "../output.ts";
+import { warn } from "@niclaslindstedt/oss-game-framework/core/output";
 import { TUNING as T } from "./defs/tuning.ts";
 import { stillCar, WHEEL_PARTS, type GameState, type RetireReason } from "./state.ts";
 import { locatePoint } from "./track.ts";

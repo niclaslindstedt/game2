@@ -40,7 +40,7 @@
 // segments and the note is already the combination, which is exactly the
 // thing a driver treats as one corner and a marshal marks as one.
 
-import { cellKey } from "../lib/math.ts";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
 import { isLoose, type Track } from "./compile.ts";
 import { corridorOffset, junctionMainEdge } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";

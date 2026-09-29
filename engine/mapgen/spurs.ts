@@ -26,7 +26,7 @@
 // solid an obstacle to a branch as the lake is: it turns away from them,
 // and where it cannot, it stops.
 
-import { hash2 } from "../lib/noise.ts";
+import { hash2 } from "@niclaslindstedt/oss-game-framework/core/noise";
 import type { Surface } from "./compile.ts";
 import { ROAD_CROSS } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";

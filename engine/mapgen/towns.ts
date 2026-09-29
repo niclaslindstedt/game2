@@ -23,8 +23,8 @@
 // vocabulary the homesteads use (`buildings.ts`), with a village's own
 // distribution over it.
 
-import { hash2 } from "../lib/noise.ts";
-import { createRng, type Rng } from "../lib/prng.ts";
+import { hash2 } from "@niclaslindstedt/oss-game-framework/core/noise";
+import { createRng, type Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import {
   buildingSolids,
   drawTownPlan,

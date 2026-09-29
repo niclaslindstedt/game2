@@ -30,7 +30,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-import { aliasEngine } from "./lib/engine-alias.mjs";
+import { aliasEngine } from "@niclaslindstedt/oss-game-framework/tooling/alias";
 import { renderLevelMap } from "./lib/level-map-render.mjs";
 import { describeSolids, indexAtS, stageFeatures, stageSummary } from "./lib/stage-features.mjs";
 

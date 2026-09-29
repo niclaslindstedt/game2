@@ -27,7 +27,7 @@
 // each other, which is a stage's grime vanishing at the first knock.
 
 import * as THREE from "three";
-import { clamp } from "../lib/util.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { paintLayers, type PaintLayers } from "./car-paint.ts";
 import { isLoose, type CarState, type GameState } from "@engine";
 

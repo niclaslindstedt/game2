@@ -13,7 +13,7 @@
 // seed; heights are smooth analytic noise, so the ground under the car
 // never stairsteps.
 
-import { cellKey } from "../lib/math.ts";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
 import type { Surface, Track } from "./compile.ts";
 import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 import { createStandField, type Stand, type StandField } from "./stands.ts";

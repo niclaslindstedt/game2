@@ -16,10 +16,10 @@ through a soft curve.
 ## The shape of it
 
 ```
-                         pwa/src/lib/synth.ts          ← the only WebAudio code
+          @niclaslindstedt/oss-game-framework/audio/synth ← the only WebAudio code
                                   ▲
               ┌───────────────────┴───────────────────┐
-        audio/bus.ts  (one context, two volume views: effects / music)
+        audio/bus.ts  (one context in the game's room, two volume views: effects / music)
               │                                       │
    ┌──────────┴──────────────┐                 music.ts ── scores/<id>.ts
    │                         │                    ▲             (tracker data)
@@ -35,10 +35,10 @@ through a soft curve.
 
 | Module                               | What it owns                                                                                                                                                                                                                         |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pwa/src/lib/voice.ts`               | The vocabulary: every parameter a sound may be written in, the `Synth` interface, and the `Layer` a bed is made of. **DOM-free**, so the banks, the router, the beds and the tests can describe a sound without importing a browser. |
-| `pwa/src/lib/synth.ts`               | The instrument. `tone()` and `noise()` for one-shots, `layer()` for the beds, one shared echo bus, a master limiter, and the whole audio-context lifecycle.                                                                          |
+| framework `audio/voice`              | The vocabulary: every parameter a sound may be written in, the `Synth` interface, and the `Layer` a bed is made of. **DOM-free**, so the banks, the router, the beds and the tests can describe a sound without importing a browser. |
+| framework `audio/synth`              | The instrument. `tone()` and `noise()` for one-shots, `layer()` for the beds, one shared echo bus (tuned per game: this one's is `audio/room.ts`), a master limiter, and the whole audio-context lifecycle.                          |
 | `pwa/src/lib/tracker.ts`             | The music sequencer: patterns through an order, booked on the audio clock with a settable lookahead, and one theme handed to the next where the last one's booking ends.                                                             |
-| `pwa/src/game/audio/bus.ts`          | One synth, two volume-scaled views so the options screen can mix effects and music independently.                                                                                                                                    |
+| `pwa/src/game/audio/bus.ts`          | One synth (in `room.ts`'s echo), two volume-scaled views (the framework's `scaledView`) so the options screen can mix effects and music independently.                                                                               |
 | `pwa/src/game/audio/bank.ts`         | Every discrete sound the CAR makes, as data — and `RUN_BANK`, the car and the stage served together.                                                                                                                                 |
 | `pwa/src/game/audio/bank-stage.ts`   | Every discrete sound the STAGE makes: the lights, the split boards, the line, the crowd, the blocks, the sky.                                                                                                                        |
 | `pwa/src/game/audio/bank-world.ts`   | The biome's own sounds: birds, insects, choughs, geese and swans on passage, a marmot, an owl, a coyote, cows and sheep, cowbells, meltwater, a diesel's horn, a crossing bell, a marshal's whistle.                                 |
@@ -48,11 +48,13 @@ through a soft curve.
 | `pwa/src/game/audio/engine-voice.ts` | The engine, as six layers: where each should be for a set of revs, a load and a seat.                                                                                                                                                |
 | `pwa/src/game/audio/road-voice.ts`   | The tyres (one voice per surface, snow included), the wind, the weather, the gale and the drift's scrub, as fourteen layers.                                                                                                         |
 | `pwa/src/game/audio/ambience.ts`     | The world: four layers (the canopy, the wind over a pass, the crowd, a train) and the roster of calls a biome makes at an hour, a height and a season.                                                                               |
-| `pwa/src/game/audio/rack.ts`         | The plumbing every bed shares: build a layer, rebuild one whose context died, steer it.                                                                                                                                              |
+| framework `audio/rack`               | The plumbing every bed shares: build a layer, rebuild one whose context died, steer it.                                                                                                                                              |
 | `pwa/src/game/audio/drive-bed.ts`    | The scheduler: the state, once a frame, into every layer's target — and the cues nothing reports (the lights, the lift's crackle, the wipers, the whistle).                                                                          |
 | `pwa/src/game/audio/music-pick.ts`   | Which score a stage gets, from its biome, its sky and the shape of its road.                                                                                                                                                         |
 | `pwa/src/game/audio/music.ts`        | The single player: which theme is up, the per-track dynamic import, and the wide booking horizon a race being stood up is carried across on.                                                                                         |
 | `pwa/src/game/audio/scores/`         | The scores themselves, over a shared `kit.ts` of figures and patches.                                                                                                                                                                |
+
+The instrument (the vocabulary, the synth, the one-shot player, the rack and the fader view) is the shared game framework's, `@niclaslindstedt/oss-game-framework/audio`, used by this game's sibling games too: a fault in it is fixed there and pulled in by moving the tag in `package.json`. Everything under `pwa/src/game/audio/` — every sound, bed and score — is this game's own.
 
 ## An event, a cue, or a bed
 
@@ -134,7 +136,7 @@ noise, the filter's type and resonance, the curve, the chorus width — because
 those are the things that cannot be moved smoothly. Everything that can be is
 a target. A parameter that has not moved is not re-scheduled.
 
-`rack.ts` is the plumbing every bed shares: it builds a layer the first time
+The framework's `audio/rack` is the plumbing every bed shares: it builds a layer the first time
 it is asked for, rebuilds one whose context has been replaced under it (iOS
 hands a backgrounded PWA a dead `AudioContext` and the synth swaps it), and
 tries again next frame when the context is still locked.

@@ -30,7 +30,7 @@
 
 import * as THREE from "three";
 
-import { clamp } from "../../lib/util.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { MeshBuilder, plate, solid, tube, type V3 } from "./builder.ts";
 import type { InteriorDetail } from "./interior.ts";
 import { disc } from "./lamps.ts";

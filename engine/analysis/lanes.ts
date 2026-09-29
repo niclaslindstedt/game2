@@ -45,7 +45,7 @@ import type { Track } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, type Check, type Finding, type MetricReport } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 /** One road off the stage, with what it is called in a finding, and how
  * far past each end the walk runs. A road that ENDS on a pad or a yard is

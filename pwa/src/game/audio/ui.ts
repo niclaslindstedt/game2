@@ -5,8 +5,8 @@
 
 import { UI_BANK, UI_SOUND, type UiCue } from "./bank-ui.ts";
 import { sfx } from "./bus.ts";
-import { playSound } from "./play.ts";
-import type { PlayShape } from "./types.ts";
+import { playSound } from "@niclaslindstedt/oss-game-framework/audio/play";
+import type { PlayShape } from "@niclaslindstedt/oss-game-framework/audio/types";
 
 export type { UiCue } from "./bank-ui.ts";
 

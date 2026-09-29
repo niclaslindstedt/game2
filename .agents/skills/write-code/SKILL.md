@@ -11,7 +11,7 @@ that owns the subject (`engine-system`, `mapgen-improvement`, `bot-improvement`,
 here.
 
 **Read this skill's lessons first** —
-`node scripts/skill-lessons.mjs write-code --list`, then the ones your task
+`npx ogf-skill-lessons write-code --list`, then the ones your task
 touches (`--scope=…`, `--concepts=…`). Reflecting them back before the commit
 is the `skill-reflection` skill's job; load it at both ends of the session.
 
@@ -88,7 +88,7 @@ Three gates before anything leaves a comment and becomes a fragment:
    _different_ file would need and would not find.
 3. **Does something already say it?** Check `AGENTS.md`, the doc named in its
    sync table, and the owning skill's `SKILL.md` and lessons
-   (`node scripts/skill-lessons.mjs --scope=<path>`). A rule in two places
+   (`npx ogf-skill-lessons --scope=<path>`). A rule in two places
    drifts, and then neither is trustworthy.
 
 Then write it where it belongs — the doc if `AGENTS.md`'s sync table names one,
@@ -223,8 +223,8 @@ Make targets are the definition of green CI enforces).
   the parameter to what the module actually needs and restates nothing. Check the
   import chain before writing the test — and when a pure model sits in a
   module that is not DOM-free, either leave it untested or split it the way
-  the audio surface already does (`lib/voice.ts` describes, `lib/synth.ts`
-  touches WebAudio); do not widen the root config.
+  the audio surface already does (the framework's `audio/voice` describes,
+  its `audio/synth` touches WebAudio); do not widen the root config.
 - Import the engine through the **`@engine`** alias (→ `engine/index.ts`),
   never a relative path into `engine/`.
 - Physics tests build **synthetic tracks** via `compileTrack(seed, segments)`
@@ -243,12 +243,14 @@ Make targets are the definition of green CI enforces).
 
 - **Keep generic game code separate.** Anything not specific to THIS game
   (math, PRNG, angle helpers engine-side; general UI utilities app-side) goes
-  in `engine/lib/` or `pwa/src/lib/` — never tangled into a game-specific
-  module. Those pools are what a sequel keeps as-is.
+  in `pwa/src/lib/` — or, when a sibling game would use it too, into the
+  shared framework (`@niclaslindstedt/oss-game-framework`), which already holds the
+  engine's whole generic pool (`core/*`) — never tangled into a game-specific
+  module.
 - **The engine never reads the wall clock; it is HANDED one.** Code in
   `engine/` that times itself or stamps a record — an analysis or rating
   pass's `ms`, a tape's `recorded` date — takes a `Clock` from
-  `engine/lib/clock.ts` (a trailing `clock: Clock = wallClock` parameter, or a
+  the framework's `core/clock` (a trailing `clock: Clock = wallClock` parameter, or a
   `clock` option on the entry point) and calls `clock.now()`; it never calls
   `Date.now`, `performance.now` or `new Date()`. A test hands in
   `fixedClock()` and compares the whole report. `tests/imports_test.ts` and

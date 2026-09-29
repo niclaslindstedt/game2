@@ -40,7 +40,7 @@
 // in step order and read by interpolation, so two runs of one seed leave
 // the same snow and a replay drives its own ruts.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { handoverAt, ROAD_CROSS, snowWear } from "../mapgen/road.ts";
 import { flatTrack, type Track } from "../mapgen/index.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";

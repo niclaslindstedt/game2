@@ -8,7 +8,7 @@
 
 import { SAMPLE_STEP, STAGE_RULES as R } from "./rules.ts";
 import { type StageStream } from "./endless.ts";
-import { cellKey } from "../lib/math.ts";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
 import { junctionFlat, junctionOverlap, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, cutSpur } from "./spur-build.ts";
 import { placeBlock, PLATFORM_HOLD, type ShelfBand, type Spur } from "./spurs.ts";

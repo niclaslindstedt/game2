@@ -38,7 +38,7 @@ import {
   type InternalSystem,
 } from "@engine";
 
-import { clamp } from "../lib/util.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 
 const C = TUNING.collision;
 

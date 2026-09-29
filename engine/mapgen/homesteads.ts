@@ -23,8 +23,8 @@
 // the analysis that judges a branch by whether it gets out of the land
 // never sees one.
 
-import { hash2, smooth } from "../lib/noise.ts";
-import { createRng, type Rng } from "../lib/prng.ts";
+import { hash2, smooth } from "@niclaslindstedt/oss-game-framework/core/noise";
+import { createRng, type Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import {
   buildingSolids,
   drawHousePlan,

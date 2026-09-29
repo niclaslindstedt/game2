@@ -8,9 +8,9 @@
 // is only WHERE the line is being steered, which is what generate.ts and
 // circuit.ts own.
 
-import type { Rng } from "../lib/prng.ts";
+import type { Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { biomeRules } from "./biomes.ts";
-import { cellKey } from "../lib/math.ts";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
 import { straightness } from "./rolling.ts";
 import {
   SAMPLE_STEP,

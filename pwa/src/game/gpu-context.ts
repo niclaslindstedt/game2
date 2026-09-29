@@ -17,7 +17,7 @@
 // it too; it is said here as well because this must not depend on which of the
 // two listeners the browser runs first.
 //
-// DOM-free, like `thumb-guard.ts` beside it: the target is injected and typed
+// DOM-free, like the framework's `input/thumb-guard`: the target is injected and typed
 // structurally, so the rules below are checked by the root suite.
 
 /** The listeners a watch needs from the canvas it watches. Typed structurally

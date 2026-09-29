@@ -13,7 +13,7 @@ name: version-bump
 # is force-pushed, and a hand-pushed `v*` tag starts nothing.
 #
 # `bump` defaults to `auto` — derived from the .changes/unreleased/ fragments
-# by scripts/release/compute-bump.mjs. Pick patch/minor/major to override.
+# by the framework's ogf-compute-bump. Pick patch/minor/major to override.
 
 on:
   workflow_dispatch:
@@ -69,7 +69,7 @@ jobs:
           REQUESTED: ${{ inputs.bump }}
         run: |
           if [ "$REQUESTED" = "auto" ] || [ -z "$REQUESTED" ]; then
-            BUMP=$(node scripts/release/compute-bump.mjs)
+            BUMP=$(npx ogf-compute-bump)
           else
             BUMP="$REQUESTED"
           fi

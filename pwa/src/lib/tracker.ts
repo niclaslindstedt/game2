@@ -23,7 +23,13 @@
 // under a chorus. It is the difference between a SNES cue and a PlayStation
 // one, and it costs one automation event per note.
 
-import type { FilterOptions, NoiseColor, Synth, VibratoOptions, WaveType } from "./voice.ts";
+import type {
+  FilterOptions,
+  NoiseColor,
+  Synth,
+  VibratoOptions,
+  WaveType,
+} from "@niclaslindstedt/oss-game-framework/audio/voice";
 
 /** A named patch: how one voice sounds, independent of what it plays. */
 export type Instrument = {

@@ -19,8 +19,8 @@
 // Everything here runs inside `step()`, off the state's own clock and its
 // own seeded stream, so a run with traffic in it replays like one without.
 
-import { createRng, type Rng } from "../lib/prng.ts";
-import { clamp } from "../lib/math.ts";
+import { createRng, type Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import {
   planTraffic,
   type CarPark,

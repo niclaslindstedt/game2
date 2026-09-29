@@ -11,7 +11,7 @@ biome a stage is set in, which plant communities quilt it, how each tree is
 built, how the ground is painted, and where the bedrock shows through.
 
 **Read this skill's lessons first** —
-`node scripts/skill-lessons.mjs nature --list`, then the ones the task
+`npx ogf-skill-lessons nature --list`, then the ones the task
 touches. Load **`skill-reflection`** at both ends of the session, and
 **`write-code`** beside this one for any code change. For anything that
 moves or animates (dust, spray), that is `visual-effects`; for the road and
@@ -37,7 +37,7 @@ the flora modules, and `buildFlora` throws on an unknown id, so a typo in a
 new mix fails loudly on the first stage build. `biome.ts` also checks at
 import that every engine grove and region has a row, so a quilt id with no
 community cannot silently fall back to the wrong wood. Shared value noise lives in
-`pwa/src/lib/noise.ts` — terrain shaping and grove placement must keep
+the framework's `@niclaslindstedt/oss-game-framework/core/noise` (the engine rides the same field) — terrain shaping and grove placement must keep
 drawing from the same helpers or their patches stop lining up.
 
 ## The biome model

@@ -17,7 +17,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createTrackPlayer, type Track } from "../pwa/src/lib/tracker.ts";
-import type { Synth } from "../pwa/src/lib/voice.ts";
+import type { Synth } from "@niclaslindstedt/oss-game-framework/audio/voice";
 
 /** A synth that plays nothing and remembers everything: one row per note, in
  * the order booked, carrying the CLOCK TIME it was booked for. */

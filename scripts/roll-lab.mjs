@@ -37,7 +37,7 @@ import {
   step,
 } from "../engine/index.ts";
 
-import { createCanvas } from "./lib/png.mjs";
+import { createCanvas } from "@niclaslindstedt/oss-game-framework/tooling/png";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = join(root, "previews");

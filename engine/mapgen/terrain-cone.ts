@@ -16,8 +16,8 @@
 // sample search, because settling it twice is what a query this hot cannot
 // afford.
 
-import { createRng } from "../lib/prng.ts";
-import { smooth, valueNoise } from "../lib/noise.ts";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
+import { smooth, valueNoise } from "@niclaslindstedt/oss-game-framework/core/noise";
 import type { Track } from "./compile.ts";
 import { biomeRules } from "./biomes.ts";
 import { createLandField } from "./land.ts";

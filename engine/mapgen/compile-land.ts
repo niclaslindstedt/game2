@@ -11,7 +11,7 @@
 import type { SegmentPlan, StageKnobs } from "./rules.ts";
 import { SAMPLE_STEP, STAGE_RULES as R, followGradeOf, followLagOf, roadWidthOf } from "./rules.ts";
 import { boredAt, type Bore } from "./search.ts";
-import { cellKey } from "../lib/math.ts";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
 import { buildableAt, createLandField } from "./land.ts";
 import { type Climate } from "../game/climate.ts";
 import { straightness } from "./rolling.ts";

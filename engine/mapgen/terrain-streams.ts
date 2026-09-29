@@ -9,7 +9,7 @@
 // It is the leaf under `terrain.ts`: the field builds streams from the
 // crossings it collects, and everything about the SHAPE of one is here.
 
-import { smooth } from "../lib/noise.ts";
+import { smooth } from "@niclaslindstedt/oss-game-framework/core/noise";
 import type { Track, TrackSample } from "./compile.ts";
 import {
   BANK,

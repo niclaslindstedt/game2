@@ -53,7 +53,7 @@ import { dirname, join, relative } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { serveDir } from "./lib/serve-dist.mjs";
+import { serveDir } from "@niclaslindstedt/oss-game-framework/tooling/serve-dist";
 import { compose, resolvedFont } from "./store-shots/compose.mjs";
 import {
   assertRasters,

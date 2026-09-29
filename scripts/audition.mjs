@@ -47,12 +47,18 @@ const out = outArg >= 0 ? args[outArg + 1] : join(root, "previews", "audition.ht
 // `envelopeShape`, `safeCutoff` and the shaper's arithmetic, which every
 // voice the synth plays goes through. Leave it out and `tsc` erases the
 // import, the page builds clean, and the first button anyone presses throws.
+//
+// The instrument itself — the vocabulary, the synth, the one-shot player and
+// the rack — is the shared framework's, read from the SOURCE it ships under
+// node_modules (`src/audio/`), so the page plays the very code the game does.
+const FRAMEWORK_AUDIO = "node_modules/@niclaslindstedt/oss-game-framework/src/audio";
 const RUNTIME = [
-  "pwa/src/lib/voice.ts",
-  "pwa/src/lib/synth.ts",
+  `${FRAMEWORK_AUDIO}/voice.ts`,
+  `${FRAMEWORK_AUDIO}/synth.ts`,
+  "pwa/src/game/audio/room.ts",
   "pwa/src/lib/tracker.ts",
-  "pwa/src/game/audio/play.ts",
-  "pwa/src/game/audio/rack.ts",
+  `${FRAMEWORK_AUDIO}/play.ts`,
+  `${FRAMEWORK_AUDIO}/rack.ts`,
   "pwa/src/game/audio/listener.ts",
   "pwa/src/game/audio/engine-voice.ts",
   "pwa/src/game/audio/road-voice.ts",
@@ -350,7 +356,7 @@ const page = `<!doctype html>
 ${runtime}
 
 const DATA = ${data};
-const synth = createSynth();
+const synth = createSynth(ROOM);
 const player = createTrackPlayer(synth);
 
 const stateEl = document.getElementById("state");

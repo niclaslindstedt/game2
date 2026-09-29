@@ -40,7 +40,7 @@
 // `npm run sim -- --field`, which drives the whole field and prints what
 // each difficulty actually does to the clock.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import type { GearboxMode } from "../game/defs/cars.ts";
 import { RALLY_BOT, type BotProfile } from "./bot.ts";
 

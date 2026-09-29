@@ -2,7 +2,7 @@
 // PNG in and PNG out, in pure Node — the pixels the desktop shell's icon
 // pipeline is built on.
 //
-// **This tree may not import the repository's own `scripts/lib/png.mjs`.**
+// **This tree may not import the root's PNG encoder (the framework's `tooling/png`).**
 // `scripts/` is tooling, which may import anything while nothing imports it,
 // and `tauri/` is a platform shell that lives outside the npm workspace with
 // its own dependency tree. So the encoder is spelled again over here, small

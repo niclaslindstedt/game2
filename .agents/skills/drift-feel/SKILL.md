@@ -14,7 +14,7 @@ Everything that shapes that answer lives in **`TUNING.drift`**
 no knob expresses what you want — and then add a knob.
 
 **Read this skill's lessons first** —
-`node scripts/skill-lessons.mjs drift-feel --list`.
+`npx ogf-skill-lessons drift-feel --list`.
 
 Load `game-feel` beside this one when the goal is the SENSATION (speed,
 drama, the camera); this skill is the mechanism under it.

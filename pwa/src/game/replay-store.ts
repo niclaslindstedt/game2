@@ -3,7 +3,7 @@
 // replay.ts.
 //
 // INDEXEDDB RATHER THAN localStorage, for the reason the screenshot roll uses
-// it (../lib/shot-store.ts): a tape is a megabyte of JSONL and localStorage's
+// it (the framework's `shots/shot-store`): a tape is a megabyte of JSONL and localStorage's
 // whole budget is five of them in UTF-16. The tapes are also held OUT of the
 // listing — `replays()` hands back metadata alone, and the text is read by id
 // only when one is about to be driven — so a page listing a dozen replays

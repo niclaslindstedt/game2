@@ -32,7 +32,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { ordinal } from "../lib/util.ts";
+import { ordinal } from "@niclaslindstedt/oss-game-framework/hud/format";
 import {
   LOCATIONS,
   continueAt,

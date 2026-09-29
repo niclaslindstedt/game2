@@ -26,10 +26,10 @@ that register, and reaching for them is what stops a new sound sounding chip:
 **MUSIC IS NOT HERE.** A score is tracker data with an arrangement, judged by
 its structure and its mix over two minutes. Different format, different review
 surface, different faults: load the **`soundtrack`** skill. The two crafts share
-only `pwa/src/lib/synth.ts`, the instrument underneath both.
+only the synth (the framework's `audio/synth`), the instrument underneath both.
 
 **Read this skill's lessons first** —
-`node scripts/skill-lessons.mjs sound-effects --list`, then the ones this task
+`npx ogf-skill-lessons sound-effects --list`, then the ones this task
 touches. Reflecting them back at the end is the **`skill-reflection`** skill's
 job; load it at both ends of the session. Load **`write-code`** too.
 
@@ -37,21 +37,22 @@ job; load it at both ends of the session. Load **`write-code`** too.
 
 | File | Role |
 | --- | --- |
-| `pwa/src/lib/voice.ts` | **The vocabulary.** Every parameter a sound may be written in, the `Synth` interface, and the `LayerSpec` / `LayerTarget` / `Layer` a bed is made of. DOM-free on purpose, so the banks, the router, the beds and the tests can describe a sound without importing a browser. |
-| `pwa/src/lib/synth.ts` | The instrument: `tone()` and `noise()` for one-shots, `layer()` for the beds, the shared echo bus, the master limiter, and the whole audio-context lifecycle (unlock, autostart, iOS interruption, zombie-context recovery, the route re-seat). The only module that touches WebAudio. |
+| `@niclaslindstedt/oss-game-framework/audio/voice` | **The vocabulary.** Every parameter a sound may be written in, the `Synth` interface, and the `LayerSpec` / `LayerTarget` / `Layer` a bed is made of. DOM-free on purpose, so the banks, the router, the beds and the tests can describe a sound without importing a browser. |
+| `@niclaslindstedt/oss-game-framework/audio/synth` | The instrument: `tone()` and `noise()` for one-shots, `layer()` for the beds, the shared echo bus, the master limiter, and the whole audio-context lifecycle (unlock, autostart, iOS interruption, zombie-context recovery, the route re-seat). The only module that touches WebAudio. A fix to it is made in the framework and pulled in by moving the tag. |
 | `pwa/src/game/audio/bank.ts` | **THE RUN'S SOUND DESIGN.** Every discrete sound the car and the stage make, as data: a description and a list of voices. This is where most SFX work happens. |
 | `pwa/src/game/audio/bank-ui.ts` | The interface's own sounds. Separate because the menu is on the app's STARTUP path and must not pull the run's bank into the entry chunk. |
 | `pwa/src/game/audio/route.ts` | **WHICH sound an event makes**, and how big — a pure function from `GameEvent` to a bank id plus a `PlayShape`. |
-| `pwa/src/game/audio/play.ts` | Firing one def: voices go to the synth verbatim, scaled by the shape. |
+| `@niclaslindstedt/oss-game-framework/audio/play` | Firing one def: voices go to the synth verbatim, scaled by the shape. |
 | `pwa/src/game/audio/bank-stage.ts` | The STAGE's sounds — the lights, the split boards, the line, the crowd, the blocks, the sky. Served with the car's as `RUN_BANK`. |
 | `pwa/src/game/audio/bank-world.ts` | The BIOME's sounds — birds, insects, an owl, a coyote, livestock, a train's horn, a crossing bell, the marshal's whistle. Raised by `ambience.ts`, never by the router.   |
 | `pwa/src/game/audio/listener.ts` | **WHERE THE EAR IS.** One row per camera: what each seat does to the engine, the exhaust, the tyres, the wind, the weather, the world, the one-shots. The beds and the router both read it. |
 | `pwa/src/game/audio/engine-voice.ts` | The engine, as six LAYERS: `engineTargets` is a pure function from revs, load, wear and a seat to where each should be. The one sound whose pitch is arithmetic rather than taste. |
 | `pwa/src/game/audio/road-voice.ts` | The tyres, the wind, the weather, the gale and the DRIFT's scrub — fourteen layers, as a pure function of how the car is going. |
 | `pwa/src/game/audio/ambience.ts` | The WORLD: three layers (the canopy, the crowd, a train) and the roster of calls a biome makes at an hour, raised on a loose clock and thinned by speed.   |
-| `pwa/src/game/audio/rack.ts` | The plumbing every bed shares: build a layer, rebuild one whose context died under it, steer it on its glide. |
+| `@niclaslindstedt/oss-game-framework/audio/rack` | The plumbing every bed shares: build a layer, rebuild one whose context died under it, steer it on its glide. |
 | `pwa/src/game/audio/drive-bed.ts` | The scheduler: reads `GameState` once a frame, turns it into every layer's target, and raises the cues nothing reports — the lights, the lift's crackle, the wipers, the whistle. |
-| `pwa/src/game/audio/bus.ts` | One synth, two volume-scaled views (effects / music), and the unlock. |
+| `pwa/src/game/audio/bus.ts` | One synth, two volume-scaled views (effects / music — the framework's `scaledView`), and the unlock. |
+| `pwa/src/game/audio/room.ts` | The game's ROOM: the echo the one synth is built with, shared with the audition page so what is judged there is what plays. |
 | `pwa/src/game/audio/ui.ts` | Raising an interface cue, and the repeat cap on it. Deliberately does NOT unlock — see the last section. |
 | `scripts/audition.mjs` | **THE REVIEW SURFACE** (`make audition`). |
 
@@ -229,7 +230,7 @@ fixing anything here that turned out WRONG, deleting what went stale, and
 promoting anything true in every run into the vocabulary above.
 
 ```sh
-node scripts/skill-lessons.mjs sound-effects --list
+npx ogf-skill-lessons sound-effects --list
 ```
 
 The lessons here are a **palette of parameter recipes that worked** — read them
