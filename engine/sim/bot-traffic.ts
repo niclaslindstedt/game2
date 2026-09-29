@@ -6,7 +6,7 @@
 // aggression. The start is here too, because a grid is the one moment the
 // whole field is a traffic problem and nothing else.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarInput, GameState } from "../game/state.ts";
 

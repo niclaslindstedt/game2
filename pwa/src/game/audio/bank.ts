@@ -31,7 +31,7 @@
 // 0.04. If everything is loud, nothing is.
 
 import { STAGE_BANK } from "./bank-stage.ts";
-import type { SoundBank } from "./types.ts";
+import type { SoundBank } from "@niclaslindstedt/oss-game-framework/audio/types";
 
 export const CAR_BANK: SoundBank = {
   // ── The drivetrain ───────────────────────────────────────────────────────

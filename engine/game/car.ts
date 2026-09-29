@@ -12,7 +12,7 @@
 // and rebounds out of — the car's weight, made visible. Numbers live in
 // defs/, not here.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import {
   askedSlide,
   slideFloor,

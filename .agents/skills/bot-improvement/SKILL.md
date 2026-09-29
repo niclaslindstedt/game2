@@ -15,7 +15,7 @@ stops drifting hairpins, drift regressions stop showing in the sim table, so
 its competence is load-bearing for the whole measuring workflow.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs bot-improvement --list`, then the ones this
+`npx ogf-skill-lessons bot-improvement --list`, then the ones this
 task touches (`--scope=…`, `--concepts=…`). Load **`skill-reflection`** at
 both ends of the session.
 

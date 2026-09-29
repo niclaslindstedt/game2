@@ -1,7 +1,7 @@
 ---
 title: A HUD element with an entrance animation is INVISIBLE in an in-game screenshot unless the layer freezes it — the picture is painted at time zero
 date: 2026-09-06
-scope: pwa/src/styles.css, pwa/src/game/shot-hud.ts
+scope: pwa/src/styles.css, pwa/src/game/shot-press.ts
 concepts: [css, hud, screenshots, animation, verification]
 ---
 

@@ -12,7 +12,7 @@ split: numbers say whether the game is _sound_; pictures say whether it _looks
 and reads_ right.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs playtest --list`, then the ones this task
+`npx ogf-skill-lessons playtest --list`, then the ones this task
 touches. Load **`skill-reflection`** at both ends of the session.
 
 ## Tooling

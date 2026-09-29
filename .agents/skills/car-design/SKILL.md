@@ -27,7 +27,7 @@ and anything new a builder draws goes on one side of the line on purpose:
 piece of dress it lays over it.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs car-design --list`, then what the task
+`npx ogf-skill-lessons car-design --list`, then what the task
 touches. Load `skill-reflection` at both ends, and `write-code` beside this
 skill for any code change.
 

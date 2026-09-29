@@ -29,7 +29,7 @@ import { InitialsHint, InitialsSlots, type Initials } from "./hud-initials.tsx";
 import { pageCount, pageOf, pageSpan, stepPage } from "./results-pages.ts";
 import { ROW } from "./results-sheet.tsx";
 import { BOARD_SIZE, type ScoreEntry } from "./scores.ts";
-import { formatDay, formatTime } from "../lib/util.ts";
+import { formatDay, formatTime } from "@niclaslindstedt/oss-game-framework/hud/format";
 import { carById } from "@engine";
 
 /** The fewest rows a page of the board is ever cut to — HALF THE BOARD, and

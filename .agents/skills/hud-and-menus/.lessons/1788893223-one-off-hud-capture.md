@@ -1,7 +1,7 @@
 ---
 title: Photograph a HUD state no suite scene reaches with a throwaway script AT THE REPO ROOT, over `serveDir` — and retry, because a live readout races the capture
 date: 2026-09-07
-scope: scripts/screenshot.mjs, scripts/lib/serve-dist.mjs
+scope: scripts/screenshot.mjs
 concepts: [screenshots, review, hud, harness]
 ---
 

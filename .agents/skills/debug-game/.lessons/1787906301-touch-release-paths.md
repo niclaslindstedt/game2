@@ -1,7 +1,7 @@
 ---
 title: A touch control that trusts only its own pointerup will eventually stick — on iOS the end of a touch is not guaranteed to be delivered anywhere
 date: 2026-08-28
-scope: pwa/src/game/hud.tsx, pwa/src/game/thumb-guard.ts
+scope: pwa/src/game/hud.tsx, pwa/src/game/hud-touch.tsx
 concepts: [input, touch, ios, hud, bug-classification]
 ---
 

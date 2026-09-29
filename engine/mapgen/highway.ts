@@ -22,8 +22,8 @@
 // shared ground. This module answers WHERE the tarmac goes. `compile.ts`
 // settles how high it is, from the junction outward, the way it always has.
 
-import { createRng } from "../lib/prng.ts";
-import { cellKey } from "../lib/math.ts";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
 import { biomeRules } from "./biomes.ts";
 import { LAKE_Y, type LandField } from "./land.ts";
 import { roadClearance } from "./road.ts";

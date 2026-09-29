@@ -10,7 +10,7 @@
 // The wind is here for the same reason: it moves the BODY, and it moves it
 // without ever spinning it.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { TUNING } from "./defs/tuning.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import type { CarState } from "./state.ts";

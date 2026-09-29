@@ -33,7 +33,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-import { aliasEngine } from "./lib/engine-alias.mjs";
+import { aliasEngine } from "@niclaslindstedt/oss-game-framework/tooling/alias";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const QUALITIES = ["render", "game"];

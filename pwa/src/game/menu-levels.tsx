@@ -24,7 +24,7 @@ import { FIELD_SIZE, STAGE_RULES, type Difficulty } from "@engine";
 import type { ComponentChildren } from "preact";
 import { useState } from "react";
 
-import { formatTime, ordinal } from "../lib/util.ts";
+import { formatTime, ordinal } from "@niclaslindstedt/oss-game-framework/hud/format";
 import { Glyph } from "./menu-glyphs.tsx";
 import {
   LOCATIONS,

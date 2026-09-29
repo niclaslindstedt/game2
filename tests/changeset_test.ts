@@ -20,7 +20,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-/** The release's own vocabulary (`scripts/release/fragments.mjs`), restated
+/** The release's own vocabulary (the framework's `tooling/release/fragments.mjs`,
+ * run as the `ogf-*` bins), restated
  * here rather than imported: that module `process.exit`s on a bad fragment,
  * which inside a test runner takes the whole run down with it and reports
  * nothing about which file was wrong. */

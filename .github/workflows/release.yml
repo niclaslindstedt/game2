@@ -5,7 +5,7 @@ name: release
 # the break-glass, with the same `bump` input. The workflow derives
 # the semver bump from the changeset fragments in .changes/unreleased/
 # (their front-matter carries the Added/Changed/Fixed/... type and an
-# optional `breaking: true` — see scripts/release/compute-bump.mjs),
+# optional `breaking: true` — see the framework's ogf-compute-bump),
 # then consumes those fragments into a new CHANGELOG section, updates
 # every shipped version string via scripts/update-versions.sh, tags
 # vX.Y.Z, pushes, creates a GitHub Release, then chains into pages.yml
@@ -89,7 +89,7 @@ jobs:
           REQUESTED: ${{ inputs.bump }}
         run: |
           if [ "$REQUESTED" = "auto" ] || [ -z "$REQUESTED" ]; then
-            BUMP=$(node scripts/release/compute-bump.mjs)
+            BUMP=$(npx ogf-compute-bump)
             echo "Auto-derived bump from fragments: $BUMP"
           else
             BUMP="$REQUESTED"
@@ -127,7 +127,7 @@ jobs:
           echo "Bumped from ${LATEST_TAG:-nothing} to v${VERSION}"
 
       - name: Collate changelog
-        run: node scripts/release/collate-changelog.mjs "${{ steps.bump.outputs.version }}"
+        run: npx ogf-collate-changelog "${{ steps.bump.outputs.version }}"
 
       # The macOS paragraph is not decoration: without notarization
       # Gatekeeper refuses the first launch, and a player with no answer to
@@ -138,7 +138,7 @@ jobs:
         env:
           NOTARIZED: ${{ secrets.MAC_CSC_LINK != '' && secrets.APPLE_ID != '' }}
         run: |
-          node scripts/release/extract-section.mjs "${{ steps.bump.outputs.version }}" > .release-notes.md
+          npx ogf-extract-section "${{ steps.bump.outputs.version }}" > .release-notes.md
           cat >> .release-notes.md <<'NOTES'
 
           ---

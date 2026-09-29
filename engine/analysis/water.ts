@@ -33,7 +33,7 @@ import type { TerrainField } from "../mapgen/terrain.ts";
 import { LAKE_Y } from "../mapgen/land.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, type Check, type Finding, type MetricReport } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 /** How far a point on a course is from the nearest crossing it was
  * anchored on, m. Inside the crossing window the water is ON the road

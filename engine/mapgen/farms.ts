@@ -22,7 +22,7 @@
 // of the yard with its long front to the yard's middle, the paddock behind
 // the barn or behind the house, the field where the paddock is not.
 
-import type { Rng } from "../lib/prng.ts";
+import type { Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { buildingSolids, drawBarnPlan, type Building, type HouseStyle } from "./buildings.ts";
 import type { LandField } from "./land.ts";
 import { STAGE_RULES as R } from "./rules.ts";

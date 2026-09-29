@@ -12,7 +12,7 @@
 import * as THREE from "three";
 import { FRONT_LAMPS, REAR_LAMPS, TUNING, lampShare, type GameState } from "@engine";
 
-import { clamp } from "../lib/util.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import {
   LAMP_BEAMS,
   DUST_RAISED,

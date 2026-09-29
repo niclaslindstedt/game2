@@ -1,7 +1,7 @@
 ---
 title: A cutoff is only safe against the LIVE sample rate — iOS picks that from the audio ROUTE, not from the device
 date: 2026-08-28
-scope: pwa/src/lib/synth.ts, pwa/src/lib/voice.ts, pwa/src/game/audio/
+scope: pwa/src/game/audio/
 concepts: [synth, filters, webaudio, ios, mixing]
 ---
 

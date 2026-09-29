@@ -46,6 +46,14 @@ const ALLOWED = new Set([
   "Zlib",
 ]);
 
+/** Our OWN packages — the shared game framework
+ * (`@niclaslindstedt/oss-game-framework`) — carry the game's own licence,
+ * which is not a permissive one and so is not on the list above. It is
+ * allowed for this scope alone: the same terms as the code it is built into,
+ * from the same author, and nothing else may widen the list by carrying it. */
+const OWN_SCOPE = "@niclaslindstedt/";
+const OWN_LICENCE = "PolyForm-Noncommercial-1.0.0";
+
 const LOCKFILES = ["package-lock.json", "native/package-lock.json", "tauri/package-lock.json"];
 
 const HELP = `usage: node scripts/check-licenses.mjs [--verbose]
@@ -118,10 +126,10 @@ for (const lockfile of LOCKFILES) {
     packages++;
     const licence = entry.license;
     seen.set(String(licence), (seen.get(String(licence)) ?? 0) + 1);
+    const name = key.replace(/^.*node_modules\//, "");
+    if (name.startsWith(OWN_SCOPE) && licence === OWN_LICENCE) continue;
     if (typeof licence !== "string" || !allowed(licence)) {
-      failures.push(
-        `${relative(root, path)}: ${key.replace(/^.*node_modules\//, "")} — ${licence ?? "no licence"}`,
-      );
+      failures.push(`${relative(root, path)}: ${name} — ${licence ?? "no licence"}`);
     }
   }
 }

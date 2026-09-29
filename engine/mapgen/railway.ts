@@ -24,8 +24,8 @@
 // Nothing here knows what a wagon looks like. The consist is a list of
 // lengths; the app dresses them.
 
-import { cellKey } from "../lib/math.ts";
-import { createRng } from "../lib/prng.ts";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { STAGE_RULES as R } from "./rules.ts";
 import { RAILCAR, standSolid, type WildObstacle } from "./solids.ts";
 import type { Spur, SpurSample } from "./spurs.ts";

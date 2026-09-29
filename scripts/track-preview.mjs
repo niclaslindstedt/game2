@@ -41,8 +41,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-import { aliasEngine } from "./lib/engine-alias.mjs";
-import { createCanvas } from "./lib/png.mjs";
+import { aliasEngine } from "@niclaslindstedt/oss-game-framework/tooling/alias";
+import { createCanvas } from "@niclaslindstedt/oss-game-framework/tooling/png";
 import { paletteFor, renderStage } from "./lib/stage-render.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");

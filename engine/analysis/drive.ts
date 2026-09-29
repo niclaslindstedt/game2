@@ -38,7 +38,7 @@ import {
   type Finding,
   type MetricReport,
 } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 export function analyzeDrive(track: Track, v: number[], clock: Clock = wallClock): MetricReport {
   const started = clock.now();

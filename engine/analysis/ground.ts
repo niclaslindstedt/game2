@@ -54,7 +54,7 @@ import {
   type Finding,
   type MetricReport,
 } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 /** The p-th percentile of a sample set, p in 0..1. */
 function percentile(sorted: number[], p: number): number {

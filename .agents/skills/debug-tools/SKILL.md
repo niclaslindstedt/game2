@@ -22,7 +22,7 @@ the bug can be stated as "the car does X". Load this one when the bug is
 stated as "it looks like that, over there".
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs debug-tools --list`, then the ones this task
+`npx ogf-skill-lessons debug-tools --list`, then the ones this task
 touches. Load **`skill-reflection`** at both ends of the session.
 
 ## The five tools
@@ -482,5 +482,5 @@ here: a fact a screenshot turned out NOT to carry, a round trip that broke,
 a class of problem the overlay could not place.
 
 ```sh
-node scripts/skill-lessons.mjs debug-tools --list
+npx ogf-skill-lessons debug-tools --list
 ```

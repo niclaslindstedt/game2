@@ -9,18 +9,17 @@
 // echo bus and the master limiter only do their jobs if every voice in the
 // game — a tyre layer, a crash, a bass note — passes through the same pair.
 
-import { createSynth } from "../../lib/synth.ts";
-import type { Layer, Synth } from "../../lib/voice.ts";
+import { createSynth } from "@niclaslindstedt/oss-game-framework/audio/synth";
+import type { Synth } from "@niclaslindstedt/oss-game-framework/audio/voice";
+import { clamp01, scaledView } from "@niclaslindstedt/oss-game-framework/audio/view";
 
-const raw = createSynth();
+import { ROOM } from "./room.ts";
+
+/** The one synth, in THIS game's room (room.ts). */
+const raw = createSynth(ROOM);
 
 let sfxVolume = 1;
 let musicVolume = 1;
-
-/** Clamp to the 0–1 the sliders promise. */
-function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
-}
 
 /** Set the 0–1 master volumes (called by the options screen). */
 export function setAudioVolumes(v: { music: number; sfx: number }): void {
@@ -28,48 +27,13 @@ export function setAudioVolumes(v: { music: number; sfx: number }): void {
   sfxVolume = clamp01(v.sfx);
 }
 
-/**
- * A synth view whose every sound is scaled by a live master volume.
- *
- * The defaults mirror the synth's own, because a voice that leaves `volume`
- * off still has to be scaled by the slider — and the only way to scale a
- * default is to know it. A one-shot scaled to nothing is skipped outright
- * rather than played at zero. A LAYER is steered every frame, so the slider
- * is read every frame and a fader moved mid-stage is heard at once.
- */
-function scaledView(volume: () => number): Synth {
-  return {
-    unlock: () => raw.unlock(),
-    autostart: () => raw.autostart(),
-    resume: () => raw.resume(),
-    now: () => raw.now(),
-    tone(options) {
-      const scaled = (options.volume ?? 0.06) * volume();
-      if (scaled < 0.001) return;
-      raw.tone({ ...options, volume: scaled });
-    },
-    noise(options) {
-      const scaled = (options.volume ?? 0.05) * volume();
-      if (scaled < 0.001) return;
-      raw.noise({ ...options, volume: scaled });
-    },
-    layer(spec): Layer | null {
-      const inner = raw.layer(spec);
-      if (!inner) return null;
-      return {
-        set: (target, glideS) => inner.set({ ...target, level: target.level * volume() }, glideS),
-        stop: () => inner.stop(),
-        alive: () => inner.alive(),
-      };
-    },
-  };
-}
-
-/** Every sound effect routes through this view. */
-export const sfx: Synth = scaledView(() => sfxVolume);
+/** Every sound effect routes through this view — a fader over the one synth
+ * (the framework's `scaledView`: a one-shot scaled to nothing is skipped, a
+ * layer re-reads the fader every frame). */
+export const sfx: Synth = scaledView(raw, () => sfxVolume);
 
 /** The music sequencer routes through this one. */
-export const music: Synth = scaledView(() => musicVolume);
+export const music: Synth = scaledView(raw, () => musicVolume);
 
 /** Start (or revive) audio from a real user gesture. Safe to call on every
  * pointer down — it is a no-op once the context is running. */

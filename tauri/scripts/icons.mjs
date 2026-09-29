@@ -3,7 +3,7 @@
 //
 // **Tauri refuses anything but an RGBA PNG at COMPILE time**, inside
 // `generate_context!`, with `icon … is not RGBA` — and the website's icons are
-// RGB, because `scripts/lib/png.mjs` (the repo's own encoder) writes RGB and a
+// RGB, because the root's encoder (the framework's `tooling/png`) writes RGB and a
 // launcher icon has no use for an alpha channel. So the icons are RE-ENCODED
 // rather than re-drawn: one source raster, the same one the manifest already
 // installs, decoded, resized and widened to 8-bit RGBA at the sizes Tauri's

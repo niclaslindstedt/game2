@@ -8,7 +8,7 @@
 // the ground a jump has left behind, is wherever the light lands.
 
 import * as THREE from "three";
-import { clamp } from "../lib/util.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import {
   temperatureAt,
   FRONT_LAMPS,

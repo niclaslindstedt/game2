@@ -16,7 +16,7 @@ import type { GameEvent } from "@engine";
 
 import type { Clap } from "../weather.ts";
 
-import type { PlayShape } from "./types.ts";
+import type { PlayShape } from "@niclaslindstedt/oss-game-framework/audio/types";
 
 /** Closing speeds that separate a brush from a hit from a wreck, m/s. The
  * engine reports no contact under its own scuff floor (3 m/s), so the bottom

@@ -16,7 +16,7 @@
 // times in five seconds; it is the most-played sound in the game and sits at
 // less than half the level of anything the car does.
 
-import type { SoundBank } from "./types.ts";
+import type { SoundBank } from "@niclaslindstedt/oss-game-framework/audio/types";
 
 /** The moments the interface makes a noise. */
 export type UiCue = "move" | "select" | "back" | "toggle" | "deny" | "page" | "start";

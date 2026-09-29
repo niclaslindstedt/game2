@@ -24,8 +24,7 @@ import { saveSettings, type Settings } from "./settings.ts";
 import { setAudioVolumes } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
 import { setRumble } from "./haptics.ts";
-import { readHudLayer } from "./shot-hud.ts";
-import { beginImageCopy, copiedWithin } from "../lib/share-image.ts";
+import { claimShotCopy, copiedWithin, readShotHud } from "./shot-press.ts";
 
 connectOutput();
 
@@ -138,7 +137,7 @@ export function useMapActions(store: RunStore, applyRace: (next: RaceSettings) =
    * is about the game's own camera, and a developer who opened this page has
    * asked for this one. The CLIPBOARD does follow the player's switch, and
    * is claimed inside the press for the same reason the shutter's is
-   * (lib/share-image.ts). Resolves once the frame has been filed, which is
+   * (shot-press.ts). Resolves once the frame has been filed, which is
    * how the button reports back. */
   const takeMapShot = (): Promise<{ saved: boolean; copied: boolean }> =>
     new Promise((resolve) => {
@@ -146,7 +145,7 @@ export function useMapActions(store: RunStore, applyRace: (next: RaceSettings) =
       const info = mapInfoRef.current;
       const spec = stageRef.current;
       playUi("select");
-      const copy = optionsRef.current.copyShots ? beginImageCopy() : null;
+      const copy = optionsRef.current.copyShots ? claimShotCopy() : null;
       shotRef.current = {
         label: `Map ${spec?.seed ?? seedRef.current}${info ? ` · ${info.label}` : ""}`,
         notes: read ? { boxes: read.boxes, repro: read.repro, legend: info?.legend ?? [] } : null,
@@ -154,13 +153,13 @@ export function useMapActions(store: RunStore, applyRace: (next: RaceSettings) =
         // driving HUD is not up over one — and asked anyway, so the two
         // shutters never disagree about what a picture is.
         sign: false,
-        hud: readHudLayer(),
+        hud: readShotHud(),
         done: (capture) => {
           if (!copy) {
             resolve({ saved: capture !== null, copied: false });
             return;
           }
-          copy.settle(capture?.blob ?? null);
+          copy.ready(capture?.blob ?? null);
           void copiedWithin(copy).then((copied) => resolve({ saved: capture !== null, copied }));
         },
       };

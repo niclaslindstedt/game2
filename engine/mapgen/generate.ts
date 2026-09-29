@@ -12,7 +12,7 @@
 // stream appends sections forever in endless.ts. Everything all three share
 // — the cursor, the point field, the draws — is in search.ts.
 
-import { createRng } from "../lib/prng.ts";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import {
   STAGE_RULES as R,
   type FiniteStageLength,

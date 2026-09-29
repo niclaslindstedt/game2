@@ -18,7 +18,7 @@
 // same PSX one the car lives in, where a sound is a shape the ear accepts
 // rather than a sample it recognises.
 
-import type { SoundBank } from "./types.ts";
+import type { SoundBank } from "@niclaslindstedt/oss-game-framework/audio/types";
 
 export const WORLD_BANK: SoundBank = {
   // ── Birds ───────────────────────────────────────────────────────────────

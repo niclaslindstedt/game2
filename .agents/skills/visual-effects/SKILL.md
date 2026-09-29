@@ -23,7 +23,7 @@ Camera behavior (shake, FOV kick, drift-angle framing) is the camera's —
 the camera to react goes there, not into an ad-hoc transform on the scene.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs visual-effects --list`, then the ones this
+`npx ogf-skill-lessons visual-effects --list`, then the ones this
 task touches. Load **`skill-reflection`** at both ends of the session.
 
 ## The flow: event → effect → draw

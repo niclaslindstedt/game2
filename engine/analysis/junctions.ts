@@ -46,7 +46,7 @@ import {
   type Finding,
   type MetricReport,
 } from "./types.ts";
-import { wallClock, type Clock } from "../lib/clock.ts";
+import { wallClock, type Clock } from "@niclaslindstedt/oss-game-framework/core/clock";
 
 /** A piece of road on the raster: where its centerline is and how wide the
  * mat is there. Both the route and the branches reduce to this, because the

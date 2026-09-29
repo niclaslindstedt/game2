@@ -8,7 +8,7 @@
 
 import type { CarSpec, GearboxMode } from "./defs/cars.ts";
 import type { KerbField, TerrainField, Track, Underfoot, WildObstacle } from "../mapgen/index.ts";
-import type { Rng } from "../lib/prng.ts";
+import type { Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import type { SandState } from "./sandstorm.ts";
 import type { Snowpack } from "./snowpack.ts";
 import type { TrafficFleet } from "./traffic.ts";

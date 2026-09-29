@@ -20,7 +20,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
-const { aliasEngine } = await import(join(root, "scripts/lib/engine-alias.mjs"));
+const { aliasEngine } = await import("@niclaslindstedt/oss-game-framework/tooling/alias");
 
 aliasEngine(root);
 const [carId, azArg, pointsPath, outPath] = process.argv.slice(2);

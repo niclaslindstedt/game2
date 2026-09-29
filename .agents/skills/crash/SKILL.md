@@ -36,7 +36,7 @@ Five modules answer it, and the split matters:
   which is how a rally car actually rolls.
 
 **Read this skill's lessons first** —
-`node scripts/skill-lessons.mjs crash --list`.
+`npx ogf-skill-lessons crash --list`.
 
 Load **`collision`** beside it whenever the answer involves what a contact
 COSTS (crush, parts, the ledger, the wreck); load **`drift-feel`** when the

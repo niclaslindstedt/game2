@@ -12,7 +12,7 @@ where the interesting question starts. A stage can be flawless by `analyze`
 and be a scribble across a field.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs level-rating --list`, then the ones this task
+`npx ogf-skill-lessons level-rating --list`, then the ones this task
 touches. Load **`skill-reflection`** at both ends, and **`write-code`** beside
 this one for any code change. Load **`mapgen-improvement`** when the answer
 turns out to be a change to the generator, and **`simulate-run`** whenever a

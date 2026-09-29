@@ -18,8 +18,8 @@
 // the solve asks for are inside the turn vocabulary. Trying it from every
 // straight over the last third of the lap is what finds one.
 
-import { angleDiff } from "../lib/math.ts";
-import { createRng } from "../lib/prng.ts";
+import { angleDiff } from "@niclaslindstedt/oss-game-framework/core/math";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import type { Climate } from "../game/climate.ts";
 import { createLandField, type LandField } from "./land.ts";
 import { roadClearance } from "./road.ts";

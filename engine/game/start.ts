@@ -7,8 +7,8 @@
 // Everything here happens once. What happens 120 times a second is
 // `step.ts`'s.
 
-import { clamp } from "../lib/math.ts";
-import { createRng } from "../lib/prng.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
+import { createRng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import {
   biomeRules,
   compileStage,
@@ -29,7 +29,7 @@ import { plant } from "./ground.ts";
 import { type CatchUp, type GameState, type RaceEnv, type Season, type Weather } from "./state.ts";
 import { freshCar, freshStats } from "./car-state.ts";
 import { createTraffic } from "./traffic.ts";
-import { status } from "../output.ts";
+import { status } from "@niclaslindstedt/oss-game-framework/core/output";
 
 const T = TUNING;
 

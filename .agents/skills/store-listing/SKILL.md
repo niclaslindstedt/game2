@@ -33,7 +33,7 @@ So: **never move a sentence of copy into a committed file**, and never
 one adjective at a time. Put the craft here and the words there.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs store-listing --list`, then the ones this task
+`npx ogf-skill-lessons store-listing --list`, then the ones this task
 touches. Load **`skill-reflection`** at both ends of the session.
 
 ## Where everything is

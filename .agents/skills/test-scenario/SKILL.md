@@ -121,4 +121,4 @@ wants the car placed mid-track at speed, a track override the API can't
 express), grow the engine's create/track surface plus its test, then document
 the option here. Recurring stagings and gotchas are lesson fragments — load
 the **`skill-reflection`** skill at both ends of the session
-(`node scripts/skill-lessons.mjs test-scenario --list`).
+(`npx ogf-skill-lessons test-scenario --list`).

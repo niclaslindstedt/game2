@@ -11,8 +11,8 @@
 // it (water, ice, snow), how far it is from the nearest road or built
 // thing, and which surface a branch under it is made of.
 
-import { cellKey } from "../lib/math.ts";
-import { smooth } from "../lib/noise.ts";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
+import { smooth } from "@niclaslindstedt/oss-game-framework/core/noise";
 import type { Surface, Track } from "./compile.ts";
 import type { CarParkField } from "./carparks.ts";
 import { GROUND_CELL, SNOW_CELL, TILE_SINK } from "./lattice.ts";

@@ -64,8 +64,8 @@
 // flattens, and the forest keeps off all three and off the trails. The
 // renderer only DRAWS what is decided here.
 
-import { cellKey } from "../lib/math.ts";
-import { createRng, type Rng } from "../lib/prng.ts";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
+import { createRng, type Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { parkedSolids } from "./buildings.ts";
 import type { Track } from "./compile.ts";
 import { CELL, routeCorridor, walkFrom, wayOut, type GroundMap } from "./carpark-map.ts";

@@ -48,7 +48,6 @@ import {
 } from "../pwa/src/game/audio/engine-voice.ts";
 import { LISTENERS, listenerFor } from "../pwa/src/game/audio/listener.ts";
 import { stageTrack, trackFor, type Setting } from "../pwa/src/game/audio/music-pick.ts";
-import { playDef } from "../pwa/src/game/audio/play.ts";
 import {
   roadTargets,
   SURFACES,
@@ -65,7 +64,7 @@ import { MENU_TRACK } from "../pwa/src/game/audio/scores/menu.ts";
 import { POLAR_TRACK } from "../pwa/src/game/audio/scores/polar.ts";
 import { SPRUCE_TRACK } from "../pwa/src/game/audio/scores/spruce.ts";
 import { TAIGA_TRACK } from "../pwa/src/game/audio/scores/taiga.ts";
-import type { SoundBank } from "../pwa/src/game/audio/types.ts";
+import type { SoundBank } from "@niclaslindstedt/oss-game-framework/audio/types";
 import {
   createTrackPlayer,
   flattenTrack,
@@ -75,17 +74,13 @@ import {
 } from "../pwa/src/lib/tracker.ts";
 import {
   MAX_CUTOFF_RATIO,
-  MIN_ATTACK_MS,
-  envelopeShape,
   safeCutoff,
-  shaperPush,
-  shaperSteepness,
   type LayerSpec,
   type LayerTarget,
   type NoiseOptions,
   type Synth,
   type ToneOptions,
-} from "../pwa/src/lib/voice.ts";
+} from "@niclaslindstedt/oss-game-framework/audio/voice";
 
 /** One layer the recorder built: what it was made of, every target it was
  * steered to, and whether it is still standing. */
@@ -458,48 +453,6 @@ describe("thunder", () => {
     expect(clap(500, -0.8).shape.pan).toBeCloseTo(-0.8, 5);
     expect(clap(500, 4).shape.pan).toBe(1);
     expect(clap(5000, -4).shape.pan).toBe(-1);
-  });
-});
-
-describe("shaping a play", () => {
-  it("scales the volume a voice left off the synth's own default", () => {
-    const rec = recorder();
-    playDef(
-      rec,
-      { description: "x".repeat(50), voices: [{ call: "tone", from: 100, durationMs: 10 }] },
-      { gain: 0.5 },
-    );
-    expect(rec.tones[0].volume).toBeCloseTo(0.06 * 0.5, 6);
-    playDef(
-      rec,
-      { description: "x".repeat(50), voices: [{ call: "noise", durationMs: 10 }] },
-      { gain: 0.5 },
-    );
-    expect(rec.noises[0].volume).toBeCloseTo(0.05 * 0.5, 6);
-  });
-
-  it("moves the filter with the pitch, and leaves a still voice still", () => {
-    const rec = recorder();
-    playDef(
-      rec,
-      {
-        description: "x".repeat(50),
-        voices: [
-          {
-            call: "tone",
-            from: 400,
-            durationMs: 100,
-            filter: { type: "lowpass", frequency: 1000, to: 2000 },
-          },
-        ],
-      },
-      { pitch: 0.5 },
-    );
-    const tone = rec.tones[0];
-    expect(tone.from).toBe(200);
-    expect(tone.to).toBeUndefined();
-    expect(tone.filter?.frequency).toBe(500);
-    expect(tone.filter?.to).toBe(1000);
   });
 });
 
@@ -1481,49 +1434,6 @@ describe("the road bed", () => {
   });
 });
 
-describe("the shape of a voice", () => {
-  const SHAPES: [string, ReturnType<typeof envelopeShape>][] = [
-    ["a held pad", envelopeShape(0.05, 0, 0.9, 300, 400, "exp")],
-    ["a plucked note", envelopeShape(0.06, 0, 0.045, 0, 0, "exp")],
-    ["a bare hi-hat burst", envelopeShape(0.009, 0, 0.014, 0, 0, "lin")],
-    ["a swell", envelopeShape(0.03, 0, 0.4, 40, 200, "exp")],
-  ];
-
-  it("never starts a voice at full scale, however short or unshaped", () => {
-    for (const [name, steps] of SHAPES) {
-      expect(steps[0].value, name).toBeLessThanOrEqual(0.0001);
-      expect(steps[0].ramp, name).toBe("set");
-      expect(steps[1].at, name).toBeGreaterThan(steps[0].at);
-      expect(steps[1].ramp, name).not.toBe("set");
-    }
-  });
-
-  it("gets up to its peak fast enough that nothing is softened", () => {
-    for (const [name, steps] of SHAPES) {
-      if (name === "a held pad" || name === "a swell") continue;
-      expect(steps[1].at, name).toBeLessThanOrEqual(MIN_ATTACK_MS / 1000 + 1e-9);
-      expect(steps[1].value, name).toBeGreaterThan(0);
-    }
-  });
-
-  it("holds a pad at its peak instead of falling through the sustain", () => {
-    const pad = envelopeShape(0.05, 0, 0.9, 300, 400, "exp");
-    const peaks = pad.filter((p) => p.value > 0.001);
-    expect(peaks.length).toBe(2);
-    expect(peaks[1].at - peaks[0].at).toBeCloseTo(0.4, 3);
-    expect(pad[pad.length - 1].value).toBeLessThanOrEqual(0.0001);
-  });
-
-  it("saturates softly — the curve never steepens into a clip", () => {
-    // A curve steep enough to be a square wave at half travel aliases, and
-    // over a Bluetooth codec that is the torn-speaker sound.
-    expect(shaperSteepness(0)).toBe(1);
-    expect(shaperSteepness(1)).toBeLessThanOrEqual(10);
-    expect(shaperSteepness(0.5)).toBeGreaterThan(shaperSteepness(0.2));
-    expect(shaperPush(1)).toBeLessThanOrEqual(4);
-  });
-});
-
 describe("what a filter may be asked for", () => {
   /** The sample rates an AudioContext actually comes back at: a desktop's,
    * and the ones iOS picks from the live Bluetooth route. */
@@ -1572,13 +1482,6 @@ describe("what a filter may be asked for", () => {
         expect(safeCutoff(hz, rate), `${where} @ ${rate} Hz`).toBe(Math.max(20, hz));
       }
     }
-  });
-
-  it("bites on a cutoff that would go over, at the rate iOS hands a headset", () => {
-    const OVER = 8200;
-    expect(safeCutoff(OVER, 16000)).toBe(HEADSET_CEILING);
-    expect(safeCutoff(OVER, 48000)).toBe(OVER);
-    expect(safeCutoff(0, 48000)).toBe(20);
   });
 
   it("keeps every kit's hats and shakers inside what a 16 kHz session can carry", () => {

@@ -23,8 +23,8 @@
 // renderer's business (the biome in the app maps these ids to flora).
 
 import { CLIMATE } from "../game/climate.ts";
-import { cellKey } from "../lib/math.ts";
-import { hash2, valueNoise } from "../lib/noise.ts";
+import { cellKey } from "@niclaslindstedt/oss-game-framework/core/math";
+import { hash2, valueNoise } from "@niclaslindstedt/oss-game-framework/core/noise";
 import { GROVE_SCALE, REGION_SCALE, type BiomeRules } from "./biomes.ts";
 import type { CornerGuard, GuardField } from "./guards.ts";
 import { LAKE_Y } from "./land.ts";

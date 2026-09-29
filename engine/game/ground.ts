@@ -14,13 +14,13 @@
 // speed the wheels ACTUALLY moved at this step is `car.wheelVy`, and the
 // difference between the two is what a bump is.
 
-import { clamp } from "../lib/math.ts";
+import { clamp } from "@niclaslindstedt/oss-game-framework/core/math";
 import { collideSlope } from "./collision.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { climbGrade } from "./limits.ts";
 import type { CarState, GameEvent, RunStats } from "./state.ts";
-import type { Rng } from "../lib/prng.ts";
+import type { Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import type { Underfoot } from "../mapgen/index.ts";
 
 const T = TUNING;

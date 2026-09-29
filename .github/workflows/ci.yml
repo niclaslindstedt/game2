@@ -207,8 +207,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+          cache: npm
+      # The gate is the shared framework's bin, so the tree it ships in is
+      # installed first.
+      - run: npm ci
       - name: Check for changelog fragment
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-        run: node scripts/release/check-changeset.mjs
+        run: npx ogf-check-changeset

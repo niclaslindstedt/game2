@@ -27,7 +27,7 @@ import { playUi } from "./audio/ui.ts";
 import { useCardRows } from "./card-rows.ts";
 import { onPortraits, portraitOf } from "./car-portraits.ts";
 import { PAGE_MAX, pageCount, pageOf, pageSpan, stepPage } from "./results-pages.ts";
-import { formatTime } from "../lib/util.ts";
+import { formatTime } from "@niclaslindstedt/oss-game-framework/hud/format";
 import { carById } from "@engine";
 
 /** One line of the sheet. */

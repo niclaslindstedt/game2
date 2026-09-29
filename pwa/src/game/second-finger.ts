@@ -44,7 +44,7 @@
 // at itself is one where the next press of the accelerator changes the camera.
 //
 // Nothing here touches the DOM: the window and the hit test are both injected
-// and typed structurally, the way thumb-guard.ts and text-interaction.ts take
+// and typed structurally, the way the framework's thumb guard and text-interaction.ts take
 // theirs, so the root suite can hold the whole decision without a browser.
 
 /** The listeners the relay needs. Capture is the one option that matters —

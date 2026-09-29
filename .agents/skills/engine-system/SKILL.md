@@ -11,7 +11,7 @@ the engine never knows a renderer exists. This is what makes every game rule
 unit-testable in plain Node, and every run reproducible from a seed.
 
 **Before starting, read this skill's lessons** —
-`node scripts/skill-lessons.mjs engine-system --list`, then the ones this task
+`npx ogf-skill-lessons engine-system --list`, then the ones this task
 touches (`--scope=…`, `--concepts=…`). Reading them here and reflecting on them
 before the commit is the **`skill-reflection`** skill's job — load it at both
 ends of the session. Load **`write-code`** beside this one on every system
@@ -29,7 +29,7 @@ change — it owns the craft rules (comments, file caps, the edit loop).
 | Car-to-track queries (progress, lateral offset, surface, lips) | `engine/game/track.ts` |
 | Stage generation rules / vocabulary | `engine/mapgen/rules.ts` + `generate.ts` + `compile.ts` — the `mapgen-improvement` skill |
 | Bot behavior | `engine/sim/bot.ts` — the `bot-improvement` skill |
-| Generic helpers (any game could use) | `engine/lib/` — the pool a later game keeps as-is |
+| Generic helpers (any game could use) | the shared framework's `core/*` (`@niclaslindstedt/oss-game-framework/core/<file>`) — fixed there, never copied back here; the engine may import `core/*` and `racing/*` and no other package |
 | Public surface | `engine/index.ts` — export new types/constants the app or tests need |
 | Tests | `tests/<topic>_test.ts` (vitest, `@engine` alias, synthetic tracks — see the `test-scenario` skill) |
 | Anything drawn | `pwa/src/game/` (`renderer.ts`, `world.ts`, `car-mesh.ts`, `dust.ts`, `camera.ts`) — the `visual-effects` skill |
@@ -73,7 +73,7 @@ change — it owns the craft rules (comments, file caps, the edit loop).
 
 - `step()` must stay deterministic for (seed, input sequence) — no wall clock,
   no `Math.random`, no DOM. Everything random draws from the seeded RNG in the
-  state (`engine/lib/prng.ts`). The sim digests
+  state (the framework's `core/prng`). The sim digests
   (`tests/simulation_test.ts`) enforce this: break determinism and they fail.
 - The engine imports nothing from `pwa/` and nothing from three.js or Preact;
   the app imports `@engine` and nothing deeper.

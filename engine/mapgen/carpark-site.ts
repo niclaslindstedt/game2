@@ -7,8 +7,8 @@
 // off the road it leaves and onto the plane it arrives at. `carparks.ts`
 // asks them in order and commits the first answer that holds.
 
-import { smooth } from "../lib/noise.ts";
-import { type Rng } from "../lib/prng.ts";
+import { smooth } from "@niclaslindstedt/oss-game-framework/core/noise";
+import { type Rng } from "@niclaslindstedt/oss-game-framework/core/prng";
 import { type ParkedCar } from "./buildings.ts";
 import type { Track } from "./compile.ts";
 import { CELL, createGroundMap, type GroundMap } from "./carpark-map.ts";

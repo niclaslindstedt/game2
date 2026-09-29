@@ -55,8 +55,7 @@ import {
 } from "./ghost.ts";
 import { playUi } from "./audio/ui.ts";
 import { musicPlaying, playMusic, stageTrack } from "./audio/music.ts";
-import { readHudLayer } from "./shot-hud.ts";
-import { beginImageCopy, copiedWithin } from "../lib/share-image.ts";
+import { claimShotCopy, copiedWithin, readShotHud } from "./shot-press.ts";
 
 connectOutput();
 
@@ -169,7 +168,7 @@ export function useRunActions(store: RunStore) {
    *
    * The HUD. It is DOM over the canvas, so none of it is in the drawing
    * buffer the picture comes off, and it is rasterized in afterwards
-   * (shot-hud.ts) — but WHICH HUD is decided here, because the clock, the
+   * (shot-press.ts) — but WHICH HUD is decided here, because the clock, the
    * call and the place the picture has to carry are the ones that were on
    * screen when the button went down. Null while ALT has the instruments
    * down, which is still the fastest way to a frame on its own.
@@ -182,7 +181,7 @@ export function useRunActions(store: RunStore) {
    * The CLIPBOARD, when the player asked for it. `write` wants the gesture's
    * transient activation, which the encode outlives, so the claim is staked
    * inside the press and the picture is handed over afterwards
-   * (lib/share-image.ts). */
+   * (shot-press.ts). */
   const takeShot = (): void => {
     // A press always gets an answer. The switch is in OPTIONS and the key is
     // not, so a shutter that has been turned off is a key that does nothing
@@ -201,19 +200,19 @@ export function useRunActions(store: RunStore) {
     // arrived a beat after the button would read as lag rather than as a
     // camera.
     playUi("select");
-    const copy = optionsRef.current.copyShots ? beginImageCopy() : null;
+    const copy = optionsRef.current.copyShots ? claimShotCopy() : null;
     const read = debugRef.current ? readDebugRef.current() : null;
     shotRef.current = {
       label: shotLabel(),
       notes: read ? { boxes: read.boxes, repro: read.repro } : null,
       sign: !debugRef.current,
-      hud: readHudLayer(),
+      hud: readShotHud(),
       done: (capture) => {
         if (!copy) {
           flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
           return;
         }
-        copy.settle(capture?.blob ?? null);
+        copy.ready(capture?.blob ?? null);
         // ONE receipt, and it waits for the clipboard — but not forever
         // (`copiedWithin`): a picture the player meant to paste is not saved
         // until it is pasteable, and two flashes for one press is the HUD

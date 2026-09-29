@@ -10,7 +10,7 @@
 // run's own clock takes it away again a few seconds later (SPLIT_HOLD in
 // App.tsx). The record book behind the two green words is split-records.ts.
 
-import { formatTime } from "../lib/util.ts";
+import { formatTime } from "@niclaslindstedt/oss-game-framework/hud/format";
 
 /** R28 — the SPLIT: what the board the car has just gone through said. */
 export type HudSplit = {
