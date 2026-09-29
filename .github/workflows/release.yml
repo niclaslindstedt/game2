@@ -175,6 +175,7 @@ jobs:
         env:
           VITE_MODEL_CARS: ${{ secrets.VITE_MODEL_CARS }}
           VITE_MODEL_TREES: ${{ secrets.VITE_MODEL_TREES }}
+          VITE_MODEL_PROPS: ${{ secrets.VITE_MODEL_PROPS }}
       - name: make test
         run: make test
 

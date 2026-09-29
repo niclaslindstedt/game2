@@ -20,6 +20,7 @@ import * as THREE from "three";
 import type { FarmGear } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
 import { box } from "./house.ts";
+import { dressOf, propModel } from "./prop-models.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture } from "./textures.ts";
 
@@ -27,7 +28,9 @@ import { detailTexture } from "./textures.ts";
  * Massey red, and a grey one nobody has washed since 1974. */
 const TRACTOR_PAINT = [0xb8261c, 0x6f8a2a, 0x2c56a8, 0xa6221f, 0x8a8c88];
 
-const TINT = {
+/** Every colour a machine is built in but a tractor's paint, by ROLE — the
+ * names a model's faces carry (`prop-models.ts`). */
+export const FARM_TINT = {
   tyre: new THREE.Color(0x1c1d1f),
   hub: new THREE.Color(0xc9c2a8),
   glass: new THREE.Color(0x2b3640),
@@ -45,6 +48,7 @@ const TINT = {
   wrap: new THREE.Color(0xe8e6df),
   lamp: new THREE.Color(0xe9e2c4),
 };
+const TINT = FARM_TINT;
 
 const gearMaterial = shareOne(
   () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
@@ -82,10 +86,17 @@ function wheel(b: GeoBuilder, x: number, z: number, r: number, w: number, lugs =
   }
 }
 
-function tractor(b: GeoBuilder, r: () => number): void {
+/** A tractor's paint from its roll: one of the makes' colours, under up to
+ * thirty years of grime. Made apart from the tractor so a model can be
+ * dressed in it. */
+export function tractorPaint(roll: number): THREE.Color {
+  const r = rolls(roll);
   const paint = new THREE.Color(TRACTOR_PAINT[Math.floor(r() * TRACTOR_PAINT.length)]);
   const grime = new THREE.Color(0x5a4d3c);
-  const body = paint.clone().lerp(grime, r() * 0.3);
+  return paint.lerp(grime, r() * 0.3);
+}
+
+function tractor(b: GeoBuilder, body: THREE.Color): void {
   const rearR = 0.85;
   const frontR = 0.48;
   const track = 0.95;
@@ -200,13 +211,18 @@ function baler(b: GeoBuilder): void {
   box(b, TINT.steel, 0, 0.7, 2.0, 0.16, 0.12, 1.6);
 }
 
-/** One machine as a mesh, from the engine's record. */
-export function buildFarmGear(gear: FarmGear, rand: () => number): THREE.Mesh {
+/** One machine as the code builds it, from the engine's record; a
+ * tractor in `paint`. */
+export function farmGearGeometry(
+  gear: FarmGear,
+  rand: () => number,
+  paint = tractorPaint(gear.roll),
+): THREE.BufferGeometry {
   const b = new GeoBuilder(rand);
   const r = rolls(gear.roll);
   switch (gear.kind) {
     case "tractor":
-      tractor(b, r);
+      tractor(b, paint);
       break;
     case "trailer":
       trailer(b, r);
@@ -221,7 +237,16 @@ export function buildFarmGear(gear: FarmGear, rand: () => number): THREE.Mesh {
       baler(b);
       break;
   }
-  const mesh = new THREE.Mesh(b.build(), gearMaterial());
+  return b.build();
+}
+
+/** One machine as a mesh, from the engine's record: its model, dressed in
+ * the farm's own tints (a tractor in its roll's paint), or the code's. */
+export function buildFarmGear(gear: FarmGear, rand: () => number): THREE.Mesh {
+  const paint = tractorPaint(gear.roll);
+  const geometry =
+    propModel("farm", gear.kind, dressOf(FARM_TINT, paint)) ?? farmGearGeometry(gear, rand, paint);
+  const mesh = new THREE.Mesh(geometry, gearMaterial());
   mesh.frustumCulled = true;
   return mesh;
 }
@@ -230,7 +255,8 @@ export function buildFarmGear(gear: FarmGear, rand: () => number): THREE.Mesh {
  * and as long, in straw or the white plastic wrap of a silage bale. */
 export const BALE = { radius: 0.62, length: 1.2 };
 
-export function buildBale(wrapped: boolean, rand: () => number): THREE.Mesh {
+/** A bale as the code builds it. */
+export function baleGeometry(wrapped: boolean, rand: () => number): THREE.BufferGeometry {
   const b = new GeoBuilder(rand);
   const body = new THREE.CylinderGeometry(BALE.radius, BALE.radius, BALE.length, 10);
   body.rotateZ(Math.PI / 2);
@@ -244,7 +270,14 @@ export function buildBale(wrapped: boolean, rand: () => number): THREE.Mesh {
       b.add(cap, TINT.baleEnd);
     }
   }
-  const mesh = new THREE.Mesh(b.build(), gearMaterial());
+  return b.build();
+}
+
+export function buildBale(wrapped: boolean, rand: () => number): THREE.Mesh {
+  const geometry =
+    propModel("farm", wrapped ? "baleWrapped" : "bale", dressOf(FARM_TINT)) ??
+    baleGeometry(wrapped, rand);
+  const mesh = new THREE.Mesh(geometry, gearMaterial());
   mesh.frustumCulled = true;
   return mesh;
 }

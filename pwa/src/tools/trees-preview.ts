@@ -24,7 +24,7 @@ import type { Season } from "@engine";
 
 import { codeShape, floraMaterial } from "../game/flora.ts";
 import { treeRowsOf } from "../game/flora-tree-rows.ts";
-import { TREE_KINDS, type TreeKind } from "../game/flora-trees.ts";
+import { FLORA_KINDS, PLANT_KINDS, type FloraKind } from "../game/flora-trees.ts";
 import { loadTreeModels, treeModel } from "../game/tree-models.ts";
 
 /** One cell, px. */
@@ -48,12 +48,19 @@ const sketch = query.get("sketch") === "1";
 const models = query.get("models");
 const want = query.get("kinds");
 const season = (query.get("season") ?? "summer") as Season;
-const kinds: readonly TreeKind[] = want
-  ? TREE_KINDS.filter((k) => want.split(",").includes(k))
-  : TREE_KINDS;
+const kinds: readonly FloraKind[] = want
+  ? FLORA_KINDS.filter((k) => want.split(",").includes(k))
+  : FLORA_KINDS;
+
+/** A kind's variants: a tree kind's rows, a plant kind's ids. */
+function variantsOf(kind: FloraKind): readonly { id: string; name: string }[] {
+  return kind in PLANT_KINDS
+    ? PLANT_KINDS[kind as keyof typeof PLANT_KINDS].map((id) => ({ id, name: id }))
+    : treeRowsOf(kind as Parameters<typeof treeRowsOf>[0]);
+}
 
 /** Each row: a kind, and whether it is drawn off its models. */
-const rows: readonly { kind: TreeKind; model: boolean }[] = kinds.flatMap((kind) =>
+const rows: readonly { kind: FloraKind; model: boolean }[] = kinds.flatMap((kind) =>
   models === "compare"
     ? [
         { kind, model: false },
@@ -79,7 +86,7 @@ function write(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
 
 async function main(): Promise<void> {
   if (models) await loadTreeModels("./");
-  const cols = Math.max(...kinds.map((k) => treeRowsOf(k).length));
+  const cols = Math.max(...kinds.map((k) => variantsOf(k).length));
   const sheet = document.getElementById("stage") as HTMLCanvasElement;
   sheet.width = CELL_W * cols;
   sheet.height = CELL_H * rows.length;
@@ -99,7 +106,7 @@ async function main(): Promise<void> {
   const ground = new THREE.MeshLambertMaterial({ color: 0x7d8a4e });
 
   rows.forEach(({ kind, model }, row) => {
-    treeRowsOf(kind).forEach((v, col) => {
+    variantsOf(kind).forEach((v, col) => {
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(SKY);
       lightScene(scene);

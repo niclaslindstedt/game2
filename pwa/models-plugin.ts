@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE MODELS EVERY BUILD PACKS: every catalog car's game-quality glTF as
-// `models/<id>.glb` and every kind of tree's as `models/trees/<kind>.glb`,
+// `models/<id>.glb`, every kind of tree's as `models/trees/<kind>.glb`,
+// every other kind of plant's as `models/flora/<kind>.glb` and every kind
+// of prop's as `models/props/<kind>.glb`,
 // emitted into the bundle (so the service worker precaches them with
 // everything else) and served the same way by the dev server. They are COMMITTED, in `pwa/models/`, made there by `make models`
 // (Blender, off the game's own numbers — the `blender-assets` skill), with a
@@ -10,9 +12,9 @@
 // (`TREE_SOURCES`), so a tree remade never asks for the cars to be, nor the
 // other way round.
 //
-// A build switched back to the code-built cars or trees (`VITE_MODEL_CARS=0`,
-// `VITE_MODEL_TREES=0` — `src/game/model-switch.ts`) packs none of that
-// side's files.
+// A build switched back to the code-built cars, flora or props
+// (`VITE_MODEL_CARS=0`, `VITE_MODEL_TREES=0`, `VITE_MODEL_PROPS=0` —
+// `src/game/model-switch.ts`) packs none of that side's files.
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -21,9 +23,10 @@ import { join } from "node:path";
 import type { Plugin } from "vite";
 
 import { CARS } from "../engine/game/defs/cars.ts";
-import { TREE_KINDS } from "./src/game/flora-trees.ts";
+import { FLORA_KINDS, floraModelFile } from "./src/game/flora-trees.ts";
+import { PROP_KIND_LIST, propModelFile } from "./src/game/prop-kinds.ts";
 
-export type ModelSwitches = { cars: boolean; trees: boolean };
+export type ModelSwitches = { cars: boolean; trees: boolean; props: boolean };
 
 /** Where the committed models are, from the repository's root. */
 export const MODELS_DIR = "pwa/models";
@@ -32,7 +35,8 @@ export const MODELS_DIR = "pwa/models";
 export function modelFiles(on: ModelSwitches): string[] {
   return [
     ...(on.cars ? CARS.map((c) => `${c.id}.glb`) : []),
-    ...(on.trees ? TREE_KINDS.map((k) => `trees/${k}.glb`) : []),
+    ...(on.trees ? FLORA_KINDS.map(floraModelFile) : []),
+    ...(on.props ? PROP_KIND_LIST.map(propModelFile) : []),
   ];
 }
 
@@ -81,6 +85,31 @@ export const TREE_SOURCES = [
   "pwa/src/game/flora-desert.ts",
 ];
 
+/** WHAT A PROP IS MADE FROM: the builder, the shelf and the driver, the
+ * data script and the packer, the props' own module, and every module a
+ * skeleton is traced off — each kind's factory and the builder under it. */
+export const PROP_SOURCES = [
+  "scripts/blender.mjs",
+  "scripts/lib/prop-model-data.mjs",
+  "scripts/blender/lib.py",
+  "scripts/blender/prop.py",
+  "scripts/lib/glb-pack.mjs",
+  "pwa/src/game/prop-kinds.ts",
+  "pwa/src/game/flora-build.ts",
+  "pwa/src/game/house.ts",
+  "pwa/src/game/traffic-fleet.ts",
+  "pwa/src/game/train.ts",
+  "pwa/src/game/farm-gear.ts",
+  "pwa/src/game/livestock.ts",
+  "pwa/src/game/wind-farm.ts",
+  "pwa/src/game/solar-farm.ts",
+  "pwa/src/game/wild.ts",
+  "pwa/src/game/crowd.ts",
+  "pwa/src/game/kerbs.ts",
+  "pwa/src/game/cones.ts",
+  "engine/game/defs/traffic.ts",
+];
+
 /** The sources' hash, from the repository's `root` (line endings as
  * committed: `\r` dropped, so a checkout's conversion moves nothing). */
 export function sourcesHash(root: string, sources: readonly string[] = MODEL_SOURCES): string {
@@ -103,7 +132,7 @@ export function carModels(on: ModelSwitches, root: string): Plugin {
         this.error(
           `${gone.map((f) => `${MODELS_DIR}/${f}`).join(", ")} is missing — run \`make models\` ` +
             "(it needs Blender), or switch the build back to the code-built ones " +
-            "(VITE_MODEL_CARS=0 / VITE_MODEL_TREES=0)",
+            "(VITE_MODEL_CARS=0 / VITE_MODEL_TREES=0 / VITE_MODEL_PROPS=0)",
         );
       }
     },
@@ -118,7 +147,9 @@ export function carModels(on: ModelSwitches, root: string): Plugin {
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const name = /\/models\/((?:trees\/)?[\w-]+\.glb)$/.exec(req.url ?? "")?.[1];
+        const name = /\/models\/((?:trees\/|flora\/|props\/)?[\w-]+\.glb)$/.exec(
+          req.url ?? "",
+        )?.[1];
         if (!name || !files.includes(name) || !existsSync(join(dir, name))) return next();
         res.setHeader("Content-Type", "model/gltf-binary");
         res.end(readFileSync(join(dir, name)));

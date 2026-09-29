@@ -36,7 +36,7 @@ describe("the model registry", () => {
 
   it("lists as Blender models exactly the files the build ships", () => {
     const listed = MODEL_REGISTRY.flatMap((r) => r.blender?.files ?? []);
-    const shipped = modelFiles({ cars: true, trees: true });
+    const shipped = modelFiles({ cars: true, trees: true, props: true });
     expect([...listed].sort()).toEqual([...shipped].sort());
     for (const f of listed) {
       expect(existsSync(join(root, MODELS_DIR, f)), `${MODELS_DIR}/${f}`).toBe(true);
@@ -59,7 +59,10 @@ describe("the model registry", () => {
   });
 
   it("names only switches the game reads", () => {
-    const readers = read("pwa/src/game/car-models.ts") + read("pwa/src/game/tree-models.ts");
+    const readers =
+      read("pwa/src/game/car-models.ts") +
+      read("pwa/src/game/tree-models.ts") +
+      read("pwa/src/game/prop-models.ts");
     for (const r of MODEL_REGISTRY) {
       if (r.blender) expect(readers, r.asset).toContain(`ENV.${r.blender.switch}`);
     }

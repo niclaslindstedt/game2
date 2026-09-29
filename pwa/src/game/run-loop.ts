@@ -145,6 +145,7 @@ export function startRun(store: RunStore, actions: RunActions): (() => void) | u
     import("./renderer.ts"),
     import("./car-models.ts").then(({ loadCarModels }) => loadCarModels()),
     import("./tree-models.ts").then(({ loadTreeModels }) => loadTreeModels()),
+    import("./prop-models.ts").then(({ loadPropModels }) => loadPropModels()),
   ]).then(([{ createRenderer }]) => {
     if (disposed) return;
     const renderer = createRenderer(canvas, optionsRef.current.video);

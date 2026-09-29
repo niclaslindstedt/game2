@@ -24,6 +24,7 @@
 //   node scripts/blender.mjs --quality render --views three,rear3 --samples 24
 //   node scripts/blender.mjs --kind tree --id birch --quality render --views row --samples 16
 //   node scripts/blender.mjs --kind tree --id all --quality game --views none
+//   node scripts/blender.mjs --kind prop --id traffic --quality render --views row --samples 16
 //
 // Blender is looked for at `BLENDER`, then the macOS app, then `blender` on
 // the PATH. It is run with `--python-use-system-env` and
@@ -51,24 +52,35 @@ const KINDS = {
     builder: "car.py",
     fallback: "compact",
   },
-  // A KIND of tree: every variant's row (the numbers the code's recipe
-  // draws with) and its skeleton, laid by the code's own builder, and — for
-  // the stills alone — the summer colours it is painted in. The game dresses
-  // a model by its materials' names, so the glTF carries no colour.
+  // A KIND of tree — or of any other plant (`PLANT_KINDS`): every variant's
+  // row (the numbers the code's recipe draws with, where it has one) and
+  // its skeleton, laid by the code's own builder, and — for the stills
+  // alone — the summer colours it is painted in. The game dresses a model
+  // by its materials' names, so the glTF carries no colour.
   tree: {
-    ids: async () => [...(await import("../pwa/src/game/flora-trees.ts")).TREE_KINDS],
+    ids: async () => [...(await import("../pwa/src/game/flora-trees.ts")).FLORA_KINDS],
     data: async (id) => (await import("./lib/tree-model-data.mjs")).treeModelData(id),
     builder: "tree.py",
     fallback: "spruce",
   },
+  // A KIND of prop (`PROP_KINDS`): every id's skeleton, laid by the code's
+  // own factory under the driver's hook, and its roles' colours for the
+  // stills. The game dresses a model by its materials' names (its roles),
+  // so the glTF carries no colour.
+  prop: {
+    ids: async () => [...(await import("../pwa/src/game/prop-models.ts")).PROP_KIND_LIST],
+    data: async (id) => (await import("./lib/prop-model-data.mjs")).propModelData(id),
+    builder: "prop.py",
+    fallback: "traffic",
+  },
 };
 
 const USAGE =
-  "usage: node scripts/blender.mjs [--kind car|tree] [--id compact|spruce|all] [--quality render|game|both]\n" +
+  "usage: node scripts/blender.mjs [--kind car|tree|prop] [--id compact|spruce|grass|traffic|all] [--quality render|game|both]\n" +
   "                                [--views side,three,rear3,chase,detail|row,far,close|none] [--samples n] [--out dir]";
 const FLAGS = {
-  kind: "the kind of asset (car, tree)",
-  id: "which one (a car's catalog id, a kind of tree), or all; the kind's default when left out",
+  kind: "the kind of asset (car, tree, prop)",
+  id: "which one (a car's catalog id, a kind of tree or plant), or all; the kind's default when left out",
   quality: "render (studio stills, subdivided twice), game (the budget and its LODs), or both",
   views:
     "only these cameras (a car's side,three,rear3,chase,detail; a tree's row,far,close), or none; every one when left out",

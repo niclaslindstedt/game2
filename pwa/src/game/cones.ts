@@ -22,6 +22,8 @@
 import * as THREE from "three";
 import { type GameState, type Track } from "@engine";
 
+import { GeoBuilder } from "./flora-build.ts";
+import { dressOf, propModel } from "./prop-models.ts";
 import { rightOf } from "./ribbon.ts";
 import { drivingThrough, outOfBody, stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
 
@@ -101,11 +103,39 @@ export type ConeField = {
  * over the ground once it has come to rest lying down. */
 export type PropShape = { reach: number; height: number; rest: number };
 
+/** Every colour a cone is built in, by ROLE — the names a model's faces
+ * carry (`prop-models.ts`): the code's own cone is the orange alone. */
+export const CONE_TINT = {
+  cone: new THREE.Color("#ff7d1f"),
+  band: new THREE.Color("#f4f1e8"),
+  base: new THREE.Color("#2a2a2c"),
+};
+
+/** A cone as the code builds it: the plain cone, or the tall channelizer,
+ * standing on y = 0 at its middle height. */
+export function coneGeometry(tall: boolean): THREE.BufferGeometry {
+  const b = new GeoBuilder(() => 0.5);
+  b.add(
+    tall
+      ? new THREE.CylinderGeometry(TALL_R * 0.55, TALL_R, TALL_H, 7)
+      : new THREE.ConeGeometry(CONE_R, CONE_H, 6),
+    CONE_TINT.cone,
+  );
+  return b.build();
+}
+
 export function createConeField(): ConeField {
   const group = new THREE.Group();
-  const geometry = new THREE.ConeGeometry(CONE_R, CONE_H, 6);
-  const tallGeometry = new THREE.CylinderGeometry(TALL_R * 0.55, TALL_R, TALL_H, 7);
-  const material = new THREE.MeshLambertMaterial({ color: "#ff7d1f" });
+  const cone = propModel("roadside", "cone", dressOf(CONE_TINT));
+  const tallCone = propModel("roadside", "tallCone", dressOf(CONE_TINT));
+  const geometry = cone ?? new THREE.ConeGeometry(CONE_R, CONE_H, 6);
+  const tallGeometry = tallCone ?? new THREE.CylinderGeometry(TALL_R * 0.55, TALL_R, TALL_H, 7);
+  // A model carries its own paint on its vertices; the code's cone is one
+  // colour.
+  const material =
+    cone || tallCone
+      ? new THREE.MeshLambertMaterial({ vertexColors: true })
+      : new THREE.MeshLambertMaterial({ color: CONE_TINT.cone });
   let cones: Cone[] = [];
 
   const plant = (x: number, y: number, z: number, s: number, tall = false): void => {

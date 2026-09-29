@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE MODELLED TREES the flora draws: every tree variant MODELLED in Blender
-// off the very row its code recipe draws with and the skeleton that recipe
-// lays (`make blender KIND=tree`, `scripts/blender/tree.py`), committed as
-// one glTF a kind in `pwa/models/trees/` by `make models` and packed by
-// every build — unless a build is switched back to the code-built trees
-// (`VITE_MODEL_TREES=0`; `model-switch.ts`). A kind whose file did not load
-// is drawn by its recipe (`flora-species.ts` and kin), as every tree is
-// under the switch.
+// THE MODELLED FLORA the world draws: every tree variant MODELLED in
+// Blender off the very row its code recipe draws with and the skeleton that
+// recipe lays, and every other plant — the shrubs, the grass, the wet
+// ground's reeds, the cacti, the dead wood — off its skeleton alone (`make
+// blender KIND=tree`, `scripts/blender/tree.py`), committed as one glTF a
+// kind in `pwa/models/trees/` and `pwa/models/flora/` by `make models` and
+// packed by every build — unless a build is switched back to the
+// code-built flora (`VITE_MODEL_TREES=0`; `model-switch.ts`). A kind whose
+// file did not load is drawn by its recipe (`flora-species.ts` and kin), as
+// every plant is under the switch.
 //
 // A MODEL CARRIES NO COLOUR: every face's material is NAMED for its paint —
 // a colour of the paint box (`SPRUCE_DARK`) or a pair blended up the part
@@ -24,13 +26,21 @@ import type { Season } from "@engine";
 
 import { PAINT_BOX, floraPalette } from "./flora-build.ts";
 import { TREE_ROW } from "./flora-tree-rows.ts";
-import { TREE_KINDS, TREE_PAINT_ROLE, type TreeColour, type TreeKind } from "./flora-trees.ts";
+import {
+  FLORA_KINDS,
+  PLANT_KIND,
+  TREE_PAINT_ROLE,
+  floraModelFile,
+  type FloraKind,
+  type TreeColour,
+} from "./flora-trees.ts";
 import { modelSwitch } from "./model-switch.ts";
 
 /** The build's environment — Vite's in the app; none in the suite. */
 const ENV = (import.meta as { env?: Record<string, string | boolean | undefined> }).env ?? {};
 
-/** Whether this build draws the modelled trees (ON unless turned off). */
+/** Whether this build draws the modelled trees and plants (ON unless
+ * turned off). */
 export const TREE_MODELS = modelSwitch(ENV.VITE_MODEL_TREES);
 
 /** The two colours a face's paint names — its first, and the one a vertex's
@@ -53,8 +63,13 @@ export type TreePiece = {
   index: Uint32Array;
 };
 
+/** A modelled plant's kind, by its flora id: a tree row's, or a plant's. */
+export function floraKindOf(id: string): FloraKind | undefined {
+  return TREE_ROW[id]?.kind ?? PLANT_KIND[id];
+}
+
 /** Every kind's variants, by mesh name (`spruceTall`, `spruceTall_far`). */
-const loaded = new Map<TreeKind, Map<string, TreePiece[]>>();
+const loaded = new Map<FloraKind, Map<string, TreePiece[]>>();
 let loading: Promise<void> | null = null;
 /** Dressed geometries, by variant, band and season: shared by every patch
  * that plants one (`userData.shared`, as the code's shapes are). */
@@ -65,7 +80,7 @@ export function piecesOf(gltf: Pick<GLTF, "scene">): Map<string, TreePiece[]> {
   const out = new Map<string, TreePiece[]>();
   gltf.scene.updateMatrixWorld(true);
   gltf.scene.traverse((o) => {
-    if (!/^[a-zA-Z]+(_far)?$/.test(o.name) || !(o.name.replace(/_far$/, "") in TREE_ROW)) return;
+    if (!/^[a-zA-Z]+(_far)?$/.test(o.name) || !floraKindOf(o.name.replace(/_far$/, ""))) return;
     const meshes: THREE.Mesh[] = [];
     if (o instanceof THREE.Mesh) meshes.push(o);
     else o.traverse((c) => c instanceof THREE.Mesh && meshes.push(c));
@@ -117,8 +132,8 @@ export function loadTreeModels(base = String(ENV.BASE_URL ?? "/")): Promise<void
   // The committed models are meshopt-packed (`scripts/lib/glb-pack.mjs`).
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   loading = Promise.all(
-    TREE_KINDS.map((kind) =>
-      loader.loadAsync(`${base}models/trees/${kind}.glb`).then(
+    FLORA_KINDS.map((kind) =>
+      loader.loadAsync(`${base}models/${floraModelFile(kind)}`).then(
         (g) => void loaded.set(kind, piecesOf(g)),
         () => undefined,
       ),
@@ -128,10 +143,10 @@ export function loadTreeModels(base = String(ENV.BASE_URL ?? "/")): Promise<void
 }
 
 /** Hand a kind's parsed model in directly (the tree lab, the suite). */
-export function setTreeModel(kind: TreeKind, pieces: Map<string, TreePiece[]>): void {
+export function setTreeModel(kind: FloraKind, pieces: Map<string, TreePiece[]>): void {
   loaded.set(kind, pieces);
   for (const key of [...dressed.keys()]) {
-    if (TREE_ROW[key.split("#")[0]]?.kind === kind) dressed.delete(key);
+    if (floraKindOf(key.split("#")[0]) === kind) dressed.delete(key);
   }
 }
 
@@ -141,18 +156,18 @@ export function setTreeModel(kind: TreeKind, pieces: Map<string, TreePiece[]>): 
 const GRAIN = 2.5;
 
 /**
- * ONE VARIANT'S MODEL, dressed for a season — the tree the road's band
+ * ONE VARIANT'S MODEL, dressed for a season — the plant the road's band
  * draws, or with `sketch` the one the wild beyond it draws — in the code
- * shape's own frame; or null when `id` is not a modelled tree or its kind
+ * shape's own frame; or null when `id` is not a modelled plant or its kind
  * has no model loaded (the code's recipe draws it).
  */
 export function treeModel(id: string, season: Season, sketch = false): THREE.BufferGeometry | null {
-  const row = TREE_ROW[id];
-  if (!row) return null;
+  const kind = floraKindOf(id);
+  if (!kind) return null;
   const key = `${id}#${sketch ? "far" : "full"}#${season}`;
   const done = dressed.get(key);
   if (done) return done;
-  const pieces = loaded.get(row.kind)?.get(`${id}${sketch ? "_far" : ""}`);
+  const pieces = loaded.get(kind)?.get(`${id}${sketch ? "_far" : ""}`);
   if (!pieces || pieces.length === 0) return null;
   const palette = floraPalette(season);
   const pos: number[] = [];

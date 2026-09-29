@@ -41,7 +41,7 @@ import {
   TOWN_ITEMS,
   VEHICLE_ITEMS,
 } from "./item-catalog-built.ts";
-import { stoneGeometry, stoneMatrix } from "../game/wild.ts";
+import { stoneGeometry, stoneMatrix, stoneModelled } from "../game/wild.ts";
 
 /** Where a camera stands for one column of the sheet. */
 export type ItemView = {
@@ -121,7 +121,10 @@ function stoneItem(kind: SolidKind, mossy: boolean, size: number, spin: number):
         // rolled here: it takes the darker face.
         if (kind === "slab") tint.lerp(new THREE.Color(ground.bedrockDark), 0.6);
       }
-      const material = new THREE.MeshLambertMaterial({ color: tint, vertexColors: mossy });
+      const material = new THREE.MeshLambertMaterial({
+        color: tint,
+        vertexColors: mossy || stoneModelled(),
+      });
       const mesh = new THREE.Mesh(geometry, material);
       stoneMatrix(
         ob,

@@ -22,11 +22,12 @@ import * as THREE from "three";
 import { createRng, rectDistance, type Paddock, type Rng } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
 import { box } from "./house.ts";
+import { dressOf, propModel } from "./prop-models.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture } from "./textures.ts";
 
-type Pose = "graze" | "stand";
-type Breed = "srb" | "holstein" | "sheep";
+export type Pose = "graze" | "stand";
+export type Breed = "srb" | "holstein" | "sheep";
 
 /** One animal, resolved: where it is in its paddock, which way it faces,
  * and what it is doing. */
@@ -71,7 +72,9 @@ const BEHAVIOUR = {
   margin: 2.2,
 };
 
-const TINT = {
+/** Every colour a beast is built in, by ROLE — the names a model's faces
+ * carry (`prop-models.ts`). */
+export const STOCK_TINT = {
   srb: new THREE.Color(0x8a4a2e),
   srbWhite: new THREE.Color(0xe9e2d2),
   holstein: new THREE.Color(0xe9e6dd),
@@ -83,6 +86,7 @@ const TINT = {
   fleece: new THREE.Color(0xe6e0cf),
   sheepFace: new THREE.Color(0x2e2a28),
 };
+const TINT = STOCK_TINT;
 
 const material = shareOne(
   () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
@@ -92,7 +96,7 @@ const material = shareOne(
  * and head forward, the head down at the grass in the grazing pose. The
  * hide is the breed's: SRB red with a white belly and blaze, Holstein
  * white with black patches laid on as proud facets. */
-function cowGeometry(breed: Breed, pose: Pose, rng: Rng): THREE.BufferGeometry {
+export function cowGeometry(breed: Breed, pose: Pose, rng: Rng): THREE.BufferGeometry {
   const b = new GeoBuilder(() => rng.next());
   const hide = breed === "holstein" ? TINT.holstein : TINT.srb;
   const patch = breed === "holstein" ? TINT.holsteinBlack : TINT.srbWhite;
@@ -161,7 +165,7 @@ function cowGeometry(breed: Breed, pose: Pose, rng: Rng): THREE.BufferGeometry {
 }
 
 /** A sheep: a fleece blob on four thin dark legs, a dark face. */
-function sheepGeometry(pose: Pose, rng: Rng): THREE.BufferGeometry {
+export function sheepGeometry(pose: Pose, rng: Rng): THREE.BufferGeometry {
   const b = new GeoBuilder(() => rng.next());
   const bodyY = 0.62;
   const fleece = new THREE.IcosahedronGeometry(0.5, 1);
@@ -182,6 +186,11 @@ function sheepGeometry(pose: Pose, rng: Rng): THREE.BufferGeometry {
   for (const side of [-1, 1])
     box(b, TINT.sheepFace, side * 0.12, headY + 0.08, headZ - 0.05, 0.1, 0.04, 0.06);
   return b.build();
+}
+
+/** A body's id in the props' model (`PROP_KINDS.livestock`). */
+export function stockId(breed: Breed, pose: Pose): string {
+  return `${breed}${pose === "graze" ? "Graze" : "Stand"}`;
 }
 
 export type Livestock = {
@@ -209,7 +218,9 @@ export function createLivestock(): Livestock {
   const bodies: Body[] = [];
   for (const breed of ["srb", "holstein", "sheep"] as const) {
     for (const pose of ["graze", "stand"] as const) {
-      const geo = breed === "sheep" ? sheepGeometry(pose, rng) : cowGeometry(breed, pose, rng);
+      const geo =
+        propModel("livestock", stockId(breed, pose), dressOf(STOCK_TINT)) ??
+        (breed === "sheep" ? sheepGeometry(pose, rng) : cowGeometry(breed, pose, rng));
       bodies.push({ breed, pose, geo, mesh: null });
     }
   }

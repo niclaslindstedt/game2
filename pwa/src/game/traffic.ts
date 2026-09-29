@@ -13,7 +13,7 @@ import { TRAFFIC_MODELS, type GameState, type SpeedSign } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture, speedSignTexture } from "./textures.ts";
-import { trafficPaint, trafficVehicleGeometry } from "./traffic-fleet.ts";
+import { trafficPaint, vehicleGeometry } from "./traffic-fleet.ts";
 
 /** How far from the car a vehicle is still drawn, m — past the fog, so
  * one is never seen to appear. */
@@ -55,7 +55,7 @@ export function createTraffic(
     const key = `${model}:${paint}`;
     const had = geometries.get(key);
     if (had) return had;
-    const made = trafficVehicleGeometry(TRAFFIC_MODELS[model], paint, rand);
+    const made = vehicleGeometry(TRAFFIC_MODELS[model], paint, rand);
     geometries.set(key, made);
     return made;
   };

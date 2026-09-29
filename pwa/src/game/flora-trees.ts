@@ -52,12 +52,97 @@ export const TREE_KINDS = [
 ] as const;
 export type TreeKind = (typeof TREE_KINDS)[number];
 
+/** EVERY OTHER PLANT, by the KIND its model is made with: the undergrowth
+ * a car drives through and the dead wood it does not, each kind one glTF
+ * (`pwa/models/flora/<kind>.glb`) as each kind of tree is. A plant has no
+ * row — its recipe is a shape of its own (`flora-species.ts` and kin) — so
+ * its model is made over the skeleton that recipe lays, as a tree's is. */
+export const PLANT_KINDS = {
+  shrub: [
+    "heathShrub",
+    "juniper",
+    "willowShrub",
+    "bogShrub",
+    "berryBush",
+    "alpenrose",
+    "mountainPine",
+  ],
+  grass: [
+    "tallGrass",
+    "fern",
+    "largeFern",
+    "sedgeTuft",
+    "tussock",
+    "bunchGrass",
+    "desertGrass",
+    "alpineGrass",
+  ],
+  wetland: ["reeds", "cottonGrass", "bulrush", "waterLily"],
+  ground: [
+    "mossPatch",
+    "bogMoss",
+    "saltCrust",
+    "cairn",
+    "cowSkull",
+    "gentianPatch",
+    "alpineFlowers",
+  ],
+  scrub: ["creosote", "bursage", "brittlebush", "sagebrush", "deadBrush", "tumbleweed", "ocotillo"],
+  cactus: [
+    "barrelCactus",
+    "pricklyPear",
+    "hedgehogCactus",
+    "cholla",
+    "chollaChain",
+    "agave",
+    "agaveBloom",
+    "yucca",
+  ],
+  deadwood: ["stump", "fallenLog", "rootLog", "fallenBranch", "driftwood", "logPile"],
+} as const satisfies Record<string, readonly string[]>;
+export type PlantKind = keyof typeof PLANT_KINDS;
+export const PLANT_KIND_LIST = Object.keys(PLANT_KINDS) as readonly PlantKind[];
+
+/** A plant's kind, by its flora id; undefined for a tree or anything the
+ * flora does not plant. */
+export const PLANT_KIND: Readonly<Record<string, PlantKind>> = Object.fromEntries(
+  PLANT_KIND_LIST.flatMap((k) => PLANT_KINDS[k].map((id) => [id, k])),
+);
+
+/** Every kind a model is made of: the trees', then the plants'. */
+export type FloraKind = TreeKind | PlantKind;
+export const FLORA_KINDS: readonly FloraKind[] = [...TREE_KINDS, ...PLANT_KIND_LIST];
+
+/** Where a kind's committed model is, under `pwa/models/`. */
+export function floraModelFile(kind: FloraKind): string {
+  return kind in PLANT_KINDS ? `flora/${kind}.glb` : `trees/${kind}.glb`;
+}
+
 /** What a colour of the paint box IS on a tree — how a model builds the
  * faces it paints. */
 export type PaintRole =
-  "needle" | "leaf" | "bark" | "wood" | "mark" | "accent" | "flesh" | "thatch" | "dagger";
+  | "needle"
+  | "leaf"
+  | "bark"
+  | "wood"
+  | "mark"
+  | "accent"
+  | "flesh"
+  | "thatch"
+  | "dagger"
+  // The undergrowth's own: a grass or fern BLADE, a cushion of MOSS (and
+  // the flat pads and crusts that lie like one), a flower or seed HEAD, a
+  // cactus's SPINES, a pile of STONE, a BONE.
+  | "blade"
+  | "moss"
+  | "head"
+  | "spine"
+  | "stone"
+  | "bone";
 
-/** Every colour a tree is painted with, and its role. */
+/** Every colour the flora is painted with, and what a part in it IS: the
+ * trees' first, then the undergrowth's — a Blender model is built over each
+ * part by its role (`scripts/blender/tree.py`). */
 export const TREE_PAINT_ROLE = {
   TRUNK: "bark",
   TRUNK_DARK: "bark",
@@ -107,6 +192,73 @@ export const TREE_PAINT_ROLE = {
   IRONWOOD_BARK: "bark",
   IRONWOOD_LEAF: "leaf",
   PINYON: "needle",
+  // The taiga's undergrowth and its wet ground.
+  JUNIPER: "leaf",
+  MOSS: "moss",
+  GRASS_BASE: "blade",
+  GRASS_TIP: "blade",
+  FERN: "blade",
+  FERN_TIP: "blade",
+  HEATH: "leaf",
+  HEATH_BLOOM: "leaf",
+  GROUND_MOSS: "moss",
+  BERRY_LEAF: "leaf",
+  BERRY: "accent",
+  SEDGE: "blade",
+  SEDGE_TIP: "blade",
+  COTTON: "head",
+  REED: "blade",
+  REED_TIP: "blade",
+  DRIFTWOOD: "wood",
+  BOG_SHRUB: "leaf",
+  LILY_PAD: "moss",
+  LILY_BLOOM: "head",
+  BULRUSH_HEAD: "head",
+  SPHAGNUM: "moss",
+  SPHAGNUM_RUST: "moss",
+  // The desert's scrub, cacti and bones.
+  BARREL: "flesh",
+  BARREL_SPINE: "spine",
+  BARREL_HOOK: "spine",
+  PRICKLY_PEAR: "flesh",
+  PEAR_FRUIT: "head",
+  HEDGEHOG: "flesh",
+  HEDGEHOG_BLOOM: "head",
+  CHOLLA: "flesh",
+  CHOLLA_DARK: "bark",
+  CHOLLA_FRUIT: "head",
+  OCOTILLO: "bark",
+  OCOTILLO_TIP: "accent",
+  CREOSOTE: "leaf",
+  CREOSOTE_STEM: "bark",
+  BURSAGE: "leaf",
+  BRITTLEBUSH: "leaf",
+  SAGEBRUSH: "leaf",
+  AGAVE: "dagger",
+  AGAVE_TIP: "spine",
+  AGAVE_STALK: "bark",
+  AGAVE_BLOOM: "head",
+  YUCCA: "dagger",
+  YUCCA_STALK: "bark",
+  DEAD_BRUSH: "wood",
+  TUMBLEWEED: "wood",
+  BUNCH_BASE: "blade",
+  BUNCH_TIP: "blade",
+  SALT_CRUST: "moss",
+  BONE: "bone",
+  // The alp's mat, its flowers and its cairns.
+  MUGO: "needle",
+  MUGO_STEM: "bark",
+  ALPENROSE_LEAF: "leaf",
+  ALPENROSE_BLOOM: "head",
+  GENTIAN: "head",
+  ARNICA: "head",
+  FLOWER_WHITE: "head",
+  ALP_GRASS_BASE: "blade",
+  ALP_GRASS_TIP: "blade",
+  CAIRN_STONE: "stone",
+  CAIRN_DARK: "stone",
+  CAIRN_LICHEN: "stone",
 } as const satisfies Record<string, PaintRole>;
 export type TreeColour = keyof typeof TREE_PAINT_ROLE;
 
@@ -337,4 +489,15 @@ export type TracedPart = {
   seg: number;
   ribs?: number;
   radii?: [number, number, number];
+  /** The primitive the code drew the part with (three's own type name),
+   * and the one matrix (column-major, sixteen numbers) that carries that
+   * primitive AS THREE MAKES IT — a unit box `size` across, a plane, a
+   * sphere — to where the part stands: every turn the recipe gave it and
+   * the placement, in one. A builder that wants the part's whole frame (a
+   * box's three axes, a blade's lean) reads it here. */
+  type: string;
+  m: number[];
+  /** A box's three sizes, a plane's two, a sphere's or a disc's radius —
+   * whatever the primitive was made from, in its own frame. */
+  size?: number[];
 };

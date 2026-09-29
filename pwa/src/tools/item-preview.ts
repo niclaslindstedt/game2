@@ -30,6 +30,8 @@ import * as THREE from "three";
 import type { Season } from "@engine";
 
 import { CAR_BODIES } from "../game/car-styles.ts";
+import { loadPropModels } from "../game/prop-models.ts";
+import { loadTreeModels } from "../game/tree-models.ts";
 import {
   DEFAULT_ITEMS,
   itemCatalog,
@@ -64,6 +66,8 @@ type Config = {
   car: string;
   cell: { w: number; h: number };
   list?: boolean;
+  /** Draw the modelled things (copied beside the page) in the code's place. */
+  models?: boolean;
 };
 
 /** The default columns: enough of a walk round a thing to judge its
@@ -183,6 +187,7 @@ function select(catalog: ItemDef[], sel: Config["select"]): ItemDef[] {
 
 async function main(): Promise<void> {
   const config = (await (await fetch("/items.json")).json()) as Config;
+  if (config.models) await Promise.all([loadTreeModels("./"), loadPropModels("./")]);
   const catalog = itemCatalog();
 
   if (config.list) {

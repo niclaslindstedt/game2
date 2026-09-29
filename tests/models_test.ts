@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE MODELLED CARS the game ships (`pwa/models/`, made by `make models`,
 // packed by `pwa/models-plugin.ts`, poured into the code-built car by
-// `car-models.ts`) — and the modelled trees beside them, stamped apart
-// (`tests/tree_models_test.ts` holds what is in them): every one committed,
+// `car-models.ts`) — and the modelled flora and props beside them, each set
+// stamped apart (`tests/tree_models_test.ts` and `tests/prop_models_test.ts`
+// hold what is in them): every one committed,
 // none older than the sources it is made from, each within its budget; the switch on unless a build turns it
 // back; every material a model carries a ROLE the game dresses; every part
 // one the game knows; and the model standing where the code-built car
@@ -20,11 +21,13 @@ import { CARS, type DamagePart } from "@engine";
 import {
   MODELS_DIR,
   MODEL_SOURCES,
+  PROP_SOURCES,
   TREE_SOURCES,
   modelFiles,
   sourcesHash,
 } from "../pwa/models-plugin.ts";
-import { TREE_KINDS } from "../pwa/src/game/flora-trees.ts";
+import { FLORA_KINDS, floraModelFile } from "../pwa/src/game/flora-trees.ts";
+import { PROP_KIND_LIST, propModelFile } from "../pwa/src/game/prop-kinds.ts";
 import { modelSwitch } from "../pwa/src/game/model-switch.ts";
 import { CAR_ROLES, dressOf } from "../pwa/src/game/car-dress.ts";
 import { SMOOTH_NORMALS, dressPart, modelOf, type CarModel } from "../pwa/src/game/car-models.ts";
@@ -68,32 +71,50 @@ const modelFor = (id: string): Promise<CarModel> => {
 };
 
 describe("the models the game ships", () => {
-  const all = modelFiles({ cars: true, trees: false });
+  const all = modelFiles({ cars: true, trees: false, props: false });
 
   it("are every catalog car under its id, and none when switched back", () => {
     expect([...all].sort()).toEqual(CARS.map((c) => `${c.id}.glb`).sort());
-    expect(modelFiles({ cars: false, trees: false })).toEqual([]);
+    expect(modelFiles({ cars: false, trees: false, props: false })).toEqual([]);
   });
 
-  it("are every kind of tree under its kind, stamped apart, and none when switched back", () => {
-    const trees = modelFiles({ cars: false, trees: true });
-    expect(trees).toEqual(TREE_KINDS.map((k) => `trees/${k}.glb`));
-    expect(modelFiles({ cars: true, trees: true })).toEqual([...all, ...trees]);
-    for (const f of trees) {
+  /** A packed set's files: every one committed and within a packed kind's
+   * size (tens of kilobytes to a couple of hundred: one grown past this is
+   * a builder that lost its budget, or a file unpacked), its sources all
+   * there, and its stamp the sources' hash as they stand. */
+  const packed = (files: string[], sources: readonly string[], key: "trees" | "props") => {
+    for (const f of files) {
       const at = join(root, MODELS_DIR, f);
-      expect(existsSync(at), `${MODELS_DIR}/${f} — run \`make models SET=trees\``).toBe(true);
-      // A packed kind is tens of kilobytes to a couple of hundred: one grown
-      // past this is a builder that lost its budget, or a file unpacked.
+      expect(existsSync(at), `${MODELS_DIR}/${f} — run \`make models SET=${key}\``).toBe(true);
       expect(statSync(at).size, f).toBeLessThan(400_000);
     }
-    for (const f of TREE_SOURCES) expect(existsSync(join(root, f)), f).toBe(true);
+    for (const f of sources) expect(existsSync(join(root, f)), f).toBe(true);
     const stamp = JSON.parse(readFileSync(join(root, MODELS_DIR, "sources.json"), "utf8")) as {
       trees: string;
+      props: string;
     };
     expect(
-      stamp.trees,
-      "a source of the trees moved since they were made — run `make models SET=trees` and commit pwa/models/",
-    ).toBe(sourcesHash(root, TREE_SOURCES));
+      stamp[key],
+      `a source of the ${key} moved since they were made — run \`make models SET=${key}\` and commit pwa/models/`,
+    ).toBe(sourcesHash(root, sources));
+  };
+
+  it("are every kind of tree and plant under its kind, stamped apart, and none when switched back", () => {
+    const trees = modelFiles({ cars: false, trees: true, props: false });
+    expect(trees).toEqual(FLORA_KINDS.map(floraModelFile));
+    expect(modelFiles({ cars: true, trees: true, props: false })).toEqual([...all, ...trees]);
+    packed(trees, TREE_SOURCES, "trees");
+  });
+
+  it("are every kind of prop under its kind, stamped apart, and none when switched back", () => {
+    const props = modelFiles({ cars: false, trees: false, props: true });
+    expect(props).toEqual(PROP_KIND_LIST.map(propModelFile));
+    expect(modelFiles({ cars: true, trees: true, props: true })).toEqual([
+      ...all,
+      ...modelFiles({ cars: false, trees: true, props: false }),
+      ...props,
+    ]);
+    packed(props, PROP_SOURCES, "props");
   });
 
   it("are all committed, each within its budget", () => {

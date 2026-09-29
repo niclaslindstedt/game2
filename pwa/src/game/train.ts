@@ -21,11 +21,14 @@ import * as THREE from "three";
 import { lineAt, trainCars, type RailCrossing, type Track, type TrainCar } from "@engine";
 import { GeoBuilder } from "./flora-build.ts";
 import { box } from "./house.ts";
+import { dressOf, propModel } from "./prop-models.ts";
 import { RAIL } from "./railway.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture } from "./textures.ts";
 
-const PAINT = {
+/** Every colour a train is built in, by ROLE — the names a model's faces
+ * carry (`prop-models.ts`). */
+export const TRAIN_PAINT = {
   railbusRed: new THREE.Color(0xa8262a),
   railbusCream: new THREE.Color(0xe9dfc6),
   locoOrange: new THREE.Color(0xd4581c),
@@ -46,6 +49,7 @@ const PAINT = {
   tank: new THREE.Color(0x2e2e30),
   tankBand: new THREE.Color(0x8a8a8c),
 };
+const PAINT = TRAIN_PAINT;
 
 const trainMaterial = shareOne(
   () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
@@ -212,8 +216,9 @@ function tankWagon(b: GeoBuilder, L: number): void {
   box(b, PAINT.tankBand, 0, FRAME_Y + 0.2 + 2 * r + 0.15, 0, 0.6, 0.3, 0.6);
 }
 
-/** One vehicle of the consist as a mesh, `rand` being the facet jitter. */
-export function buildTrainCar(car: TrainCar, rand: () => number): THREE.Mesh {
+/** One vehicle of the consist as the code builds it, `rand` being the
+ * facet jitter. */
+export function trainCarGeometry(car: TrainCar, rand: () => number): THREE.BufferGeometry {
   const b = new GeoBuilder(rand);
   switch (car.kind) {
     case "railbus":
@@ -232,7 +237,15 @@ export function buildTrainCar(car: TrainCar, rand: () => number): THREE.Mesh {
       tankWagon(b, car.length);
       break;
   }
-  const mesh = new THREE.Mesh(b.build(), trainMaterial());
+  return b.build();
+}
+
+/** One vehicle of the consist as a mesh: its model, dressed in the train's
+ * own paint, or the code's. */
+export function buildTrainCar(car: TrainCar, rand: () => number): THREE.Mesh {
+  const geometry =
+    propModel("train", car.kind, dressOf(TRAIN_PAINT)) ?? trainCarGeometry(car, rand);
+  const mesh = new THREE.Mesh(geometry, trainMaterial());
   mesh.frustumCulled = true;
   return mesh;
 }
