@@ -4,7 +4,7 @@ This file is the canonical source of truth for AI coding agents working in this 
 
 **This file is the ROUTER, not the manual.** It says how work is done here, where things live at one level of detail, and which skill owns the rest. The procedures — every loop, every lab, every craft rule — live in `.agents/skills/`. Load the skill that owns the task's SUBJECT before starting; do not re-derive from this file what a skill already states.
 
-Fleet guidelines: GAME_GUIDELINES 1.0.2
+Fleet guidelines: GAME_GUIDELINES 1.1.0
 
 Everything a session needs to work on the game is in this file and the skills it routes to. Where the repository knowingly falls short of the rules it is built to, [`docs/conformance.md`](docs/conformance.md) is the ledger — one row per rule, with the verdict, the evidence, what closing the gap would take, and the day it was last checked.
 
