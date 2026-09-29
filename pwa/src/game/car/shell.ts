@@ -114,7 +114,10 @@ export function archAt(spec: CarBodySpec, axles: number[], z: number): number {
   return y;
 }
 
-function stationAt(spec: CarBodySpec, axles: number[], z: number): Station {
+/** The station at one z — exported so the Blender driver (`make blender`)
+ * can hand a modelled shell the same sections at the extra stations it
+ * lofts through. */
+export function stationAt(spec: CarBodySpec, axles: number[], z: number): Station {
   const s = sampleProfile(spec.profile, z);
   const sillY = archAt(spec, axles, z);
   const open = sillY > spec.floorY + 1e-4;
@@ -182,6 +185,15 @@ export function buildStations(spec: CarBodySpec, axles: number[]): Station[] {
     });
   // Two stations at one z would loft a zero-length ring; keep the first.
   return stations.filter((s, i) => i === 0 || Math.abs(s.z - stations[i - 1].z) > 1e-4);
+}
+
+/** Whether the band between two neighbouring stations is INSIDE a shut
+ * line — groove floor or chamfer wall, painted in shadow. It has to be
+ * NARROW as well as seam-ended: the two stations bracketing a whole door are
+ * both seam stations too, and without the width test the entire door panel
+ * goes dark. Stated once, so a modelled shell darkens the same bands. */
+export function seamGap(sa: Station, sc: Station): boolean {
+  return sa.seam !== undefined && sc.seam !== undefined && sa.z - sc.z < SEAM_WALL * 2.2;
 }
 
 /** Ring cross-section at a station, counter-clockwise seen from the nose:
@@ -342,11 +354,8 @@ export function buildShell(
     const sa = stations[i];
     const sc = stations[i + 1];
     const open = cuts[i];
-    // A band inside the shut line — groove floor or chamfer wall, both
-    // painted in shadow. It has to be NARROW as well as seam-ended: the
-    // two stations bracketing a whole door are both seam stations too, and
-    // without the width test the entire door panel goes dark.
-    const gap = sa.seam !== undefined && sc.seam !== undefined && sa.z - sc.z < SEAM_WALL * 2.2;
+    // A band inside the shut line (`seamGap`), painted in shadow.
+    const gap = seamGap(sa, sc);
     const a = ring(spec, sa);
     const c = ring(spec, sc);
     // A quad is painted by its FRONT station, so the tail's colour starts

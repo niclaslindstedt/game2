@@ -21,6 +21,7 @@ import { studioLights } from "./car-surface.ts";
 import type { CarSpec } from "@engine";
 
 import { buildCarBody } from "./car-body.ts";
+import { carModel } from "./car-models.ts";
 import type { Livery } from "./car-livery.ts";
 import { bodySpecFor } from "./car-styles.ts";
 
@@ -81,7 +82,11 @@ export function createPortraitStand(): PortraitStand {
     // Nothing behind the glass and nothing on it: at this size the cabin is
     // a dark shape either way, and the crew's own helmets would be two
     // pixels. The paint is the whole portrait.
-    const body = buildCarBody(bodySpecFor(spec, paint), { interior: "off", screens: "off" });
+    const body = buildCarBody(bodySpecFor(spec, paint), {
+      interior: "off",
+      screens: "off",
+      model: carModel(spec.id),
+    });
     scene.add(body.group);
     // Framed off the body that was actually built rather than off a number
     // per car: a long sedan and a short hatch both fill the frame.

@@ -33,6 +33,16 @@
 //     # where the axles, tyres and lamp edges landed in sheet pixels — lay
 //     # the cell over a reference photo registered on two of them to check
 //     # the proportions against the real car rather than against an eye
+//   ... car-preview.mjs --asset previews/blender/compact-lod0.glb,previews/blender/compact-lod1.glb
+//     # THE ASSET SHEET: each MODELLED car (`make blender`) in a row under the
+//     # code-built one it was made off, poured into the game's own builder
+//     # (car-models.ts) — its forms, the code's dress, the code's glass
+//   ... car-preview.mjs --models
+//     # every car's COMMITTED model (pwa/models/) under its code-built self;
+//     # with --wrecks, the wrecks are the model's
+//   ... car-preview.mjs --rig --models --cars compact
+//     # THE RIG SHEET: the code car posed by car-mesh.ts's numbers and each
+//     # model's own clips (steer, travel, roll) played to the same moments
 //   ... car-preview.mjs --skip-build
 //     # reuse the last harness bundle (fast spec-only iterations)
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -198,7 +208,7 @@ if (has("crew")) {
     mode: "wrecks",
     cars: scenes
       .filter(([id]) => !scene || scene.some((word) => id.includes(word)))
-      .map(([id, damage]) => ({ id: `${carId} — ${id}`, spec: base, damage })),
+      .map(([id, damage]) => ({ id: `${carId} — ${id}`, car: carId, spec: base, damage })),
   };
   if (variants.cars.length === 0) throw new Error(`no such wreck: ${scene}`);
 } else if (has("field")) {
@@ -241,9 +251,44 @@ if (has("crew")) {
     cars: ids.map((id) => {
       const spec = CAR_BODIES[id.trim()];
       if (!spec) throw new Error(`unknown car id: ${id} (have ${Object.keys(CAR_BODIES)})`);
-      return { id: id.trim(), spec };
+      return { id: id.trim(), car: id.trim(), spec };
     }),
   };
+}
+
+if (has("rig")) variants.mode = "rig";
+
+// THE MODELS: `--asset a.glb,b.glb` (a model `make blender` made — the
+// file's name starts with its car's id) or `--models` (the committed ones).
+// A catalog row gains a row per model of its car under it; a wreck row is
+// wrecked as the model instead.
+const assetFiles = (value("asset") ?? "")
+  .split(",")
+  .filter(Boolean)
+  .map((p) => resolve(p));
+const served = new Map();
+if (assetFiles.length > 0 || has("models")) {
+  const { basename } = await import("node:path");
+  const modelsOf = (car) =>
+    has("models")
+      ? [join(root, "pwa", "models", `${car}.glb`)]
+      : assetFiles.filter((f) => basename(f).startsWith(`${car}-`) || basename(f) === `${car}.glb`);
+  const url = (file) => {
+    const at = `/asset/${served.size}.glb`;
+    served.set(at, file);
+    return at;
+  };
+  const rows = [];
+  for (const v of variants.cars) {
+    const files = v.car ? modelsOf(v.car) : [];
+    if (variants.mode === "wrecks") {
+      rows.push(files[0] ? { ...v, id: `${v.id} · model`, asset: url(files[0]) } : v);
+      continue;
+    }
+    rows.push(v);
+    for (const f of files) rows.push({ ...v, id: `${v.id} · ${basename(f)}`, asset: url(f) });
+  }
+  variants.cars = rows;
 }
 
 if (!has("skip-build") || !existsSync(join(buildDir, "car-preview.html"))) {
@@ -279,11 +324,13 @@ const MIME = {
   ".js": "text/javascript",
   ".css": "text/css",
   ".json": "application/json",
+  ".glb": "model/gltf-binary",
 };
 
 const server = createServer(async (req, res) => {
   const path = (req.url ?? "/").split("?")[0];
-  const file = join(buildDir, path === "/" ? "car-preview.html" : path.slice(1));
+  const file =
+    served.get(path) ?? join(buildDir, path === "/" ? "car-preview.html" : path.slice(1));
   try {
     const body = await readFile(file);
     res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
@@ -303,7 +350,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
 await page.goto(`http://127.0.0.1:${port}/car-preview.html`);
 // A string, not a closure — it runs in the page, where `window` exists.
-await page.waitForFunction("window.__done === true", undefined, { timeout: 20000 });
+await page.waitForFunction("window.__done === true", undefined, { timeout: 60000 });
 const sheet = await page.$("canvas#stage");
 const box = await sheet.boundingBox();
 await page.setViewportSize({ width: Math.ceil(box.width), height: Math.ceil(box.height) });

@@ -52,6 +52,7 @@ import type { ScreenRain } from "./car/screen-rain.ts";
 import type { ScreenSnow } from "./car/screen-snow.ts";
 import type { LampStage } from "./daylight.ts";
 import { bodySpecFor } from "./car-styles.ts";
+import { carModel } from "./car-models.ts";
 import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
 import { glowTexture } from "./textures.ts";
 
@@ -386,6 +387,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     screens: options.screens,
     exhaust: options.exhaust,
     reflect: options.reflect,
+    model: carModel(spec.id),
   });
   // Panels, parts and wheels share one material, so a ghost is one flag.
   // Its own back faces still occlude its front ones (depth writing stays

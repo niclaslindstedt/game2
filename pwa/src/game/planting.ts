@@ -10,7 +10,7 @@
 import { LAKE_Y, biomeRules, type Climate, type StageKnobs, type WildObstacle } from "@engine";
 
 import type { Biome, Community, FloraMix } from "./biome.ts";
-import type { FloraPlacement } from "./flora.ts";
+import type { FloraPlacement } from "./flora-build.ts";
 import { plantZone, underSnow } from "./ground-rules.ts";
 
 /** The community a grove-quilt index names — the quilt itself lives in the
@@ -165,7 +165,7 @@ export function treePlacement(
  * the fallen timber, the cut stumps and the logging blocks' stacks. Stone
  * props are drawn as rock instead (wild.ts) and never come through here.
  * Returns null for a prop this renderer draws some other way. */
-const WOODEN: Partial<Record<WildObstacle["kind"], string>> = {
+export const WOODEN_PROPS: Partial<Record<WildObstacle["kind"], string>> = {
   // A trunk that came down in a gale still holds its root plate up on end;
   // one that rotted off its stump lies plain. They are two KINDS in the
   // engine, not one kind with a flag, because the plate is a metre and a
@@ -186,7 +186,7 @@ const WOODEN: Partial<Record<WildObstacle["kind"], string>> = {
 const LAID_ALONG_X = new Set(["fallenLog", "rootLog"]);
 
 export function propPlacement(ob: WildObstacle): FloraPlacement | null {
-  const id = WOODEN[ob.kind];
+  const id = WOODEN_PROPS[ob.kind];
   if (!id) return null;
   const spin = LAID_ALONG_X.has(id) ? Math.PI - ob.spin : ob.spin;
   return { id, x: ob.x, y: ob.y, z: ob.z, scale: ob.size, spin };

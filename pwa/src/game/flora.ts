@@ -16,25 +16,20 @@ import * as THREE from "three";
 import type { FloraCasterSource } from "./flora-shadow.ts";
 import { createRng, type Season } from "@engine";
 
-import { GeoBuilder, floraPalette } from "./flora-build.ts";
+import { GeoBuilder, floraPalette, hashId, shapeSeed, type FloraPlacement } from "./flora-build.ts";
 import { VARIANTS } from "./flora-species.ts";
 import { detailTexture } from "./textures.ts";
 import { snowCap } from "./snow-cap.ts";
+import { treeModel } from "./tree-models.ts";
 
 export { TRUNK_COLOR } from "./flora-build.ts";
 
 /** Every plantable variant id — what a biome's mixes may reference. */
 export const FLORA_IDS: readonly string[] = Object.keys(VARIANTS);
 
-export type FloraPlacement = {
-  id: string;
-  x: number;
-  y: number;
-  z: number;
-  scale: number;
-  /** Spin around up, radians. */
-  spin: number;
-};
+// Where one plant stands: stated with the builder (DOM-free, so the planting
+// policy and the model registry read it without the speckle map).
+export type { FloraPlacement } from "./flora-build.ts";
 
 export type Flora = {
   group: THREE.Group;
@@ -66,26 +61,19 @@ const SHAPES = 3;
  * would blank the forest still standing. */
 const shapes = new Map<string, THREE.BufferGeometry>();
 
-function shapeFor(id: string, shape: number, season: Season): THREE.BufferGeometry {
+function shapeFor(id: string, shape: number, season: Season, far = false): THREE.BufferGeometry {
+  // A TREE is its Blender model, when the build draws them and its kind
+  // arrived (`tree-models.ts`) — the one model standing in for every one of
+  // the code's shapes of it, the wild's the model's own far sketch.
+  const modelled = treeModel(id, season, far);
+  if (modelled) return modelled;
   const key = `${id}#${shape}#${season}`;
   const built = shapes.get(key);
   if (built) return built;
-  // Seeded from the variant and jitter alone, so a plant keeps its SHAPE
-  // across a change of season and only its colours move — and so a shape is
-  // the same however early or late the stage happens to ask for it.
-  const rng = createRng((hashId(`${id}#${shape}`) ^ 0x7f4a7c15) >>> 0);
-  const b = new GeoBuilder(() => rng.next(), floraPalette(season));
-  VARIANTS[id].build(b);
-  const geo = b.build();
+  const geo = codeShape(id, shape, season);
   geo.userData.shared = true;
   shapes.set(key, geo);
   return geo;
-}
-
-function hashId(key: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193);
-  return h >>> 0;
 }
 
 /** The breeze clock, shared by every leafy material in the world so the
@@ -141,6 +129,26 @@ function floraMaterials(): FloraMaterials {
   // one was.
   materials = { solid: snowCap(solid), leafy: snowCap(leafy) };
   return materials;
+}
+
+/** The material the flora draws a plant with — the solid one, or the
+ * double-sided, wind-swayed one — for a lab that stands a single plant. */
+export function floraMaterial(twoSided = false): THREE.Material {
+  const { solid, leafy } = floraMaterials();
+  return twoSided ? leafy : solid;
+}
+
+/** A variant's CODE-built shape (its `shape`-th build), never its model —
+ * what the world draws a plant with no model as, and the tree lab's row the
+ * models are held against. Seeded from the variant and jitter alone, so a
+ * plant keeps its SHAPE across a change of season and only its colours
+ * move — and so a shape is the same however early or late the stage
+ * happens to ask for it. */
+export function codeShape(id: string, shape: number, season: Season): THREE.BufferGeometry {
+  const rng = createRng(shapeSeed(id, shape));
+  const b = new GeoBuilder(() => rng.next(), floraPalette(season));
+  VARIANTS[id].build(b);
+  return b.build();
 }
 
 /** Turn a placement list into instanced meshes — one per variant used,
@@ -278,8 +286,10 @@ export function buildFloraField(season: Season): FloraField {
         const room = Math.ceil(list.length / POOL_BLOCK) * POOL_BLOCK;
         // One shape per variant here, chosen off the variant's own name:
         // the biome is background, and the shape variety that matters at
-        // this distance is between SPECIES, not between builds of one.
-        const geo = shapeFor(id, hashId(id) % SHAPES, season);
+        // this distance is between SPECIES, not between builds of one. The
+        // wild is the land past the road's own band (150 m and on), so a
+        // modelled tree stands here as its far sketch.
+        const geo = shapeFor(id, hashId(id) % SHAPES, season, true);
         mesh = new THREE.InstancedMesh(geo, VARIANTS[id].twoSided ? leafy : solid, room);
         group.add(mesh);
         meshes.set(id, mesh);

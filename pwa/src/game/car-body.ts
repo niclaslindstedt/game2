@@ -24,6 +24,7 @@ import * as THREE from "three";
 import type { DamagePart } from "@engine";
 
 import { MeshBuilder, mergeGeometries, patchNormal } from "./car/builder.ts";
+import { SMOOTH_NORMALS, dressPart, type CarModel } from "./car-models.ts";
 import { carSurface } from "./car-surface.ts";
 import { buildFront, buildRear } from "./car/fascia.ts";
 import { buildGlassCracks, type GlassCracks } from "./car/glass-cracks.ts";
@@ -266,6 +267,10 @@ export type CarBodyOptions = {
    * panels standing in for windows, and a reflection is a thing a window
    * does. */
   reflect?: boolean;
+  /** The MODELLED car to pour into this one (`car-models.ts`): the model's
+   * forms in place of the code's, part for part, with the code's dress laid
+   * over them. Left off, or null, the car is the code-built one. */
+  model?: CarModel | null;
 };
 
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
@@ -304,18 +309,38 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // hole is then a solid panel, and a hole nothing can see into is closed.
   const stations = buildStations(spec, axles);
   const bay = bayOpening(spec);
-  buildShell(b, spec, stations, {
-    openings: [...(options.cockpit ? [cabinOpening(spec)] : []), ...(bay ? [bay] : [])],
-  });
+  b.formed(() =>
+    buildShell(b, spec, stations, {
+      openings: [...(options.cockpit ? [cabinOpening(spec)] : []), ...(bay ? [bay] : [])],
+    }),
+  );
   const engineBay = buildEngineBay(b, spec, stations, axles, detail);
   const panes = buildGreenhouse(b, g, spec);
   buildFront({ body: b, lens: l }, spec, axles, part, { engineBay });
   buildRear({ body: b, lens: l }, spec, axles, part, { exhaust: options.exhaust });
   buildTrim(b, spec, axles, part);
 
+  // A MODEL's forms in place of the code's, where it has the part: its
+  // geometry, dressed in this body's livery, with whatever DRESS the code
+  // drew on that part laid over it. Everything downstream reads the mesh,
+  // so the crumple, the dirt and the tear-off take the model as they take
+  // the code.
+  const model = options.model ?? null;
+  const modelled = (names: readonly string[], builder: MeshBuilder): THREE.BufferGeometry => {
+    const forms = model ? dressPart(model, names, spec) : null;
+    if (!forms) return builder.geometry();
+    if (!builder.dressed) return forms;
+    const merged = mergeGeometries([forms, builder.geometry(true)]);
+    forms.dispose();
+    merged.userData[SMOOTH_NORMALS] = true;
+    return merged;
+  };
+
   const chassis = new THREE.Group();
   group.add(chassis);
-  const bodyGeo = b.geometry();
+  // The deck under the greenhouse is the model's own panel, dropped on the
+  // car that is sat in exactly as the code cuts it out of its shell.
+  const bodyGeo = modelled(options.cockpit ? ["body"] : ["body", "cabin_deck"], b);
   const body = new THREE.Mesh(bodyGeo, material);
   // THE SHELL THROWS THE SHADOW (car-shadow.ts): the body, its lenses, its
   // glass, the bolt-ons and the wheels — the outline the sun sees. Nothing
@@ -406,7 +431,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   const breakables: Partial<Record<DamagePart, THREE.Mesh>> = {};
   const partGeos: THREE.BufferGeometry[] = [];
   for (const [name, builder] of partBuilders) {
-    const geo = builder.geometry();
+    const geo = model?.parts.has(name) ? modelled([name], builder) : builder.geometry();
     // A part a spec never authored builds no triangles, and an empty mesh is
     // still an object to transform, cull, sort and issue a draw for on every
     // pass of every frame — on every car on a grid. There is nothing there
@@ -538,7 +563,11 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // wall nothing can see), so a single geometry on both sides turns one of
   // them back to front and leaves those two corners showing a bare drum.
   // Each is still built once for the whole axle set and disposed once.
-  const wheelGeo = [buildWheel(spec, -1), buildWheel(spec, 1)];
+  const wheelGeo = ([-1, 1] as const).map((side) => {
+    const name = side < 0 ? "wheel_fl" : "wheel_fr";
+    const at = new THREE.Vector3(side * spec.trackHalf, spec.wheelRadius, axles[0]);
+    return (model && dressPart(model, [name], spec, at)) ?? buildWheel(spec, side);
+  });
   for (const axle of axles) {
     for (const side of [-1, 1] as const) {
       const wheel = new THREE.Group();

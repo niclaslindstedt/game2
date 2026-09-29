@@ -113,7 +113,10 @@ async function shootNext(): Promise<void> {
   }
   const key = portraitKey(subject);
   if (!stand) {
-    loading ??= import("./car-portrait.ts").then(({ createPortraitStand }) => {
+    loading ??= Promise.all([
+      import("./car-portrait.ts"),
+      import("./car-models.ts").then(({ loadCarModels }) => loadCarModels()),
+    ]).then(([{ createPortraitStand }]) => {
       stand = createPortraitStand();
     });
     try {

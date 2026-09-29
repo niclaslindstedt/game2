@@ -113,6 +113,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: make build
+        env:
+          # The modelled cars' and trees' switches (`make ci-models`): on unless set to 0.
+          VITE_MODEL_CARS: ${{ secrets.VITE_MODEL_CARS }}
+          VITE_MODEL_TREES: ${{ secrets.VITE_MODEL_TREES }}
 
   # Bots must keep finishing what the generator builds — the simulation
   # sweep is its own job so a balance regression is named as such rather

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint licences changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
+.PHONY: model-registry blender models ci-models build test lint fmt fmt-check release clean install icons sim drift roll crash heat record replay track level analyze rate previews routes biomes cars liveries field crew wrecks items items-list trees sky traffic glyphs health transit views rollcam aircam wheel audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-iphone native-android store-preflight store-metadata store-shots store-sweep shellcheck actionlint licences changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt mac-appstore desktop
 
 
 # The shared framework (@niclaslindstedt/oss-game-framework): the release
@@ -266,6 +266,51 @@ rate:
 		$(if $(BIOME),--biome $(BIOME),) $(if $(SEASON),--season $(SEASON),) \
 		$(if $(CAMPAIGN),--campaign,) $(ARGS)
 
+# THE BLENDER LAB: a car MODELLED in Blender off the game's own numbers (its
+# CarBodySpec, the shell's rings, every bolt-on's plan) — studio renders on a
+# gravel stage, the game-budget glTF with two LODs and the .blend files, in
+# previews/blender/ — or a kind of TREE off its variants' rows and the
+# skeleton the code's own recipes lay (the variants in a row on a meadow,
+# the kind's one glTF). Nothing is committed; `make cars ARGS="--asset
+# previews/blender/compact-lod0.glb"` sets a model beside the code-built car,
+# `make trees ARGS="--models --from previews/blender --compare"` a tree's.
+# Needs Blender (BLENDER= its executable). ID=classic (or all) picks the car;
+# KIND=tree ID=spruce (or all) a kind of tree;
+# ARGS="--quality game --views none", or "--quality render --views three".
+blender:
+	npm run blender -- $(if $(KIND),--kind $(KIND),) $(if $(ID),--id $(ID),) $(ARGS)
+
+# The models the game ships: every car and every kind of tree at game
+# quality (no stills), made by Blender and published into the COMMITTED
+# pwa/models/ with a stamp of their sources (the trees packed, and stamped
+# apart) — tests/models_test.ts fails when a model is older than what it is
+# made from. Needs Blender. SET=trees (or SET=cars) makes and publishes that
+# half alone. A build draws them unless switched back (VITE_MODEL_CARS=0,
+# VITE_MODEL_TREES=0).
+models:
+	$(if $(filter trees,$(SET)),,npm run blender -- --id all --quality game --views none)
+	$(if $(filter cars,$(SET)),,npm run blender -- --kind tree --id all --quality game --views none)
+	node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/models.mjs \
+		$(if $(SET),--set $(SET),)
+
+# Switch the models on or off for every CI build — the repository SECRETS the
+# workflows hand the build (needs gh, and the right to set them): `make
+# ci-models MODELS=off` builds the code-built cars and trees on the next
+# deploy with no commit; MODELS=on (or deleting the secrets) puts the models
+# back.
+ci-models:
+	@case "$(MODELS)" in \
+	  off) gh secret set VITE_MODEL_CARS --body 0 && gh secret set VITE_MODEL_TREES --body 0 ;; \
+	  on) gh secret set VITE_MODEL_CARS --body 1 && gh secret set VITE_MODEL_TREES --body 1 ;; \
+	  *) echo "usage: make ci-models MODELS=on|off" >&2; exit 2 ;; \
+	esac
+
+# THE MODEL REGISTRY: which assets are Blender models and which the code
+# generates, written into docs/models.md from pwa/src/game/model-registry.ts.
+# `make model-registry` · `make model-registry ARGS=--check`
+model-registry:
+	npm run model-registry -- $(ARGS)
+
 # Render the car models to a labeled contact sheet (previews/cars.png):
 # the chase-cam gaming angle plus turntable views, for the car-design
 # iteration loop. Same Chromium requirements as `screenshots`.
@@ -310,6 +355,15 @@ items:
 	npm run items -- $(if $(ITEMS),--items $(ITEMS),) $(if $(GROUP),--group $(GROUP),) \
 		$(if $(TURNTABLE),--turntable $(TURNTABLE),) $(if $(SEASON),--season $(SEASON),) \
 		$(if $(CAR),--car $(CAR),) $(if $(OUT),--out $(OUT),)
+
+# THE TREE LAB (previews/trees*.png): every kind of tree and every variant
+# of it, a row a kind, each seen from a car's seat through the flora's own
+# geometry and material. `make trees ARGS="--models --from previews/blender
+# --compare"` sets a make blender run's models under the code's own, the
+# triangles under each; `--models` alone the committed ones, `--sketch` the
+# wild's far sketches, `--kinds pine,birch`, `--season autumn`.
+trees:
+	npm run trees -- $(ARGS)
 
 # Every item the sheet knows how to stand up, by group.
 items-list:

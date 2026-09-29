@@ -1,5 +1,5 @@
 {
-  "about": "Every asset Scandinavian Flick ships, where it comes from and under what licence. The game ships no audio file, no font file and no model or texture file: every sound is synthesized and every car, tree, building and road is geometry built by code at run time. Nothing here is third-party. A new kind of asset, or a new generator, changes this file in the same commit.",
+  "about": "Every asset Scandinavian Flick ships, where it comes from and under what licence. The game ships no audio file, no font file and no texture file: every sound is synthesized and every tree, building and road is geometry built by code at run time. The CARS and the TREES are the models it ships: glTFs made in Blender off the game's own numbers by `make models` (the code-built car and trees are one switch away, VITE_MODEL_CARS=0 / VITE_MODEL_TREES=0). Nothing here is third-party. A new kind of asset, or a new generator, changes this file in the same commit.",
   "assets": [
     {
       "path": "pwa/public/icons/icon.svg",
@@ -78,6 +78,20 @@
       "source": "authored",
       "licence": "PolyForm-Noncommercial-1.0.0",
       "note": "The world's models and materials — cars, flora, buildings, terrain, sky — built as geometry by this code at run time. No model or texture file ships."
+    },
+    {
+      "path": "pwa/models/*.glb",
+      "source": "generated",
+      "generator": "make models (scripts/blender.mjs, scripts/blender/car.py, scripts/models.mjs)",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "The modelled cars, one per catalog car, made in Blender off the game's own data (the CarBodySpec, the shell's rings, every bolt-on's plan). Committed with pwa/models/sources.json, the stamp tests/models_test.ts holds to their sources."
+    },
+    {
+      "path": "pwa/models/trees/*.glb",
+      "source": "generated",
+      "generator": "make models (scripts/blender.mjs, scripts/lib/tree-model-data.mjs, scripts/blender/tree.py, scripts/lib/glb-pack.mjs, scripts/models.mjs)",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "note": "The modelled trees, one glTF per kind (every tree variant the flora plants, each a full tree and a far sketch), made in Blender off the game's own data (the variants' rows and the skeleton the code's recipes lay) and packed with meshopt. Stamped apart in pwa/models/sources.json, which tests/models_test.ts holds to their sources."
     }
   ]
 }

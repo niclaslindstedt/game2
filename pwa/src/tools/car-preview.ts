@@ -12,7 +12,11 @@ import { studioLights } from "../game/car-surface.ts";
 
 import type { CarDamage, GameState } from "@engine";
 
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+
 import { buildCarBody, crewSeats, type CarBodySpec } from "../game/car-body.ts";
+import { modelOf, type CarModel } from "../game/car-models.ts";
+import { CAR_CLIPS, clipMoments, type CarClip } from "../game/car-rig.ts";
 import type { CrewLook } from "../game/car-crew.ts";
 import { createCarDamage } from "../game/car-damage.ts";
 import { createDirtPainter, wheelSpray, type DirtCoat } from "../game/car-dirt.ts";
@@ -35,6 +39,10 @@ type Variant = {
    * engine's own metres, for the real damage visual to bend this body from
    * — the row is that accident, and nothing about it is simulated. */
   damage?: CarDamage;
+  /** The catalog car the row is (`--asset`, `--models`). */
+  car?: string;
+  /** A MODEL to pour into the builder (`car-models.ts`), by URL. */
+  asset?: string;
 };
 
 type View = {
@@ -164,6 +172,20 @@ const WRECK_VIEWS: View[] = [
 const DEBRIS_SETTLE = 4;
 const DEBRIS_HZ = 60;
 
+/** THE RIG SHEET's columns (`--rig`): the code car posed by the numbers
+ * car-mesh.ts poses it by, and a model's own clips played to the same
+ * moment beside it — a wheel that turns the wrong way, lifts short or
+ * rolls backwards is read off the two rows. */
+const RIG_POSES: { name: string; clip?: CarClip; at?: "peak" | "trough" }[] = [
+  { name: "rest" },
+  { name: "steer left", clip: "steer", at: "peak" },
+  { name: "steer right", clip: "steer", at: "trough" },
+  { name: "full bump", clip: "travel", at: "peak" },
+  { name: "full droop", clip: "travel", at: "trough" },
+  { name: "rolled a quarter", clip: "roll", at: "peak" },
+];
+const RIG_VIEW = { az: 0.55, el: 0.12, dist: 1.2 };
+
 const DEFAULT_CELL = { w: 440, h: 310 };
 
 function byName(views: View[], name: string): View {
@@ -204,7 +226,7 @@ async function main(): Promise<void> {
     cell,
   } = (await res.json()) as {
     cars: Variant[];
-    mode?: "crew" | "wrecks";
+    mode?: "crew" | "wrecks" | "rig";
     /** Columns by name — or a whole View, for a camera nothing on the
      * sheet has: a REFERENCE photograph's own viewpoint, fitted from its
      * landmarks, so the render can be laid over it (car-design skill). */
@@ -243,6 +265,22 @@ async function main(): Promise<void> {
   const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
   const marks: NonNullable<Window["__marks"]> = {};
 
+  const loader = new GLTFLoader();
+  const models = new Map<string, CarModel>();
+  const gltfs = new Map<string, Awaited<ReturnType<GLTFLoader["loadAsync"]>>>();
+  for (const v of cars) {
+    if (v.asset && !models.has(v.asset)) {
+      const gltf = await loader.loadAsync(v.asset);
+      gltfs.set(v.asset, gltf);
+      models.set(v.asset, modelOf(v.car ?? v.id, gltf));
+    }
+  }
+  if (mode === "rig") {
+    rigSheet(renderer, cars, gltfs, CELL_W, CELL_H, addLabel);
+    window.__done = true;
+    return;
+  }
+
   cars.forEach((variant, row) => {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#3fa9f5");
@@ -257,7 +295,10 @@ async function main(): Promise<void> {
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    const car = buildCarBody(variant.spec, { crew: variant.crew });
+    const car = buildCarBody(variant.spec, {
+      crew: variant.crew,
+      model: variant.asset ? models.get(variant.asset) : null,
+    });
     // The pane itself, so a crew view can take it off. It is found rather
     // than handed out: the glass is one mesh in the cabin group carrying the
     // one material car-body.ts names, and the builder owes a preview tool no
@@ -376,6 +417,75 @@ async function main(): Promise<void> {
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+/** The rig sheet: per row, the code car or a model's raw glTF, posed at
+ * every `RIG_POSES` moment — the code car by car-mesh.ts's own numbers
+ * (`CAR_CLIPS`), the model by its baked clip. */
+function rigSheet(
+  renderer: THREE.WebGLRenderer,
+  cars: Variant[],
+  gltfs: Map<string, Awaited<ReturnType<GLTFLoader["loadAsync"]>>>,
+  w: number,
+  h: number,
+  addLabel: (text: string, col: number, row: number, dy?: number) => void,
+): void {
+  renderer.setSize(w * RIG_POSES.length, h * cars.length, true);
+  const camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 300);
+  cars.forEach((variant, row) => {
+    RIG_POSES.forEach((pose, col) => {
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color("#3fa9f5");
+      scene.add(studioLights());
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(240, 240),
+        new THREE.MeshBasicMaterial({ map: gravelTexture() }),
+      );
+      (ground.material.map as THREE.Texture).repeat.set(48, 48);
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+      const value = pose.clip && pose.at ? CAR_CLIPS[pose.clip][pose.at] : 0;
+      const gltf = variant.asset ? gltfs.get(variant.asset) : undefined;
+      if (gltf) {
+        const model = gltf.scene.clone(true);
+        scene.add(model);
+        if (pose.clip && pose.at) {
+          const mixer = new THREE.AnimationMixer(model);
+          const clip = THREE.AnimationClip.findByName(gltf.animations, pose.clip);
+          if (clip) {
+            const action = mixer.clipAction(clip);
+            action.setLoop(THREE.LoopOnce, 1);
+            action.clampWhenFinished = true;
+            action.play();
+            mixer.setTime(clipMoments(pose.clip)[pose.at]);
+          }
+        }
+      } else {
+        const car = buildCarBody(variant.spec);
+        scene.add(car.group);
+        car.wheelGroups.forEach((wheel, i) => {
+          if (pose.clip === "steer" && i < 2) wheel.rotation.y = value;
+          if (pose.clip === "travel") wheel.position.y += value;
+          if (pose.clip === "roll") car.wheelSpin[i].rotation.x = value;
+        });
+      }
+      const zs = variant.spec.profile.map((p) => p.z);
+      const d = RIG_VIEW.dist * (Math.max(...zs) - Math.min(...zs));
+      const target = new THREE.Vector3(0, 0.5, 0.6);
+      camera.position.set(
+        target.x + Math.sin(RIG_VIEW.az) * Math.cos(RIG_VIEW.el) * d,
+        target.y + Math.sin(RIG_VIEW.el) * d,
+        target.z + Math.cos(RIG_VIEW.az) * Math.cos(RIG_VIEW.el) * d,
+      );
+      camera.lookAt(target);
+      const y = h * cars.length - (row + 1) * h;
+      renderer.setViewport(col * w, y, w, h);
+      renderer.setScissor(col * w, y, w, h);
+      renderer.render(scene, camera);
+      if (row === 0) addLabel(pose.name, col, 0);
+    });
+    addLabel(variant.id, 0, row, 20);
+  });
+}
 
 /** The points on a car a photo can be registered against: the wheel
  * centres, the tyres' outer contact corners, the roof's corners, the outer

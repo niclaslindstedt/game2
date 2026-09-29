@@ -179,7 +179,7 @@ export function panelMinus(holes: Rect[]): Rect[] {
  * four strips rather than as a filled rectangle. Filled, it is an opaque
  * panel sitting directly behind every window, which is invisible while the
  * glass is opaque and is the entire cabin while it is not. */
-function frameOf(outer: Rect, inner: Rect): Rect[] {
+export function frameOf(outer: Rect, inner: Rect): Rect[] {
   return [
     { ...outer, v0: outer.v0, v1: inner.v0 },
     { ...outer, v0: inner.v1, v1: outer.v1 },
@@ -415,16 +415,18 @@ export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpe
   for (let p = 0; p < panels.length; p++) {
     const panel = panels[p];
     const { patch, span, holes, mirrored } = panel;
-    for (const strip of panelMinus(holes)) {
-      patchQuad(b, patch, strip, pillar, 0, mirrored);
-    }
+    b.formed(() => {
+      for (const strip of panelMinus(holes)) patchQuad(b, patch, strip, pillar, 0, mirrored);
+    });
     for (const hole of holes) {
       const pane = glassRect(hole, seal, span);
       const start = g.count;
       if (seal > 0) {
-        for (const band of frameOf(hole, pane)) {
-          patchQuad(b, patch, band, SEAL_COLOR, SEAL_PROUD, mirrored);
-        }
+        b.formed(() => {
+          for (const band of frameOf(hole, pane)) {
+            patchQuad(b, patch, band, SEAL_COLOR, SEAL_PROUD, mirrored);
+          }
+        });
       }
       // Against HEIGHT, not against v: the windscreen's v runs cowl → roof
       // and the backlight's runs roof → deck, so a gradient laid along v
@@ -453,10 +455,12 @@ export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpe
     }
   }
 
-  patchQuad(b, [FL, FR, RR, RL], { u0: 0, u1: 1, v0: 0, v1: 1 }, roof);
+  b.formed(() => patchQuad(b, [FL, FR, RR, RL], { u0: 0, u1: 1, v0: 0, v1: 1 }, roof));
   buildQuarterCorners(b, spec, panels, pillar);
-  buildGutters(b, spec);
-  buildRoofVents(b, spec);
+  b.formed(() => {
+    buildGutters(b, spec);
+    buildRoofVents(b, spec);
+  });
   return panes;
 }
 
@@ -526,11 +530,40 @@ function buildRoofVents(b: MeshBuilder, spec: CarBodySpec): void {
   if (!v) return;
   const color = v.color ?? spec.colors.trim ?? 0x14181f;
   const mouth = spec.colors.shadow ?? 0x191d24;
-  const y = spec.cabin.roofY + v.height / 2;
-  for (const x of v.offsets) {
-    b.box(x, y, v.z, v.width, v.height, v.length, color);
-    b.box(x, y + v.height * 0.1, v.z + v.length / 2, v.width * 0.8, v.height * 0.6, 0.012, mouth);
+  for (const box of roofVentBoxes(spec)) {
+    const [x, y, z] = box.c;
+    b.box(x, y, z, box.s[0], box.s[1], box.s[2], box.mouth ? mouth : color);
   }
+}
+
+/** The roof scoops as boxes, m — each scoop's body and the dark mouth on
+ * its front face — stated once for the drawn roof and a modelled one
+ * (`make blender`). */
+export function roofVentBoxes(spec: CarBodySpec): { c: V3; s: V3; mouth: boolean }[] {
+  const v = spec.cabin.roofVents;
+  if (!v) return [];
+  const y = spec.cabin.roofY + v.height / 2;
+  return v.offsets.flatMap((x) => [
+    { c: [x, y, v.z] as V3, s: [v.width, v.height, v.length] as V3, mouth: false },
+    {
+      c: [x, y + v.height * 0.1, v.z + v.length / 2] as V3,
+      s: [v.width * 0.8, v.height * 0.6, 0.012] as V3,
+      mouth: true,
+    },
+  ]);
+}
+
+/** The rain gutters as boxes, m, one down each roof edge — stated once for
+ * the drawn roof and a modelled one (`make blender`). */
+export function gutterBoxes(spec: CarBodySpec): { c: V3; s: V3 }[] {
+  const g = spec.cabin.gutter;
+  if (!g) return [];
+  const { roofFrontZ, roofRearZ, roofY, roofHalf } = spec.cabin;
+  const length = roofFrontZ - roofRearZ;
+  return [-1, 1].map((side) => ({
+    c: [side * (roofHalf + g.width / 2), roofY - g.width * 0.4, (roofFrontZ + roofRearZ) / 2] as V3,
+    s: [g.width, g.width * 0.9, length] as V3,
+  }));
 }
 
 /** Rain gutters: a thin rail down each roof edge, running the length of
@@ -539,18 +572,8 @@ function buildRoofVents(b: MeshBuilder, spec: CarBodySpec): void {
 function buildGutters(b: MeshBuilder, spec: CarBodySpec): void {
   const g = spec.cabin.gutter;
   if (!g) return;
-  const { roofFrontZ, roofRearZ, roofY, roofHalf } = spec.cabin;
   const color = g.color ?? spec.colors.trim ?? 0x14181f;
-  const length = roofFrontZ - roofRearZ;
-  for (const side of [-1, 1]) {
-    b.box(
-      side * (roofHalf + g.width / 2),
-      roofY - g.width * 0.4,
-      (roofFrontZ + roofRearZ) / 2,
-      g.width,
-      g.width * 0.9,
-      length,
-      color,
-    );
+  for (const box of gutterBoxes(spec)) {
+    b.box(box.c[0], box.c[1], box.c[2], box.s[0], box.s[1], box.s[2], color);
   }
 }

@@ -172,6 +172,9 @@ jobs:
 
       - name: make build
         run: make build
+        env:
+          VITE_MODEL_CARS: ${{ secrets.VITE_MODEL_CARS }}
+          VITE_MODEL_TREES: ${{ secrets.VITE_MODEL_TREES }}
       - name: make test
         run: make test
 
