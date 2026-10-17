@@ -133,6 +133,12 @@ are paid for, so CI never builds the app on a push.
 A store build must **not** set `EXPO_PUBLIC_GAME_URL`. A build that streams the
 website is exactly the shape guideline 4.2 rejects.
 
+EAS installs with the Node that `eas.json` pins — `"node"` in every build
+profile, the same major as `.nvmrc`. Without it EAS falls back to its image's
+default Node, whose npm 10 reads the lockfile npm 11 wrote as out of sync and
+stops the build at `npm ci` ("Missing: typescript@5.9.3 from lock file"). Move
+the pin when `.nvmrc` moves.
+
 ## 5. Submit
 
 ```sh

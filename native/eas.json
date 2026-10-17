@@ -5,6 +5,7 @@
   },
   "build": {
     "development": {
+      "node": "24.21.0",
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
@@ -12,6 +13,7 @@
       }
     },
     "preview": {
+      "node": "24.21.0",
       "distribution": "internal",
       "autoIncrement": true,
       "android": {
@@ -19,9 +21,11 @@
       }
     },
     "testflight": {
+      "node": "24.21.0",
       "autoIncrement": true
     },
     "production": {
+      "node": "24.21.0",
       "autoIncrement": true
     }
   },
